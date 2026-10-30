@@ -448,3 +448,225 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(coordinator.failure == nil && coordinator.sourceSnapshot == nil)
     #expect(!trace.events.contains("failed-2") && trace.events.last == "cancelled-2")
 }
+
+// MARK: WI-3 — Retry, and Cancel during Retry, return to 「读取失败」.
+
+/// Reaches F: a folder-entry read of `name` that fails with `kind` after one batch.
+@MainActor private func readFailedState(_ kind: ReadFailedErrorKind = .io, name: String = "待整理",
+    scene: (FolderScanFixture, FolderScanCoordinator, ViewerSession, ReadFailedHost, URL)? = nil, at index: Int = 0)
+    async throws -> (FolderScanFixture, FolderScanCoordinator, ViewerSession, ReadFailedHost, ReadFailedProjection) {
+    let (fixture, coordinator, session, host, _) = scene ?? readFailedScene(name)
+    let task = coordinator.begin(folder: fixture.root.appendingPathComponent(name), rootID: fixture.id)
+    await fixture.scanner.waitForStart(index)
+    try await fixture.scanner.deliver(["img1.png"], at: index)
+    await fixture.scanner.finish(index, failing: true, error: kind.error)
+    _ = try? await task.value
+    #expect(readFailedIsScanFailure(session.imageStatus))
+    return (fixture, coordinator, session, host, readFailedProject(coordinator, session))
+}
+
+@Test @MainActor func readFailedRetrySucceedsShowsCompleteFolder() async throws {
+    let (fixture, coordinator, session, host, _) = try await readFailedState()
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    try await fixture.scanner.deliver(["img1.png", "img2.png"], at: 1)
+    await fixture.scanner.finish(1); try await retry.value
+    #expect(coordinator.failure == nil && coordinator.completedImageCount == 2 && coordinator.sourceSnapshot?.isComplete == true)
+    #expect(!readFailedIsScanFailure(session.imageStatus) && session.imageStatus != .readingFolder)
+    #expect(host.log.suffix(3) == ["remember", "open-img1.png", "complete-2"])
+    #expect(await fixture.access.balance == [2, 2])
+    // A cancel after the success does not bring the failure back.
+    coordinator.cancel()
+    #expect(coordinator.failure == nil)
+}
+
+@Test(arguments: [0, 2])
+@MainActor func readFailedRetryFailsAgainReturnsToSameFailedState(batches: Int) async throws {
+    let (fixture, coordinator, session, host, failed) = try await readFailedState()
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    if batches > 0 { try await fixture.scanner.deliver(["img1.png", "img2.png"], at: 1) }
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
+    _ = try? await retry.value
+    #expect(readFailedProject(coordinator, session) == failed)
+    #expect(host.log.filter { $0 == "end" }.count >= 2 && !host.log.contains { $0.hasPrefix("complete-") })
+    #expect(await fixture.access.balance == [2, 2])
+}
+
+@Test @MainActor func readFailedRetryFailsWithNewErrorPublishesNewReason() async throws {
+    let (fixture, coordinator, session, _, failed) = try await readFailedState(.denied)
+    #expect(failed.failureReason == "Folder access denied")
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
+    _ = try? await retry.value
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+    let now = readFailedProject(coordinator, session)
+    #expect(now.conditions == failed.conditions && now.sourceNil && now.snapshotNil && !now.scanning)
+}
+
+@Test(arguments: [0, 2])
+@MainActor func readFailedCancelDuringRetryRestoresFailedState(batches: Int) async throws {
+    let (fixture, coordinator, session, host, failed) = try await readFailedState(.denied)
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    if batches > 0 { try await fixture.scanner.deliver(["img1.png", "img2.png"], at: 1) }
+    coordinator.cancel()
+    #expect(readFailedProject(coordinator, session) == failed)
+    #expect(session.imageStatus == .folderScanFailed("Folder access denied", "待整理"))
+    #expect(!coordinator.isScanning)
+    await fixture.scanner.finish(1); _ = try? await retry.value
+    #expect(readFailedProject(coordinator, session) == failed)
+    let again = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(2)
+    #expect(await fixture.scanner.startedCount == 3)
+    #expect(!host.log.contains { $0.hasPrefix("complete-") || $0.hasPrefix("open-") })
+    coordinator.cancel(); await fixture.scanner.finish(2); _ = try? await again.value
+    #expect(await fixture.access.balance == [3, 3])
+}
+
+@Test @MainActor func readFailedRepeatedRetryCancelIsStable() async throws {
+    let (fixture, coordinator, session, host, failed) = try await readFailedState()
+    var generation = coordinator.generation
+    for cycle in 1...3 {
+        let retry = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(cycle)
+        try await fixture.scanner.deliver(["img1.png"], at: cycle)
+        coordinator.cancel()
+        await fixture.scanner.finish(cycle); _ = try? await retry.value
+        #expect(readFailedProject(coordinator, session) == failed, "cycle \(cycle)")
+        #expect(coordinator.generation > generation, "cycle \(cycle)")
+        generation = coordinator.generation
+    }
+    #expect(await fixture.access.balance == [4, 4])
+    #expect(!host.log.contains { $0.hasPrefix("complete-") })
+}
+
+@Test @MainActor func readFailedDoubleRetryThenCancelRestoresFailedState() async throws {
+    let (fixture, coordinator, session, _, failed) = try await readFailedState()
+    let first = try #require(coordinator.retry())
+    let second = coordinator.retry()
+    await fixture.scanner.waitForStart(1)
+    coordinator.cancel()
+    #expect(readFailedProject(coordinator, session) == failed)
+    await fixture.scanner.finish(1); _ = try? await first.value
+    if second != nil { await fixture.scanner.waitForStart(2); await fixture.scanner.finish(2); _ = try? await second?.value }
+    #expect(readFailedProject(coordinator, session) == failed)
+}
+
+@Test(arguments: [false, true])
+@MainActor func readFailedLateEventsAfterCancelledRetryAreIgnored(lateFails: Bool) async throws {
+    let (fixture, coordinator, session, host, failed) = try await readFailedState()
+    let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    coordinator.cancel()
+    let logAtCancel = host.log
+    try? await fixture.scanner.deliver(["late.png"], at: 1)
+    await fixture.scanner.finish(1, failing: lateFails, error: ReadFailedErrorKind.io.error)
+    _ = try? await retry.value
+    #expect(readFailedProject(coordinator, session) == failed)
+    #expect(gate.calls.isEmpty && host.log == logAtCancel)
+}
+
+@Test @MainActor func readFailedCancelDuringRetryRootCheckRestoresFailedState() async throws {
+    let (fixture, coordinator, session, host, failed) = try await readFailedState()
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
+    await gate.waitForCall(1)
+    coordinator.cancel()
+    let logAtCancel = host.log
+    gate.answer(lost: true)
+    _ = try? await retry.value
+    #expect(gate.calls.count == 1)
+    #expect(readFailedProject(coordinator, session) == failed)
+    #expect(host.log == logAtCancel)
+}
+
+@Test @MainActor func readFailedEndDuringRetryClearsEverything() async throws {
+    let (fixture, coordinator, session, _, _) = try await readFailedState()
+    let retry = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    coordinator.end()
+    #expect(coordinator.failure == nil && coordinator.snapshot == nil && !coordinator.isScanning)
+    #expect(coordinator.retry() == nil && session.imageStatus == .empty)
+    await fixture.scanner.finish(1); _ = try? await retry.value
+    #expect(await fixture.scanner.startedCount == 2 && coordinator.failure == nil)
+}
+
+enum ReadFailedRestoreRow: CaseIterable, Sendable { case newReason, successThenOpen, successThenFailedOpen }
+
+@Test(arguments: ReadFailedRestoreRow.allCases)
+@MainActor func readFailedRestorePointTracksLatestFailureAndClears(row: ReadFailedRestoreRow) async throws {
+    let (fixture, coordinator, session, _, _) = try await readFailedState(.denied)
+    let first = try #require(coordinator.retry())
+    await fixture.scanner.waitForStart(1)
+    switch row {
+    case .newReason:
+        await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error); _ = try? await first.value
+        let latest = readFailedProject(coordinator, session)
+        let second = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(2)
+        coordinator.cancel()
+        #expect(readFailedProject(coordinator, session) == latest)
+        #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+        await fixture.scanner.finish(2); _ = try? await second.value
+    case .successThenOpen:
+        await fixture.scanner.finish(1); try await first.value
+        let open = coordinator.begin(folder: fixture.root.appendingPathComponent("B"), rootID: fixture.id)
+        await fixture.scanner.waitForStart(2)
+        coordinator.cancel()
+        #expect(coordinator.failure == nil && !readFailedIsScanFailure(session.imageStatus))
+        await fixture.scanner.finish(2); _ = try? await open.value
+    case .successThenFailedOpen:
+        await fixture.scanner.finish(1); try await first.value
+        let open = coordinator.begin(folder: fixture.root.appendingPathComponent("B"), rootID: fixture.id)
+        await fixture.scanner.waitForStart(2)
+        await fixture.scanner.finish(2, failing: true, error: ReadFailedErrorKind.io.error); _ = try? await open.value
+        let second = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(3)
+        coordinator.cancel()
+        #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "B"))
+        await fixture.scanner.finish(3); _ = try? await second.value
+        let third = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(4)
+        #expect(await fixture.scanner.folder(at: 4) == fixture.root.appendingPathComponent("B"))
+        coordinator.end(); await fixture.scanner.finish(4); _ = try? await third.value
+    }
+}
+
+@Test @MainActor func readFailedSessionCancelFolderEntryReturnsReadFailedTarget() async throws {
+    // Failure, nothing shown: Cancel Reading during Retry returns to 「读取失败」.
+    do {
+        let (fixture, coordinator, session, host, failed) = try await readFailedState(.denied)
+        session.beginFolderEntry(shownImage: nil, hasCompleteGrid: false)
+        let retry = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(1)
+        #expect(session.cancelFolderEntry() == .readFailed)
+        #expect(readFailedProject(coordinator, session) == failed)
+        #expect(session.imageStatus == .folderScanFailed("Folder access denied", "待整理"))
+        #expect(!host.log.contains { $0.hasPrefix("open-") })
+        await fixture.scanner.finish(1); _ = try? await retry.value
+    }
+    // Failure with a shown image: the image wins.
+    do {
+        let (fixture, coordinator, session, _, _) = try await readFailedState()
+        let shown = fixture.root.appendingPathComponent("待整理/img2.png")
+        session.beginFolderEntry(shownImage: shown, hasCompleteGrid: false)
+        let retry = try #require(coordinator.retry())
+        await fixture.scanner.waitForStart(1)
+        #expect(session.cancelFolderEntry() == .viewer(shown))
+        await fixture.scanner.finish(1); _ = try? await retry.value
+    }
+    // No failure: the existing empty target.
+    do {
+        let (fixture, coordinator, session, _, folder) = readFailedScene()
+        session.beginFolderEntry(shownImage: nil, hasCompleteGrid: false)
+        let open = coordinator.begin(folder: folder, rootID: fixture.id)
+        await fixture.scanner.waitForStart()
+        #expect(session.cancelFolderEntry() == .empty)
+        await fixture.scanner.finish(); _ = try? await open.value
+    }
+}
