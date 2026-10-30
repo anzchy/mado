@@ -1906,7 +1906,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     private func showReadFailedState() {
         guard session.folderScan?.failure != nil, waitingAccessPosition == nil else { return }
         stateHost.refresh()
-        guard !gridShell.isHidden, let page = stateHost.readFailedView else { return }
+        // On the reading surface only: a silent refresh failing under a shown grid keeps the grid and its footer.
+        guard !gridShell.isHidden, gridView.isHidden, let page = stateHost.readFailedView else { return }
         gridShell.setReadFailedStatus(true)
         gridShell.linkKeyViews(from: page.retryButton, through: page.chooseOtherButton)
         _ = window?.makeFirstResponder(page.retryButton)
@@ -2407,7 +2408,11 @@ extension CanvasWindowController: FolderScanHost {
                                           children: children.map { GridSidebarFolder(url: $0) })
         }
     }
-    func folderScanDidComplete(count: Int) { chromeOverlay.refresh(session: session) }
+    func folderScanDidComplete(count: Int) {
+        chromeOverlay.refresh(session: session)
+        // A completed read leaves nothing of 「读取失败」's footer behind (#238).
+        gridShell.setReadFailedStatus(false)
+    }
     func folderScanDidStart() {
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
