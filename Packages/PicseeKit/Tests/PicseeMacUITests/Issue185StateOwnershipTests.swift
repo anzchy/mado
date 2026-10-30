@@ -202,7 +202,7 @@ private struct Issue185Random: RandomNumberGenerator {
 @Test @MainActor func issue185SurfaceVisibilityInvariantAcrossGeneratedTransitions() {
     enum Surface { case viewer, gridReading, grid }
     let statuses: [ViewerImageStatus] = [.empty, .loading("a.png"), .readingFolder,
-        .folderScanFailed("Folder scan failed", 2), .noMatches, .showing, .detailLimited,
+        .folderScanFailed("Folder scan failed", "A"), .noMatches, .showing, .detailLimited,
         .failed(.corruptImage, "b.png")]
     let folder = URL(fileURLWithPath: "/issue185/A")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)

@@ -254,11 +254,10 @@ public final class ViewerStateHost: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
             return
-        case .folderScanFailed(let reason, let count):
+        case .folderScanFailed(let reason, let folder):
             failure = true
-            textLines = [String(localized: "Unable to finish reading folder"),
-                String(localized: String.LocalizationValue(reason)),
-                String(format: String(localized: "Images found before scan stopped: %lld"), Int64(count))]
+            textLines = [String(localized: "Unable to finish reading folder"), folder,
+                String(localized: String.LocalizationValue(reason))]
             actions = [(String(localized: "Retry"), "state.retry-folder")]
         case .noMatches:
             textLines = [String(localized: "No Images Match This Filter"),

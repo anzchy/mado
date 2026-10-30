@@ -106,8 +106,8 @@ import PicseeCore
         await #expect(throws: FolderScanTestError.expected) { try await task.value }
         #expect(host.opens.isEmpty && host.remembered.isEmpty && !fixture.coordinator.isEmptyFolder)
         #expect(fixture.coordinator.failure is FolderScanTestError)
-        #expect(fixture.coordinator.snapshot?.isComplete == false)
-        #expect(fixture.coordinator.snapshot?.entries.map(\.url.lastPathComponent) == ["img-0040.png"])
+        // #238: a folder-entry failure keeps no partial snapshot (24F-A shows no partial list).
+        #expect(fixture.coordinator.snapshot == nil && fixture.coordinator.sourceSnapshot == nil)
         #expect(!fixture.coordinator.isReadingFolder)
         #expect(await fixture.access.balance == [1, 1])
     }

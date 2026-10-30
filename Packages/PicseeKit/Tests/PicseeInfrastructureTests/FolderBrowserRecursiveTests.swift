@@ -115,8 +115,9 @@ private struct RecursiveTree {
     do { try await task.value } catch { }
     #expect(coordinator.failure != nil)
     #expect(coordinator.failureReason == "Folder access denied")
-    #expect(coordinator.sourceSnapshot?.navigationEntries.map(\.relativePath) == ["top.png"])
-    #expect(session.imageStatus == .folderScanFailed("Folder access denied", 1))
+    // #238: a folder-entry failure keeps no partial source (24F-A shows no partial list or count).
+    #expect(coordinator.sourceSnapshot == nil)
+    #expect(session.imageStatus == .folderScanFailed("Folder access denied", tree.root.lastPathComponent))
 }
 
 @Test func recursiveScanRejectsOutsideLinksAndCyclesWithoutDuplicateIdentity() async throws {
@@ -223,8 +224,8 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
         scanner: FolderBrowser(readValues: failure.read))
     _ = try? await coordinator.begin(folder: tree.root, rootID: tree.rootID).value
     #expect(coordinator.failure != nil)
-    #expect(coordinator.sourceSnapshot?.isComplete == false)
-    #expect(coordinator.sourceSnapshot?.navigationEntries.count == 3)
+    // #238: a folder-entry failure keeps no partial source, so no buffered count survives it.
+    #expect(coordinator.sourceSnapshot == nil)
     #expect(coordinator.failureReason == "Folder scan failed")
     #expect(coordinator.completedImageCount == nil)
 }
