@@ -1973,6 +1973,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                 open(file, accessRequest: request, fromFolderScan: fromFolder || root != nil)
             case .empty:
                 restoreEmptyFolderEntry()
+            case .readFailed:
+                break
             }
         }
     }

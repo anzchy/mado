@@ -16,6 +16,17 @@ struct FolderScanRestorePoint {
     let folder: URL?
 }
 
+/// A failed folder-entry read its Retry can return to: Cancel Reading during the Retry restores it (#238).
+struct FolderScanFailedRead {
+    let error: any Error
+    let folder: URL
+    let rootID: AccessRootID
+    let conditions: FolderViewConditions
+    let loopEnabled: Bool
+    let recursiveEnabled: Bool
+    let canPresent: @MainActor () -> Bool
+}
+
 @MainActor private final class RefreshBuffer { var entries: [FolderEntry] = [] }
 /// One scan owner per window. The scanning task retains its lease until enumeration really exits.
 @MainActor @Observable public final class FolderScanCoordinator {
@@ -122,12 +133,19 @@ struct FolderScanRestorePoint {
     public var failedFolderName: String { (activeFolder?.url ?? sourceFolder)?.lastPathComponent ?? "" }
     @discardableResult public func retry() -> Task<Void, any Error>? {
         // A failed refresh has no active folder; it rescans the complete source's folder.
-        guard failure != nil, let folder = activeFolder ?? sourceSnapshot.map({ ($0.version.folder, $0.version.rootID) }),
+        guard let error = failure, let folder = activeFolder ?? sourceSnapshot.map({ ($0.version.folder, $0.version.rootID) }),
               let canPresent = automaticPresentationAllowed else { return nil }
         // The image the user moved to after the failure, not the one the failed scan began with.
-        return start(folder: folder.url, rootID: folder.rootID, input: currentURL ?? inputURL,
+        let input = currentURL ?? inputURL
+        // Only a folder entry returns to 「读取失败」; an image-first Retry keeps the viewing surface.
+        let point = input == nil ? FolderScanFailedRead(error: error, folder: folder.url, rootID: folder.rootID,
+            conditions: conditions, loopEnabled: loopEnabled, recursiveEnabled: recursiveEnabled, canPresent: canPresent) : nil
+        let task = start(folder: folder.url, rootID: folder.rootID, input: input,
             canPresent: canPresent, preserveConditions: true)
+        failedRead = point
+        return task
     }
+    private var failedRead: FolderScanFailedRead?
     public private(set) var inputURL: URL?
     public internal(set) var currentItemID: ItemID?
     public internal(set) var currentURL: URL?
@@ -436,6 +454,7 @@ struct FolderScanRestorePoint {
                 guard activeGeneration == token, !Task.isCancelled else { return }
                 activeGeneration = nil
                 activeFolder = nil
+                failedRead = nil
                 trace?.complete(count: completed.navigationEntries.count, generation: token)
                 trace?.end(outcome: .complete, generation: token)
                 host?.folderScanDidComplete(count: completed.navigationEntries.count)
@@ -473,6 +492,7 @@ struct FolderScanRestorePoint {
                 }
                 pendingDirection = nil
                 failure = error
+                failedRead = nil
                 retireWatch(successor: false)
                 trace?.failure(error, generation: token)
                 trace?.end(outcome: .failed, generation: token)
@@ -523,7 +543,19 @@ struct FolderScanRestorePoint {
         let token = requestWatch(), rootID = point.source.version.rootID, recursive = point.recursiveEnabled
         Task { await subscribeWatch(folder, rootID: rootID, recursive: recursive, token: token) }
     }
-    public func cancel() { end() }
+    /// Cancel Reading; during a folder-entry Retry it returns to the failed read instead of ending the session.
+    public func cancel() {
+        guard activeGeneration != nil, let point = failedRead else { end(); return }
+        stop(.cancelled)
+        conditions = point.conditions
+        conditionsFolder = point.folder
+        loopEnabled = point.loopEnabled
+        recursiveEnabled = point.recursiveEnabled
+        activeFolder = (point.folder, point.rootID)
+        sourceFolder = point.folder
+        automaticPresentationAllowed = point.canPresent
+        failure = point.error
+    }
     public func end() { stop(.cancelled) }
     private func projectSource() {
         guard let sourceSnapshot else { return }
@@ -586,6 +618,7 @@ struct FolderScanRestorePoint {
         automaticPresentationAllowed = nil
         isReadingFolder = false
         failure = nil
+        failedRead = nil
         noMatchesPresented = false
         refreshTask?.cancel(); refreshTask = nil; refreshPending = false; refreshFailed = false
         retireWatch(successor: successor)
@@ -595,7 +628,7 @@ struct FolderScanRestorePoint {
     }
     /// A lost Access Root is page 26's (#238): no failure is published and nothing of the read is kept.
     private func endForLostRoot(_ error: any Error, generation token: UInt64) {
-        activeGeneration = nil; activeFolder = nil; scanTask = nil
+        activeGeneration = nil; activeFolder = nil; scanTask = nil; failedRead = nil
         isReadingFolder = false
         invalidateMetadata()
         sourceSnapshot = nil; snapshot = nil

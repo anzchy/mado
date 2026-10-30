@@ -6,6 +6,8 @@ public enum FolderEntryRestoreTarget: Equatable, Sendable {
     case viewer(URL)
     case grid
     case empty
+    /// 「读取失败」 (24F-A): Cancel Reading during its Retry returns to the failed read (#238).
+    case readFailed
 }
 
 struct FolderEntryRestorePoint {
@@ -20,7 +22,8 @@ extension ViewerSession {
     public func beginFolderEntry(shownImage: URL?, hasCompleteGrid: Bool) {
         guard folderEntryRestore == nil else { return }
         // A shown image wins, including one previewed from a grid; the grid's state is restored with it.
-        let target: FolderEntryRestoreTarget = shownImage.map { .viewer($0) } ?? (hasCompleteGrid ? .grid : .empty)
+        let target: FolderEntryRestoreTarget = shownImage.map { .viewer($0) }
+            ?? (hasCompleteGrid ? .grid : folderScan?.failure != nil ? .readFailed : .empty)
         folderEntryRestore = FolderEntryRestorePoint(target: target, browsing: browsingState,
             scan: folderScan?.restorePoint, filePreviewSet: filePreviewSet)
         // The folder entry owns navigation while it reads; Cancel puts the File Preview Set back.
