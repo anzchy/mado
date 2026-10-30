@@ -110,6 +110,9 @@ struct PinnedDesign {
     }
 
     func lengthValue(_ expression: String, viewport: Double, percentageBase: Double? = nil) throws -> Double {
+        // A bare token reference such as `var(--radius-control)` resolves against :root first.
+        let expression = expression.contains("var(")
+            ? try resolveVars(expression, viewport: viewport, context: "length expression", tokenSelector: ":root") : expression
         guard let number = evaluate(expression, viewport: viewport, percentageBase: percentageBase) else {
             throw Error("\(name) length expression at \(viewport)pt: expected a resolvable length, got '\(expression)'")
         }
