@@ -49,8 +49,9 @@ extension ViewerSession {
     }
     public var imageStatus: ViewerImageStatus {
         if folderScan?.isReadingFolder == true || folderScan?.isAwaitingFilteredMatch == true { return .readingFolder }
-        if let reason = folderScan?.failureReason {
-            return .folderScanFailed(reason, folderScan?.failedFolderName ?? "")
+        // A failure always has the folder it was reading.
+        if let reason = folderScan?.failureReason, let folder = folderScan?.failedFolderName {
+            return .folderScanFailed(reason, folder)
         }
         if filePreviewSet == nil, previewSet == nil, folderScan?.hasNoMatches == true { return .noMatches }
         if filePreviewSet == nil, previewSet == nil, folderScan?.isEmptyFolder == true, imageLoader.phase == .idle {
