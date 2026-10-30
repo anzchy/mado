@@ -22,6 +22,8 @@ struct FolderScanRestorePoint {
     public private(set) var snapshot: FolderSnapshot?
     public private(set) var sourceSnapshot: FolderSnapshot?
     @ObservationIgnored public var onReadFailure: (@MainActor (AccessRootID, URL) -> Void)?
+    /// Asked once per failed read before it is published: true when the Access Root itself is lost (page 26, #238).
+    @ObservationIgnored public var rootLossCheck: (@MainActor (AccessRootID, any Error) async -> Bool)?
     public private(set) var conditions = FolderViewConditions()
     // Keep the filter's folder identity across end() during single-image admission.
     private var conditionsFolder: URL?
@@ -238,6 +240,19 @@ struct FolderScanRestorePoint {
                 guard generation == token, !Task.isCancelled, !(error is CancellationError) else {
                     trace?.end(outcome: .cancelled, generation: token); return
                 }
+                if let rootLossCheck {
+                    let lost = await rootLossCheck(rootID, error)
+                    guard generation == token, !Task.isCancelled else {
+                        trace?.end(outcome: .cancelled, generation: token); return
+                    }
+                    if lost {
+                        // Page 26 takes the window; the source stays for its restore position.
+                        refreshTask = nil
+                        trace?.failure(error, generation: token); trace?.end(outcome: .failed, generation: token)
+                        host?.folderScanDidEnd()
+                        throw error
+                    }
+                }
                 refreshTask = nil
                 trace?.failure(error, generation: token); trace?.end(outcome: .failed, generation: token)
                 failure = error; refreshFailed = true
@@ -428,6 +443,15 @@ struct FolderScanRestorePoint {
             } catch {
                 guard activeGeneration == token else { return }
                 if !Task.isCancelled, !retainReadingAuthority() { return }
+                // The Reading State stays up while the root is checked, so 24F-A never flashes before page 26.
+                if !(error is CancellationError), !Task.isCancelled, let rootLossCheck {
+                    let lost = await rootLossCheck(rootID, error)
+                    guard activeGeneration == token, !Task.isCancelled else { return }
+                    if lost {
+                        endForLostRoot(error, generation: token)
+                        throw error
+                    }
+                }
                 activeGeneration = nil
                 isReadingFolder = false
                 scanTask = nil
@@ -567,6 +591,18 @@ struct FolderScanRestorePoint {
         retireWatch(successor: successor)
         if outcome == .cancelled { excludedPresentationNeedsReconciliation = false }
         if let ending { trace?.end(outcome: outcome, generation: ending) }
+        host?.folderScanDidEnd()
+    }
+    /// A lost Access Root is page 26's (#238): no failure is published and nothing of the read is kept.
+    private func endForLostRoot(_ error: any Error, generation token: UInt64) {
+        activeGeneration = nil; activeFolder = nil; scanTask = nil
+        isReadingFolder = false
+        invalidateMetadata()
+        sourceSnapshot = nil; snapshot = nil
+        inputURL = nil; currentItemID = nil; currentURL = nil; pendingDirection = nil
+        retireWatch(successor: false)
+        trace?.failure(error, generation: token)
+        trace?.end(outcome: .failed, generation: token)
         host?.folderScanDidEnd()
     }
     private func cancelMetadataWork() {
