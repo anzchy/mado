@@ -41,7 +41,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func p204FixGenericFailureRendersPartialCountAndRetryButton() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204FixGenericFailureRendersReadFailedAndRetryButton() async throws {
     let scene = StatesScene(), scanner = GenericFailureThenSuccessScanner()
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/native-folder/A")
@@ -52,7 +52,8 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
         input: folder.appendingPathComponent("old.png")).value
     scene.state.refresh()
     #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
-    #expect(scene.state.textLines == ["Unable to finish reading folder", "A", "Folder scan failed"])
+    // #238: 24F-A copy; no reason line and no partial count.
+    #expect(scene.state.textLines == ["Couldn't finish reading “A”", "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."])
     let retry = try #require(scene.state.buttons.first)
     #expect(retry.identifier?.rawValue == "state.retry-folder")
     retry.performClick(nil)
@@ -102,9 +103,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
         ("Cancel Reading", "取消读取"), ("Include Subfolders", "包含子文件夹"),
         ("Scan limit reached", "已达到扫描上限"), ("Folder access denied", "文件夹访问被拒绝"),
         ("Folder scan failed", "文件夹读取失败"),
-        ("Unable to finish reading folder", "无法完成文件夹读取"),
-        ("Images: %lld", "图片：%lld 张"),
-        ("Images found before scan stopped: %lld", "扫描停止前找到图片：%lld 张")] {
+        ("Images: %lld", "图片：%lld 张")] {
         let entry = strings[key] as? [String: Any]
         let localizations = entry?["localizations"] as? [String: Any]
         for (language, expected) in [("en", key), ("zh-Hans", chinese)] {
@@ -164,13 +163,13 @@ private struct FolderNoMatchesScanner: FolderScanning {
     #expect(await leases.balance == [1, 1])
 }
 
-@Test @MainActor func viewerFolderScanFailureShowsPartialCountAndRetry() throws {
+@Test @MainActor func viewerFolderScanFailureShowsReadFailedPage() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     scene.state.display(.folderScanFailed("Scan limit reached", "A"))
     #expect(scene.state.showsProgress == false)
-    #expect(scene.state.textLines == ["Unable to finish reading folder", "A", "Scan limit reached"])
-    #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.retry-folder"])
+    #expect(scene.state.textLines == ["Couldn't finish reading “A”", "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."])
+    #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.retry-folder", "state.choose-other-folder"])
     #expect(scene.state.buttons.first?.title == "Retry")
     #expect(scene.state.isHidden == false)
 }

@@ -108,6 +108,9 @@ public final class ViewerStateHost: NSView {
     public private(set) var buttons: [NSButton] = []
     public private(set) var textLines: [String] = []
     public private(set) var showsProgress = false
+    /// 「读取失败」 (24F-A) while `.folderScanFailed` shows (#238).
+    public private(set) var readFailedView: ReadFailedStateView?
+    private let readFailedPage = ReadFailedStateView()
     public var onRetry: (() -> Void)?
     public var onCancelFolderReading: (() -> Void)?
     private weak var keyCanvas: NSView?
@@ -195,7 +198,7 @@ public final class ViewerStateHost: NSView {
             $0.removeFromSuperview()
         }
         buttons = []; textLines = []; showsProgress = false
-        composedState = nil; stateIcon = nil; stateLabels = []; firstLaunch = nil; readingViews = nil
+        composedState = nil; stateIcon = nil; stateLabels = []; firstLaunch = nil; readingViews = nil; readFailedView = nil
         var actions: [(String, String)] = []
         var failure = false
         let notice = status == .detailLimited
@@ -254,11 +257,28 @@ public final class ViewerStateHost: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
             return
-        case .folderScanFailed(let reason, let folder):
-            failure = true
-            textLines = [String(localized: "Unable to finish reading folder"), folder,
-                String(localized: String.LocalizationValue(reason))]
-            actions = [(String(localized: "Retry"), "state.retry-folder")]
+        case .folderScanFailed(_, let folder):
+            // 24F-A pins one explanatory line: no reason and no partial count (#238).
+            let text = ReadFailedStateText(title: String(format: String(localized: "Couldn't finish reading “%@”"), folder),
+                detail: String(localized: "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."),
+                retry: String(localized: "Retry"), chooseOther: String(localized: "Choose Another Folder…"))
+            let page = readFailedPage
+            page.onRetry = { [weak self] in self?.session?.retryFolderScan(); self?.refresh() }
+            page.onChooseOtherFolder = { [weak self] in
+                guard let session = self?.session else { return }
+                CommandRouter().route(.open, from: .button, to: session)
+            }
+            page.frame = bounds
+            page.autoresizingMask = [.width, .height]
+            page.isHidden = false; page.setAccessibilityHidden(false)
+            page.display(text)
+            addSubview(page)
+            readFailedView = page
+            textLines = [text.title, text.detail]
+            buttons = page.buttons
+            setAccessibilityChildren([page])
+            page.layoutSubtreeIfNeeded()
+            return
         case .noMatches:
             textLines = [String(localized: "No Images Match This Filter"),
                          String(localized: "Choose another extension or clear the filter.")]

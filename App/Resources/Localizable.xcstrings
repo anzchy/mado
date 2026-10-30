@@ -2544,23 +2544,6 @@
         }
       }
     },
-    "Images found before scan stopped: %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images found before scan stopped: %lld"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "扫描停止前找到图片：%lld 张"
-          }
-        }
-      }
-    },
     "Reading…": {
       "extractionState": "manual",
       "localizations": {
@@ -2629,19 +2612,53 @@
         }
       }
     },
-    "Unable to finish reading folder": {
+    "Couldn't finish reading “%@”": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unable to finish reading folder"
+            "value": "Couldn't finish reading “%@”"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法完成文件夹读取"
+            "value": "没能读完“%@”"
+          }
+        }
+      }
+    },
+    "Read incomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read incomplete"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取未完成"
+          }
+        }
+      }
+    },
+    "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取在中途停止了。为避免显示不完整的列表，已经找到的图片暂不显示。"
           }
         }
       }
