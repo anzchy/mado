@@ -146,6 +146,8 @@ struct FolderScanFailedRead {
         return task
     }
     private var failedRead: FolderScanFailedRead?
+    /// A folder-entry Retry is reading: Cancel Reading returns to 「读取失败」.
+    public var isRetryingFailedRead: Bool { activeGeneration != nil && failedRead != nil }
     public private(set) var inputURL: URL?
     public internal(set) var currentItemID: ItemID?
     public internal(set) var currentURL: URL?
