@@ -79,6 +79,10 @@ import PicseeCore
     private var countText = ""
     private var countIsSearchSummary = false
     private var isReading = false
+    /// 「读取失败」 (24F-A, #238): the footer reads `–` / Read incomplete and the read folder's row `—`.
+    private var isReadFailed = false
+    /// Reading or failed: the footer shows the read's status, not the stored name and count.
+    private var showsReadStatus: Bool { isReading || isReadFailed }
     private let keyboardHint = NSView()
     private let spaceKeycap = NSTextField(labelWithString: "Space")
     private let quickLookLabel = NSTextField(labelWithString: "")
@@ -413,7 +417,7 @@ import PicseeCore
         var countWidth: CGFloat = 0
         if !searchStatus.isHidden {
             let countNeed = Self.cellWidth(searchStatus)
-            if countIsSearchSummary && !isReading {
+            if countIsSearchSummary && !showsReadStatus {
                 countWidth = min(countNeed, max(0, available - fileWidth - countGap))
             } else {
                 countWidth = min(countNeed, available)
@@ -599,8 +603,9 @@ import PicseeCore
     }
     /// Page 22 disables footer search and sort and hides page 23 until it leaves.
     private func applyFooterState() {
-        let enabled = footerActionsRequested && emptyFolderView.isHidden
+        let enabled = footerActionsRequested && emptyFolderView.isHidden && !isReadFailed
         footerActionsEnabled = enabled
+        infoButton.isEnabled = !isReadFailed && comingSoonEntries[ObjectIdentifier(infoButton)]?.isEnabled != false
         searchField.isEnabled = enabled
         searchButton.isEnabled = enabled
         sortButton.isEnabled = enabled
@@ -614,7 +619,7 @@ import PicseeCore
         if term.isEmpty {
             countText = ""
             countIsSearchSummary = false
-            if !isReading {
+            if !showsReadStatus {
                 searchStatus.stringValue = ""
                 searchStatus.isHidden = true
             }
@@ -622,7 +627,7 @@ import PicseeCore
     }
     public func setCurrentFile(_ name: String) {
         currentFileName = name
-        if !isReading {
+        if !showsReadStatus {
             currentFileStatus.stringValue = name
             currentFileStatus.isHidden = name.isEmpty
         }
@@ -632,11 +637,25 @@ import PicseeCore
     /// (Avenir Next); SF's en dash has that width.
     public func setReadingStatus(_ reading: Bool) {
         isReading = reading
-        folderTree.showsZeroForUnknownCurrent = reading
-        currentFileStatus.stringValue = reading ? "–" : currentFileName
-        currentFileStatus.isHidden = !reading && currentFileName.isEmpty
-        searchStatus.stringValue = reading ? String(localized: "Reading…") : countText
+        if reading { isReadFailed = false }
+        applyReadStatus()
+    }
+    /// folder-loading.html `?case=failed`: `–` in the name slot, 「读取未完成」 in the count's, `—` for the folder's
+    /// count; search, sort and information are unavailable while nothing complete is shown.
+    public func setReadFailedStatus(_ failed: Bool) {
+        isReadFailed = failed
+        if failed { isReading = false }
+        applyReadStatus()
+    }
+    private func applyReadStatus() {
+        folderTree.showsZeroForUnknownCurrent = isReading
+        folderTree.showsDashForCurrent = isReadFailed
+        currentFileStatus.stringValue = showsReadStatus ? "–" : currentFileName
+        currentFileStatus.isHidden = !showsReadStatus && currentFileName.isEmpty
+        searchStatus.stringValue = isReading ? String(localized: "Reading…")
+            : isReadFailed ? String(localized: "Read incomplete") : countText
         searchStatus.isHidden = footer.bounds.width <= 480 || searchStatus.stringValue.isEmpty
+        applyFooterState()
         needsLayout = true
     }
     public func setSearchStatus(resultCount: Int, term: String) {
@@ -644,7 +663,7 @@ import PicseeCore
             ? String(format: String(localized: "%lld images"), resultCount)
             : String(format: String(localized: "Search: %@ · %lld results"), term, resultCount)
         countIsSearchSummary = !term.isEmpty
-        if !isReading { searchStatus.stringValue = countText }
+        if !showsReadStatus { searchStatus.stringValue = countText }
         searchStatus.isHidden = footer.bounds.width <= 480
         searchButton.state = term.isEmpty ? .off : .on
         needsLayout = true
