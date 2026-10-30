@@ -508,10 +508,13 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
 @Test(arguments: [0, 2])
 @MainActor func readFailedCancelDuringRetryRestoresFailedState(batches: Int) async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState(.denied)
+    #expect(!coordinator.isRetryingFailedRead)
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(1)
     if batches > 0 { try await fixture.scanner.deliver(["img1.png", "img2.png"], at: 1) }
+    #expect(coordinator.isRetryingFailedRead)
     coordinator.cancel()
+    #expect(!coordinator.isRetryingFailedRead)
     #expect(readFailedProject(coordinator, session) == failed)
     #expect(session.imageStatus == .folderScanFailed("Folder access denied", "待整理"))
     #expect(!coordinator.isScanning)

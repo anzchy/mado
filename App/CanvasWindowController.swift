@@ -1902,13 +1902,34 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             window?.makeFirstResponder(cancel)
         }
     }
+    /// 「读取失败」 (24F-A) in the grid shell's content area: failed footer, 「重试」 focused (#238).
+    private func showReadFailedState() {
+        guard session.folderScan?.failure != nil, waitingAccessPosition == nil else { return }
+        stateHost.refresh()
+        guard !gridShell.isHidden, let page = stateHost.readFailedView else { return }
+        gridShell.setReadFailedStatus(true)
+        gridShell.linkKeyViews(from: page.retryButton, through: page.chooseOtherButton)
+        _ = window?.makeFirstResponder(page.retryButton)
+    }
     private func cancelFolderEntry() {
+        // Cancel Reading during a Retry from 「读取失败」 returns to it. The entry keeps its access authority and
+        // restore point for the Retry that completes it (#238).
+        if session.folderScan?.isRetryingFailedRead == true {
+            session.cancelFolderReading()
+            showReadFailedState()
+            return
+        }
         navigationTask?.cancel()
         _ = accessIntent.begin()
         pendingGridCurrentItemID = nil
         let restore = folderEntryRestore
         folderEntryRestore = nil
-        guard let target = session.cancelFolderEntry() else { session.cancelFolderReading(); return }
+        guard let target = session.cancelFolderEntry() else {
+            // Cancel Reading during a Retry from 「读取失败」 returns to it (#238).
+            session.cancelFolderReading()
+            showReadFailedState()
+            return
+        }
         restore?(target)
     }
     /// Native half of the restore point; the Session records the target, stops the scan and restores its own state.
@@ -1974,7 +1995,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             case .empty:
                 restoreEmptyFolderEntry()
             case .readFailed:
-                break
+                if session.folderScan?.failure != nil { showReadFailedState() } else { restoreEmptyFolderEntry() }
             }
         }
     }
@@ -2240,6 +2261,15 @@ extension CanvasWindowController: FolderScanHost {
         return scan
     }
     private func configureReadFailureReporting(_ scan: FolderScanCoordinator, monitor: AccessMonitor) {
+        // #238: one root check per failed read, before the coordinator publishes it. A lost root is page 26
+        // (the monitor's loss reaches handleAccessLoss); anything else is 「读取失败」.
+        scan.rootLossCheck = { [weak self] rootID, error in
+            guard let self, self.presentationRootID == rootID,
+                  let context = self.scanReadContext, context.permit.isCurrent else { return false }
+            await monitor.reportReadFailure(rootID, from: context.stamp, error: error)
+            if case .lost? = monitor.state.snapshot(for: rootID)?.availability { return true }
+            return false
+        }
         scan.onReadFailure = { [weak self] rootID, _ in
             guard let self, self.presentationRootID == rootID,
                   let context = self.scanReadContext, context.permit.isCurrent else { return }
@@ -2392,6 +2422,10 @@ extension CanvasWindowController: FolderScanHost {
         guard presentation.showReadingOverGrid(session.folderScan?.isReadingFolder == true) else {
             // Retry from the failed-read page reads again on the shell's reading surface; page 26 is not a read.
             if waitingAccessPosition == nil { presentation.resumeReadingFooter(session.folderScan?.isReadingFolder == true) }
+            // Retry from 「读取失败」: the Reading State takes the focus 「重试」 held.
+            if waitingAccessPosition == nil, session.folderScan?.isReadingFolder == true, !gridShell.isHidden, gridView.isHidden {
+                showReadingState()
+            }
             return
         }
         if folderEntryRestore == nil { folderEntryRestore = makeFolderEntryRestore() }
@@ -2399,12 +2433,8 @@ extension CanvasWindowController: FolderScanHost {
     }
     func folderScanDidEnd() {
         chromeOverlay.refresh(session: session)
-        // A failed read ends on the failure page, not the grid, so nothing clears the reading footer there.
-        if session.folderScan?.failure != nil { gridShell.setReadingStatus(false) }
-        if let context = scanReadContext, let root = presentationRootID,
-           let failure = session.folderScan?.failure, let monitor = accessMonitor {
-            Task { await monitor.reportReadFailure(root, from: context.stamp, error: failure) }
-        }
+        // A failed read ends on 「读取失败」, not the grid; its root was already checked (#238).
+        if session.folderScan?.failure != nil { showReadFailedState() }
         guard let scan = session.folderScan, scan.failure != nil, scan.sourceSnapshot?.isComplete == true,
               let source = scan.sourceSnapshot else { return }
         let folder = gridFolderURL ?? source.version.folder

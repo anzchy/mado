@@ -114,8 +114,10 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     try await waitUntil { controller.session.folderScan?.failure != nil }
     // Fix round 5: a failed read must not keep the reading footer.
     window.contentView?.layoutSubtreeIfNeeded()
-    #expect(try footer().name.stringValue != "–", "failure: name")
+    // #238: the pinned 24F-A footer keeps the dash in the name slot and reads 「读取未完成」.
+    #expect(try footer().name.stringValue == "–", "failure: name")
     #expect(try footer().count.stringValue != String(localized: "Reading…"), "failure: count")
+    #expect(try footer().count.stringValue == String(localized: "Read incomplete"), "failure: count")
     if let sheet = window.attachedSheet { window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
     scanner.allowRetry()
     controller.session.retryFolderScan()
@@ -227,7 +229,9 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     retry.performClick(nil)
     try await waitUntil { scanner.started == 2 && controller.session.folderScan?.isReadingFolder == true }
     #expect(try footer() == ("–", "Reading…"), "held retry")
-    #expect(sidebarCount() == firstReadSidebar, "held retry: sidebar count as for a first read")
+    // #238: the root check before 「读取失败」 gives the sidebar time to learn the folder's own full count, so a
+    // held retry shows the first read's unknown `0` or that count, never the failed read's `—`.
+    #expect([firstReadSidebar, "2"].contains(sidebarCount()), "held retry: sidebar count as for a first read")
     #expect(firstReadZero == true && window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
         .folderTree.showsZeroForUnknownCurrent == firstReadZero, "held retry: unknown count shows 0 as for a first read")
 
