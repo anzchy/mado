@@ -151,3 +151,300 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
     #expect(host.opens.isEmpty)
     #expect(await fixture.access.balance == [1, 1])
 }
+
+// MARK: WI-2 — the Access Root is checked before a failure is published.
+
+/// Fake for the App's root-loss port (AccessMonitor lives in App). `fixed` answers at once; otherwise `answer` resumes.
+@MainActor final class RootLossGate {
+    var calls: [(AccessRootID, any Error)] = []
+    var fixed: Bool?
+    private var pending: CheckedContinuation<Bool, Never>?
+    init(fixed: Bool? = nil) { self.fixed = fixed }
+    func check(_ id: AccessRootID, _ error: any Error) async -> Bool {
+        calls.append((id, error))
+        if let fixed { return fixed }
+        return await withCheckedContinuation { pending = $0 }
+    }
+    /// Bounded, so a check that is never called fails the test instead of hanging it.
+    func waitForCall(_ count: Int = 1) async {
+        for _ in 0..<500 where calls.count < count { try? await Task.sleep(for: .milliseconds(10)) }
+    }
+    func answer(lost: Bool) { pending?.resume(returning: lost); pending = nil }
+    func install(on coordinator: FolderScanCoordinator) {
+        coordinator.rootLossCheck = { [self] id, error in await check(id, error) }
+    }
+}
+
+private func readFailedIsScanFailure(_ status: ViewerImageStatus) -> Bool {
+    if case .folderScanFailed = status { return true }
+    return false
+}
+
+enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
+
+@Test(arguments: RootCheckOutcome.allCases, [0, 2])
+@MainActor func readFailedRootCheckOutcomeTable(outcome: RootCheckOutcome, cut: Int) async throws {
+    for imageFirst in [false, true] {
+        let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
+        let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
+        let session = ViewerSession(host: host)
+        session.folderScan = coordinator; coordinator.host = host
+        let gate = RootLossGate(fixed: outcome == .lost)
+        if outcome != .none { gate.install(on: coordinator) }
+        let folder = fixture.root.appendingPathComponent("待整理")
+        let input = imageFirst ? folder.appendingPathComponent("img2.png") : nil
+        let task = coordinator.begin(folder: folder, rootID: fixture.id, input: input)
+        await fixture.scanner.waitForStart()
+        if cut > 0 { try await fixture.scanner.deliver(["img1.png", "img2.png"]) }
+        await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+        var thrown: (any Error)?
+        do { try await task.value } catch { thrown = error }
+        let step = "\(outcome) cut \(cut) imageFirst \(imageFirst)"
+        #expect(readFailedSameError(thrown, ReadFailedErrorKind.io.error), "\(step)")
+        #expect((coordinator.failure != nil) == (outcome != .lost), "\(step)")
+        #expect(!coordinator.isScanning, "\(step)")
+        if outcome == .lost {
+            #expect(!readFailedIsScanFailure(session.imageStatus), "\(step)")
+            #expect(coordinator.snapshot == nil && coordinator.sourceSnapshot == nil, "\(step)")
+        } else {
+            #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"), "\(step)")
+            #expect((coordinator.sourceSnapshot == nil) == !imageFirst || cut == 0, "\(step)")
+        }
+        #expect(host.sinceStart == ["end"], "\(step)")
+        #expect(!host.log.contains { $0.hasPrefix("complete-") }, "\(step)")
+        #expect(gate.calls.count == (outcome == .none ? 0 : 1), "\(step)")
+        #expect(trace.events.last == "failed-1" && trace.events.filter { $0.hasSuffix("-1") && !$0.hasPrefix("begin") && !$0.hasPrefix("first") }.count == 1, "\(step)")
+        #expect(await fixture.access.balance == [1, 1], "\(step)")
+    }
+}
+
+@Test @MainActor func readFailedRootCheckPendingKeepsReadingState() async throws {
+    let (fixture, coordinator, session, host, folder) = readFailedScene()
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let task = coordinator.begin(folder: folder, rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    try await fixture.scanner.deliver(["img1.png"]); try await fixture.scanner.deliver(["img2.png"])
+    await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    await gate.waitForCall(1)
+    for _ in 0..<3 {
+        #expect(session.imageStatus == .readingFolder)
+        #expect(coordinator.isReadingFolder && coordinator.failure == nil && coordinator.isScanning)
+        #expect(host.sinceStart.isEmpty)
+        await Task.yield()
+    }
+    #expect(gate.calls.first?.0 == fixture.id)
+    #expect(readFailedSameError(gate.calls.first?.1, ReadFailedErrorKind.io.error))
+    gate.answer(lost: false)
+    _ = try? await task.value
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+    #expect(coordinator.sourceSnapshot == nil && host.sinceStart == ["end"])
+}
+
+@Test @MainActor func readFailedRootLostHandsOffWithoutPublishingFailure() async throws {
+    let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
+    let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
+    let session = ViewerSession(host: host)
+    session.folderScan = coordinator; coordinator.host = host
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let task = coordinator.begin(folder: fixture.root.appendingPathComponent("待整理"), rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    try await fixture.scanner.deliver(["img1.png", "img2.png", "img3.png"])
+    await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.gone.error)
+    await gate.waitForCall(1)
+    gate.answer(lost: true)
+    var thrown: (any Error)?
+    do { try await task.value } catch { thrown = error }
+    #expect(readFailedSameError(thrown, ReadFailedErrorKind.gone.error))
+    #expect(coordinator.failure == nil && coordinator.failureReason == nil)
+    #expect(coordinator.snapshot == nil && coordinator.sourceSnapshot == nil && !coordinator.isScanning)
+    #expect(!readFailedIsScanFailure(session.imageStatus))
+    #expect(coordinator.retry() == nil)
+    #expect(host.sinceStart == ["end"])
+    #expect(trace.events == ["begin-1", "first-3", "failed-1"])
+    #expect(await fixture.access.balance == [1, 1])
+}
+
+@Test @MainActor func readFailedRootReadablePublishesReadFailed() async throws {
+    let (fixture, coordinator, session, host, folder) = readFailedScene()
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let task = coordinator.begin(folder: folder, rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.denied.error)
+    await gate.waitForCall(1)
+    gate.answer(lost: false)
+    _ = try? await task.value
+    #expect(gate.calls.count == 1)
+    #expect(session.imageStatus == .folderScanFailed("Folder access denied", "待整理"))
+    #expect(coordinator.snapshot == nil && coordinator.sourceSnapshot == nil && coordinator.completedImageCount == nil)
+    #expect(host.sinceStart == ["end"])
+}
+
+struct ReadFailedProjection: Equatable {
+    let status: ViewerImageStatus, failureReason: String?, conditions: FolderViewConditions, recursive: Bool
+    let scanning: Bool, reading: Bool, snapshotNil: Bool, sourceNil: Bool, count: Int?, hasSource: Bool
+}
+@MainActor func readFailedProject(_ coordinator: FolderScanCoordinator, _ session: ViewerSession) -> ReadFailedProjection {
+    ReadFailedProjection(status: session.imageStatus, failureReason: coordinator.failureReason,
+        conditions: coordinator.conditions, recursive: coordinator.recursiveEnabled,
+        scanning: coordinator.isScanning, reading: coordinator.isReadingFolder,
+        snapshotNil: coordinator.snapshot == nil, sourceNil: coordinator.sourceSnapshot == nil,
+        count: coordinator.completedImageCount, hasSource: session.hasFolderSource)
+}
+
+@Test(arguments: [0, 3])
+@MainActor func readFailedWithoutRootCheckMatchesReadableCheck(cut: Int) async throws {
+    var projections: [ReadFailedProjection] = [], logs: [[String]] = []
+    for checked in [false, true] {
+        let (fixture, coordinator, session, host, folder) = readFailedScene()
+        if checked { RootLossGate(fixed: false).install(on: coordinator) }
+        let task = coordinator.begin(folder: folder, rootID: fixture.id)
+        await fixture.scanner.waitForStart()
+        if cut > 0 { try await fixture.scanner.deliver(["img1.png", "img2.png", "img3.png"]) }
+        await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+        _ = try? await task.value
+        projections.append(readFailedProject(coordinator, session)); logs.append(host.log)
+    }
+    #expect(projections[0] == projections[1])
+    #expect(logs[0] == logs[1])
+}
+
+enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, replaced, cancellationError }
+
+@Test(arguments: ReadFailedEnding.allCases)
+@MainActor func readFailedRootCheckRunsOncePerFailureNotOnCancel(ending: ReadFailedEnding) async throws {
+    let (fixture, coordinator, session, _, folder) = readFailedScene()
+    let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
+    let task = coordinator.begin(folder: folder, rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    try await fixture.scanner.deliver(["img1.png"])
+    var replacement: Task<Void, any Error>?
+    switch ending {
+    case .failure: await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    case .cancel: coordinator.cancel(); await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    case .end: coordinator.end(); await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    case .replaced:
+        replacement = coordinator.begin(folder: fixture.root.appendingPathComponent("B"), rootID: fixture.id)
+        await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    case .cancellationError: await fixture.scanner.finish(failing: true, error: CancellationError())
+    }
+    _ = try? await task.value
+    if ending == .failure {
+        #expect(gate.calls.count == 1)
+        #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+    } else {
+        #expect(gate.calls.isEmpty, "\(ending)")
+        #expect(coordinator.failure == nil && !readFailedIsScanFailure(session.imageStatus), "\(ending)")
+    }
+    if let replacement {
+        await fixture.scanner.waitForStart(1); await fixture.scanner.finish(1); _ = try? await replacement.value
+        #expect(await fixture.access.balance == [2, 2])
+    } else {
+        #expect(await fixture.access.balance == [1, 1])
+    }
+}
+
+@Test(arguments: [true, false])
+@MainActor func readFailedCancelDuringRootCheckWins(lateLost: Bool) async throws {
+    let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
+    let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
+    let session = ViewerSession(host: host)
+    session.folderScan = coordinator; coordinator.host = host
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let task = coordinator.begin(folder: fixture.root.appendingPathComponent("待整理"), rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    await gate.waitForCall(1)
+    coordinator.cancel()
+    let logAtCancel = host.log
+    gate.answer(lost: lateLost)
+    _ = try? await task.value
+    #expect(coordinator.failure == nil && !readFailedIsScanFailure(session.imageStatus) && coordinator.snapshot == nil)
+    #expect(!coordinator.isScanning && coordinator.retry() == nil)
+    #expect(trace.events.filter { $0.hasSuffix("-1") && !$0.hasPrefix("begin") } == ["cancelled-1"])
+    #expect(host.log == logAtCancel)
+    #expect(await fixture.access.balance == [1, 1])
+}
+
+@Test @MainActor func readFailedNewerOpenDuringRootCheckWins() async throws {
+    let (fixture, coordinator, session, host, folder) = readFailedScene()
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let first = coordinator.begin(folder: folder, rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
+    await gate.waitForCall(1)
+    let second = coordinator.begin(folder: fixture.root.appendingPathComponent("B"), rootID: fixture.id)
+    await fixture.scanner.waitForStart(1)
+    try await fixture.scanner.deliver(["b1.png", "b2.png"], at: 1)
+    gate.answer(lost: false)
+    _ = try? await first.value
+    #expect(coordinator.failure == nil && coordinator.isReadingFolder && coordinator.generation == 2)
+    #expect(coordinator.snapshot?.version.generation == 2 && coordinator.snapshot?.entries.count == 2)
+    #expect(session.imageStatus == .readingFolder)
+    await fixture.scanner.finish(1); try await second.value
+    #expect(coordinator.completedImageCount == 2)
+    #expect(host.log.suffix(2) == ["open-b1.png", "complete-2"])
+    #expect(gate.calls.count == 1)
+}
+
+@MainActor private func readFailedCompletedSource()
+    async throws -> (FolderScanFixture, FolderScanCoordinator, ViewerSession, ReadFailedHost, FolderFixTrace) {
+    let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
+    let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
+    let session = ViewerSession(host: host)
+    session.folderScan = coordinator; coordinator.host = host
+    let task = coordinator.begin(folder: fixture.root.appendingPathComponent("待整理"), rootID: fixture.id)
+    await fixture.scanner.waitForStart()
+    try await fixture.scanner.deliver(["img1.png", "img2.png", "img3.png"])
+    await fixture.scanner.finish(); try await task.value
+    return (fixture, coordinator, session, host, trace)
+}
+
+@Test @MainActor func readFailedRefreshRootLostKeepsSourceWithoutFailure() async throws {
+    let (fixture, coordinator, session, host, _) = try await readFailedCompletedSource()
+    let gate = RootLossGate(fixed: true); gate.install(on: coordinator)
+    let logBefore = host.log.count
+    let refresh = try #require(coordinator.refresh())
+    await fixture.scanner.waitForStart(1)
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.gone.error)
+    _ = try? await refresh.value
+    #expect(gate.calls.count == 1)
+    // A Bool, so a RED never prints the ENOENT description (the receipt reads it as an environment failure).
+    let failed = coordinator.failure != nil
+    #expect(!failed)
+    #expect(coordinator.sourceSnapshot?.entries.count == 3 && coordinator.sourceSnapshot?.isComplete == true)
+    #expect(coordinator.completedImageCount == 3 && !readFailedIsScanFailure(session.imageStatus))
+    #expect(Array(host.log[logBefore...]) == ["end"])
+    let again = try #require(coordinator.refresh())
+    await fixture.scanner.waitForStart(2); await fixture.scanner.finish(2); _ = try? await again.value
+}
+
+@Test @MainActor func readFailedRefreshRootReadablePublishesFailure() async throws {
+    let (fixture, coordinator, session, host, _) = try await readFailedCompletedSource()
+    let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
+    let logBefore = host.log.count
+    let refresh = try #require(coordinator.refresh())
+    await fixture.scanner.waitForStart(1)
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
+    _ = try? await refresh.value
+    #expect(gate.calls.count == 1)
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+    #expect(coordinator.sourceSnapshot?.entries.count == 3 && coordinator.completedImageCount == nil)
+    // The fake files are absent, so the existing refresh path also clears the shown image.
+    #expect(Array(host.log[logBefore...]) == ["clear", "end"])
+    #expect(coordinator.retry() != nil)
+    await fixture.scanner.waitForStart(2); await fixture.scanner.finish(2)
+}
+
+@Test @MainActor func readFailedRefreshEndDuringRootCheckIgnoresLateResult() async throws {
+    let (fixture, coordinator, _, _, trace) = try await readFailedCompletedSource()
+    let gate = RootLossGate(); gate.install(on: coordinator)
+    let refresh = try #require(coordinator.refresh())
+    await fixture.scanner.waitForStart(1)
+    await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
+    await gate.waitForCall(1)
+    coordinator.end()
+    gate.answer(lost: false)
+    _ = try? await refresh.value
+    #expect(coordinator.failure == nil && coordinator.sourceSnapshot == nil)
+    #expect(!trace.events.contains("failed-2") && trace.events.last == "cancelled-2")
+}
