@@ -130,7 +130,7 @@ struct FolderScanFailedRead {
         return "Folder scan failed"
     }
     /// The folder a failed read was reading, by display name (24F-A heading).
-    public var failedFolderName: String { (activeFolder?.url ?? sourceFolder)?.lastPathComponent ?? "" }
+    public var failedFolderName: String? { (activeFolder?.url ?? sourceFolder)?.lastPathComponent }
     @discardableResult public func retry() -> Task<Void, any Error>? {
         // A failed refresh has no active folder; it rescans the complete source's folder.
         guard let error = failure, let folder = activeFolder ?? sourceSnapshot.map({ ($0.version.folder, $0.version.rootID) }),
