@@ -288,3 +288,30 @@ private let issue238ReadError = NSError(domain: NSCocoaErrorDomain, code: NSFile
     try await scene.waitUntil { scene.controller.gridSearchAvailable }
     #expect(!scene.visible("access.lost.state"))
 }
+
+/// Review H1: a silent refresh that fails on a shown grid keeps the grid and its footer; 24F-A belongs to the
+/// reading surface, and a later successful refresh leaves nothing of the failed mode behind.
+@Test(.timeLimit(.minutes(3))) @MainActor func issue238RefreshFailureOnGridKeepsTheGridFooter() async throws {
+    let scene = try Issue238Scene([.init(), .init(failure: issue238ReadError, after: 1), .init()])
+    defer { scene.close() }
+    scene.controller.openGrantedFolder(scene.folder)
+    try await scene.waitUntil { scene.controller.gridSearchAvailable }
+    let shown = try scene.footer()
+    let scan = try #require(scene.controller.session.folderScan)
+    // A refresh starts only once the open's scan has fully ended.
+    try await scene.waitUntil { !scan.isScanning && scan.completedImageCount != nil }
+    _ = try? await scan.refresh()?.value
+    #expect(scan.failure != nil && scene.scanner?.started == 2)
+    for _ in 0..<5 { try await scene.tick() }
+    scene.dismissSheet()
+    #expect(try scene.footer() == shown, "failed refresh: grid footer kept")
+    #expect(scene.row(scene.folder)?.countLabel.stringValue != "—")
+    #expect(scene.shell?.searchButton.isEnabled == true && scene.shell?.sortButton.isEnabled == true)
+    try await scene.waitUntil { !scan.isScanning }
+    _ = try? await scan.refresh()?.value
+    for _ in 0..<5 { try await scene.tick() }
+    #expect(scan.failure == nil && scene.scanner?.started == 3)
+    #expect(try scene.footer() == shown, "recovered refresh: grid footer")
+    #expect(scene.row(scene.folder)?.countLabel.stringValue != "—")
+    #expect(scene.shell?.searchButton.isEnabled == true && scene.shell?.sortButton.isEnabled == true)
+}
