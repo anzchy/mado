@@ -118,6 +118,18 @@ public struct GridSidebarFolder: Sendable, Equatable {
         setAccessibilityValue(value)
         setAccessibilityHelp(value)
     }
+    /// A folder whose read did not finish: `—` and no count.
+    public func setUnreadCount() {
+        countLabel.stringValue = "—"
+        countLabel.isHidden = accessLossCause != nil
+        let name = folderURL.lastPathComponent
+        if accessLossCause == nil {
+            setAccessibilityLabel("\(name), \(String(localized: "Read incomplete"))")
+        } else {
+            setAccessibilityLabel(name)
+        }
+        needsLayout = true
+    }
     public override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         refreshAppearance()
@@ -245,9 +257,16 @@ public struct GridSidebarFolder: Sendable, Equatable {
     /// folder-loading.html: the folder being read shows `0` until its count is known.
     public var showsZeroForUnknownCurrent = false {
         didSet {
-            guard let currentFolder else { return }
-            rows.first(where: { $0.current })?.setCount(shownCount(currentFolder.count, current: true))
+            guard let currentFolder, let row = rows.first(where: { $0.current }) else { return }
+            applyCount(currentFolder.count, to: row)
         }
+    }
+    /// 24F-A: the folder whose read failed shows `—`, never a partial count (#238).
+    public var showsDashForCurrent = false {
+        didSet { if let row = rows.first(where: { $0.current }) { applyCount(currentFolder?.count, to: row) } }
+    }
+    private func applyCount(_ count: Int?, to row: GridSidebarFolderButton) {
+        if row.current && showsDashForCurrent { row.setUnreadCount() } else { row.setCount(shownCount(count, current: row.current)) }
     }
     private func shownCount(_ count: Int?, current: Bool) -> Int? {
         count ?? (current && showsZeroForUnknownCurrent ? 0 : nil)
@@ -257,6 +276,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
             count: shownCount(folder.count, current: current), accessLossCause: folder.accessLossCause),
             depth: depth, current: current)
         if depth > 0 && !current { row.countLabel.alphaValue = 0.8 }
+        if current && showsDashForCurrent { row.setUnreadCount() }
         row.target = self
         row.action = #selector(selectFolder(_:))
         document.addSubview(row)
@@ -274,7 +294,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
         if let index = children.firstIndex(where: { $0.url == url }) {
             children[index] = GridSidebarFolder(url: url, count: count, accessLossCause: children[index].accessLossCause)
         }
-        if let row = rows.first(where: { $0.folderURL == url }) { row.setCount(shownCount(count, current: row.current)) }
+        if let row = rows.first(where: { $0.folderURL == url }) { applyCount(count, to: row) }
     }
     public override func layout() {
         super.layout()
