@@ -36,7 +36,7 @@ import PicseeCore
     #expect(coordinator.canMove(.next) == (count == 3))
     #expect(coordinator.canMove(.previous) == (count == 3))
     #expect(coordinator.snapshot?.entries.count == count)
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", count))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
     #expect(session.isEnabled(.next) == (count == 3) && session.isEnabled(.previous) == (count == 3))
     #expect(session.isEnabled(.fit) && session.isEnabled(.zoomIn))
     #expect(session.imageLoader.presented?.key == presented)
@@ -56,7 +56,7 @@ import PicseeCore
     try await fixture.scanner.deliver(["img1.png", "img2.png", "img10.png"])
     await fixture.scanner.finish(failing: true)
     await #expect(throws: FolderScanTestError.expected) { try await first.value }
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", 3))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
     let retry = try #require(coordinator.retry())
     #expect(!coordinator.isReadingFolder)
     #expect(coordinator.inputURL == input && coordinator.currentURL == input)

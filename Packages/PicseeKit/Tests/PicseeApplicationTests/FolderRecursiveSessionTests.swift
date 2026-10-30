@@ -38,9 +38,9 @@ private struct PartialFailureScanner: FolderScanning {
     session.folderScan = coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     _ = try? await task.value
-    #expect(coordinator.sourceSnapshot?.entries.count == 1)
-    #expect(coordinator.sourceSnapshot?.isComplete == false)
-    #expect(session.imageStatus == .folderScanFailed("Scan limit reached", 1))
+    // #238: a folder-entry failure keeps no partial source (24F-A shows no partial list or count).
+    #expect(coordinator.sourceSnapshot == nil && coordinator.snapshot == nil)
+    #expect(session.imageStatus == .folderScanFailed("Scan limit reached", "A"))
     #expect(await fixture.access.balance == [1, 1])
 }
 
@@ -131,7 +131,7 @@ private struct PartialFailureScanner: FolderScanning {
     await fixture.scanner.waitForStart(1)
     await fixture.scanner.finish(1, failing: true)
     await #expect(throws: FolderScanTestError.expected) { try await off.value }
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", 0))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
     #expect(host.paintedURL == nested && host.cleared == 0)
     let retry = try #require(fixture.coordinator.retry())
     await fixture.scanner.waitForStart(2)
@@ -262,9 +262,10 @@ private struct PermissionFailureScanner: FolderScanning {
         scanner: PermissionFailureScanner(error: POSIXError(.EPERM)))
     let session = ViewerSession(host: nil); session.folderScan = coordinator
     _ = try? await coordinator.begin(folder: fixture.folder, rootID: fixture.id).value
-    #expect(session.imageStatus == .folderScanFailed("Folder access denied", 0))
+    #expect(session.imageStatus == .folderScanFailed("Folder access denied", "A"))
     #expect(coordinator.completedImageCount == nil)
-    #expect(coordinator.sourceSnapshot?.isComplete == false)
+    // #238: a folder-entry failure keeps no partial source.
+    #expect(coordinator.sourceSnapshot == nil)
     #expect(await fixture.access.balance == [1, 1])
 }
 
@@ -284,7 +285,7 @@ private actor RootFailureLease: AccessLeasing {
     session.folderScan = coordinator
     #expect(session.folderRecursiveEnabled == false)
     _ = try? await coordinator.begin(folder: fixture.folder, rootID: fixture.id).value
-    #expect(session.imageStatus == .folderScanFailed("Folder access denied", 0))
+    #expect(session.imageStatus == .folderScanFailed("Folder access denied", "A"))
     #expect(coordinator.sourceSnapshot == nil)
     _ = try? await coordinator.retry()?.value
     #expect(await access.requests == 2)

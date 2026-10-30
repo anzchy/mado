@@ -45,7 +45,7 @@ import PicseeCore
     #expect(session.imageStatus == .readingFolder)
     await fixture.scanner.finish(failing: true)
     await #expect(throws: FolderScanTestError.expected) { try await task.value }
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", 1))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
     #expect(!coordinator.hasNoMatches)
 
     let retry = try #require(coordinator.retry())
@@ -54,7 +54,7 @@ import PicseeCore
     try await fixture.scanner.deliver(["b.png"], at: 1)
     await fixture.scanner.finish(1); try await retry.value
     #expect(coordinator.currentURL?.lastPathComponent == "b.png")
-    #expect(!coordinator.hasNoMatches && session.imageStatus != .folderScanFailed("Folder scan failed", 1))
+    #expect(!coordinator.hasNoMatches && session.imageStatus != .folderScanFailed("Folder scan failed", "A"))
 }
 
 @Test @MainActor func issue123FirstEligibleBatchUsesTypeOrderAndLaterBatchKeepsCurrent() async throws {
@@ -89,7 +89,7 @@ import PicseeCore
     coordinator.setConditions(.init(selectedExtensions: ["png"]))
     await fixture.scanner.finish(failing: true)
     await #expect(throws: FolderScanTestError.expected) { try await task.value }
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", 1))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
 
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(1)

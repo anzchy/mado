@@ -49,7 +49,7 @@ actor FolderScanControlledScanner: FolderScanning {
     }
     private enum Event: Sendable {
         case batch([String], CheckedContinuation<Void, any Error>)
-        case finish(Bool)
+        case finish(Bool, (any Error & Sendable)?)
     }
     private var calls: [Call] = []
     private var events: [[Event]] = []
@@ -69,8 +69,8 @@ actor FolderScanControlledScanner: FolderScanning {
                 let entries = names.map { FolderEntry(url: folder.appendingPathComponent($0), root: root) }
                 do { try await emit(entries); acknowledgement.resume() }
                 catch { acknowledgement.resume(throwing: error) }
-            case .finish(let failing):
-                if failing { throw FolderScanTestError.expected }
+            case .finish(let failing, let error):
+                if failing { throw error ?? FolderScanTestError.expected }
                 return
             }
         }
@@ -88,12 +88,13 @@ actor FolderScanControlledScanner: FolderScanning {
         await withCheckedContinuation { waiters.append((index, $0)) }
     }
     func root(at index: Int) -> ItemIdentityRoot { calls[index].root }
+    func folder(at index: Int) -> URL { calls[index].folder }
     func options(at index: Int) -> FolderScanOptions { calls[index].options }
     func deliver(_ names: [String], at index: Int = 0) async throws {
         try await withCheckedThrowingContinuation { send(.batch(names, $0), at: index) }
     }
-    func finish(_ index: Int = 0, failing: Bool = false) {
-        send(.finish(failing), at: index)
+    func finish(_ index: Int = 0, failing: Bool = false, error: (any Error & Sendable)? = nil) {
+        send(.finish(failing, error), at: index)
     }
 }
 

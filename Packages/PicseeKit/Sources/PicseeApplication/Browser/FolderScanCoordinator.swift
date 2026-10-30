@@ -116,6 +116,8 @@ struct FolderScanRestorePoint {
         }
         return "Folder scan failed"
     }
+    /// The folder a failed read was reading, by display name (24F-A heading).
+    public var failedFolderName: String { (activeFolder?.url ?? sourceFolder)?.lastPathComponent ?? "" }
     @discardableResult public func retry() -> Task<Void, any Error>? {
         // A failed refresh has no active folder; it rescans the complete source's folder.
         guard failure != nil, let folder = activeFolder ?? sourceSnapshot.map({ ($0.version.folder, $0.version.rootID) }),
@@ -437,7 +439,14 @@ struct FolderScanRestorePoint {
                     trace?.end(outcome: .cancelled, generation: token)
                     return
                 }
-                snapshot = sourceSnapshot?.applying(conditions, metadata: metadata)
+                if input == nil {
+                    // #238: a failed folder entry keeps nothing partial, so no list or count can pass for complete.
+                    invalidateMetadata()
+                    sourceSnapshot = nil; snapshot = nil
+                } else {
+                    // An image-first read keeps the images already found navigable (FOLDER-05).
+                    snapshot = sourceSnapshot?.applying(conditions, metadata: metadata)
+                }
                 pendingDirection = nil
                 failure = error
                 retireWatch(successor: false)

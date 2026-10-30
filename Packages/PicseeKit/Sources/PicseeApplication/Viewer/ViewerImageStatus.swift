@@ -7,7 +7,7 @@ public enum ViewerImageFailure: Equatable, Sendable {
 
 /// The single presentation state consumed by native state surfaces.
 public enum ViewerImageStatus: Equatable, Sendable {
-    case empty, loading(String), readingFolder, folderScanFailed(String, Int), noMatches, showing, detailLimited, failed(ViewerImageFailure, String)
+    case empty, loading(String), readingFolder, folderScanFailed(String, String), noMatches, showing, detailLimited, failed(ViewerImageFailure, String)
     /// A folder session whose complete scan found no images: page 22 on whichever surface shows (ADR-014, #137).
     case emptyFolder
 
@@ -50,7 +50,7 @@ extension ViewerSession {
     public var imageStatus: ViewerImageStatus {
         if folderScan?.isReadingFolder == true || folderScan?.isAwaitingFilteredMatch == true { return .readingFolder }
         if let reason = folderScan?.failureReason {
-            return .folderScanFailed(reason, folderScan?.sourceSnapshot?.navigationEntries.count ?? 0)
+            return .folderScanFailed(reason, folderScan?.failedFolderName ?? "")
         }
         if filePreviewSet == nil, previewSet == nil, folderScan?.hasNoMatches == true { return .noMatches }
         if filePreviewSet == nil, previewSet == nil, folderScan?.isEmptyFolder == true, imageLoader.phase == .idle {

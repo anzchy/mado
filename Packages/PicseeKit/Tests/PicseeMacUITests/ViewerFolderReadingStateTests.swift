@@ -51,9 +51,8 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     _ = try? await coordinator.begin(folder: folder, rootID: AccessRootID(),
         input: folder.appendingPathComponent("old.png")).value
     scene.state.refresh()
-    #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", 1))
-    #expect(scene.state.textLines == ["Unable to finish reading folder", "Folder scan failed",
-        "Images found before scan stopped: 1"])
+    #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
+    #expect(scene.state.textLines == ["Unable to finish reading folder", "A", "Folder scan failed"])
     let retry = try #require(scene.state.buttons.first)
     #expect(retry.identifier?.rawValue == "state.retry-folder")
     retry.performClick(nil)
@@ -168,10 +167,9 @@ private struct FolderNoMatchesScanner: FolderScanning {
 @Test @MainActor func viewerFolderScanFailureShowsPartialCountAndRetry() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
-    scene.state.display(.folderScanFailed("Scan limit reached", 7))
+    scene.state.display(.folderScanFailed("Scan limit reached", "A"))
     #expect(scene.state.showsProgress == false)
-    #expect(scene.state.textLines == ["Unable to finish reading folder", "Scan limit reached",
-        "Images found before scan stopped: 7"])
+    #expect(scene.state.textLines == ["Unable to finish reading folder", "A", "Scan limit reached"])
     #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.retry-folder"])
     #expect(scene.state.buttons.first?.title == "Retry")
     #expect(scene.state.isHidden == false)

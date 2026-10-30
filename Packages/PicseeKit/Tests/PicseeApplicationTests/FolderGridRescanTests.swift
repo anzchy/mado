@@ -89,7 +89,7 @@ import PicseeCore
     try await fixture.scanner.deliver(["a.png"], at: 2)
     await fixture.scanner.finish(2, failing: true)
     await #expect(throws: FolderScanTestError.expected) { try await failing.value }
-    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", 1))
+    #expect(session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(3)
     #expect(coordinator.isReadingFolder && session.imageStatus == .readingFolder)
