@@ -572,4 +572,43 @@ extension PinnedDesign {
         }
         return body.components(separatedBy: "<\(tag)").count - 1
     }
+
+    /// The `animation` shorthand outside every media rule, as `name duration timing iterations direction`.
+    func animation(_ selector: String) throws
+        -> (name: String, duration: Double, timing: String, iterations: String, direction: String) {
+        guard let value = rules.last(where: { $0.selector == selector && $0.unsupported == nil })?
+            .declarations["animation"] else {
+            throw Error("\(name) \(selector) animation: no declaration outside media rules")
+        }
+        let parts = Self.splitWhitespace(value)
+        guard parts.count == 5, let duration = try? Self.seconds(parts[1]) else {
+            throw Error("\(name) \(selector) animation '\(value)' is not 'name duration timing iterations direction'")
+        }
+        return (parts[0], duration, parts[2], parts[3], parts[4])
+    }
+
+    /// The `animation` declared for `selector` inside `@media (prefers-reduced-motion:reduce)`.
+    func reducedMotionAnimation(_ selector: String) throws -> String {
+        guard let value = rules.last(where: {
+            $0.selector == selector
+                && $0.unsupported?.replacingOccurrences(of: " ", with: "").contains("prefers-reduced-motion:reduce") == true
+        })?.declarations["animation"] else {
+            throw Error("\(name) \(selector) animation: no prefers-reduced-motion rule")
+        }
+        return value
+    }
+
+    /// `@keyframes name { from { translate: x y } to { translate: x y } }`. The CSS parser skips keyframes; read the HTML.
+    func keyframes(_ keyframesName: String) throws -> (from: (x: Double, y: Double), to: (x: Double, y: Double)) {
+        let number = #"(-?[\d.]+)(?:px)?"#
+        let pattern = #"@keyframes\s+"# + NSRegularExpression.escapedPattern(for: keyframesName)
+            + #"\s*\{\s*from\s*\{\s*translate:\s*"# + number + #"\s+"# + number
+            + #"\s*;?\s*\}\s*to\s*\{\s*translate:\s*"# + number + #"\s+"# + number + #"\s*;?\s*\}\s*\}"#
+        let found = Self.matches(pattern, in: html)
+        let values = found.first?.compactMap(Double.init) ?? []
+        guard found.count == 1, values.count == 4 else {
+            throw Error("\(name) @keyframes \(keyframesName): expected one from/to translate block, found \(found.count)")
+        }
+        return ((values[0], values[1]), (values[2], values[3]))
+    }
 }
