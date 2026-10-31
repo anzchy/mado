@@ -1326,15 +1326,17 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
     let staging = f.base.appendingPathComponent("staging", isDirectory: true)
     let container = f.a.deletingLastPathComponent()
     try await f.moveRoot(to: staging)
-    NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApplication.shared)
-    try await recoveryWaitAsync { await f.services.files.rootURL(f.rootA)?.path == staging.path }
+    // Foreground notifications coalesce, and a cached URL is not a completion signal.
+    // Await the same real bookmark/scope probe used by Open Recent after each move.
+    _ = try await f.services.probeRootURL(f.rootA)
+    #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
     try await f.services.files.runIsolated {
         try FileManager.default.removeItem(at: container)
         try FileManager.default.moveItem(at: staging, to: container)
         f.bookmarks.relocate(staging, to: container)
     }
-    NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApplication.shared)
-    try await recoveryWaitAsync { await f.services.files.rootURL(f.rootA)?.path == container.path }
+    _ = try await f.services.probeRootURL(f.rootA)
+    #expect(await f.services.files.rootURL(f.rootA)?.path == container.path)
     #expect(c.session.folderScan?.snapshot?.version.rootID == f.rootB)
     #expect(try await f.services.recent.load().contains(recorded))
     let replacement = f.base.appendingPathComponent("Replacement", isDirectory: true)
