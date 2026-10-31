@@ -2544,6 +2544,23 @@
         }
       }
     },
+    "Images found before scan stopped: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images found before scan stopped: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描停止前找到图片：%lld 张"
+          }
+        }
+      }
+    },
     "Reading…": {
       "extractionState": "manual",
       "localizations": {
@@ -2608,6 +2625,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "文件夹读取失败"
+          }
+        }
+      }
+    },
+    "Unable to finish reading folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to finish reading folder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成文件夹读取"
           }
         }
       }

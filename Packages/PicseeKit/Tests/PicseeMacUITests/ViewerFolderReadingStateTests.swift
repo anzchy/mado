@@ -52,8 +52,10 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
         input: folder.appendingPathComponent("old.png")).value
     scene.state.refresh()
     #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", "A"))
-    // #238: 24F-A copy; no reason line and no partial count.
-    #expect(scene.state.textLines == ["Couldn't finish reading “A”", "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."])
+    // Audit M1: the viewer keeps the base non-covering notice; 24F-A is folder-entry only.
+    #expect(scene.state.readFailedView == nil)
+    #expect(scene.state.textLines == ["Unable to finish reading folder", "Folder scan failed", "Images found before scan stopped: 1"])
+    #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.retry-folder"])
     let retry = try #require(scene.state.buttons.first)
     #expect(retry.identifier?.rawValue == "state.retry-folder")
     retry.performClick(nil)
@@ -166,6 +168,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
 @Test @MainActor func viewerFolderScanFailureShowsReadFailedPage() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
+    scene.state.surface = .gridReading
     scene.state.display(.folderScanFailed("Scan limit reached", "A"))
     #expect(scene.state.showsProgress == false)
     #expect(scene.state.textLines == ["Couldn't finish reading “A”", "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."])
