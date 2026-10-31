@@ -45,6 +45,14 @@ import os
     var themeOverride: DesignTheme?
     var reduceMotionOverride: Bool?
     var reduceTransparencyOverride: Bool? { didSet { refreshStyle() } }
+    /// #316 drift inputs; tests replace them, the App keeps the defaults.
+    var windowVisible: @MainActor (NSWindow) -> Bool = FirstLaunchDrift.windowIsVisible
+    var appFrontmost: @MainActor () -> Bool = FirstLaunchDrift.appIsFrontmost
+    var driftClock: () -> CFTimeInterval = CACurrentMediaTime
+    private static let driftKey = "first-launch.wall.drift"
+    private var driftElapsed: CFTimeInterval = 0
+    private var driftRunningSince: CFTimeInterval?
+    private var tilesRest = CGPoint.zero
     var semanticViews: [NSView] { [heading, openButton, shortcut] + chips }
     private var reduceMotion: Bool { reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     private var reduceTransparency: Bool { reduceTransparencyOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency }
@@ -130,6 +138,43 @@ import os
         refreshStyle()
     }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); refreshStyle() }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); refreshDrift() }
+    override func viewDidHide() { super.viewDidHide(); refreshDrift() }
+    override func viewDidUnhide() { super.viewDidUnhide(); refreshDrift() }
+    /// Runs the drift while it may animate; otherwise freezes the tiles where they are. Running time is the only
+    /// time that advances the ping-pong phase, so a resume continues from the paused offset.
+    private func refreshDrift() {
+        let visible = window.map { !isHiddenOrHasHiddenAncestor && windowVisible($0) } ?? false
+        let run = FirstLaunchDrift.mayAnimate(visible: visible, frontmost: appFrontmost(), reduceMotion: reduceMotion)
+        if run, driftRunningSince == nil {
+            let now = driftClock()
+            driftRunningSince = now
+            let drift = CABasicAnimation(keyPath: "position.y")
+            drift.isAdditive = true
+            drift.fromValue = 0
+            drift.toValue = FirstLaunchDrift.range
+            drift.duration = FirstLaunchDrift.period
+            drift.autoreverses = true
+            drift.repeatCount = .infinity
+            drift.timingFunction = CAMediaTimingFunction(name: .linear)
+            drift.beginTime = now
+            drift.timeOffset = driftElapsed
+            placeTiles()
+            tilesLayer.add(drift, forKey: Self.driftKey)
+        } else if !run, let since = driftRunningSince {
+            driftElapsed = (driftElapsed + driftClock() - since).truncatingRemainder(dividingBy: 2 * FirstLaunchDrift.period)
+            driftRunningSince = nil
+            tilesLayer.removeAnimation(forKey: Self.driftKey)
+            placeTiles()
+        }
+    }
+    /// The model sits at rest while the additive drift runs, and at the frozen offset while paused.
+    private func placeTiles() {
+        let offset = driftRunningSince == nil ? FirstLaunchDrift.offset(elapsed: driftElapsed) : 0
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        tilesLayer.position = CGPoint(x: tilesRest.x, y: tilesRest.y + offset)
+        CATransaction.commit()
+    }
     private func refreshStyle(animateWall: Bool = false) {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let dark = theme == .dark
@@ -267,7 +312,8 @@ import os
         CATransaction.begin(); CATransaction.setDisableActions(true)
         tilesLayer.setAffineTransform(.identity)
         tilesLayer.bounds = CGRect(origin: .zero, size: layout.box.size)
-        tilesLayer.position = CGPoint(x: layout.box.midX, y: layout.box.midY)
+        tilesRest = CGPoint(x: layout.box.midX, y: layout.box.midY)
+        placeTiles()
         tilesLayer.setAffineTransform(CGAffineTransform(rotationAngle: FirstLaunchLayout.tiltDegrees * .pi / 180))
         for (container, tile) in zip(tiles, layout.tiles) {
             container.frame = tile.frame
