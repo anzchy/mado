@@ -136,9 +136,30 @@ import os
     required init?(coder: NSCoder) { nil }
     @objc private func accessibilityOptionsChanged(_ notification: Notification) {
         refreshStyle()
+        refreshDrift()
     }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); refreshStyle() }
-    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); refreshDrift() }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        NotificationCenter.default.removeObserver(self)
+    }
+    /// Window notifications come only from the Home's own window; app ones only while the Home is in a window.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window {
+            for name in [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMiniaturizeNotification,
+                         NSWindow.didDeminiaturizeNotification] {
+                NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: window)
+            }
+            for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+                         NSApplication.didHideNotification, NSApplication.didUnhideNotification] {
+                NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: nil)
+            }
+        }
+        refreshDrift()
+    }
+    /// Every trigger re-reads all three inputs; the notification itself is not the state.
+    @objc private func driftInputChanged(_ notification: Notification) { refreshDrift() }
     override func viewDidHide() { super.viewDidHide(); refreshDrift() }
     override func viewDidUnhide() { super.viewDidUnhide(); refreshDrift() }
     /// Runs the drift while it may animate; otherwise freezes the tiles where they are. Running time is the only
