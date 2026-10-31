@@ -46,13 +46,21 @@ private actor RecoveryMounts: DiskMountPort {
     private var volumes = [AccessProbeVolume(uuid: "111", url: nil, name: "Disk"), AccessProbeVolume(uuid: "222", url: nil, name: "Other")]
     private var continuation: AsyncStream<DiskMountEvent>.Continuation?
     private var pauseNext = false
+    private var enumerationsBeforePause = 0
+    private var pauseObservers: [AsyncStream<Void>.Continuation] = []
     private var waiting: [(CheckedContinuation<[AccessProbeVolume], Never>, [AccessProbeVolume])] = []
     private(set) var paused = false
     func mountedVolumes() async -> [AccessProbeVolume] {
         // Capture before suspension: a late success must still lose to a newer eject.
         let captured = volumes
         if pauseNext {
+            if enumerationsBeforePause > 0 {
+                enumerationsBeforePause -= 1
+                return captured
+            }
             pauseNext = false; paused = true
+            let observers = pauseObservers; pauseObservers = []
+            for observer in observers { observer.finish() }
             return await withCheckedContinuation { waiting.append(($0, captured)) }
         }
         return captured
@@ -65,9 +73,22 @@ private actor RecoveryMounts: DiskMountPort {
         }
         continuation?.yield(event)
     }
-    func pauseEnumeration() { pauseNext = true; paused = false }
+    func pauseEnumeration(after enumerations: Int = 0) {
+        pauseNext = true; paused = false; enumerationsBeforePause = enumerations
+    }
+    func waitUntilPaused() async throws {
+        try Task.checkCancellation()
+        if paused { return }
+        let (stream, observer) = AsyncStream<Void>.makeStream()
+        pauseObservers.append(observer)
+        for await _ in stream { }
+        try Task.checkCancellation()
+        guard paused else { throw CancellationError() }
+    }
     func release() {
-        pauseNext = false; paused = false
+        pauseNext = false; paused = false; enumerationsBeforePause = 0
+        let observers = pauseObservers; pauseObservers = []
+        for observer in observers { observer.finish() }
         let held = waiting; waiting = []
         for (continuation, captured) in held { continuation.resume(returning: captured) }
     }
@@ -1307,6 +1328,94 @@ private struct Issue314Scanner: FolderScanning {
 }
 
 
+/// Each instance observes one known readable-root pass. The last readiness
+/// callback is synchronous on MainActor; with exactly these saved roots there
+/// is no further await before AccessMonitor clears its recheck task. A resumed
+/// MainActor waiter therefore starts its next phase after that job has finished.
+@MainActor private final class RecoveryForegroundPhase {
+    private let monitor: AccessMonitor
+    private let expectedRoots: Set<AccessRootID>
+    private var observation: UUID?
+    private(set) var observedRoots: Set<AccessRootID> = []
+    private(set) var isWaiting = false
+    var hasObserver: Bool { observation != nil }
+    var isComplete: Bool { observedRoots == expectedRoots }
+
+    init(monitor: AccessMonitor, roots: Set<AccessRootID>) {
+        self.monitor = monitor; expectedRoots = roots
+    }
+
+    func run(trigger: @MainActor () -> Void = {
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApplication.shared)
+    }) async throws {
+        let (events, completion) = AsyncStream<Void>.makeStream()
+        defer {
+            if let observation { monitor.removeReadinessObserver(observation) }
+            observation = nil
+            isWaiting = false
+            completion.finish()
+        }
+        try Task.checkCancellation()
+        isWaiting = true
+        observation = monitor.observeReadiness { [weak self] root in
+            guard let self, expectedRoots.contains(root) else { return }
+            observedRoots.insert(root)
+            if isComplete { completion.finish() }
+        }
+        // Registration and the actual activation are one MainActor segment.
+        // AsyncStream retains completion even before its iterator starts.
+        trigger()
+        for await _ in events { }
+        try Task.checkCancellation()
+        try #require(isComplete)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() async throws {
+    let f = try await RecoveryFixture()
+    defer { f.remove(); Task { await f.mounts.release() } }
+    let c = f.controller(); defer { c.window?.close() }
+    c.browseRecoveredFolder(f.b, rootID: f.rootB)
+    try await f.ready(c, folder: f.b)
+    await f.services.monitor.start()
+    let roots = Set(await f.services.files.records().map(\.id))
+    try #require(roots == Set([f.rootA, f.rootB]))
+
+    let beforeEntry = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+    let alreadyCancelled = Task { @MainActor in try await beforeEntry.run() }
+    alreadyCancelled.cancel()
+    do { try await alreadyCancelled.value; Issue.record("Cancelled phase unexpectedly succeeded") }
+    catch is CancellationError { }
+    #expect(!beforeEntry.hasObserver && !beforeEntry.isWaiting && beforeEntry.observedRoots.isEmpty)
+
+    await f.mounts.pauseEnumeration(after: 1)
+    let phase = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+    let waiter = Task { @MainActor in try await phase.run() }
+    defer { waiter.cancel() }
+    try await f.mounts.waitUntilPaused()
+    #expect(await f.mounts.paused)
+    #expect(phase.hasObserver && phase.isWaiting && !phase.isComplete)
+    #expect(phase.observedRoots == Set([f.rootA]))
+    waiter.cancel()
+    do { try await waiter.value; Issue.record("Pending phase unexpectedly succeeded after cancellation") }
+    catch is CancellationError { }
+    #expect(!phase.hasObserver && !phase.isWaiting && !phase.isComplete)
+    #expect(phase.observedRoots == Set([f.rootA]))
+    #expect(await f.mounts.paused)
+    print("i333 cancellation: before-entry and held-B waiters exited with CancellationError and no observer")
+
+    // Subscribe before releasing B. Its late readiness must not reach the
+    // cancelled phase, and the continuing foreground job must finish cleanup.
+    let drain = RecoveryForegroundPhase(monitor: f.services.monitor, roots: Set([f.rootB]))
+    try await drain.run { Task { await f.mounts.release() } }
+    #expect(drain.isComplete && drain.observedRoots == Set([f.rootB]))
+    #expect(phase.observedRoots == Set([f.rootA]) && !phase.hasObserver)
+    #expect(!(await f.mounts.paused))
+    print("i333 cancellation: held B released and real foreground drained without resuming cancelled waiter")
+}
+
+
 private func t231Fix2AppRecordedRoot(_ item: RecentFolder) throws -> String? {
     let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(item)) as? [String: Any])
     return object["recordedRoot"] as? String
@@ -1323,20 +1432,45 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
     #expect(try t231Fix2AppRecordedRoot(recorded) == f.a.absoluteString)
     c.browseRecoveredFolder(f.b, rootID: f.rootB)
     try await f.ready(c, folder: f.b)
+    defer { Task { await f.mounts.release() } }
+    await f.services.monitor.start()
+    let roots = Set(await f.services.files.records().map(\.id))
+    try #require(roots == Set([f.rootA, f.rootB]))
     let staging = f.base.appendingPathComponent("staging", isDirectory: true)
     let container = f.a.deletingLastPathComponent()
+    let first = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+    var secondMoveStarted = false
+    await f.mounts.pauseEnumeration(after: 1)
     try await f.moveRoot(to: staging)
-    // Foreground notifications coalesce, and a cached URL is not a completion signal.
-    // Await the same real bookmark/scope probe used by Open Recent after each move.
-    _ = try await f.services.probeRootURL(f.rootA)
+    let checker = Task { @MainActor in
+        try await f.mounts.waitUntilPaused()
+        #expect(await f.mounts.paused)
+        #expect(first.hasObserver && first.isWaiting && !first.isComplete)
+        #expect(first.observedRoots == Set([f.rootA]))
+        #expect(!secondMoveStarted)
+        #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
+        #expect(FileManager.default.fileExists(atPath: staging.path))
+        #expect(!FileManager.default.fileExists(atPath: f.a.path))
+        print("i333 fix1 GREEN: held B; first foreground registered and pending with only A ready; move two blocked")
+        await f.mounts.release()
+    }
+    defer { checker.cancel() }
+    try await first.run()
+    try await checker.value
+    #expect(first.observedRoots == roots && first.isComplete && !first.hasObserver)
     #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
+    print("i333 fix1 GREEN: first foreground completed all roots before move two")
+    secondMoveStarted = true
     try await f.services.files.runIsolated {
         try FileManager.default.removeItem(at: container)
         try FileManager.default.moveItem(at: staging, to: container)
         f.bookmarks.relocate(staging, to: container)
     }
-    _ = try await f.services.probeRootURL(f.rootA)
+    let second = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+    try await second.run()
+    #expect(second.observedRoots == roots && second.isComplete && !second.hasObserver)
     #expect(await f.services.files.rootURL(f.rootA)?.path == container.path)
+    print("i333 fix1 GREEN: fresh second foreground completed all roots at container")
     #expect(c.session.folderScan?.snapshot?.version.rootID == f.rootB)
     #expect(try await f.services.recent.load().contains(recorded))
     let replacement = f.base.appendingPathComponent("Replacement", isDirectory: true)
@@ -1351,7 +1485,6 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
     f.gate.arm(replacement)
     defer { f.gate.release() }
     await f.mounts.pauseEnumeration()
-    defer { Task { await f.mounts.release() } }
     c.completeAccessFolderSelection(replacement, reselect: true)
     try await recoveryWaitAsync { await f.mounts.paused }
     // The next mount query can belong to an outstanding foreground check.
