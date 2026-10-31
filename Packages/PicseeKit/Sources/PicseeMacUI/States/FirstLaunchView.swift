@@ -139,20 +139,23 @@ import os
         refreshDrift()
     }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); refreshStyle() }
+    private static let windowDriftInputs = [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMiniaturizeNotification,
+                                            NSWindow.didDeminiaturizeNotification]
+    private static let appDriftInputs = [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+                                         NSApplication.didHideNotification, NSApplication.didUnhideNotification]
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
-        NotificationCenter.default.removeObserver(self)
+        for name in Self.windowDriftInputs { NotificationCenter.default.removeObserver(self, name: name, object: window) }
+        for name in Self.appDriftInputs { NotificationCenter.default.removeObserver(self, name: name, object: nil) }
     }
     /// Window notifications come only from the Home's own window; app ones only while the Home is in a window.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let window {
-            for name in [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMiniaturizeNotification,
-                         NSWindow.didDeminiaturizeNotification] {
+            for name in Self.windowDriftInputs {
                 NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: window)
             }
-            for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
-                         NSApplication.didHideNotification, NSApplication.didUnhideNotification] {
+            for name in Self.appDriftInputs {
                 NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: nil)
             }
         }
