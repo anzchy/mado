@@ -1,5 +1,6 @@
 import AppKit
 import Testing
+import PicseeApplication
 @testable import PicseeMacUI
 
 /// Page 21 `.wall .tiles { animation: home-wall-drift … }` and its keyframes; CSS Y points down, AppKit's up.
@@ -245,4 +246,139 @@ private func i316Mod(_ t: CFTimeInterval) -> CFTimeInterval { t.truncatingRemain
     resize(NSSize(width: 1200, height: 800))
     #expect(home.tiles?.position.x == home.base.x)
     #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 20)), "relayout snapped \(home.frozenOffset)")
+}
+
+// MARK: - WI-3: live inputs, Reduce Motion, leaving the Home, drag fade
+
+private func i316Post(_ name: Notification.Name, _ object: Any?) { NotificationCenter.default.post(name: name, object: object) }
+private func i316PostAccessibilityChange() {
+    NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+}
+
+@Test @MainActor func i316AppAndWindowNotificationsPauseAndResume() throws {
+    struct Case { let pause: Notification.Name; let resume: Notification.Name; let app: Bool; let flipsFrontmost: Bool }
+    let cases = [
+        Case(pause: NSApplication.didResignActiveNotification, resume: NSApplication.didBecomeActiveNotification, app: true, flipsFrontmost: true),
+        Case(pause: NSApplication.didHideNotification, resume: NSApplication.didUnhideNotification, app: true, flipsFrontmost: false),
+        Case(pause: NSWindow.didMiniaturizeNotification, resume: NSWindow.didDeminiaturizeNotification, app: false, flipsFrontmost: false),
+        Case(pause: NSWindow.didChangeOcclusionStateNotification, resume: NSWindow.didChangeOcclusionStateNotification, app: false, flipsFrontmost: false)
+    ]
+    for item in cases {
+        let home = I316Home()
+        defer { home.close() }
+        let object: Any = item.app ? NSApplication.shared : home.window
+        home.clock.now += 7
+        if item.flipsFrontmost { home.frontmost = false } else { home.visible = false }
+        i316Post(item.pause, object)
+        #expect(home.drift == nil, "\(item.pause.rawValue) did not pause")
+        #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 7)), "\(item.pause.rawValue) froze at \(home.frozenOffset)")
+        home.clock.now += 30
+        if item.flipsFrontmost { home.frontmost = true } else { home.visible = true }
+        i316Post(item.resume, object)
+        let resumed = try #require(home.drift, "\(item.resume.rawValue) did not resume")
+        #expect(i316Close(CGFloat(resumed.timeOffset), 7) && resumed.beginTime == home.clock.now, "\(item.resume.rawValue) phase")
+    }
+}
+
+@Test @MainActor func i316NotificationsReReadEveryInput() throws {
+    let home = I316Home()
+    defer { home.close() }
+    let start = try #require(home.drift)
+    home.clock.now += 10
+    i316Post(NSApplication.didResignActiveNotification, NSApplication.shared)
+    #expect(home.drift.map { $0.beginTime == start.beginTime && $0.timeOffset == start.timeOffset } == true,
+            "the notification name is not the state: the app reader still says frontmost")
+    let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: .borderless,
+                         backing: .buffered, defer: false)
+    other.isReleasedWhenClosed = false
+    defer { other.close() }
+    home.visible = false
+    i316Post(NSWindow.didMiniaturizeNotification, other)
+    #expect(home.drift.map { $0.beginTime == start.beginTime } == true, "another window's notification paused the drift")
+    home.visible = true
+    home.frontmost = false
+    i316Post(NSWindow.didChangeOcclusionStateNotification, home.window)
+    #expect(home.drift == nil, "a window notification must re-read the app input too")
+    #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 10)))
+}
+
+@Test @MainActor func i316ReduceMotionLiveStopsAndResumes() throws {
+    let home = I316Home()
+    defer { home.close() }
+    home.clock.now += 20
+    home.view.reduceMotionOverride = true
+    i316PostAccessibilityChange()
+    #expect(home.drift == nil, "Reduce Motion on did not stop the drift at once")
+    #expect(home.tiles?.animationKeys() == nil)
+    #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 20)), "Reduce Motion freezes in place, no snap")
+    home.clock.now += 30
+    home.view.reduceMotionOverride = false
+    i316PostAccessibilityChange()
+    let resumed = try #require(home.drift, "Reduce Motion off did not resume")
+    #expect(i316Close(CGFloat(resumed.timeOffset), 20), "Reduce Motion time counted: \(resumed.timeOffset)")
+    home.frontmost = false
+    home.view.reduceMotionOverride = true
+    i316PostAccessibilityChange()
+    home.view.reduceMotionOverride = false
+    i316PostAccessibilityChange()
+    #expect(home.drift == nil, "resumed while picsee is in the background")
+}
+
+@Test @MainActor func i316LeavingHomeReleasesDriftForEveryExit() throws {
+    for exit in [ViewerImageStatus.loading("a.jpg"), .readingFolder, .showing] {
+        let scene = StatesScene()
+        defer { scene.window.close() }
+        scene.state.display(.empty)
+        let home = try launch(in: scene)
+        let inputs = I316Inputs()
+        home.windowVisible = { [inputs] _ in inputs.visible }
+        home.appFrontmost = { [inputs] in inputs.frontmost }
+        home.reduceMotionOverride = false
+        i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+        let tiles = try #require(wallLayer("first-launch.wall.tiles", in: home))
+        #expect(tiles.animation(forKey: "first-launch.wall.drift") != nil, "\(exit): Home did not start drifting")
+        scene.state.display(exit)
+        #expect(home.window == nil, "\(exit): Home still in the window")
+        #expect(tiles.animationKeys() == nil, "\(exit): animation kept after leaving: \(tiles.animationKeys() ?? [])")
+        i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+        i316Post(NSWindow.didChangeOcclusionStateNotification, scene.window)
+        i316Post(NSWindow.didDeminiaturizeNotification, scene.window)
+        i316PostAccessibilityChange()
+        #expect(tiles.animationKeys() == nil, "\(exit): a later notification restarted the drift")
+    }
+}
+
+/// The drift (animation, readers, observers) must not keep a Home alive once it leaves its window. The host path
+/// is not used: on main the state host already keeps its last Home object alive after leaving (reported in #316).
+@Test @MainActor func i316OldHomeIsReleasedAfterLeaving() throws {
+    weak var released: FirstLaunchView?
+    var window: NSWindow?
+    autoreleasepool {
+        let home = I316Home()
+        i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+        home.clock.now += 3
+        #expect(home.drift != nil, "the Home never drifted")
+        released = home.view
+        home.view.removeFromSuperview()
+        i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+        window = home.window
+    }
+    window?.close()
+    #expect(released == nil, "the drift keeps the old Home alive")
+}
+
+@Test @MainActor func i316DragFadeAndDriftCoexist() throws {
+    let home = I316Home()
+    defer { home.close() }
+    home.clock.now += 5
+    let start = try #require(home.drift)
+    home.view.setDragActive(true)
+    #expect(!wallOpacityAnimations(home.view).isEmpty, "drag fade missing while drifting")
+    #expect(home.drift.map { $0.beginTime == start.beginTime && $0.timeOffset == start.timeOffset } == true, "drag restarted the drift")
+    home.view.setDragActive(false)
+    #expect(home.drift.map { $0.beginTime == start.beginTime && $0.timeOffset == start.timeOffset } == true, "drag end restarted the drift")
+    home.view.setDragActive(true)
+    home.view.reduceMotionOverride = true
+    i316PostAccessibilityChange()
+    #expect(wallOpacityAnimations(home.view).isEmpty && home.drift == nil, "Reduce Motion during a drag keeps motion")
 }
