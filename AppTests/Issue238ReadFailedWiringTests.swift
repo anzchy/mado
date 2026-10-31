@@ -223,6 +223,50 @@ private let issue238ReadError = NSError(domain: NSCocoaErrorDomain, code: NSFile
     for _ in 0..<20 { try await scene.tick(); #expect(!scene.visible("access.lost.state")) }
 }
 
+/// Audit M1: a failed reread on the viewer surface must not cover the shown image with 24F-A.
+@Test(.timeLimit(.minutes(3))) @MainActor func issue238ViewerReadFailureKeepsImageAndArrowNavigation() async throws {
+    let scene = try Issue238Scene([.init(), .init(failure: issue238ReadError, after: 1)])
+    defer { scene.close() }
+    scene.controller.openGrantedFolder(scene.folder)
+    try await scene.waitUntil { scene.controller.gridSearchAvailable }
+    let scan = try #require(scene.controller.session.folderScan)
+    try await scene.waitUntil { !scan.isScanning && scan.completedImageCount == 2 }
+    let first = try #require(scan.snapshot?.navigationEntries.first)
+    scene.controller.session.focus(first.itemID)
+    try #require(scene.controller.route(.enter, from: .key))
+    try await scene.waitUntil {
+        scene.controller.session.mode == .viewing && scene.controller.hasImage &&
+            scene.controller.session.imageStatus == .showing
+    }
+    #expect(scene.controller.session.imageLoader.fileURL?.lastPathComponent == "img1.png")
+
+    _ = try? await scan.refresh()?.value
+    try await scene.waitUntil { scan.failureReason != nil }
+    for _ in 0..<5 { try await scene.tick() }
+    #expect(scene.controller.hasImage && scene.controller.session.imageLoader.presented != nil)
+    #expect(scene.readFailed == nil, "24F-A must stay on the folder-entry reading surface")
+    #expect(scene.visible("state.retry-folder"), "the viewer keeps its non-covering failure state")
+
+    func arrow(_ keyCode: UInt16, _ characters: String) throws {
+        let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: scene.window.windowNumber, context: nil, characters: characters,
+            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
+        scene.window.sendEvent(event)
+    }
+    try arrow(124, "\u{F703}")
+    try await scene.waitUntil {
+        scene.controller.session.imageLoader.fileURL?.lastPathComponent == "img2.png" &&
+            scene.controller.hasImage && scene.controller.session.imageLoader.presented != nil
+    }
+    #expect(scene.controller.hasImage && scene.readFailed == nil)
+    try arrow(123, "\u{F702}")
+    try await scene.waitUntil {
+        scene.controller.session.imageLoader.fileURL?.lastPathComponent == "img1.png" &&
+            scene.controller.hasImage && scene.controller.session.imageLoader.presented != nil
+    }
+    #expect(scene.controller.hasImage && scene.readFailed == nil)
+}
+
 @Test(.timeLimit(.minutes(3))) @MainActor func issue238RetrySucceedsThenRetryFailsReturnsToReadFailed() async throws {
     let scene = try Issue238Scene([.init(failure: issue238ReadError, after: 1), .init(failure: issue238ReadError, after: 1), .init()])
     defer { scene.close() }

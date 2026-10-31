@@ -108,7 +108,7 @@ public final class ViewerStateHost: NSView {
     public private(set) var buttons: [NSButton] = []
     public private(set) var textLines: [String] = []
     public private(set) var showsProgress = false
-    /// 「读取失败」 (24F-A) while `.folderScanFailed` shows (#238).
+    /// 「读取失败」 (24F-A) on the folder-entry reading surface (#238).
     public private(set) var readFailedView: ReadFailedStateView?
     private let readFailedPage = ReadFailedStateView()
     public var onRetry: (() -> Void)?
@@ -257,8 +257,17 @@ public final class ViewerStateHost: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
             return
-        case .folderScanFailed(_, let folder):
-            // 24F-A pins one explanatory line: no reason and no partial count (#238).
+        case .folderScanFailed(let reason, let folder):
+            if surface != .gridReading {
+                failure = true
+                let count = session?.folderScan?.sourceSnapshot?.navigationEntries.count ?? 0
+                textLines = [String(localized: "Unable to finish reading folder"),
+                    String(localized: String.LocalizationValue(reason)),
+                    String(format: String(localized: "Images found before scan stopped: %lld"), Int64(count))]
+                actions = [(String(localized: "Retry"), "state.retry-folder")]
+                break
+            }
+            // 24F-A is folder-entry only: no reason and no partial count (#238).
             let text = ReadFailedStateText(title: String(format: String(localized: "Couldn't finish reading “%@”"), folder),
                 detail: String(localized: "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."),
                 retry: String(localized: "Retry"), chooseOther: String(localized: "Choose Another Folder…"))

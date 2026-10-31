@@ -150,6 +150,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     let scene = StatesScene(), scanner = ReadFailedNativeScanner(failures: failures)
     let coordinator = FolderScanCoordinator(access: ReadFailedNativeLeases(), scanner: scanner)
     scene.session.folderScan = coordinator
+    scene.state.surface = .gridReading
     _ = try? await coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/待整理"), rootID: AccessRootID()).value
     scene.state.refresh()
     return (scene, coordinator, scanner)
@@ -226,13 +227,13 @@ private actor ReadFailedNativeScanner: FolderScanning {
     for (key, chinese) in [("Couldn't finish reading “%@”", "没能读完“%@”"),
         ("Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden.",
          "读取在中途停止了。为避免显示不完整的列表，已经找到的图片暂不显示。"),
-        ("Read incomplete", "读取未完成"), ("Retry", "重试"), ("Choose Another Folder…", "选择其他文件夹…")] {
+        ("Read incomplete", "读取未完成"), ("Retry", "重试"), ("Choose Another Folder…", "选择其他文件夹…"),
+        ("Unable to finish reading folder", "无法完成文件夹读取"),
+        ("Images found before scan stopped: %lld", "扫描停止前找到图片：%lld 张")] {
         let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]
         for (language, expected) in [("en", key), ("zh-Hans", chinese)] {
             let unit = (localizations?[language] as? [String: Any])?["stringUnit"] as? [String: Any]
             #expect(unit?["value"] as? String == expected, "\(key) \(language)")
         }
     }
-    #expect(strings["Images found before scan stopped: %lld"] == nil)
-    #expect(strings["Unable to finish reading folder"] == nil)
 }
