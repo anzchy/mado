@@ -382,3 +382,36 @@ private func i316PostAccessibilityChange() {
     i316PostAccessibilityChange()
     #expect(wallOpacityAnimations(home.view).isEmpty && home.drift == nil, "Reduce Motion during a drag keeps motion")
 }
+
+// MARK: - Review fix round: the window-visibility rule and window moves
+
+@Test func i316WindowVisibilityTruthTable() {
+    for onScreen in [false, true] {
+        for miniaturized in [false, true] {
+            for appHidden in [false, true] {
+                let expected = onScreen && !miniaturized && !appHidden
+                #expect(FirstLaunchDrift.windowIsVisible(onScreen: onScreen, miniaturized: miniaturized, appHidden: appHidden) == expected,
+                        "onScreen \(onScreen) miniaturized \(miniaturized) appHidden \(appHidden)")
+            }
+        }
+    }
+}
+
+@Test @MainActor func i316MovingToAnotherWindowIgnoresTheOldWindow() throws {
+    let home = I316Home()
+    defer { home.close() }
+    let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: .borderless,
+                         backing: .buffered, defer: false)
+    other.isReleasedWhenClosed = false
+    defer { other.close() }
+    let host = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+    other.contentView = host
+    host.addSubview(home.view)
+    let start = try #require(home.drift, "not drifting in the new window")
+    home.visible = false
+    NotificationCenter.default.post(name: NSWindow.didMiniaturizeNotification, object: home.window)
+    NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: home.window)
+    #expect(home.drift.map { $0.beginTime == start.beginTime } == true, "the old window still drives the drift")
+    NotificationCenter.default.post(name: NSWindow.didMiniaturizeNotification, object: other)
+    #expect(home.drift == nil, "the new window's notification did not pause the drift")
+}
