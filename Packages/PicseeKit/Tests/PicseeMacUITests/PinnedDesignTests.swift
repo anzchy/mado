@@ -275,3 +275,15 @@ private func fixturePage(_ css: String) throws -> PinnedDesign {
     #expect(border.width == 1.5 && border.style == "dashed")
     #expect(try light.raw(".wall img", "object-fit", viewport: 960) == "cover")
 }
+
+@Test func i316PinnedReaderReadsDrift() throws {
+    let page = try PinnedDesign.page("first-launch")
+    let animation = try page.animation(".wall .tiles")
+    #expect(animation.name == "home-wall-drift" && animation.duration == 60, "the reduced-motion rule must not win")
+    #expect(try page.reducedMotionAnimation(".wall .tiles") == "none")
+    let frames = try page.keyframes("home-wall-drift")
+    #expect([frames.from.x, frames.from.y, frames.to.x, frames.to.y] == [0, 0, 0, -362])
+    #expect(throws: PinnedDesign.Error.self) { try page.keyframes("no-such-keyframes") }
+    #expect(throws: PinnedDesign.Error.self) { try page.animation(".drop-outline") }
+    #expect(throws: PinnedDesign.Error.self) { try page.reducedMotionAnimation(".drop-outline") }
+}
