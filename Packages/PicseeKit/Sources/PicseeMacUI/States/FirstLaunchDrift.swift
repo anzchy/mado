@@ -23,7 +23,9 @@ enum FirstLaunchDrift {
 
     /// Not minimised, not hidden with the app, and at least partly on screen (not fully covered).
     @MainActor static func windowIsVisible(_ window: NSWindow) -> Bool {
-        window.occlusionState.contains(.visible) && !window.isMiniaturized && !NSApplication.shared.isHidden
+        // Read every condition up front: a window that is never on screen must still exercise the whole rule.
+        let conditions = [window.occlusionState.contains(.visible), !window.isMiniaturized, !NSApplication.shared.isHidden]
+        return !conditions.contains(false)
     }
 
     @MainActor static func appIsFrontmost() -> Bool { NSApplication.shared.isActive }
