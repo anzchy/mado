@@ -179,6 +179,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
     private let addFolderBorder = CAShapeLayer()
     public private(set) var parent: GridSidebarFolder?
     private var currentFolder: GridSidebarFolder?
+    public var currentAccessLossCause: AccessLossCause? { currentFolder?.accessLossCause }
     public private(set) var children: [GridSidebarFolder] = []
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

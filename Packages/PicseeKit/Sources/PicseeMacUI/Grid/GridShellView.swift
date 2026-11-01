@@ -83,6 +83,10 @@ import PicseeCore
     private var isReadFailed = false
     /// Reading or failed: the footer shows the read's status, not the stored name and count.
     private var showsReadStatus: Bool { isReading || isReadFailed }
+    /// Page 26 (#332): the tree's current folder lost access, whatever the cause; the footer reads `–` / Unavailable.
+    private var showsLostAccess: Bool { !folderTree.isHidden && folderTree.currentAccessLossCause != nil }
+    /// The count slot shows a status, not the stored count, so it never truncates as a search summary.
+    private var showsCountStatus: Bool { showsReadStatus || showsLostAccess }
     private let keyboardHint = NSView()
     private let spaceKeycap = NSTextField(labelWithString: "Space")
     private let quickLookLabel = NSTextField(labelWithString: "")
@@ -338,6 +342,7 @@ import PicseeCore
             if appearing { focusAppearingEmptyFolder() }
         }
         emptyFolderMirror?.setEmptyFolderPage(page)
+        if applyStatusText() { needsLayout = true }
         applyFooterState()
     }
     public func updateFolderCount(_ count: Int?, for url: URL) {
@@ -400,7 +405,8 @@ import PicseeCore
                                     width: hintWidth, height: 28)
         spaceKeycap.frame = NSRect(x: 0, y: 5, width: keycapWidth, height: 18)
         quickLookLabel.frame = NSRect(x: keycapWidth + 5, y: 6, width: quickLookWidth, height: 18)
-        searchStatus.isHidden = footer.bounds.width <= 480 || searchStatus.stringValue.isEmpty
+        // CanvasWindowController clears the tree directly (`folderTree.clear()`), so page 26 is re-read here too.
+        applyStatusText()
         let statusRight = (keyboardHint.isHidden
             ? (searchField.isHidden ? searchButton.frame.minX : searchField.frame.minX)
             : keyboardHint.frame.minX) - 16
@@ -417,7 +423,7 @@ import PicseeCore
         var countWidth: CGFloat = 0
         if !searchStatus.isHidden {
             let countNeed = Self.cellWidth(searchStatus)
-            if countIsSearchSummary && !showsReadStatus {
+            if countIsSearchSummary && !showsCountStatus {
                 countWidth = min(countNeed, max(0, available - fileWidth - countGap))
             } else {
                 countWidth = min(countNeed, available)
@@ -619,18 +625,12 @@ import PicseeCore
         if term.isEmpty {
             countText = ""
             countIsSearchSummary = false
-            if !showsReadStatus {
-                searchStatus.stringValue = ""
-                searchStatus.isHidden = true
-            }
+            if applyStatusText() { needsLayout = true }
         }
     }
     public func setCurrentFile(_ name: String) {
         currentFileName = name
-        if !showsReadStatus {
-            currentFileStatus.stringValue = name
-            currentFileStatus.isHidden = name.isEmpty
-        }
+        applyStatusText()
         needsLayout = true
     }
     /// folder-loading.html: the empty name slot, then `Reading…` in the count's place. The page's `—` renders 7px wide
@@ -650,21 +650,34 @@ import PicseeCore
     private func applyReadStatus() {
         folderTree.showsZeroForUnknownCurrent = isReading
         folderTree.showsDashForCurrent = isReadFailed
-        currentFileStatus.stringValue = showsReadStatus ? "–" : currentFileName
-        currentFileStatus.isHidden = !showsReadStatus && currentFileName.isEmpty
-        searchStatus.stringValue = isReading ? String(localized: "Reading…")
-            : isReadFailed ? String(localized: "Read incomplete") : countText
-        searchStatus.isHidden = footer.bounds.width <= 480 || searchStatus.stringValue.isEmpty
+        applyStatusText()
         applyFooterState()
         needsLayout = true
+    }
+    /// The name and count slots, by precedence: a read's status, page 26 (`–` / Unavailable), page 22 (`–` / the
+    /// stored `0 images`), then the stored name and count. The stored values are never overwritten, so leaving a page
+    /// shows the latest ones. Layout calls this too, so unchanged values are not reassigned; returns whether any changed.
+    @discardableResult private func applyStatusText() -> Bool {
+        let showsDash = showsReadStatus || showsLostAccess || !emptyFolderView.isHidden
+        let name = showsDash ? "–" : currentFileName
+        let count = isReading ? String(localized: "Reading…")
+            : isReadFailed ? String(localized: "Read incomplete")
+            : showsLostAccess ? String(localized: "Unavailable") : countText
+        let countHidden = footer.bounds.width <= 480 || count.isEmpty
+        let changed = currentFileStatus.stringValue != name || currentFileStatus.isHidden != name.isEmpty
+            || searchStatus.stringValue != count || searchStatus.isHidden != countHidden
+        if currentFileStatus.stringValue != name { currentFileStatus.stringValue = name }
+        if currentFileStatus.isHidden != name.isEmpty { currentFileStatus.isHidden = name.isEmpty }
+        if searchStatus.stringValue != count { searchStatus.stringValue = count }
+        if searchStatus.isHidden != countHidden { searchStatus.isHidden = countHidden }
+        return changed
     }
     public func setSearchStatus(resultCount: Int, term: String) {
         countText = term.isEmpty
             ? String(format: String(localized: "%lld images"), resultCount)
             : String(format: String(localized: "Search: %@ · %lld results"), term, resultCount)
         countIsSearchSummary = !term.isEmpty
-        if !showsReadStatus { searchStatus.stringValue = countText }
-        searchStatus.isHidden = footer.bounds.width <= 480
+        applyStatusText()
         searchButton.state = term.isEmpty ? .off : .on
         needsLayout = true
     }
