@@ -338,6 +338,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self.session.updateFocus(self.focusContext)
         }
         window.consumeKey = { [weak self] event in self?.consumePanelKey(event) ?? false }
+        window.observeMouseDown = { [weak self] event in self?.gridShell?.dismissDisplayPanel(forMouseDown: event) }
         canvas.pointerIsOverPanel = { [weak self] in
             guard let self, !self.inspectorHost.isHidden, let window = self.window else { return false }
             return self.inspectorHost.bounds.contains(
@@ -2033,6 +2034,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     }
     private func consumePanelKey(_ event: NSEvent) -> Bool {
         if waitingAccessPosition != nil, window?.attachedSheet == nil, !menuTracking(), event.keyCode == 53 { return true }
+        // #114: an open Display panel gets first refusal of Esc and Tab, ahead of the Inspector and grid rules.
+        if let gridShell, window?.attachedSheet == nil, !menuTracking(),
+           let handled = gridShell.routeDisplayPanelKey(event, firstResponder: window?.firstResponder) { return handled }
         if event.keyCode == 34, event.modifierFlags.contains(.command),
            event.modifierFlags.intersection([.control, .option]).isEmpty,
            !menuTracking() {
