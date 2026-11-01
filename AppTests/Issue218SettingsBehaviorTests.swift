@@ -13,7 +13,7 @@ import PicseeMacUI
     return nil
 }
 
-@MainActor @Test func issue218FutureSectionsAreVisibleAndInert() throws {
+@MainActor @Test func issue218DisplaySectionControlsAreLiveAndSelectingWritesNothing() throws {
     let preferences = InMemoryDisplayPreferencesStore()
     let defaults = UserDefaults(suiteName: "issue218-future-\(UUID().uuidString)")!
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),

@@ -421,3 +421,35 @@ private final class Issue114SettingsScanner: FolderScanning, @unchecked Sendable
     #expect(!shell.isDisplayPanelOpen, "Esc closes the Display panel")
     #expect(window.firstResponder === button, "focus returns to the Display button")
 }
+
+/// #114 fix round 1 (opus L1): the Settings note says changes sync immediately. Within the app both surfaces observe
+/// the one store, so with Settings and the grid panel open together each reflects the other's change at once.
+@MainActor @Test func issue114SettingsAndOpenPanelSyncInProcess() throws {
+    let store = InMemoryDisplayPreferencesStore()
+    let grid = try Issue114SettingsShell(store)
+    defer { grid.window.close() }
+    grid.shell.setDisplayPanelOpen(true)
+    let panel = grid.shell.displayPanel
+    let settings = issue114SettingsPanel(store)
+    defer { settings.window.close() }
+    let c = try Issue114SettingsControls(settings)
+
+    c.slide(260)
+    c.names.performClick(nil)
+    c.fit.performClick(nil)
+    grid.settle()
+    #expect(panel.sizeSlider.doubleValue == 260 && panel.namesCheckbox.state == .off)
+    #expect(panel.fitPopup.indexOfSelectedItem == 1)
+    // 1280 pt window, sidebar shown: 1084 pt content, insets 24, gap 16 → ⌊1052 / 276⌋ = 3 (4 at the default 220).
+    #expect(grid.columns == 3)
+
+    panel.sizeSlider.doubleValue = 150
+    issue114SettingsSend(panel.sizeSlider)
+    panel.namesCheckbox.state = .on
+    issue114SettingsSend(panel.namesCheckbox)
+    panel.fitPopup.selectItem(at: 0)
+    issue114SettingsSend(panel.fitPopup)
+    #expect(c.size.doubleValue == 150 && c.names.state == .on)
+    c.expectFit(.fill, "panel → open Settings")
+    #expect(grid.shell.isDisplayPanelOpen)
+}
