@@ -46,7 +46,7 @@ open class CanvasView: NSView {
 
     public var isShowingKeyboardFocusRing: Bool { showsKeyboardFocusRing }
 
-    public func showKeyboardFocusRing() {
+    private func showKeyboardFocusRing() {
         showsKeyboardFocusRing = true
         focusRingType = .none
         needsDisplay = true

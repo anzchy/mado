@@ -218,14 +218,14 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
                                 styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     let model = InspectorModel(reader: Issue362InspectorReader())
-    var restored = 0
+    let host = Issue362Host()
+    host.canvas = canvas
+    session.host = host
     var updates: [FocusContext] = []
+    // Same body as the App's restore: focus only; the ring comes from the key press.
     let panel = NSHostingView(rootView: InspectorPanel(model: model, session: session,
-        close: {}, restoreCanvasFocus: {
-            restored += 1
-            _ = window.makeFirstResponder(canvas)
-            canvas.showKeyboardFocusRing()
-        }, updateFocus: { updates.append($0); session.updateFocus($0) }))
+        close: {}, restoreCanvasFocus: { _ = window.makeFirstResponder(canvas) },
+        updateFocus: { updates.append($0); session.updateFocus($0) }))
     panel.frame = NSRect(x: 432, y: 0, width: 220, height: 500)
     let content = NSView(frame: frame)
     content.addSubview(canvas)
@@ -246,12 +246,13 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     #expect(window.makeFirstResponder(closeButton))
     #expect(updates.contains(.panel))
     #expect(window.firstResponder !== canvas)
+    // Esc → session → host.applyFocus(.canvas) inside the key press, as in the App.
     window.sendEvent(try issue362KeyCode(window, keyCode: 53))
-    for _ in 0..<100 where restored == 0 {
+    for _ in 0..<10 {
         panel.layoutSubtreeIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.01))
     }
-    #expect(restored > 0)
+    #expect(session.inspectorFocus.focus == .canvas)
     #expect(window.firstResponder === canvas)
     try issue362ExpectReference(canvas, ring: true)
 }
