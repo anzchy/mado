@@ -1481,7 +1481,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             } catch {
                 if operation.isCurrent, generation == current {
                     if error as? FileAccessError == .corruptStore { showAccessError(error) }
-                    else { promptForFolder(folder, currentImage: nil, direction: .next) }
+                    else if session.folderScan?.failure == nil { promptForFolder(folder, currentImage: nil, direction: .next) }
                 }
             }
         }

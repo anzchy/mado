@@ -223,6 +223,20 @@ private let issue238ReadError = NSError(domain: NSCocoaErrorDomain, code: NSFile
     for _ in 0..<20 { try await scene.tick(); #expect(!scene.visible("access.lost.state")) }
 }
 
+@Test(.timeLimit(.minutes(3))) @MainActor func issue238UnreadableChildScanShowsOnlyReadFailed() async throws {
+    let readDenied = NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+    let scene = try Issue238Scene([.init(), .init(failure: readDenied, after: 1)])
+    defer { scene.close() }
+    scene.controller.openGrantedFolder(scene.folder)
+    try await scene.waitUntil { scene.controller.gridSearchAvailable && scene.row(scene.child) != nil }
+    try #require(scene.row(scene.child)).performClick(nil)
+    try await scene.waitUntil { scene.readFailed != nil }
+    for _ in 0..<20 { try await scene.tick() }
+    #expect(scene.readFailed?.titleLabel.stringValue == "Couldn't finish reading “Child”")
+    #expect(!scene.visible("access.lost.state"))
+    #expect(scene.window.attachedSheet == nil, "a readable Access Root must not produce a folder grant sheet for a child read failure")
+}
+
 /// Audit M1: a failed reread on the viewer surface must not cover the shown image with 24F-A.
 @Test(.timeLimit(.minutes(3))) @MainActor func issue238ViewerReadFailureKeepsImageAndArrowNavigation() async throws {
     let scene = try Issue238Scene([.init(), .init(failure: issue238ReadError, after: 1)])
