@@ -6,6 +6,7 @@ public enum DisplayAppearance: String, Codable, Sendable {
 
 /// App-level display preferences. Search and per-folder extension filters are transient.
 public struct DisplayPreferences: Codable, Equatable, Sendable {
+    public var loopThroughImages: Bool = false
     public var alwaysShowTools: Bool
     public var filmstripExpanded: Bool
     public var appearance: DisplayAppearance
@@ -26,7 +27,7 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case alwaysShowTools, filmstripExpanded, appearance, gridSidebarWidth, gridSidebarVisible
-        case folderSort, folderSortDirection
+        case folderSort, folderSortDirection, loopThroughImages
     }
 
     public static func normalizedSidebarWidth(_ width: Double) -> Double {
@@ -43,6 +44,7 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
         // Omit defaults to keep existing preference encodings stable.
         if folderSort != .name { try values.encode(folderSort, forKey: .folderSort) }
         if folderSortDirection != .ascending { try values.encode(folderSortDirection, forKey: .folderSortDirection) }
+        if loopThroughImages { try values.encode(loopThroughImages, forKey: .loopThroughImages) }
     }
 
     public init(from decoder: any Decoder) throws {
@@ -54,6 +56,7 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
         gridSidebarVisible = (try? values.decode(Bool.self, forKey: .gridSidebarVisible)) ?? true
         folderSort = (try? values.decode(FolderSortKey.self, forKey: .folderSort)) ?? .name
         folderSortDirection = (try? values.decode(FolderSortDirection.self, forKey: .folderSortDirection)) ?? .ascending
+        loopThroughImages = (try? values.decode(Bool.self, forKey: .loopThroughImages)) ?? false
     }
 }
 
