@@ -44,9 +44,9 @@ public enum EntryPoint: String, CaseIterable, Sendable {
         switch self {
         case .reportIssue, .diagnostics, .keyboardShortcuts,
              .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
-             .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay: .implemented
-        case .contextMenu, .filmstrip, .favorites, .recents, .footerInfo,
-             .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode: .comingSoon
+             .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay,
+             .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode: .implemented
+        case .contextMenu, .filmstrip, .favorites, .recents, .footerInfo: .comingSoon
         }
     }
     public var isEnabled: Bool { state == .implemented }

@@ -34,6 +34,9 @@ enum SettingsSection: String, CaseIterable {
     private var appearanceButtons: [DisplayAppearance: NSButton] = [:]
     private var entryPoints: [ObjectIdentifier: EntryPoint] = [:]
     private var toolsButton: NSButton!
+    private var displaySize: NSSlider!
+    private var displayNames: NSButton!
+    private var fitButtons: [ThumbnailFit: NSButton] = [:]
     private var cacheSize: NSTextField!
     private var cacheDiagnostic: NSTextField!
     private var cacheClear: NSButton!
@@ -104,6 +107,12 @@ enum SettingsSection: String, CaseIterable {
             button.setAccessibilityValue(appearance == preferences.appearance ? "1" : "0")
         }
         toolsButton.state = preferences.alwaysShowTools ? .on : .off
+        displaySize.doubleValue = preferences.thumbnailSize
+        displayNames.state = preferences.showFileNames ? .on : .off
+        for (fit, button) in fitButtons {
+            button.state = fit == preferences.thumbnailFit ? .on : .off
+            button.setAccessibilityValue(fit == preferences.thumbnailFit ? "1" : "0")
+        }
     }
 
     private func buildViews() {
@@ -218,39 +227,41 @@ enum SettingsSection: String, CaseIterable {
         entryPoints[ObjectIdentifier(control)] = entry
     }
 
-    private func soon(_ x: CGFloat, _ y: CGFloat, in pane: NSView) {
-        let badge = label(String(localized: "Coming Soon"), role: "uiSmall", muted: true)
-        badge.frame = NSRect(x: x, y: y, width: 100, height: 24)
-        pane.addSubview(badge)
-    }
-
+    /// settings.html 显示 pane: the grid-display.html `.grid-tools-panel` preferences (one shared store, #114).
     private func buildDisplay() {
         let pane = panes[.display]!
         rowLabel(String(localized: "Thumbnail Size"), y: 397, in: pane)
-        let size = NSSlider(value: 220, minValue: 140, maxValue: 280, target: nil, action: nil)
-        size.frame = NSRect(x: 162, y: 397, width: 220, height: 24)
-        configure(size, entry: .settingsDisplayThumbnailSize, id: "settings.display.size", title: String(localized: "Thumbnail Size"))
-        pane.addSubview(size)
-        soon(390, 397, in: pane)
+        displaySize = NSSlider(value: 220, minValue: 140, maxValue: 280, target: self, action: #selector(changeThumbnailSize(_:)))
+        displaySize.numberOfTickMarks = 15
+        displaySize.allowsTickMarkValuesOnly = true
+        displaySize.frame = NSRect(x: 162, y: 397, width: 220, height: 24)
+        configure(displaySize, entry: .settingsDisplayThumbnailSize, id: "settings.display.size", title: String(localized: "Thumbnail Size"))
+        pane.addSubview(displaySize)
         rowLabel(String(localized: "Show File Names"), y: 352, in: pane)
-        let names = NSButton(checkboxWithTitle: String(localized: "Show names below thumbnails"), target: nil, action: nil)
-        names.font = DesignMetrics.font("ui")
-        names.frame = NSRect(x: 162, y: 352, width: names.intrinsicContentSize.width, height: 24)
-        configure(names, entry: .settingsDisplayFileNames, id: "settings.display.names", title: String(localized: "Show File Names"))
-        pane.addSubview(names)
-        soon(450, 352, in: pane)
+        displayNames = NSButton(checkboxWithTitle: String(localized: "Show names below thumbnails"),
+                                target: self, action: #selector(changeFileNames(_:)))
+        displayNames.font = DesignMetrics.font("ui")
+        displayNames.frame = NSRect(x: 162, y: 352, width: displayNames.intrinsicContentSize.width, height: 24)
+        configure(displayNames, entry: .settingsDisplayFileNames, id: "settings.display.names", title: String(localized: "Show File Names"))
+        pane.addSubview(displayNames)
         rowLabel(String(localized: "Thumbnails"), y: 307, in: pane)
         var fitX: CGFloat = 162
-        for (index, title) in [String(localized: "Fill and Crop"), String(localized: "Fit Entire Image")].enumerated() {
-            let button = NSButton(title: title, target: nil, action: nil)
-            button.font = DesignMetrics.font("ui")
-            let width = button.intrinsicContentSize.width
+        // A toggle pair styled like the 通用 appearance buttons.
+        for (index, item) in [(ThumbnailFit.fill, String(localized: "Fill and Crop")),
+                              (.fit, String(localized: "Fit Entire Image"))].enumerated() {
+            let button = NSButton(title: item.1, target: self, action: #selector(changeThumbnailFit(_:)))
+            button.tag = index
+            button.bezelStyle = .rounded
+            button.setButtonType(.pushOnPushOff)
+            configure(button, entry: .settingsDisplayFitMode, id: "settings.display.fit.\(index)", title: item.1)
+            button.font = DesignMetrics.font("uiSmall")
+            button.setAccessibilityRole(.radioButton)
+            let width = max(62, button.intrinsicContentSize.width + 14)
             button.frame = NSRect(x: fitX, y: 307, width: width, height: 24)
-            configure(button, entry: .settingsDisplayFitMode, id: "settings.display.fit.\(index)", title: title)
             pane.addSubview(button)
-            fitX += width + 8
+            fitButtons[item.0] = button
+            fitX += width + 2
         }
-        soon(fitX, 307, in: pane)
         let note = label(String(localized: "These are the same preferences as the grid footer Display panel; changes will sync immediately."), role: "uiSmall", muted: true)
         note.frame = NSRect(x: 162, y: 260, width: 390, height: 40)
         pane.addSubview(note)
@@ -455,6 +466,29 @@ enum SettingsSection: String, CaseIterable {
         case .settingsAboutSourceCode: openURL(EntryPoint.settingsAboutSourceCodeURL)
         default: break
         }
+    }
+
+    /// Changes one field of the store's current value, then reflects it (a re-clicked fit button stays on).
+    private func writeDisplay(_ change: (inout DisplayPreferences) -> Void) {
+        var value = preferencesStore.value
+        change(&value)
+        preferencesStore.value = value
+        preferencesDidChange(preferencesStore.value)
+    }
+
+    @objc private func changeThumbnailSize(_ sender: NSSlider) {
+        let size = DisplayPreferences.normalizedThumbnailSize(sender.doubleValue)
+        writeDisplay { $0.thumbnailSize = size }
+    }
+
+    @objc private func changeFileNames(_ sender: NSButton) {
+        let names = sender.state == .on
+        writeDisplay { $0.showFileNames = names }
+    }
+
+    @objc private func changeThumbnailFit(_ sender: NSButton) {
+        let fit: ThumbnailFit = sender.tag == 1 ? .fit : .fill
+        writeDisplay { $0.thumbnailFit = fit }
     }
 
     @objc private func changeTools(_ sender: NSButton) {

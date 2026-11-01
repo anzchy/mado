@@ -10,13 +10,14 @@ import PicseeApplication
 @Test func issue215EntryPointModelCoversEveryReleaseSurfaceEntry() {
     let expectedComingSoon: Set<EntryPoint> = [
         .contextMenu, .filmstrip, .favorites, .recents, .footerInfo,
-        .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode,
     ]
     // #220 / ADR-015: the two Settings → Updates controls are real now; #299: so are the About links (#285);
-    // #114: the grid footer Display button opens the page-15 popover.
+    // #114: the grid footer Display button opens the page-15 popover, and Settings 显示 edits the same three
+    // preferences (owner: 「两者都做，共用一组偏好」).
     let implemented: Set<EntryPoint> = [
         .reportIssue, .diagnostics, .keyboardShortcuts, .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
         .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay,
+        .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode,
     ]
     #expect(Set(EntryPoint.allCases) == expectedComingSoon.union(implemented))
     #expect(Set(EntryPoint.allCases.filter { $0.state == .comingSoon }) == expectedComingSoon)

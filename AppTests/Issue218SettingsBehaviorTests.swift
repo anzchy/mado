@@ -28,8 +28,11 @@ import PicseeMacUI
         panel.select(section)
         for id in ids {
             let control = try #require(settingsControl(id, in: root) as? NSControl)
-            #expect(!control.isEnabled)
-            #expect(control.accessibilityLabel()?.contains(String(localized: "Coming Soon")) == true)
+            // #114 (owner: 「两者都做，共用一组偏好」): Settings 显示 is real now — visible, enabled, no Coming Soon marker;
+            // selecting the section alone still writes nothing.
+            #expect(!control.isHidden && !control.isHiddenOrHasHiddenAncestor)
+            #expect(control.isEnabled)
+            #expect(control.accessibilityLabel()?.contains(String(localized: "Coming Soon")) == false)
             #expect(control.window?.firstResponder !== control)
         }
     }
