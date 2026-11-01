@@ -339,7 +339,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 外观与显示偏好 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
 | 文件夹浏览 | 2026-11-01 | doc-gardener | 34483f3..6c06db7 |
 | Filmstrip | 2026-10-28 | doc-gardener | 00a5c6d..50a495a。历史复核见 git log -p -- docs/feature-ledger.md |
-| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 34483f3..6c06db7 |
+| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 34483f3..363a5af |
 | 信息与元数据 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
 | 授权与文件访问 | 2026-11-01 | doc-gardener | 34483f3..6c06db7 |
 | 缓存与资源 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
