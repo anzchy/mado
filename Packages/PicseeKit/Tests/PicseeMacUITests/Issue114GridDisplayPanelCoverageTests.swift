@@ -70,3 +70,23 @@ import PicseeApplication
     #expect(!shell.isDisplayPanelOpen)
     #expect(window.firstResponder === shell.displayButton)
 }
+
+/// The store is the grid's one source: a grid that arrives with other options takes the stored ones on attach,
+/// including the defaults.
+@Test @MainActor func issue114PanelCoverageAttachedGridTakesStoredOptions() throws {
+    _ = NSApplication.shared
+    for stored in [GridDisplayOptions(), GridDisplayOptions(thumbnailSize: 260, showFileNames: false, fit: .fit)] {
+        var preferences = DisplayPreferences()
+        preferences.thumbnailSize = stored.thumbnailSize
+        preferences.showFileNames = stored.showFileNames
+        preferences.thumbnailFit = stored.fit
+        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800),
+                                  preferencesStore: InMemoryDisplayPreferencesStore(preferences))
+        let grid = GridBrowserView(frame: NSRect(origin: .zero, size: shell.mainFrame.size))
+        grid.displayOptions = GridDisplayOptions(thumbnailSize: 140, showFileNames: stored.showFileNames == false,
+                                                 fit: stored.fit == .fit ? .fill : .fit)
+        shell.mainContent.addSubview(grid)
+        shell.layoutSubtreeIfNeeded()
+        #expect(grid.displayOptions == stored)
+    }
+}
