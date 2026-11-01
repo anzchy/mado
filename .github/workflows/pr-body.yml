@@ -28,7 +28,7 @@ jobs:
           node-version: 22
       - name: Test agent tooling
         working-directory: pr-head
-        run: node --test scripts/agents/*.test.mjs
+        run: node --test scripts/agents/*.test.mjs scripts/perf/*.test.mjs
 
   pr-body-gates:
     name: PR body Gates
