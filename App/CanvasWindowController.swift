@@ -1838,6 +1838,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     }
     func returnToGrid() {
         guard gridFolderRoot != nil, let folder = gridProjection.snapshot?.version.folder ?? gridFolderURL else { return }
+        let returnedCurrent = session.currentItemID
+        let currentChanged = returnedCurrent != gridView.currentItemID
         session.setInspectorVisible(false)
         session.closeImage()
         canvas.showFailure()
@@ -1848,6 +1850,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             showGrid()
             if let offset = gridPreviewScrollOffset { gridView.restoreContentOffset(offset) }
             else if let anchor = session.scrollAnchor { gridView.scrollTo(anchor) }
+            // A wrapped preview returns to its latest viewed item, beyond the saved Grid viewport.
+            if currentChanged, let returnedCurrent { gridView.scrollTo(returnedCurrent) }
         } else { showGrid() }
         if let window { GridWindowIdentity.showFolder(folder, in: window) }
     }

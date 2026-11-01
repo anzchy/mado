@@ -153,30 +153,7 @@ func issue344SessionLoopCyclesRespectFilteredOrder(count: Int, descending: Bool)
     #expect(store.value.loopThroughImages)
 }
 
-@Test @MainActor func issue344SessionLoopDoesNotYetWrapPreviewOrFinderSets() async throws {
-    var preferences = DisplayPreferences()
-    preferences.loopThroughImages = true
-    let (_, host, session, _) = try await issue344FolderSession(store: InMemoryDisplayPreferencesStore(preferences))
-    let a = URL(fileURLWithPath: "/input/a.png"), b = URL(fileURLWithPath: "/input/b.png")
-    session.filePreviewSet = FilePreviewSet(files: [a, b])
-    issue344Command(.previous, session: session)
-    #expect(host.inputOpens.isEmpty)
-    issue344Command(.next, session: session)
-    issue344Command(.next, session: session)
-    #expect(host.inputOpens == [b])
-    #expect(session.filePreviewSet?.current == b)
-    session.filePreviewSet = nil
-    let first = ItemID.ephemeral(UUID()), last = ItemID.ephemeral(UUID())
-    session.beginBrowsing(items: [first, last], sourceVersion: .init(1), scrollAnchor: first)
-    session.select(first)
-    #expect(CommandRouter().route(.preview, from: .key, to: session))
-    issue344Command(.previous, session: session)
-    #expect(session.previewSet?.currentItemID == first)
-    issue344Command(.next, session: session)
-    issue344Command(.next, session: session)
-    #expect(session.previewSet?.currentItemID == last)
-    #expect(host.opens.isEmpty && host.navigation.isEmpty)
-}
+// #345 supersedes #344's temporary no-wrap limitation; session coverage is in Issue345LoopSetTests.
 
 @MainActor private final class Issue344ObservationSignal {
     var changed = false
