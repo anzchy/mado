@@ -12,6 +12,7 @@
     "Personal Favorites": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Personal Favorites"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "个人收藏"}}}},
     "Recently Viewed": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Recently Viewed"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "最近查看"}}}},
     "Show Image Information": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Show Image Information"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "显示图片信息"}}}},
+    "Close Display Panel": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Close Display Panel"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "关闭显示面板"}}}},
     "Display and Appearance": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Display and Appearance"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "显示与外观"}}}},
     "Help": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Help"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "帮助"}}}},
     "Report a Problem…": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Report a Problem…"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "报告问题…"}}}},
