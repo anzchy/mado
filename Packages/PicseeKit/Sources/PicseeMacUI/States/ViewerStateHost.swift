@@ -132,7 +132,12 @@ public final class ViewerStateHost: NSView {
     private var tracking = false
     /// Which window surface this host sits on; GridViewerPresentation owns it. The grid surface never shows a state.
     public enum Surface: Sendable { case viewer, gridReading, grid }
-    public var surface: Surface = .viewer { didSet { applyVisibility() } }
+    public var surface: Surface = .viewer {
+        didSet { applyVisibility(); if heldReading, surface != .gridReading { refresh() } }
+    }
+    /// The App shows the Reading State on the reading surface before the scan starts, while the Session still reads
+    /// `.empty`. Rebuilding the Home in that gap restarted its wall drift (#316), so the Reading State holds there.
+    private var heldReading = false
     /// Page 22 on the viewer surface (owner decision C, #137); GridShellView mirrors its page here.
     public let emptyFolderView = EmptyFolderStateView()
     private var emptyFolderPage: EmptyFolderPage?
@@ -163,13 +168,19 @@ public final class ViewerStateHost: NSView {
         if !tracking {
             tracking = true
             withObservationTracking {
-                display(session.imageStatus, nextEnabled: session.isEnabled(.next))
+                displaySessionStatus(session)
             } onChange: { [weak self] in
                 Task { @MainActor [weak self] in self?.tracking = false; self?.refresh() }
             }
-        } else { display(session.imageStatus, nextEnabled: session.isEnabled(.next)) }
+        } else { displaySessionStatus(session) }
+    }
+    private func displaySessionStatus(_ session: ViewerSession) {
+        let status = session.imageStatus
+        guard surface != .gridReading || status != .empty || displayedStatus != .readingFolder else { heldReading = true; return }
+        display(status, nextEnabled: session.isEnabled(.next))
     }
     public func display(_ status: ViewerImageStatus, nextEnabled: Bool = false) {
+        heldReading = false
         guard displayedStatus != status || displayedNextEnabled != nextEnabled else { return }
         displayedStatus = status; displayedNextEnabled = nextEnabled
         // #331: the chrome hides on the Home before the deferred relink, so the loop keeps Choose Folder….
