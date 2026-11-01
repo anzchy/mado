@@ -292,3 +292,17 @@ test('overlapping sample logs of one process count each event once', () => {
   assert.equal(result.samples[0].inside.diskHit, 1);
   assert.equal(result.samples[1].inside.diskHit + result.samples[1].outside.diskHit, 0);
 });
+
+// Fix round 1 (#146 opus M1): identical rows inside one file are two genuine events (a burst of equal-size evictions
+// in the same microsecond); only a re-print of an earlier, overlapping file is dropped.
+test('identical events inside one file are all kept; only overlap re-prints are dropped', () => {
+  const evict = line({ type: 'event', name: 'MemoryCacheEviction', id: '0', us: BASE + 5, msg: message('MemoryCacheEviction'), category: 'performance' });
+  const other = line({ type: 'event', name: 'MemoryCacheAdmission', id: '0', us: BASE + 9, msg: message('MemoryCacheAdmission'), category: 'performance' });
+  assert.equal(parseNdjson([evict, evict].join('\n')).events.length, 2);
+  assert.equal(mergeSampleLogs([[evict, evict].join('\n')]).events.length, 2, 'one file: both evictions are real');
+  // File two overlaps file one: it re-prints both evictions and adds its own event.
+  const merged = mergeSampleLogs([[evict, evict].join('\n'), [evict, evict, other].join('\n')]).events;
+  assert.deepEqual(merged.map((e) => e.name), ['MemoryCacheEviction', 'MemoryCacheEviction', 'MemoryCacheAdmission']);
+  // A later file that saw three (one more than the earlier file printed) keeps three.
+  assert.equal(mergeSampleLogs([[evict, evict].join('\n'), [evict, evict, evict].join('\n')]).events.length, 3);
+});

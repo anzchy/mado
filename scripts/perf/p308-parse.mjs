@@ -49,23 +49,28 @@ export function parseNdjson(text) {
 
 /**
  * Events of several sample logs as one list. Each sample's `log show` starts a little before its window, so in one
- * process (warm-memory) consecutive files overlap; an event printed by two files is the same event and kept once.
+ * process (warm-memory) consecutive files overlap and re-print the same events. Identical rows (same pid, µs
+ * timestamp, name, type, signpost ID and message) inside one file are distinct events (a burst of equal-size
+ * evictions), so each identical row is kept as many times as the file that printed it most often.
  */
 export function mergeSampleLogs(texts) {
-  const seen = new Set();
-  const events = [];
+  const kept = new Map(); // key → events kept so far
   let skipped = 0;
   for (const text of texts) {
     const parsed = parseNdjson(text);
     skipped += parsed.skipped;
+    const inFile = new Map();
     for (const e of parsed.events) {
       const key = [e.pid, e.us, e.name, e.type, e.id, e.message].join('\u0000');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      events.push(e);
+      if (!inFile.has(key)) inFile.set(key, []);
+      inFile.get(key).push(e);
+    }
+    for (const [key, events] of inFile) {
+      const have = kept.get(key) ?? [];
+      if (events.length > have.length) kept.set(key, [...have, ...events.slice(have.length)]);
     }
   }
-  events.sort((a, b) => a.us - b.us);
+  const events = [...kept.values()].flat().sort((a, b) => a.us - b.us);
   return { events, skipped };
 }
 
