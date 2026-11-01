@@ -288,3 +288,33 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
         try issue362ExpectReference(canvas, ring: true)
     }
 }
+
+@Test @MainActor func issue362HandledArrowWithoutOpeningLeavesNoRingForLaterOpening() throws {
+    _ = NSApplication.shared
+    let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
+    let canvas = CanvasView(frame: frame, session: ViewerSession())
+    let button = NSButton(frame: NSRect(x: 360, y: 10, width: 50, height: 24))
+    let content = NSView(frame: frame)
+    content.addSubview(canvas)
+    content.addSubview(button)
+    canvas.nextKeyView = button
+    button.nextKeyView = canvas
+    let window = Issue362Window(contentRect: frame.offsetBy(dx: -20000, dy: -20000),
+                                styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = content
+    window.orderFrontRegardless()
+    defer { window.close() }
+
+    // The end of a preview set accepts ←/→ and opens nothing.
+    canvas.onCommand = { id in id == .previous || id == .next }
+    #expect(window.makeFirstResponder(button))
+    window.sendEvent(try issue362Key(window, shift: false))
+    try issue362ExpectReference(canvas, ring: true)
+    window.sendEvent(try issue362KeyCode(window, keyCode: 124))
+    try issue362ExpectReference(canvas, ring: true)
+
+    // A later opening outside any key event (Finder, toolbar, programmatic) never keeps the ring.
+    canvas.beginOpening()
+    try issue362ExpectReference(canvas, ring: false)
+}

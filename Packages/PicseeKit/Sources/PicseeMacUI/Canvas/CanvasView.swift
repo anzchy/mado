@@ -44,22 +44,24 @@ open class CanvasView: NSView {
         if wasVisible { needsDisplay = true }
     }
 
+    public var isShowingKeyboardFocusRing: Bool { showsKeyboardFocusRing }
+
     public func showKeyboardFocusRing() {
         showsKeyboardFocusRing = true
         focusRingType = .none
         needsDisplay = true
     }
 
-    public func preserveKeyboardFocusRingForNextOpening() {
+    /// A visible ring survives only the openings `body` starts; later openings hide it.
+    public func preservingKeyboardFocusRing<Result>(_ body: () -> Result) -> Result {
+        let preserving = preserveKeyboardFocusRingForOpening
         preserveKeyboardFocusRingForOpening = showsKeyboardFocusRing
+        defer { preserveKeyboardFocusRingForOpening = preserving }
+        return body()
     }
 
     public func beginOpening() {
-        if preserveKeyboardFocusRingForOpening {
-            preserveKeyboardFocusRingForOpening = false
-        } else {
-            hideKeyboardFocusRing()
-        }
+        if !preserveKeyboardFocusRingForOpening { hideKeyboardFocusRing() }
         image = nil
         dragPoint = nil
         let generation = openingGeneration?() ?? UUID()
@@ -123,7 +125,9 @@ open class CanvasView: NSView {
 
     public override func becomeFirstResponder() -> Bool {
         let event = window?.currentEvent ?? NSApplication.shared.currentEvent
-        if event?.type == .keyDown, event?.keyCode == 48 || event?.keyCode == 53 {
+        // Any key press that moves focus here shows the ring, except Return, Space and keypad Enter,
+        // which open an image.
+        if let event, event.type == .keyDown, ![36, 49, 76].contains(event.keyCode) {
             showKeyboardFocusRing()
         } else {
             hideKeyboardFocusRing()
@@ -166,9 +170,9 @@ open class CanvasView: NSView {
         if event.modifierFlags.intersection([.control, .option]).isEmpty,
            let key = event.charactersIgnoringModifiers,
            let id = CommandID.matching(key: key, command: event.modifierFlags.contains(.command)) {
-            if id == .previous || id == .next { preserveKeyboardFocusRingForNextOpening() }
-            if onCommand?(id) == true { return }
-            preserveKeyboardFocusRingForOpening = false
+            let handled = id == .previous || id == .next
+                ? preservingKeyboardFocusRing { onCommand?(id) == true } : onCommand?(id) == true
+            if handled { return }
         }
         super.keyDown(with: event)
     }
