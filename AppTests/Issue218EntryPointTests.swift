@@ -30,7 +30,7 @@ import PicseeMacUI
     return own + root.subviews.flatMap(disabledSettingsControls(in:))
 }
 
-@MainActor @Test func issue218EveryGreyedSettingsControlUsesDeclaredEntryPoint() throws {
+@MainActor @Test func issue218SettingsControlsUseDeclaredImplementedEntryPoints() throws {
     let panel = settingsEntryPointPanel()
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)
