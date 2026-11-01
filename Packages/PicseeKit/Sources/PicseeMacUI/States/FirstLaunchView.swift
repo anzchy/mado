@@ -146,6 +146,7 @@ import os
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
         for name in Self.windowDriftInputs { NotificationCenter.default.removeObserver(self, name: name, object: window) }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
         for name in Self.appDriftInputs { NotificationCenter.default.removeObserver(self, name: name, object: nil) }
     }
     /// Window notifications come only from the Home's own window; app ones only while the Home is in a window.
@@ -155,6 +156,8 @@ import os
             for name in Self.windowDriftInputs {
                 NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: window)
             }
+            NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
+                                                   name: NSWindow.willCloseNotification, object: window)
             for name in Self.appDriftInputs {
                 NotificationCenter.default.addObserver(self, selector: #selector(driftInputChanged(_:)), name: name, object: nil)
             }
@@ -163,12 +166,15 @@ import os
     }
     /// Every trigger re-reads all three inputs; the notification itself is not the state.
     @objc private func driftInputChanged(_ notification: Notification) { refreshDrift() }
+    /// ⌘W orders a reusable window out with the Home still inside, and the window is still on screen when this
+    /// arrives. Pause now; later triggers re-read the readers, which see the closed window as not visible.
+    @objc private func windowWillClose(_ notification: Notification) { refreshDrift(closing: true) }
     override func viewDidHide() { super.viewDidHide(); refreshDrift() }
     override func viewDidUnhide() { super.viewDidUnhide(); refreshDrift() }
     /// Runs the drift while it may animate; otherwise freezes the tiles where they are. Running time is the only
     /// time that advances the ping-pong phase, so a resume continues from the paused offset.
-    private func refreshDrift() {
-        let visible = window.map { !isHiddenOrHasHiddenAncestor && windowVisible($0) } ?? false
+    private func refreshDrift(closing: Bool = false) {
+        let visible = !closing && (window.map { !isHiddenOrHasHiddenAncestor && windowVisible($0) } ?? false)
         let run = FirstLaunchDrift.mayAnimate(visible: visible, frontmost: appFrontmost(), reduceMotion: reduceMotion)
         if run, driftRunningSince == nil {
             let now = driftClock()
