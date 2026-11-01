@@ -40,13 +40,32 @@ timing and permissions feeding those tested modules are real.
 | Machine | Use it for | Can't do |
 |---|---|---|
 | Mac mini (M4, 16 GiB, macOS 26.4, 1920×1080 @1x) | the local device-test machine; the plan §10 performance baseline and every check that doesn't need @2x | Retina criteria: record NOT VERIFIED (no @2x display) |
-| MacBook Pro (M4, 24 GiB, macOS 27.0.1, Retina @2x) | @2x criteria only (P0-03, P1-03, state page 27), reached from the mini with the to-be-configured `ssh macbook` alias | baseline performance numbers (not the §10.1 baseline) |
+| MacBook Pro (M4, 24 GiB, macOS 27.0.1, Retina @2x) | @2x criteria only (P0-03, P1-03, state page 27), reached from the mini with the `ssh macbook` alias (working since 2026-11-01, #131) | baseline performance numbers (not the §10.1 baseline) |
 
 On the mini, run from an agent session with access to the local desktop. For @2x, send commands over `ssh macbook` into a
 tmux session started on the MacBook's own desktop. Signed builds and launches must run inside that desktop-started
-session because a plain SSH session cannot reach the login keychain (`errSecInternalComponent`). Until the SSH alias
-and that session are available, record every @2x criterion as NOT VERIFIED. Every record names the machine, chip,
-memory, macOS version, display and scale.
+session because a plain SSH session cannot reach the login keychain (`errSecInternalComponent`). Every record names
+the machine, chip, memory, macOS version, display and scale.
+
+The MacBook procedure, first passed on 2026-11-01 (#131: doctor 12 PASS, scale 2.0, a 960×640 pt window captured at
+1920×1280 px):
+
+- **Session.** The owner opens Terminal.app on the MacBook's desktop and runs `tmux new -s picsee-mbp`, then
+  `caffeinate -dimsu &` inside it. Started from SSH, tmux is not on `PATH`: use `/opt/homebrew/bin/tmux`.
+- **Permissions (owner only).** Terminal.app needs Screen & System Audio Recording and the permission that macOS 27
+  lists as **Privacy & Security → Device Control and Data Access** (Accessibility on earlier macOS). Restart Terminal and
+  tmux after granting. Check from inside tmux: `AXIsProcessTrustedWithOptions` and `CGPreflightScreenCaptureAccess`
+  both return true. Plain SSH processes do not have them, so `osascript` over SSH fails with `-1728`.
+- **Running a step.** Write a script on the MacBook that logs to the run directory, start it with
+  `tmux send-keys -t picsee-mbp '<script>' Enter`, and poll the log over SSH. Set
+  `PICSEE_XCODE=/Applications/Xcode-26.6.app`. Pass `--expected-sha` the 8-character short SHA that `build.sh` prints
+  (for example `235e94ef`), not 7 characters.
+- **First launch.** Sparkle's "Check for updates automatically?" window can sit behind the main window. Until it is
+  answered for the bundle ID, `launch.sh`, `doctor.sh` and `shot.sh` fail with "missing visible Picsee window" (#355).
+  The answer is the owner's, because it also applies to their installed Picsee.
+- **Limits.** One device run at a time on the MacBook; never quit or kill a Picsee the run didn't start. The MacBook is
+  not the performance baseline. Until this session and those permissions are available, record every @2x criterion
+  as NOT VERIFIED.
 
 ## 3. Isolation: one instance per machine
 
