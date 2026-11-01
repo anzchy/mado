@@ -202,3 +202,40 @@ import PicseeApplication
     }
     #expect(abs(fixture.currentFrame.minY - inset.minY) < 0.5)
 }
+
+/// #345 / GRID-02: id-based reveal follows the same minimum-distance law as arrows.
+@Test @MainActor func issue345IDRevealIsMinimalAndIdempotent() {
+    let fixture = GridArrowScrollFixture()
+    let grid = fixture.grid, scroll = grid.collectionView.enclosingScrollView!
+    scroll.automaticallyAdjustsContentInsets = false
+    scroll.contentInsets = NSEdgeInsets(top: 40, left: 0, bottom: 24, right: 0)
+    grid.layoutSubtreeIfNeeded()
+    func effectiveVisible() -> NSRect {
+        var visible = fixture.visible
+        visible.origin.y += 40
+        visible.size.height -= 64
+        return visible
+    }
+    let selection = grid.selection, current = grid.currentItemID
+    let saved = NSPoint(x: 0, y: 900.25)
+    for (index, id) in grid.displayedItemIDs.enumerated() {
+        grid.restoreContentOffset(saved)
+        let before = effectiveVisible(), tile = grid.collectionView.frameForItem(at: index)
+        let shift = tile.minY < before.minY ? tile.minY - before.minY : max(0, tile.maxY - before.maxY)
+        grid.reveal(id)
+        #expect(effectiveVisible().contains(tile))
+        #expect(abs(grid.contentOffset.y - saved.y - shift) < 0.0001)
+        #expect(grid.contentOffset.x == saved.x)
+        if before.contains(tile) { #expect(grid.contentOffset == saved) }
+        let revealed = grid.contentOffset
+        grid.reveal(id)
+        #expect(grid.contentOffset == revealed, "reveal is idempotent")
+        #expect(grid.selection == selection)
+        #expect(grid.currentItemID == current)
+    }
+    grid.restoreContentOffset(saved)
+    grid.reveal(.ephemeral(UUID()))
+    #expect(grid.contentOffset == saved)
+    #expect(grid.selection == selection)
+    #expect(grid.currentItemID == current)
+}

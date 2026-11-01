@@ -143,7 +143,8 @@ func issue345WrapEscapeKeepsLatestCurrentAndSelection(reverse: Bool) {
     issue345Route(direction, session) // wrap
     for _ in 0..<3 { issue345Route(direction, session) } // another full cycle
     issue345Route(direction, session) // ordinary page after wrap
-    let landed = reverse ? ids[2] : ids[2]
+    // Both directions reach the middle selected item after a wrap, full cycle and ordinary page.
+    let landed = ids[2]
     #expect(session.currentItemID == landed)
     session.setFolderLoopEnabled(false); issue345Route(.escape, session)
     #expect(session.mode == .browsing)
