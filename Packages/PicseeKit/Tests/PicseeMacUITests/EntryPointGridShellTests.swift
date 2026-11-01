@@ -21,7 +21,6 @@ import PicseeInfrastructure
         (.favorites, shell.favoritesButton),
         (.recents, shell.recentsButton),
         (.footerInfo, shell.infoButton),
-        (.footerDisplay, shell.displayButton),
     ]
 
     for (entry, button) in entries {
@@ -42,6 +41,11 @@ import PicseeInfrastructure
     #expect(shell.displayButton.title.isEmpty)
     #expect(shell.infoButton.image != nil)
     #expect(shell.displayButton.image != nil)
+    // #114 (owner: 「两者都做，共用一组偏好」): the Display button is implemented, not coming soon.
+    #expect(EntryPoint.footerDisplay.state == .implemented)
+    #expect(shell.displayButton.isEnabled && shell.displayButton.acceptsFirstResponder && shell.displayButton.action != nil)
+    #expect(shell.displayButton.accessibilityLabel()?.contains(EntryPoint.footerInfo.accessibilityLabel(for: .preferred)) == false)
+    expectComingSoonContentFits(shell.displayButton)
 }
 
 @Test @MainActor func issue215ComingSoonLayoutFitsDesignAndNarrowWindowInBothLanguages() throws {
@@ -106,7 +110,7 @@ import PicseeInfrastructure
             || $0.accessibilityLabel()?.contains("即将推出") == true)
     }
     #expect(Set(controls.compactMap { $0.accessibilityIdentifier() }) == [
-        "grid.favorites.row", "grid.recents.row", "grid.info.button", "grid.display.button",
+        "grid.favorites.row", "grid.recents.row", "grid.info.button",
     ])
     for control in controls {
         let entry = try #require(shell.entryPoint(for: control),
