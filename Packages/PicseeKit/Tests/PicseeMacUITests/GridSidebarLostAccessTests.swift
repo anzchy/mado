@@ -99,6 +99,19 @@ func t232LostSidebarAccessibilityUsesPage26CauseCopy(_ sample: (cause: AccessLos
     #expect(row.countLabel.isHidden)
 }
 
+@Test @MainActor func t238LostUnreadSidebarRowKeepsLostAccessAccessibility() throws {
+    let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
+    let folder = URL(fileURLWithPath: "/tmp/Trip")
+    tree.showsDashForCurrent = true
+    tree.show(current: .init(url: folder, count: 8, accessLossCause: .accessExpired), parent: nil, children: [])
+    let row = try #require(tree.rows.first)
+    let expected = "\(String(localized: "Unavailable")), \(String(localized: "Access Has Expired"))"
+    #expect(row.countLabel.isHidden)
+    #expect(row.accessibilityLabel() == "Trip")
+    #expect(row.accessibilityValue() as? String == expected)
+    #expect(row.accessibilityHelp() == expected)
+}
+
 @Test @MainActor func t232NoncurrentLostRowUsesMutedWarning() throws {
     let page = try PinnedDesign.page("permission-denied")
     let row = GridSidebarFolderButton(folder: .init(url: URL(fileURLWithPath: "/tmp/Trip"),
