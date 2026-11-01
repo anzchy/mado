@@ -253,3 +253,14 @@ private func p308InfrastructureSignpostMessages(source: String = #filePath) thro
     #expect(await cache.diagnostics().entries == 2)
     #expect(tracer.lookups == 0)
 }
+
+/// Budget accounting is the only remover here (capacity is far above the budget): its departures are reported too.
+@Test func p308BudgetAccountingReportsItsEvictions() async throws {
+    let recorder = MovementRecorder()
+    let cache = ImageMemoryCache(capacity: 1_000, budget: MemoryBudget(limit: 32), movementTrace: recorder)
+    let keys = [cacheKey(1), cacheKey(2), cacheKey(3)]
+    for key in keys { await cache.insert(cacheImage(try cachePixels(), key: key), for: key) }
+    #expect(await cache.diagnostics().entries == 2)
+    #expect(recorder.admissions.count == 3)
+    #expect(recorder.departures == [.init(preview: false, bytes: 16, reason: .budget)], "the oldest goes to fit the budget")
+}
