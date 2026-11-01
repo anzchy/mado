@@ -133,12 +133,11 @@ public final class ChromeToolView: NSView {
 private final class ChromeFloatingGroupView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 5.5, yRadius: 5.5)
+            let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), xRadius: 5.75, yRadius: 5.75)
             DesignColor.popoverBackground.nsColor.setFill()
             outline.fill()
-            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            NSColor.black.withAlphaComponent(dark ? 0.28 : 0.16).setStroke()
-            outline.lineWidth = 1
+            DesignColor.textPrimary.nsColor.withAlphaComponent(0.12).setStroke()
+            outline.lineWidth = 0.5
             outline.stroke()
         }
     }
@@ -153,18 +152,6 @@ public final class ViewerChromeOverlay: NSView {
     private let fileLabel = NSTextField(labelWithString: "")
     let metadataSortNotice = GridSortNoticeLabel(labelWithString: String(localized: "Sort unfinished"))
     private var displayedMetadataSortState: MetadataSortState = .idle
-    public override func draw(_ dirtyRect: NSRect) {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            NSColor.black.withAlphaComponent(dark ? 0.18 : 0.12).setStroke()
-            for group in groups where !group.isHidden {
-                let outline = NSBezierPath(roundedRect: group.frame.insetBy(dx: 0.5, dy: 0.5),
-                    xRadius: 5.5, yRadius: 5.5)
-                outline.lineWidth = 2
-                outline.stroke()
-            }
-        }
-    }
     /// #331: the Home (status `.empty`, pinned page 21) shows only its centre. Opt-in, so only the App window hides.
     public private(set) var hidesOnHome = false
     private var requestedVisible = true
@@ -210,16 +197,15 @@ public final class ViewerChromeOverlay: NSView {
     }
     private func updateGroupColors() {
         needsDisplay = true
-        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         effectiveAppearance.performAsCurrentDrawingAppearance {
             metadataSortNotice.layer?.backgroundColor = DesignColor.canvasBackground.nsColor.cgColor
             for group in groups {
                 guard let layer = group.layer else { continue }
                 layer.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
-                layer.shadowColor = NSColor.black.cgColor
-                layer.shadowOpacity = dark ? 0.32 : 0.18
-                layer.shadowRadius = 6
-                layer.shadowOffset = CGSize(width: 0, height: -2)
+                layer.shadowColor = DesignColor.textPrimary.nsColor.cgColor
+                layer.shadowOpacity = 0.08
+                layer.shadowRadius = 12
+                layer.shadowOffset = CGSize(width: 0, height: -8)
                 layer.masksToBounds = false
                 group.needsDisplay = true
             }

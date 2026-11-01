@@ -27,26 +27,30 @@ import PicseeApplication
         session: ViewerSession())
     overlay.refresh(filename: "a.png")
     let initialWidth = overlay.groups[1].frame.width
-    var lightOpacity: Float = 0
 
-    for (index, appearance) in [NSAppearance.Name.aqua, .darkAqua, .aqua].enumerated() {
+    for appearance in [NSAppearance.Name.aqua, .darkAqua, .aqua] {
         overlay.appearance = NSAppearance(named: appearance)
         overlay.viewDidChangeEffectiveAppearance()
+        var unresolvedExpected: NSColor?
+        overlay.effectiveAppearance.performAsCurrentDrawingAppearance {
+            unresolvedExpected = DesignColor.textPrimary.nsColor.usingColorSpace(.sRGB)
+        }
+        let expectedColor = try #require(unresolvedExpected)
         for group in overlay.groups {
             let layer = try #require(group.layer)
-            #expect(layer.shadowColor != nil)
-            #expect(layer.shadowOpacity > 0.1)
-            #expect(layer.shadowOpacity < 0.4)
-            #expect(layer.shadowRadius > 0)
-            #expect(layer.shadowOffset.height < 0)
+            let shadowCG = try #require(layer.shadowColor)
+            let shadowColor = try #require(NSColor(cgColor: shadowCG)?.usingColorSpace(.sRGB))
+            #expect(abs(shadowColor.redComponent - expectedColor.redComponent) < 0.00001)
+            #expect(abs(shadowColor.greenComponent - expectedColor.greenComponent) < 0.00001)
+            #expect(abs(shadowColor.blueComponent - expectedColor.blueComponent) < 0.00001)
+            #expect(shadowColor.alphaComponent == 1)
+            #expect(layer.shadowOpacity == 0.08)
+            #expect(layer.shadowRadius == 12)
+            #expect(layer.shadowOffset == CGSize(width: 0, height: -8))
             #expect(layer.masksToBounds == false)
             let path = try #require(layer.shadowPath)
             #expect(path.boundingBoxOfPath == group.bounds)
         }
-        let opacity = try #require(overlay.groups[0].layer).shadowOpacity
-        if index == 0 { lightOpacity = opacity }
-        if index == 1 { #expect(opacity > lightOpacity) }
-        if index == 2 { #expect(opacity == lightOpacity) }
     }
 
     overlay.refresh(filename: String(repeating: "long-filename-", count: 30) + ".png")
