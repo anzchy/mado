@@ -333,21 +333,21 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| 查看与画布 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| C 沉浸界面 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| 外观与显示偏好 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| 文件夹浏览 | 2026-11-01 | doc-gardener | 34483f3..6c06db7 |
+| 打开与输入 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 查看与画布 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| C 沉浸界面 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 外观与显示偏好 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 文件夹浏览 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | Filmstrip | 2026-10-28 | doc-gardener | 00a5c6d..50a495a。历史复核见 git log -p -- docs/feature-ledger.md |
-| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 34483f3..363a5af |
-| 信息与元数据 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| 授权与文件访问 | 2026-11-01 | doc-gardener | 34483f3..6c06db7 |
-| 缓存与资源 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
-| 命令与键盘 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
+| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 信息与元数据 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 授权与文件访问 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 缓存与资源 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
+| 命令与键盘 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 可访问性与本地化 | 2026-11-01 | doc-gardener | 34483f3a..75619450 |
+| 可访问性与本地化 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | 分发 | 2026-11-01 | doc-gardener | fbba9cb..c578437 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
