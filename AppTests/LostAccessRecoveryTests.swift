@@ -1351,7 +1351,13 @@ func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async t
     let selected = try #require(trashed as URL?)
     defer { try? FileManager.default.removeItem(at: selected) }
     c.completeAccessFolderSelection(selected, reselect: true)
-    try await recoveryWait { c.session.folderScan?.snapshot?.isComplete == true || (c.waitingAccessPosition != nil && c.waitingAccessPosition?.rootID != f.rootA) }
+    // #379: the grid applies a completed snapshot in a later MainActor job, so wait for the grid, not the scan.
+    try await recoveryWait {
+        let scan = c.session.folderScan?.snapshot, grid = try? recoveryGrid(c)
+        let shown = scan?.isComplete == true && scan?.version.folder.path == selected.path &&
+            grid.map { !$0.isHiddenOrHasHiddenAncestor && !$0.displayedItemIDs.isEmpty } == true
+        return shown || (c.waitingAccessPosition != nil && c.waitingAccessPosition?.rootID != f.rootA)
+    }
     #expect(c.waitingAccessPosition == nil, "explicit selected Trash should open; cause=\(String(describing: c.accessLossCause))")
     let snapshot = try #require(c.session.folderScan?.snapshot)
     #expect(snapshot.version.folder.path == selected.path)
