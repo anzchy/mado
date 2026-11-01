@@ -1,16 +1,15 @@
 import Foundation
-import os
 import PicseeApplication
 import Sparkle
 
 /// Untested native forwarding to Sparkle (network, XPC installer); the Settings side is covered with a fake
 /// port, and the real path is checked on a device with a test appcast (#223). Excluded from PicseeAppTests; a source
-/// guard there pins that the controller is built stopped and `start()` calls Sparkle's throwing start (#359).
+/// guard there pins that the controller is built stopped and `start()` goes through `startUpdater()`, so a start
+/// failure still shows Sparkle's own alert (#359).
 @MainActor final class SparkleUpdatePort: NSObject, AppUpdatePort, SPUUpdaterDelegate {
     private var controller: SPUStandardUpdaterController!
     private var observers: [@MainActor () -> Void] = []
     private var observations: [NSKeyValueObservation] = []
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "updates")
 
     override init() {
         super.init()
@@ -44,10 +43,7 @@ import Sparkle
 
     func checkForUpdates() { controller.checkForUpdates(nil) }
 
-    func start() {
-        do { try controller.updater.start() }
-        catch { logger.error("Updater failed to start: \(String(describing: error), privacy: .private)") }
-    }
+    func start() { controller.startUpdater() }
 
     func observe(_ onChange: @escaping @MainActor () -> Void) { observers.append(onChange) }
 
