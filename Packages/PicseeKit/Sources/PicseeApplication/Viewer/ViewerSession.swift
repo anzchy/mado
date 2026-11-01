@@ -25,7 +25,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public func beginCanvasImage() { zoomMode = .fit }
     public func reportCanvasZoom(_ value: Double) { zoomMode = .custom(value) }
     public var searchTerm = ""
-    public var displayPreferences: DisplayPreferences { preferencesStore.value }
+    public private(set) var displayPreferences: DisplayPreferences
     public private(set) var selection = BrowserSelection()
     public private(set) var previewSet: PreviewSet? {
         didSet { if oldValue != nil && previewSet == nil { applyPreferredFolderSort() } }
@@ -86,6 +86,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 host: (any ViewerSessionHost)? = nil, imageLoader: ViewerImageLoader = ViewerImageLoader()) {
         self.imageLoader = imageLoader
         self.preferencesStore = preferencesStore
+        self.displayPreferences = preferencesStore.value
         self.clock = clock
         self.host = host
         chrome = ViewerChromeState(now: clock.now, hideDelay: hideDelay)
@@ -200,6 +201,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         synchronizeChrome()
     }
     public func preferencesDidChange(_ preferences: DisplayPreferences) {
+        displayPreferences = preferences
         chrome.setPinned(preferences.alwaysShowTools, at: clock.now)
         // Unchanged true values must not count as a new Filmstrip interaction.
         if chrome.locks.contains(.filmstrip) != preferences.filmstripExpanded {
@@ -207,6 +209,12 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         }
         synchronizeChrome()
         applyPreferredFolderSort()
+    }
+    public func setFolderLoopEnabled(_ enabled: Bool) {
+        guard preferencesStore.value.loopThroughImages != enabled else { return }
+        var preferences = preferencesStore.value
+        preferences.loopThroughImages = enabled
+        preferencesStore.value = preferences
     }
     private func applyPreferredFolderSort() {
         guard previewSet == nil, filePreviewSet == nil, let folderScan else { return }
@@ -239,7 +247,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
             else {
                 if mode == .viewing, previewSet == nil, folderScan?.isReadingFolder == true { false }
                 else if mode == .viewing, previewSet == nil,
-                        let enabled = folderScan?.canMove(command == .next ? .next : .previous, currentURL: imageLoader.fileURL) { enabled }
+                        let enabled = folderScan?.canMove(command == .next ? .next : .previous, currentURL: imageLoader.fileURL,
+                                                         mayWrap: displayPreferences.loopThroughImages) { enabled }
                 else {
                     mode == .viewing && (host?.hasImage == true || imageStatus != .empty)
                         && (previewSet != nil || (host as? any ViewerSessionNavigationHost)?.canNavigate == true)
@@ -288,7 +297,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 previewSet?.move(forward: command == .next)
                 if let id = previewSet?.currentItemID, id != previous { host?.presentGridItem(id) }
             } else if mode == .viewing,
-                      folderScan?.move(command == .next ? .next : .previous, currentURL: imageLoader.fileURL) == true {
+                      folderScan?.move(command == .next ? .next : .previous, currentURL: imageLoader.fileURL,
+                                       mayWrap: displayPreferences.loopThroughImages) == true {
             } else {
                 (host as? any ViewerSessionNavigationHost)?.navigate(command == .next ? .next : .previous)
             }

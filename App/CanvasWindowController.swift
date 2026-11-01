@@ -39,7 +39,6 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         var wasViewing: Bool
         let conditions: FolderViewConditions
         let recursive: Bool
-        let loop: Bool
         let searchTerm: String
         let scrollOffset: NSPoint
         var counter: UInt64
@@ -457,7 +456,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             currentItemID: session.currentItemID ?? session.folderScan?.currentItemID,
             currentImageURL: fileURL, wasViewing: session.mode == .viewing,
             conditions: session.folderConditions, recursive: session.folderRecursiveEnabled,
-            loop: session.folderLoopEnabled, searchTerm: gridSearch.term,
+            searchTerm: gridSearch.term,
             scrollOffset: gridView.contentOffset, counter: counter)
         if initialPosition == nil {
             if folderRecoveryReference?.rootID == rootID, folderRecoveryURLs.contains(folder.standardizedFileURL) {
@@ -946,7 +945,6 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             trace: NativeFolderScanTrace(), metadataReader: ImageFolderMetadataReader(), watcher: services.watch)
         accessRecoveryScan = scan
         _ = scan.setRecursiveEnabled(position.recursive)
-        scan.setLoopEnabled(position.loop)
         let task = scan.begin(folder: folder, rootID: position.rootID, canPresent: { [weak self, weak scan] in
             guard let self, let scan, context.permit.isCurrent, operation.isCurrent else { return false }
             return self.mayRestore(position, request: request, operation: operation, context: context) ||
@@ -2185,7 +2183,7 @@ extension CanvasWindowController: AccessRecoveryHost {
         var position = WaitingAccessPosition(rootID: rootID, folderURL: lastKnownFolder,
             currentItemID: nil, currentImageURL: nil, wasViewing: false,
             conditions: session.folderConditions, recursive: session.folderRecursiveEnabled,
-            loop: session.folderLoopEnabled, searchTerm: "", scrollOffset: .zero,
+            searchTerm: "", scrollOffset: .zero,
             counter: accessMonitor?.state.snapshot(for: rootID)?.counter ?? 0)
         position.automaticRecovery = false
         handleAccessLoss(rootID, counter: position.counter, initialPosition: position)
