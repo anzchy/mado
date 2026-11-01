@@ -499,3 +499,21 @@ private func i316PostAccessibilityChange() {
         #expect(count.frontmostReads == 1, "\(name.rawValue) reached \(count.frontmostReads) registrations")
     }
 }
+
+/// Leaving the Home through ⌘O (device smoke run=20261101-212141-i316s): the App puts the Reading State on the reading
+/// surface before the scan starts, while the Session still reads `.empty`. The Session's observation refresh in that
+/// gap rebuilt the Home, whose drift ran for about 8 ms until the scan began and hid it again.
+@Test @MainActor func i316LeavingTheHomeForAFolderReadNeverRebuildsTheHome() throws {
+    let scene = StatesScene()
+    defer { scene.window.close() }
+    #expect(scene.state.subviews.contains { $0 is FirstLaunchView }, "the scene starts on the Home")
+    scene.session.enterFolderGrid(items: [], sourceVersion: .init(0))
+    scene.state.surface = .gridReading
+    scene.state.display(.readingFolder)
+    #expect(scene.session.imageStatus == .empty, "the gap before the scan starts")
+    scene.state.refresh()
+    #expect(!scene.state.subviews.contains { $0 is FirstLaunchView }, "the Session's .empty rebuilt the Home on the reading surface")
+    #expect(scene.state.textLines.first == "Reading Folder…")
+    scene.state.surface = .viewer
+    #expect(scene.state.subviews.contains { $0 is FirstLaunchView }, "back on the viewer surface the Home returns")
+}
