@@ -1163,6 +1163,46 @@ private struct Issue314Scanner: FolderScanning {
     try await recoveryWait { c.waitingAccessPosition?.rootID == f.rootA && recoveryPage(c) != nil }
     try expectLostFooter("undo back to page 26")
 }
+/// #332 / page 26: cancelling either replacement route restores the lost footer and sidebar row.
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [false, true])
+func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async throws {
+    let f = try await RecoveryFixture(); defer { f.remove() }
+    let c = f.controller(); defer { f.gate.release(); c.window?.close() }
+    try await t231Lose(f, c)
+    let position = try #require(c.waitingAccessPosition)
+    let cause = try #require(c.accessLossCause)
+    let shell = try recoveryShell(c)
+    let parent = shell.folderTree.parent
+    f.gate.arm(f.b)
+    c.completeAccessFolderSelection(f.b, reselect: reselect)
+    try await recoveryWait { f.gate.isBlocked }
+    let state = try #require(c.window?.contentView?.subviews.compactMap { $0 as? ViewerStateHost }.first)
+    let cancel = try #require(state.buttons.first)
+    cancel.performClick(nil)
+    func expectRestored() throws {
+        #expect(recoveryPage(c) != nil)
+        #expect(c.waitingAccessPosition?.rootID == position.rootID)
+        #expect(c.waitingAccessPosition?.folderURL == position.folderURL)
+        #expect(c.accessLossCause == cause)
+        shell.layoutSubtreeIfNeeded()
+        let name = try #require(t281Fix5Label("grid.current-file-status", in: shell))
+        let count = try #require(t281Fix5Label("grid.folder-count", in: shell))
+        #expect(!name.isHidden && name.stringValue == "\u{2013}")
+        #expect(!count.isHidden && count.stringValue == String(localized: "Unavailable"))
+        #expect(!shell.searchField.isEnabled && !shell.sortButton.isEnabled)
+        #expect(!shell.folderTree.isHidden)
+        let row = try #require(shell.folderTree.rows.first { $0.current })
+        #expect(row.folderURL == position.folderURL && row.accessLossCause == cause)
+        #expect(!row.warningGlyph.isHidden && row.countLabel.isHidden)
+        #expect(shell.folderTree.parent == parent && shell.folderTree.children.isEmpty)
+    }
+    try expectRestored()
+    f.gate.release()
+    // Let the abandoned real read return; its stale completion cannot replace the restored page.
+    try await Task.sleep(for: .milliseconds(100))
+    try expectRestored()
+}
+
 @MainActor private func t281Fix5Label(_ id: String, in view: NSView) -> NSTextField? {
     if view.accessibilityIdentifier() == id || view.identifier?.rawValue == id { return view as? NSTextField }
     return view.subviews.lazy.compactMap { t281Fix5Label(id, in: $0) }.first
