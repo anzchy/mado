@@ -99,6 +99,18 @@ test('a new keyCode comparison in another file fails until it is declared', () =
   /SettingsPanelWindow\.swift handles key code 51, which KEY_SITES does not declare/);
 });
 
+test('a new code in a key code list fails until it is declared', () => {
+  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+    replaceOnce('![36, 49, 76].contains(event.keyCode)', '![36, 49, 51, 76].contains(event.keyCode)')),
+  /CanvasView\.swift handles key code 51, which KEY_SITES does not declare/);
+});
+
+test('a key code list without a leading ! is read too', () => {
+  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+    replaceOnce('![36, 49, 76].contains(event.keyCode)', '[36, 49, 51, 76].contains(event.keyCode)')),
+  /CanvasView\.swift handles key code 51, which KEY_SITES does not declare/);
+});
+
 test('a new SwiftUI key press fails until it is declared', () => {
   fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift',
     replaceOnce('.onKeyPress(.space, action: activateFromKeyboard)', '.onKeyPress(.space, action: activateFromKeyboard).onKeyPress(.return, action: activateFromKeyboard)')),
