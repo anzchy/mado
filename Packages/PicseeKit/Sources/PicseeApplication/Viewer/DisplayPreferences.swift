@@ -4,6 +4,11 @@ public enum DisplayAppearance: String, Codable, Sendable {
     case system, light, dark
 }
 
+/// Grid thumbnail presentation (grid-display.html Thumbnails: Fill and Crop / Fit Entire Image).
+public enum ThumbnailFit: String, Codable, Sendable {
+    case fill, fit
+}
+
 /// App-level display preferences. Search and per-folder extension filters are transient.
 public struct DisplayPreferences: Codable, Equatable, Sendable {
     public var loopThroughImages: Bool = false
@@ -14,6 +19,9 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
     public var gridSidebarVisible: Bool
     public var folderSort: FolderSortKey
     public var folderSortDirection: FolderSortDirection
+    public var thumbnailSize: Double = 220
+    public var showFileNames: Bool = true
+    public var thumbnailFit: ThumbnailFit = .fill
     public init(alwaysShowTools: Bool = false, filmstripExpanded: Bool = false, appearance: DisplayAppearance = .system,
                 gridSidebarWidth: Double = 196, gridSidebarVisible: Bool = true) {
         self.alwaysShowTools = alwaysShowTools
@@ -28,10 +36,18 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case alwaysShowTools, filmstripExpanded, appearance, gridSidebarWidth, gridSidebarVisible
         case folderSort, folderSortDirection, loopThroughImages
+        case thumbnailSize, showFileNames, thumbnailFit
     }
 
     public static func normalizedSidebarWidth(_ width: Double) -> Double {
         width.isFinite ? min(320, max(160, width)) : 196
+    }
+
+    /// grid-display.html Thumbnail Size slider: 140…280 in steps of 10; ties round up.
+    public static func normalizedThumbnailSize(_ size: Double) -> Double {
+        guard size.isFinite else { return 220 }
+        let clamped = min(280, max(140, size))
+        return 140 + ((clamped - 140) / 10).rounded(.toNearestOrAwayFromZero) * 10
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -45,6 +61,9 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
         if folderSort != .name { try values.encode(folderSort, forKey: .folderSort) }
         if folderSortDirection != .ascending { try values.encode(folderSortDirection, forKey: .folderSortDirection) }
         if loopThroughImages { try values.encode(loopThroughImages, forKey: .loopThroughImages) }
+        if thumbnailSize != 220 { try values.encode(thumbnailSize, forKey: .thumbnailSize) }
+        if !showFileNames { try values.encode(showFileNames, forKey: .showFileNames) }
+        if thumbnailFit != .fill { try values.encode(thumbnailFit, forKey: .thumbnailFit) }
     }
 
     public init(from decoder: any Decoder) throws {
@@ -57,6 +76,9 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
         folderSort = (try? values.decode(FolderSortKey.self, forKey: .folderSort)) ?? .name
         folderSortDirection = (try? values.decode(FolderSortDirection.self, forKey: .folderSortDirection)) ?? .ascending
         loopThroughImages = (try? values.decode(Bool.self, forKey: .loopThroughImages)) ?? false
+        thumbnailSize = Self.normalizedThumbnailSize((try? values.decode(Double.self, forKey: .thumbnailSize)) ?? 220)
+        showFileNames = (try? values.decode(Bool.self, forKey: .showFileNames)) ?? true
+        thumbnailFit = (try? values.decode(ThumbnailFit.self, forKey: .thumbnailFit)) ?? .fill
     }
 }
 
@@ -81,6 +103,7 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
         set {
             var normalized = newValue
             normalized.gridSidebarWidth = DisplayPreferences.normalizedSidebarWidth(normalized.gridSidebarWidth)
+            normalized.thumbnailSize = DisplayPreferences.normalizedThumbnailSize(normalized.thumbnailSize)
             storedValue = normalized
             observers.removeAll { $0.value == nil }
             for observer in observers { observer.value?.preferencesDidChange(normalized) }
