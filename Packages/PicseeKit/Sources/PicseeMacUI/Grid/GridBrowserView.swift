@@ -35,6 +35,7 @@ import PicseeApplication
     private let placeholder = NSTextField(labelWithString: String(localized: "Thumbnail pending"))
     private let nameLabel = NSTextField(labelWithString: "")
     private let selectionBadge = NSTextField(labelWithString: "✓")
+    private var showsName = true
 
     public override func loadView() {
         let surface = GridPhotoSurface(frame: NSRect(x: 0, y: 0, width: 220, height: 184))
@@ -86,8 +87,8 @@ import PicseeApplication
     private func layoutContent() {
         guard isViewLoaded else { return }
         let width = max(0, view.bounds.width - 8)
-        let height = max(0, view.bounds.height - 36)
-        tile.frame = NSRect(x: 4, y: 32, width: width, height: height)
+        let height = max(0, view.bounds.height - (showsName ? 36 : 8))
+        tile.frame = NSRect(x: 4, y: showsName ? 32 : 4, width: width, height: height)
         placeholder.frame = tile.frame
         nameLabel.frame = NSRect(x: 4, y: 4, width: width, height: 21)
         selectionBadge.frame = NSRect(x: tile.frame.maxX - 25, y: tile.frame.maxY - 25,
@@ -97,6 +98,15 @@ import PicseeApplication
     }
 
     var tileLayer: CALayer? { tile.layer }
+    var isNameVisible: Bool { !nameLabel.isHidden }
+    /// grid-display.html: Show File Names drops `.photo-name`; `.thumb-contain>img{object-fit:contain}` fits.
+    func apply(_ options: GridDisplayOptions) {
+        _ = view
+        showsName = options.showFileNames
+        nameLabel.isHidden = !options.showFileNames
+        tile.layer?.contentsGravity = options.fit == .fit ? .resizeAspect : .resizeAspectFill
+        layoutContent()
+    }
     var currentRingLayer: CALayer { currentRing }
     /// Current Item (where arrows, Space and Enter act); distinct from Selection.
     public var isCurrent = false { didSet { updateSelection() } }
@@ -184,6 +194,20 @@ import PicseeApplication
     public var isSelectionBadgeVisible: Bool { !selectionBadge.isHidden }
 }
 
+/// grid-display.html `.grid-tools-panel`: Thumbnail Size, Show File Names, Thumbnails (Fill and Crop / Fit Entire Image).
+public struct GridDisplayOptions: Equatable, Sendable {
+    public var thumbnailSize: Double
+    public var showFileNames: Bool
+    public var fit: ThumbnailFit
+    public init(thumbnailSize: Double = 220, showFileNames: Bool = true, fit: ThumbnailFit = .fill) {
+        self.thumbnailSize = thumbnailSize; self.showFileNames = showFileNames; self.fit = fit
+    }
+    public init(_ preferences: DisplayPreferences) {
+        self.init(thumbnailSize: preferences.thumbnailSize, showFileNames: preferences.showFileNames,
+            fit: preferences.thumbnailFit)
+    }
+}
+
 /// Page 11/12 inlined CSS: `.grid-scroll`, `.photo-grid`, `.photo-cell`,
 /// `.thumbnail-wrap`, and `.layout-exploration .photo-name` (grid-light/dark.html).
 private struct GridGeometry: Equatable {
@@ -193,25 +217,26 @@ private struct GridGeometry: Equatable {
     let rowGap: CGFloat
     let horizontalInset: CGFloat
     let topInset: CGFloat = 16
+    let tileHeight: CGFloat
 
-    init(viewportWidth width: CGFloat, contentWidth: CGFloat) {
+    init(viewportWidth width: CGFloat, contentWidth: CGFloat, options: GridDisplayOptions = GridDisplayOptions()) {
         let narrow = width <= 1050
         let wide = width >= 1600
         horizontalInset = narrow ? 16 : (wide ? 32 : 24)
         columnGap = narrow ? 12 : (wide ? 22 : 16)
         rowGap = narrow ? 12 : (wide ? 22 : 18)
-        let minColumnWidth: CGFloat = width <= 720 ? 145 : 220
+        // grid-display.html: Thumbnail Size sets `--thumb-min`; the ≤720 rule keeps 145.
+        let minColumnWidth: CGFloat = width <= 720 ? 145 : CGFloat(options.thumbnailSize)
         let available = max(0, contentWidth - 2 * horizontalInset)
         columns = width <= 480 ? 1 : max(1, Int((available + columnGap) / (minColumnWidth + columnGap)))
         // Leave one representable step of slack so flow layout does not wrap an exact-fit row.
         let cellWidth = max(0, ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown)
-        let tileHeight: CGFloat
         if width <= 720 { tileHeight = 150 }
         else if width <= 1050 { tileHeight = 165 }
         else if wide { tileHeight = 200 }
         else { tileHeight = min(225, max(135, width * 0.147)) }
-        // Cell padding 4+4; name margin 7, padded line 21, bottom padding 4.
-        itemSize = NSSize(width: cellWidth, height: tileHeight + 36)
+        // Cell padding 4+4; name margin 7, padded line 21, bottom padding 4. Without names only the padding stays.
+        itemSize = NSSize(width: cellWidth, height: tileHeight + (options.showFileNames ? 36 : 8))
     }
 }
 
@@ -300,6 +325,14 @@ private struct GridGeometry: Equatable {
     }
     public var thumbnailLoader: (@Sendable (FolderEntry, AccessRootID, ThumbnailCoverage, DecodePriority) async throws -> (ImageDecodeRequest, DecodedImage))? {
         didSet { reconcileThumbnails() }
+    }
+    public var displayOptions = GridDisplayOptions() {
+        didSet {
+            guard displayOptions != oldValue else { return }
+            updateGeometry()
+            for case let item as GridPhotoItem in collectionView.visibleItems() { item.apply(displayOptions) }
+            reconcileThumbnails()
+        }
     }
     private var thumbnailsActive = false
     private var thumbnailGeneration: UInt64 = 0
@@ -454,7 +487,7 @@ private struct GridGeometry: Equatable {
         let scale: CGFloat
         if let window { scale = window.backingScaleFactor } else { scale = 1 }
         return GridThumbnailPixelSizing.coverage(tile: NSSize(width: geometry.itemSize.width - 8,
-            height: geometry.itemSize.height - 36), backingScale: scale)
+            height: geometry.tileHeight), backingScale: scale)
     }
     private var thumbnailPixelEdge: Int { thumbnailCoverage.fallbackEdge }
 
@@ -537,7 +570,8 @@ private struct GridGeometry: Equatable {
 
     private func updateGeometry() {
         let viewportWidth = window?.contentView?.bounds.width ?? bounds.width
-        let next = GridGeometry(viewportWidth: viewportWidth, contentWidth: scrollView.contentSize.width)
+        let next = GridGeometry(viewportWidth: viewportWidth, contentWidth: scrollView.contentSize.width,
+            options: displayOptions)
         guard next != geometry, let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout else { return }
         geometry = next
         (collectionView as? GridCollectionView)?.columnStep = next.columns
@@ -697,6 +731,7 @@ private struct GridGeometry: Equatable {
     public func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let item = collectionView.makeItem(withIdentifier: Self.reuseID, for: indexPath)
         if let photo = item as? GridPhotoItem {
+            photo.apply(displayOptions)
             photo.configure(entries[indexPath.item])
             photo.isSelected = selection.selectedItemIDs.contains(entries[indexPath.item].itemID)
             photo.isCurrent = entries[indexPath.item].itemID == currentItemID
