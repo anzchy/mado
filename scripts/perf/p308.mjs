@@ -3,12 +3,12 @@
 // scripts/perf/measure-p3-08.sh; see docs/validation/P3.md「P3-08 测量方法」.
 //
 // It never drives the UI itself: `--driver` (the delegator's GUI step) opens the fixture folder once per sample.
-// It owns only the Picsee processes it launched (PID diff + birth identity, re-checked before SIGTERM, never by name),
-// refuses to start while another Picsee runs, and never deletes a cache: a cold sample moves picsee's thumbnail cache
+// It owns only the Picsee processes it spawned as its own children (the child handle, never a pid read from a process
+// list or by name), SIGTERMs only those, never escalates, and refuses to start while another Picsee runs, and never deletes a cache: a cold sample moves picsee's thumbnail cache
 // into the run directory. Evidence stays in the run directory; nothing is written to the checkout.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -70,27 +70,37 @@ export function cacheDirectory(bundleID, home = homedir()) {
 }
 
 /**
- * Where a cold sample moves the cache, or why it must not. Never deletes. Refuses a symlinked or foreign path and
- * an aside target that already exists. `fs` is injectable for tests.
+ * Where a cold sample moves the cache, or why it must not. Never deletes. Every component from the App's container
+ * down to the cache must be a plain directory (no symlink anywhere), the resolved cache must stay inside the real
+ * container, and only ENOENT means "no cache yet": any other error (EACCES, EPERM, …) refuses, so a cache the script
+ * cannot see is never reported as cold. `fs` is injectable for tests; the default is the real filesystem.
  */
-export function planCacheAside(cache, runDir, sample, { bundleID, home = homedir(), fs = { lstatSync, existsSync } } = {}) {
+export function planCacheAside(cache, runDir, sample, { bundleID, home = homedir(), fs = { lstatSync, existsSync, realpathSync } } = {}) {
   const expected = cacheDirectory(bundleID, home);
   if (path.resolve(cache) !== expected) return { action: 'refuse', reason: `not picsee's cache directory: ${cache}` };
   const target = path.join(runDir, 'cache-aside', String(sample).padStart(3, '0'));
   if (fs.existsSync(target)) return { action: 'refuse', reason: `aside target already exists: ${target}` };
-  let stat;
-  try { stat = fs.lstatSync(cache); } catch { return { action: 'none', reason: 'no cache directory yet (already cold)' }; }
-  if (stat.isSymbolicLink() || !stat.isDirectory()) return { action: 'refuse', reason: `cache path is not a plain directory: ${cache}` };
-  return { action: 'move', from: cache, to: target };
+  const containers = path.join(home, 'Library/Containers');
+  let component = containers;
+  for (const part of path.relative(containers, expected).split(path.sep)) {
+    component = path.join(component, part);
+    let stat;
+    try { stat = fs.lstatSync(component); } catch (error) {
+      if (error?.code === 'ENOENT') return { action: 'none', reason: `no cache directory yet (already cold): ${component} absent` };
+      return { action: 'refuse', reason: `cannot inspect ${component} (${error?.code ?? error}); a cache the script cannot see is not cold` };
+    }
+    if (stat.isSymbolicLink()) return { action: 'refuse', reason: `symlink in the cache path: ${component}` };
+    if (!stat.isDirectory()) return { action: 'refuse', reason: `not a plain directory in the cache path: ${component}` };
+  }
+  let real, container;
+  try { real = fs.realpathSync(expected); container = fs.realpathSync(path.join(containers, bundleID)); } catch (error) {
+    return { action: 'refuse', reason: `cannot resolve ${expected} (${error?.code ?? error})` };
+  }
+  if (!real.startsWith(container + path.sep)) return { action: 'refuse', reason: `cache resolves outside the App container: ${real}` };
+  return { action: 'move', from: expected, to: target };
 }
 
-/** Same PID, same birth and same executable as recorded at launch; otherwise never signal. Pure. */
-export function sameProcess(recorded, current) {
-  return Boolean(recorded && current && recorded.pid === current.pid && recorded.birth === current.birth
-    && recorded.executable === current.executable);
-}
-
-// ---- Native steps (device only; not unit-tested) ----
+// ---- Native steps (launch, quit and cache aside are tested with real child processes and temp trees; the rest is device only) ----
 
 const sh = (file, args, options = {}) => execFileSync(file, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }).trim();
 const quiet = (file, args) => { try { return sh(file, args); } catch { return null; } };
@@ -106,33 +116,41 @@ function picseePIDs() {
   const out = quiet('/usr/bin/pgrep', ['-x', 'Picsee']);
   return out ? out.split('\n').map(Number).filter(Boolean) : [];
 }
-function processRecord(pid) {
-  const birth = quiet('/bin/ps', ['-o', 'lstart=', '-p', String(pid)]);
-  const executable = quiet('/bin/ps', ['-o', 'comm=', '-p', String(pid)]);
-  return birth && executable ? { pid, birth, executable } : null;
-}
 
-async function launch(app, run) {
-  const before = picseePIDs();
+// Children this script spawned, by pid. Ownership is the child handle itself, never a pid read from a process list.
+const children = new Map();
+
+/**
+ * Starts the bundle's executable as a child of this script and owns exactly that child. Refuses while any other
+ * Picsee runs (it would share the container cache); a Picsee that appears meanwhile is never claimed.
+ */
+export async function launch(app, run, { spawn: spawnChild = spawn, picseePIDs: list = picseePIDs, sleep: wait = sleep, readyMs = 2000 } = {}) {
+  const before = list();
   if (before.length) throw new Error(`another Picsee is running (pid ${before.join(', ')}); ask its owner to quit it`);
   const executable = path.join(app, 'Contents/MacOS/Picsee');
-  spawnSync('/usr/bin/open', ['-n', app], { stdio: 'ignore' });
-  for (let i = 0; i < 120; i += 1) {
-    const fresh = picseePIDs().filter((pid) => !before.includes(pid)).map(processRecord)
-      .filter((r) => r && path.resolve(r.executable) === path.resolve(executable));
-    if (fresh.length > 1) throw new Error('more than one new Picsee process; refusing to pick one');
-    if (fresh.length === 1) { run.owned.push(fresh[0]); await sleep(2000); return fresh[0]; }
-    await sleep(250);
+  const child = spawnChild(executable, [], { stdio: 'ignore' });
+  if (!child?.pid) throw new Error(`could not start ${executable}`);
+  child.on('error', () => {});
+  await wait(readyMs);
+  if (child.exitCode !== null || child.signalCode !== null) {
+    throw new Error(`Picsee exited during start-up (${child.exitCode ?? child.signalCode}); nothing owned`);
   }
-  throw new Error('Picsee did not start within 30 s');
+  children.set(child.pid, child);
+  const record = { pid: child.pid, executable, birth: quiet('/bin/ps', ['-o', 'lstart=', '-p', String(child.pid)]), child: true };
+  run.owned.push(record);
+  return record;
 }
 
-async function quit(record) {
-  if (!sameProcess(record, processRecord(record.pid))) return 'already exited or identity changed; no signal sent';
-  process.kill(record.pid, 'SIGTERM');
+/** SIGTERM to a child this script spawned that is still running; never escalates and never signals anything else. */
+export async function quit(record, { sleep: wait = sleep } = {}) {
+  const child = record && children.get(record.pid);
+  if (!child) throw new Error(`pid ${record?.pid} is not a child this script spawned; no signal sent`);
+  const exited = () => child.exitCode !== null || child.signalCode !== null;
+  if (exited()) { children.delete(record.pid); return 'already exited; no signal sent'; }
+  child.kill('SIGTERM');
   for (let i = 0; i < 100; i += 1) {
-    if (!sameProcess(record, processRecord(record.pid))) return 'terminated';
-    await sleep(100);
+    if (exited()) { children.delete(record.pid); return 'terminated'; }
+    await wait(100);
   }
   throw new Error(`pid ${record.pid} did not exit 10 s after SIGTERM; no escalation sent`);
 }
@@ -170,8 +188,9 @@ async function sample(options, run, record, index, priming) {
   run.windows.push({ index, pid: record.pid, startUs, endUs, priming, file: path.relative(options.out, file) });
 }
 
-function moveCacheAside(options, run, index) {
-  const plan = planCacheAside(run.cache, options.out, index, { bundleID: run.bundleID });
+/** Plans and moves in one step, so the checks hold immediately before the rename. */
+export function moveCacheAside(out, run, index, { home = homedir() } = {}) {
+  const plan = planCacheAside(run.cache, out, index, { bundleID: run.bundleID, home });
   run.cacheMoves.push({ sample: index, ...plan });
   if (plan.action === 'refuse') throw new Error(`cold cache refused: ${plan.reason}`);
   if (plan.action === 'move') { mkdirSync(path.dirname(plan.to), { recursive: true }); renameSync(plan.from, plan.to); }
@@ -244,7 +263,7 @@ async function measure(options) {
         await quit(record);
       }
       for (let i = 1; i <= options.samples; i += 1) {
-        if (options.cacheState === 'cold-app') moveCacheAside(options, run, i);
+        if (options.cacheState === 'cold-app') moveCacheAside(options.out, run, i);
         const record = await launch(options.app, run);
         await sample(options, run, record, i, false);
         await quit(record);
@@ -253,7 +272,7 @@ async function measure(options) {
     }
   } finally {
     save();
-    for (const record of run.owned) await quit(record).catch((e) => console.error(String(e)));
+    for (const record of run.owned) if (children.has(record.pid)) await quit(record).catch((e) => console.error(String(e)));
   }
   report(options.out);
 }
