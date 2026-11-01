@@ -415,3 +415,32 @@ private func i316PostAccessibilityChange() {
     NotificationCenter.default.post(name: NSWindow.didMiniaturizeNotification, object: other)
     #expect(home.drift == nil, "the new window's notification did not pause the drift")
 }
+
+// MARK: - Fix round 1: window close, frame rate, observer removal
+
+/// ⌘W keeps a reusable window (`isReleasedWhenClosed = false`) and the Home inside it. Closing pauses the drift at
+/// once, even before any reader reports the window gone; showing it again resumes only if every input holds.
+@Test @MainActor func i316ClosingTheWindowPausesAndReopeningResumesOnlyWhenAllowed() throws {
+    let home = I316Home()
+    defer { home.close() }
+    let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: .borderless,
+                         backing: .buffered, defer: false)
+    other.isReleasedWhenClosed = false
+    defer { other.close() }
+    let start = try #require(home.drift, "the Home never drifted")
+    home.clock.now += 9
+    i316Post(NSWindow.willCloseNotification, other)
+    #expect(home.drift.map { $0.beginTime == start.beginTime } == true, "another window's close paused the drift")
+    i316Post(NSWindow.willCloseNotification, home.window)
+    #expect(home.drift == nil, "closing the Home's window did not pause the drift")
+    #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 9)), "close froze at \(home.frozenOffset)")
+    home.clock.now += 40
+    home.frontmost = false
+    i316Post(NSWindow.didChangeOcclusionStateNotification, home.window)
+    #expect(home.drift == nil, "shown again in the background: resumed")
+    home.frontmost = true
+    i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+    let resumed = try #require(home.drift, "shown again while frontmost: did not resume")
+    #expect(i316Close(CGFloat(resumed.timeOffset), 9) && resumed.beginTime == home.clock.now,
+            "closed time counted: \(resumed.timeOffset)")
+}
