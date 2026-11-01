@@ -68,6 +68,12 @@ finish() {
   fi
   if ! release; then
     [[ $task_rc -ne 0 ]] || task_rc=70
+  else
+    # XCTest termination can bypass the App hook; test-host sandbox cleanup may fail.
+    # Only after owned processes drain, remove UUID fixtures proved by this run's log.
+    if ! python3 "$repo/scripts/ui-test-runtime.py" cleanup-app-fixtures "$output"; then
+      [[ $task_rc -ne 0 ]] || task_rc=70
+    fi
   fi
   if ! python3 "$repo/scripts/ui-test-runtime.py" cleanup "$output"; then
     [[ $task_rc -ne 0 ]] || task_rc=70

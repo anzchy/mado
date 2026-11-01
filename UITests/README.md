@@ -34,7 +34,11 @@ All tests use ADR-012's unique container fixture and `XCUIApplication()` bound
 to the built Target Application. They never drive the open panel. The existing
 prelaunch guard skips if any Picsee is already running; it does not quit it.
 A skip is **NOT VERIFIED**, not a reliability pass. Teardown terminates only
-the test-launched App and removes only that run's fixture directory. The fixture
+the test-launched App. App/test-host cleanup hooks can leave fixture directories
+behind after XCTest termination. Once owned processes drain, the host runner
+removes only exact run-prefixed UUID directories proved by that run's native
+folder-marker logs, including their private `.test-access` state. Unlogged
+siblings, unexpected top-level files and symlinks are preserved/refused. The fixture
 shares the installed App's container/cache/preferences; no persistent settings
 are reset. English language arguments apply to this process only; fixture order
 is derived from the displayed Grid rather than a fixed user sort preference.
