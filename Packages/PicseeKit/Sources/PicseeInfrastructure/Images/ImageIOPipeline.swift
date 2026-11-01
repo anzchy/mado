@@ -70,7 +70,7 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
         self.configuration = configuration
         self.pressureSleep = pressureSleep
         let cache = cache ?? ImageMemoryCache(capacity: configuration.cacheCapacity, budget: MemoryBudget(limit: configuration.budget),
-            pressureRecoveryDelay: configuration.pressureRecoveryDelay, pressureClock: pressureClock)
+            pressureRecoveryDelay: configuration.pressureRecoveryDelay, pressureClock: pressureClock, movementTrace: cacheTrace)
         self.cache = cache
         self.cacheTrace = cacheTrace
         self.thumbnailCache = thumbnailCache
@@ -202,8 +202,11 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
         let edge = ticket.request.maximumPixelSize
         let cost = (try? DecodeBudget.outputCost(width: edge, height: edge, maximumPixelSize: edge, bytesPerPixel: 4,
             budget: configuration.budget)) ?? configuration.budget
-        return try await admission.staged(ticket.request, key: key, cost: cost, priority: ticket.request.priority) {
-            try await thumbnailCache.load(ticket)
+        return try await admission.staged(ticket.request, key: key, cost: cost, priority: ticket.request.priority) { [cacheTrace] in
+            // Counted when the load returned, as the disk cache counts it; a throw is neither a hit nor a miss.
+            let image = try await thumbnailCache.load(ticket)
+            cacheTrace?.diskLookup(hit: image != nil)
+            return image
         }
     }
     private func lookup(_ request: ImageDecodeRequest, key: RenderKey, observation: UUID) async throws -> ImageCacheRequest {
