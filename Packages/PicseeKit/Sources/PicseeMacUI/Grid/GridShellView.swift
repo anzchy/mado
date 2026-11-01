@@ -86,7 +86,7 @@ import PicseeCore
     /// Page 26 (#332): the tree's current folder lost access, whatever the cause; the footer reads `–` / Unavailable.
     private var showsLostAccess: Bool { !folderTree.isHidden && folderTree.currentAccessLossCause != nil }
     /// The count slot shows a status, not the stored count, so it never truncates as a search summary.
-    private var showsCountStatus: Bool { showsReadStatus || showsLostAccess }
+    private var showsCountStatus: Bool { showsReadStatus || showsLostAccess || !emptyFolderView.isHidden }
     private let keyboardHint = NSView()
     private let spaceKeycap = NSTextField(labelWithString: "Space")
     private let quickLookLabel = NSTextField(labelWithString: "")
@@ -654,15 +654,16 @@ import PicseeCore
         applyFooterState()
         needsLayout = true
     }
-    /// The name and count slots, by precedence: a read's status, page 26 (`–` / Unavailable), page 22 (`–` / the
-    /// stored `0 images`), then the stored name and count. The stored values are never overwritten, so leaving a page
+    /// The name and count slots, by precedence: a read's status, page 26 (`–` / Unavailable), page 22 (`–` /
+    /// `0 images`, including during search), then the stored name and count. The stored values are never overwritten, so leaving a page
     /// shows the latest ones. Layout calls this too, so unchanged values are not reassigned; returns whether any changed.
     @discardableResult private func applyStatusText() -> Bool {
         let showsDash = showsReadStatus || showsLostAccess || !emptyFolderView.isHidden
         let name = showsDash ? "–" : currentFileName
         let count = isReading ? String(localized: "Reading…")
             : isReadFailed ? String(localized: "Read incomplete")
-            : showsLostAccess ? String(localized: "Unavailable") : countText
+            : showsLostAccess ? String(localized: "Unavailable")
+            : !emptyFolderView.isHidden ? String(format: String(localized: "%lld images"), 0) : countText
         let countHidden = footer.bounds.width <= 480 || count.isEmpty
         let changed = currentFileStatus.stringValue != name || currentFileStatus.isHidden != name.isEmpty
             || searchStatus.stringValue != count || searchStatus.isHidden != countHidden

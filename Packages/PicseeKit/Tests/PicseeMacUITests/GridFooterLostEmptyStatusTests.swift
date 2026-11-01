@@ -166,12 +166,15 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
     shell.setSearchTerm("")
     lostEmptyEnterEmpty(shell)
     #expect(shell.emptyFolderVisible)
-    for toggles in 0...2 {
-        if toggles > 0 { shell.toggleSidebar() }
-        let footer = try lostEmptyFooter(shell)
-        lostEmptySlot(footer.name, lostEmptyDash, "toggles \(toggles) name")
-        lostEmptySlot(footer.count, "0 images", "toggles \(toggles) count")
-        #expect(footer.count.stringValue == String(format: String(localized: "%lld images"), 0))
+    for term in ["", "x", String(repeating: "long-search-", count: 20)] {
+        shell.setSearchStatus(resultCount: 0, term: term)
+        for toggles in 0...2 {
+            if toggles > 0 { shell.toggleSidebar() }
+            let footer = try lostEmptyFooter(shell)
+            lostEmptySlot(footer.name, lostEmptyDash, "term \(term) toggles \(toggles) name")
+            lostEmptySlot(footer.count, "0 images", "term \(term) toggles \(toggles) count")
+            #expect(footer.count.stringValue == String(format: String(localized: "%lld images"), 0))
+        }
     }
 }
 
@@ -282,7 +285,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
 /// count; derived text never overwrites the stored values, so every path back to normal shows them.
 private enum LostEmptyOp: CustomStringConvertible {
     case reading(Bool), failed(Bool), showLost(AccessLossCause), showTree, showFolder, clearTree, empty(Bool)
-    case file(Int), noFile, count(Int), clearTerm
+    case file(Int), noFile, count(Int), search(Int), clearTerm
     var description: String {
         switch self {
         case .reading(let on): "reading(\(on))"
@@ -295,6 +298,7 @@ private enum LostEmptyOp: CustomStringConvertible {
         case .file(let k): "file(\(k))"
         case .noFile: "file('')"
         case .count(let k): "count(\(k))"
+        case .search(let k): "search(\(k))"
         case .clearTerm: "term('')"
         }
     }
@@ -314,12 +318,13 @@ private struct LostEmptyModel {
         case .file(let k): name = "f\(k).png"
         case .noFile: name = ""
         case .count(let k): count = "\(k) images"
+        case .search(let k): count = "Search: x · \(k) results"
         case .clearTerm: count = ""
         }
     }
     var renderedName: String { reading || failed || lost || empty ? lostEmptyDash : name }
     var renderedCount: String {
-        reading ? "Reading…" : failed ? "Read incomplete" : lost ? "Unavailable" : count
+        reading ? "Reading…" : failed ? "Read incomplete" : lost ? "Unavailable" : empty ? "0 images" : count
     }
 }
 
@@ -335,6 +340,7 @@ private struct LostEmptyModel {
     case .file(let k): shell.setCurrentFile("f\(k).png")
     case .noFile: shell.setCurrentFile("")
     case .count(let k): shell.setSearchStatus(resultCount: k, term: "")
+    case .search(let k): shell.setSearchStatus(resultCount: k, term: "x")
     case .clearTerm: shell.setSearchTerm("")
     }
 }
@@ -356,7 +362,7 @@ private struct LostEmptySplitMix64 {
     var recoveries: [String: Int] = [:]
     for sequenceIndex in 0..<128 {
         var ops: [LostEmptyOp] = (0..<8).map { _ in
-            switch random.below(11) {
+            switch random.below(12) {
             case 0: .reading(random.below(2) == 0)
             case 1: .failed(random.below(2) == 0)
             case 2: .showLost(lostEmptyCauses[random.below(lostEmptyCauses.count)])
@@ -367,10 +373,13 @@ private struct LostEmptySplitMix64 {
             case 7: .file(random.below(100))
             case 8: .count(random.below(100) + 1)
             case 9: .noFile
+            case 10: .search(random.below(100))
             default: .clearTerm
             }
         }
-        ops += [.reading(false), .failed(false), .showTree, .empty(false)]
+        ops += [.reading(false), .failed(false), .showTree, .empty(true), .search(0),
+                .reading(true), .reading(false), .failed(true), .failed(false),
+                .showLost(.notFound), .showTree, .count(7), .clearTerm, .search(2), .empty(false)]
         let (window, shell) = lostEmptyShell()
         defer { window.close() }
         shell.setCurrentFile("start.png"); shell.setSearchStatus(resultCount: 1, term: "")
