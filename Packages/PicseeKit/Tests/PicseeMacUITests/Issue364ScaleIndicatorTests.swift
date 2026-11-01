@@ -6,18 +6,27 @@ import Testing
 private struct Issue364PinnedScaleLabel: View {
     let label: String
     let hovered: Bool
+    let fontSize: Double
+    let minWidth: Double
+    let padding: Double
+    let radius: Double
+    let textColor: PinnedDesign.Color
+    let hoverColor: PinnedDesign.Color
+
+    private func color(_ value: PinnedDesign.Color) -> Color {
+        Color(nsColor: NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: value.alpha))
+    }
 
     var body: some View {
         Button(action: {}) {
             Text(label)
-                .font(.system(size: 12))
-                .foregroundStyle(DesignColor.textSecondary.color)
-                .padding(5)
-                .frame(minWidth: 68)
+                .font(.system(size: fontSize))
+                .foregroundStyle(color(textColor))
+                .padding(padding)
+                .frame(minWidth: minWidth)
         }
         .buttonStyle(.plain)
-        .background(hovered ? DesignColor.hoverBackground.color : .clear,
-                    in: RoundedRectangle(cornerRadius: 4))
+        .background(hovered ? color(hoverColor) : .clear, in: RoundedRectangle(cornerRadius: radius))
     }
 }
 
@@ -37,9 +46,20 @@ private struct Issue364PinnedScaleLabel: View {
     let design = try PinnedDesign.page("viewer-controls")
     #expect(try design.exactDeclaration(".zoom-label", "background") == "transparent")
     #expect(try design.exactDeclaration(".zoom-label", "border") == "0")
-    #expect(try design.length(".zoom-label", "padding", viewport: 1280) == 5)
 
     for theme in DesignTheme.allCases {
+        let design = try PinnedDesign.page("viewer-controls", appearance: theme == .dark ? "dark" : "light")
+        let selector = ".zoom-pod .zoom-label"
+        let fontSize = try design.length(selector, "font-size", viewport: 1280)
+        let minWidth = try design.length(selector, "min-width", viewport: 1280)
+        let padding = try design.length(".zoom-label", "padding", viewport: 1280)
+        let radius = try design.length(".zoom-label", "border-radius", viewport: 1280)
+        let textColor = try design.color(".zoom-label", "color", viewport: 1280)
+        let hoverColor = try design.color(".zoom-label:hover", "background", viewport: 1280)
+        func reference(_ label: String, _ hovered: Bool) -> Issue364PinnedScaleLabel {
+            Issue364PinnedScaleLabel(label: label, hovered: hovered, fontSize: fontSize,
+                minWidth: minWidth, padding: padding, radius: radius, textColor: textColor, hoverColor: hoverColor)
+        }
         for (actualPixels, customZoom) in [(false, nil), (true, nil), (false, 12.34)] {
             let scale = ScaleIndicator(actualPixels: actualPixels, customZoom: customZoom,
                                        theme: theme, input: .forced) {}
@@ -47,18 +67,17 @@ private struct Issue364PinnedScaleLabel: View {
                 let state: ComponentState = hovered ? .hover : []
                 let actual = ScaleIndicator(actualPixels: actualPixels, customZoom: customZoom,
                                             state: state, theme: theme, input: .forced) {}
-                let reference = Issue364PinnedScaleLabel(label: scale.label, hovered: hovered)
-                #expect(try issue364Pixels(actual, theme: theme) == issue364Pixels(reference, theme: theme),
+                #expect(try issue364Pixels(actual, theme: theme) == issue364Pixels(reference(scale.label, hovered), theme: theme),
                         "page 14 .zoom-label \(scale.label), hovered=\(hovered), theme=\(theme)")
             }
 
             let actualHost = NSHostingView(rootView: scale)
-            let referenceHost = NSHostingView(rootView: Issue364PinnedScaleLabel(label: scale.label, hovered: false))
+            let referenceHost = NSHostingView(rootView: reference(scale.label, false))
             actualHost.layoutSubtreeIfNeeded()
             referenceHost.layoutSubtreeIfNeeded()
-            #expect(referenceHost.fittingSize.width >= 68)
+            #expect(referenceHost.fittingSize.width >= minWidth)
             #expect(abs(actualHost.fittingSize.width - referenceHost.fittingSize.width) < 0.01,
-                    "min-width 68 and unpadded text must fit \(scale.label)")
+                    "pinned min-width \(minWidth) and unpadded text must fit \(scale.label)")
         }
 
         let rest = ScaleIndicator(actualPixels: false, theme: theme, input: .forced) {}
