@@ -39,6 +39,10 @@ private struct Issue364PinnedScaleLabel: View {
     #expect(try design.exactDeclaration(".zoom-label", "border") == "0")
     #expect(try design.length(".zoom-label", "padding", viewport: 1280) == 5)
 
+    var liveScale = ScaleIndicator(actualPixels: false) {}
+    liveScale.updateHover(true)
+    liveScale.updateHover(false)
+
     for theme in DesignTheme.allCases {
         for (actualPixels, customZoom) in [(false, nil), (true, nil), (false, 12.34)] {
             let scale = ScaleIndicator(actualPixels: actualPixels, customZoom: customZoom,
