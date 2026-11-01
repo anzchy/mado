@@ -4,7 +4,7 @@ import PicseeCore
 import PicseeApplication
 @testable import PicseeMacUI
 
-@Test @MainActor func viewerCanvasKeepsDocumentedKeyboardFocusOutlineAfterGridPreview() {
+@Test @MainActor func viewerCanvasHasNoFocusOutlineAfterGridPreview() {
     _ = NSApplication.shared
     let session = ViewerSession()
     let item = ItemID.ephemeral(UUID())
@@ -18,7 +18,7 @@ import PicseeApplication
     #expect(window.makeFirstResponder(canvas))
     #expect(session.mode == .viewing)
     #expect(window.firstResponder === canvas)
-    #expect(canvas.focusRingType == .exterior)
-    #expect(canvas.focusRingMaskBounds == canvas.bounds.insetBy(dx: 3, dy: 3))
+    #expect(canvas.focusRingType == .none)
+    #expect(canvas.focusRingMaskBounds == .zero)
     canvas.drawFocusRingMask()
 }
