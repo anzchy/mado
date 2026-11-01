@@ -24,7 +24,7 @@ export function parseArgs(argv) {
   const options = { mode, allowUnder30: false, rounds: 3, timeoutSeconds: 180 };
   const names = { '--app': 'app', '--fixture': 'fixture', '--tier': 'tier', '--cache-state': 'cacheState', '--samples': 'samples',
     '--driver': 'driver', '--browse': 'browse', '--out': 'out', '--rounds': 'rounds', '--manifest': 'manifest',
-    '--disk-high-water-bytes': 'diskHighWaterBytes', '--timeout': 'timeoutSeconds', '--tuning': 'tuning' };
+    '--disk-high-water-bytes': 'diskHighWaterBytes', '--timeout': 'timeoutSeconds', '--tuning': 'tuning', '--content': 'content' };
   for (let i = 0; i < rest.length; i += 1) {
     const flag = rest[i];
     if (flag === '--allow-under-30') { options.allowUnder30 = true; continue; }
@@ -57,7 +57,7 @@ export function parseArgs(argv) {
 const USAGE = `usage:
   measure-p3-08.sh run --app <signed Release Picsee.app> --fixture <folder> --tier S1..S6
       --cache-state cold-app|warm-disk|warm-memory --samples N (≥ ${MIN_SAMPLES}) --driver '<cmd that opens the folder>'
-      --out <new run dir> [--manifest <file>] [--tuning <text>] [--timeout <s>] [--allow-under-30]
+      --out <new run dir> [--manifest <file>] [--tuning <text>] [--content <what the files are>] [--timeout <s>] [--allow-under-30]
   measure-p3-08.sh resources --app … --fixture … --tier … --driver '<cmd>' --browse '<cmd>' --out <new run dir>
       [--rounds 3] [--disk-high-water-bytes N]
   measure-p3-08.sh parse <run dir>
@@ -242,7 +242,7 @@ function prepareRun(options) {
   const bundleID = plist(options.app, 'CFBundleIdentifier');
   if (!bundleID) throw new Error(`cannot read CFBundleIdentifier from ${options.app}`);
   const meta = { runID: path.basename(options.out), app: options.app, fixture: options.fixture, tier: options.tier,
-    cacheState: options.cacheState, tuning: options.tuning ?? UNKNOWN, diskHighWaterBytes: options.diskHighWaterBytes,
+    cacheState: options.cacheState, tuning: options.tuning ?? UNKNOWN, content: options.content, diskHighWaterBytes: options.diskHighWaterBytes,
     ...describeBuild(options.app), ...describeMachine(options.fixture), ...describeFixture(options) };
   return { meta, bundleID, cache: cacheDirectory(bundleID), owned: [], windows: [], cacheMoves: [] };
 }

@@ -12,6 +12,15 @@ export const SUBSYSTEM = 'io.github.anzchy.picsee';
 export const UNKNOWN = '未知';
 export const MIN_SAMPLES = 30;
 
+/** What a tier's files are, from TestAssets/README.md, so a pasted report states its limits. */
+const TIER_CONTENT = {
+  S2: 'S2 为很小的合成图（PNG/TIFF），不是照片；只证明枚举与网格拓扑，不证明真实照片解码吞吐',
+};
+/** `--content` when given, else the README's description of the tier, else 未知. */
+export function fixtureContent(meta) {
+  return meta.content || TIER_CONTENT[meta.tier] || UNKNOWN;
+}
+
 /** `log show` prints signpostID as a 64-bit integer; JSON.parse would round it. Quote it first. */
 export function quoteSignpostIDs(line) {
   return line.replace(/"signpostID":(\d+)/g, '"signpostID":"$1"');
@@ -229,6 +238,7 @@ export function renderReport(meta, result) {
   lines.push(`- 构建：SHA ${value(meta.buildSHA)}；签名 ${value(meta.signing)}；配置 ${value(meta.configuration)}；调优设置 ${value(meta.tuning)}`);
   lines.push(`- 机器：${value(meta.machine)}；macOS ${value(meta.macOS)}；显示 scale ${value(meta.scale)}；存储 ${value(meta.storage)}`);
   lines.push(`- 素材：档位 ${value(meta.tier)}；路径 ${value(meta.fixture)}；文件数 ${value(meta.fixtureFiles)}；manifest ${value(meta.manifest)}`);
+  lines.push(`- 内容：${fixtureContent(meta)}`);
   lines.push(`- 缓存状态：${value(meta.cacheState)}（冷应用缓存不等于 OS 文件页缓存已清空）`);
   lines.push(`- 样本：请求 ${result.requested}，有效 ${result.valid}，排除 ${result.excluded}，预热 ${result.priming}${claim}`);
   lines.push(`- 计时边界：open→grid = FolderScan begin → GridFirstThumbnails end（outcome=complete，同 pid 与 generation）；`
@@ -281,5 +291,6 @@ export function renderResources(meta, rounds) {
     + (typeof configured === 'number' && observed !== null ? `（${observed <= configured ? '不高于' : '高于'}配置）` : ''));
   lines.push('- 线性增长：未判定（三轮数值见上表，由记录者判断并写明依据）');
   lines.push(`- 构建 ${value(meta.buildSHA)}；签名 ${value(meta.signing)}；配置 ${value(meta.configuration)}；素材 ${value(meta.tier)} ${value(meta.fixture)}`);
+  lines.push(`- 内容：${fixtureContent(meta)}`);
   return lines.join('\n') + '\n';
 }

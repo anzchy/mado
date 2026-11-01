@@ -306,3 +306,15 @@ test('identical events inside one file are all kept; only overlap re-prints are 
   // A later file that saw three (one more than the earlier file printed) keeps three.
   assert.equal(mergeSampleLogs([[evict, evict].join('\n'), [evict, evict, evict].join('\n')]).events.length, 3);
 });
+
+// Fix round 1 (#146 opus M4): a pasted report says what the fixture is, not just its tier.
+test('reports label the fixture content; S2 says tiny synthetic images, not photos', () => {
+  const result = analyze([], []);
+  const s2 = renderReport({ tier: 'S2' }, result);
+  assert.match(s2, /内容：S2 为很小的合成图（PNG\/TIFF），不是照片/);
+  assert.match(s2, /不证明真实照片解码吞吐/);
+  assert.match(renderReport({ tier: 'S4', content: 'RAW 照片 200 张' }, result), /内容：RAW 照片 200 张/);
+  assert.match(renderReport({ tier: 'S5' }, result), /内容：未知/);
+  assert.match(renderResources({ tier: 'S2' }, []), /内容：S2 为很小的合成图/);
+  assert.match(renderResources({ tier: 'S5' }, []), /内容：未知/);
+});
