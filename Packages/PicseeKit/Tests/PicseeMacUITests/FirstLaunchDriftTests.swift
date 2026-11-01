@@ -469,3 +469,33 @@ private func i316PostAccessibilityChange() {
     let resumed = try #require(home.drift)
     #expect(resumed.preferredFrameRateRange.preferred == rate.preferred, "a resumed drift lost the frame rate")
 }
+
+@MainActor final class I316ReadCount { var frontmostReads = 0 }
+
+/// Every drift trigger reads the app input once, so the read count shows how many registrations a notification
+/// reaches: none after leaving the window, exactly one after coming back (characterization).
+@Test @MainActor func i316LeavingAndReturningLeavesOneRegistrationPerTrigger() throws {
+    let home = I316Home()
+    defer { home.close() }
+    let count = I316ReadCount()
+    home.view.appFrontmost = { [count] in count.frontmostReads += 1; return true }
+    home.view.removeFromSuperview()
+    count.frontmostReads = 0
+    i316Post(NSApplication.didBecomeActiveNotification, NSApplication.shared)
+    i316Post(NSWindow.didChangeOcclusionStateNotification, home.window)
+    i316Post(NSWindow.willCloseNotification, home.window)
+    #expect(count.frontmostReads == 0, "a trigger still reached the Home after it left: \(count.frontmostReads)")
+    home.container.addSubview(home.view)
+    for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+                 NSApplication.didHideNotification, NSApplication.didUnhideNotification] {
+        count.frontmostReads = 0
+        i316Post(name, NSApplication.shared)
+        #expect(count.frontmostReads == 1, "\(name.rawValue) reached \(count.frontmostReads) registrations")
+    }
+    for name in [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMiniaturizeNotification,
+                 NSWindow.didDeminiaturizeNotification, NSWindow.willCloseNotification] {
+        count.frontmostReads = 0
+        i316Post(name, home.window)
+        #expect(count.frontmostReads == 1, "\(name.rawValue) reached \(count.frontmostReads) registrations")
+    }
+}
