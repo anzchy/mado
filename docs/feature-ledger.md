@@ -333,7 +333,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-01 | doc-gardener | 55504af..3746321 |
+| 打开与输入 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
 | 查看与画布 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
 | C 沉浸界面 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
 | 外观与显示偏好 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
@@ -343,11 +343,11 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 信息与元数据 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
 | 授权与文件访问 | 2026-11-01 | doc-gardener | 55504af..3746321 |
 | 缓存与资源 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 命令与键盘 | 2026-11-01 | doc-gardener | fbba9cb..c578437 |
+| 命令与键盘 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 可访问性与本地化 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
+| 可访问性与本地化 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
 | 分发 | 2026-11-01 | doc-gardener | fbba9cb..c578437 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
