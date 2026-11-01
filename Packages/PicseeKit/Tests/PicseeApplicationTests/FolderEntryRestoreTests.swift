@@ -101,7 +101,7 @@ import PicseeCore
         let coordinator = fixture.coordinator
         let entries = try #require(coordinator.snapshot?.navigationEntries)
         let ids = entries.map(\.itemID)
-        coordinator.setLoopEnabled(true)
+        session.setFolderLoopEnabled(true)
         session.setFolderConditions(.init(selectedExtensions: ["png", "jpg"]))
         let captured = coordinator.snapshot, conditions = coordinator.conditions
         let current = coordinator.currentItemID, currentURL = coordinator.currentURL
@@ -117,7 +117,7 @@ import PicseeCore
         #expect(coordinator.generation == generation)
         #expect(session.hasFolderSource)
         #expect(coordinator.snapshot == captured)
-        #expect(coordinator.conditions == conditions && coordinator.loopEnabled)
+        #expect(coordinator.conditions == conditions && session.displayPreferences.loopThroughImages)
         #expect(coordinator.currentItemID == current && coordinator.currentURL == currentURL)
         #expect(session.mode == .browsing)
         #expect(session.selection.selectedItemIDs == [ids[2]])

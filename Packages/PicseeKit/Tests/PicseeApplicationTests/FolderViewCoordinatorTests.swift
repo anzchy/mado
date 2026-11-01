@@ -73,35 +73,34 @@ import PicseeCore
 @Test @MainActor func folderViewOnlyWrapsCompleteMultiItemSnapshot() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     coordinator.host = host
-    coordinator.setLoopEnabled(true)
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id,
         input: fixture.folder.appendingPathComponent("a.png"))
     await fixture.scanner.waitForStart()
     try await fixture.scanner.deliver(["a.png", "b.png"])
-    #expect(coordinator.canMove(.previous) == true)
-    #expect(coordinator.move(.previous))
+    #expect(coordinator.canMove(.previous, mayWrap: true) == true)
+    #expect(coordinator.move(.previous, mayWrap: true))
     #expect(host.opens.isEmpty)
     await fixture.scanner.finish(); try await task.value
-    #expect(coordinator.canMove(.previous) == true)
-    #expect(coordinator.move(.previous))
+    #expect(coordinator.canMove(.previous, mayWrap: true) == true)
+    #expect(coordinator.move(.previous, mayWrap: true))
     #expect(host.opens.map(\.lastPathComponent) == ["b.png"])
-    #expect(coordinator.move(.next))
+    #expect(coordinator.move(.next, mayWrap: true))
     #expect(host.opens.map(\.lastPathComponent) == ["b.png", "a.png"])
     let singleton = coordinator.begin(folder: fixture.folder, rootID: fixture.id,
         input: fixture.folder.appendingPathComponent("only.png"))
     await fixture.scanner.waitForStart(1)
     try await fixture.scanner.deliver(["only.png"], at: 1)
     await fixture.scanner.finish(1); try await singleton.value
-    #expect(coordinator.loopEnabled)
-    #expect(coordinator.canMove(.next) == false && coordinator.canMove(.previous) == false)
-    #expect(coordinator.move(.next))
+    #expect(coordinator.canMove(.next, mayWrap: true) == false && coordinator.canMove(.previous, mayWrap: true) == false)
+    #expect(coordinator.move(.next, mayWrap: true))
     #expect(host.opens.map(\.lastPathComponent) == ["b.png", "a.png"])
 }
 
 @Test @MainActor func folderViewLateBatchUsesLatestFilterAndNewFolderResetsConditions() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
+    let session = ViewerSession()
     coordinator.host = host
-    coordinator.setLoopEnabled(true)
+    session.setFolderLoopEnabled(true)
     let old = coordinator.begin(folder: fixture.folder, rootID: fixture.id,
         input: fixture.folder.appendingPathComponent("a.jpg"))
     await fixture.scanner.waitForStart()
@@ -114,7 +113,7 @@ import PicseeCore
     let newFolder = fixture.root.appendingPathComponent("B")
     let newer = coordinator.begin(folder: newFolder, rootID: fixture.id)
     await fixture.scanner.waitForStart(1)
-    #expect(coordinator.conditions == .init() && coordinator.loopEnabled)
+    #expect(coordinator.conditions == .init() && session.displayPreferences.loopThroughImages)
     try await fixture.scanner.deliver(["late.PNG"], at: 0)
     try await fixture.scanner.deliver(["img10.jpg", "img2.jpg"], at: 1)
     await fixture.scanner.finish(0); try await old.value
@@ -142,7 +141,8 @@ import PicseeCore
                                                     URL(fileURLWithPath: "/input/two.jpg")])
     session.setFolderConditions(.init(selectedExtensions: ["tiff"]))
     session.setFolderLoopEnabled(true)
-    #expect(session.folderConditions == .init() && !session.folderLoopEnabled)
+    // #344 makes loop global even while the frozen file set keeps its own paging behavior.
+    #expect(session.folderConditions == .init() && session.folderLoopEnabled)
     session.filePreviewSet = nil
     session.setFolderLoopEnabled(true)
     session.setFolderConditions(.init(selectedExtensions: ["tiff"]))

@@ -7,7 +7,6 @@ public enum MetadataSortState: Sendable, Equatable { case idle, pending, incompl
 struct FolderScanRestorePoint {
     let source: FolderSnapshot
     let conditions: FolderViewConditions
-    let loopEnabled: Bool
     let recursiveEnabled: Bool
     let inputURL: URL?
     let currentItemID: ItemID?
@@ -22,7 +21,6 @@ struct FolderScanFailedRead {
     let folder: URL
     let rootID: AccessRootID
     let conditions: FolderViewConditions
-    let loopEnabled: Bool
     let recursiveEnabled: Bool
     let canPresent: @MainActor () -> Bool
 }
@@ -48,7 +46,6 @@ struct FolderScanFailedRead {
         return metadataUnknownItemIDs.isEmpty ? .complete : .incomplete
     }
     public private(set) var metadataUnknownItemIDs: Set<ItemID> = []
-    public private(set) var loopEnabled = false
     public private(set) var recursiveEnabled = false
     /// A filtered empty projection is final only after enumeration, or while its prior result remains shown during refresh.
     public var hasNoMatches: Bool {
@@ -93,7 +90,6 @@ struct FolderScanFailedRead {
         projectSource()
         enqueueMetadata(candidates: added)
     }
-    public func setLoopEnabled(_ value: Bool) { loopEnabled = value }
     /// `rereadingFolder` rescans as a folder open (Reading State, first entry on completion) instead of keeping the shown image.
     @discardableResult public func setRecursiveEnabled(_ value: Bool, rereadingFolder: Bool = false) -> Task<Void, any Error>? {
         guard recursiveEnabled != value else { return nil }
@@ -139,7 +135,7 @@ struct FolderScanFailedRead {
         let input = currentURL ?? inputURL
         // Only a folder entry returns to 「读取失败」; an image-first Retry keeps the viewing surface.
         let point = input == nil ? FolderScanFailedRead(error: error, folder: folder.url, rootID: folder.rootID,
-            conditions: conditions, loopEnabled: loopEnabled, recursiveEnabled: recursiveEnabled, canPresent: canPresent) : nil
+            conditions: conditions, recursiveEnabled: recursiveEnabled, canPresent: canPresent) : nil
         let task = start(folder: folder.url, rootID: folder.rootID, input: input,
             canPresent: canPresent, preserveConditions: true)
         failedRead = point
@@ -520,7 +516,7 @@ struct FolderScanFailedRead {
     /// A complete folder source Cancel Reading can put back; nil while scanning or after a cancel.
     var restorePoint: FolderScanRestorePoint? {
         guard let sourceSnapshot, sourceSnapshot.isComplete else { return nil }
-        return FolderScanRestorePoint(source: sourceSnapshot, conditions: conditions, loopEnabled: loopEnabled,
+        return FolderScanRestorePoint(source: sourceSnapshot, conditions: conditions,
             recursiveEnabled: recursiveEnabled, inputURL: inputURL, currentItemID: currentItemID, currentURL: currentURL,
             canPresent: automaticPresentationAllowed, folder: sourceFolder)
     }
@@ -530,7 +526,6 @@ struct FolderScanFailedRead {
         conditions = FolderViewConditions(sort: sort, direction: direction,
             selectedExtensions: point.conditions.selectedExtensions)
         conditionsFolder = point.source.version.folder
-        loopEnabled = point.loopEnabled
         recursiveEnabled = point.recursiveEnabled
         inputURL = point.inputURL
         currentItemID = point.currentItemID
@@ -551,7 +546,6 @@ struct FolderScanFailedRead {
         stop(.cancelled)
         conditions = point.conditions
         conditionsFolder = point.folder
-        loopEnabled = point.loopEnabled
         recursiveEnabled = point.recursiveEnabled
         activeFolder = (point.folder, point.rootID)
         sourceFolder = point.folder

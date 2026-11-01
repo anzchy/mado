@@ -90,7 +90,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.waitForStart(1)
     try await fixture.scanner.deliver(["a.jpg", "b.png"], at: 1)
     await fixture.scanner.finish(1); try await same.value
-    let selection = FolderMenuSelection(conditions: scan.conditions, loopEnabled: scan.loopEnabled)
+    let selection = FolderMenuSelection(conditions: scan.conditions, loopEnabled: false)
     for action in [FolderMenuAction.sort(.pixelDimensions), .direction(.descending), .extensionType("png")] {
         #expect(FolderMenuPolicy.state(for: action, selection: selection,
             hasFolderSource: true, previewActive: false).checked)

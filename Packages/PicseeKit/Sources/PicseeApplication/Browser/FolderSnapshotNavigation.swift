@@ -19,16 +19,16 @@ extension FolderScanHost {
 
 extension FolderScanCoordinator {
     /// Nil lets a nonmember use the existing native grant/navigation path.
-    public func canMove(_ direction: NavigationDirection, currentURL: URL? = nil) -> Bool? {
+    public func canMove(_ direction: NavigationDirection, currentURL: URL? = nil, mayWrap: Bool = false) -> Bool? {
         if hasNoMatches { return false }
         if snapshot?.isComplete == true, snapshot?.navigationEntries.isEmpty == true { return false }
         guard let navigation = navigation(matching: currentURL), let snapshot else {
             return failure == nil ? nil : false
         }
-        return (failure == nil && !snapshot.isComplete) || neighbor(in: navigation, direction: direction) != nil
+        return (failure == nil && !snapshot.isComplete) || neighbor(in: navigation, direction: direction, mayWrap: mayWrap) != nil
     }
     /// A member endpoint is handled, including a provisional endpoint's enabled no-op.
-    @discardableResult public func move(_ direction: NavigationDirection, currentURL: URL? = nil) -> Bool {
+    @discardableResult public func move(_ direction: NavigationDirection, currentURL: URL? = nil, mayWrap: Bool = false) -> Bool {
         if hasNoMatches { return true }
         if snapshot?.isComplete == true, snapshot?.navigationEntries.isEmpty == true { return true }
         guard let navigation = navigation(matching: currentURL), let snapshot else {
@@ -36,7 +36,7 @@ extension FolderScanCoordinator {
             return queueNavigation(direction, folder: currentURL.deletingLastPathComponent(), input: currentURL)
         }
         pendingDirection = nil
-        if let entry = neighbor(in: navigation, direction: direction) {
+        if let entry = neighbor(in: navigation, direction: direction, mayWrap: mayWrap) {
             presentationRevision &+= 1
             currentItemID = entry.itemID
             self.currentURL = entry.url
@@ -46,7 +46,7 @@ extension FolderScanCoordinator {
     }
     func advancePending() {
         guard !Task.isCancelled, let direction = pendingDirection, automaticPresentationAllowed?() != false,
-              let navigation = navigation(matching: nil), neighbor(in: navigation, direction: direction) != nil else { return }
+              let navigation = navigation(matching: nil), neighbor(in: navigation, direction: direction, mayWrap: false) != nil else { return }
         move(direction)
     }
     private func navigation(matching actual: URL?) -> (entries: [FolderEntry], index: Int)? {
@@ -56,10 +56,10 @@ extension FolderScanCoordinator {
         guard let index = snapshot.navigationIndex(for: currentItemID) else { return nil }
         return (entries, index)
     }
-    private func neighbor(in navigation: (entries: [FolderEntry], index: Int), direction: NavigationDirection) -> FolderEntry? {
+    private func neighbor(in navigation: (entries: [FolderEntry], index: Int), direction: NavigationDirection, mayWrap: Bool) -> FolderEntry? {
         let index = navigation.index + (direction == .next ? 1 : -1)
         if navigation.entries.indices.contains(index) { return navigation.entries[index] }
-        guard loopEnabled, snapshot?.isComplete == true, navigation.entries.count > 1 else { return nil }
+        guard mayWrap, snapshot?.isComplete == true, navigation.entries.count > 1 else { return nil }
         return direction == .next ? navigation.entries.first : navigation.entries.last
     }
 }
@@ -69,7 +69,7 @@ extension ViewerSession {
     public func cancelFolderReading() { folderScan?.cancel() }
     public func retryFolderScan() { _ = folderScan?.retry() }
     public var folderConditions: FolderViewConditions { folderScan?.conditions ?? .init() }
-    public var folderLoopEnabled: Bool { folderScan?.loopEnabled ?? false }
+    public var folderLoopEnabled: Bool { displayPreferences.loopThroughImages }
     public var folderRecursiveEnabled: Bool { folderScan?.recursiveEnabled ?? false }
     public var folderAvailableExtensions: [String] { folderScan?.availableExtensions ?? [] }
     public var hasFolderSource: Bool { folderScan?.sourceSnapshot != nil }
@@ -78,10 +78,6 @@ extension ViewerSession {
         guard filePreviewSet == nil, previewSet == nil else { return }
         folderScan?.setConditions(conditions)
         saveFolderSort(conditions)
-    }
-    public func setFolderLoopEnabled(_ enabled: Bool) {
-        guard filePreviewSet == nil, previewSet == nil else { return }
-        folderScan?.setLoopEnabled(enabled)
     }
     @discardableResult public func setFolderRecursiveEnabled(_ enabled: Bool) -> Task<Void, any Error>? {
         guard filePreviewSet == nil, previewSet == nil, let folderScan else { return nil }
