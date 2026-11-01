@@ -176,7 +176,7 @@ public final class ViewerStateHost: NSView {
     }
     private func displaySessionStatus(_ session: ViewerSession) {
         let status = session.imageStatus
-        guard surface != .gridReading || status != .empty || displayedStatus != .readingFolder else { heldReading = true; return }
+        if surface == .gridReading, status == .empty, displayedStatus == .readingFolder { heldReading = true; return }
         display(status, nextEnabled: session.isEnabled(.next))
     }
     public func display(_ status: ViewerImageStatus, nextEnabled: Bool = false) {

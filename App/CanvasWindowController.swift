@@ -1462,6 +1462,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         navigationTask?.cancel()
         let current = generation
         navigationTask = Task { [self] in
+            var scanStarted = false
             do {
                 let authority = FolderScanPresentationAuthority(access: operation, input: inputIntent.current, originatingTask: navigationTask)
                 let services = try await operation.wait { try await accessServices.value }
@@ -1474,12 +1475,17 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 try operation.check()
                 await self.captureRecoveryPosition(folder, rootID: rootID, services: services, context: context, operation: operation)
                 try operation.check()
+                scanStarted = true
                 try await folderScanner(services).begin(folder: folder, rootID: rootID,
                     canPresent: { authority.isCurrent && context.permit.isCurrent }).value
             } catch {
                 if operation.isCurrent, generation == current {
+                    // Before begin there is no scan to finish the Reading State. Restore exactly as Cancel Reading
+                    // does before offering recovery, while preserving any terminal Lost Access presentation.
+                    let preScanFailure = !scanStarted
+                    if preScanFailure, waitingAccessPosition == nil { cancelFolderEntry() }
                     if error as? FileAccessError == .corruptStore { showAccessError(error) }
-                    else if session.folderScan?.failure == nil { promptForFolder(folder, currentImage: nil, direction: .next) }
+                    else if preScanFailure || session.folderScan?.failure == nil { promptForFolder(folder, currentImage: nil, direction: .next) }
                 }
             }
         }
