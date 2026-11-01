@@ -357,12 +357,24 @@ private struct LostEmptySplitMix64 {
     mutating func below(_ n: Int) -> Int { Int(next() % UInt64(n)) }
 }
 
-/// Async so it yields the main actor after every sequence: as one synchronous hop it held the main actor for seconds
-/// and, on the slower CI runner, pushed other main-actor tests past their 120 s time limits.
+@MainActor private func lostEmptyExpectModel(_ shell: GridShellView, _ model: LostEmptyModel, _ label: String) throws {
+    let footer = try lostEmptyFooter(shell)
+    if model.renderedName.isEmpty { lostEmptyQuiet(footer.name, "\(label) name") }
+    else { lostEmptySlot(footer.name, model.renderedName, "\(label) name") }
+    if model.renderedCount.isEmpty { lostEmptyQuiet(footer.count, "\(label) count") }
+    else { lostEmptySlot(footer.count, model.renderedCount, "\(label) count") }
+}
+
+/// Kept cheap on purpose: one window for every sequence and 16 sequences, with every op kind and lost cause checked
+/// below. A 1280×772 window per sequence for 128 sequences held the main actor long enough that, on the slower CI
+/// runner, other main-actor tests passed their 120 s time limits. Each sequence starts from an explicit reset, checked against a fresh model, so a reused shell is
+/// only a longer sequence of the same ops; it still yields the main actor between sequences.
 @Test @MainActor func footerStatusTransitionsRestoreStoredFooter() async throws {
     var random = LostEmptySplitMix64(state: 332)
-    var recoveries: [String: Int] = [:]
-    for sequenceIndex in 0..<128 {
+    var recoveries: [String: Int] = [:], seen: Set<String> = []
+    let (window, shell) = lostEmptyShell()
+    defer { window.close() }
+    for sequenceIndex in 0..<16 {
         var ops: [LostEmptyOp] = (0..<8).map { _ in
             switch random.below(12) {
             case 0: .reading(random.below(2) == 0)
@@ -382,11 +394,12 @@ private struct LostEmptySplitMix64 {
         ops += [.reading(false), .failed(false), .showTree, .empty(true), .search(0),
                 .reading(true), .reading(false), .failed(true), .failed(false),
                 .showLost(.notFound), .showTree, .count(7), .clearTerm, .search(2), .empty(false)]
-        let (window, shell) = lostEmptyShell()
-        defer { window.close() }
+        for op: LostEmptyOp in [.reading(false), .failed(false), .showTree, .empty(false)] { lostEmptyApply(op, to: shell) }
         shell.setCurrentFile("start.png"); shell.setSearchStatus(resultCount: 1, term: "")
         var model = LostEmptyModel()
+        try lostEmptyExpectModel(shell, model, "seq \(sequenceIndex) reset")
         for (step, op) in ops.enumerated() {
+            seen.formUnion([op.description, String(op.description.prefix { $0 != "(" })])
             switch op {
             case .showTree, .showFolder, .clearTree: if model.lost { recoveries[op.description, default: 0] += 1 }
             case .empty(false): if model.empty { recoveries[op.description, default: 0] += 1 }
@@ -395,14 +408,12 @@ private struct LostEmptySplitMix64 {
             lostEmptyApply(op, to: shell)
             model.apply(op)
             let label = "seq \(sequenceIndex) step \(step) \(ops.prefix(step + 1).map(\.description))"
-            let footer = try lostEmptyFooter(shell)
-            if model.renderedName.isEmpty { lostEmptyQuiet(footer.name, "\(label) name") }
-            else { lostEmptySlot(footer.name, model.renderedName, "\(label) name") }
-            if model.renderedCount.isEmpty { lostEmptyQuiet(footer.count, "\(label) count") }
-            else { lostEmptySlot(footer.count, model.renderedCount, "\(label) count") }
+            try lostEmptyExpectModel(shell, model, label)
         }
         await Task.yield()
     }
+    let kinds = ["reading", "failed", "tree", "folder", "clear", "empty", "file", "file('')", "count", "search", "term"]
+    for kind in kinds + lostEmptyCauses.map({ "lost(\($0))" }) { #expect(seen.contains(kind), "op \(kind) never ran") }
     for recovery in ["tree", "folder", "clear", "empty(false)"] {
         #expect(recoveries[recovery, default: 0] >= 1, "recovery \(recovery) never reached from lost/empty")
     }
