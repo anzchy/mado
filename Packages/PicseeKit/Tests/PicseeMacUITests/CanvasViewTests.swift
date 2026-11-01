@@ -126,16 +126,19 @@ import PicseeApplication
     #expect(canvas.accessibilityRole() == .image)
     #expect(canvas.accessibilityLabel() == "Image")
     #expect(canvas.accessibilityIdentifier() == "viewer.canvas")
+    canvas.focusRingType = .exterior
     #expect(canvas.becomeFirstResponder())
+    #expect(canvas.focusRingType == .none)
     #expect(canvas.resignFirstResponder())
-    #expect(canvas.focusRingMaskBounds == CGRect(x: 3, y: 3, width: 426, height: 226))
+    #expect(canvas.focusRingMaskBounds == .zero)
     let focusRep = try canvasBitmap(canvas)
+    let beforeFocusMask = focusRep.tiffRepresentation
     let context = try #require(NSGraphicsContext(bitmapImageRep: focusRep))
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = context
     canvas.drawFocusRingMask()
     NSGraphicsContext.restoreGraphicsState()
-    #expect(try #require(focusRep.colorAt(x: 10, y: 10)).alphaComponent > 0.9)
+    #expect(focusRep.tiffRepresentation == beforeFocusMask)
     for (appearance, expected): (NSAppearance.Name, [Double]) in [(.aqua, [1, 1, 1]),
         (.darkAqua, [15.0 / 255, 17.0 / 255, 21.0 / 255])] {
         canvas.appearance = NSAppearance(named: appearance)

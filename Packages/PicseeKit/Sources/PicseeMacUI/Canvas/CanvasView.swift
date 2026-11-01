@@ -15,6 +15,7 @@ open class CanvasView: NSView {
     private var message: String?
     private var dragPoint: CGPoint?
     private var previousViewport = CGSize.zero
+    private var showsKeyboardFocusRing = false
     public var onResolutionNeeded: ((Int) -> Void)?
 
     public init(frame frameRect: NSRect, session: ViewerSession) {
@@ -22,6 +23,7 @@ open class CanvasView: NSView {
         super.init(frame: frameRect)
         previousViewport = frameRect.size
         clipsToBounds = true
+        focusRingType = .none
         setAccessibilityIdentifier("viewer.canvas")
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
@@ -34,7 +36,13 @@ open class CanvasView: NSView {
     public override var acceptsFirstResponder: Bool { true }
     public override var mouseDownCanMoveWindow: Bool { false }
 
+    private func hideKeyboardFocusRing() {
+        showsKeyboardFocusRing = false
+        focusRingType = .none
+    }
+
     public func beginOpening() {
+        hideKeyboardFocusRing()
         image = nil
         dragPoint = nil
         let generation = openingGeneration?() ?? UUID()
@@ -97,17 +105,22 @@ open class CanvasView: NSView {
     public var hasImage: Bool { image != nil }
 
     public override func becomeFirstResponder() -> Bool {
+        let event = window?.currentEvent ?? NSApplication.shared.currentEvent
+        showsKeyboardFocusRing = event?.type == .keyDown && event?.keyCode == 48
+        focusRingType = .none
         needsDisplay = true
         return true
     }
     public override func resignFirstResponder() -> Bool {
+        hideKeyboardFocusRing()
         needsDisplay = true
         return true
     }
-    public override var focusRingMaskBounds: NSRect { bounds.insetBy(dx: 3, dy: 3) }
-    public override func drawFocusRingMask() { NSBezierPath(rect: focusRingMaskBounds).fill() }
+    public override var focusRingMaskBounds: NSRect { .zero }
+    public override func drawFocusRingMask() {}
 
     public override func mouseDown(with event: NSEvent) {
+        hideKeyboardFocusRing()
         onCanvasFocus?()
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
@@ -200,6 +213,14 @@ open class CanvasView: NSView {
             let rectangle = NSRect(x: origin.x, y: origin.y, width: end.x - origin.x, height: end.y - origin.y)
             image.draw(in: rectangle, from: .zero, operation: .sourceOver, fraction: 1,
                        respectFlipped: true, hints: [.interpolation: NSImageInterpolation.none])
+        }
+        if showsKeyboardFocusRing, window?.firstResponder === self {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                DesignColor.focusRing.nsColor.setStroke()
+                let ring = NSBezierPath(rect: bounds.insetBy(dx: 2, dy: 2))
+                ring.lineWidth = 2
+                ring.stroke()
+            }
         }
     }
 }
