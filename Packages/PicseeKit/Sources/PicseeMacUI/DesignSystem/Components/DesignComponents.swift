@@ -146,7 +146,34 @@ public struct ScaleIndicator: View {
     }
     let state: ComponentState; let theme: DesignTheme
     let actualPixels: Bool; let customZoom: Double?; let input: ComponentInput; let action: () -> Void
-    public var body: some View { Button(action: activate) { ShortcutHint(text: label) }.buttonStyle(DesignCommandStyle(kind: .scale, state: state, theme: theme, input: input)).focusable(input == .live).allowsHitTesting(input == .live) }
+    @State private var hover = false
+    @FocusState private var focused: Bool
+    private var current: ComponentState { input.state(state, hover: hover, focused: focused) }
+    private var fill: DesignColor? {
+        if current.contains(.selected) || current.contains(.pressed) { return .selectionFill }
+        return current.contains(.hover) ? .hoverBackground : nil
+    }
+    func updateHover(_ value: Bool) { hover = value }
+    public var body: some View {
+        Button(action: activate) {
+            Text(label)
+                .font(Font(DesignMetrics.font("uiSmall")))
+                .foregroundStyle(DesignColor.textSecondary.color)
+                .padding(5)
+                .frame(minWidth: 68)
+        }
+        .buttonStyle(.plain)
+        .background(fill?.color ?? .clear, in: RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!))
+        .overlay(RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!)
+            .strokeBorder(current.contains(.keyboardFocused) ? DesignColor.focusRing.color : .clear, lineWidth: 2))
+        .opacity(current.contains(.disabled) ? 0.4 : 1)
+        .disabled(state.contains(.disabled))
+        .focusable(input == .live)
+        .focused($focused)
+        .focusEffectDisabled(input == .forced)
+        .onHover(perform: updateHover)
+        .allowsHitTesting(input == .live)
+    }
 }
 public struct IndeterminateProgressRow: View {
     public init(label: String) { self.label = label }
