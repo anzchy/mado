@@ -37,8 +37,10 @@ open class CanvasView: NSView {
     public override var mouseDownCanMoveWindow: Bool { false }
 
     private func hideKeyboardFocusRing() {
+        let wasVisible = showsKeyboardFocusRing
         showsKeyboardFocusRing = false
         focusRingType = .none
+        if wasVisible { needsDisplay = true }
     }
 
     public func beginOpening() {

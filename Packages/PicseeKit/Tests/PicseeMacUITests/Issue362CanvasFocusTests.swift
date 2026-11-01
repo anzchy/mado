@@ -45,6 +45,17 @@ private final class Issue362Window: NSWindow {
     }
 }
 
+private final class Issue362Canvas: CanvasView {
+    var displayScheduled = false
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            if newValue { displayScheduled = true }
+            super.needsDisplay = newValue
+        }
+    }
+}
+
 @MainActor private func issue362Bitmap(_ view: NSView) throws -> NSBitmapImageRep {
     let rep = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width),
         pixelsHigh: Int(view.bounds.height), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -83,17 +94,19 @@ private final class Issue362Window: NSWindow {
     for name in [NSAppearance.Name.aqua, .darkAqua] {
         let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
         let content = NSView(frame: frame)
-        let canvas = CanvasView(frame: frame, session: ViewerSession())
+        let canvas = Issue362Canvas(frame: frame, session: ViewerSession())
         let button = NSButton(frame: NSRect(x: 360, y: 10, width: 50, height: 24))
         content.addSubview(canvas)
         content.addSubview(button)
         canvas.nextKeyView = button
         button.nextKeyView = canvas
-        let window = Issue362Window(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        let window = Issue362Window(contentRect: frame.offsetBy(dx: -20000, dy: -20000),
+                                    styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = content
         canvas.appearance = try #require(NSAppearance(named: name))
         canvas.focusRingType = .exterior
+        window.orderFrontRegardless()
         defer { window.close() }
 
         #expect(window.makeFirstResponder(canvas))
@@ -104,12 +117,17 @@ private final class Issue362Window: NSWindow {
         window.sendEvent(try issue362Key(window, shift: false))
         #expect(window.firstResponder === canvas)
         try issue362ExpectReference(canvas, ring: true)
+        canvas.displayIfNeeded()
+        #expect(!canvas.needsDisplay)
+        canvas.displayScheduled = false
 
         let mouse = try #require(NSEvent.mouseEvent(with: .leftMouseDown,
             location: canvas.convert(CGPoint(x: 100, y: 100), to: nil), modifierFlags: [], timestamp: 0,
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         canvas.mouseDown(with: mouse)
         #expect(canvas.focusRingType == .none)
+        #expect(canvas.displayScheduled, "clicking a visible ring must schedule its removal")
+        canvas.displayIfNeeded()
         try issue362ExpectReference(canvas, ring: false)
 
         #expect(window.makeFirstResponder(button))
