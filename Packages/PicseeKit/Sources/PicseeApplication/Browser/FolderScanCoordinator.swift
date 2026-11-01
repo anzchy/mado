@@ -111,7 +111,7 @@ struct FolderScanFailedRead {
     public private(set) var failure: (any Error)?
     public var completedImageCount: Int? {
         guard failure == nil, sourceSnapshot?.isComplete == true else { return nil }
-        return sourceSnapshot?.navigationEntries.count
+        return snapshot?.navigationEntries.count
     }
     public var failureReason: String? {
         guard let failure else { return nil }
