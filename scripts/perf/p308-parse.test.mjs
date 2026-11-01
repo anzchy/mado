@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  SUBSYSTEM, UNKNOWN, analyze, fields, pairIntervals, parseNdjson, percentile, quoteSignpostIDs, renderReport,
+  SUBSYSTEM, UNKNOWN, analyze, fields, mergeSampleLogs, pairIntervals, parseNdjson, percentile, quoteSignpostIDs, renderReport,
   renderResources, summary, timestampMicros,
 } from './p308-parse.mjs';
 
@@ -270,4 +270,25 @@ test('real log show rows parse with the fields the parser reads', () => {
   // The same scan and generation as the shared table's App messages.
   assert.equal(events[0].message, message('FolderScan.begin'));
   assert.equal(events[3].message, message('FolderScan.end'));
+});
+
+// warm-memory: one pid, and each sample's log starts before its window, so file 2 repeats the end of sample 1.
+test('overlapping sample logs of one process count each event once', () => {
+  const t1 = BASE, t2 = BASE + 1_000_000;
+  const first = sampleLines({ g: 1, t: t1, total: 400 });
+  const second = sampleLines({ g: 2, t: t2, total: 400 });
+  const disk = line({ type: 'event', name: 'ThumbnailDiskLookup', id: '0', us: t1 + 200_000, msg: message('ThumbnailDiskLookup.hit'), category: 'performance' });
+  const fileOne = [...first, disk].join('\n');
+  const fileTwo = [first[3], disk, first[4], ...second].join('\n'); // started before sample 1's grid end
+  const windows = [{ index: 1, pid: 501, startUs: t1 - 1000, endUs: t1 + 600_000 }, { index: 2, pid: 501, startUs: t2 - 1000, endUs: t2 + 600_000 }];
+  const naive = analyze([fileOne, fileTwo].flatMap((text) => parseNdjson(text).events), windows);
+  assert.equal(naive.valid, 1, 'concatenating the files duplicates sample 1 (the defect this guards)');
+  const { events, skipped } = mergeSampleLogs([fileOne, fileTwo]);
+  assert.equal(skipped, 0);
+  assert.equal(events.length, first.length + second.length + 1);
+  const result = analyze(events, windows);
+  assert.equal(result.valid, 2);
+  assert.deepEqual(result.samples.map((s) => s.openToGridMs), [400, 400]);
+  assert.equal(result.samples[0].inside.diskHit, 1);
+  assert.equal(result.samples[1].inside.diskHit + result.samples[1].outside.diskHit, 0);
 });

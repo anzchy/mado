@@ -47,6 +47,28 @@ export function parseNdjson(text) {
   return { events, skipped };
 }
 
+/**
+ * Events of several sample logs as one list. Each sample's `log show` starts a little before its window, so in one
+ * process (warm-memory) consecutive files overlap; an event printed by two files is the same event and kept once.
+ */
+export function mergeSampleLogs(texts) {
+  const seen = new Set();
+  const events = [];
+  let skipped = 0;
+  for (const text of texts) {
+    const parsed = parseNdjson(text);
+    skipped += parsed.skipped;
+    for (const e of parsed.events) {
+      const key = [e.pid, e.us, e.name, e.type, e.id, e.message].join('\u0000');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      events.push(e);
+    }
+  }
+  events.sort((a, b) => a.us - b.us);
+  return { events, skipped };
+}
+
 /** "outcome=complete generation=7 visible=3" → { outcome: 'complete', generation: '7', visible: '3' }. */
 export function fields(message) {
   const out = {};

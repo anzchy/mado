@@ -12,7 +12,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { MIN_SAMPLES, SUBSYSTEM, UNKNOWN, analyze, parseNdjson, renderReport, renderResources } from './p308-parse.mjs';
+import { MIN_SAMPLES, SUBSYSTEM, UNKNOWN, analyze, mergeSampleLogs, parseNdjson, renderReport, renderResources } from './p308-parse.mjs';
 
 export const CACHE_STATES = ['cold-app', 'warm-disk', 'warm-memory'];
 export const TIERS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
@@ -285,7 +285,7 @@ async function resources(options) {
 /** Re-parses a run directory's saved samples; usable offline. */
 export function report(out) {
   const run = JSON.parse(readFileSync(path.join(out, 'run.json'), 'utf8'));
-  const events = run.windows.flatMap((w) => parseNdjson(readFileSync(path.join(out, w.file), 'utf8')).events);
+  const { events } = mergeSampleLogs(run.windows.map((w) => readFileSync(path.join(out, w.file), 'utf8')));
   const markdown = renderReport(run.meta, analyze(events, run.windows));
   writeFileSync(path.join(out, 'report.md'), markdown);
   console.log(markdown);
