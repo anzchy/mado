@@ -1723,6 +1723,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         }
         session.updateFocus(focusContext)
         session.setMenuTracking(menuTracking())
+        if entry == .key, command == .previous || command == .next {
+            canvas.preserveKeyboardFocusRingForNextOpening()
+        }
         return router.route(command, from: entry, to: session)
     }
     private func returnToFolder(of file: URL) {
@@ -1782,6 +1785,10 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                 restoreCanvasFocus: { [weak self] in
                     guard let self else { return }
                     _ = self.window?.makeFirstResponder(self.gridView.isHidden ? self.canvas : self.gridView.collectionView)
+                    if self.gridView.isHidden, self.window?.currentEvent?.type == .keyDown,
+                       self.window?.currentEvent?.keyCode == 53 {
+                        self.canvas.showKeyboardFocusRing()
+                    }
                 }, updateFocus: { [weak self] focus in self?.session.updateFocus(focus) },
                 allowsCloseFocus: { [weak self] in self?.isGridSearchFocused != true })
         }
