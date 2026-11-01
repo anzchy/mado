@@ -357,7 +357,9 @@ private struct LostEmptySplitMix64 {
     mutating func below(_ n: Int) -> Int { Int(next() % UInt64(n)) }
 }
 
-@Test @MainActor func footerStatusTransitionsRestoreStoredFooter() throws {
+/// Async so it yields the main actor after every sequence: as one synchronous hop it held the main actor for seconds
+/// and, on the slower CI runner, pushed other main-actor tests past their 120 s time limits.
+@Test @MainActor func footerStatusTransitionsRestoreStoredFooter() async throws {
     var random = LostEmptySplitMix64(state: 332)
     var recoveries: [String: Int] = [:]
     for sequenceIndex in 0..<128 {
@@ -399,6 +401,7 @@ private struct LostEmptySplitMix64 {
             if model.renderedCount.isEmpty { lostEmptyQuiet(footer.count, "\(label) count") }
             else { lostEmptySlot(footer.count, model.renderedCount, "\(label) count") }
         }
+        await Task.yield()
     }
     for recovery in ["tree", "folder", "clear", "empty(false)"] {
         #expect(recoveries[recovery, default: 0] >= 1, "recovery \(recovery) never reached from lost/empty")
