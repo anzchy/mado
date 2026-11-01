@@ -249,7 +249,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     expectHidden(scene.chrome, scene.content, scene.canvas, "refresh on the Home")
     #expect(loopIDs(scene.canvas) == ["state.open"], "refresh on the Home keeps Choose Folder… in the loop")
     let statuses: [ViewerImageStatus] = [.emptyFolder, .readingFolder, .noMatches, .detailLimited,
-        .folderScanFailed("x", 0), .showing, .loading("x"), .failed(.corruptImage, "x")]
+        .folderScanFailed("x", "x"), .showing, .loading("x"), .failed(.corruptImage, "x")]
     for status in statuses {
         scene.state.display(status)
         expectShown(scene.chrome, scene.content, scene.canvas, "\(status)")

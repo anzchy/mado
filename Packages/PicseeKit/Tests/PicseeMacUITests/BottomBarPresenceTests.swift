@@ -96,7 +96,7 @@ import PicseeInfrastructure
     #expect(scene.sidebarShown, "Reading State keeps the sidebar")
 
     // Failed read: the failure page sits on the shell's reading surface.
-    scene.state.display(.folderScanFailed("Folder scan failed", 1))
+    scene.state.display(.folderScanFailed("Folder scan failed", "Folder"))
     scene.shell.setReadingStatus(false)
     scene.layout()
     expectBar(scene, "failed read")
