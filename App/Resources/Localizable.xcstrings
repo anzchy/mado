@@ -2697,19 +2697,19 @@
         }
       }
     },
-    "Loop Through Folder": {
+    "Loop Through Images": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loop Through Folder"
+            "value": "Loop Through Images"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "循环浏览文件夹"
+            "value": "循环浏览"
           }
         }
       }

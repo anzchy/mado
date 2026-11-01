@@ -31,7 +31,7 @@ public enum FolderMenuAction: Equatable, Sendable {
         case .direction(.descending): "Descending"
         case .extensionType(let value): value.isEmpty ? "No Extension" : value.uppercased()
         case .clearFilter: "All Extensions"
-        case .loop: "Loop Through Folder"
+        case .loop: "Loop Through Images"
         case .recursive: "Include Subfolders"
         }
     }
@@ -71,7 +71,7 @@ public enum FolderMenuPolicy {
     }
     public static func state(for action: FolderMenuAction, selection: FolderMenuSelection,
                              hasFolderSource: Bool, previewActive: Bool) -> FolderMenuItemState {
-        let active = hasFolderSource && !previewActive
+        let active = action == .loop ? hasFolderSource || previewActive : hasFolderSource && !previewActive
         let checked: Bool
         switch action {
         case .sort(let key): checked = selection.conditions.sort == key
@@ -82,7 +82,7 @@ public enum FolderMenuPolicy {
         case .loop: checked = selection.loopEnabled
         case .recursive: checked = selection.recursiveEnabled
         }
-        return .init(enabled: active, checked: action == .recursive ? checked : active && checked)
+        return .init(enabled: active, checked: action == .recursive || action == .loop ? checked : active && checked)
     }
     public static func applying(_ action: FolderMenuAction, to selection: FolderMenuSelection) -> FolderMenuSelection {
         var result = selection

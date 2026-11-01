@@ -18,7 +18,8 @@ import PicseeCore
 @Test func folderMenuPolicyUsesActiveWindowConditionsAndClearableNoMatches() {
     let initial = FolderMenuSelection(conditions: .init(), loopEnabled: false)
     let actions: [FolderMenuAction] = [.sort(.name), .sort(.modificationDate), .sort(.type), .sort(.size),
-        .direction(.ascending), .direction(.descending), .extensionType("png"), .clearFilter, .loop]
+        .direction(.ascending), .direction(.descending), .extensionType("png"), .clearFilter]
+    // #344: loop is app-wide; its preview availability is covered separately from these folder-only actions.
     for action in actions {
         #expect(!FolderMenuPolicy.state(for: action, selection: initial,
             hasFolderSource: false, previewActive: false).enabled)

@@ -203,7 +203,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     let catalog = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     let strings = try #require(catalog["strings"] as? [String: Any])
     for key in ["Sort By", "Name", "Modification Date", "Type", "Size", "Sort Order", "Ascending",
-        "Descending", "Extensions", "All Extensions", "Loop Through Folder", "No Images Match This Filter",
+        "Descending", "Extensions", "All Extensions", "Loop Through Images", "No Images Match This Filter",
         "Choose another extension or clear the filter.", "Clear Filter", "No Extension"] {
         let entry = try #require(strings[key] as? [String: Any])
         let localizations = try #require(entry["localizations"] as? [String: Any])
