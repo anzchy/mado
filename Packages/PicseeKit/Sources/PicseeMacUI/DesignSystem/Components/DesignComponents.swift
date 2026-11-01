@@ -160,7 +160,7 @@ public struct ScaleIndicator: View {
                 .font(Font(DesignMetrics.font("uiSmall")))
                 .foregroundStyle(DesignColor.textSecondary.color)
                 .padding(5)
-                .frame(minWidth: 68)
+                .frame(minWidth: 100)
         }
         .buttonStyle(.plain)
         .background(fill?.color ?? .clear, in: RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!))

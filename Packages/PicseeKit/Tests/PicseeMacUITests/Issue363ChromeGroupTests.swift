@@ -4,13 +4,23 @@ import PicseeApplication
 @testable import PicseeMacUI
 
 private final class Issue363ContourReference: NSView {
+    let spread: Double
+    let radius: Double
+    let color: PinnedDesign.Color
+    init(frame: NSRect, spread: Double, radius: Double, color: PinnedDesign.Color) {
+        self.spread = spread; self.radius = radius; self.color = color
+        super.init(frame: frame)
+    }
+    required init?(coder: NSCoder) { nil }
     override func draw(_ dirtyRect: NSRect) {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             DesignColor.popoverBackground.nsColor.setFill()
-            let contour = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), xRadius: 5.75, yRadius: 5.75)
+            let inset = spread / 2
+            let contour = NSBezierPath(roundedRect: bounds.insetBy(dx: inset, dy: inset),
+                                       xRadius: radius - inset, yRadius: radius - inset)
             contour.fill()
-            DesignColor.textPrimary.nsColor.withAlphaComponent(0.12).setStroke()
-            contour.lineWidth = 0.5
+            NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha).setStroke()
+            contour.lineWidth = spread
             contour.stroke()
         }
     }
@@ -36,32 +46,33 @@ private final class Issue363ContourReference: NSView {
 
 @Test @MainActor func issue363ChromeGroupsHaveOnePinnedContourAndNoOverlayStroke() throws {
     _ = NSApplication.shared
-    let design = try PinnedDesign.page("viewer-controls", appearance: "light")
-    let layers = try design.boxShadowLayers(".zoom-pod", viewport: 1280)
-    #expect(layers.count == 2)
-    #expect(layers[0].spread == 0.5 && layers[0].color.alpha == 0.12)
-
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 480, height: 240),
                                       session: ViewerSession())
     overlay.refresh(filename: "a.png")
     for name in [NSAppearance.Name.aqua, .darkAqua] {
         let appearance = try #require(NSAppearance(named: name))
+        let design = try PinnedDesign.page("viewer-controls", appearance: name == .darkAqua ? "dark" : "light")
+        let layers = try design.boxShadowLayers(".zoom-pod", viewport: 1280)
+        try #require(layers.count == 2)
+        let contour = layers[0]
+        let radius = try design.length(".zoom-pod", "border-radius", viewport: 1280)
         overlay.appearance = appearance
         overlay.viewDidChangeEffectiveAppearance()
         for group in overlay.groups { group.layer?.shadowOpacity = 0 }
 
         let strip = NSRect(x: 0, y: 9, width: 6, height: 20)
         let actual = try issue363Raster(overlay.groups[0], in: strip)
-        let reference = Issue363ContourReference(frame: overlay.groups[0].bounds)
+        let reference = Issue363ContourReference(frame: overlay.groups[0].bounds,
+            spread: contour.spread, radius: radius, color: contour.color)
         reference.appearance = appearance
         reference.wantsLayer = true
-        reference.layer?.cornerRadius = DesignMetrics.radii["control"]!
+        reference.layer?.cornerRadius = radius
         appearance.performAsCurrentDrawingAppearance {
             reference.layer?.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
         }
         let expected = try issue363Raster(reference, in: strip)
         #expect(actual.tiffRepresentation == expected.tiffRepresentation,
-                "single 0.5 pt text@12% contour in \(name)")
+                "single pinned \(contour.spread) pt contour in \(name)")
 
         let overlayPixels = try issue363Raster(overlay, in: overlay.bounds, cache: false)
         var drewOverlayStroke = false

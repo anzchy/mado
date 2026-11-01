@@ -29,13 +29,14 @@ import PicseeApplication
     let initialWidth = overlay.groups[1].frame.width
 
     for appearance in [NSAppearance.Name.aqua, .darkAqua, .aqua] {
+        let design = try PinnedDesign.page("viewer-controls", appearance: appearance == .darkAqua ? "dark" : "light")
+        let layers = try design.boxShadowLayers(".zoom-pod", viewport: 1280)
+        try #require(layers.count == 2)
+        let shadow = layers[1]
+        let expectedColor = NSColor(srgbRed: shadow.color.red, green: shadow.color.green,
+                                    blue: shadow.color.blue, alpha: 1)
         overlay.appearance = NSAppearance(named: appearance)
         overlay.viewDidChangeEffectiveAppearance()
-        var unresolvedExpected: NSColor?
-        overlay.effectiveAppearance.performAsCurrentDrawingAppearance {
-            unresolvedExpected = DesignColor.textPrimary.nsColor.usingColorSpace(.sRGB)
-        }
-        let expectedColor = try #require(unresolvedExpected)
         for group in overlay.groups {
             let layer = try #require(group.layer)
             let shadowCG = try #require(layer.shadowColor)
@@ -44,9 +45,10 @@ import PicseeApplication
             #expect(abs(shadowColor.greenComponent - expectedColor.greenComponent) < 0.00001)
             #expect(abs(shadowColor.blueComponent - expectedColor.blueComponent) < 0.00001)
             #expect(shadowColor.alphaComponent == 1)
-            #expect(layer.shadowOpacity == 0.08)
-            #expect(layer.shadowRadius == 12)
-            #expect(layer.shadowOffset == CGSize(width: 0, height: -8))
+            #expect(layer.shadowOpacity == Float(shadow.color.alpha))
+            #expect(abs(layer.shadowRadius - shadow.blur / 2) < 0.00001)
+            #expect(abs(layer.shadowOffset.width - shadow.x) < 0.00001)
+            #expect(abs(layer.shadowOffset.height + shadow.y) < 0.00001)
             #expect(layer.masksToBounds == false)
             let path = try #require(layer.shadowPath)
             #expect(path.boundingBoxOfPath == group.bounds)

@@ -136,7 +136,8 @@ private final class ChromeFloatingGroupView: NSView {
             let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), xRadius: 5.75, yRadius: 5.75)
             DesignColor.popoverBackground.nsColor.setFill()
             outline.fill()
-            DesignColor.textPrimary.nsColor.withAlphaComponent(0.12).setStroke()
+            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            DesignColor.textPrimary.nsColor.withAlphaComponent(dark ? 0.16 : 0.12).setStroke()
             outline.lineWidth = 0.5
             outline.stroke()
         }
@@ -198,12 +199,13 @@ public final class ViewerChromeOverlay: NSView {
     private func updateGroupColors() {
         needsDisplay = true
         effectiveAppearance.performAsCurrentDrawingAppearance {
+            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             metadataSortNotice.layer?.backgroundColor = DesignColor.canvasBackground.nsColor.cgColor
             for group in groups {
                 guard let layer = group.layer else { continue }
                 layer.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
-                layer.shadowColor = DesignColor.textPrimary.nsColor.cgColor
-                layer.shadowOpacity = 0.08
+                layer.shadowColor = dark ? NSColor.black.cgColor : DesignColor.textPrimary.nsColor.cgColor
+                layer.shadowOpacity = dark ? 0.45 : 0.08
                 layer.shadowRadius = 12
                 layer.shadowOffset = CGSize(width: 0, height: -8)
                 layer.masksToBounds = false
