@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 import PicseeCore
 import PicseeApplication
@@ -28,10 +29,15 @@ private final class Issue362StageReference: NSView {
 
 private final class Issue362Window: NSWindow {
     private var injectedEvent: NSEvent?
+    var onEscape: (() -> Void)?
     override var currentEvent: NSEvent? { injectedEvent }
     override func sendEvent(_ event: NSEvent) {
         injectedEvent = event
         defer { injectedEvent = nil }
+        if event.type == .keyDown, event.keyCode == 53, let onEscape {
+            onEscape()
+            return
+        }
         guard event.type == .keyDown, event.keyCode == 48 else {
             super.sendEvent(event)
             return
@@ -148,5 +154,137 @@ private final class Issue362Canvas: CanvasView {
         #expect(window.makeFirstResponder(canvas))
         #expect(canvas.focusRingType == .none)
         #expect(try issue362Bitmap(canvas).tiffRepresentation == openedWithoutRing)
+    }
+}
+
+@MainActor private final class Issue362Host: ViewerSessionHost {
+    weak var canvas: CanvasView?
+    var hasImage: Bool { canvas?.hasImage == true }
+    func performCanvas(_ command: CommandID, from entry: CommandEntry) {}
+    func performCanvasZoom(_ command: CommandID, from entry: CommandEntry) -> Double? { nil }
+    func requestOpen() {}
+    func applyFocus(_ focus: FocusContext) {
+        if focus == .canvas { _ = canvas?.window?.makeFirstResponder(canvas) }
+    }
+    func showInspector(_ visible: Bool) {}
+    func presentGridItem(_ id: ItemID) {}
+    func returnToGrid() {}
+}
+
+private struct Issue362InspectorReader: InspectorMetadataReading {
+    func read(_ url: URL, access: AccessRequest) async throws -> InspectorMetadata { .init() }
+}
+
+@MainActor private func issue362KeyCode(_ window: NSWindow, keyCode: UInt16) throws -> NSEvent {
+    let characters: [UInt16: String] = [53: "\u{1b}", 123: "\u{F702}", 124: "\u{F703}"]
+    let text = try #require(characters[keyCode])
+    return try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: window.windowNumber, context: nil, characters: text, charactersIgnoringModifiers: text,
+        isARepeat: false, keyCode: keyCode))
+}
+
+@Test @MainActor func issue362KeyboardRingAfterEscapeFromTool() throws {
+    _ = NSApplication.shared
+    let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
+    let session = ViewerSession()
+    let canvas = CanvasView(frame: frame, session: session)
+    let tool = ChromeToolView(frame: NSRect(x: 180, y: 190, width: 40, height: 32),
+                              session: session, command: .open)
+    let host = Issue362Host()
+    host.canvas = canvas
+    session.host = host
+    let content = NSView(frame: frame)
+    content.addSubview(canvas)
+    content.addSubview(tool)
+    let window = Issue362Window(contentRect: frame.offsetBy(dx: -20000, dy: -20000),
+                                styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = content
+    window.orderFrontRegardless()
+    defer { window.close() }
+
+    #expect(window.makeFirstResponder(tool))
+    window.sendEvent(try issue362KeyCode(window, keyCode: 53))
+    #expect(window.firstResponder === canvas)
+    try issue362ExpectReference(canvas, ring: true)
+}
+
+@Test @MainActor func issue362KeyboardRingAfterEscapeClosesInspector() throws {
+    _ = NSApplication.shared
+    let frame = NSRect(x: 0, y: 0, width: 652, height: 500)
+    let session = ViewerSession()
+    let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 432, height: 500), session: session)
+    let window = Issue362Window(contentRect: frame.offsetBy(dx: -20000, dy: -20000),
+                                styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    let model = InspectorModel(reader: Issue362InspectorReader())
+    var restored = 0
+    var updates: [FocusContext] = []
+    let panel = NSHostingView(rootView: InspectorPanel(model: model, session: session,
+        close: {}, restoreCanvasFocus: {
+            restored += 1
+            _ = window.makeFirstResponder(canvas)
+            canvas.showKeyboardFocusRing()
+        }, updateFocus: { updates.append($0); session.updateFocus($0) }))
+    panel.frame = NSRect(x: 432, y: 0, width: 220, height: 500)
+    let content = NSView(frame: frame)
+    content.addSubview(canvas)
+    content.addSubview(panel)
+    window.contentView = content
+    window.onEscape = {
+        _ = CommandRouter().route(.escape, from: .key, to: session)
+        panel.layoutSubtreeIfNeeded()
+    }
+    window.orderFrontRegardless()
+    defer { window.close() }
+
+    session.setInspectorVisible(true)
+    panel.layoutSubtreeIfNeeded()
+    func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+    let closeButton = try #require(descendants(panel).compactMap { $0 as? NSButton }
+        .first { $0.accessibilityIdentifier() == "inspector.close" })
+    #expect(window.makeFirstResponder(closeButton))
+    #expect(updates.contains(.panel))
+    #expect(window.firstResponder !== canvas)
+    window.sendEvent(try issue362KeyCode(window, keyCode: 53))
+    for _ in 0..<100 where restored == 0 {
+        panel.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
+    #expect(restored > 0)
+    #expect(window.firstResponder === canvas)
+    try issue362ExpectReference(canvas, ring: true)
+}
+
+@Test @MainActor func issue362KeyboardRingSurvivesArrowNavigation() throws {
+    _ = NSApplication.shared
+    let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
+    let canvas = CanvasView(frame: frame, session: ViewerSession())
+    let button = NSButton(frame: NSRect(x: 360, y: 10, width: 50, height: 24))
+    let content = NSView(frame: frame)
+    content.addSubview(canvas)
+    content.addSubview(button)
+    canvas.nextKeyView = button
+    button.nextKeyView = canvas
+    let window = Issue362Window(contentRect: frame.offsetBy(dx: -20000, dy: -20000),
+                                styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = content
+    window.orderFrontRegardless()
+    defer { window.close() }
+
+    canvas.onCommand = { id in
+        guard id == .previous || id == .next else { return false }
+        canvas.beginOpening()
+        return true
+    }
+    #expect(window.makeFirstResponder(button))
+    window.sendEvent(try issue362Key(window, shift: false))
+    #expect(window.firstResponder === canvas)
+    try issue362ExpectReference(canvas, ring: true)
+
+    for keyCode in [UInt16(123), UInt16(124)] {
+        window.sendEvent(try issue362KeyCode(window, keyCode: keyCode))
+        try issue362ExpectReference(canvas, ring: true)
     }
 }

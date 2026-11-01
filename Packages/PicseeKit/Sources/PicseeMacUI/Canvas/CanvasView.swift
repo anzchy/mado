@@ -16,6 +16,7 @@ open class CanvasView: NSView {
     private var dragPoint: CGPoint?
     private var previousViewport = CGSize.zero
     private var showsKeyboardFocusRing = false
+    private var preserveKeyboardFocusRingForOpening = false
     public var onResolutionNeeded: ((Int) -> Void)?
 
     public init(frame frameRect: NSRect, session: ViewerSession) {
@@ -43,8 +44,22 @@ open class CanvasView: NSView {
         if wasVisible { needsDisplay = true }
     }
 
+    public func showKeyboardFocusRing() {
+        showsKeyboardFocusRing = true
+        focusRingType = .none
+        needsDisplay = true
+    }
+
+    public func preserveKeyboardFocusRingForNextOpening() {
+        preserveKeyboardFocusRingForOpening = showsKeyboardFocusRing
+    }
+
     public func beginOpening() {
-        hideKeyboardFocusRing()
+        if preserveKeyboardFocusRingForOpening {
+            preserveKeyboardFocusRingForOpening = false
+        } else {
+            hideKeyboardFocusRing()
+        }
         image = nil
         dragPoint = nil
         let generation = openingGeneration?() ?? UUID()
@@ -108,8 +123,11 @@ open class CanvasView: NSView {
 
     public override func becomeFirstResponder() -> Bool {
         let event = window?.currentEvent ?? NSApplication.shared.currentEvent
-        showsKeyboardFocusRing = event?.type == .keyDown && event?.keyCode == 48
-        focusRingType = .none
+        if event?.type == .keyDown, event?.keyCode == 48 || event?.keyCode == 53 {
+            showKeyboardFocusRing()
+        } else {
+            hideKeyboardFocusRing()
+        }
         needsDisplay = true
         return true
     }
@@ -147,8 +165,11 @@ open class CanvasView: NSView {
         if event.keyCode == 48 { onTab?(event.modifierFlags.contains(.shift)); return }
         if event.modifierFlags.intersection([.control, .option]).isEmpty,
            let key = event.charactersIgnoringModifiers,
-           let id = CommandID.matching(key: key, command: event.modifierFlags.contains(.command)),
-           onCommand?(id) == true { return }
+           let id = CommandID.matching(key: key, command: event.modifierFlags.contains(.command)) {
+            if id == .previous || id == .next { preserveKeyboardFocusRingForNextOpening() }
+            if onCommand?(id) == true { return }
+            preserveKeyboardFocusRingForOpening = false
+        }
         super.keyDown(with: event)
     }
 
