@@ -32,7 +32,12 @@ import PicseeApplication
     // Native cacheDisplay does not composite layer-backed descendants of a parent.
     // Render the group itself; the left edge is clear of icon ink.
     let strip = try chromeRaster(overlay.groups[0], in: NSRect(x: 0, y: 9, width: 6, height: 20))
-    let ink = chromeInk(strip)
+    let ink = (0..<strip.pixelsHigh).flatMap { y in
+        (0..<strip.pixelsWide).map { x in
+            guard let color = strip.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+            return color.alphaComponent > 0.1 && min(color.redComponent, color.greenComponent, color.blueComponent) < 0.99
+        }
+    }
     let edgeInk = (0...2).reduce(0) { count, x in
         count + (0..<strip.pixelsHigh).filter { ink[$0 * strip.pixelsWide + x] }.count
     }
