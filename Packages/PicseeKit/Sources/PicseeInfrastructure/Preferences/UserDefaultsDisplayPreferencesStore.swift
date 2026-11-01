@@ -19,6 +19,7 @@ import PicseeApplication
         set {
             var normalized = newValue
             normalized.gridSidebarWidth = DisplayPreferences.normalizedSidebarWidth(normalized.gridSidebarWidth)
+            normalized.thumbnailSize = DisplayPreferences.normalizedThumbnailSize(normalized.thumbnailSize)
             guard normalized != storedValue else { return }
             storedValue = normalized
             if let existing = defaults.data(forKey: Self.key), let version = Self.unsupportedVersion(existing) {
