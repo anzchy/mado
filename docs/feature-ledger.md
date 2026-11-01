@@ -129,7 +129,7 @@
 | VIEW-07 | 透明图 | Partial | 单元 | P0-05 | `Packages/PicseeKit/Sources/PicseeInfrastructure/Images/ImageIOPipeline.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 打开透明 PNG，透明区域按背景设置显示，不是黑色；限制：@1x 真机不发黑（[记录](validation/P0.md#p0-0506解码真机验收9view-06--view-07--view-08--fmt-01mac-mini)）；尚无背景设置；@2x 未验 |
 | VIEW-08 | 大图不卡界面 | Partial | 单元 | P0-05、P1-04 | `Packages/PicseeKit/Sources/PicseeInfrastructure/Images/DecodeAdmission.swift`、`Packages/PicseeKit/Sources/PicseeCore/Ports/ImagePipeline.swift`、`Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasDecodePolicy.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerImageLoader.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerImageHost.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/FirstPreviewTracing.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 打开 48MP 图：加载期间窗口能拖、菜单能开；先出预览再变清晰；限制：@1x 预览→清晰及 AX 移窗可响应已验（[P0 记录](validation/P0.md#p0-0506解码真机验收9view-06--view-07--view-08--fmt-01mac-mini)、[P1 记录](validation/P1.md#p1-04渐进细节与位深资源上限)）；48MP 用 45.4MP；鼠标拖窗/菜单、@2x 未验。渐进、位深/上限、重请求与重试仅单元，原生 opener 未验；合格源首预览可走磁盘缓存（见 CACHE-02）；查看器解码与缓存像素、网格钉住共用同一内存预算，钉住占满时可见解码等待而不失败，仅单元（P3-06）。 |
 | VIEW-09 | 快速切图不串图 | Partial | 单元 | P1-05、P2-08 | `Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerImageLoader.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerImageHost.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`App/CanvasWindowController.swift` | 快速打开 A→B→C，让 A 最后才解码完：画布、标题、Inspector 都只显示 C；限制：“A 最后完成”单元通过；@1x 自然时序仅见一次（[记录](validation/P1.md#p1-04渐进细节与位深资源上限)），无延迟钩子、@2x 未验；标题仅文件名（Inspector 元数据随切换同步见 INFO-02，仅单元）。同代次修订只重试一次；清旧像素回 opening、关闭/失败清理及 #58 消耗重试后的延迟旧查找、#122 迟到旧 pin/旧观察与取消均仅单测，#122 与网格内快速翻图真机未验。 P2-08 外部重命名/替换触发新呈现代次并更新画布与标题，仅单元与 App 接线测试覆盖；签名真机未验。 |
-| VIEW-10 | 上一张 / 下一张 | Partial | 单元 | P2-03 | `Packages/PicseeKit/Sources/PicseeApplication/Access/FolderNavigation.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Browser/FolderSnapshotNavigation.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Access/ViewerSessionNavigationHost.swift`、`App/Commands/CommandMenu.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift`；菜单 ID：`folder.loop.menu` | ←/→ 按目录顺序翻图；到首尾时按设置停止或循环。限制：既有按键/菜单/按钮顺序及首尾停止 @1x 通过（[记录](validation/P0.md#p0-04--p0-09授权与-session-真机验收811access-01--access-02--access-05--open-02--open-06--view-10--cmd-02--a11y-02mac-mini)）；工具按钮未验；P2-03 循环/筛选/排序、P2-04 递归快照重建与扫描中快照、末端、方向合并仅单元，原生组合未验。#344「循环浏览」默认关闭、持久化、跨窗口同步及目录边界仅单元；菜单仅编译 App 测试，真机未验。P3-01 冻结预览集首尾停止，不读循环设置，新增路径未验。 |
+| VIEW-10 | 上一张 / 下一张 | Partial | 单元 | P2-03 | `Packages/PicseeKit/Sources/PicseeApplication/Access/FolderNavigation.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Browser/FolderSnapshotNavigation.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Access/ViewerSessionNavigationHost.swift`、`App/Commands/CommandMenu.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/DisplayPreferences.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`；菜单 ID：`folder.loop.menu`；偏好键：`loopThroughImages` | ←/→ 按目录顺序翻图；到首尾时按设置停止或循环。限制：既有按键/菜单/按钮顺序及首尾停止 @1x 通过（[记录](validation/P0.md#p0-04--p0-09授权与-session-真机验收811access-01--access-02--access-05--open-02--open-06--view-10--cmd-02--a11y-02mac-mini)）；工具按钮未验；P2-03 循环/筛选/排序、P2-04 递归快照重建与扫描中快照、末端、方向合并仅单元，原生组合未验。#344「循环浏览」默认关闭、持久化、跨窗口同步及目录边界仅单元；菜单仅编译 App 测试，真机未验。P3-01 冻结预览集首尾停止，不读循环设置，新增路径未验。#344 起「循环浏览」在预览集与 Finder 打开时也可用并切换同一偏好，但这两处翻页仍不读取它（#345），仅单元。 |
 
 ### C 沉浸界面
 
@@ -333,21 +333,21 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
-| 查看与画布 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| C 沉浸界面 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
-| 外观与显示偏好 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
-| 文件夹浏览 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
+| 打开与输入 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 查看与画布 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| C 沉浸界面 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 外观与显示偏好 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 文件夹浏览 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
 | Filmstrip | 2026-10-28 | doc-gardener | 00a5c6d..50a495a。历史复核见 git log -p -- docs/feature-ledger.md |
-| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 信息与元数据 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
-| 授权与文件访问 | 2026-11-01 | doc-gardener | 55504af..3746321 |
-| 缓存与资源 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 命令与键盘 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
+| 网格、选择与菜单 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 信息与元数据 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 授权与文件访问 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 缓存与资源 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
+| 命令与键盘 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 可访问性与本地化 | 2026-11-01 | doc-gardener | 8a86883..fadfe98 |
+| 可访问性与本地化 | 2026-11-01 | doc-gardener | 085ff7c..86ac80c |
 | 分发 | 2026-11-01 | doc-gardener | fbba9cb..c578437 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
