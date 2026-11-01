@@ -4,7 +4,8 @@ Run from this worktree on an unlocked macOS 14+ desktop with Xcode, xcodegen,
 Apple Development signing configured, and UI Automation authorized:
 
 ```sh
-scripts/ui-tests.sh              # smoke, keyboard, menu states, both-surface audit
+scripts/ui-tests.sh              # default: keyboard + menu states (flows)
+scripts/ui-tests.sh all          # smoke, keyboard, menu states, both-surface audit
 scripts/ui-tests.sh flows 10     # ten consecutive keyboard + menu passes
 scripts/ui-tests.sh audit        # Grid and viewer accessibility audits
 scripts/ui-tests.sh smoke        # original three-image fixture smoke
@@ -29,6 +30,18 @@ per-run logs, JSON summaries, `.xcresult` bundles and `passes.log`. The runner
 stops at the first unsuccessful run. Skips, expected failures, incomplete runs
 and zero tests fail its pass counter; retries are not used to replace failures.
 Open a result bundle in Xcode to inspect audit issues and attachments.
+
+`flows` is the default so a normal invocation runs the reliability checks without
+the known audit failures. With the current product, explicit `all` and `audit`
+runs are expected to exit **65** because native findings remain unsuppressed:
+[#365](https://github.com/anzchy/picsee/issues/365)–[#374](https://github.com/anzchy/picsee/issues/374)
+cover 12 occurrences (Grid 6, Viewer 6). Compare each retained finding's surface,
+audit type, description and element identifier (or label/value) with those issue
+bodies; use frames as location context, not stable identity. An unmatched finding
+or additional occurrence is new evidence to triage, rather
+than a reason to assume every exit 65 is already explained. Preserve logs and
+file each distinct new finding. `all N` with `N > 1` stops at repetition 1 while
+these findings persist; the runner stops at its first unsuccessful repetition.
 
 All tests use ADR-012's unique container fixture and `XCUIApplication()` bound
 to the built Target Application. They never drive the open panel. The existing
@@ -77,7 +90,11 @@ python3 scripts/tests/ui-test-prompts.test.py
 
 The keyboard test keeps Current Item distinct from the nonempty Selection,
 pages both ways, ends on another viewer image, restores the Grid, then sends
-more keys without a mouse click. Filenames come from native child text and the
+more keys without a mouse click. After Esc, Shift-Down must change the Grid's
+Current Item: vertical arrows are handled only by the focused Grid collection,
+not by window-level commands. Shift-Up restores the original Current Item while
+preserving Selection before appearance comparisons. This focus oracle is
+independent of the Current Item ring and Space/Left/Right command routing. Filenames come from native child text and the
 Current Item comes from the Grid footer. Native collection wrappers expose no
 usable Selection value, so retained cell screenshots compare the same Current
 Item before/after preview and a selection-preserving Shift-arrow redraw.

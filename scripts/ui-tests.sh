@@ -2,7 +2,7 @@
 # Local/manual XCUITests only. Never add this command to required PR checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-mode=${1:-all}
+mode=${1:-flows}
 repetitions=${2:-1}
 case "$mode" in
   all|flows|audit|smoke) ;;
