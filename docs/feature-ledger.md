@@ -348,7 +348,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-10-30 | doc-gardener | c3584cc4..b0c69fcd。历史复核见 git log -p -- docs/feature-ledger.md |
 | 可访问性与本地化 | 2026-11-01 | doc-gardener | cc37409..f75d6d1 |
-| 分发 | 2026-10-30 | doc-gardener | 4a13df5..639588e。历史复核见 git log -p -- docs/feature-ledger.md |
+| 分发 | 2026-11-01 | doc-gardener | 55504af..0dc9213 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
 ### 2026-10-21 建账
