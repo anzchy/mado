@@ -18,6 +18,12 @@ import PicseeInfrastructure
         _ = NSApplication.shared
         var preferences = DisplayPreferences()
         preferences.gridSidebarVisible = sidebar
+        // The shell gives an attached grid the stored options, so a fixture's options live in the store too.
+        if let options {
+            preferences.thumbnailSize = options.thumbnailSize
+            preferences.showFileNames = options.showFileNames
+            preferences.thumbnailFit = options.fit
+        }
         let store = InMemoryDisplayPreferencesStore(preferences)
         shell = GridShellView(frame: NSRect(x: 0, y: 0, width: width, height: 772), preferencesStore: store)
         grid = GridBrowserView(frame: NSRect(origin: .zero, size: shell.mainFrame.size))

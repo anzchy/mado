@@ -106,7 +106,7 @@ import PicseeCore
     /// Page 15 (#114): the footer Display button's popover, a shell subview above the main content and page 22.
     public let displayPanel: GridDisplayPanelView
     public var isDisplayPanelOpen: Bool { displayPanel.superview === self }
-    /// The display options last sent to the grid; a fresh grid already has the defaults.
+    /// The display options last sent to the grids; the store is their one source, so an attached grid takes them.
     private var gridDisplayOptions: GridDisplayOptions
     private let optionedGrids = NSHashTable<GridBrowserView>.weakObjects()
 
@@ -382,7 +382,7 @@ import PicseeCore
             if let grid = content as? GridBrowserView {
                 if !optionedGrids.contains(grid) {
                     optionedGrids.add(grid)
-                    if gridDisplayOptions != GridDisplayOptions() { grid.displayOptions = gridDisplayOptions }
+                    grid.displayOptions = gridDisplayOptions
                 }
                 grid.bottomContentInset = footer.bounds.height
                 grid.frame = gridContentFrame()
