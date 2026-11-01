@@ -1950,6 +1950,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         let priorPresentationRoot = presentationRootID
         let priorScanContext = scanReadContext, priorImageContext = presentationReadContext
         let priorWaitingPosition = waitingAccessPosition, priorLossCause = accessLossCause
+        let priorSidebarParent = gridShell.folderTree.parent
         let priorRecoveryReference = folderRecoveryReference, priorRecoveryURLs = folderRecoveryURLs
         session.beginFolderEntry(shownImage: fileURL, hasCompleteGrid: completeGrid)
         return { [weak self] target in
@@ -1971,7 +1972,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                 gridProjection = FolderGridProjection()
                 gridView.clearPresentation()
                 cancelSidebarTree()
-                gridShell.showFolder(nil)
+                // Restore page 26's lost row as well as its content, before monitor reconciliation.
+                gridShell.showFolderTree(current: GridSidebarFolder(url: priorWaitingPosition.folderURL,
+                    accessLossCause: priorLossCause ?? .unknown), parent: priorSidebarParent, children: [])
                 WindowImageTitle.apply(to: window, imageURL: nil)
                 showWaitingAccessState()
                 if let snapshot = accessMonitor?.state.snapshot(for: priorWaitingPosition.rootID) {
