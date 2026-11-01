@@ -154,6 +154,8 @@ public struct ScaleIndicator: View {
         return current.contains(.hover) ? .hoverBackground : nil
     }
     func updateHover(_ value: Bool) { hover = value }
+    /// Receives the installed `onHover` handler; tests drive hover without a real pointer.
+    var receiveHoverHandler: ((@escaping (Bool) -> Void) -> Void)?
     public var body: some View {
         Button(action: activate) {
             Text(label)
@@ -172,6 +174,7 @@ public struct ScaleIndicator: View {
         .focused($focused)
         .focusEffectDisabled(input == .forced)
         .onHover(perform: updateHover)
+        .onAppear { receiveHoverHandler?(updateHover) }
         .allowsHitTesting(input == .live)
     }
 }
