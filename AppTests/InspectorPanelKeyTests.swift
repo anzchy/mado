@@ -214,7 +214,8 @@ import PicseeCore
         modifierFlags: .shift, timestamp: 0, windowNumber: window.windowNumber,
         context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48))
     let divider = try #require(shell.toggleButton.nextKeyView)
-    let footer: [NSView] = [shell.toggleButton, divider, shell.searchButton, shell.sortButton]
+    // #114: the footer Display button is a live control (owner: 「两者都做，共用一组偏好」), so Tab reaches it after Sort.
+    let footer: [NSView] = [shell.toggleButton, divider, shell.searchButton, shell.sortButton, shell.displayButton]
     for target in footer {
         window.sendEvent(tab)
         #expect(window.firstResponder === target)
@@ -242,12 +243,16 @@ import PicseeCore
     #expect(window.firstResponder === shell.sortButton)
     shell.showSearchEmpty(true, term: "unmatched")
     window.sendEvent(tab)
+    #expect(window.firstResponder === shell.displayButton)
+    window.sendEvent(tab)
     #expect(window.firstResponder === shell.clearSearchButton)
     window.sendEvent(tab)
     #expect(controller.session.inspectorFocus.focus == .panel)
     #expect((window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close")
     window.sendEvent(reverse)
     #expect(window.firstResponder === shell.clearSearchButton)
+    window.sendEvent(reverse)
+    #expect(window.firstResponder === shell.displayButton)
     window.sendEvent(reverse)
     #expect(window.firstResponder === shell.sortButton)
     window.sendEvent(reverse)

@@ -578,8 +578,9 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     try await scene.open([])
     let page = scene.page, shell = scene.shell
     let divider = try #require(shell.adjacentFooterKeyView(to: shell.toggleButton, reverse: false))
+    // #114: the implemented Display button stays in the loop on page 22 (never a dead control).
     let subfolderLoop: [NSView] = [shell.toggleButton, divider] + shell.folderTree.rows + page.tiles
-        + [page.primaryButton, page.chooseButton, scene.grid.collectionView]
+        + [page.primaryButton, page.chooseButton, shell.displayButton, scene.grid.collectionView]
     #expect(sameViews(scene.keyWalk(), subfolderLoop))
     for control in page.keyViews { #expect((control as? NSControl)?.focusRingType == .exterior) }
     #expect(page.heading.accessibilityRole()?.rawValue == "AXHeading")
@@ -593,7 +594,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     scene.tree([])
     scene.sync()
     let recentsLoop: [NSView] = [shell.toggleButton, divider] + shell.folderTree.rows + page.recentRows
-        + [page.chooseButton, scene.grid.collectionView]
+        + [page.chooseButton, shell.displayButton, scene.grid.collectionView]
     #expect(sameViews(scene.keyWalk(), recentsLoop))
     for control in page.keyViews { #expect((control as? NSControl)?.focusRingType == .exterior) }
     #expect(page.recentsGroup.accessibilityLabel() == "Recently Opened")

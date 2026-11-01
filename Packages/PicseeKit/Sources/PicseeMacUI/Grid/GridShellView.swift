@@ -34,7 +34,7 @@ import PicseeCore
 }
 
 /// Page 11/12/24/29 frame shared by the grid and folder-reading state.
-@MainActor public final class GridShellView: NSView, NSSearchFieldDelegate {
+@MainActor public final class GridShellView: NSView, NSSearchFieldDelegate, DisplayPreferencesObserver {
     public let mainContent = NSView()
     public let sidebar = NSView()
     public let footer = NSView()
@@ -103,9 +103,17 @@ import PicseeCore
     private var footerActionsEnabled = true
     private var preserveRestoredSearchEditor = false
     private var comingSoonEntries: [ObjectIdentifier: EntryPoint] = [:]
+    /// Page 15 (#114): the footer Display button's popover, a shell subview above the main content and page 22.
+    public let displayPanel: GridDisplayPanelView
+    public var isDisplayPanelOpen: Bool { displayPanel.superview === self }
+    /// The display options last sent to the grid; a fresh grid already has the defaults.
+    private var gridDisplayOptions: GridDisplayOptions
+    private let optionedGrids = NSHashTable<GridBrowserView>.weakObjects()
 
     public init(frame: NSRect, preferencesStore: any DisplayPreferencesStore) {
         self.preferencesStore = preferencesStore
+        displayPanel = GridDisplayPanelView(preferencesStore: preferencesStore)
+        gridDisplayOptions = GridDisplayOptions(preferencesStore.value)
         super.init(frame: frame)
         addSubview(sidebar)
         addSubview(mainContent)
@@ -203,7 +211,8 @@ import PicseeCore
         configureComingSoon(favoritesButton, entry: .favorites, title: String(localized: "Personal Favorites"), identifier: "grid.favorites.row", systemImage: "heart")
         configureComingSoon(recentsButton, entry: .recents, title: String(localized: "Recently Viewed"), identifier: "grid.recents.row", systemImage: "clock")
         configureComingSoon(infoButton, entry: .footerInfo, title: String(localized: "Show Image Information"), identifier: "grid.info.button", systemImage: "info.circle", iconOnly: true)
-        configureComingSoon(displayButton, entry: .footerDisplay, title: String(localized: "Display and Appearance"), identifier: "grid.display.button", systemImage: "square.grid.2x2", iconOnly: true)
+        configureDisplayButton()
+        displayPanel.onClose = { [weak self] in self?.setDisplayPanelOpen(false) }
         favoritesButton.alignment = .left
         recentsButton.alignment = .left
         sidebar.addSubview(folderName)
@@ -252,6 +261,7 @@ import PicseeCore
         footer.wantsLayer = true
         refreshAppearance()
         refreshToggleLabel()
+        preferencesStore.observe(self)
         NSWorkspace.shared.notificationCenter.addObserver(self,
             selector: #selector(accessibilityOptionsChanged(_:)),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
@@ -276,6 +286,8 @@ import PicseeCore
                 .withAlphaComponent(reduceTransparency ? 1 : 0.8).cgColor
             footerLeadingDivider.layer?.backgroundColor = DesignColor.divider.nsColor.cgColor
             toggleButton.layer?.backgroundColor = preferencesStore.value.gridSidebarVisible
+                ? DesignColor.hoverBackground.nsColor.cgColor : NSColor.clear.cgColor
+            displayButton.layer?.backgroundColor = isDisplayPanelOpen
                 ? DesignColor.hoverBackground.nsColor.cgColor : NSColor.clear.cgColor
             spaceKeycap.layer?.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
             spaceKeycap.layer?.borderColor = DesignColor.divider.nsColor.cgColor
@@ -368,6 +380,10 @@ import PicseeCore
         footer.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 40)
         for content in mainContent.subviews {
             if let grid = content as? GridBrowserView {
+                if !optionedGrids.contains(grid) {
+                    optionedGrids.add(grid)
+                    if gridDisplayOptions != GridDisplayOptions() { grid.displayOptions = gridDisplayOptions }
+                }
                 grid.bottomContentInset = footer.bounds.height
                 grid.frame = gridContentFrame()
             } else {
@@ -476,6 +492,10 @@ import PicseeCore
         divider.frame = NSRect(x: max(0, sidebar.bounds.width - 5), y: 0, width: 5,
                                height: sidebar.bounds.height)
         divider.setAccessibilityValue(NSNumber(value: Double(main.minX)))
+        // viewer-options.css `.grid-tools-panel`: right 12, bottom 50, width 280, max-width calc(100vw − 24px).
+        let panelWidth = max(0, min(280, bounds.width - 24))
+        displayPanel.frame = NSRect(x: bounds.width - 12 - panelWidth, y: 50, width: panelWidth,
+                                    height: displayPanel.fittingHeight())
         if lastMainFrame != main {
             lastMainFrame = main
             onMainFrameChange?(main)
@@ -535,8 +555,10 @@ import PicseeCore
         if footerActionsEnabled {
             views.append(searchField.isHidden ? searchButton : searchField)
             views.append(sortButton)
-            if !emptyState.isHidden { views.append(clearSearchButton) }
         }
+        // #114: the Display button is never a dead control, so it stays in the loop with footer actions off.
+        views.append(displayButton)
+        if footerActionsEnabled && !emptyState.isHidden { views.append(clearSearchButton) }
         return views
     }
     public var firstFooterKeyView: NSView { footerKeyViews[0] }
@@ -553,9 +575,9 @@ import PicseeCore
         (focusTail ?? focusAnchor).nextKeyView = toggleButton
         let page = pageKeyViews
         let nextAction: NSView = footerActionsEnabled ? (searchField.isHidden ? searchButton : searchField)
-            : page.first ?? focusAnchor
+            : page.first ?? displayButton
         for (index, view) in page.enumerated() {
-            view.nextKeyView = page.indices.contains(index + 1) ? page[index + 1] : focusAnchor
+            view.nextKeyView = page.indices.contains(index + 1) ? page[index + 1] : displayButton
         }
         let treeRows: [NSView] = preferencesStore.value.gridSidebarVisible && !folderTree.isHidden ? folderTree.rows : []
         toggleButton.nextKeyView = preferencesStore.value.gridSidebarVisible ? divider : nextAction
@@ -565,7 +587,8 @@ import PicseeCore
         }
         searchButton.nextKeyView = sortButton
         searchField.nextKeyView = sortButton
-        sortButton.nextKeyView = emptyState.isHidden ? focusAnchor : clearSearchButton
+        sortButton.nextKeyView = displayButton
+        displayButton.nextKeyView = footerActionsEnabled && !emptyState.isHidden ? clearSearchButton : focusAnchor
         clearSearchButton.nextKeyView = focusAnchor
     }
     /// Footer search is offered: not while reading, and not on page 22 (its search and sort are disabled).
@@ -772,6 +795,56 @@ import PicseeCore
         button.toolTip = label
         button.setAccessibilityLabel(label)
         button.setAccessibilityIdentifier(identifier)
+    }
+    /// Page 15 (#114): the footer Display button opens the display popover; pressed while it is open.
+    private func configureDisplayButton() {
+        let label = String(localized: "Display and Appearance")
+        displayButton.setButtonType(.pushOnPushOff)
+        displayButton.title = ""
+        displayButton.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
+        displayButton.imagePosition = .imageOnly
+        displayButton.imageScaling = .scaleProportionallyDown
+        displayButton.isBordered = false
+        displayButton.contentTintColor = .secondaryLabelColor
+        displayButton.wantsLayer = true
+        displayButton.layer?.cornerRadius = DesignMetrics.radii["control"]!
+        displayButton.toolTip = label
+        displayButton.setAccessibilityLabel(label)
+        displayButton.setAccessibilityIdentifier("grid.display.button")
+        displayButton.target = self
+        displayButton.action = #selector(toggleDisplayPanelFromButton)
+        refreshDisplayButton()
+    }
+    @objc private func toggleDisplayPanelFromButton() { setDisplayPanelOpen(!isDisplayPanelOpen) }
+    /// Opening focuses the slider; every close returns focus to the Display button.
+    public func setDisplayPanelOpen(_ open: Bool) {
+        if open && !isDisplayPanelOpen {
+            displayPanel.reflect(preferencesStore.value)
+            addSubview(displayPanel, positioned: .above, relativeTo: nil)
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+            window?.makeFirstResponder(displayPanel.sizeSlider)
+        } else if !open && isDisplayPanelOpen {
+            displayPanel.removeFromSuperview()
+            window?.makeFirstResponder(displayButton)
+        }
+        refreshDisplayButton()
+    }
+    private func refreshDisplayButton() {
+        displayButton.state = isDisplayPanelOpen ? .on : .off
+        displayButton.setAccessibilityValue(NSNumber(value: isDisplayPanelOpen ? 1 : 0))
+        refreshAppearance()
+    }
+    /// The store is the one source: a change from this panel, Settings or elsewhere reaches the grid and the panel.
+    public func preferencesDidChange(_ preferences: DisplayPreferences) {
+        displayPanel.reflect(preferences)
+        let options = GridDisplayOptions(preferences)
+        guard options != gridDisplayOptions else { return }
+        gridDisplayOptions = options
+        for case let grid as GridBrowserView in mainContent.subviews {
+            optionedGrids.add(grid)
+            grid.displayOptions = options
+        }
     }
     private func refreshToggleLabel() {
         let label = String(localized: preferencesStore.value.gridSidebarVisible ? "Hide sidebar" : "Show sidebar")

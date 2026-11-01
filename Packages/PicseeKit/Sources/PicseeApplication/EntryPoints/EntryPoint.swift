@@ -44,8 +44,8 @@ public enum EntryPoint: String, CaseIterable, Sendable {
         switch self {
         case .reportIssue, .diagnostics, .keyboardShortcuts,
              .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
-             .settingsAboutPrivacyNote, .settingsAboutSourceCode: .implemented
-        case .contextMenu, .filmstrip, .favorites, .recents, .footerInfo, .footerDisplay,
+             .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay: .implemented
+        case .contextMenu, .filmstrip, .favorites, .recents, .footerInfo,
              .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode: .comingSoon
         }
     }
