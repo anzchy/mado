@@ -679,6 +679,11 @@ private struct GridGeometry: Equatable {
         scrollView.contentView.setBoundsOrigin(point)
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
+    /// Reveal the whole tile with minimum movement, preserving the viewport when already visible.
+    public func reveal(_ id: ItemID) {
+        guard let index = indices[id] else { return }
+        scrollIntoView(index)
+    }
     public func scrollTo(_ id: ItemID) {
         guard let index = indices[id] else { return }
         collectionView.scrollToItems(at: [IndexPath(item: index, section: 0)], scrollPosition: .top)
