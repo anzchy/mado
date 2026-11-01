@@ -9,6 +9,9 @@ import PicseeApplication
     var canCheckForUpdates = true
     var nextCheckDate: Date?
     private(set) var checkCount = 0
+    private(set) var startCount = 0
+    /// Runs inside `start()`, so a test can look at the windows at the moment the updater starts.
+    var onStart: (@MainActor () -> Void)?
     private var observers: [@MainActor () -> Void] = []
 
     init(version: String? = "2.0.0", build: String? = "40", automatic: Bool = false,
@@ -26,6 +29,11 @@ import PicseeApplication
         checkCount += 1
         lastUpdateCheckDate = nextCheckDate
         notify()
+    }
+
+    func start() {
+        startCount += 1
+        onStart?()
     }
 
     func observe(_ onChange: @escaping @MainActor () -> Void) {

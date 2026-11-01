@@ -24,6 +24,8 @@ public struct AppVersionInfo: Equatable, Sendable {
     /// False while the updater cannot start a user-initiated check (for example, a background check is running).
     var canCheckForUpdates: Bool { get }
     func checkForUpdates()
+    /// Starts the updater; the App calls it once, after the first window is front, so Sparkle's permission question opens on top.
+    func start()
     /// Calls `onChange` after the updater's state may have changed (an update cycle finished, or a setting changed elsewhere).
     func observe(_ onChange: @escaping @MainActor () -> Void)
 }

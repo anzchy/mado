@@ -114,6 +114,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let uiTestFixtureRoot { viewer().openGrantedFolder(uiTestFixtureRoot) }
         #endif
         NSApplication.shared.activate(ignoringOtherApps: true)
+        startUpdatesOnce()
+    }
+
+    /// Runs after the first window is front, so Sparkle's second-launch question opens on top of it (#359).
+    private func startUpdatesOnce() {
+        guard !updatesStarted, let updates else { return }
+        updatesStarted = true
+        updates.start()
     }
 
     #if DEBUG && PICSEE_UI_TEST_FIXTURE
@@ -172,8 +180,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return controller
     }
 
-    /// Set before the app runs; read once when the Settings window is first built.
+    /// Set before the app runs; started once at the end of launch and read once when the Settings window is first built.
     var updates: (any AppUpdatePort)?
+    private var updatesStarted = false
 
     func makeSettingsWindow(defaults: UserDefaults = .standard) -> SettingsPanelWindow {
         SettingsPanelWindow(cache: thumbnailCache, appearanceAdapter: appearanceAdapter,
