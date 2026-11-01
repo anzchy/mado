@@ -50,6 +50,17 @@ final class PicseeFixtureGridUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
         assertGridCurrent(app, names: names, current: first)
         waitForThumbnails(app)
+        // Only GridCollectionView.keyDown handles vertical arrows; window commands do not.
+        // If focus were elsewhere, Shift-Down could not move the Grid's Current Item.
+        app.typeKey(.downArrow, modifierFlags: [.shift])
+        let focusedGridMovement = XCTNSPredicateExpectation(predicate: NSPredicate(
+            format: "value IN %@", Array(names.dropFirst())),
+            object: app.staticTexts["grid.current-file-status"])
+        let focusResult = XCTWaiter.wait(for: [focusedGridMovement], timeout: 5)
+        print("i145 focused Grid-only Shift-Down result=\(focusResult.rawValue)")
+        XCTAssertEqual(focusResult, .completed, "Esc must restore focus to the Grid-only vertical-arrow handler")
+        app.typeKey(.upArrow, modifierFlags: [.shift])
+        assertGridCurrent(app, names: names, current: first)
         let afterReturn = captureGrid(app, names: names, stage: "after-return")
         for index in names.indices {
             XCTAssertTrue(appearanceMatches(afterReturn[index], beforePreview[index]),
