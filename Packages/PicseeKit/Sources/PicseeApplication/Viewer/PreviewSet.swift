@@ -21,6 +21,7 @@ public struct PreviewSet: Equatable, Sendable {
     public private(set) var itemIDs: [ItemID] = []
     public private(set) var currentItemID: ItemID?
     public private(set) var origin: PreviewOrigin
+    private var hasWrapped = false
     public init(items: [ItemID], sourceVersion: PreviewSourceVersion, origin: PreviewOrigin) {
         self.sourceVersion = sourceVersion
         self.origin = origin
@@ -28,10 +29,20 @@ public struct PreviewSet: Equatable, Sendable {
             ? items.filter { origin.selection.selectedItemIDs.contains($0) } : items
         currentItemID = origin.selection.currentItemID.flatMap { itemIDs.contains($0) ? $0 : nil } ?? itemIDs.first
     }
-    public mutating func move(forward: Bool) {
+    public mutating func move(forward: Bool, mayWrap: Bool = false) {
         guard let currentItemID, let index = itemIDs.firstIndex(of: currentItemID) else { return }
         let next = index + (forward ? 1 : -1)
         if itemIDs.indices.contains(next) { self.currentItemID = itemIDs[next] }
+        else if mayWrap, itemIDs.count > 1 {
+            self.currentItemID = forward ? itemIDs.first : itemIDs.last
+            hasWrapped = true
+        }
+        // Once a wrap changes the return destination, later paging keeps it at the latest viewed item.
+        // Focus preserves the original picked set and selection anchor.
+        if hasWrapped, let current = self.currentItemID {
+            origin.selection.focus(current, in: itemIDs)
+            origin.scrollAnchor = current
+        }
     }
     public mutating func reconcile(availableItemIDs: [ItemID]) {
         let available = Set(availableItemIDs)
@@ -42,5 +53,9 @@ public struct PreviewSet: Equatable, Sendable {
         itemIDs.removeAll { !available.contains($0) }
         origin.selection.reconcile(with: availableItemIDs)
         if let anchor = origin.scrollAnchor, !available.contains(anchor) { origin.scrollAnchor = nil }
+        if hasWrapped, let currentItemID {
+            origin.selection.focus(currentItemID, in: itemIDs)
+            origin.scrollAnchor = currentItemID
+        }
     }
 }

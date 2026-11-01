@@ -266,7 +266,8 @@ import PicseeCore
     session.cancelImageOpening()
 }
 
-@Test @MainActor func folderViewControlsNeverReorderOrLoopFrozenPreviewSets() async throws {
+// #345 replaces the former no-loop limitation; sort/filter controls still cannot change frozen membership/order.
+@Test @MainActor func folderViewControlsPreserveFrozenOrderAndShareLoopPreference() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -284,7 +285,7 @@ import PicseeCore
     #expect(session.isEnabled(.next))
     #expect(CommandRouter().route(.next, from: .key, to: session))
     #expect(host.inputOpens == [second] && session.filePreviewSet?.current == second)
-    #expect(!session.isEnabled(.next) && session.isEnabled(.previous))
+    #expect(session.isEnabled(.next) && session.isEnabled(.previous))
     session.filePreviewSet = nil
 
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID())
@@ -295,9 +296,9 @@ import PicseeCore
     #expect(CommandRouter().route(.next, from: .key, to: session))
     #expect(session.previewSet?.currentItemID == b)
     #expect(CommandRouter().route(.next, from: .key, to: session))
-    #expect(session.previewSet?.currentItemID == b)
-    #expect(CommandRouter().route(.previous, from: .key, to: session))
     #expect(session.previewSet?.currentItemID == a)
+    #expect(CommandRouter().route(.previous, from: .key, to: session))
+    #expect(session.previewSet?.currentItemID == b)
     #expect(host.opens.count == folderOpens)
     #expect(fixture.coordinator.snapshot?.entries.map(\.url.lastPathComponent) == ["c.png", "b.PNG"])
 }

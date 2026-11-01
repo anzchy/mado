@@ -243,7 +243,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         case .inspector: inspectorFocus.isVisible || imageCommandsAvailable || (mode == .browsing && currentItemID != nil)
         case .preview, .enter: mode == .browsing && !orderedItemIDs.isEmpty
         case .previous, .next:
-            if let filePreviewSet { filePreviewSet.canMove(forward: command == .next) }
+            if let filePreviewSet { filePreviewSet.canMove(forward: command == .next, mayWrap: displayPreferences.loopThroughImages) }
             else {
                 if mode == .viewing, previewSet == nil, folderScan?.isReadingFolder == true { false }
                 else if mode == .viewing, previewSet == nil,
@@ -294,7 +294,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 moveInputFile(forward: command == .next)
             } else if previewSet != nil {
                 let previous = previewSet?.currentItemID
-                previewSet?.move(forward: command == .next)
+                previewSet?.move(forward: command == .next, mayWrap: displayPreferences.loopThroughImages)
                 if let id = previewSet?.currentItemID, id != previous { host?.presentGridItem(id) }
             } else if mode == .viewing,
                       folderScan?.move(command == .next ? .next : .previous, currentURL: imageLoader.fileURL,
