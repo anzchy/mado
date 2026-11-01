@@ -816,8 +816,10 @@ import PicseeCore
         refreshDisplayButton()
     }
     @objc private func toggleDisplayPanelFromButton() { setDisplayPanelOpen(!isDisplayPanelOpen) }
-    /// Opening focuses the slider; every close returns focus to the Display button.
-    public func setDisplayPanelOpen(_ open: Bool) {
+    /// Opening focuses the slider; closing returns focus to the Display button. An outside click closes without
+    /// moving focus that is already outside the panel, so the click's target can take it.
+    public func setDisplayPanelOpen(_ open: Bool) { setDisplayPanelOpen(open, restoringFocus: true) }
+    private func setDisplayPanelOpen(_ open: Bool, restoringFocus: Bool) {
         if open && !isDisplayPanelOpen {
             displayPanel.reflect(preferencesStore.value)
             addSubview(displayPanel, positioned: .above, relativeTo: nil)
@@ -825,10 +827,32 @@ import PicseeCore
             layoutSubtreeIfNeeded()
             window?.makeFirstResponder(displayPanel.sizeSlider)
         } else if !open && isDisplayPanelOpen {
+            let focusInPanel = (window?.firstResponder as? NSView)?.isDescendant(of: displayPanel) == true
             displayPanel.removeFromSuperview()
-            window?.makeFirstResponder(displayButton)
+            if restoringFocus || focusInPanel { window?.makeFirstResponder(displayButton) }
         }
         refreshDisplayButton()
+    }
+    /// Window key rule while the panel is open: `true` consumed, `false` left to AppKit, `nil` not the panel's key.
+    /// Esc closes the panel from any focus before the Inspector or grid sees it; Tab inside the panel walks its loop.
+    public func routeDisplayPanelKey(_ event: NSEvent, firstResponder: NSResponder?) -> Bool? {
+        guard isDisplayPanelOpen, !isHiddenOrHasHiddenAncestor,
+              event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return nil }
+        if event.keyCode == 53 {
+            setDisplayPanelOpen(false)
+            return true
+        }
+        if event.keyCode == 48, (firstResponder as? NSView)?.isDescendant(of: displayPanel) == true { return false }
+        return nil
+    }
+    /// A mouse-down outside the open panel closes it; the click still reaches its target. viewer-options.js closes
+    /// the panel on an outside pointer-down; the Display button keeps its own toggle.
+    public func dismissDisplayPanel(forMouseDown event: NSEvent) {
+        guard isDisplayPanelOpen, let window, event.windowNumber == window.windowNumber else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        guard !displayPanel.frame.contains(point), !displayButton.convert(displayButton.bounds, to: self).contains(point)
+        else { return }
+        setDisplayPanelOpen(false, restoringFocus: false)
     }
     private func refreshDisplayButton() {
         displayButton.state = isDisplayPanelOpen ? .on : .off
