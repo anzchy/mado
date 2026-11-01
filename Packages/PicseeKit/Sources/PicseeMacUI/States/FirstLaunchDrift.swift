@@ -8,6 +8,10 @@ enum FirstLaunchDrift {
     /// One leg (up or down); `alternate` makes a full cycle twice this.
     static let period: CFTimeInterval = 60
     static let range: CGFloat = 362
+    /// The wall moves range/period ≈ 6 pt/s, yet left alone Core Animation recomposites 60 shadowed tiles at the
+    /// display rate (up to 120 Hz) for steps of ~0.05 pt. At 25 Hz a frame moves ~0.24 pt, under half a pixel at
+    /// @2x, which still reads as continuous; 15 Hz (~0.4 pt) is the floor and 30 Hz the cap.
+    static let frameRate = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 25)
 
     static func mayAnimate(visible: Bool, frontmost: Bool, reduceMotion: Bool) -> Bool {
         visible && frontmost && !reduceMotion

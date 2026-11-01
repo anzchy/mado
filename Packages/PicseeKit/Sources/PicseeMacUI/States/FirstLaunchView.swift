@@ -50,6 +50,7 @@ import os
     var appFrontmost: @MainActor () -> Bool = FirstLaunchDrift.appIsFrontmost
     var driftClock: () -> CFTimeInterval = CACurrentMediaTime
     private static let driftKey = "first-launch.wall.drift"
+    private static let driftLog = Logger(subsystem: "io.github.anzchy.picsee", category: "home")
     private var driftElapsed: CFTimeInterval = 0
     private var driftRunningSince: CFTimeInterval?
     private var tilesRest = CGPoint.zero
@@ -175,7 +176,16 @@ import os
     /// time that advances the ping-pong phase, so a resume continues from the paused offset.
     private func refreshDrift(closing: Bool = false) {
         let visible = !closing && (window.map { !isHiddenOrHasHiddenAncestor && windowVisible($0) } ?? false)
-        let run = FirstLaunchDrift.mayAnimate(visible: visible, frontmost: appFrontmost(), reduceMotion: reduceMotion)
+        let frontmost = appFrontmost()
+        let stillness = reduceMotion
+        let run = FirstLaunchDrift.mayAnimate(visible: visible, frontmost: frontmost, reduceMotion: stillness)
+        // Debug-level transition trace for the device smoke: the three inputs only, nothing personal.
+        if run == (driftRunningSince == nil) {
+            Self.driftLog.debug("""
+                wall drift \(run ? "run" : "pause", privacy: .public) visible=\(visible, privacy: .public) \
+                frontmost=\(frontmost, privacy: .public) reduceMotion=\(stillness, privacy: .public)
+                """)
+        }
         if run, driftRunningSince == nil {
             let now = driftClock()
             driftRunningSince = now
@@ -187,6 +197,7 @@ import os
             drift.autoreverses = true
             drift.repeatCount = .infinity
             drift.timingFunction = CAMediaTimingFunction(name: .linear)
+            drift.preferredFrameRateRange = FirstLaunchDrift.frameRate
             drift.beginTime = now
             drift.timeOffset = driftElapsed
             placeTiles()

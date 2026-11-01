@@ -444,3 +444,28 @@ private func i316PostAccessibilityChange() {
     #expect(i316Close(CGFloat(resumed.timeOffset), 9) && resumed.beginTime == home.clock.now,
             "closed time counted: \(resumed.timeOffset)")
 }
+
+/// About 6 pt/s needs no display-rate recomposite of the whole wall: a low preferred rate whose per-frame step
+/// stays at or under half a pixel at @2x (0.25 pt), capped well below 60 Hz. Claims no CPU or GPU figure.
+@Test @MainActor func i316DriftRequestsALowFrameRate() throws {
+    let (period, range) = try i316Pinned()
+    let rate = FirstLaunchDrift.frameRate
+    let preferred = try #require(rate.preferred, "no preferred rate")
+    #expect(rate.minimum > 0 && rate.minimum <= preferred && preferred <= rate.maximum,
+            "range \(rate.minimum)…\(preferred)…\(rate.maximum)")
+    #expect(rate.maximum <= 30, "maximum \(rate.maximum) Hz recomposites the wall near the display rate")
+    let step = range / CGFloat(period) / CGFloat(preferred)
+    #expect(step <= 0.25, "\(step) pt per frame at the preferred rate")
+    let home = I316Home()
+    defer { home.close() }
+    let drift = try #require(home.drift)
+    #expect(drift.preferredFrameRateRange.minimum == rate.minimum && drift.preferredFrameRateRange.maximum == rate.maximum
+            && drift.preferredFrameRateRange.preferred == rate.preferred, "the drift does not carry the low frame rate")
+    home.clock.now += 4
+    home.visible = false
+    i316Post(NSWindow.didChangeOcclusionStateNotification, home.window)
+    home.visible = true
+    i316Post(NSWindow.didChangeOcclusionStateNotification, home.window)
+    let resumed = try #require(home.drift)
+    #expect(resumed.preferredFrameRateRange.preferred == rate.preferred, "a resumed drift lost the frame rate")
+}
