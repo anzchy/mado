@@ -164,6 +164,31 @@ private actor ReadFailedNativeScanner: FolderScanning {
     return strings + view.subviews.filter { !$0.isHidden }.flatMap(readFailedStrings)
 }
 
+/// #316 M2: a Session change releases the pre-scan hold without leaving the reading surface.
+@Test @MainActor func i316SessionStatusChangeReleasesHeldReading() async throws {
+    let scene = StatesScene()
+    defer { scene.window.close() }
+    let coordinator = FolderScanCoordinator(access: ReadFailedNativeLeases(), scanner: ReadFailedNativeScanner())
+    scene.session.folderScan = coordinator
+    scene.session.enterFolderGrid(items: [], sourceVersion: .init(0))
+    scene.state.surface = .gridReading
+    scene.state.display(.readingFolder)
+    scene.state.refresh()
+    #expect(scene.session.imageStatus == .empty)
+    #expect(scene.state.textLines.first == "Reading Folder…")
+    _ = try? await coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/待整理"), rootID: AccessRootID()).value
+    scene.state.refresh()
+    #expect(scene.state.surface == .gridReading)
+    #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
+    let failure = try #require(scene.state.readFailedView)
+    #expect(!failure.isHiddenOrHasHiddenAncestor)
+    #expect(scene.state.textLines.first == "Couldn't finish reading “待整理”")
+    scene.session.folderScan = nil
+    scene.state.refresh()
+    #expect(scene.state.surface == .gridReading)
+    #expect(scene.state.subviews.contains { $0 is FirstLaunchView }, "a later empty Session is not masked by the old hold")
+}
+
 @Test @MainActor func readFailedHostShowsPinnedStateWithoutPartialCount() async throws {
     let (scene, _, _) = await readFailedHostScene()
     defer { scene.window.close() }
