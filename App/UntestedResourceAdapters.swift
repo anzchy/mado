@@ -15,6 +15,18 @@ struct UntestedNativeResourceSnapshotTrace: ResourceSnapshotTracing {
             value.entries, value.previewBytes, value.detailBytes, value.pinnedBytes, value.reservedBytes,
             value.running, value.waiting, value.pressure.rawValue)
     }
+    // #146 counters; the message text is CacheTraceMessage, checked by the package tests.
+    func diskLookup(hit: Bool) {
+        os_signpost(.event, log: performance, name: "ThumbnailDiskLookup", "%{public}@", CacheTraceMessage.diskLookup(hit: hit))
+    }
+    func memoryAdmission(isPreview: Bool, bytes: Int) {
+        os_signpost(.event, log: performance, name: "MemoryCacheAdmission", "%{public}@",
+            CacheTraceMessage.admission(isPreview: isPreview, bytes: bytes))
+    }
+    func memoryDeparture(isPreview: Bool, bytes: Int, reason: MemoryDepartureReason) {
+        os_signpost(.event, log: performance, name: "MemoryCacheEviction", "%{public}@",
+            CacheTraceMessage.departure(isPreview: isPreview, bytes: bytes, reason: reason))
+    }
 }
 
 /// Untested OS input adapter. One consumer forwards observed levels in source-delivery order,
