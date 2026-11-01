@@ -284,6 +284,12 @@ private struct GridGeometry: Equatable {
     public private(set) var selection = BrowserSelection()
     private var geometry: GridGeometry?
     private let thumbnailScheduler = GridThumbnailScheduler()
+    /// #146 GridFirstThumbnails: complete snapshot shown → every visible cell terminal. Signposts only.
+    public var thumbnailTrace: (any GridThumbnailTracing)? = SignpostGridThumbnailTrace()
+    /// The generation whose interval is still open, and the last one an interval began for; only a new read
+    /// (an incomplete snapshot) or a cleared presentation lets the same generation begin again.
+    private var firstThumbnailsPending: UInt64?
+    private var firstThumbnailsBegun: UInt64?
     public var thumbnailPinning: (any ImagePresentationPinning)? {
         get { thumbnailScheduler.pinning }
         set { thumbnailScheduler.pinning = newValue }
@@ -348,8 +354,12 @@ private struct GridGeometry: Equatable {
             name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
         thumbnailScheduler.onResult = { [weak self] index, request, image in
             self?.showThumbnail(at: index, request: request, image: image)
+            self?.checkFirstThumbnails()
         }
-        thumbnailScheduler.onFailure = { [weak self] index in self?.showThumbnailFailure(at: index) }
+        thumbnailScheduler.onFailure = { [weak self] index in
+            self?.showThumbnailFailure(at: index)
+            self?.checkFirstThumbnails()
+        }
         updateGeometry()
     }
     public required init?(coder: NSCoder) { nil }
@@ -407,7 +417,10 @@ private struct GridGeometry: Equatable {
 
     public func setThumbnailsActive(_ active: Bool) {
         thumbnailsActive = active
-        if active { reconcileThumbnails() } else { thumbnailScheduler.stop() }
+        if active { reconcileThumbnails() } else {
+            if firstThumbnailsPending != nil { endFirstThumbnails(.stopped) }
+            thumbnailScheduler.stop()
+        }
     }
 
     public func stopThumbnails() { setThumbnailsActive(false) }
@@ -415,6 +428,7 @@ private struct GridGeometry: Equatable {
     /// not retain an accessible filename or thumbnail from a lost root.
     public func clearPresentation() {
         stopThumbnails()
+        firstThumbnailsBegun = nil
         thumbnailGeneration &+= 1
         entries = []; indices = [:]; currentItemID = nil
         selection = BrowserSelection()
@@ -430,6 +444,10 @@ private struct GridGeometry: Equatable {
         reconcileThumbnails()
     }
     func waitForThumbnail(at index: Int) async { await thumbnailScheduler.waitForTerminal(at: index) }
+    /// Read-only: the cell's request ended with a thumbnail or a failure.
+    func thumbnailIsTerminal(at index: Int) -> Bool {
+        thumbnailScheduler.result(at: index) != nil || thumbnailScheduler.hasFailure(at: index)
+    }
 
     private var thumbnailCoverage: ThumbnailCoverage {
         guard let geometry else { return ThumbnailCoverage(width: 0, height: 0) }
@@ -445,15 +463,45 @@ private struct GridGeometry: Equatable {
             thumbnailScheduler.reconcile(visible: [], columns: 1, coverage: ThumbnailCoverage(width: 0, height: 0), loader: nil)
             return
         }
+        let visible = visibleIndices()
+        thumbnailScheduler.reconcile(visible: visible, columns: geometry.columns,
+            coverage: thumbnailCoverage, loader: thumbnailLoader)
+        for index in visible { bindThumbnail(at: index) }
+        checkFirstThumbnails()
+    }
+
+    private func visibleIndices() -> Set<Int> {
         // The flow layout is installed in init and remains this view's layout.
         let attributes = collectionView.collectionViewLayout!.layoutAttributesForElements(in: collectionView.visibleRect)
         var visible: Set<Int> = []
         for attribute in attributes where attribute.representedElementCategory == .item {
             if let index = attribute.indexPath?.item { visible.insert(index) }
         }
-        thumbnailScheduler.reconcile(visible: visible, columns: geometry.columns,
-            coverage: thumbnailCoverage, loader: thumbnailLoader)
-        for index in visible { bindThumbnail(at: index) }
+        return visible
+    }
+
+    private func firstThumbnailCounts(_ visible: Set<Int>) -> (shown: Int, failed: Int) {
+        (visible.filter { thumbnailScheduler.result(at: $0) != nil }.count,
+         visible.filter { thumbnailScheduler.hasFailure(at: $0) }.count)
+    }
+
+    private func endFirstThumbnails(_ outcome: GridFirstThumbnailsOutcome) {
+        guard let generation = firstThumbnailsPending else { return }
+        firstThumbnailsPending = nil
+        let visible = visibleIndices()
+        let counts = firstThumbnailCounts(visible)
+        thumbnailTrace?.firstThumbnailsEnd(generation: generation, outcome: outcome, visible: visible.count,
+                                           shown: counts.shown, failed: counts.failed)
+    }
+
+    /// Ends the interval the first time every visible cell is terminal. A grid that is inactive, outside a window,
+    /// hidden or not yet laid out has no visible cells and keeps waiting.
+    private func checkFirstThumbnails() {
+        guard firstThumbnailsPending != nil, thumbnailsActive, window != nil else { return }
+        let visible = visibleIndices()
+        let counts = firstThumbnailCounts(visible)
+        guard !visible.isEmpty, counts.shown + counts.failed == visible.count else { return }
+        endFirstThumbnails(.complete)
     }
 
     private func bindThumbnail(at index: Int) {
@@ -508,6 +556,11 @@ private struct GridGeometry: Equatable {
     }
 
     public func display(_ snapshot: FolderSnapshot, selection: BrowserSelection) {
+        // Counts are taken before the scheduler forgets the old snapshot's results.
+        if firstThumbnailsPending != nil, !snapshot.isComplete || firstThumbnailsPending != snapshot.version.generation {
+            endFirstThumbnails(.superseded)
+        }
+        if !snapshot.isComplete { firstThumbnailsBegun = nil }
         thumbnailScheduler.setSnapshot(snapshot)
         thumbnailGeneration = snapshot.version.generation
         if !snapshot.isComplete {
@@ -533,6 +586,12 @@ private struct GridGeometry: Equatable {
         collectionView.reloadData()
         drawSelection()
         updating = false
+        if firstThumbnailsBegun != snapshot.version.generation {
+            firstThumbnailsBegun = snapshot.version.generation
+            firstThumbnailsPending = snapshot.version.generation
+            thumbnailTrace?.firstThumbnailsBegin(generation: snapshot.version.generation, items: entries.count)
+            if entries.isEmpty { endFirstThumbnails(.complete) }
+        }
         reconcileThumbnails()
     }
     public func synchronizeSelection(_ selection: BrowserSelection) {
