@@ -318,3 +318,11 @@ test('reports label the fixture content; S2 says tiny synthetic images, not phot
   assert.match(renderResources({ tier: 'S2' }, []), /内容：S2 为很小的合成图/);
   assert.match(renderResources({ tier: 'S5' }, []), /内容：未知/);
 });
+
+// Fix round 2 (#146 gpt confirm M2): a standalone report names its launch protocol.
+test('reports state the direct-exec launch and where the timed interval starts', () => {
+  for (const text of [renderReport({ tier: 'S2' }, analyze([], [])), renderResources({ tier: 'S2' }, [])]) {
+    assert.match(text, /启动方式：直接执行 `Contents\/MacOS\/Picsee`，作为脚本跟踪的子进程，不经 LaunchServices（非 open）/);
+    assert.match(text, /计时区间从就绪等待之后的驱动命令开始，不含 App 启动/);
+  }
+});
