@@ -41,23 +41,22 @@ import PicseeMacUI
         "settings.display.fit.1": .settingsDisplayFitMode,
     ]
 
+    // #114 (owner: 「两者都做，共用一组偏好」): Settings 显示 is real now, so no Settings control stays greyed; the four
+    // display controls keep their declared entry points, now implemented, without a Coming Soon marker.
     for (id, entry) in expected {
         let control = try #require(settingsEntryPointView(id, in: root) as? NSControl)
-        #expect(!control.isEnabled, "\(id)")
-        #expect(!control.acceptsFirstResponder, "\(id)")
+        #expect(control.isEnabled, "\(id)")
+        #expect(!control.refusesFirstResponder, "\(id)")
         if let button = control as? NSButton {
-            #expect(button.refusesFirstResponder, "\(id)")
             #expect(button.keyEquivalent.isEmpty, "\(id)")
         }
-        let marker = entry.accessibilityLabel(for: .preferred)
-        #expect(control.accessibilityLabel()?.contains(" · \(marker)") == true, "\(id)")
+        #expect(control.accessibilityLabel()?.contains(" · ") == false, "\(id)")
         #expect(panel.entryPoint(for: control) == entry, "\(id)")
-        #expect(entry.state == .comingSoon, "\(id)")
+        #expect(entry.state == .implemented, "\(id)")
     }
 
     let disabled = disabledSettingsControls(in: root)
-    #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }) == Set(expected.keys))
-    #expect(disabled.allSatisfy { panel.entryPoint(for: $0) != nil })
+    #expect(disabled.isEmpty)
 }
 
 @MainActor @Test func issue218AboutReportIssueOpensSharedEntryPointURL() throws {
