@@ -287,6 +287,8 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     for keyCode in [UInt16(123), UInt16(124)] {
         window.sendEvent(try issue362KeyCode(window, keyCode: keyCode))
         try issue362ExpectReference(canvas, ring: true)
+        // The App tests read this state; it must agree with the rendered ring.
+        #expect(canvas.isShowingKeyboardFocusRing)
     }
 }
 

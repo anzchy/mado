@@ -110,14 +110,18 @@ private struct Issue364PinnedScaleLabel: View {
     renderer.scale = 1
     let image = try #require(renderer.cgImage)
     let rep = NSBitmapImageRep(cgImage: image)
-    let color = try #require(rep.colorAt(x: 2, y: 14))
+    let color = try #require(rep.colorAt(x: 14, y: 14))
     return try #require(color.usingColorSpace(.sRGB))
 }
 
-@Test @MainActor func issue364InstalledScaleIndicatorRendersRealHoverEvents() throws {
+/// Real pointer hover needs a moving cursor (signed device smoke). This drives the installed view's
+/// `onHover` handler and checks the rendered fill, sampled inside the label.
+@Test @MainActor func issue364InstalledScaleIndicatorRendersHoverHandlerState() throws {
     _ = NSApplication.shared
     for theme in DesignTheme.allCases {
-        let scale = ScaleIndicator(actualPixels: false, theme: theme) {}
+        var scale = ScaleIndicator(actualPixels: false, theme: theme) {}
+        var installedHover: ((Bool) -> Void)?
+        scale.receiveHoverHandler = { installedHover = $0 }
         let host = NSHostingView(rootView: scale)
         host.frame = NSRect(x: 0, y: 0, width: 122, height: 28)
         host.wantsLayer = true
@@ -133,48 +137,37 @@ private struct Issue364PinnedScaleLabel: View {
         window.orderFrontRegardless()
         defer { window.close() }
         host.layoutSubtreeIfNeeded()
+        let hoverHandler = try #require(installedHover, "the installed view hands over its onHover handler")
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let views = descendants(host)
         for view in views { view.updateTrackingAreas() }
-        let owners = views.filter { view in
+        #expect(views.contains { view in
             view.trackingAreas.contains { area in
                 (area.owner as AnyObject?) === view && area.options.contains(.mouseEnteredAndExited)
             }
-        }
-        #expect(!owners.isEmpty)
-        let rest = try issue364InstalledPixel(host, x: 2, y: 14)
+        }, "onHover installs a hover tracking area")
 
-        let location = host.convert(CGPoint(x: 61, y: 14), to: nil)
-        let entered = try #require(NSEvent.enterExitEvent(with: .mouseEntered, location: location,
-            modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
-            eventNumber: 1, trackingNumber: 0, userData: nil))
-        for owner in owners { owner.mouseEntered(with: entered) }
+        // x = 14 lies inside the 100 pt label, which is centred in the 122 pt host.
+        let rest = try issue364InstalledPixel(host, x: 14, y: 14)
+        hoverHandler(true)
         for _ in 0..<20 { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
-        let hover = try issue364InstalledPixel(host, x: 2, y: 14)
-
-        let exitedEvent = try #require(NSEvent.enterExitEvent(with: .mouseExited, location: location,
-            modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber, context: nil,
-            eventNumber: 2, trackingNumber: 0, userData: nil))
-        for owner in owners { owner.mouseExited(with: exitedEvent) }
+        let hover = try issue364InstalledPixel(host, x: 14, y: 14)
+        hoverHandler(false)
         for _ in 0..<20 { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
-        let exited = try issue364InstalledPixel(host, x: 2, y: 14)
+        let exited = try issue364InstalledPixel(host, x: 14, y: 14)
 
         let expectedRest = try issue364ReferencePixel(hovered: false, theme: theme)
         let expectedHover = try issue364ReferencePixel(hovered: true, theme: theme)
-        let actualDelta = [hover.redComponent - rest.redComponent,
-                           hover.greenComponent - rest.greenComponent,
-                           hover.blueComponent - rest.blueComponent]
-        let expectedDelta = [expectedHover.redComponent - expectedRest.redComponent,
-                             expectedHover.greenComponent - expectedRest.greenComponent,
-                             expectedHover.blueComponent - expectedRest.blueComponent]
+        func channels(_ color: NSColor) -> [CGFloat] { [color.redComponent, color.greenComponent, color.blueComponent] }
+        let actualDelta = zip(channels(hover), channels(rest)).map { $0 - $1 }
+        let expectedDelta = zip(channels(expectedHover), channels(expectedRest)).map { $0 - $1 }
+        #expect(expectedDelta.map(abs).max() ?? 0 > 0.02,
+                "the sample lies inside the hover fill, so rest and hover differ, theme=\(theme)")
         for channel in 0..<3 {
             #expect(abs(actualDelta[channel] - expectedDelta[channel]) < 0.02,
-                    "real mouseEntered fill channel \(channel), theme=\(theme)")
-        }
-        for channel in 0..<3 {
-            let actual = [exited.redComponent, exited.greenComponent, exited.blueComponent][channel]
-            let initial = [rest.redComponent, rest.greenComponent, rest.blueComponent][channel]
-            #expect(abs(actual - initial) < 0.02, "real mouseExited restores channel \(channel), theme=\(theme)")
+                    "hover handler fill channel \(channel), theme=\(theme)")
+            #expect(abs(channels(exited)[channel] - channels(rest)[channel]) < 0.02,
+                    "leaving hover restores channel \(channel), theme=\(theme)")
         }
     }
 }
