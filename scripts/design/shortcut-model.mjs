@@ -31,9 +31,11 @@ export const KEY_HANDLERS = [
 // Every key code handled outside the menus, per file: the page row it belongs to, or why it has none. A code found in a
 // file and not declared here fails, and so does a declared code the file no longer handles.
 const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Space, Return), not a command';
+const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
 export const KEY_SITES = {
   'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift': { 123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows' },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab' },
+  'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
+    36: { excluded: OPEN_KEY_RING }, 49: { excluded: OPEN_KEY_RING }, 76: { excluded: OPEN_KEY_RING } },
   'App/CanvasWindowController.swift': { 34: 'command:inspector', 53: 'command:escape', 49: 'command:preview', 36: 'command:enter', 76: 'command:enter',
     48: { excluded: 'Tab moves focus between the grid, its footer and the Inspector' } },
   'App/Commands/CommandMenu.swift': { 34: 'command:inspector' },
@@ -51,10 +53,13 @@ export const KEY_SITES = {
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift'];
 
-/** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, and .onKeyPress(.name). */
+/** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
+ * (with or without a leading !), and .onKeyPress(.name). */
 export function keySites(source) {
   const codes = new Set(), unread = [];
   for (const [, code] of source.matchAll(/\bkeyCode == (\d+)/g)) codes.add(code);
+  const codeList = /\[(\d+(?:, *\d+)*)\]\.contains\([\w.]*\.keyCode\)/g;
+  for (const [, listed] of source.matchAll(codeList)) for (const code of listed.split(',')) codes.add(code.trim());
   for (const match of source.matchAll(/switch [\w.]*keyCode \{/g)) {
     let depth = 1, i = match.index + match[0].length;
     while (depth && i < source.length) { if (source[i] === '{') depth++; else if (source[i] === '}') depth--; i++; }
@@ -62,9 +67,9 @@ export function keySites(source) {
       for (const code of list.split(',')) /^\d+$/.test(code.trim()) ? codes.add(code.trim()) : unread.push(`case ${list}`);
   }
   for (const [, name] of source.matchAll(/\.onKeyPress\(\.(\w+)/g)) codes.add(name);
-  // A keyCode in any other shape (!=, contains, a stored copy) is not read here.
+  // A keyCode in any other shape (!=, a stored copy, contains on a named set) is not read here.
   for (const line of source.split('\n')) {
-    const rest = line.replace(/\bkeyCode == \d+/g, '').replace(/switch [\w.]*keyCode \{/, '').replace(/keyCode: (event\.keyCode|UInt16)/g, '');
+    const rest = line.replace(/\bkeyCode == \d+/g, '').replace(/switch [\w.]*keyCode \{/, '').replace(codeList, '').replace(/keyCode: (event\.keyCode|UInt16)/g, '');
     if (/\bkeyCode\b/.test(rest)) unread.push(line.trim());
   }
   if (/\.onKeyPress\((?!\.\w+[,)])/.test(source)) unread.push('.onKeyPress without a single named key');
