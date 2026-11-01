@@ -275,14 +275,17 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         if let help = action.helpKey { item.toolTip = String(localized: String.LocalizationValue(help)) }
     }
     @objc private func invokeFolder(_ item: NSMenuItem) {
-        guard let action = item.representedObject as? FolderMenuAction,
-              let session = (NSApp.keyWindow?.windowController as? CanvasWindowController)?.session,
+        guard let action = item.representedObject as? FolderMenuAction else { return }
+        if action == .loop {
+            preferencesStore.value.loopThroughImages.toggle()
+            return
+        }
+        guard let session = windowController()?.session,
               session.hasFolderSource, session.filePreviewSet == nil, session.previewSet == nil else { return }
         let selection = FolderMenuSelection(conditions: session.folderConditions, loopEnabled: session.folderLoopEnabled,
             recursiveEnabled: session.folderRecursiveEnabled)
         let changed = FolderMenuPolicy.applying(action, to: selection)
         session.setFolderConditions(changed.conditions)
-        session.setFolderLoopEnabled(changed.loopEnabled)
         session.setFolderRecursiveEnabled(changed.recursiveEnabled)
     }
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
@@ -294,9 +297,9 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
             return false
         }
         if let action = item.representedObject as? FolderMenuAction {
-            let session = (NSApp.keyWindow?.windowController as? CanvasWindowController)?.session
+            let session = windowController()?.session
             let selection = FolderMenuSelection(conditions: session?.folderConditions ?? .init(),
-                loopEnabled: session?.folderLoopEnabled ?? false, recursiveEnabled: session?.folderRecursiveEnabled ?? false)
+                loopEnabled: preferencesStore.value.loopThroughImages, recursiveEnabled: session?.folderRecursiveEnabled ?? false)
             let state = FolderMenuPolicy.state(for: action, selection: selection,
                 hasFolderSource: session?.hasFolderSource == true,
                 previewActive: session?.filePreviewSet != nil || session?.previewSet != nil)
