@@ -1140,28 +1140,28 @@ private struct Issue314Scanner: FolderScanning {
 }
 
 /// Fix round 5 (device run parity-281-fix4-10301906): page 26 kept the reading footer, `–` and `Reading…`, because the
-/// read that ended on the lost-access page never cleared it. Main shows an empty footer status there.
+/// read that ended on the lost-access page never cleared it. #332: page 26's footer status is `–` / 无法访问.
 @MainActor @Test(.timeLimit(.minutes(3))) func t281Fix5LostAccessPageFooterIsNotReading() async throws {
     let f = try await RecoveryFixture(); defer { f.remove() }
     let c = f.controller(); defer { c.window?.close() }
-    func expectQuietFooter(_ step: String) throws {
+    func expectLostFooter(_ step: String) throws {
         let shell = try recoveryShell(c)
         shell.layoutSubtreeIfNeeded()
         let name = try #require(t281Fix5Label("grid.current-file-status", in: shell))
         let count = try #require(t281Fix5Label("grid.folder-count", in: shell))
-        #expect(name.isHidden || name.stringValue.isEmpty, "\(step): name \(name.stringValue)")
-        #expect(count.isHidden || count.stringValue.isEmpty, "\(step): count \(count.stringValue)")
-        #expect(name.stringValue != "–" && count.stringValue != String(localized: "Reading…"), "\(step): reading footer")
+        #expect(!name.isHidden && name.stringValue == "\u{2013}", "\(step): name \(name.stringValue)")
+        #expect(!count.isHidden && count.stringValue == String(localized: "Unavailable"), "\(step): count \(count.stringValue)")
+        #expect(count.stringValue != String(localized: "Reading…"), "\(step): reading footer")
         #expect(!shell.searchField.isEnabled && !shell.sortButton.isEnabled, "\(step): footer actions as on main")
     }
     try await t231Lose(f, c)
-    try expectQuietFooter("page 26")
+    try expectLostFooter("page 26")
     c.completeAccessFolderSelection(f.b, reselect: true)
     try await f.ready(c, folder: f.b)
     let strip = try t231Strip(c)
     strip.undoButton.performClick(nil)
     try await recoveryWait { c.waitingAccessPosition?.rootID == f.rootA && recoveryPage(c) != nil }
-    try expectQuietFooter("undo back to page 26")
+    try expectLostFooter("undo back to page 26")
 }
 @MainActor private func t281Fix5Label(_ id: String, in view: NSView) -> NSTextField? {
     if view.accessibilityIdentifier() == id || view.identifier?.rawValue == id { return view as? NSTextField }
