@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -105,6 +106,39 @@ def cleanup(run_root: Path, runtime_root: Path) -> None:
     marker.unlink()
 
 
+def cleanup_app_fixtures(run_root: Path, runtime_root: Path, container_root: Path) -> list[str]:
+    """Remove only UUID fixtures observed in this run's native XCTest logs."""
+    run = _run_directory(run_root, runtime_root)
+    container = Path(container_root).absolute()
+    _no_symlinks(container)
+    pattern = re.compile(r"grid\.sidebar\.folder\.(" + re.escape(run.name)
+        + r"-[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12})(?![0-9A-Za-z-])")
+    names = set()
+    for log in run.glob("run-*.log"):
+        if not re.fullmatch(r"run-\d+\.log", log.name): continue
+        if log.is_symlink() or not log.is_file():
+            raise ValueError(f"refusing unsafe native evidence log: {log}")
+        names.update(pattern.findall(log.read_text()))
+    pending = []
+    for name in sorted(names):
+        folder = container / name
+        _no_symlinks(folder)
+        if not folder.exists(): continue
+        if not folder.is_dir() or not {p.name for p in folder.iterdir()} <= {*FILENAMES, ".test-access"}:
+            raise ValueError(f"refusing unexpected app fixture contents: {folder}")
+        entries = list(folder.rglob("*"))
+        if any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in entries):
+            raise ValueError(f"refusing nonregular or symlinked app fixture contents: {folder}")
+        pending.append((folder, entries))
+    # Validate all candidates before deleting anything. Never touch an unlogged sibling.
+    for folder, entries in pending:
+        for path in sorted(entries, key=lambda p: len(p.parts), reverse=True):
+            if path.is_dir(): path.rmdir()
+            else: path.unlink()
+        folder.rmdir()
+    return [folder.name for folder, _ in pending]
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -113,6 +147,8 @@ def main(argv=None) -> int:
     staging.add_argument("source_dir", type=Path)
     cleaning = commands.add_parser("cleanup")
     cleaning.add_argument("run_root", type=Path)
+    app_cleaning = commands.add_parser("cleanup-app-fixtures")
+    app_cleaning.add_argument("run_root", type=Path)
     args = parser.parse_args(argv)
     # Deliberately no environment override: CLI output is confined to this home-owned root.
     runtime_root = Path.home() / ".picsee" / "ui-tests"
@@ -120,6 +156,11 @@ def main(argv=None) -> int:
         if args.command == "stage":
             fixtures = stage(args.run_root, args.source_dir, runtime_root)
             print(json.dumps({"fixtures": str(fixtures)}))
+        elif args.command == "cleanup-app-fixtures":
+            container = (Path.home() / "Library/Containers/io.github.anzchy.picsee/Data/Library"
+                         / "Application Support/Picsee/UITestFixtures")
+            removed = cleanup_app_fixtures(args.run_root, runtime_root, container)
+            print(json.dumps({"removed_app_fixtures": removed}))
         else:
             cleanup(args.run_root, runtime_root)
             print(json.dumps({"cleaned": str(args.run_root.absolute())}))

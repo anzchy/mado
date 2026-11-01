@@ -109,5 +109,56 @@ class RuntimeFixtureTests(unittest.TestCase):
         self.assertEqual(external.read_bytes(), b"must survive")
 
 
+    def app_fixture(self, suffix=None):
+        name = self.run.name + "-" + (suffix or str(uuid.uuid4()).upper())
+        folder = self.base / "container-fixtures" / name
+        folder.mkdir(parents=True)
+        for file in FILENAMES: (folder / file).write_bytes(b"fixture image")
+        state = folder / ".test-access" / "nested"
+        state.mkdir(parents=True)
+        (state / "test-bookmark.json").write_bytes(b"test state")
+        self.run.mkdir(parents=True, exist_ok=True)
+        with (self.run / "run-1.log").open("a") as stream:
+            stream.write('Find "grid.sidebar.folder.' + name + '" Button\n')
+        return folder
+
+    def test_container_cleanup_removes_only_logged_uuid_fixtures_and_keeps_evidence(self):
+        owned = self.app_fixture()
+        unrelated = self.base / "container-fixtures" / (self.run.name + "-" + str(uuid.uuid4()))
+        unrelated.mkdir(); (unrelated / "keep.txt").write_bytes(b"unlogged")
+        log = (self.run / "run-1.log").read_bytes()
+        removed = runtime.cleanup_app_fixtures(self.run, self.runtime_root, owned.parent)
+        self.assertEqual(removed, [owned.name])
+        self.assertFalse(owned.exists())
+        self.assertEqual((unrelated / "keep.txt").read_bytes(), b"unlogged")
+        self.assertEqual((self.run / "run-1.log").read_bytes(), log)
+        self.assertEqual(runtime.cleanup_app_fixtures(self.run, self.runtime_root, owned.parent), [])
+
+    def test_container_cleanup_refuses_nested_symlink_before_removing_images(self):
+        owned = self.app_fixture()
+        external = self.base / "user-file"; external.write_bytes(b"must survive")
+        (owned / ".test-access" / "external").symlink_to(external)
+        with self.assertRaises(ValueError):
+            runtime.cleanup_app_fixtures(self.run, self.runtime_root, owned.parent)
+        self.assertEqual(external.read_bytes(), b"must survive")
+        self.assertTrue((owned / FILENAMES[0]).exists())
+
+    def test_container_cleanup_refuses_unexpected_files_before_any_deletion(self):
+        owned = self.app_fixture()
+        (owned / "unrecognized.txt").write_bytes(b"keep")
+        with self.assertRaises(ValueError):
+            runtime.cleanup_app_fixtures(self.run, self.runtime_root, owned.parent)
+        self.assertEqual((owned / "unrecognized.txt").read_bytes(), b"keep")
+        self.assertTrue((owned / FILENAMES[0]).exists())
+
+    def test_container_cleanup_rejects_symlinked_evidence_log(self):
+        owned = self.app_fixture()
+        log = self.run / "run-1.log"
+        external = self.base / "outside-log"; log.rename(external); log.symlink_to(external)
+        with self.assertRaises(ValueError):
+            runtime.cleanup_app_fixtures(self.run, self.runtime_root, owned.parent)
+        self.assertTrue(owned.exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
