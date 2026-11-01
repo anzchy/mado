@@ -236,3 +236,20 @@ private func p308InfrastructureSignpostMessages(source: String = #filePath) thro
     let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     return try #require(object["package"] as? [String: String])
 }
+
+/// A tracer written before the counters (lookups only) keeps compiling and receives them as no-ops.
+@Test func p308CountersDefaultToNoOpsForOlderTracers() async throws {
+    final class LookupsOnly: ResourceSnapshotTracing, @unchecked Sendable {
+        var lookups = 0
+        func lookup(isPreview: Bool, hit: Bool) { lookups += 1 }
+    }
+    let tracer = LookupsOnly()
+    tracer.diskLookup(hit: true)
+    tracer.memoryAdmission(isPreview: false, bytes: 16)
+    tracer.memoryDeparture(isPreview: false, bytes: 16, reason: .budget)
+    let cache = ImageMemoryCache(capacity: 32, budget: nil, movementTrace: tracer)
+    let a = cacheKey(1), b = cacheKey(2), c = cacheKey(3)
+    for key in [a, b, c] { await cache.insert(cacheImage(try cachePixels(), key: key), for: key) }
+    #expect(await cache.diagnostics().entries == 2)
+    #expect(tracer.lookups == 0)
+}
