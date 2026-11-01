@@ -50,7 +50,7 @@ import os
     var appFrontmost: @MainActor () -> Bool = FirstLaunchDrift.appIsFrontmost
     var driftClock: () -> CFTimeInterval = CACurrentMediaTime
     private static let driftKey = "first-launch.wall.drift"
-    private static let driftLog = Logger(subsystem: "io.github.anzchy.picsee", category: "home")
+    private static let driftLog = OSLog(subsystem: "io.github.anzchy.picsee", category: "home")
     private var driftElapsed: CFTimeInterval = 0
     private var driftRunningSince: CFTimeInterval?
     private var tilesRest = CGPoint.zero
@@ -181,10 +181,8 @@ import os
         let run = FirstLaunchDrift.mayAnimate(visible: visible, frontmost: frontmost, reduceMotion: stillness)
         // Debug-level transition trace for the device smoke: the three inputs only, nothing personal.
         if run == (driftRunningSince == nil) {
-            Self.driftLog.debug("""
-                wall drift \(run ? "run" : "pause", privacy: .public) visible=\(visible, privacy: .public) \
-                frontmost=\(frontmost, privacy: .public) reduceMotion=\(stillness, privacy: .public)
-                """)
+            os_log(.debug, log: Self.driftLog, "wall drift %{public}s visible=%{public}d frontmost=%{public}d reduceMotion=%{public}d",
+                   run ? "run" : "pause", visible ? 1 : 0, frontmost ? 1 : 0, stillness ? 1 : 0)
         }
         if run, driftRunningSince == nil {
             let now = driftClock()
