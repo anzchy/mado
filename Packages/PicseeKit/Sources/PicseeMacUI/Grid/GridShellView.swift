@@ -671,7 +671,7 @@ import PicseeCore
         applyReadStatus()
     }
     private func applyReadStatus() {
-        folderTree.showsZeroForUnknownCurrent = isReading
+        folderTree.showsZeroForUnknownCurrent = false
         folderTree.showsDashForCurrent = isReadFailed
         applyStatusText()
         applyFooterState()
