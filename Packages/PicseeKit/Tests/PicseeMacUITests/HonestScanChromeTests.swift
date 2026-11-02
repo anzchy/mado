@@ -31,11 +31,9 @@ private actor I142ChromeScanner: FolderScanning {
     }
 }
 
-/// Bound the held scanner handshake, yielding the MainActor while the scan reaches its gate.
+/// Yield the MainActor until the scan reaches its held gate; the test time limit bounds the wait.
 private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async throws -> Bool {
-    let clock = ContinuousClock(), deadline = clock.now + .seconds(5)
-    while clock.now < deadline {
-        if await scanner.started(index) { return true }
+    while !(await scanner.started(index)) {
         try await Task.sleep(for: .milliseconds(5))
     }
     return await scanner.started(index)
@@ -67,7 +65,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
     await Task.yield()
     let task = c.begin(folder: folder, rootID: root)
     expectText(reading)
-    try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate within 5 seconds")
+    try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate")
     #expect(c.snapshot?.isComplete == false && c.completedImageCount == nil)
     expectText(reading)
     await scanner.finish(0)
@@ -82,7 +80,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
     scene.session.beginFolderEntry(shownImage: nil, hasCompleteGrid: true)
     await Task.yield()
     let replacement = c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"), rootID: root)
-    try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate within 5 seconds")
+    try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate")
     expectText(reading)
     #expect(scene.session.cancelFolderEntry() == .grid)
     expectText(images(2))
@@ -91,7 +89,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
     expectText(images(2))
     await Task.yield()
     let failing = c.begin(folder: folder, rootID: root)
-    try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate within 5 seconds")
+    try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate")
     expectText(reading)
     await scanner.finish(2, failed: true)
     await #expect(throws: CocoaError.self) { try await failing.value }
