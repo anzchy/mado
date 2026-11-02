@@ -41,8 +41,8 @@ import PicseeInfrastructure
     let status = try #require(issue282FooterView("grid.current-file-status", in: shell) as? NSTextField)
     let count = try #require(issue282FooterView("grid.folder-count", in: shell) as? NSTextField)
     // folder-loading.html: `<span>—</span><span class="grid-folder-count">正在读取…</span>` text at x 63 and 82, gap 12;
-    // its `—` renders 7px wide, which is SF's en dash. Frames are 2pt wider than the text on each side.
-    #expect(status.stringValue == "–")
+    // Keep the pinned U+2014 glyph; frames add 2pt of text inset on each side.
+    #expect(status.stringValue == "—")
     #expect(!status.isHidden)
     #expect(status.frame.minX == 61)
     #expect(status.frame.width == ceil(status.cell?.cellSize.width ?? 0))

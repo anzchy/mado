@@ -31,7 +31,7 @@ import PicseeApplication
                 shell.layoutSubtreeIfNeeded()
                 let name = try #require(i354FindField("grid.current-file-status", in: shell))
                 let count = try #require(i354FindField("grid.folder-count", in: shell))
-                #expect(name.stringValue == "\u{2013}" && !name.isHidden)
+                #expect(name.stringValue == "\u{2014}" && !name.isHidden)
                 #expect(count.stringValue == "Unavailable" && !count.isHidden)
                 #expect(name.frame.width >= ceil(name.cell?.cellSize.width ?? .infinity))
                 #expect(count.frame.width >= ceil(count.cell?.cellSize.width ?? .infinity))

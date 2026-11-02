@@ -682,7 +682,7 @@ import PicseeCore
     /// shows the latest ones. Layout calls this too, so unchanged values are not reassigned; returns whether any changed.
     @discardableResult private func applyStatusText() -> Bool {
         let showsDash = showsReadStatus || showsLostAccess || !emptyFolderView.isHidden
-        let name = showsDash ? "–" : currentFileName
+        let name = showsDash ? "—" : currentFileName
         let count = isReading ? String(localized: "Reading…")
             : isReadFailed ? String(localized: "Read incomplete")
             : showsLostAccess ? String(localized: "Unavailable")

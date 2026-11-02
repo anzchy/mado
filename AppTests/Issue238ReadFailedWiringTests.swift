@@ -160,7 +160,7 @@ private let issue238ReadError = NSError(domain: NSCocoaErrorDomain, code: NSFile
     #expect(page.retryButton.nextValidKeyView === page.chooseOtherButton)
     #expect(scene.controller.session.folderScan?.sourceSnapshot == nil)
     #expect(!scene.controller.gridSearchAvailable)
-    #expect(try scene.footer() == ("–", "Read incomplete"))
+    #expect(try scene.footer() == ("—", "Read incomplete"))
     #expect(scene.row(scene.folder)?.countLabel.stringValue == "—")
     // The sidebar stays usable: another folder opens from it.
     try #require(scene.row(scene.child)).performClick(nil)
@@ -309,7 +309,7 @@ private let issue238ReadError = NSError(domain: NSCocoaErrorDomain, code: NSFile
     let failed = try scene.observed()
     try #require(scene.readFailed).retryButton.performClick(nil)
     try await scene.waitUntil { scene.scanner?.started == 2 && scene.visible("state.cancel-folder") }
-    #expect(try scene.footer() == ("–", "Reading…"))
+    #expect(try scene.footer() == ("—", "Reading…"))
     let cancel = try #require(issue238Find(NSButton.self, in: scene.window.contentView) { $0.identifier?.rawValue == "state.cancel-folder" })
     cancel.performClick(nil)
     try await scene.waitUntil { scene.readFailed != nil }
