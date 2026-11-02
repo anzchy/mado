@@ -41,12 +41,12 @@ import PicseeMacUI
     let window = try #require(controller.window)
     defer { window.close() }
     controller.open(file, accessRequest: .fileGrant(file))
-    await waitUntil { controller.session.imageLoader.presented != nil }
+    try await waitUntil { controller.session.imageLoader.presented != nil }
     #expect(controller.session.imageLoader.presented != nil)
     var trashed: NSURL?
     try fm.trashItem(at: file, resultingItemURL: &trashed)
     defer { if let trashed { try? fm.removeItem(at: trashed as URL) } }
-    await waitUntil {
+    try await waitUntil {
         if controller.session.imageLoader.fileURL == nil { return true }
         controller.reconcileStandaloneImage()
         return false

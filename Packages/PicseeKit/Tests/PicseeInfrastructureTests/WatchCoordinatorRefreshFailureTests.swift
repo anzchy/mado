@@ -36,8 +36,8 @@ private actor FlakyScanner: FolderScanning {
         let prior = try #require(v.c.sourceSnapshot)
         if move { try FileManager.default.moveItem(at: v.w.url("F"), to: v.w.url("G/F-moved")) } else { v.w.delete("F") }
         v.w.changed(["F"])
-        #expect(await mainPoll { v.failures == 1 }, "move=\(move)")
-        #expect(await mainPoll { v.w.host.cleared == 1 }, "move=\(move) image kept")
+        try await waitUntil("move=\(move)") { v.failures == 1 }
+        try await waitUntil("move=\(move) image kept") { v.w.host.cleared == 1 }
         #expect(v.c.failure != nil && v.c.failureReason != nil, "move=\(move)")
         #expect(v.c.currentItemID == nil && v.c.currentURL == nil, "move=\(move)")
         #expect(v.w.host.ended >= 1 && v.w.host.opened.isEmpty && v.w.host.didStart == 0, "move=\(move)")
@@ -46,7 +46,7 @@ private actor FlakyScanner: FolderScanning {
 
         // The folder coming back recovers on the next hint and clears the failure.
         v.w.write("F/a.png"); v.w.write("F/c.png"); v.w.changed(["F/c.png"])
-        #expect(await mainPoll { v.names == ["a.png", "c.png"] }, "move=\(move)")
+        try await waitUntil("move=\(move)") { v.names == ["a.png", "c.png"] }
         #expect(v.c.failure == nil, "move=\(move)")
         #expect(!v.w.host.completed.isEmpty, "move=\(move)")
     }
@@ -57,14 +57,14 @@ private actor FlakyScanner: FolderScanning {
         let prior = try #require(v.c.sourceSnapshot)
         await v.scanner.arm()
         v.w.hint([.mustRescan])
-        #expect(await mainPoll { v.failures == 1 })
+        try await waitUntil { v.failures == 1 }
         #expect(v.c.failure != nil)
         #expect(v.c.currentURL?.lastPathComponent == "a.png" && v.c.currentItemID == v.w.id("F/a.png"))
         #expect(v.w.host.cleared == 0 && v.w.host.opened.isEmpty)
         #expect(v.c.sourceSnapshot?.entries == prior.entries)
         // The next hint with unchanged entries still clears the failure.
         v.w.hint([.mustRescan])
-        #expect(await mainPoll { v.c.failure == nil })
+        try await waitUntil { v.c.failure == nil }
         #expect(v.c.currentURL?.lastPathComponent == "a.png" && v.w.host.cleared == 0)
     }
 
@@ -73,7 +73,7 @@ private actor FlakyScanner: FolderScanning {
         let v = try await Viewed(); defer { v.w.f.remove() }
         v.w.delete("F")
         v.w.changed(["F"])
-        #expect(await mainPoll { v.failures == 1 && v.c.failure != nil })
+        try await waitUntil { v.failures == 1 && v.c.failure != nil }
         v.w.write("F/b.png")
         let retried = try #require(v.c.retry())
         try await retried.value

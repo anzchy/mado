@@ -33,7 +33,7 @@ private let pressureTile = ThumbnailCoverage(width: 212, height: 212)
 
 @Suite(.timeLimit(.minutes(2))) @MainActor struct GridThumbnailPressureTests {
     // 4.1, 4.2: pressure keeps only visible cells; held prefetched results are released, visible ones stay.
-    @Test func pressureDropsPrefetchedResultsAndRequestsOnlyVisibleCells() async {
+    @Test func pressureDropsPrefetchedResultsAndRequestsOnlyVisibleCells() async throws {
         let snapshot = pinningSnapshot(count: 20), fake = RecordingPinning(), log = PressureLoaderLog()
         let ids = snapshot.navigationEntries.map(\.itemID)
         let scheduler = GridThumbnailScheduler()
@@ -66,7 +66,7 @@ private let pressureTile = ThumbnailCoverage(width: 212, height: 212)
     }
 
     // 4.3, 4.3c, 4.5: a prefetch the pipeline refuses is deferred, not failed, and only the next reconcile retries it.
-    @Test func refusedPrefetchIsDeferredUntilTheNextReconcile() async {
+    @Test func refusedPrefetchIsDeferredUntilTheNextReconcile() async throws {
         let snapshot = pinningSnapshot(count: 5), log = PressureLoaderLog()
         let ids = snapshot.navigationEntries.map(\.itemID)
         let refusing = Refusal()
@@ -100,7 +100,7 @@ private let pressureTile = ThumbnailCoverage(width: 212, height: 212)
     }
 
     // 4.3b: a real prefetch failure still shows and is not retried while the cell stays off screen.
-    @Test func failedPrefetchStillFailsAndIsNotRetriedOffScreen() async {
+    @Test func failedPrefetchStillFailsAndIsNotRetriedOffScreen() async throws {
         let snapshot = pinningSnapshot(count: 3), log = PressureLoaderLog()
         let ids = snapshot.navigationEntries.map(\.itemID)
         let scheduler = GridThumbnailScheduler()
@@ -188,9 +188,9 @@ final class ManualPressureTime: @unchecked Sendable {
         }
         for sleeper in woken { sleeper.resume() }
     }
-    /// True once `count` sleeps are pending; the test's time limit bounds the wait (#277).
-    func waitForSleepers(_ count: Int) async -> Bool {
-        await waitUntil { sleeping == count }
+    /// True once `count` sleeps are pending; throws when the bounded wait ends first (#392).
+    func waitForSleepers(_ count: Int) async throws -> Bool {
+        try await waitUntil { sleeping == count }
         return sleeping == count
     }
 }
@@ -218,9 +218,9 @@ actor GatedResumption: PrefetchResuming {
     func release() { waiter?.resume(); waiter = nil }
 }
 
-/// The test's time limit bounds the wait (#277).
-@MainActor private func eventually(_ condition: @MainActor () async -> Bool) async -> Bool {
-    await waitUntil { await condition() }
+/// Bounded like `waitUntil`: throws when the wait ends before the condition holds (#392).
+@MainActor private func eventually(_ condition: @MainActor () async -> Bool) async throws -> Bool {
+    try await waitUntil { await condition() }
     return await condition()
 }
 
@@ -258,7 +258,7 @@ actor GatedResumption: PrefetchResuming {
         for index in 0...2 { await scheduler.waitForTerminal(at: index) }
         #expect(scheduler.result(at: 0) != nil)
         #expect(scheduler.result(at: 1) == nil && scheduler.result(at: 2) == nil)
-        #expect(await time.waitForSleepers(1))
+        #expect(try await time.waitForSleepers(1))
         for _ in 0..<3 { reconcile([0]) }
         reconcile([2])
         await scheduler.waitForTerminal(at: 2)
@@ -274,7 +274,7 @@ actor GatedResumption: PrefetchResuming {
         #expect(await resumption.calls == 1)
 
         time.advance(by: 5)
-        #expect(await eventually { (1...5).allSatisfy { scheduler.result(at: $0) != nil } })
+        #expect(try await eventually { (1...5).allSatisfy { scheduler.result(at: $0) != nil } })
         let resumed = await log.calls
         #expect(resumed[ids[0]] == [.visible])
         #expect(resumed[ids[1]] == [.prefetch, .prefetch])
@@ -295,11 +295,11 @@ actor GatedResumption: PrefetchResuming {
         scheduler.setMemoryPressure(false)
         reconcile([3])
         for index in 1...5 { await scheduler.waitForTerminal(at: index) }
-        #expect(await time.waitForSleepers(1))
+        #expect(try await time.waitForSleepers(1))
         #expect(await resumption.calls == 2)
         #expect(scheduler.result(at: 1) == nil && scheduler.result(at: 5) == nil)
         time.advance(by: 5)
-        #expect(await eventually { [1, 2, 4, 5].allSatisfy { scheduler.result(at: $0) != nil } })
+        #expect(try await eventually { [1, 2, 4, 5].allSatisfy { scheduler.result(at: $0) != nil } })
         #expect(await log.calls[ids[1]] == [.prefetch, .prefetch, .prefetch, .prefetch])
         #expect(failures.isEmpty)
         scheduler.stop()
@@ -308,7 +308,7 @@ actor GatedResumption: PrefetchResuming {
     }
 
     // R1 1.3: a folder change while waiting cancels the wait; nothing is asked when the wait returns.
-    @Test func folderChangeCancelsThePrefetchWait() async {
+    @Test func folderChangeCancelsThePrefetchWait() async throws {
         let log = PressureLoaderLog(), refusing = Refusal(), gate = GatedResumption()
         let scheduler = GridThumbnailScheduler()
         scheduler.prefetchResumption = gate
@@ -321,9 +321,9 @@ actor GatedResumption: PrefetchResuming {
         await refusing.set(true)
         scheduler.reconcile(visible: [0], columns: 1, coverage: pressureTile, loader: loader)
         for index in 0...2 { await scheduler.waitForTerminal(at: index) }
-        #expect(await eventually { await gate.calls == 1 })
+        #expect(try await eventually { await gate.calls == 1 })
         scheduler.setSnapshot(pinningSnapshot(count: 5))
-        #expect(await eventually { await gate.returned == 1 })
+        #expect(try await eventually { await gate.returned == 1 })
         await refusing.set(false)
         for _ in 0..<50 { await Task.yield() }
         #expect(scheduler.token(at: 0) == nil)

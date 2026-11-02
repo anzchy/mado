@@ -383,8 +383,8 @@ private final class Issue114SettingsScanner: FolderScanning, @unchecked Sendable
     window.setContentSize(NSSize(width: 1280, height: 772))
     controller.showWindow(nil)
     window.orderFrontRegardless()
-    func waitUntil(_ condition: () -> Bool) async throws {
-        while !condition() { window.update(); try await Task.sleep(for: .milliseconds(10)) }
+    func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
 
     controller.openGrantedFolder(folder)

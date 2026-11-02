@@ -112,8 +112,8 @@ private actor HeldTraceLoads {
     }
     func id(_ index: Int) -> ItemID { entries[index].itemID }
     /// Answers whatever is parked for these cells until each is terminal; cancellable by the test's time limit.
-    func release(_ indices: [Int]) async {
-        await waitUntil {
+    func release(_ indices: [Int]) async throws {
+        try await waitUntil {
             var done = true
             for index in indices where !grid.thumbnailIsTerminal(at: index) {
                 done = false
@@ -122,8 +122,8 @@ private actor HeldTraceLoads {
             return done
         }
     }
-    func fail(_ index: Int) async {
-        await waitUntil {
+    func fail(_ index: Int) async throws {
+        try await waitUntil {
             if grid.thumbnailIsTerminal(at: index) { return true }
             await loads.fail(id(index))
             return false
@@ -139,9 +139,9 @@ private actor HeldTraceLoads {
     let visible = fixture.visible
     try #require(visible.count >= 4 && visible.count < fixture.entries.count)
     #expect(fixture.trace.events == [.begin(1, items: 80)])
-    await fixture.release(Array(visible.dropLast()))
+    try await fixture.release(Array(visible.dropLast()))
     #expect(fixture.ends.isEmpty, "ended before the last visible cell: \(fixture.trace.events)")
-    await fixture.release([visible.last!])
+    try await fixture.release([visible.last!])
     #expect(fixture.trace.events == [.begin(1, items: 80),
         .end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)], "\(fixture.trace.events)")
 }
@@ -151,8 +151,8 @@ private actor HeldTraceLoads {
     defer { fixture.close() }
     fixture.show()
     let visible = fixture.visible
-    await fixture.fail(visible[1])
-    await fixture.release(visible.filter { $0 != visible[1] })
+    try await fixture.fail(visible[1])
+    try await fixture.release(visible.filter { $0 != visible[1] })
     #expect(fixture.ends == [.end(1, .complete, visible: visible.count, shown: visible.count - 1, failed: 1)], "\(fixture.trace.events)")
 }
 
@@ -162,13 +162,13 @@ private actor HeldTraceLoads {
     defer { fixture.close() }
     fixture.show()
     let visible = Set(fixture.visible)
-    await waitUntil { await fixture.loads.heldIDs.count > visible.count }
+    try await waitUntil { await fixture.loads.heldIDs.count > visible.count }
     let held = await fixture.loads.heldIDs
     let prefetch = fixture.entries.indices.filter { held.contains(fixture.id($0)) && !visible.contains($0) }
     try #require(!prefetch.isEmpty, "no prefetch cells were requested")
-    await fixture.release(prefetch)
+    try await fixture.release(prefetch)
     #expect(fixture.ends.isEmpty, "prefetch results ended the interval: \(fixture.trace.events)")
-    await fixture.release(visible.sorted())
+    try await fixture.release(visible.sorted())
     #expect(fixture.ends == [.end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)])
 }
 
@@ -178,7 +178,7 @@ private actor HeldTraceLoads {
     await fixture.loads.throwSourceChangedOnce(fixture.id(0))
     fixture.show()
     let visible = fixture.visible
-    await fixture.release(visible)
+    try await fixture.release(visible)
     #expect(await fixture.loads.calls[fixture.id(0)] == 2, "the scheduler did not retry once")
     #expect(fixture.ends == [.end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)], "\(fixture.trace.events)")
 }
@@ -199,11 +199,11 @@ private actor HeldTraceLoads {
     defer { fixture.close() }
     fixture.show(generation: 1)
     let visible = fixture.visible
-    await fixture.release([visible[0]])
+    try await fixture.release([visible[0]])
     fixture.show(generation: 2)
     #expect(fixture.trace.events == [.begin(1, items: 80),
         .end(1, .superseded, visible: visible.count, shown: 1, failed: 0), .begin(2, items: 80)], "\(fixture.trace.events)")
-    await fixture.release(fixture.visible)
+    try await fixture.release(fixture.visible)
     #expect(fixture.ends.count == 2)
     // After a complete end, the next generation begins without ending the finished one again.
     fixture.show(generation: 3)
@@ -222,11 +222,11 @@ private actor HeldTraceLoads {
     // A filename-search projection keeps the source generation.
     fixture.grid.display(traceSnapshot(Array(fixture.entries.prefix(30)), generation: 1), selection: selection)
     #expect(fixture.trace.events == [.begin(1, items: 80)], "\(fixture.trace.events)")
-    await fixture.release(fixture.visible)
+    try await fixture.release(fixture.visible)
     #expect(fixture.ends.count == 1)
     fixture.grid.restoreContentOffset(NSPoint(x: 0, y: 200))
     fixture.grid.layoutSubtreeIfNeeded()
-    await fixture.release(fixture.visible)
+    try await fixture.release(fixture.visible)
     fixture.grid.display(traceSnapshot(fixture.entries, generation: 1), selection: selection)
     #expect(fixture.trace.events.count == 2, "events after the end: \(fixture.trace.events)")
 }
@@ -242,7 +242,7 @@ private actor HeldTraceLoads {
         await fixture.loads.releaseAll()
         // Returning (from a preview, or after the root comes back) re-displays the same generation and reactivates.
         fixture.show()
-        await fixture.release(fixture.visible)
+        try await fixture.release(fixture.visible)
         #expect(fixture.ends.count == (clear ? 2 : 1), "clear \(clear): \(fixture.trace.events)")
         let begins = fixture.trace.events.count - fixture.ends.count
         // A preview return is not a new folder open; a cleared presentation is.
@@ -254,7 +254,7 @@ private actor HeldTraceLoads {
     let fixture = TraceGrid()
     defer { fixture.close() }
     fixture.show(generation: 4)
-    await fixture.release(fixture.visible)
+    try await fixture.release(fixture.visible)
     // A new read shows the Reading State (incomplete) and may complete with the same generation number.
     fixture.grid.display(traceSnapshot(fixture.entries, generation: 4, complete: false), selectedItemID: nil)
     fixture.show(generation: 4)
@@ -272,9 +272,9 @@ private actor HeldTraceLoads {
     fixture.grid.setThumbnailsActive(true)
     let visible = fixture.visible
     try #require(!visible.isEmpty)
-    await fixture.release(Array(visible.dropLast()))
+    try await fixture.release(Array(visible.dropLast()))
     #expect(fixture.ends.isEmpty)
-    await fixture.release([visible.last!])
+    try await fixture.release([visible.last!])
     #expect(fixture.ends == [.end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)], "\(fixture.trace.events)")
 }
 
@@ -293,9 +293,9 @@ private actor HeldTraceLoads {
     fixture.grid.layoutSubtreeIfNeeded()
     let visible = fixture.visible
     try #require(!visible.isEmpty)
-    await fixture.release(Array(visible.dropLast()))
+    try await fixture.release(Array(visible.dropLast()))
     #expect(fixture.ends.isEmpty)
-    await fixture.release([visible.last!])
+    try await fixture.release([visible.last!])
     #expect(fixture.trace.events == [.begin(1, items: 80),
         .end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)], "\(fixture.trace.events)")
 }

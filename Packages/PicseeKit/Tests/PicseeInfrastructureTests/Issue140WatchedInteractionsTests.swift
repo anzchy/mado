@@ -14,7 +14,7 @@ import PicseeApplication
     w.host.reset()
     let priorGeneration = w.generation
     w.delete("F/b.png"); w.changed(["F/b.png"])
-    #expect(await mainPoll { w.generation > priorGeneration && c.currentURL?.lastPathComponent == "c.png" })
+    try await waitUntil { w.generation > priorGeneration && c.currentURL?.lastPathComponent == "c.png" }
     #expect(c.snapshot?.navigationEntries.map(\.url.lastPathComponent) == ["a.png", "c.png"])
     #expect(c.currentItemID == w.id("F/c.png"))
     #expect(w.host.opened.map(\.lastPathComponent) == ["c.png"])
@@ -35,7 +35,7 @@ import PicseeApplication
     try FileManager.default.moveItem(at: w.url("F/match-b.png"), to: w.url("F/match-d.png"))
     var generation = w.generation
     w.changed(["F/match-b.png", "F/match-d.png"])
-    #expect(await mainPoll { w.generation > generation && c.currentURL?.lastPathComponent == "match-d.png" })
+    try await waitUntil { w.generation > generation && c.currentURL?.lastPathComponent == "match-d.png" }
     #expect(c.currentItemID == originalID)
     #expect(search.project(try #require(c.sourceSnapshot)).navigationEntries.map(\.url.lastPathComponent) ==
         ["match-a.png", "match-c.png", "match-d.png"])
@@ -43,8 +43,8 @@ import PicseeApplication
     w.host.reset()
     generation = w.generation
     w.delete("F/match-d.png"); w.changed(["F/match-d.png"])
-    #expect(await mainPoll { w.generation > generation &&
-        c.sourceSnapshot?.entries.contains(where: { $0.url.lastPathComponent == "match-d.png" }) == false })
+    try await waitUntil { w.generation > generation &&
+        c.sourceSnapshot?.entries.contains(where: { $0.url.lastPathComponent == "match-d.png" }) == false }
     let filtered = search.project(try #require(c.sourceSnapshot))
     #expect(filtered.navigationEntries.map(\.url.lastPathComponent) == ["match-a.png", "match-c.png"])
     #expect(search.term == "match" && !filtered.navigationEntries.isEmpty)

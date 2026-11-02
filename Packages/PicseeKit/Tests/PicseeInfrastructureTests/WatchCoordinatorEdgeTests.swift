@@ -14,7 +14,7 @@ import PicseeApplication
     alias.host.reset()
     let g0 = alias.generation
     alias.delete("F/a.png"); alias.changed(["F/a.png"])
-    #expect(await mainPoll { alias.generation > g0 })
+    try await waitUntil { alias.generation > g0 }
     #expect(viewer.currentItemID == alias.id("F/c.png"))
     #expect(viewer.currentURL?.lastPathComponent == "c.png")
     #expect(alias.host.opened.map(\.lastPathComponent) == ["c.png"])

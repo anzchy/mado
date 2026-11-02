@@ -33,7 +33,7 @@ private actor CountingGridInspectorReader: InspectorMetadataReading {
 }
 
 @MainActor private func waitForGridInspector(_ condition: () -> Bool) async throws {
-    await waitUntil { condition() }
+    try await waitUntil { condition() }
 }
 
 @Test(.timeLimit(.minutes(3))) @MainActor func issue140Combo136GridInspectorTracksRevisionsWithoutDuplicateReads() async throws {

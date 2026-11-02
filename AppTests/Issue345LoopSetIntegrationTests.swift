@@ -42,8 +42,9 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int) a
         windowController: { controller })
     defer { window.close(); NSApp.mainMenu = oldMenu; withExtendedLifetime(menu) {} }
     window.setContentSize(NSSize(width: 900, height: 620))
-    func waitUntil(_ condition: () -> Bool) async throws {
-        while !condition() { window.contentView?.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(10)) }
+    func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line,
+            between: { window.contentView?.layoutSubtreeIfNeeded() }, condition)
     }
     controller.openGrantedFolder(folder)
     try await waitUntil { controller.gridSearchAvailable }

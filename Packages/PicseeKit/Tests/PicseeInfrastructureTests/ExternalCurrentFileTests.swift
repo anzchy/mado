@@ -100,9 +100,9 @@ private func issue140PNG(red: UInt8) throws -> Data {
     try Data().write(to: added)
     f.source.emit([.mustRescan], on: moved)
     f.clock.advance(by: 200)
-    #expect(await mainPoll {
+    try await waitUntil {
         coordinator.snapshot?.entries.contains(where: { canonicalPath($0.url) == canonicalPath(added) }) == true
-    })
+    }
     coordinator.end()
 }
 
@@ -133,7 +133,7 @@ private func issue140PNG(red: UInt8) throws -> Data {
     try FileManager.default.moveItem(at: root, to: moved)
     f.bookmarks.relocated = moved
     try await #require(first.refresh()).value
-    #expect(await mainPoll { second.snapshot?.version.folder.lastPathComponent == "moved" })
+    try await waitUntil { second.snapshot?.version.folder.lastPathComponent == "moved" }
     first.end(); second.end()
 }
 
@@ -150,10 +150,10 @@ private func issue140PNG(red: UInt8) throws -> Data {
     try FileManager.default.moveItem(at: old, to: renamed)
     f.source.emit([.changed(old), .changed(renamed)], on: root)
     f.clock.advance(by: 200)
-    #expect(await mainPoll {
+    try await waitUntil {
         coordinator.currentURL?.lastPathComponent == "z.png" &&
             coordinator.snapshot?.entries.map(\.url.lastPathComponent) == ["z.png"]
-    })
+    }
     #expect(coordinator.currentItemID == current)
     #expect(coordinator.conditions.selectedExtensions == ["png"])
     #expect(coordinator.sourceSnapshot?.entries.count == 2)

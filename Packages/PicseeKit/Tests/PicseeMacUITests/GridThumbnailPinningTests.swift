@@ -125,7 +125,7 @@ private let pinningTile = ThumbnailCoverage(width: 212, height: 212)
     }
 
     // 3.4: a scheduler released while holding results unpins them.
-    @Test func gridUnpinsWhenTheSchedulerGoesAway() async {
+    @Test func gridUnpinsWhenTheSchedulerGoesAway() async throws {
         let fake = RecordingPinning()
         do {
             let scheduler = GridThumbnailScheduler()
@@ -136,7 +136,7 @@ private let pinningTile = ThumbnailCoverage(width: 212, height: 212)
             await scheduler.settlePins()
             #expect(await fake.held == 3)
         }
-        await waitUntil { await fake.held == 0 }
+        try await waitUntil { await fake.held == 0 }
         #expect(await fake.held == 0)
         #expect(await !fake.wentNegative)
     }
@@ -220,6 +220,7 @@ private let pinningTile = ThumbnailCoverage(width: 212, height: 212)
         let rootID = AccessRootID(rawValue: UUID()), root = ItemIdentityRoot(id: rootID, url: folder)
         let snapshot = pinningSnapshot(count: 1, folder: folder, rootID: rootID, names: names)
         let gate = GatedDecoder()
+        defer { gate.open() }
         let pipeline = ImageIOPipeline(decoder: gate)
         let a = GridThumbnailScheduler(), b = GridThumbnailScheduler()
         for window in [a, b] { window.pinning = pipeline; window.setSnapshot(snapshot) }

@@ -15,19 +15,19 @@ private actor LossHeldInspectorReader: InspectorMetadataReading {
     var held: Bool { gate != nil }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue233InspectorClearRejectsReleasedMetadataAndThumbnail() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue233InspectorClearRejectsReleasedMetadataAndThumbnail() async throws {
     let reader = LossHeldInspectorReader()
     let model = InspectorModel(reader: reader)
     let url = URL(fileURLWithPath: "/tmp/lost.png")
     model.select(itemID: nil, url: url, access: .fileGrant(url))
-    await waitUntil { await reader.held }
+    try await waitUntil { await reader.held }
     #expect(model.name == "lost.png")
     #expect(model.value == .loading)
     model.select(itemID: nil, url: nil, access: nil)
     #expect(model.name == nil)
     #expect(model.value == .unknown)
     await reader.release()
-    await waitUntil { await reader.completed }
+    try await waitUntil { await reader.completed }
     #expect(await reader.completed)
     // Give the model's awaiting task a main-actor turn after the reader has returned.
     try? await Task.sleep(for: .milliseconds(20))

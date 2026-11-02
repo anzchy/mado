@@ -41,7 +41,7 @@ import Darwin
     let window = try #require(controller.window)
     let chrome = try #require(window.contentView.flatMap(smokeChrome(in:)))
     controller.open(image, accessRequest: .root(root, file: image))
-    await waitUntil { controller.session.folderScan?.sourceSnapshot?.isComplete == true &&
+    try await waitUntil { controller.session.folderScan?.sourceSnapshot?.isComplete == true &&
         controller.session.imageLoader.presented != nil &&
         chrome.position != nil }
     #expect(controller.session.folderScan?.sourceSnapshot?.isComplete == true)
@@ -66,9 +66,9 @@ import Darwin
     #expect(controller.session.previewSet?.currentItemID == id)
     try fm.moveItem(at: original, to: renamed)
     services.watch.reconcileAll()
-    await waitUntil { controller.session.folderScan?.sourceSnapshot?.entries.first?.url.standardizedFileURL.resolvingSymlinksInPath() ==
+    try await waitUntil { controller.session.folderScan?.sourceSnapshot?.entries.first?.url.standardizedFileURL.resolvingSymlinksInPath() ==
         renamed.standardizedFileURL.resolvingSymlinksInPath() }
-    await waitUntil { controller.session.imageLoader.presented?.fileURL.lastPathComponent == renamed.lastPathComponent &&
+    try await waitUntil { controller.session.imageLoader.presented?.fileURL.lastPathComponent == renamed.lastPathComponent &&
         chrome.filename == renamed.lastPathComponent }
     #expect(controller.session.folderScan?.sourceSnapshot?.entries.first?.url.standardizedFileURL.resolvingSymlinksInPath() ==
         renamed.standardizedFileURL.resolvingSymlinksInPath())
@@ -104,9 +104,9 @@ import Darwin
     }
     #expect(result == 0)
     services.watch.reconcileAll()
-    await waitUntil { controller.session.folderScan?.generation != generation &&
+    try await waitUntil { controller.session.folderScan?.generation != generation &&
         controller.session.folderScan?.isScanning != true }
-    await waitUntil { controller.session.imageLoader.presented != nil &&
+    try await waitUntil { controller.session.imageLoader.presented != nil &&
         controller.session.imageLoader.presented?.key.revision != first.key.revision }
     #expect(controller.session.folderScan?.generation != generation)
     #expect(controller.session.imageLoader.presented?.key.revision != first.key.revision)
@@ -127,8 +127,8 @@ import Darwin
     #expect(chrome.position == "Images: 2")
     try fm.removeItem(at: shown)
     services.watch.reconcileAll()
-    await waitUntil { controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 1 }
-    await waitUntil { chrome.position == "Images: 1" }
+    try await waitUntil { controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 1 }
+    try await waitUntil { chrome.position == "Images: 1" }
     #expect(controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 1)
     #expect(controller.session.folderScan?.currentURL?.lastPathComponent == neighbour.lastPathComponent)
     #expect(chrome.position == "Images: 1")
@@ -148,7 +148,7 @@ import Darwin
     let (controller, services, window, _) = try await smokeViewer(in: base, image: original)
     defer { window.close() }
     #expect(controller.route(.inspector, from: .key))
-    await waitUntil { controller.inspector.value != .loading }
+    try await waitUntil { controller.inspector.value != .loading }
     guard case .known(let firstMetadata) = controller.inspector.value else {
         Issue.record("Inspector did not read the initial image"); return
     }
@@ -156,7 +156,7 @@ import Darwin
 
     try fm.moveItem(at: original, to: renamed)
     services.watch.reconcileAll()
-    await waitUntil { controller.inspector.name == renamed.lastPathComponent &&
+    try await waitUntil { controller.inspector.name == renamed.lastPathComponent &&
         controller.session.imageLoader.presented?.fileURL.lastPathComponent == renamed.lastPathComponent }
     #expect(controller.inspector.name == renamed.lastPathComponent)
     #expect(controller.session.imageLoader.presented?.fileURL.lastPathComponent == renamed.lastPathComponent)
@@ -167,7 +167,7 @@ import Darwin
     }
     #expect(replaceResult == 0)
     services.watch.reconcileAll()
-    await waitUntil {
+    try await waitUntil {
         guard case .known(let metadata) = controller.inspector.value else { return false }
         return metadata.pixelWidth != firstMetadata.pixelWidth && metadata.pixelHeight != firstMetadata.pixelHeight
     }
@@ -180,14 +180,14 @@ import Darwin
 
     try fm.removeItem(at: renamed)
     services.watch.reconcileAll()
-    await waitUntil { controller.inspector.name == neighbour.lastPathComponent &&
+    try await waitUntil { controller.inspector.name == neighbour.lastPathComponent &&
         controller.session.imageLoader.presented?.fileURL.lastPathComponent == neighbour.lastPathComponent }
     #expect(controller.inspector.name == neighbour.lastPathComponent)
     #expect(controller.session.imageLoader.presented?.fileURL.lastPathComponent == neighbour.lastPathComponent)
 
     try fm.removeItem(at: neighbour)
     services.watch.reconcileAll()
-    await waitUntil { controller.inspector.name == nil }
+    try await waitUntil { controller.inspector.name == nil }
     #expect(controller.inspector.name == nil)
     #expect(controller.inspector.value == .unknown)
     #expect(controller.session.inspectorFocus.isVisible)

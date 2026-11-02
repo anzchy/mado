@@ -25,7 +25,7 @@ import PicseeApplication
     FileManager.default.createFile(atPath: moved.appendingPathComponent("later.png").path, contents: Data())
     f.source.emit([.changed(moved.appendingPathComponent("later.png"))], on: moved)
     f.clock.advance(by: 200)
-    #expect(await mainPoll { coordinator.sourceSnapshot?.entries.map(\.url.lastPathComponent) == ["later.png"] })
+    try await waitUntil { coordinator.sourceSnapshot?.entries.map(\.url.lastPathComponent) == ["later.png"] }
 
     let settled = try #require(coordinator.sourceSnapshot)
     try await coordinator.refresh()?.value

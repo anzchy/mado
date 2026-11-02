@@ -21,7 +21,7 @@ private func auditSolidTIFF(_ url: URL, red: CGFloat) throws {
 private final class AuditHeldDecoder: ImageDecoding, @unchecked Sendable {
     let started: AsyncStream<Void>
     private let signal: AsyncStream<Void>.Continuation
-    let release = DispatchSemaphore(value: 0)
+    let release = TestGate()
 
     init() { (started, signal) = AsyncStream.makeStream() }
 
@@ -87,6 +87,7 @@ private final class AuditReplaceOnce: @unchecked Sendable {
         store: BookmarkStore(url: folder.appendingPathComponent("roots.json")), buildSHA: "p303-fix")
     let root = try await access.grant(folder: folder)
     let decoder = AuditHeldDecoder()
+    defer { decoder.release.open() }
     let pipeline = ImageIOPipeline(decoder: decoder, thumbnailCache: ThumbnailDiskCache(directory: cacheDirectory))
     let source = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)
     let work = Task { try await source.image(maximumPixelSize: 64) }

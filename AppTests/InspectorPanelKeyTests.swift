@@ -73,7 +73,7 @@ import PicseeCore
     #expect(controller.session.inspectorFocus.isVisible)
     #expect(controller.route(.search, from: .key))
     let editor = try #require(shell.searchField.currentEditor() as? NSTextView)
-    runLoopUntil { window.firstResponder === editor }
+    try runLoopUntil { window.firstResponder === editor }
     #expect(window.firstResponder === editor)
     editor.insertText("cat")
     #expect(shell.searchField.stringValue == "cat")
@@ -132,7 +132,7 @@ import PicseeCore
     shell.focusSearch()
     shell.setSearchTerm("match")
     shell.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: shell.searchField))
-    await waitUntil { shell.searchStatus.stringValue.contains("Search:") }
+    try await waitUntil { shell.searchStatus.stringValue.contains("Search:") }
     #expect(shell.searchStatus.stringValue.contains("Search:"))
     #expect(controller.route(.inspector, from: .key))
     #expect(controller.inspector.name == d.url.lastPathComponent)
@@ -177,12 +177,12 @@ import PicseeCore
             object: shell.searchField))
     }
     type("match-a")
-    await waitUntil { shell.searchStatus.stringValue.contains("match-a") }
+    try await waitUntil { shell.searchStatus.stringValue.contains("match-a") }
     #expect(shell.searchStatus.stringValue.contains("match-a"))
     #expect(controller.session.selection.currentItemID == a.itemID)
     #expect(controller.inspector.name == a.url.lastPathComponent)
     type("unmatched")
-    await waitUntil { shell.searchStatus.stringValue.contains("unmatched") }
+    try await waitUntil { shell.searchStatus.stringValue.contains("unmatched") }
     #expect(shell.searchEmptyVisible)
     #expect(controller.inspector.name == nil)
     type("")
@@ -222,7 +222,7 @@ import PicseeCore
         #expect(shell.searchField.isHidden)
     }
     window.sendEvent(tab)
-    runLoopUntil { controller.session.inspectorFocus.focus == .panel &&
+    try runLoopUntil { controller.session.inspectorFocus.focus == .panel &&
         (window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close" }
     #expect(controller.session.inspectorFocus.focus == .panel)
     #expect((window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close")

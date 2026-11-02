@@ -117,10 +117,10 @@ private func runConcurrently(_ ops: [WatchOp], _ f: WatchFixture, _ root: Access
 /// Returns a failure description, or nil when the per-root law holds at this quiescent point.
 private func refCountViolation(_ f: WatchFixture, live: [Probe], dead: [Probe]) async -> String? {
     let expected = live.isEmpty ? 0 : 1
-    let settled = await poll {
+    let settled = (try? await poll {
         let counts = f.scope.counts
         return f.source.active == expected && counts[0] - counts[1] == expected && f.source.starts - f.source.stops == f.source.active
-    }
+    }) ?? false
     guard settled else {
         return "live=\(live.count) active=\(f.source.active) scope=\(f.scope.counts) starts=\(f.source.starts) stops=\(f.source.stops)"
     }

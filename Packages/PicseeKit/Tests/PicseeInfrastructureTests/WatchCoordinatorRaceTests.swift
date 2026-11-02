@@ -35,7 +35,7 @@ import PicseeApplication
         let g0 = w.generation
         for file in row.deleted { w.delete("F/\(file)") }
         w.changed(row.deleted.map { "F/\($0)" })
-        #expect(await mainPoll { w.generation > g0 }, "\(row.name) no refresh")
+        try await waitUntil("\(row.name) no refresh") { w.generation > g0 }
         #expect(c.currentURL?.lastPathComponent == row.expected, "\(row.name)")
         #expect(c.currentItemID == row.expected.map { w.id("F/\($0)") }, "\(row.name)")
         #expect(w.host.opened.map(\.lastPathComponent) == row.opened, "\(row.name)")
@@ -51,13 +51,13 @@ import PicseeApplication
     w.host.reset()
     var g0 = w.generation
     w.write("F/d.png"); w.changed(["F/d.png"])
-    #expect(await mainPoll { w.generation > g0 }, "M8 no refresh")
+    try await waitUntil("M8 no refresh") { w.generation > g0 }
     #expect(c.currentURL?.lastPathComponent == "b.png")
     #expect(c.currentItemID == w.id("F/b.png"))
     #expect(w.host.opened.isEmpty)
     g0 = w.generation
     w.delete("F/b.png"); w.changed(["F/b.png"])
-    #expect(await mainPoll { w.generation > g0 }, "M9 no refresh")
+    try await waitUntil("M9 no refresh") { w.generation > g0 }
     #expect(c.currentURL?.lastPathComponent == "c.png")
     #expect(w.host.opened.map(\.lastPathComponent) == ["c.png"])
 }
@@ -74,7 +74,7 @@ import PicseeApplication
             await Task.yield()
         }
         try await w.coordinator.begin(folder: w.url("F"), rootID: w.rootID).value
-        #expect(await mainPoll { w.names() == ["a.png", "late.png"] })
+        try await waitUntil { w.names() == ["a.png", "late.png"] }
     }
 
     // X2: a user scan of another folder supersedes a refresh in flight.
@@ -108,7 +108,7 @@ import PicseeApplication
         await w.turns()
         #expect(c.snapshot == nil)
         #expect(c.sourceSnapshot == nil)
-        #expect(await mainPoll { w.f.source.stops == 1 && w.scopeBalanced })
+        try await waitUntil { w.f.source.stops == 1 && w.scopeBalanced }
         #expect(w.f.source.starts == 1)
     }
 
@@ -126,13 +126,13 @@ import PicseeApplication
         await w.turns()
         #expect(w.trace.begins.count == n0)
         w.write("G/s.png"); w.changed(["G/s.png"])
-        #expect(await mainPoll { w.names("G").contains("s.png") })
+        try await waitUntil { w.names("G").contains("s.png") }
         #expect(w.trace.begins.count == n0 + 1)
         #expect(w.trace.begins.last.map { canonicalPath($0.folder) } == canonicalPath(w.url("G")))
         #expect(w.f.source.starts == 1)
         #expect(w.f.source.stops == 0)
         c.end()
-        #expect(await mainPoll { w.f.source.stops == 1 && w.f.source.active == 0 && w.scopeBalanced })
+        try await waitUntil { w.f.source.stops == 1 && w.f.source.active == 0 && w.scopeBalanced }
     }
 
     // X5: a folder on another root stops root 1's stream and starts root 2's.
@@ -143,7 +143,7 @@ import PicseeApplication
         let c = w.coordinator
         try await c.begin(folder: w.url("F"), rootID: w.rootID).value
         try await c.begin(folder: w.f.url("other"), rootID: other).value
-        #expect(await mainPoll { w.f.source.stops == 1 && w.f.source.active == 1 })
+        try await waitUntil { w.f.source.stops == 1 && w.f.source.active == 1 }
         #expect(w.f.source.startURLs == [canonicalPath(w.f.url("root")), canonicalPath(w.f.url("other"))])
     }
 
@@ -164,7 +164,7 @@ import PicseeApplication
         let task = c.begin(folder: w.url("missing"), rootID: w.rootID)
         await #expect(throws: (any Error).self) { try await task.value }
         #expect(c.failure != nil)
-        #expect(await mainPoll { w.f.source.active == 0 && w.f.source.stops == 1 && w.scopeBalanced })
+        try await waitUntil { w.f.source.active == 0 && w.f.source.stops == 1 && w.scopeBalanced }
         #expect(w.f.source.starts == 1)
         w.write("missing/a.png")
         let retried = c.retry()
@@ -174,7 +174,7 @@ import PicseeApplication
         #expect(w.f.source.active == 1)
         #expect(w.names("missing") == ["a.png"])
         w.write("missing/b.png"); w.changed(["missing/b.png"])
-        #expect(await mainPoll { w.names("missing") == ["a.png", "b.png"] })
+        try await waitUntil { w.names("missing") == ["a.png", "b.png"] }
     }
 
     // X8: Cancel Reading back to a complete grid keeps it watched on the same stream.
@@ -190,7 +190,7 @@ import PicseeApplication
         _ = try? await reading.value
         #expect(c.sourceSnapshot?.version.folder == SnapshotVersion(rootID: w.rootID, folder: w.url("F"), generation: 0).folder)
         w.write("F/new.png"); w.changed(["F/new.png"])
-        #expect(await mainPoll { w.names().contains("new.png") })
+        try await waitUntil { w.names().contains("new.png") }
         #expect(w.f.source.starts == 1)
         #expect(w.f.source.stops == 0)
     }

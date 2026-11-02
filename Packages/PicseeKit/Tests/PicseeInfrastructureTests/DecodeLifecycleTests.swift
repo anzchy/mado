@@ -29,6 +29,7 @@ import PicseeCore
 
 @Test(.timeLimit(.minutes(2))) func taskCancellationResumesOnceAfterBlockingDecoderReturns() async throws {
     let decoder = BlockingDecoder()
+    defer { decoder.gate.open() }
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4),
         executor: OperationDecodeExecutor(workers: 1), decoder: decoder)
     let task = Task { try await admission.image(tinyRequest, key: decodeKey(41), cost: 4, heavy: true, priority: .current) }
@@ -103,6 +104,7 @@ private struct FailingDecoder: ImageDecoding {
 @Test(.timeLimit(.minutes(2))) func controlledExecutorMidDecodeCancellationWaitsForRealReturn() async throws {
     let executor = ControlledExecutor()
     let decoder = BlockingDecoder()
+    defer { decoder.gate.open() }
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4), executor: executor, decoder: decoder)
     let consumer = await admission.subscribe(tinyRequest, key: decodeKey(60), cost: 4, heavy: true, priority: .current)
     // The fake controls dispatch; the decoder controls its real return independently.

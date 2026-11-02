@@ -80,24 +80,24 @@ private actor GridThumbnailEdgeLog {
         GridThumbnailPixelSizing.edge(tile: NSSize(width: layout.itemSize.width - 8,
             height: layout.itemSize.height - 36), backingScale: window.backingScaleFactor)
     }
-    func awaitRequest(_ edge: Int) async {
-        await waitUntil { await log.contains(edge) }
+    func awaitRequest(_ edge: Int) async throws {
+        try await waitUntil { await log.contains(edge) }
         #expect(await log.contains(edge))
     }
     let initial = expectedEdge()
-    await awaitRequest(initial)
+    try await awaitRequest(initial)
     shell.resizeSidebar(to: 320)
     shell.layoutSubtreeIfNeeded()
     grid.layoutSubtreeIfNeeded()
     let resized = expectedEdge()
     #expect(resized != initial)
-    await awaitRequest(resized)
+    try await awaitRequest(resized)
     shell.toggleSidebar()
     shell.layoutSubtreeIfNeeded()
     grid.layoutSubtreeIfNeeded()
     let expanded = expectedEdge()
     #expect(expanded != resized && expanded != initial)
-    await awaitRequest(expanded)
+    try await awaitRequest(expanded)
     grid.stopThumbnails()
 }
 

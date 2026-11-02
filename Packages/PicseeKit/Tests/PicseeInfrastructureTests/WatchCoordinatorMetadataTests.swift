@@ -44,9 +44,9 @@ private actor FailNextMetadataScan: FolderScanning {
     }
     func names() -> [String] { coordinator.snapshot?.entries.map(\.url.lastPathComponent) ?? [] }
     func refresh() async throws { try await #require(coordinator.refresh()).value }
-    func close() async {
+    func close() async throws {
         coordinator.end()
-        #expect(await mainPoll { self.f.source.active == 0 && self.f.scope.counts[0] == self.f.scope.counts[1] })
+        try await waitUntil { self.f.source.active == 0 && self.f.scope.counts[0] == self.f.scope.counts[1] }
         f.remove()
     }
 }
@@ -56,7 +56,7 @@ private actor FailNextMetadataScan: FolderScanning {
     try w.write("a.png", bytes: 3); try w.write("b.png", bytes: 1)
     try await w.coordinator.begin(folder: w.f.url("root/F"), rootID: w.rootID).value
     w.coordinator.setConditions(.init(sort: .captureDate))
-    #expect(await mainPoll { w.coordinator.metadataSortState == .complete })
+    try await waitUntil { w.coordinator.metadataSortState == .complete }
     #expect(w.names() == ["b.png", "a.png"])
     #expect(w.reader.counts == ["a.png": 1, "b.png": 1])
 
@@ -70,14 +70,14 @@ private actor FailNextMetadataScan: FolderScanning {
     // Addition: existing items keep metadata; only the new file is read.
     try w.write("c.png", bytes: 2)
     try await w.refresh()
-    #expect(await mainPoll { w.coordinator.metadataSortState == .complete })
+    try await waitUntil { w.coordinator.metadataSortState == .complete }
     #expect(w.names() == ["b.png", "c.png", "a.png"])
     #expect(w.reader.counts == ["a.png": 1, "b.png": 1, "c.png": 1])
 
     // Changed bytes invalidate that identity's header alone.
     try w.write("b.png", bytes: 5)
     try await w.refresh()
-    #expect(await mainPoll { w.coordinator.metadataSortState == .complete })
+    try await waitUntil { w.coordinator.metadataSortState == .complete }
     #expect(w.names() == ["c.png", "a.png", "b.png"])
     #expect(w.reader.counts == ["a.png": 1, "b.png": 2, "c.png": 1])
 
@@ -95,5 +95,5 @@ private actor FailNextMetadataScan: FolderScanning {
     #expect(w.coordinator.metadataSortState == .complete)
     #expect(w.names() == ["c.png", "b.png"])
     #expect(w.reader.counts == ["a.png": 1, "b.png": 2, "c.png": 1])
-    await w.close()
+    try await w.close()
 }

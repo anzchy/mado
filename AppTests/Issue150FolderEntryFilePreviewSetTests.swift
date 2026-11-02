@@ -100,9 +100,8 @@ private struct Issue150HoldingScanner: FolderScanning {
         window.close()
         try? FileManager.default.removeItem(at: base)
     }
-    func waitUntil(_ condition: () -> Bool) async throws {
-        // No wall-clock deadline (#277): the test's time limit cancels the sleep, which ends the wait.
-        while !condition() { try await Task.sleep(for: .milliseconds(10)) }
+    func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, condition)
         #expect(condition(), "timed out")
     }
     static func button(_ identifier: String, in view: NSView?) -> NSButton? {

@@ -93,10 +93,9 @@ final class ChangeLog: @unchecked Sendable {
     }
 }
 
-/// Positive waits only. No wall-clock deadline: the calling test's time limit bounds the wait, so a loaded runner
-/// cannot fail a condition that does hold (#277). False only once that limit cancels the wait.
-func poll(_ condition: () -> Bool) async -> Bool {
-    await waitUntil { condition() }
+/// Positive waits only, bounded like `waitUntil`: throws when the wait ends before the condition holds (#392).
+func poll(_ condition: () -> Bool) async throws -> Bool {
+    try await waitUntil { condition() }
     return condition()
 }
 

@@ -32,13 +32,13 @@ import PicseeMacUI
     #expect(state.textLines.first == "Reading Folder…")
     state.refresh()
     #expect(!state.buttons.contains { $0.identifier?.rawValue == "state.open" }, "no transient Home in the pre-scan gap")
-    await waitUntil { window.attachedSheet != nil }
+    try await waitUntil { window.attachedSheet != nil }
     let sheet = try #require(window.attachedSheet)
     #expect(state.surface == .viewer, "a completed pre-scan error must stop claiming to read")
     #expect(state.buttons.contains { $0.identifier?.rawValue == "state.open" })
     #expect(!state.buttons.contains { $0.identifier?.rawValue == "state.cancel-folder" })
     window.endSheet(sheet, returnCode: error == .corruptStore ? .alertFirstButtonReturn : .alertSecondButtonReturn)
-    await waitUntil { window.attachedSheet == nil }
+    try await waitUntil { window.attachedSheet == nil }
     state.refresh()
     #expect(state.surface == .viewer)
     #expect(state.buttons.contains { $0.identifier?.rawValue == "state.open" }, "declining recovery leaves the restored Home")
@@ -59,31 +59,31 @@ import PicseeMacUI
     defer { window.close() }
     let state = try issue316State(controller)
     controller.open(image)
-    await waitUntil {
+    try await waitUntil {
         if case .failed = controller.session.imageStatus { return true }
         return false
     }
     // The prior image's access error has its own sheet. Retire it so the next sheet proves the folder task exited.
-    await waitUntil { window.attachedSheet != nil }
+    try await waitUntil { window.attachedSheet != nil }
     let priorSheet = try #require(window.attachedSheet)
     window.endSheet(priorSheet, returnCode: .alertFirstButtonReturn)
-    await waitUntil { window.attachedSheet == nil }
+    try await waitUntil { window.attachedSheet == nil }
     state.refresh()
     let priorText = state.textLines
     #expect(controller.session.imageLoader.fileURL == image)
     controller.browseRecoveredFolder(folder, rootID: AccessRootID())
     #expect(state.surface == .gridReading)
-    await waitUntil { window.attachedSheet != nil }
+    try await waitUntil { window.attachedSheet != nil }
     let sheet = try #require(window.attachedSheet)
     #expect(state.surface == .viewer)
     #expect(controller.session.imageLoader.fileURL == image)
     #expect(!state.buttons.contains { $0.identifier?.rawValue == "state.open" })
     #expect(!state.buttons.contains { $0.identifier?.rawValue == "state.cancel-folder" })
     window.endSheet(sheet, returnCode: .alertSecondButtonReturn)
-    await waitUntil { window.attachedSheet == nil }
+    try await waitUntil { window.attachedSheet == nil }
     // Restoration reopens the same URL through the same unavailable service, so its prior error returns.
     // Do not wait for the expected restored surface: the old implementation must fail assertions, not hang.
-    await waitUntil {
+    try await waitUntil {
         if case .failed = controller.session.imageStatus { return true }
         return controller.session.imageLoader.fileURL != image
     }

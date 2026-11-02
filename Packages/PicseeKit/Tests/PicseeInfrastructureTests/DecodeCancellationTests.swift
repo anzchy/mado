@@ -29,7 +29,7 @@ func expectCancelled(_ subscription: DecodeSubscription) async {
 final class BlockingDecoder: ImageDecoding, @unchecked Sendable {
     let started: AsyncStream<Void>
     private let signal: AsyncStream<Void>.Continuation
-    let gate = DispatchSemaphore(value: 0)
+    let gate = TestGate()
     init() { (started, signal) = AsyncStream.makeStream() }
     func decode(_ request: ImageDecodeRequest) throws -> DecodedImage {
         signal.yield(())
@@ -40,6 +40,7 @@ final class BlockingDecoder: ImageDecoding, @unchecked Sendable {
 
 @Test(.timeLimit(.minutes(2))) func realQueueCancellationBalancesThreePointsWithoutSleep() async throws {
     let decoder = BlockingDecoder()
+    defer { decoder.gate.open() }
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4),
         executor: OperationDecodeExecutor(workers: 1), decoder: decoder)
     let running = await admission.subscribe(tinyRequest, key: decodeKey(20), cost: 4, heavy: true, priority: .current)
@@ -59,7 +60,8 @@ final class BlockingDecoder: ImageDecoding, @unchecked Sendable {
 @Test(.timeLimit(.minutes(2))) func submittedPixelCancellationSkipsDecoderAndBalancesResources() async throws {
     let executor = OperationDecodeExecutor(workers: 1)
     let (blocked, signalBlocked) = AsyncStream<Void>.makeStream()
-    let release = DispatchSemaphore(value: 0)
+    let release = TestGate()
+    defer { release.open() }
     executor.submit { signalBlocked.yield(()); release.wait() }
     var blocker = blocked.makeAsyncIterator()
     _ = await blocker.next()

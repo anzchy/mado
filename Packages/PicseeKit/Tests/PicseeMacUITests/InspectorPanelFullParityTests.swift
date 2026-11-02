@@ -62,7 +62,7 @@ private func ink(_ image: CGImage, background: PinnedDesign.Color) -> (width: In
             let model = InspectorModel(reader: ParityReader(metadata: metadata))
             let url = URL(fileURLWithPath: "/tmp/inspector-parity.png")
             model.select(itemID: nil, url: url, access: .fileGrant(url))
-            await waitUntil { model.value != .loading }
+            try await waitUntil { model.value != .loading }
             #expect(model.value == .known(metadata))
             let renderer = ImageRenderer(content: InspectorPanel(model: model, session: ViewerSession(),
                 translations: words, close: {}, restoreCanvasFocus: {}, updateFocus: { _ in })

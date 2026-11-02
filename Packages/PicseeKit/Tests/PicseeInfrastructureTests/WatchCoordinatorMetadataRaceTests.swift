@@ -31,25 +31,26 @@ private final class HeldWatchMetadataReader: FolderMetadataReading, @unchecked S
     let f = try WatchFixture(folders: ["root/F"]); defer { f.remove() }
     let rootID = try await f.access.grant(folder: f.url("root"))
     let reader = HeldWatchMetadataReader()
+    defer { reader.release() }
     let coordinator = FolderScanCoordinator(access: f.access, scanner: FolderBrowser(), trace: nil,
         metadataReader: reader, watcher: f.hub)
     try Data(repeating: 1, count: 3).write(to: f.url("root/F/a.png"))
     try await coordinator.begin(folder: f.url("root/F"), rootID: rootID).value
     coordinator.setConditions(.init(sort: .captureDate))
-    #expect(await mainPoll { coordinator.metadataSortState == .complete })
+    try await waitUntil { coordinator.metadataSortState == .complete }
     #expect(reader.counts == ["a.png": 1])
 
     try Data(repeating: 1, count: 1).write(to: f.url("root/F/b.png"))
     try await #require(coordinator.refresh()).value
-    #expect(await mainPoll { reader.counts["b.png"] == 1 })
+    try await waitUntil { reader.counts["b.png"] == 1 }
     #expect(coordinator.metadataSortState == .pending)
     try await #require(coordinator.refresh()).value
     #expect(reader.counts == ["a.png": 1, "b.png": 1])
     reader.release()
-    #expect(await mainPoll { coordinator.metadataSortState == .complete })
+    try await waitUntil { coordinator.metadataSortState == .complete }
     #expect(reader.counts == ["a.png": 1, "b.png": 2])
     #expect(reader.maxConcurrent == 1)
     #expect(coordinator.snapshot?.entries.map(\.url.lastPathComponent) == ["b.png", "a.png"])
     coordinator.end()
-    #expect(await mainPoll { f.source.active == 0 && f.scope.counts[0] == f.scope.counts[1] })
+    try await waitUntil { f.source.active == 0 && f.scope.counts[0] == f.scope.counts[1] }
 }

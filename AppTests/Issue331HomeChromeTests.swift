@@ -15,7 +15,7 @@ import PicseeMacUI
 
 @MainActor private func issue331Wait(_ stage: String, detail: () -> String = { "" },
                                       _ condition: () -> Bool) async throws {
-    await waitUntil { condition() }
+    try await waitUntil { condition() }
     try #require(condition(), "Issue 331 stage: \(stage) \(detail())")
 }
 

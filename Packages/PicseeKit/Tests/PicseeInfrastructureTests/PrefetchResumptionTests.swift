@@ -41,9 +41,9 @@ private final class SteppedPressureTime: @unchecked Sendable {
         }
         for sleeper in woken { sleeper.resume() }
     }
-    /// True once `count` sleeps have been asked for and are pending; the suite's time limit bounds the wait (#277).
-    func waitFor(asked count: Int) async -> Bool {
-        await waitUntil { requested.count == count && sleeping == 1 }
+    /// True once `count` sleeps have been asked for and are pending; throws when the bounded wait ends first (#392).
+    func waitFor(asked count: Int) async throws -> Bool {
+        try await waitUntil { requested.count == count && sleeping == 1 }
         return requested.count == count && sleeping == 1
     }
 }
@@ -55,17 +55,17 @@ private final class SteppedPressureTime: @unchecked Sendable {
     }
 
     // R1 1.4: the wait polls while pressure lasts, then sleeps only what is left of the recovery delay.
-    @Test func pipelinePrefetchResumptionWaitsOutPressureAndTheRecoveryDelay() async {
+    @Test func pipelinePrefetchResumptionWaitsOutPressureAndTheRecoveryDelay() async throws {
         let time = SteppedPressureTime(), pipeline = Self.pipeline(time)
         await pipeline.memoryPressure(.warning)
         let waiting = Task { await pipeline.prefetchResumes() }
-        #expect(await time.waitFor(asked: 1))
+        #expect(try await time.waitFor(asked: 1))
         time.advance(by: 5)
-        #expect(await time.waitFor(asked: 2))
+        #expect(try await time.waitFor(asked: 2))
         time.advance(by: 1)
         await pipeline.memoryPressure(.normal)
         time.advance(by: 4)
-        #expect(await time.waitFor(asked: 3))
+        #expect(try await time.waitFor(asked: 3))
         #expect(await !pipeline.cache.permits(.prefetch))
         time.advance(by: 1)
         await waiting.value
@@ -74,13 +74,13 @@ private final class SteppedPressureTime: @unchecked Sendable {
     }
 
     // R1 1.4c: with prefetch already permitted the wait returns without sleeping; a zero delay still polls pressure.
-    @Test func pipelinePrefetchResumptionReturnsAtOnceWhenPermitted() async {
+    @Test func pipelinePrefetchResumptionReturnsAtOnceWhenPermitted() async throws {
         let time = SteppedPressureTime(), pipeline = Self.pipeline(time, delay: 0)
         await pipeline.prefetchResumes()
         #expect(time.requested.isEmpty)
         await pipeline.memoryPressure(.critical)
         let waiting = Task { await pipeline.prefetchResumes() }
-        #expect(await time.waitFor(asked: 1))
+        #expect(try await time.waitFor(asked: 1))
         #expect(time.requested == [1])
         await pipeline.memoryPressure(.normal)
         time.advance(by: 1)
@@ -89,7 +89,7 @@ private final class SteppedPressureTime: @unchecked Sendable {
     }
 
     // R1 1.4e: the default sleep waits on the real clock for a short recovery delay.
-    @Test func pipelinePrefetchResumptionUsesTheRealClockByDefault() async {
+    @Test func pipelinePrefetchResumptionUsesTheRealClockByDefault() async throws {
         let pipeline = ImageIOPipeline(configuration: DecodeConfiguration(pressureRecoveryDelay: 0.05))
         await pipeline.memoryPressure(.warning)
         await pipeline.memoryPressure(.normal)
@@ -99,11 +99,11 @@ private final class SteppedPressureTime: @unchecked Sendable {
     }
 
     // R1 1.4d: a cancelled wait returns and stops sleeping.
-    @Test func pipelinePrefetchResumptionStopsWhenCancelled() async {
+    @Test func pipelinePrefetchResumptionStopsWhenCancelled() async throws {
         let time = SteppedPressureTime(), pipeline = Self.pipeline(time)
         await pipeline.memoryPressure(.warning)
         let waiting = Task { await pipeline.prefetchResumes() }
-        #expect(await time.waitFor(asked: 1))
+        #expect(try await time.waitFor(asked: 1))
         waiting.cancel()
         await waiting.value
         for _ in 0..<20 { await Task.yield() }

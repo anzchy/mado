@@ -87,11 +87,10 @@ private actor EntrySink {
     }
 }
 
-/// MainActor poll: sleeping yields the actor, so hint hops and refresh completions run between checks. No wall-clock
-/// deadline: the calling test's time limit bounds the wait (#277). False only once that limit cancels the wait.
+/// The pre-#392 shape, kept only for WatchCoordinatorTimingTests until #390 rewrites it; new waits use `waitUntil`,
+/// which throws. Bounded and cancelled like `waitUntil`; false when the wait ended without the condition holding.
 @MainActor func mainPoll(_ condition: () -> Bool) async -> Bool {
-    await waitUntil { condition() }
-    return condition()
+    (try? await waitUntil { condition() }) != nil
 }
 
 @Test(.timeLimit(.minutes(2))) @MainActor func watchedCoordinatorRefreshIsSilentAndConvergesOnDisk() async throws {
@@ -106,14 +105,14 @@ private actor EntrySink {
 
     // Row 1: a hint picks up a new file silently, with a generation the grid accepts.
     w.write("F/c.png"); w.changed(["F/c.png"])
-    #expect(await mainPoll { w.names() == ["a.png", "b.png", "c.png"] })
+    try await waitUntil { w.names() == ["a.png", "b.png", "c.png"] }
     let fresh = try #require(c.sourceSnapshot)
     #expect(fresh.isComplete)
     #expect(fresh.version.generation > prior.version.generation)
     #expect(grid.apply(fresh))
     #expect(w.host.didStart == 0)
     #expect(w.host.opened.isEmpty)
-    #expect(await mainPoll { samples.values.count >= 2 }) // the sampler records one MainActor turn after the change
+    try await waitUntil { samples.values.count >= 2 } // the sampler records one MainActor turn after the change
     #expect(samples.values.allSatisfy { $0.snapshot?.isComplete == true && !$0.reading })
 
     // W1/W2: a sibling folder and a flat subfolder never refresh; a positive sentinel ends the negative check.
@@ -123,7 +122,7 @@ private actor EntrySink {
     await w.turns()
     #expect(w.trace.begins.count == n0)
     w.write("F/s.png"); w.changed(["F/s.png"])
-    #expect(await mainPoll { w.names().contains("s.png") })
+    try await waitUntil { w.names().contains("s.png") }
     #expect(w.trace.begins.count == n0 + 1)
     #expect(!w.names().contains("sub/x.png"))
 
@@ -150,7 +149,7 @@ private actor EntrySink {
     c.setConditions(.init(sort: .name, direction: .descending))
     try await c.setRecursiveEnabled(true)?.value
     w.write("F/sub/m.png"); w.changed(["F/sub/m.png"])
-    #expect(await mainPoll { w.names().contains("sub/m.png") })
+    try await waitUntil { w.names().contains("sub/m.png") }
     #expect(Set(w.names()) == ["a.png", "b.png", "c.png", "s.png", "sub/n.png", "sub/x.png", "sub/m.png"])
     #expect(c.conditions.direction == .descending)
     let visible = c.snapshot?.entries.map(\.url.lastPathComponent) ?? []
@@ -175,13 +174,14 @@ private actor EntrySink {
         let begins = w.trace.begins.count
         w.hint([rng.next() % 3 == 0 ? .mustRescan : .changed(w.url(touched[touched.count - 1]))])
         if rng.next() % 10 < 3 {
-            #expect(await mainPoll { w.trace.begins.count > begins }, "seed=\(seed) no refresh began")
+            try await waitUntil("seed=\(seed) no refresh began") { w.trace.begins.count > begins }
             let more = edit()
             w.changed([more[more.count - 1]])
         }
         let expected = try await w.freshScan(recursive: c.recursiveEnabled)
-        let converged = await mainPoll { Set(c.sourceSnapshot?.entries.map(\.itemID) ?? []) == expected }
-        #expect(converged, "seed=\(seed) got=\(w.names()) expected=\(expected)")
+        try await waitUntil("seed=\(seed) got=\(w.names()) expected=\(expected)") {
+            Set(c.sourceSnapshot?.entries.map(\.itemID) ?? []) == expected
+        }
         #expect(c.currentItemID.map { c.snapshot?.navigationIndex(for: $0) != nil } ?? true, "seed=\(seed)")
         generations.append(w.generation)
     }

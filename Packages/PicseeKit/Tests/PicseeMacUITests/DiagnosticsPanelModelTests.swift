@@ -115,9 +115,9 @@ private final class ManualSleeper: @unchecked Sendable {
 }
 
 /// Waits for a condition the sleeper can't signal, sleeping between looks so the polls add little to a busy main
-/// actor. The suite's time limit bounds it (#277), and it stops when cancelled.
-@MainActor private func until(_ condition: @MainActor () -> Bool) async -> Bool {
-    await waitUntil { condition() }
+/// actor. Bounded like `waitUntil`: throws when the wait ends before the condition holds (#392).
+@MainActor private func until(_ condition: @MainActor () -> Bool) async throws -> Bool {
+    try await waitUntil { condition() }
     return condition()
 }
 
@@ -269,7 +269,7 @@ private func catalogValue(_ key: String, _ language: String) throws -> String? {
         try #require(await sleeper.sleeping(1))
         model.setVisible(false)
         #expect(!model.isVisible)
-        try #require(await until { sleeper.cancelled == 1 && sleeper.pendingCount == 0 })
+        try #require(try await until { sleeper.cancelled == 1 && sleeper.pendingCount == 0 })
         sleeper.advance()
         try await Task.sleep(for: .milliseconds(50))
         #expect(source.reads == 1 && sleeper.requested.count == 1)
@@ -294,10 +294,10 @@ private func catalogValue(_ key: String, _ language: String) throws -> String? {
         // Hide and show while a read is suspended: the old loop must end with its read, not keep going.
         source.hold()
         sleeper.advance()
-        try #require(await until { source.heldReads == 1 })
+        try #require(try await until { source.heldReads == 1 })
         model.setVisible(false)
         model.setVisible(true)
-        try #require(await until { source.heldReads == 2 })
+        try #require(try await until { source.heldReads == 2 })
         source.releaseReads()
         try #require(await sleeper.sleeping(3))
         try await Task.sleep(for: .milliseconds(50))
@@ -329,7 +329,7 @@ private func catalogValue(_ key: String, _ language: String) throws -> String? {
         sleeper.advance()
         model?.setVisible(false)
         model = nil
-        try #require(await until { loopToken == nil })
+        try #require(try await until { loopToken == nil })
         #expect(source.reads == 1)
     }
 }
@@ -345,12 +345,12 @@ private func catalogValue(_ key: String, _ language: String) throws -> String? {
         var model: DiagnosticsPanelModel? = DiagnosticsPanelModel(source: try #require(source), interval: .milliseconds(10))
         source = nil
         model?.setVisible(true)
-        try #require(await until { (loopSource?.reads ?? 0) >= 3 })
+        try #require(try await until { (loopSource?.reads ?? 0) >= 3 })
         let readsAtHide = try #require(loopSource).reads
         model?.setVisible(false)
         #expect(value(try #require(model), "decoding.finished") == "9")
         model = nil
-        try #require(await until { released.value != nil })
+        try #require(try await until { released.value != nil })
         // A read already called when the panel hid may count after it; no read starts after it.
         let finalReads = try #require(released.value)
         #expect(finalReads >= readsAtHide && finalReads <= readsAtHide + 1)

@@ -60,7 +60,7 @@ func issue187OpenedGridTakesKeyboardFocusAndFirstDownMovesOneRow(granted: Bool) 
         #expect(!controller.gridSearchAvailable)
         #expect(window.firstResponder is NSButton)
     }
-    await waitUntil {
+    try await waitUntil {
         if controller.gridSearchAvailable { return true }
         window.update()
         return false

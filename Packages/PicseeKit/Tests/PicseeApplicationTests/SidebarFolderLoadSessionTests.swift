@@ -32,35 +32,38 @@ private actor BlockedCounter: SidebarFolderEnumerating {
     let root = URL(fileURLWithPath: "/tmp/picsee-sidebar-root")
     let child = root.appendingPathComponent("Trip")
     let counter = BlockedCounter(child: child)
-    defer { Task { await counter.release() } }
-    let browser = SidebarFolderBrowser(access: LoadLease(root: root), enumerator: counter)
-    let session = SidebarFolderLoadSession(browser: browser)
-    var rowURLs: [URL] = []
-    var counts: [URL: Int] = [:]
-    var rowsSignal: AsyncStream<Void>.Continuation!
-    let rows = AsyncStream<Void> { rowsSignal = $0 }
-    var countSignal: AsyncStream<Void>.Continuation!
-    let countUpdates = AsyncStream<Void> { countSignal = $0 }
-    session.start(folder: root, rootID: AccessRootID(), onRows: { urls, _ in
-        rowURLs = urls
-        rowsSignal.yield()
-    }, onCount: { url, count in
-        counts[url] = count
-        countSignal.yield()
-    })
-    var rowIterator = rows.makeAsyncIterator()
-    _ = await rowIterator.next()
-    try #require(rowURLs == [child])
-    #expect(counts.isEmpty)
-    await counter.release()
-    var countIterator = countUpdates.makeAsyncIterator()
-    while counts[root] != 5 || counts[child] != 1234 {
-        guard await countIterator.next() != nil else { break }
+    try await withAsyncTeardown {
+        let browser = SidebarFolderBrowser(access: LoadLease(root: root), enumerator: counter)
+        let session = SidebarFolderLoadSession(browser: browser)
+        var rowURLs: [URL] = []
+        var counts: [URL: Int] = [:]
+        var rowsSignal: AsyncStream<Void>.Continuation!
+        let rows = AsyncStream<Void> { rowsSignal = $0 }
+        var countSignal: AsyncStream<Void>.Continuation!
+        let countUpdates = AsyncStream<Void> { countSignal = $0 }
+        session.start(folder: root, rootID: AccessRootID(), onRows: { urls, _ in
+            rowURLs = urls
+            rowsSignal.yield()
+        }, onCount: { url, count in
+            counts[url] = count
+            countSignal.yield()
+        })
+        var rowIterator = rows.makeAsyncIterator()
+        _ = await rowIterator.next()
+        try #require(rowURLs == [child])
+        #expect(counts.isEmpty)
+        await counter.release()
+        var countIterator = countUpdates.makeAsyncIterator()
+        while counts[root] != 5 || counts[child] != 1234 {
+            guard await countIterator.next() != nil else { break }
+        }
+        #expect(counts[root] == 5)
+        #expect(counts[child] == 1234)
+        session.cancel()
+        #expect(counts[child] == 1234)
+    } teardown: {
+        await counter.release()
     }
-    #expect(counts[root] == 5)
-    #expect(counts[child] == 1234)
-    session.cancel()
-    #expect(counts[child] == 1234)
 }
 
 private enum SidebarFailure: Error { case unavailable }

@@ -42,10 +42,10 @@ private func round2Fixture(_ name: String) -> URL {
     let window = try #require(controller.window)
     defer { window.close() }
     controller.open(original, accessRequest: .fileGrant(original))
-    await waitUntil { controller.session.imageLoader.presented != nil }
+    try await waitUntil { controller.session.imageLoader.presented != nil }
     #expect(controller.session.imageLoader.presented != nil)
     try fm.moveItem(at: original, to: moved)
-    await waitUntil {
+    try await waitUntil {
         if controller.session.imageLoader.presented?.fileURL.standardizedFileURL == moved.standardizedFileURL { return true }
         controller.reconcileStandaloneImage()
         return false
@@ -66,13 +66,13 @@ private func round2Fixture(_ name: String) -> URL {
     let window = try #require(controller.window)
     defer { window.close() }
     controller.open(file, accessRequest: .fileGrant(file))
-    await waitUntil { controller.session.imageLoader.presented != nil }
+    try await waitUntil { controller.session.imageLoader.presented != nil }
     let original = try #require(controller.session.imageLoader.presented)
     var trashed: NSURL?
     try fm.trashItem(at: file, resultingItemURL: &trashed)
     defer { if let trashed { try? fm.removeItem(at: trashed as URL) } }
     try fm.copyItem(at: round2Fixture("portrait-2x3.png"), to: file)
-    await waitUntil {
+    try await waitUntil {
         if let presented = controller.session.imageLoader.presented,
            presented.key.revision != original.key.revision,
            presented.fileURL.standardizedFileURL == file.standardizedFileURL { return true }

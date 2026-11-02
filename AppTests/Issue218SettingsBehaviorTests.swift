@@ -207,7 +207,7 @@ import PicseeMacUI
     let windowContent = try #require(panel.window.contentView)
     let size = try #require(settingsControl("settings.cache.size", in: windowContent) as? NSTextField)
     let measuredLabel = ByteCountFormatter.string(fromByteCount: initialBytes, countStyle: .file)
-    await waitUntil { size.stringValue == measuredLabel }
+    try await waitUntil { size.stringValue == measuredLabel }
     #expect(size.stringValue == measuredLabel)
     let clear = try #require(settingsControl("settings.cache.clear", in: windowContent) as? NSButton)
     clear.performClick(nil)
@@ -220,6 +220,6 @@ import PicseeMacUI
     #expect(prompts == 2)
     #expect(try await cache.sizeBytes() == 0)
     let emptyLabel = ByteCountFormatter.string(fromByteCount: 0, countStyle: .file)
-    await waitUntil { size.stringValue == emptyLabel }
+    try await waitUntil { size.stringValue == emptyLabel }
     #expect(size.stringValue == emptyLabel)
 }

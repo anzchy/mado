@@ -163,7 +163,7 @@ private func p303SolidTIFF(_ url: URL, red: CGFloat) throws {
 private final class P303HeldAfterDecode: ImageDecoding, @unchecked Sendable {
     let started: AsyncStream<Void>
     private let signal: AsyncStream<Void>.Continuation
-    let release = DispatchSemaphore(value: 0)
+    let release = TestGate()
     private let lock = NSLock()
     private var calls = 0
     var count: Int { lock.withLock { calls } }
@@ -224,7 +224,7 @@ private actor P303ChangedTicketSignalCache: ThumbnailCaching {
         store: BookmarkStore(url: folder.appendingPathComponent("roots.json")), buildSHA: "p303-fix")
     let root = try await access.grant(folder: folder)
     let decoder = P303HeldAfterDecode()
-    defer { decoder.release.signal() }
+    defer { decoder.release.open() }
     let cache = P303ChangedTicketSignalCache(directory: cacheDirectory)
     let pipeline = ImageIOPipeline(decoder: decoder, thumbnailCache: cache)
     let oldSource = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)

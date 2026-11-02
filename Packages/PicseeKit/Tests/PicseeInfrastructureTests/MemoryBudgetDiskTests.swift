@@ -68,10 +68,10 @@ private actor DiskReadGate {
 
 /// Whether `count` jobs come to wait in admission. It sleeps between looks: a `Task.yield()` spin starved the
 /// loads it waited for on the 3-core CI runner, and kept spinning after the suite's time limit cancelled the test.
-/// The suite's time limit bounds it (#277); callers leave no room, so a queued job stays queued.
+/// Bounded like `waitUntil` (#392); false when the wait ended first, so the caller can cancel its load and open its
+/// gate before `#require` ends the test.
 private func waitUntilWaiting(_ pipeline: ImageIOPipeline, _ count: Int) async -> Bool {
-    await waitUntil { await pipeline.admission.activity().waiting == count }
-    return await pipeline.admission.activity().waiting == count
+    (try? await waitUntil { await pipeline.admission.activity().waiting == count }) != nil
 }
 /// The durable payloads the first load wrote, so the next load of that edge is a warm disk hit.
 private func diskPayloads(_ rig: DiskRig) throws -> [URL] {

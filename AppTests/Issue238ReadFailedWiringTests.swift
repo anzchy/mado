@@ -103,9 +103,10 @@ private final class Issue238Scanner: FolderScanning, @unchecked Sendable {
         try? FileManager.default.removeItem(at: base)
     }
     func tick() async throws { window.update(); try await Task.sleep(for: .milliseconds(10)) }
-    /// No wall-clock deadline (#277): the test's time limit cancels the sleep, which ends the wait.
-    func waitUntil(_ condition: () -> Bool, each: () -> Void = {}) async throws {
-        while !condition() { each(); try await tick() }
+    /// Bounded and cancelled like the shared `waitUntil` (#392).
+    func waitUntil(_ condition: () -> Bool, each: () -> Void = {}, fileID: String = #fileID, line: Int = #line)
+        async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { each(); window.update() }, condition)
         each()
     }
     var readFailed: ReadFailedStateView? {

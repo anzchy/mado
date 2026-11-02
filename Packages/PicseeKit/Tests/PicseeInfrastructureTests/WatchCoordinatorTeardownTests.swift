@@ -35,7 +35,9 @@ private final class GatedWatcher: FolderWatching, @unchecked Sendable {
     FolderScanCoordinator(access: w.f.access, scanner: FolderBrowser(), watcher: watcher)
 }
 
-@MainActor private func released(_ w: WatchedCoordinator) async -> Bool { await mainPoll { w.f.source.active == 0 && w.scopeBalanced } }
+@MainActor private func released(_ w: WatchedCoordinator, _ step: String, fileID: String = #fileID, line: Int = #line) async throws {
+    try await waitUntil(step, fileID: fileID, line: line) { w.f.source.active == 0 && w.scopeBalanced }
+}
 
 @Test(.timeLimit(.minutes(2))) @MainActor func watchedCoordinatorCancelsItsSubscriptionsWhenEndedOrReleased() async throws {
     // end() and release in the same turn: nothing waits on the released coordinator to cancel.
@@ -45,7 +47,7 @@ private final class GatedWatcher: FolderWatching, @unchecked Sendable {
         try await ended?.begin(folder: w.url("F"), rootID: w.rootID).value
         #expect(w.f.source.active == 1)
         ended?.end(); ended = nil
-        #expect(await released(w), "end() then release")
+        try await released(w, "end() then release")
     }
     // Released without end(): teardown cancels the live watch.
     do {
@@ -54,7 +56,7 @@ private final class GatedWatcher: FolderWatching, @unchecked Sendable {
         try await dropped?.begin(folder: w.url("F"), rootID: w.rootID).value
         #expect(w.f.source.active == 1)
         dropped = nil
-        #expect(await released(w), "release without end()")
+        try await released(w, "release without end()")
     }
     // A folder switch inside one root keeps the shared stream; the old subscription goes once the new one exists.
     do {
@@ -64,20 +66,20 @@ private final class GatedWatcher: FolderWatching, @unchecked Sendable {
         try await stable.begin(folder: w.url("H"), rootID: w.rootID).value
         #expect(w.f.source.starts == 1 && w.f.source.stops == 0 && w.f.source.active == 1)
         stable.end()
-        #expect(await released(w), "folder switch then end()")
+        try await released(w, "folder switch then end()")
     }
     // Switching roots while the new subscribe is held, then releasing: both roots end up stopped.
     do {
         let (w, other) = try await section(); defer { w.f.remove() }
-        let gate = GatedWatcher(w.f.hub)
+        let gate = GatedWatcher(w.f.hub); defer { gate.open() }
         var switching: FolderScanCoordinator? = make(w, gate)
         try await switching?.begin(folder: w.url("F"), rootID: w.rootID).value
         gate.close()
         let pending = switching?.begin(folder: w.f.url("other/K"), rootID: other)
-        #expect(await mainPoll { gate.waiting == 1 })
+        try await waitUntil { gate.waiting == 1 }
         switching = nil
         gate.open()
         _ = try? await pending?.value
-        #expect(await released(w), "root switch held, then release")
+        try await released(w, "root switch held, then release")
     }
 }
