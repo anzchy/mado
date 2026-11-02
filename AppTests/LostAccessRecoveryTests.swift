@@ -709,7 +709,7 @@ func t230SameIdentityReselectRestoresOriginalPosition(_ renamed: Bool) async thr
     let conditions = controller.session.folderConditions
     defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: f.a.path) }
     try await t230DenyRoot(f, controller)
-    #expect(recoveryPage(controller)?.titleLabel.stringValue == String(localized: "Access Has Expired"))
+    #expect(recoveryPage(controller)?.titleLabel.stringValue == String(format: String(localized: "Unable to Access “%@”"), try #require(controller.waitingAccessPosition).folderURL.lastPathComponent))
     #expect(recoveryPage(controller)?.buttons.count == 1)
     #expect(controller.waitingAccessPosition?.folderReference != nil)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: f.a.path)
@@ -878,7 +878,7 @@ func t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() asy
     try await t231Lose(f, c)
     let records = await f.services.files.records(), recent = try await f.services.recent.load()
     let page = try #require(recoveryPage(c))
-    #expect(page.titleLabel.stringValue == String(localized: "Not Found"))
+    #expect(page.titleLabel.stringValue == String(format: String(localized: "Can’t Find “%@”"), try #require(c.waitingAccessPosition).folderURL.lastPathComponent))
     #expect(page.buttons.map(\.title) == [String(localized: "Choose at New Location…"), String(localized: "Choose Another Folder…")])
     #expect(!page.detailLabel.stringValue.lowercased().contains("moved"))
     c.completeAccessFolderSelection(nil, reselect: true)

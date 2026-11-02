@@ -1,9 +1,11 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Can’t Find “%@”": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Can’t Find “%@”"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"找不到“%@”"}}}},
+    "Unable to Access “%@”": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Unable to Access “%@”"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法访问“%@”"}}}},
     "Not Found":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Not Found"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"找不到"}}}},
     "Choose at New Location…":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Choose at New Location…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在新位置选择…"}}}},
-    "picsee can’t find “%@”. Choose its location, or choose another folder to continue.":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"picsee can’t find “%@”. Choose its location, or choose another folder to continue."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"picsee 找不到“%@”。请在新位置选择，或选择其他文件夹以继续。"}}}},
+    "picsee can’t find “%@”. Choose its location, or choose another folder to continue.":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"它可能已被删除、放进了废纸篓，或不在原来的磁盘上。\n如果它在别处，在新位置重新选择它即可继续。"}}}},
     "Updated to %@":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Updated to %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已更新到 %@"}}}},
     "Dismiss Location Update":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Dismiss Location Update"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"关闭位置更新提示"}}}},
     "Access Has Expired": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Access Has Expired"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"授权失效"}}}},

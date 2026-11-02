@@ -534,8 +534,11 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         let expired = accessLossCause == .accessExpired
         let notFound = accessLossCause == .notFound
         let title: String
-        if notFound { title = String(localized: "Not Found") }
-        else if expired { title = String(localized: "Access Has Expired") }
+        if notFound {
+            title = String(format: String(localized: "Can’t Find “%@”"), position.folderURL.lastPathComponent)
+        } else if expired {
+            title = String(format: String(localized: "Unable to Access “%@”"), position.folderURL.lastPathComponent)
+        }
         else if disk, let name = accessMonitor?.volumeName(for: position.rootID) {
             title = String(format: String(localized: "External Disk “%@” Is Not Connected"), name)
         } else {
