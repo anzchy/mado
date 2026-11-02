@@ -132,3 +132,97 @@ private func i354SVGMask(_ cause: AccessLossCause) throws -> [Bool] {
     }
     return i354AlphaMask(NSBitmapImageRep(cgImage: try #require(context.makeImage())))
 }
+
+/// #354 fix1 M1: unlike the alpha oracle above, this renders the actual image view's tint.
+/// The optional mutation is test-owned and is explicitly reported as mutant RED evidence.
+@Test @MainActor func i354RecoveryIconViewRendersPinnedTemplateTint() async throws {
+    _ = NSApplication.shared
+    let mutant = ProcessInfo.processInfo.environment["PICSEE_I354_TINT_NEGATIVE_CONTROL"] == "1"
+    print("i354 tint evidence mode=\(mutant ? "mutant-RED non-template black-tint" : "normal baseline/restored production")")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    let view = LostAccessStateView(frame: NSRect(x: 0, y: 0, width: 800, height: 680))
+    window.contentView = view
+    let text = LostAccessStateText(title: "Title", detail: "Detail", waiting: "Waiting…",
+                                  reselect: "Reselect…", chooseOther: "Other…")
+    var firstLight: [[Double]] = []
+    for (appearanceIndex, theme) in [DesignTheme.light, .dark, .light].enumerated() {
+        window.appearance = NSAppearance(named: theme == .light ? .aqua : .darkAqua)
+        let page = try PinnedDesign.page("permission-denied", appearance: theme == .light ? "light" : "dark")
+        let css = try page.color(".recovery-state>svg", "color", viewport: 1280)
+        let expected = [css.red, css.green, css.blue]
+        let semantic = Array(DesignColor.textSecondary.components(theme).prefix(3))
+        // A real CSS/semantic mismatch is a stop condition, not a reason to change tint here.
+        try #require(zip(expected, semantic).allSatisfy { abs($0 - $1) < 0.000_001 })
+        for (causeIndex, cause) in [AccessLossCause.notFound, .accessExpired, .diskNotConnected].enumerated() {
+            view.display(cause: cause, text: text)
+            view.layoutSubtreeIfNeeded()
+            let image = try #require(view.iconView.image)
+            if mutant {
+                // display() supplied a new test-owned image; no production source is mutated.
+                image.isTemplate = false
+                view.iconView.contentTintColor = .black
+            }
+            #expect(image.isTemplate, "\(theme) \(cause): recovery image must be a template")
+            let pixels = try i354TintedViewPixels(view.iconView)
+            // Native thin strokes are antialiased even inside these geometric cores.
+            // Use every independent position; do not select by actual alpha or RGB.
+            let samples = i354StrokeInteriors(try i354SVGMask(cause))
+            try #require(samples.count >= 8, "Independent SVG must supply at least eight distinct sample positions")
+            var opacity: Double = 0
+            var maximumPremultipliedError: Double = 0
+            var weightedRGB = [Double](repeating: 0, count: 3)
+            for index in samples {
+                let color = try #require(pixels.colorAt(x: index % 128, y: index / 128))
+                // colorAt loses the source profile label; read its encoded components directly.
+                // The actual target image's sRGB profile is required by the rendering helper.
+                let channels = [Double(color.redComponent), Double(color.greenComponent), Double(color.blueComponent)]
+                let alpha = Double(color.alphaComponent)
+                opacity += alpha
+                for channel in 0..<3 {
+                    maximumPremultipliedError = max(maximumPremultipliedError, abs(channels[channel] * alpha - expected[channel] * alpha))
+                    weightedRGB[channel] += channels[channel] * alpha
+                }
+            }
+            try #require(opacity >= 8, "Each glyph/theme must supply at least eight opacity-equivalent pixels")
+            let mean = weightedRGB.map { $0 / opacity }
+            let maximumTintError = zip(mean, expected).map { abs($0 - $1) }.max() ?? .infinity
+            #expect(maximumPremultipliedError <= 3.0 / 255, "\(theme) \(cause): per-pixel premultiplied RGB error \(maximumPremultipliedError)")
+            #expect(maximumTintError <= 3.0 / 255, "\(theme) \(cause): alpha-weighted rendered tint \(mean), pinned \(expected), max error \(maximumTintError)")
+            if appearanceIndex == 0 { firstLight.append(mean) }
+            if appearanceIndex == 2 {
+                #expect(zip(mean, firstLight[causeIndex]).allSatisfy { abs($0 - $1) <= 3.0 / 255 }, "Light tint must return after dark")
+            }
+            await Task.yield()
+        }
+    }
+}
+
+@MainActor private func i354TintedViewPixels(_ view: NSImageView) throws -> NSBitmapImageRep {
+    let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+    let target = try #require(CGContext(data: nil, width: 128, height: 128, bitsPerComponent: 8,
+        bytesPerRow: 128 * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let pixels = NSBitmapImageRep(cgImage: try #require(target.makeImage()))
+    pixels.size = view.bounds.size
+    view.effectiveAppearance.performAsCurrentDrawingAppearance {
+        view.cacheDisplay(in: view.bounds, to: pixels)
+    }
+    let rendered = try #require(pixels.cgImage)
+    #expect(rendered.colorSpace?.name == CGColorSpace.sRGB)
+    #expect(rendered.width == 128 && rendered.height == 128)
+    return pixels
+}
+
+/// Erode the independent SVG alpha mask by two pixels; never select by actual RGB.
+private func i354StrokeInteriors(_ mask: [Bool]) -> [Int] {
+    (2..<126).flatMap { y in
+        (2..<126).compactMap { x in
+            let interior = (-2...2).allSatisfy { dy in
+                (-2...2).allSatisfy { dx in mask[(y + dy) * 128 + x + dx] }
+            }
+            return interior ? y * 128 + x : nil
+        }
+    }
+}
