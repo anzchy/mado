@@ -206,7 +206,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     }
     let task = scene.session.imageLoader.loadTask
     await gate.entered()
-    await waitUntil { scene.state.buttons.first?.accessibilityIdentifier() == "state.cancel" }
+    try await waitUntil { scene.state.buttons.first?.accessibilityIdentifier() == "state.cancel" }
     #expect(scene.session.imageStatus == .loading("B.png"))
     #expect(scene.chrome.filename == nil)
     expectShown(scene.chrome, scene.content, scene.canvas, "loading")
@@ -214,7 +214,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
 
     let cancel = try #require(scene.state.buttons.first)
     cancel.performClick(nil)
-    await waitUntil { scene.state.buttons.first?.accessibilityIdentifier() == "state.open" }
+    try await waitUntil { scene.state.buttons.first?.accessibilityIdentifier() == "state.open" }
     #expect(scene.session.imageStatus == .empty)
     expectHidden(scene.chrome, scene.content, scene.canvas, "cancelled back to the Home")
     #expect(loopIDs(scene.canvas) == ["state.open"])
@@ -235,7 +235,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     let scene = HomeChromeScene(hidesOnHome: true)
     defer { scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/A.png"))?.value
-    await waitUntil { scene.state.isHidden }
+    try await waitUntil { scene.state.isHidden }
     #expect(scene.session.imageStatus == .showing)
     expectShown(scene.chrome, scene.content, scene.canvas, "showing an image")
     #expect(!keyLoop(from: scene.canvas).contains { $0 is NSButton && !($0 is ChromeToolView) })
@@ -264,12 +264,12 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     let a = HomeChromeScene(hidesOnHome: true), b = HomeChromeScene(hidesOnHome: true)
     defer { a.window.close(); b.window.close() }
     await b.open(URL(fileURLWithPath: "/A.png"))?.value
-    await waitUntil { b.state.isHidden }
+    try await waitUntil { b.state.isHidden }
     expectShown(b.chrome, b.content, b.canvas, "B shows an image")
     expectHidden(a.chrome, a.content, a.canvas, "A stays on the Home")
     #expect(loopIDs(a.canvas) == ["state.open"])
     b.session.cancelImageOpening()
-    await waitUntil { !b.state.isHidden }
+    try await waitUntil { !b.state.isHidden }
     #expect(b.session.imageStatus == .empty)
     expectHidden(b.chrome, b.content, b.canvas, "B back on the Home")
     expectHidden(a.chrome, a.content, a.canvas, "A still on the Home")
@@ -282,12 +282,12 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     let scene = HomeChromeScene(hidesOnHome: true)
     defer { scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/A.png"))?.value
-    await waitUntil { scene.state.isHidden }
+    try await waitUntil { scene.state.isHidden }
     expectShown(scene.chrome, scene.content, scene.canvas, "showing an image")
     #expect(scene.window.makeFirstResponder(scene.chrome.tools[0]))
     #expect(scene.session.inspectorFocus.focus == .tools)
     scene.session.cancelImageOpening()
-    await waitUntil { !scene.state.isHidden }
+    try await waitUntil { !scene.state.isHidden }
     #expect(scene.session.imageStatus == .empty)
     #expect(!(scene.window.firstResponder is ChromeToolView), "focus left on a hidden control")
     #expect(scene.window.firstResponder === scene.canvas)

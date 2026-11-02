@@ -113,13 +113,13 @@ private func issue140RouteServices(_ base: URL) async throws -> (AccessServices,
         } else {
             controller.open(image, accessRequest: .root(root, file: image))
         }
-        await waitUntil { !trace.completions.isEmpty }
+        try await waitUntil { !trace.completions.isEmpty }
         #expect(trace.begins == [1])
         #expect(trace.completions == [1])
         #expect(scan.generation == 1)
         #expect(scan.sourceSnapshot?.isComplete == true)
         #expect(scan.sourceSnapshot?.entries.map(\.url.lastPathComponent) == ["image.png"])
-        await waitUntil { controller.session.imageLoader.presented != nil }
+        try await waitUntil { controller.session.imageLoader.presented != nil }
         #expect(controller.session.imageLoader.presented != nil)
         #expect(window.representedURL == image)
         #expect(window.attachedSheet == nil)

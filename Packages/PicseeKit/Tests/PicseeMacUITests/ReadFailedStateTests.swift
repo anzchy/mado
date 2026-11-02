@@ -212,7 +212,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     defer { scene.window.close() }
     let retry = try #require(scene.state.buttons.first { $0.identifier?.rawValue == "state.retry-folder" })
     retry.performClick(nil)
-    await waitUntil { await scanner.calls >= 2 && !coordinator.isScanning }
+    try await waitUntil { await scanner.calls >= 2 && !coordinator.isScanning }
     #expect(await scanner.calls == 2)
     scene.state.refresh()
     // The retry failed again: 24F-A is back, with fresh, enabled controls.

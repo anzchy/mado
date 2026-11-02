@@ -22,7 +22,7 @@ private extension ThumbnailDiskCache {
 @MainActor private func suspendCache(_ cache: ThumbnailDiskCache) async throws -> SettingsCacheGate {
     let gate = SettingsCacheGate()
     Task.detached { await cache.suspendForSettingsTest(gate) }
-    await waitUntil { gate.isSuspended }
+    try await waitUntil { gate.isSuspended }
     #expect(gate.isSuspended)
     return gate
 }
@@ -49,7 +49,7 @@ private extension ThumbnailDiskCache {
     #expect(!clear.isEnabled)
     refreshGate.resume()
     let occupied = ByteCountFormatter.string(fromByteCount: 42, countStyle: .file)
-    await waitUntil { size.stringValue == occupied }
+    try await waitUntil { size.stringValue == occupied }
     #expect(size.stringValue == occupied)
     #expect(clear.isEnabled)
     let clearGate = try await suspendCache(cache)
@@ -62,7 +62,7 @@ private extension ThumbnailDiskCache {
     #expect(!clear.isEnabled)
     clearGate.resume()
     let empty = ByteCountFormatter.string(fromByteCount: 0, countStyle: .file)
-    await waitUntil { size.stringValue == empty }
+    try await waitUntil { size.stringValue == empty }
     #expect(size.stringValue == empty)
     #expect(clear.isEnabled)
 }

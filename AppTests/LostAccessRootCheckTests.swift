@@ -319,28 +319,31 @@ func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: B
 @MainActor @Test(.timeLimit(.minutes(3))) func t229Fix3ConcurrentSourceReportsCoalesceAndCancellationIsPerCaller() async throws {
     let gate = RootCheckProbeGate()
     let f = try await RootCheckFixture(sourceExists: { gate.probe($0, codec: $1) })
-    defer { gate.release(); f.remove(); Task { await f.mounts.release() } }
-    let stamp = f.monitor.state.stamp(for: f.root)
-    let before = await f.mounts.enumerations
-    await f.mounts.pauseEnumeration()
-    let reports = (0..<12).map { _ in Task { @MainActor in
-        await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
-                                         file: f.base.appendingPathComponent("Root/broken.jpg"))
-    } }
-    try await rootCheckWait { gate.calls > 0 }
-    // The probe is held; this window only observes unwanted duplicate probes.
-    try await Task.sleep(for: .milliseconds(100))
-    #expect(gate.waiting)
-    #expect(gate.calls == 1)
-    reports[0].cancel()
-    gate.release()
-    try await rootCheckWait { await f.mounts.paused }
-    await f.mounts.disconnect()
-    await f.mounts.release()
-    for report in reports { await report.value }
-    #expect(await f.mounts.enumerations - before == 1)
-    #expect(f.monitor.state.snapshot(for: f.root)?.availability == .lost(.diskNotConnected))
-    #expect(f.codec.activeScopes == 0)
+    try await withAsyncTeardown {
+        let stamp = f.monitor.state.stamp(for: f.root)
+        let before = await f.mounts.enumerations
+        await f.mounts.pauseEnumeration()
+        let reports = (0..<12).map { _ in Task { @MainActor in
+            await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
+                                             file: f.base.appendingPathComponent("Root/broken.jpg"))
+        } }
+        try await rootCheckWait { gate.calls > 0 }
+        // The probe is held; this window only observes unwanted duplicate probes.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(gate.waiting)
+        #expect(gate.calls == 1)
+        reports[0].cancel()
+        gate.release()
+        try await rootCheckWait { await f.mounts.paused }
+        await f.mounts.disconnect()
+        await f.mounts.release()
+        for report in reports { await report.value }
+        #expect(await f.mounts.enumerations - before == 1)
+        #expect(f.monitor.state.snapshot(for: f.root)?.availability == .lost(.diskNotConnected))
+        #expect(f.codec.activeScopes == 0)
+    } teardown: {
+        gate.release(); f.remove(); await f.mounts.release()
+    }
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229Fix3ContentProbeDoesNotSwallowOtherSourcesOrAccessEvidence() async throws {

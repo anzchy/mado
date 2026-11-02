@@ -218,7 +218,7 @@ private actor ParkedThumbnailLoads {
     let restingItems = visibleItems()
     try #require(!resting.isEmpty)
     let before = await loads.everRequested
-    await waitUntil { await loads.parkedIndices().isSuperset(of: restingItems) }
+    try await waitUntil { await loads.parkedIndices().isSuperset(of: restingItems) }
     #expect(before.isDisjoint(with: restingItems), "the resting region was requested before: \(before.intersection(restingItems).sorted().prefix(5))")
     for parked in await loads.takeAll() {
         correctAnswers += 1

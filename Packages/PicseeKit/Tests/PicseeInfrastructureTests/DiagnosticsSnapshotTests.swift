@@ -20,8 +20,9 @@ private struct SnapshotRig {
 
 /// Holds every decode until released, one release per decode.
 private final class HeldDecoder: ImageDecoding, @unchecked Sendable {
-    private let gate = DispatchSemaphore(value: 0)
+    private let gate = TestGate()
     func release(_ count: Int) { for _ in 0..<count { gate.signal() } }
+    func open() { gate.open() }
     func decode(_ request: ImageDecodeRequest) throws -> DecodedImage {
         gate.wait()
         return try ImageIODecoder().decode(request)
@@ -82,13 +83,14 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     let rig = try SnapshotRig(files: ["a.png", "b.png"])
     defer { rig.remove() }
     let decoder = HeldDecoder()
+    defer { decoder.open() }
     // One 64×48 decode (12 288 bytes) fits the 20 000-byte budget; a second must wait for it.
     let pipeline = ImageIOPipeline(decoder: decoder, configuration: DecodeConfiguration(budget: 20_000))
     let loads = ["a.png", "b.png"].map { name in
         Task { try await pipeline.image(for: try await pipeline.request(for: rig.file(name), maximumPixelSize: 64,
                                                                         identityRoot: rig.root)) }
     }
-    await waitUntil { let activity = await pipeline.admission.activity(); return activity.running == 1 && activity.waiting == 1 }
+    try await waitUntil { let activity = await pipeline.admission.activity(); return activity.running == 1 && activity.waiting == 1 }
     let held = await pipeline.diagnostics()
     #expect(held.decoding == .init(running: 1, waiting: 1, finished: 0))
     #expect(held.budget?.staging == 12_288)

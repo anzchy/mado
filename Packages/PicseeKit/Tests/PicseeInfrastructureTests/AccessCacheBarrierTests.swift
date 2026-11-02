@@ -19,6 +19,7 @@ private func t229Request(_ original: ImageDecodeRequest, permit: AccessWorkPermi
     let authority = AccessWorkAuthority()
     authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), memory = ImageMemoryCache(capacity: 1_000_000)
+    defer { decoder.gate.open() }
     let pipeline = ImageIOPipeline(decoder: decoder, cache: memory)
     let original = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 32)
     let request = t229Request(original, permit: authority.permit(counter: 0))
@@ -265,6 +266,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
 @Test func t229FreshCounterQueuesOwnDecodeInsteadOfJoiningRevokedJob() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), pipeline = ImageIOPipeline(decoder: decoder)
+    defer { decoder.gate.open() }
     let raw = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 32)
     let key = try #require(raw.renderKey)
     let old = await pipeline.admission.subscribe(t229Request(raw, permit: authority.permit(counter: 0)),
@@ -285,6 +287,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
 @Test func t229SameCounterRetainsDecodeCoalescence() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), pipeline = ImageIOPipeline(decoder: decoder)
+    defer { decoder.gate.open() }
     let raw = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 32)
     let key = try #require(raw.renderKey)
     let first = await pipeline.admission.subscribe(t229Request(raw, permit: authority.permit(counter: 0)),

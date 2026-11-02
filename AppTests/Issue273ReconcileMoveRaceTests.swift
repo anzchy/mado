@@ -101,7 +101,7 @@ private func raceFixture() -> URL {
 @MainActor private func openThenArm(_ file: URL, _ controller: CanvasWindowController,
                                     _ pipeline: MoveDuringRequestPipeline) async throws {
     controller.open(file, accessRequest: .fileGrant(file))
-    await waitUntil { controller.session.imageLoader.phase == .settled }
+    try await waitUntil { controller.session.imageLoader.phase == .settled }
     #expect(controller.session.imageLoader.phase == .settled)
     pipeline.arm()
     controller.reconcileStandaloneImage()
@@ -124,7 +124,7 @@ private func raceFixture() -> URL {
     let window = try #require(controller.window)
     defer { window.close() }
     try await openThenArm(file, controller, pipeline)
-    await waitUntil { (pipeline.moves != 0 && controller.session.imageLoader.fileURL == nil) ||
+    try await waitUntil { (pipeline.moves != 0 && controller.session.imageLoader.fileURL == nil) ||
         window.attachedSheet != nil }
     #expect(pipeline.moves == 1)
     #expect(controller.session.imageLoader.fileURL == nil)
@@ -149,7 +149,7 @@ private func raceFixture() -> URL {
     let window = try #require(controller.window)
     defer { window.close() }
     try await openThenArm(original, controller, pipeline)
-    await waitUntil { (pipeline.moves != 0 &&
+    try await waitUntil { (pipeline.moves != 0 &&
         controller.session.imageLoader.presented?.fileURL.standardizedFileURL == moved.standardizedFileURL) ||
         window.attachedSheet != nil }
     #expect(pipeline.moves == 1)
@@ -171,18 +171,18 @@ private func raceFixture() -> URL {
     let window = try #require(controller.window)
     defer { window.close() }
     controller.open(original, accessRequest: .fileGrant(original))
-    await waitUntil {
+    try await waitUntil {
         controller.session.imageLoader.phase == .settled && pipeline.completedHeaderRequests != 0
     }
     #expect(controller.session.imageLoader.presented?.fileURL.standardizedFileURL == original.standardizedFileURL)
     pipeline.holdHeader()
     defer { pipeline.releaseHeader() }
     controller.reconcileStandaloneImage()
-    await waitUntil { pipeline.headerHeld }
+    try await waitUntil { pipeline.headerHeld }
     #expect(pipeline.headerHeld)
     try fm.moveItem(at: original, to: renamed)
     pipeline.releaseHeader()
-    await waitUntil {
+    try await waitUntil {
         (controller.session.imageLoader.fileURL?.standardizedFileURL == renamed.standardizedFileURL &&
          controller.session.imageLoader.presented?.fileURL.standardizedFileURL == renamed.standardizedFileURL &&
          window.representedURL?.standardizedFileURL == renamed.standardizedFileURL) || window.attachedSheet != nil
@@ -212,7 +212,7 @@ private func raceFixture() -> URL {
     defer { window.close() }
     controller.open(file, accessRequest: .fileGrant(file))
     // Settle the viewer and the reconcile that open starts, so the grant is watched before the trash.
-    await waitUntil { controller.session.imageLoader.phase == .settled && pipeline.headerRequests != 0 }
+    try await waitUntil { controller.session.imageLoader.phase == .settled && pipeline.headerRequests != 0 }
     try await Task.sleep(for: .milliseconds(100))
     #expect(controller.session.imageLoader.phase == .settled)
     #expect(controller.session.imageLoader.presented != nil)
@@ -221,17 +221,17 @@ private func raceFixture() -> URL {
     pipeline.holdHeader()
     defer { pipeline.releaseHeader() }
     controller.reconcileStandaloneImage()
-    await waitUntil { pipeline.headerHeld }
+    try await waitUntil { pipeline.headerHeld }
     #expect(pipeline.headerHeld)
     // A larger detail request: the image stays shown while the loader refines and finds the file trashed.
     pipeline.armLoader()
     controller.session.requireImageResolution(4096)
     #expect(controller.session.imageLoader.phase == .refining)
-    await waitUntil { (pipeline.moves != 0 && (controller.session.imageLoader.phase == .failed ||
+    try await waitUntil { (pipeline.moves != 0 && (controller.session.imageLoader.phase == .failed ||
         controller.session.imageLoader.fileURL == nil)) || window.attachedSheet != nil }
     #expect(window.attachedSheet == nil, "sheet: \(sheetText(window))")
     pipeline.releaseHeader()
-    await waitUntil { controller.session.imageLoader.fileURL == nil || window.attachedSheet != nil }
+    try await waitUntil { controller.session.imageLoader.fileURL == nil || window.attachedSheet != nil }
     #expect(pipeline.moves == 1)
     #expect(controller.session.imageLoader.fileURL == nil)
     #expect(window.representedURL == nil)
@@ -240,7 +240,7 @@ private func raceFixture() -> URL {
 
 /// A read that fails for a real access loss still asks to reconnect.
 @MainActor private func expectReconnectSheet(_ window: NSWindow, _ pipeline: MoveDuringRequestPipeline) async throws {
-    await waitUntil { window.attachedSheet != nil }
+    try await waitUntil { window.attachedSheet != nil }
     #expect(pipeline.moves == 1)
     #expect(window.attachedSheet is NSPanel, "sheet: \(sheetText(window))")
 }

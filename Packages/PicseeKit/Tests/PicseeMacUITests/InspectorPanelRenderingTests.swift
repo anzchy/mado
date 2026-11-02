@@ -189,7 +189,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     let model = InspectorModel(reader: FilledInspectorReader(value: metadata)), session = ViewerSession()
     let url = URL(fileURLWithPath: "/tmp/long-name.png")
     model.select(itemID: nil, url: url, access: .fileGrant(url))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .known(metadata))
     let renderer = ImageRenderer(content: InspectorPanel(model: model, session: session,
         close: {}, restoreCanvasFocus: {}, updateFocus: { _ in }).frame(height: 500))
@@ -208,7 +208,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     #expect(hasActualPreviewPixel)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorPanelFocusEntersAndEscRestoresCanvas() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorPanelFocusEntersAndEscRestoresCanvas() throws {
     _ = NSApplication.shared
     let session = ViewerSession(), model = InspectorModel(reader: EmptyInspectorReader())
     var updates: [FocusContext] = [], restored = 0, closed = 0
@@ -229,11 +229,11 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     session.setInspectorVisible(true)
     session.tab(reverse: false)
     host.layoutSubtreeIfNeeded()
-    runLoopUntil { !updates.isEmpty }
+    try runLoopUntil { !updates.isEmpty }
     #expect(updates.contains(.panel))
     _ = CommandRouter().route(.escape, from: .key, to: session)
     host.layoutSubtreeIfNeeded()
-    runLoopUntil { restored != 0 }
+    try runLoopUntil { restored != 0 }
     #expect(restored > 0)
     #expect(session.inspectorFocus.focus == .canvas)
 }

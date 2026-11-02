@@ -59,7 +59,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     let retry = try #require(scene.state.buttons.first)
     #expect(retry.identifier?.rawValue == "state.retry-folder")
     retry.performClick(nil)
-    await waitUntil { await scanner.callCount >= 2 }
+    try await waitUntil { await scanner.callCount >= 2 }
     #expect(await scanner.callCount == 2)
 }
 
@@ -67,31 +67,34 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     let scene = StatesScene(), leases = FolderReadingNativeLeases(), scanner = FolderReadingNativeScanner()
     defer { scene.window.close() }
     let coordinator = FolderScanCoordinator(access: leases, scanner: scanner)
-    defer { coordinator.cancel(); Task { await scanner.finish() } }
-    scene.session.folderScan = coordinator
-    let task = coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/A"), rootID: AccessRootID())
-    await scanner.waitForStart()
-    scene.state.refresh(); scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
-    #expect(scene.session.imageStatus == .readingFolder)
-    #expect(scene.state.showsProgress)
-    #expect(scene.state.textLines == ["Reading Folder…", "Looking for images to browse. Please wait."])
-    #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.cancel-folder"])
-    let title = scene.state.subviews.first { $0.accessibilityIdentifier() == "state.folder-title" } as? NSTextField
-    let subtitle = scene.state.subviews.first { $0.accessibilityIdentifier() == "state.folder-subtitle" } as? NSTextField
-    #expect(title?.stringValue == "Reading Folder…")
-    #expect(subtitle?.stringValue == "Looking for images to browse. Please wait.")
-    let children = scene.state.accessibilityChildren() ?? []
-    #expect(children.count == 4)
-    let cancel = try #require(scene.state.buttons.first)
-    #expect(cancel.title == "Cancel Reading")
-    #expect(cancel.acceptsFirstResponder && scene.canvas.nextKeyView === cancel)
-    cancel.performClick(nil); scene.state.refresh()
-    #expect(scene.session.imageStatus == .empty)
-    #expect(!scene.state.showsProgress)
-    #expect(scene.state.buttons.first?.identifier?.rawValue == "state.open")
-    #expect(await leases.balance == [1, 0])
-    await scanner.finish(); try await task.value
-    #expect(await leases.balance == [1, 1])
+    try await withAsyncTeardown {
+        scene.session.folderScan = coordinator
+        let task = coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/A"), rootID: AccessRootID())
+        await scanner.waitForStart()
+        scene.state.refresh(); scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
+        #expect(scene.session.imageStatus == .readingFolder)
+        #expect(scene.state.showsProgress)
+        #expect(scene.state.textLines == ["Reading Folder…", "Looking for images to browse. Please wait."])
+        #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.cancel-folder"])
+        let title = scene.state.subviews.first { $0.accessibilityIdentifier() == "state.folder-title" } as? NSTextField
+        let subtitle = scene.state.subviews.first { $0.accessibilityIdentifier() == "state.folder-subtitle" } as? NSTextField
+        #expect(title?.stringValue == "Reading Folder…")
+        #expect(subtitle?.stringValue == "Looking for images to browse. Please wait.")
+        let children = scene.state.accessibilityChildren() ?? []
+        #expect(children.count == 4)
+        let cancel = try #require(scene.state.buttons.first)
+        #expect(cancel.title == "Cancel Reading")
+        #expect(cancel.acceptsFirstResponder && scene.canvas.nextKeyView === cancel)
+        cancel.performClick(nil); scene.state.refresh()
+        #expect(scene.session.imageStatus == .empty)
+        #expect(!scene.state.showsProgress)
+        #expect(scene.state.buttons.first?.identifier?.rawValue == "state.open")
+        #expect(await leases.balance == [1, 0])
+        await scanner.finish(); try await task.value
+        #expect(await leases.balance == [1, 1])
+    } teardown: {
+        coordinator.cancel(); await scanner.finish()
+    }
 }
 
 @Test func viewerFolderReadingLocalizationExactValues() throws {

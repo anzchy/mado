@@ -123,7 +123,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.waitForStart()
     try await fixture.scanner.deliver(["a.jpg"])
     await fixture.scanner.finish(); try await task.value
-    await waitUntil { !reader.requested.isEmpty }
+    try await waitUntil { !reader.requested.isEmpty }
     #expect(reader.requested == ["a.jpg"])
     #expect(scan.conditions.sort == key)
 }
@@ -286,7 +286,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.waitForStart()
     try await fixture.scanner.deliver(["a.jpg", "b.png"])
     await fixture.scanner.finish(); try await task.value
-    await waitUntil { reader.requested.count >= 2 }
+    try await waitUntil { reader.requested.count >= 2 }
     #expect(reader.requested.count == 2)
     let original = try #require(scan.snapshot)
     let ids = original.navigationEntries.map(\.itemID)

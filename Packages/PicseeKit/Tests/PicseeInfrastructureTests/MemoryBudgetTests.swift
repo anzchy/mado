@@ -36,6 +36,7 @@ private struct BudgetRig {
     // 2.1, 2.1b–d: a full cache gives up exactly the shortfall, oldest first, before the decoder allocates.
     @Test func budgetEvictsOnlyTheShortfallBeforeTheDecodeRuns() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...4, pinned: false)
         #expect(rig.budget.usage == MemoryBudget.Usage(pinned: 0, evictable: 64, reserved: 0))
@@ -56,6 +57,7 @@ private struct BudgetRig {
     // 2.2, 2.3c(a): pins and staging block other work; `.current` waits for a running decode instead of exceeding.
     @Test func budgetPinsAndStagingQueueWorkUntilRoomReturns() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...2, pinned: true)
         var starts = rig.decoder.started.makeAsyncIterator()
@@ -82,6 +84,7 @@ private struct BudgetRig {
     // 2.3, 2.3b, 2.7: with pins alone at the limit, only `.current` with nothing running may exceed.
     @Test func budgetLetsOnlyAnIdleCurrentDecodeExceedPins() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...4, pinned: true)
         let visible = await rig.subscribe(100, .visible)
@@ -106,6 +109,7 @@ private struct BudgetRig {
     // 2.3c(b): an idle `.current` evicts rather than exceeding when evictable bytes can make room.
     @Test func budgetIdleCurrentEvictsBeforeExceeding() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...3, pinned: true)
         try await rig.fill(4...4, pinned: false)
@@ -121,6 +125,7 @@ private struct BudgetRig {
     // R1 4.1 (opus M3): eviction that cannot admit a non-current job evicts nothing; an idle `.current` takes only its shortfall.
     @Test func budgetDoesNotEvictWhenEvictionCannotAdmit() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...2, pinned: true)
         try await rig.fill(3...4, pinned: false)
@@ -142,6 +147,7 @@ private struct BudgetRig {
     // R1 4.1c: an idle `.current` whose shortfall exceeds the evictable bytes still evicts them all, then may exceed.
     @Test func budgetIdleCurrentEvictsEverythingEvenBeyondItsShortfall() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...3, pinned: true)
         try await rig.fill(4...4, pinned: false)
@@ -157,6 +163,7 @@ private struct BudgetRig {
     // R1 4.1b: when the shortfall equals the evictable bytes, eviction admits a `.visible` job.
     @Test func budgetEvictsWhenTheShortfallEqualsEvictable() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         defer { rig.releaseAll() }
         try await rig.fill(1...2, pinned: true)
         try await rig.fill(3...4, pinned: false)
@@ -172,6 +179,7 @@ private struct BudgetRig {
     // 2.5, 2.6, 2.6b: inserts and pins keep pinned + evictable + reserved within the limit, and the peak sees them.
     @Test func budgetInsertsAndPinsTrimEvictableToTheRoomLeft() async throws {
         let rig = BudgetRig()
+        defer { rig.decoder.gate.open() }
         rig.budget.reserved(2 * unit)
         try await rig.fill(1...1, pinned: true)
         try await rig.fill(2...4, pinned: false)
@@ -211,7 +219,7 @@ private struct BudgetRig {
         let request = try await pipeline.request(for: file, maximumPixelSize: 16)
         let waiting = Task { try await pipeline.image(for: ImageDecodeRequest(fileURL: file, maximumPixelSize: 16,
             renderKey: request.renderKey, priority: .visible)) }
-        await waitUntil { await pipeline.admission.activity().waiting != 0 }
+        try await waitUntil { await pipeline.admission.activity().waiting != 0 }
         #expect(await pipeline.admission.activity().waiting == 1)
         #expect(await pipeline.admission.activity().running == 0)
         for key in pinned { await pipeline.unpin(key) }

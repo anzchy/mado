@@ -296,7 +296,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         fixture.grid.setThumbnailsActive(true)
         fixture.settle()
         let id = fixture.entries[0].itemID
-        await waitUntil { await log.last(id) != nil }
+        try await waitUntil { await log.last(id) != nil }
         let coverage = try #require(await log.last(id))
         let tile = try #require(try fixture.item(0).tileLayer).frame
         let scale = fixture.window.backingScaleFactor
@@ -332,7 +332,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         fixture.set(GridDisplayOptions(thumbnailSize: 150))
         let resizedEdge = try fixture.item(0).thumbnailPixelEdge
         #expect(resizedEdge != edge, "size 150 changes the tile and its coverage")
-        if resizedEdge != edge { await waitUntil { await log.count > before } }
+        if resizedEdge != edge { try await waitUntil { await log.count > before } }
         #expect(await log.count > before)
     }
 
@@ -363,7 +363,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
             }
             return true
         }
-        if fixture.layout.itemSize.width != widthAt220 { await waitUntil { await matches() } }
+        if fixture.layout.itemSize.width != widthAt220 { try await waitUntil { await matches() } }
         #expect(await matches(), "every visible item was requested at its rendered tile × scale")
         let renewed = await log.ids(after: before)
         #expect(renewed.contains { visibleAt220.contains($0) }, "an item visible at 220 was requested again")

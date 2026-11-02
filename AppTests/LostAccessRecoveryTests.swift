@@ -365,42 +365,45 @@ private struct RecoveryInterleaving: Sendable {
 private func t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_ trace: RecoveryInterleaving) async throws {
     let f = try await RecoveryFixture(); defer { f.remove() }
     let first = f.controller(), second = f.controller()
-    defer { first.window?.close(); second.window?.close(); f.gate.release(); Task { await f.mounts.release() } }
-    first.browseRecoveredFolder(f.childOne, rootID: f.rootA)
-    second.browseRecoveredFolder(f.childTwo, rootID: f.rootA)
-    try await f.ready(first, folder: f.childOne)
-    try await f.ready(second, folder: f.childTwo)
-    await f.eject()
-    try await recoveryWait { recoveryPage(first) != nil && recoveryPage(second) != nil }
-    let lostCounter = try #require(f.services.monitor.state.snapshot(for: f.rootA)?.counter)
-    if trace.duringScan { f.gate.arm(f.a) } else { await f.mounts.pauseEnumeration() }
-    await f.mount()
-    if trace.duringScan { try await recoveryWait { f.gate.isBlocked } }
-    else { try await recoveryWaitAsync { await f.mounts.paused } }
-    #expect(recoveryPage(first) != nil && recoveryPage(second) != nil)
-    #expect(!first.hasImage && !second.hasImage)
-    #expect(try recoveryGrid(first).displayedItemIDs.isEmpty)
-    #expect(try recoveryGrid(second).displayedItemIDs.isEmpty)
-    if trace.duringScan { #expect(f.watchSource.activeURLs.contains(f.a)) }
-    first.browseRecoveredFolder(f.b, rootID: f.rootB)
-    if trace.secondEject {
+    try await withAsyncTeardown {
+        first.browseRecoveredFolder(f.childOne, rootID: f.rootA)
+        second.browseRecoveredFolder(f.childTwo, rootID: f.rootA)
+        try await f.ready(first, folder: f.childOne)
+        try await f.ready(second, folder: f.childTwo)
         await f.eject()
-        try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.counter == lostCounter + 1 }
-    }
-    f.gate.release()
-    await f.mounts.release()
-    try await f.ready(first, folder: f.b, count: 1)
-    #expect(first.waitingAccessPosition == nil && first.window?.representedURL == f.b)
-    if trace.secondEject {
-        #expect(recoveryPage(second) != nil)
-        #expect(!second.hasImage && second.window?.representedURL == nil)
+        try await recoveryWait { recoveryPage(first) != nil && recoveryPage(second) != nil }
+        let lostCounter = try #require(f.services.monitor.state.snapshot(for: f.rootA)?.counter)
+        if trace.duringScan { f.gate.arm(f.a) } else { await f.mounts.pauseEnumeration() }
         await f.mount()
+        if trace.duringScan { try await recoveryWait { f.gate.isBlocked } }
+        else { try await recoveryWaitAsync { await f.mounts.paused } }
+        #expect(recoveryPage(first) != nil && recoveryPage(second) != nil)
+        #expect(!first.hasImage && !second.hasImage)
+        #expect(try recoveryGrid(first).displayedItemIDs.isEmpty)
+        #expect(try recoveryGrid(second).displayedItemIDs.isEmpty)
+        if trace.duringScan { #expect(f.watchSource.activeURLs.contains(f.a)) }
+        first.browseRecoveredFolder(f.b, rootID: f.rootB)
+        if trace.secondEject {
+            await f.eject()
+            try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.counter == lostCounter + 1 }
+        }
+        f.gate.release()
+        await f.mounts.release()
+        try await f.ready(first, folder: f.b, count: 1)
+        #expect(first.waitingAccessPosition == nil && first.window?.representedURL == f.b)
+        if trace.secondEject {
+            #expect(recoveryPage(second) != nil)
+            #expect(!second.hasImage && second.window?.representedURL == nil)
+            await f.mount()
+        }
+        try await f.ready(second, folder: f.childTwo, count: 2)
+        #expect(second.waitingAccessPosition == nil)
+        #expect(second.session.folderScan?.snapshot?.version.rootID == f.rootA)
+        #expect(first.session.folderScan?.snapshot?.version.rootID == f.rootB)
+        #expect(first.window?.representedURL == f.b)
+    } teardown: {
+        first.window?.close(); second.window?.close(); f.gate.release(); await f.mounts.release()
     }
-    try await f.ready(second, folder: f.childTwo, count: 2)
-    #expect(second.waitingAccessPosition == nil)
-    #expect(second.session.folderScan?.snapshot?.version.rootID == f.rootA)
-    #expect(first.session.folderScan?.snapshot?.version.rootID == f.rootB)
-    #expect(first.window?.representedURL == f.b)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229RecoveryCancelReadingAnotherRootRestoresWaitingPosition() async throws {
@@ -616,24 +619,27 @@ private final class RecoveryDiagnosticTrace: @unchecked Sendable {
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229DiagnosticsSupersededRecoveryRefusesPublication() async throws {
     let trace = RecoveryDiagnosticTrace(), f = try await RecoveryFixture(diagnostics: trace.diagnostics)
-    defer { f.remove(); Task { await f.mounts.release() } }
-    await f.services.monitor.start()
-    await f.eject()
-    try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected) }
-    let lossCounter = try #require(f.services.monitor.state.snapshot(for: f.rootA)?.counter)
-    await f.mounts.pauseEnumeration()
-    await f.mount()
-    try await recoveryWaitAsync { await f.mounts.paused }
-    await f.eject()
-    try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected) }
-    try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.counter == lossCounter + 1 }
-    await f.mounts.release()
-    try await recoveryWait { trace.messages.contains { $0.contains("AccessRecovery outcome=refused") } }
-    #expect(!trace.messages.contains { $0.contains("AccessRecovery outcome=published") })
-    #expect(f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected))
-    await f.mount()
-    try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .readable }
-    #expect(trace.messages.contains { $0.contains("AccessRecovery outcome=published") })
+    try await withAsyncTeardown {
+        await f.services.monitor.start()
+        await f.eject()
+        try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected) }
+        let lossCounter = try #require(f.services.monitor.state.snapshot(for: f.rootA)?.counter)
+        await f.mounts.pauseEnumeration()
+        await f.mount()
+        try await recoveryWaitAsync { await f.mounts.paused }
+        await f.eject()
+        try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected) }
+        try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.counter == lossCounter + 1 }
+        await f.mounts.release()
+        try await recoveryWait { trace.messages.contains { $0.contains("AccessRecovery outcome=refused") } }
+        #expect(!trace.messages.contains { $0.contains("AccessRecovery outcome=published") })
+        #expect(f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.diskNotConnected))
+        await f.mount()
+        try await recoveryWait { f.services.monitor.state.snapshot(for: f.rootA)?.availability == .readable }
+        #expect(trace.messages.contains { $0.contains("AccessRecovery outcome=published") })
+    } teardown: {
+        f.remove(); await f.mounts.release()
+    }
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229R2GridRestoresNonFirstCurrentItemAfterMountTokenChanges() async throws {
@@ -841,25 +847,28 @@ func t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() asy
     f.gate.arm(replacement)
     defer { f.gate.release() }
     await f.mounts.pauseEnumeration()
-    defer { Task { await f.mounts.release() } }
-    c.completeAccessFolderSelection(replacement, reselect: true)
-    try await recoveryWaitAsync { await f.mounts.paused }
-    // A paused mount query can belong to a foreground check, so await actual commit.
-    try await recoveryWaitAsync {
-        let records = await f.services.files.records()
-        return !records.contains { $0.id == f.rootA } && records.contains { $0.id != f.rootB }
+    try await withAsyncTeardown {
+        c.completeAccessFolderSelection(replacement, reselect: true)
+        try await recoveryWaitAsync { await f.mounts.paused }
+        // A paused mount query can belong to a foreground check, so await actual commit.
+        try await recoveryWaitAsync {
+            let records = await f.services.files.records()
+            return !records.contains { $0.id == f.rootA } && records.contains { $0.id != f.rootB }
+        }
+        let destination = try #require(await f.services.files.records().first { $0.id != f.rootB })
+        let committed = try await f.services.recent.load()
+        #expect(committed.allSatisfy { $0.rootID != f.rootA })
+        #expect(committed.contains { $0.rootID == destination.id && $0.url.path == replacement.appendingPathComponent("One").path })
+        f.gate.release()
+        await f.mounts.release()
+        try await f.ready(c, folder: replacement)
+        let recent = try await f.services.recent.load()
+        #expect(recent.allSatisfy { $0.rootID != f.rootA })
+        #expect(recent.filter { $0.rootID == destination.id && $0.url.path == replacement.path }.count == 1)
+        #expect(try t231Strip(c).superview != nil)
+    } teardown: {
+        await f.mounts.release()
     }
-    let destination = try #require(await f.services.files.records().first { $0.id != f.rootB })
-    let committed = try await f.services.recent.load()
-    #expect(committed.allSatisfy { $0.rootID != f.rootA })
-    #expect(committed.contains { $0.rootID == destination.id && $0.url.path == replacement.appendingPathComponent("One").path })
-    f.gate.release()
-    await f.mounts.release()
-    try await f.ready(c, folder: replacement)
-    let recent = try await f.services.recent.load()
-    #expect(recent.allSatisfy { $0.rootID != f.rootA })
-    #expect(recent.filter { $0.rootID == destination.id && $0.url.path == replacement.path }.count == 1)
-    #expect(try t231Strip(c).superview != nil)
 }
 @MainActor @Test(.timeLimit(.minutes(3))) func t231NotFoundCopyAndCancelLeaveRecoveryActions() async throws {
     let f = try await RecoveryFixture(); defer { f.remove() }
@@ -1414,45 +1423,48 @@ func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async t
 @MainActor @Test(.timeLimit(.minutes(3)))
 func t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() async throws {
     let f = try await RecoveryFixture()
-    defer { f.remove(); Task { await f.mounts.release() } }
-    let c = f.controller(); defer { c.window?.close() }
-    c.browseRecoveredFolder(f.b, rootID: f.rootB)
-    try await f.ready(c, folder: f.b)
-    await f.services.monitor.start()
-    let roots = Set(await f.services.files.records().map(\.id))
-    try #require(roots == Set([f.rootA, f.rootB]))
+    try await withAsyncTeardown {
+        let c = f.controller(); defer { c.window?.close() }
+        c.browseRecoveredFolder(f.b, rootID: f.rootB)
+        try await f.ready(c, folder: f.b)
+        await f.services.monitor.start()
+        let roots = Set(await f.services.files.records().map(\.id))
+        try #require(roots == Set([f.rootA, f.rootB]))
 
-    let beforeEntry = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
-    let alreadyCancelled = Task { @MainActor in try await beforeEntry.run() }
-    alreadyCancelled.cancel()
-    do { try await alreadyCancelled.value; Issue.record("Cancelled phase unexpectedly succeeded") }
-    catch is CancellationError { }
-    #expect(!beforeEntry.hasObserver && !beforeEntry.isWaiting && beforeEntry.observedRoots.isEmpty)
+        let beforeEntry = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+        let alreadyCancelled = Task { @MainActor in try await beforeEntry.run() }
+        alreadyCancelled.cancel()
+        do { try await alreadyCancelled.value; Issue.record("Cancelled phase unexpectedly succeeded") }
+        catch is CancellationError { }
+        #expect(!beforeEntry.hasObserver && !beforeEntry.isWaiting && beforeEntry.observedRoots.isEmpty)
 
-    await f.mounts.pauseEnumeration(after: 1)
-    let phase = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
-    let waiter = Task { @MainActor in try await phase.run() }
-    defer { waiter.cancel() }
-    try await f.mounts.waitUntilPaused()
-    #expect(await f.mounts.paused)
-    #expect(phase.hasObserver && phase.isWaiting && !phase.isComplete)
-    #expect(phase.observedRoots == Set([f.rootA]))
-    waiter.cancel()
-    do { try await waiter.value; Issue.record("Pending phase unexpectedly succeeded after cancellation") }
-    catch is CancellationError { }
-    #expect(!phase.hasObserver && !phase.isWaiting && !phase.isComplete)
-    #expect(phase.observedRoots == Set([f.rootA]))
-    #expect(await f.mounts.paused)
-    print("i333 cancellation: before-entry and held-B waiters exited with CancellationError and no observer")
+        await f.mounts.pauseEnumeration(after: 1)
+        let phase = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+        let waiter = Task { @MainActor in try await phase.run() }
+        defer { waiter.cancel() }
+        try await f.mounts.waitUntilPaused()
+        #expect(await f.mounts.paused)
+        #expect(phase.hasObserver && phase.isWaiting && !phase.isComplete)
+        #expect(phase.observedRoots == Set([f.rootA]))
+        waiter.cancel()
+        do { try await waiter.value; Issue.record("Pending phase unexpectedly succeeded after cancellation") }
+        catch is CancellationError { }
+        #expect(!phase.hasObserver && !phase.isWaiting && !phase.isComplete)
+        #expect(phase.observedRoots == Set([f.rootA]))
+        #expect(await f.mounts.paused)
+        print("i333 cancellation: before-entry and held-B waiters exited with CancellationError and no observer")
 
-    // Subscribe before releasing B. Its late readiness must not reach the
-    // cancelled phase, and the continuing foreground job must finish cleanup.
-    let drain = RecoveryForegroundPhase(monitor: f.services.monitor, roots: Set([f.rootB]))
-    try await drain.run { Task { await f.mounts.release() } }
-    #expect(drain.isComplete && drain.observedRoots == Set([f.rootB]))
-    #expect(phase.observedRoots == Set([f.rootA]) && !phase.hasObserver)
-    #expect(!(await f.mounts.paused))
-    print("i333 cancellation: held B released and real foreground drained without resuming cancelled waiter")
+        // Subscribe before releasing B. Its late readiness must not reach the
+        // cancelled phase, and the continuing foreground job must finish cleanup.
+        let drain = RecoveryForegroundPhase(monitor: f.services.monitor, roots: Set([f.rootB]))
+        try await drain.run { Task { await f.mounts.release() } }
+        #expect(drain.isComplete && drain.observedRoots == Set([f.rootB]))
+        #expect(phase.observedRoots == Set([f.rootA]) && !phase.hasObserver)
+        #expect(!(await f.mounts.paused))
+        print("i333 cancellation: held B released and real foreground drained without resuming cancelled waiter")
+    } teardown: {
+        f.remove(); await f.mounts.release()
+    }
 }
 
 
@@ -1472,76 +1484,79 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
     #expect(try t231Fix2AppRecordedRoot(recorded) == f.a.absoluteString)
     c.browseRecoveredFolder(f.b, rootID: f.rootB)
     try await f.ready(c, folder: f.b)
-    defer { Task { await f.mounts.release() } }
-    await f.services.monitor.start()
-    let roots = Set(await f.services.files.records().map(\.id))
-    try #require(roots == Set([f.rootA, f.rootB]))
-    let staging = f.base.appendingPathComponent("staging", isDirectory: true)
-    let container = f.a.deletingLastPathComponent()
-    let first = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
-    var secondMoveStarted = false
-    await f.mounts.pauseEnumeration(after: 1)
-    try await f.moveRoot(to: staging)
-    let checker = Task { @MainActor in
-        try await f.mounts.waitUntilPaused()
-        #expect(await f.mounts.paused)
-        #expect(first.hasObserver && first.isWaiting && !first.isComplete)
-        #expect(first.observedRoots == Set([f.rootA]))
-        #expect(!secondMoveStarted)
+    try await withAsyncTeardown {
+        await f.services.monitor.start()
+        let roots = Set(await f.services.files.records().map(\.id))
+        try #require(roots == Set([f.rootA, f.rootB]))
+        let staging = f.base.appendingPathComponent("staging", isDirectory: true)
+        let container = f.a.deletingLastPathComponent()
+        let first = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+        var secondMoveStarted = false
+        await f.mounts.pauseEnumeration(after: 1)
+        try await f.moveRoot(to: staging)
+        let checker = Task { @MainActor in
+            try await f.mounts.waitUntilPaused()
+            #expect(await f.mounts.paused)
+            #expect(first.hasObserver && first.isWaiting && !first.isComplete)
+            #expect(first.observedRoots == Set([f.rootA]))
+            #expect(!secondMoveStarted)
+            #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
+            #expect(FileManager.default.fileExists(atPath: staging.path))
+            #expect(!FileManager.default.fileExists(atPath: f.a.path))
+            print("i333 fix1 GREEN: held B; first foreground registered and pending with only A ready; move two blocked")
+            await f.mounts.release()
+        }
+        defer { checker.cancel() }
+        try await first.run()
+        try await checker.value
+        #expect(first.observedRoots == roots && first.isComplete && !first.hasObserver)
         #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
-        #expect(FileManager.default.fileExists(atPath: staging.path))
-        #expect(!FileManager.default.fileExists(atPath: f.a.path))
-        print("i333 fix1 GREEN: held B; first foreground registered and pending with only A ready; move two blocked")
+        print("i333 fix1 GREEN: first foreground completed all roots before move two")
+        secondMoveStarted = true
+        try await f.services.files.runIsolated {
+            try FileManager.default.removeItem(at: container)
+            try FileManager.default.moveItem(at: staging, to: container)
+            f.bookmarks.relocate(staging, to: container)
+        }
+        let second = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
+        try await second.run()
+        #expect(second.observedRoots == roots && second.isComplete && !second.hasObserver)
+        #expect(await f.services.files.rootURL(f.rootA)?.path == container.path)
+        print("i333 fix1 GREEN: fresh second foreground completed all roots at container")
+        #expect(c.session.folderScan?.snapshot?.version.rootID == f.rootB)
+        #expect(try await f.services.recent.load().contains(recorded))
+        let replacement = f.base.appendingPathComponent("Replacement", isDirectory: true)
+        try FileManager.default.copyItem(at: container, to: replacement)
+        try FileManager.default.createDirectory(at: replacement.appendingPathComponent("album/One"), withIntermediateDirectories: true)
+        try FileManager.default.removeItem(at: container)
+        f.bookmarks.fail(container, true)
+        c.openRecent(recorded)
+        try await recoveryWait { c.waitingAccessPosition?.rootID == f.rootA && recoveryPage(c) != nil }
+        // Reconnection first renders an unknown cause, then classifies the root asynchronously.
+        try await recoveryWait { c.accessLossCause == .notFound }
+        f.gate.arm(replacement)
+        defer { f.gate.release() }
+        await f.mounts.pauseEnumeration()
+        c.completeAccessFolderSelection(replacement, reselect: true)
+        try await recoveryWaitAsync { await f.mounts.paused }
+        // The next mount query can belong to an outstanding foreground check.
+        // Observe FileAccess transaction publication before inspecting committed bytes.
+        try await recoveryWaitAsync {
+            let records = await f.services.files.records()
+            return !records.contains { $0.id == f.rootA } && records.contains { $0.id != f.rootB }
+        }
+        let committed = try await f.services.recent.load()
+        let mapped = committed.filter { $0.displayName == recorded.displayName }
+        #expect(mapped.count == 1)
+        #expect(mapped.first?.url.path == replacement.appendingPathComponent("One").path)
+        #expect(!mapped.contains { $0.url.path == replacement.appendingPathComponent("album/One").path })
+        if let item = mapped.first { #expect(try t231Fix2AppRecordedRoot(item) == replacement.absoluteString) }
+        f.gate.release()
+        await f.mounts.release()
+        try await f.ready(c, folder: replacement)
+    } teardown: {
         await f.mounts.release()
     }
-    defer { checker.cancel() }
-    try await first.run()
-    try await checker.value
-    #expect(first.observedRoots == roots && first.isComplete && !first.hasObserver)
-    #expect(await f.services.files.rootURL(f.rootA)?.path == staging.path)
-    print("i333 fix1 GREEN: first foreground completed all roots before move two")
-    secondMoveStarted = true
-    try await f.services.files.runIsolated {
-        try FileManager.default.removeItem(at: container)
-        try FileManager.default.moveItem(at: staging, to: container)
-        f.bookmarks.relocate(staging, to: container)
-    }
-    let second = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
-    try await second.run()
-    #expect(second.observedRoots == roots && second.isComplete && !second.hasObserver)
-    #expect(await f.services.files.rootURL(f.rootA)?.path == container.path)
-    print("i333 fix1 GREEN: fresh second foreground completed all roots at container")
-    #expect(c.session.folderScan?.snapshot?.version.rootID == f.rootB)
-    #expect(try await f.services.recent.load().contains(recorded))
-    let replacement = f.base.appendingPathComponent("Replacement", isDirectory: true)
-    try FileManager.default.copyItem(at: container, to: replacement)
-    try FileManager.default.createDirectory(at: replacement.appendingPathComponent("album/One"), withIntermediateDirectories: true)
-    try FileManager.default.removeItem(at: container)
-    f.bookmarks.fail(container, true)
-    c.openRecent(recorded)
-    try await recoveryWait { c.waitingAccessPosition?.rootID == f.rootA && recoveryPage(c) != nil }
-    // Reconnection first renders an unknown cause, then classifies the root asynchronously.
-    try await recoveryWait { c.accessLossCause == .notFound }
-    f.gate.arm(replacement)
-    defer { f.gate.release() }
-    await f.mounts.pauseEnumeration()
-    c.completeAccessFolderSelection(replacement, reselect: true)
-    try await recoveryWaitAsync { await f.mounts.paused }
-    // The next mount query can belong to an outstanding foreground check.
-    // Observe FileAccess transaction publication before inspecting committed bytes.
-    try await recoveryWaitAsync {
-        let records = await f.services.files.records()
-        return !records.contains { $0.id == f.rootA } && records.contains { $0.id != f.rootB }
-    }
-    let committed = try await f.services.recent.load()
-    let mapped = committed.filter { $0.displayName == recorded.displayName }
-    #expect(mapped.count == 1)
-    #expect(mapped.first?.url.path == replacement.appendingPathComponent("One").path)
-    #expect(!mapped.contains { $0.url.path == replacement.appendingPathComponent("album/One").path })
-    if let item = mapped.first { #expect(try t231Fix2AppRecordedRoot(item) == replacement.absoluteString) }
-    f.gate.release()
-    await f.mounts.release()
-    try await f.ready(c, folder: replacement)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)))

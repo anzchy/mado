@@ -83,7 +83,7 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     defer { window.close() }
     window.setContentSize(NSSize(width: 1280, height: 800))
     controller.browseRecoveredFolder(folder, rootID: root)
-    await waitUntil {
+    try await waitUntil {
         window.contentView?.layoutSubtreeIfNeeded()
         return controller.session.folderScan?.snapshot?.isComplete == true && controller.gridSearchAvailable
     }
@@ -92,7 +92,7 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     let new = try #require(snapshot.entries.first { $0.url.lastPathComponent == "02-new.png" })
     let grid = try #require(inspectorBudgetGrid(window.contentView))
     grid.layoutSubtreeIfNeeded()
-    await waitUntil { budget.usage.pinned > 0 }
+    try await waitUntil { budget.usage.pinned > 0 }
     #expect(budget.usage.pinned > 0, "the grid owns shared-budget thumbnail pins before Inspector opens")
     grid.activate(currentItemID: old.itemID)
     let wideWidth = grid.bounds.width
@@ -100,7 +100,7 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     #expect(controller.route(.inspector, from: .key))
     window.contentView?.layoutSubtreeIfNeeded()
     #expect(grid.bounds.width < wideWidth)
-    await waitUntil { decoder.heldRequest != nil || inspectorBudgetMetadata(controller) != nil }
+    try await waitUntil { decoder.heldRequest != nil || inspectorBudgetMetadata(controller) != nil }
     let held = try #require(decoder.heldRequest, "the default Inspector reader must request through the shared pipeline")
     #expect(held.maximumPixelSize == 240 && held.priority == .visible)
     let oldKey = try #require(held.renderKey)
@@ -116,7 +116,7 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     #expect(controller.route(.inspector, from: .key))
     window.contentView?.layoutSubtreeIfNeeded()
     #expect(grid.bounds.width < wideWidth)
-    await waitUntil { inspectorBudgetMetadata(controller)?.thumbnailData != nil }
+    try await waitUntil { inspectorBudgetMetadata(controller)?.thumbnailData != nil }
     let current = try #require(inspectorBudgetMetadata(controller))
     let preview = try inspectorBudgetPreview(current)
     #expect(current.pixelWidth == 600 && current.pixelHeight == 400)
@@ -124,8 +124,8 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     #expect(controller.inspector.name == new.url.lastPathComponent)
     #expect(budget.usage.reserved > 0, "cancelled synchronous old work stays charged until it really returns")
     decoder.release()
-    await waitUntil { await pipeline.admission.activity().running == 0 }
-    await waitUntil { await pipeline.cache.pendingCount() == 0 }
+    try await waitUntil { await pipeline.admission.activity().running == 0 }
+    try await waitUntil { await pipeline.cache.pendingCount() == 0 }
     #expect(inspectorBudgetMetadata(controller) == current)
     #expect(controller.inspector.name == new.url.lastPathComponent)
     #expect(await pipeline.cache.image(for: oldKey) == nil, "cancelled old Inspector decode must not publish cache pixels")
@@ -135,7 +135,7 @@ func issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThu
     #expect(controller.route(.inspector, from: .key))
     grid.stopThumbnails()
     window.close()
-    await waitUntil { budget.usage.pinned == 0 && budget.usage.reserved == 0 }
+    try await waitUntil { budget.usage.pinned == 0 && budget.usage.reserved == 0 }
     #expect(budget.usage.pinned == 0)
     #expect(await pipeline.admission.activity().waiting == 0)
     #expect(await pipeline.admission.activity().running == 0)

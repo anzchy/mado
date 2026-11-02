@@ -83,9 +83,8 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     controller.showWindow(nil)
     window.orderFrontRegardless()
 
-    func waitUntil(_ condition: () -> Bool) async throws {
-        // No wall-clock deadline (#277): the test's time limit cancels the sleep, which ends the wait.
-        while !condition() { window.update(); try await Task.sleep(for: .milliseconds(10)) }
+    func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
     func footer() throws -> (name: NSTextField, count: NSTextField) {
         (try #require(issue281View("grid.current-file-status", in: window.contentView) as? NSTextField),
@@ -195,8 +194,8 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     controller.showWindow(nil)
     window.orderFrontRegardless()
 
-    func waitUntil(_ condition: () -> Bool) async throws {
-        while !condition() { window.update(); try await Task.sleep(for: .milliseconds(10)) }
+    func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
     func footer() throws -> (name: String, count: String) {
         window.contentView?.layoutSubtreeIfNeeded()

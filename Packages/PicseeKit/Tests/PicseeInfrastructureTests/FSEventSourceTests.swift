@@ -43,14 +43,14 @@ private func makeTempDir(_ prefix: String) throws -> URL {
     let streamA = try FSEventSource().start(watching: dir, onHints: a.sink)
     let x = dir.appendingPathComponent("x.png")
     FileManager.default.createFile(atPath: x.path, contents: Data([1]))
-    #expect(await mainPoll { a.changedPaths.contains(canonicalPath(x)) })
+    try await waitUntil { a.changedPaths.contains(canonicalPath(x)) }
     streamA.stop()
     streamA.stop() // idempotent
     let aAtStop = a.count
     let streamB = try FSEventSource().start(watching: dir, onHints: b.sink)
     let y = dir.appendingPathComponent("y.png")
     FileManager.default.createFile(atPath: y.path, contents: Data([1]))
-    #expect(await mainPoll { b.changedPaths.contains(canonicalPath(y)) })
+    try await waitUntil { b.changedPaths.contains(canonicalPath(y)) }
     #expect(a.count == aAtStop)
     streamB.stop()
 
@@ -60,11 +60,11 @@ private func makeTempDir(_ prefix: String) throws -> URL {
     holder.set(try FSEventSource().start(watching: dir) { hints in cSink(hints); holder.stream?.stop() })
     let z1 = dir.appendingPathComponent("z1.png")
     FileManager.default.createFile(atPath: z1.path, contents: Data([1]))
-    #expect(await mainPoll { c.count >= 1 })
+    try await waitUntil { c.count >= 1 }
     let streamD = try FSEventSource().start(watching: dir, onHints: d.sink)
     let z2 = dir.appendingPathComponent("z2.png")
     FileManager.default.createFile(atPath: z2.path, contents: Data([1]))
-    #expect(await mainPoll { d.changedPaths.contains(canonicalPath(z2)) })
+    try await waitUntil { d.changedPaths.contains(canonicalPath(z2)) }
     #expect(c.count == 1)
     streamD.stop()
 
@@ -84,11 +84,11 @@ private func makeTempDir(_ prefix: String) throws -> URL {
     try await coordinator.begin(folder: folder, rootID: rootID).value
     #expect(coordinator.snapshot?.entries.map(\.relativePath) == ["F/a.png"])
     FileManager.default.createFile(atPath: folder.appendingPathComponent("new.png").path, contents: Data([1]))
-    #expect(await mainPoll {
-        coordinator.snapshot?.entries.map(\.relativePath).contains("F/new.png") == true })
+    try await waitUntil {
+        coordinator.snapshot?.entries.map(\.relativePath).contains("F/new.png") == true }
     #expect(host.didStart == 1)
     coordinator.end()
-    #expect(await mainPoll { let counts = scope.counts; return counts[0] == counts[1] })
+    try await waitUntil { let counts = scope.counts; return counts[0] == counts[1] }
 }
 
 @Test(.timeLimit(.minutes(3))) func dispatchWatchSchedulerFiresWithinRealTimeBound() async throws {
@@ -99,7 +99,7 @@ private func makeTempDir(_ prefix: String) throws -> URL {
     let start = ContinuousClock.now
     _ = scheduler.schedule(afterMilliseconds: 200, x.action)
     // The time limit guards a missing callback; CI has delayed a 200 ms item by over 20 s.
-    #expect(await poll { x.count >= 1 })
+    #expect(try await poll { x.count >= 1 })
     let elapsed = (x.first ?? start) - start
     // Dispatch is allowed to run late under load; only an early callback violates the delay.
     #expect(elapsed >= .milliseconds(200))
@@ -107,7 +107,7 @@ private func makeTempDir(_ prefix: String) throws -> URL {
     scheduler.schedule(afterMilliseconds: 100, y.action).cancel()
     let zStart = ContinuousClock.now
     _ = scheduler.schedule(afterMilliseconds: 300, z.action)
-    #expect(await poll { z.count == 1 })
+    #expect(try await poll { z.count == 1 })
     #expect((z.first ?? zStart) - zStart >= .milliseconds(300))
     #expect(y.count == 0)
     #expect(x.count == 1)

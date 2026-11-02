@@ -327,6 +327,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         let tree = try IdentityTree(); defer { tree.remove() }
         try issue58Write("orientation-1.tiff", to: tree.file)
         let cache = ImageMemoryCache(capacity: 1_000_000), decoder = CacheBlockingDecoder()
+        defer { decoder.gate.open() }
         let resolver = Issue58IdentityGate(root: tree.scope, holds: [5])
         let pipeline = ImageIOPipeline(decoder: decoder, identityResolver: resolver, cache: cache)
         let old = try #require(try await pipeline.request(for: tree.file, maximumPixelSize: 128).renderKey)

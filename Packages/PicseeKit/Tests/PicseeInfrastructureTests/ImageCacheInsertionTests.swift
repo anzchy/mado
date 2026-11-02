@@ -16,7 +16,7 @@ private final class CacheFailingDecoder: ImageDecoding, @unchecked Sendable {
 final class CacheBlockingDecoder: ImageDecoding, @unchecked Sendable {
     let started: AsyncStream<Void>
     private let signal: AsyncStream<Void>.Continuation
-    let gate = DispatchSemaphore(value: 0)
+    let gate = TestGate()
     private let lock = NSLock()
     private var runs = 0
     var count: Int { lock.withLock { runs } }
@@ -131,6 +131,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
 
     @Test(.timeLimit(.minutes(2))) func cacheCancelledRunningResultNeverBecomesReusable() async throws {
         let decoder = CacheBlockingDecoder(), cache = ImageMemoryCache(capacity: 100_000)
+        defer { decoder.gate.open() }
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache)
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)
         let task = Task { try await pipeline.image(for: request) }

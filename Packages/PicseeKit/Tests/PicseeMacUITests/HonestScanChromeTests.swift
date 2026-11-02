@@ -44,55 +44,55 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/i142-chrome/A"), root = AccessRootID()
     let c = FolderScanCoordinator(access: StatesLeases(), scanner: scanner)
-    defer {
-        c.end()
-        Task { await scanner.finishAll() }
-    }
-    scene.session.folderScan = c
-    let label = try #require(scene.chrome.groups.flatMap(\.subviews).compactMap { $0 as? NSTextField }
-        .first { $0.accessibilityIdentifier() == "chrome.filename" })
-    func expectText(_ expected: String) {
-        for _ in 0..<2 {
-            scene.chrome.refresh(session: scene.session)
-            #expect(label.stringValue == expected)
+    try await withAsyncTeardown { @MainActor in
+        scene.session.folderScan = c
+        let label = try #require(scene.chrome.groups.flatMap(\.subviews).compactMap { $0 as? NSTextField }
+            .first { $0.accessibilityIdentifier() == "chrome.filename" })
+        @MainActor func expectText(_ expected: String) {
+            for _ in 0..<2 {
+                scene.chrome.refresh(session: scene.session)
+                #expect(label.stringValue == expected)
+            }
         }
-    }
-    let reading = String(localized: "Reading…")
-    func images(_ count: Int) -> String {
-        String(format: String(localized: "Images: %lld"), Int64(count))
-    }
-    expectText("")
-    await Task.yield()
-    let task = c.begin(folder: folder, rootID: root)
-    expectText(reading)
-    try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate")
-    #expect(c.snapshot?.isComplete == false && c.completedImageCount == nil)
-    expectText(reading)
-    await scanner.finish(0)
-    try await task.value
-    for (extensions, count) in [(nil as Set<String>?, 3), (["png"], 2), (["gif"], 0), (nil, 3)] {
-        c.setConditions(.init(selectedExtensions: extensions))
-        expectText(images(count))
-        #expect(c.completedImageCount == count)
+        let reading = String(localized: "Reading…")
+        func images(_ count: Int) -> String {
+            String(format: String(localized: "Images: %lld"), Int64(count))
+        }
+        expectText("")
         await Task.yield()
+        let task = c.begin(folder: folder, rootID: root)
+        expectText(reading)
+        try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate")
+        #expect(c.snapshot?.isComplete == false && c.completedImageCount == nil)
+        expectText(reading)
+        await scanner.finish(0)
+        try await task.value
+        for (extensions, count) in [(nil as Set<String>?, 3), (["png"], 2), (["gif"], 0), (nil, 3)] {
+            c.setConditions(.init(selectedExtensions: extensions))
+            expectText(images(count))
+            #expect(c.completedImageCount == count)
+            await Task.yield()
+        }
+        c.setConditions(.init(selectedExtensions: ["png"]))
+        scene.session.beginFolderEntry(shownImage: nil, hasCompleteGrid: true)
+        await Task.yield()
+        let replacement = c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"), rootID: root)
+        try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate")
+        expectText(reading)
+        #expect(scene.session.cancelFolderEntry() == .grid)
+        expectText(images(2))
+        await scanner.finish(1)
+        try await replacement.value
+        expectText(images(2))
+        await Task.yield()
+        let failing = c.begin(folder: folder, rootID: root)
+        try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate")
+        expectText(reading)
+        await scanner.finish(2, failed: true)
+        await #expect(throws: CocoaError.self) { try await failing.value }
+        #expect(c.completedImageCount == nil && c.failure != nil)
+        expectText("")
+    } teardown: {
+        c.end(); await scanner.finishAll()
     }
-    c.setConditions(.init(selectedExtensions: ["png"]))
-    scene.session.beginFolderEntry(shownImage: nil, hasCompleteGrid: true)
-    await Task.yield()
-    let replacement = c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"), rootID: root)
-    try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate")
-    expectText(reading)
-    #expect(scene.session.cancelFolderEntry() == .grid)
-    expectText(images(2))
-    await scanner.finish(1)
-    try await replacement.value
-    expectText(images(2))
-    await Task.yield()
-    let failing = c.begin(folder: folder, rootID: root)
-    try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate")
-    expectText(reading)
-    await scanner.finish(2, failed: true)
-    await #expect(throws: CocoaError.self) { try await failing.value }
-    #expect(c.completedImageCount == nil && c.failure != nil)
-    expectText("")
 }

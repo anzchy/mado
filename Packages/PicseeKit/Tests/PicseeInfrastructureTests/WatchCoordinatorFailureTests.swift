@@ -13,7 +13,7 @@ import PicseeApplication
     #expect(w.names() == ["a.png", "b.png"])
     #expect(c.isWatchUnavailable)
     #expect(w.f.source.active == 0)
-    #expect(await mainPoll { w.scopeBalanced })
+    try await waitUntil { w.scopeBalanced }
 
     // The hub's foreground reconcile reaches only live watches, so nothing refreshes this window.
     w.write("F/c.png")
@@ -32,7 +32,7 @@ import PicseeApplication
     #expect(w.host.didStart == 0)
     #expect(c.reconcileUnwatched() == nil)
     w.write("F/d.png"); w.changed(["F/d.png"])
-    #expect(await mainPoll { w.names().contains("d.png") })
+    try await waitUntil { w.names().contains("d.png") }
 
     // Switching to another root whose stream is refused stops the old root's watch and holds nothing.
     let other = try await w.f.access.grant(folder: w.f.url("other"))
@@ -40,7 +40,7 @@ import PicseeApplication
     w.f.source.refusals = 1
     try await c.begin(folder: w.f.url("other/H"), rootID: other).value
     #expect(c.isWatchUnavailable)
-    #expect(await mainPoll { w.f.source.active == 0 && w.scopeBalanced })
+    try await waitUntil { w.f.source.active == 0 && w.scopeBalanced }
     #expect(w.f.source.stops == 1)
 
     // After end() there is nothing to fall back for.

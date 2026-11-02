@@ -14,7 +14,7 @@ private actor HeldInspectorReader: InspectorMetadataReading {
     func hasWait(_ name: String) -> Bool { waits[name] != nil }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorRejectsLateOldItemAndClearsValuesImmediately() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorRejectsLateOldItemAndClearsValuesImmediately() async throws {
     let reader = HeldInspectorReader()
     let model = InspectorModel(reader: reader)
     let first = URL(fileURLWithPath: "/tmp/first.png"), second = URL(fileURLWithPath: "/tmp/second.jpg")
@@ -30,41 +30,41 @@ private actor HeldInspectorReader: InspectorMetadataReading {
     await Task.yield()
     #expect(model.value == .loading)
     await reader.release("second.jpg", result: .success(.init(pixelWidth: 300, pixelHeight: 400)))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .known(.init(pixelWidth: 300, pixelHeight: 400)))
     model.select(itemID: nil, url: nil, access: nil)
     #expect(model.name == nil)
     #expect(model.value == .unknown)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorDistinguishesNoPermissionAndUnreadable() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorDistinguishesNoPermissionAndUnreadable() async throws {
     let reader = HeldInspectorReader(), model = InspectorModel(reader: reader)
     let url = URL(fileURLWithPath: "/tmp/a.jpg")
     model.select(itemID: nil, url: url, access: .fileGrant(url))
     await Task.yield()
     await reader.release("a.jpg", result: .failure(InspectorReadError.noPermission))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .noPermission)
     model.select(itemID: nil, url: url, access: .fileGrant(url), refresh: true)
     await Task.yield()
     await reader.release("a.jpg", result: .failure(InspectorReadError.unreadable))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .unreadable)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorRefreshesSameURLWhenRevisionChanges() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorRefreshesSameURLWhenRevisionChanges() async throws {
     let reader = HeldInspectorReader(), model = InspectorModel(reader: reader)
     let url = URL(fileURLWithPath: "/tmp/revised.png")
     model.select(itemID: nil, url: url, access: .fileGrant(url), revision: "first")
     await Task.yield()
     await reader.release("revised.png", result: .success(.init(pixelWidth: 100)))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .known(.init(pixelWidth: 100)))
     model.select(itemID: nil, url: url, access: .fileGrant(url), revision: "second")
     #expect(model.value == .loading)
     await Task.yield()
     await reader.release("revised.png", result: .success(.init(pixelWidth: 200)))
-    await waitUntil { model.value != .loading }
+    try await waitUntil { model.value != .loading }
     #expect(model.value == .known(.init(pixelWidth: 200)))
 }
 

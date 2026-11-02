@@ -1,14 +1,58 @@
 import Foundation
 
-/// Waits until `condition` holds, sleeping 5 ms between looks so a busy main actor still runs the work being waited
-/// for. There is no wall-clock deadline: a loaded CI runner can queue the main actor for most of a minute (#277), so
-/// the calling test's time limit bounds the wait instead, and cancellation by that limit ends it.
-func waitUntil(isolation: isolated (any Actor)? = #isolation, _ condition: () async throws -> Bool) async rethrows {
-    while !Task.isCancelled, try await !condition() { try? await Task.sleep(for: .milliseconds(5)) }
+/// A condition wait that ended without its condition holding: the bound ran out or the test was cancelled. Throwing
+/// it ends the test at the wait, so the expectations after it never run against a state that did not arrive (#392).
+struct ConditionWaitError: Error, CustomStringConvertible {
+    let description: String
 }
 
-/// Runs the main run loop until `condition` holds, for AppKit and SwiftUI work the run loop delivers. Bounded the same
-/// way as `waitUntil`: by the calling test's time limit, whose cancellation ends it.
-@MainActor func runLoopUntil(_ condition: () -> Bool) {
-    while !Task.isCancelled, !condition() { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+/// Cancellation by the test's time limit is what normally ends a wait that never holds. The wall-clock default only
+/// bounds waits in untimed tests: it sits near the two-minute limits, far above CI's main-actor queueing (#277, most
+/// of a minute; #390 saw 35 s), so a loaded runner cannot fail a condition that does hold.
+let conditionWaitDefaultTimeout = Duration.seconds(100)
+
+/// Waits until `condition` holds, sleeping 5 ms between looks so a busy main actor still runs the work being waited
+/// for. `between` runs before each sleep. Throws `ConditionWaitError` when `timeout` passes on `clock` or the task is
+/// cancelled, naming the call site.
+func waitUntil(
+    _ comment: @autoclosure () -> String = "", timeout: Duration = conditionWaitDefaultTimeout,
+    clock: some Clock<Duration> = ContinuousClock(), fileID: String = #fileID, line: Int = #line,
+    isolation: isolated (any Actor)? = #isolation, between: () -> Void = {}, _ condition: () async throws -> Bool
+) async throws {
+    let deadline = clock.now.advanced(by: timeout)
+    while try await !condition() {
+        let site = comment().isEmpty ? "\(fileID):\(line)" : "\(fileID):\(line) (\(comment()))"
+        if Task.isCancelled { throw ConditionWaitError(description: "wait cancelled at \(site)") }
+        if clock.now >= deadline { throw ConditionWaitError(description: "wait timed out after \(timeout) at \(site)") }
+        between()
+        try? await clock.sleep(until: clock.now.advanced(by: .milliseconds(5)), tolerance: nil)
+    }
+}
+
+/// Runs `body`, then awaits `teardown` whether `body` returned or threw (#392). Cleanup that has to await, such as
+/// releasing a held actor gate, is awaited here instead of being left to a fire-and-forget task in `defer`.
+func withAsyncTeardown<T>(
+    isolation: isolated (any Actor)? = #isolation, _ body: () async throws -> T, teardown: () async -> Void
+) async throws -> T {
+    let value: T
+    do { value = try await body() } catch { await teardown(); throw error }
+    await teardown()
+    return value
+}
+
+/// Runs the main run loop until `condition` holds, for AppKit and SwiftUI work the run loop delivers. Bounded and
+/// cancelled the same way as `waitUntil`.
+@MainActor func runLoopUntil(
+    _ comment: @autoclosure () -> String = "", timeout: Duration = conditionWaitDefaultTimeout,
+    fileID: String = #fileID, line: Int = #line, _ condition: () -> Bool
+) throws {
+    let clock = ContinuousClock(), deadline = clock.now.advanced(by: timeout)
+    while !condition() {
+        let site = comment().isEmpty ? "\(fileID):\(line)" : "\(fileID):\(line) (\(comment()))"
+        if Task.isCancelled { throw ConditionWaitError(description: "run loop wait cancelled at \(site)") }
+        if clock.now >= deadline {
+            throw ConditionWaitError(description: "run loop wait timed out after \(timeout) at \(site)")
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
 }

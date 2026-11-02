@@ -8,7 +8,7 @@ private struct T229FailingMetadataReader: FolderMetadataReading {
 }
 private final class T229HeldFailingMetadataReader: FolderMetadataReading, @unchecked Sendable {
     private let lock = NSLock()
-    private let gate = DispatchSemaphore(value: 0)
+    private let gate = TestGate()
     private var entered = false
     var started: Bool { lock.withLock { entered } }
     func read(_ url: URL) throws -> FolderImageMetadata {
@@ -17,6 +17,7 @@ private final class T229HeldFailingMetadataReader: FolderMetadataReading, @unche
         throw FolderScanTestError.expected
     }
     func release() { gate.signal() }
+    func open() { gate.open() }
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229MetadataFailureReportsCurrentGenerationAndCallbackEndCannotRepublish() async throws {
@@ -42,7 +43,7 @@ private final class T229HeldFailingMetadataReader: FolderMetadataReading, @unche
     let staleScan = FolderScanCoordinator(access: staleFixture.access, scanner: staleFixture.scanner, metadataReader: reader)
     var staleFailures = 0
     staleScan.onReadFailure = { _, _ in staleFailures += 1 }
-    defer { staleScan.end(); reader.release() }
+    defer { staleScan.end(); reader.open() }
     let old = staleScan.begin(folder: staleFixture.folder, rootID: staleFixture.id)
     await staleFixture.scanner.waitForStart()
     try await staleFixture.scanner.deliver(["old.jpg"])
