@@ -112,7 +112,7 @@ public final class LostAccessStateView: NSView {
         waitingLabel.stringValue = text.waiting
         reselectButton.title = text.reselect
         chooseOtherButton.title = text.chooseOther
-        iconView.image = NSImage(systemSymbolName: cause == .diskNotConnected ? "externaldrive" : "folder.badge.questionmark", accessibilityDescription: nil)
+        iconView.image = Self.recoveryImage(for: cause)
         buttons = cause == .diskNotConnected ? [chooseOtherButton]
             : cause == .accessExpired ? [reselectButton] : [reselectButton, chooseOtherButton]
         [iconView, titleLabel, detailLabel].forEach { addSubview($0) }
@@ -132,6 +132,58 @@ public final class LostAccessStateView: NSView {
         refreshColors()
         refreshWaitingAnimation()
         needsLayout = true
+    }
+    /// Page 26 uses the pinned 24-unit SVG paths inside a 32-point template image.
+    /// Keep the outer canvas: the approximately 26-point bounds describe the ink.
+    private static func recoveryImage(for cause: AccessLossCause) -> NSImage? {
+        guard cause != .unknown else {
+            return NSImage(systemSymbolName: "folder.badge.questionmark", accessibilityDescription: nil)
+        }
+        let image = NSImage(size: NSSize(width: 32, height: 32), flipped: true) { rect in
+            let scale = rect.width / 24
+            func stroke(_ path: NSBezierPath, dashed: Bool = false) {
+                path.transform(using: AffineTransform(scale: scale))
+                path.lineWidth = 1.3 * scale
+                path.lineCapStyle = .round; path.lineJoinStyle = .round
+                if dashed { path.setLineDash([2.5 * scale, 2 * scale], count: 2, phase: 0) }
+                NSColor.black.setStroke()
+                path.stroke()
+            }
+            if cause == .diskNotConnected {
+                stroke(NSBezierPath(roundedRect: NSRect(x: 3, y: 7, width: 18, height: 10), xRadius: 2, yRadius: 2))
+                let indicators = NSBezierPath()
+                indicators.move(to: NSPoint(x: 7, y: 13)); indicators.line(to: NSPoint(x: 7.01, y: 13))
+                indicators.move(to: NSPoint(x: 11, y: 13)); indicators.line(to: NSPoint(x: 17, y: 13))
+                stroke(indicators)
+            } else {
+                // SVG circular arcs expressed as cubic quarter circles.
+                let arc: CGFloat = 0.5522847498307936
+                let folder = NSBezierPath()
+                folder.move(to: NSPoint(x: 3, y: 7)); folder.line(to: NSPoint(x: 3, y: 5))
+                folder.curve(to: NSPoint(x: 5, y: 3), controlPoint1: NSPoint(x: 3, y: 5 - 2 * arc), controlPoint2: NSPoint(x: 5 - 2 * arc, y: 3))
+                folder.line(to: NSPoint(x: 10, y: 3)); folder.line(to: NSPoint(x: 12, y: 6))
+                folder.line(to: NSPoint(x: 19, y: 6))
+                folder.curve(to: NSPoint(x: 21, y: 8), controlPoint1: NSPoint(x: 19 + 2 * arc, y: 6), controlPoint2: NSPoint(x: 21, y: 8 - 2 * arc))
+                folder.line(to: NSPoint(x: 21, y: 19))
+                folder.curve(to: NSPoint(x: 19, y: 21), controlPoint1: NSPoint(x: 21, y: 19 + 2 * arc), controlPoint2: NSPoint(x: 19 + 2 * arc, y: 21))
+                folder.line(to: NSPoint(x: 5, y: 21))
+                folder.curve(to: NSPoint(x: 3, y: 19), controlPoint1: NSPoint(x: 5 - 2 * arc, y: 21), controlPoint2: NSPoint(x: 3, y: 19 + 2 * arc))
+                folder.close()
+                stroke(folder, dashed: cause == .notFound)
+                if cause == .accessExpired {
+                    stroke(NSBezierPath(roundedRect: NSRect(x: 9.5, y: 12, width: 5, height: 4), xRadius: 1, yRadius: 1))
+                    let shackle = NSBezierPath()
+                    shackle.move(to: NSPoint(x: 10.5, y: 12)); shackle.line(to: NSPoint(x: 10.5, y: 10.8))
+                    shackle.curve(to: NSPoint(x: 12, y: 9.3), controlPoint1: NSPoint(x: 10.5, y: 10.8 - 1.5 * arc), controlPoint2: NSPoint(x: 12 - 1.5 * arc, y: 9.3))
+                    shackle.curve(to: NSPoint(x: 13.5, y: 10.8), controlPoint1: NSPoint(x: 12 + 1.5 * arc, y: 9.3), controlPoint2: NSPoint(x: 13.5, y: 10.8 - 1.5 * arc))
+                    shackle.line(to: NSPoint(x: 13.5, y: 12))
+                    stroke(shackle)
+                }
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
     private func refreshWaitingAnimation() {
         guard let layer = waitingDot.layer else { return }
