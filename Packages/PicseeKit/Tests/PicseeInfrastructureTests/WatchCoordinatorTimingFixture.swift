@@ -9,7 +9,7 @@ import PicseeApplication
     let root = URL(fileURLWithPath: "/picsee-watch-timing-fixture")
     let rootID = AccessRootID()
     var folder: URL { root.appendingPathComponent("F") }
-    let clock = FakeWatchClock()
+    let clock = TimingWatchClock()
     let source = FakeFolderEventSource()
     let scanner: TimingFolderScanner
     let trace = TimingScanTrace()
@@ -61,29 +61,44 @@ final class TimingFolderScanner: FolderScanning, @unchecked Sendable {
         signal.continuation.yield(generation)
     }
 
-    /// Buffered signals cannot be missed if completion precedes registration. Cancellation terminates the
-    /// AsyncStream wait and the watchdog sleep; the group always drains. Wall time is only a failure bound,
-    /// never a clock input or a polling cadence. A failed wait throws and stops the caller immediately.
+    /// Buffered completions cannot be missed. AsyncStream terminates on task cancellation; the test's
+    /// time limit is the only wall-clock bound, so MainActor queueing cannot expire a shorter watchdog.
+    /// A cancelled wait throws once with its fake-clock context and stops the driver immediately.
     func waitForEnd(generation: UInt64, at time: Int) async throws {
-        let stream = signal.stream
-        let actual = try await withThrowingTaskGroup(of: UInt64.self) { group in
-            defer { group.cancelAll() }
-            group.addTask {
-                for await value in stream { return value }
-                throw CancellationError()
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(5))
-                throw TimingWaitExpired(generation: generation, time: time)
-            }
-            return try await group.next()!
+        for await actual in signal.stream {
+            try #require(actual == generation, "t=\(time) expected scan end \(generation), got \(actual)")
+            return
         }
-        try #require(actual == generation, "t=\(time) expected scan end \(generation), got \(actual)")
+        let error = TimingWaitCancelled(generation: generation, time: time)
+        // Swift Testing reports the time-limit issue and discards the cancelled body's thrown error.
+        print("WatchCoordinatorTimingTests: \(error)")
+        throw error
     }
 }
 
-private struct TimingWaitExpired: Error, CustomStringConvertible {
+private struct TimingWaitCancelled: Error, CustomStringConvertible {
     let generation: UInt64
     let time: Int
-    var description: String { "t=\(time) scan \(generation) did not end within the 5 s watchdog" }
+    var description: String { "t=\(time) scan \(generation) completion wait cancelled by the test time limit or task cancellation" }
+}
+
+/// Counts actual scheduler deliveries, including unexpected late callbacks. A zero-delivery advance
+/// cannot enqueue coordinator work, so the quiet tail can be checked synchronously without polling.
+final class TimingWatchClock: WatchScheduling, @unchecked Sendable {
+    private let clock = FakeWatchClock()
+    private let lock = NSLock()
+    private var deliveries = 0
+    var deliveredCount: Int { lock.withLock { deliveries } }
+    var nowMilliseconds: Int { clock.nowMilliseconds }
+    func schedule(afterMilliseconds: Int, _ action: @escaping @Sendable () -> Void) -> any WatchCancellable {
+        clock.schedule(afterMilliseconds: afterMilliseconds) { [self] in
+            lock.withLock { deliveries += 1 }
+            action()
+        }
+    }
+    @discardableResult func advance(to time: Int) -> Int {
+        let before = deliveredCount
+        clock.advance(to: time)
+        return deliveredCount - before
+    }
 }
