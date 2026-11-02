@@ -32,6 +32,7 @@ export const KEY_HANDLERS = [
 // file and not declared here fails, and so does a declared code the file no longer handles.
 const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Space, Return), not a command';
 const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
+const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissal, not a command';
 export const KEY_SITES = {
   'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift': { 123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows' },
   'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
@@ -45,7 +46,9 @@ export const KEY_SITES = {
   'Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift': { 53: 'command:escape',
     48: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL } },
   'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridShellView.swift': {
-    123: { excluded: 'arrows resize the focused sidebar divider' }, 124: { excluded: 'arrows resize the focused sidebar divider' } },
+    123: { excluded: 'arrows resize the focused sidebar divider' }, 124: { excluded: 'arrows resize the focused sidebar divider' },
+    53: { excluded: DISPLAY_PANEL_ESC }, 48: { excluded: 'Tab stays in the open Display panel\'s own key loop' } },
+  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridDisplayPanelView.swift': { 53: { excluded: DISPLAY_PANEL_ESC } },
   'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridSidebarTreeView.swift': {
     36: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
   'Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
