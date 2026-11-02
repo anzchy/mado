@@ -56,11 +56,10 @@ func srgb(_ cg: CGColor?) throws -> PinnedDesign.Color {
                  blue: resolved.blueComponent, alpha: resolved.alphaComponent)
 }
 
-@MainActor func waitForSamples(_ launch: FirstLaunchView, timeout: Duration = .seconds(15)) async {
-    let clock = ContinuousClock(), deadline = clock.now + timeout
-    while !launch.sampleLoadCompleted && clock.now < deadline {
-        try? await Task.sleep(for: .milliseconds(10))
-    }
+/// Waits for the Home's bundled samples to finish loading on the shared cancellation-driven wait (#398): a load that
+/// never finishes fails the test at this wait, naming `sampleLoadCompleted`, instead of returning without samples.
+@MainActor func waitForSamples(_ launch: FirstLaunchView, fileID: String = #fileID, line: Int = #line) async throws {
+    try await waitUntil("sampleLoadCompleted", fileID: fileID, line: line) { launch.sampleLoadCompleted }
     launch.layoutSubtreeIfNeeded()
 }
 

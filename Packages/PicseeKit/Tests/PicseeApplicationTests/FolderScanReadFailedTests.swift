@@ -165,9 +165,10 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
         if let fixed { return fixed }
         return await withCheckedContinuation { pending = $0 }
     }
-    /// Bounded, so a check that is never called fails the test instead of hanging it.
-    func waitForCall(_ count: Int = 1) async {
-        for _ in 0..<500 where calls.count < count { try? await Task.sleep(for: .milliseconds(10)) }
+    /// On the shared cancellation-driven wait (#398): a check that is never called fails the test at this wait
+    /// instead of hanging it or returning silently.
+    func waitForCall(_ count: Int = 1, fileID: String = #fileID, line: Int = #line) async throws {
+        try await waitUntil("root-loss check called \(count) time(s)", fileID: fileID, line: line) { calls.count >= count }
     }
     func answer(lost: Bool) { pending?.resume(returning: lost); pending = nil }
     func install(on coordinator: FolderScanCoordinator) {
@@ -225,7 +226,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     await fixture.scanner.waitForStart()
     try await fixture.scanner.deliver(["img1.png"]); try await fixture.scanner.deliver(["img2.png"])
     await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     for _ in 0..<3 {
         #expect(session.imageStatus == .readingFolder)
         #expect(coordinator.isReadingFolder && coordinator.failure == nil && coordinator.isScanning)
@@ -250,7 +251,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     await fixture.scanner.waitForStart()
     try await fixture.scanner.deliver(["img1.png", "img2.png", "img3.png"])
     await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.gone.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     gate.answer(lost: true)
     var thrown: (any Error)?
     do { try await task.value } catch { thrown = error }
@@ -270,7 +271,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
     await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.denied.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     gate.answer(lost: false)
     _ = try? await task.value
     #expect(gate.calls.count == 1)
@@ -353,7 +354,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     let task = coordinator.begin(folder: fixture.root.appendingPathComponent("待整理"), rootID: fixture.id)
     await fixture.scanner.waitForStart()
     await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     coordinator.cancel()
     let logAtCancel = host.log
     gate.answer(lost: lateLost)
@@ -371,7 +372,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     let first = coordinator.begin(folder: folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
     await fixture.scanner.finish(failing: true, error: ReadFailedErrorKind.io.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     let second = coordinator.begin(folder: fixture.root.appendingPathComponent("B"), rootID: fixture.id)
     await fixture.scanner.waitForStart(1)
     try await fixture.scanner.deliver(["b1.png", "b2.png"], at: 1)
@@ -441,7 +442,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     let refresh = try #require(coordinator.refresh())
     await fixture.scanner.waitForStart(1)
     await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     coordinator.end()
     gate.answer(lost: false)
     _ = try? await refresh.value
@@ -578,7 +579,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(1)
     await fixture.scanner.finish(1, failing: true, error: ReadFailedErrorKind.io.error)
-    await gate.waitForCall(1)
+    try await gate.waitForCall(1)
     coordinator.cancel()
     let logAtCancel = host.log
     gate.answer(lost: true)

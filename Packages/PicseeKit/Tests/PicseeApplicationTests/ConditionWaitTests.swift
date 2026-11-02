@@ -136,6 +136,13 @@ private struct TeardownProbe: Error {}
     }
     #expect(cores.allSatisfy { $0 == cores[0] }, "ConditionWait.swift copies differ")
     #expect(cores[0].contains("Duration.seconds(100)"))
+    // Teardown has no wall-clock bound below the test's time limit: only cancellation ends it early (#398).
+    let startedTasks = try #require(cores[0].range(of: "final class StartedTasks")).lowerBound
+    let teardownHelper = try #require(cores[0].range(of: "func withAsyncTeardown")).lowerBound
+    let section = cores[0][startedTasks..<teardownHelper]
+    for banned in ["Clock", "deadline", "limit:", "timeout", "waitUntil(", "runLoopUntil(", "0..<", "DispatchTime", "Date("] {
+        #expect(!section.contains(banned), "StartedTasks keeps a bound: \(banned)")
+    }
 }
 
 private actor I392Hold {
@@ -144,32 +151,105 @@ private actor I392Hold {
     func open() { opened = true; waiter?.resume(); waiter = nil }
 }
 
-/// Teardown waits for every tracked task, running its release action between looks, even when the test task itself
-/// is already cancelled (as after a time limit).
-@Test(.timeLimit(.minutes(2))) func i392StartedTasksAwaitAllReleasesAndWaitsEvenWhenCancelled() async throws {
-    let started = StartedTasks(), hold = I392Hold()
-    let held = started.track(Task { await hold.hold(); return 1 })
-    #expect(!started.allEnded)
-    let teardown = Task {
-        withUnsafeCurrentTask { $0?.cancel() }
-        var releases = 0
-        await started.awaitAll { releases += 1; await hold.open() }
-        return (releases, started.allEnded)
+/// Not cancelled, teardown waits for every tracked task to end, however many looks that takes, running its release
+/// action before each look; there is no wall-clock bound to cut it short (#398). Cancelled with nothing left
+/// running, it records nothing.
+@Test(.timeLimit(.minutes(2))) func i398StartedTasksAwaitAllWaitsUntilEveryTaskEnds() async throws {
+    let started = StartedTasks(), first = I392Hold(), second = I392Hold()
+    let a = started.track(Task { await first.hold(); return 1 })
+    let b = started.track(Task { await second.hold(); return 2 })
+    var looks = 0
+    await started.awaitAll {
+        looks += 1
+        if looks == 10 { await first.open() }
+        if looks == 40 { await second.open() }
     }
-    let (releases, ended) = await teardown.value
-    #expect(ended && releases >= 1)
-    #expect(await held.value == 1)
-    started.cancelAll() // cancelling ended tasks is harmless
+    #expect(started.allEnded)
+    #expect(looks >= 40)
+    let values = (await a.value, await b.value)
+    #expect(values == (1, 2))
+    await Task { withUnsafeCurrentTask { $0?.cancel() }; await started.awaitAll() }.value
 }
 
-/// A task that outlives the limit is reported at the call site instead of being left behind silently.
-@Test(.timeLimit(.minutes(2))) func i392StartedTasksAwaitAllRecordsATaskStillRunning() async throws {
+/// A teardown that starts already cancelled (the time limit fired in the body) still runs its release action before
+/// it stops, so gated tasks are let through; a task not yet ended is named as still running (#398).
+@Test(.timeLimit(.minutes(2))) func i398CancelledTeardownStillReleasesBeforeItStops() async throws {
     let started = StartedTasks(), hold = I392Hold()
-    started.track(Task { await hold.hold() })
-    await withKnownIssue("the held task is still running when the limit ends") {
-        await started.awaitAll(limit: .milliseconds(50))
-    } matching: { issue in issue.comments.contains { $0.rawValue.contains("still running") } }
-    await hold.open()
+    let held = started.track(Task { await hold.hold(); return 1 })
+    var releases = 0
+    await withKnownIssue("the released task may not have ended by the single look", isIntermittent: true) {
+        releases = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            var releases = 0
+            await started.awaitAll { releases += 1; await hold.open() }
+            return releases
+        }.value
+    }
+    #expect(releases >= 1)
+    let value = await held.value
+    #expect(value == 1)
     await started.awaitAll()
     #expect(started.allEnded)
+}
+
+/// Only the cancellation of the awaiting task (the test's time limit) ends the wait early; it then names, in one
+/// issue, the site that started each task still running, and not the sites of tasks that ended (#398).
+@Test(.timeLimit(.minutes(2))) func i392StartedTasksAwaitAllRecordsATaskStillRunning() async throws {
+    let started = StartedTasks(), holdB = I392Hold(), holdC = I392Hold()
+    let lineB = #line + 1
+    started.track(Task { await holdB.hold() })
+    let lineA = #line + 1
+    let a = started.track(Task {})
+    let lineC = #line + 1
+    started.track(Task { await holdC.hold() })
+    await a.value
+    try await waitUntil { started.runningCount == 2 }
+    let site = "PicseeApplicationTests/ConditionWaitTests.swift"
+    try await withKnownIssue("the teardown was cancelled with B and C still running") {
+        let looks = OSAllocatedUnfairLock(initialState: 0)
+        let teardown = Task { await started.awaitAll { looks.withLock { $0 += 1 } } }
+        try await waitUntil { looks.withLock { $0 } >= 3 }
+        teardown.cancel()
+        await teardown.value
+    } matching: { issue in
+        issue.comments.contains {
+            $0.rawValue.contains("\(site):\(lineB)") && $0.rawValue.contains("\(site):\(lineC)")
+                && !$0.rawValue.contains("\(site):\(lineA)")
+        }
+    }
+    #expect(started.runningCount == 2, "the wait ended by cancellation, not because the held tasks ended")
+    await holdB.open()
+    await holdC.open()
+    await started.awaitAll()
+    #expect(started.allEnded)
+}
+
+/// The same-class waits found by the #398 sweep stay on the shared cancellation-driven wait: no polling-count or
+/// short wall-clock bound, and a failed wait throws instead of returning silently.
+@Test func i398SweptWaitHelpersUseTheSharedWait() throws {
+    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let helpers = [
+        ("Packages/PicseeKit/Tests/PicseeMacUITests/FirstLaunchWallTestSupport.swift", "func waitForSamples"),
+        ("Packages/PicseeKit/Tests/PicseeInfrastructureTests/InspectorThumbnailBudgetTests.swift", "func inspectorWait"),
+        ("Packages/PicseeKit/Tests/PicseeApplicationTests/FolderScanReadFailedTests.swift", "func waitForCall"),
+        ("Packages/PicseeKit/Tests/PicseeApplicationTests/Issue233InspectorFailureCallbackTests.swift", "func r2CallbackWait"),
+        ("AppTests/Issue233ReplacementProbeTests.swift", "func replacementWait"),
+        ("AppTests/SidebarTreeControllerTests.swift", "func waitForSidebar"),
+    ]
+    for (path, name) in helpers {
+        let lines = try String(contentsOf: repo.appendingPathComponent(path), encoding: .utf8)
+            .components(separatedBy: "\n")
+        let start = try #require(lines.firstIndex { $0.contains(name) }, "\(path): \(name)")
+        let indent = String(lines[start].prefix { $0 == " " })
+        let end = try #require(lines[start...].firstIndex { $0 == indent + "}" }, "\(path): end of \(name)")
+        let body = lines[start...end].joined(separator: "\n")
+        #expect(body.contains("waitUntil("), "\(path): \(name) does not use waitUntil")
+        for banned in ["0..<", "Clock", "deadline", "timeout", "seconds("] {
+            #expect(!body.contains(banned), "\(path): \(name) keeps \(banned)")
+        }
+    }
+    let sidebar = try String(contentsOf: repo.appendingPathComponent("AppTests/SidebarTreeControllerTests.swift"),
+                             encoding: .utf8)
+    #expect(!sidebar.contains("sidebarCondition(for: 2)"), "the delivered-change wait is a positive wait")
 }

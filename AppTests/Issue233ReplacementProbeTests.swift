@@ -103,11 +103,10 @@ private final class ReplacementPipeline: ImagePipeline, @unchecked Sendable {
     var onChange: (@MainActor () -> Void)?
 }
 
-@MainActor private func replacementWait(_ condition: @MainActor () -> Bool) async {
-    for _ in 0..<2000 {
-        if condition() { return }
-        try? await Task.sleep(for: .milliseconds(5))
-    }
+@MainActor private func replacementWait(
+    fileID: String = #fileID, line: Int = #line, _ condition: @MainActor () -> Bool
+) async throws {
+    try await waitUntil(fileID: fileID, line: line) { condition() }
 }
 
 /// Each argument holds one of the four actual post-read/resolution delivery continuations.
@@ -141,10 +140,10 @@ private final class ReplacementPipeline: ImagePipeline, @unchecked Sendable {
         try? fm.removeItem(at: base)
     }
     viewer.open(original, accessRequest: .fileGrant(original))
-    await replacementWait { viewer.session.imageLoader.phase == .settled && pipeline.headerCount > 0 }
+    try await replacementWait { viewer.session.imageLoader.phase == .settled && pipeline.headerCount > 0 }
     #expect(viewer.hasImage)
     #expect(viewer.route(.inspector, from: .key))
-    await replacementWait { if case .known = viewer.inspector.value { true } else { false } }
+    try await replacementWait { if case .known = viewer.inspector.value { true } else { false } }
     if case .known = viewer.inspector.value {} else { Issue.record("Inspector must be populated before replacement") }
     // Complete the startup access work before arming a single system-boundary gate.
     await viewer.reportFileGrantReadFailure(original).value
@@ -174,7 +173,7 @@ private final class ReplacementPipeline: ImagePipeline, @unchecked Sendable {
     }
     let p1 = viewer.reportFileGrantReadFailure(original)
     let gate = boundary.hasSuffix("Release") ? scope.releaseGate : bookmarks.gate
-    await replacementWait { gate.held }
+    try await replacementWait { gate.held }
     try #require(gate.held, "P1 must reach the held \(boundary) boundary")
     if boundary == "failedReadRelease" {
         do {
