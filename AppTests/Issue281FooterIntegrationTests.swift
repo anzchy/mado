@@ -216,8 +216,9 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     try await waitUntil { issue281View("state.cancel-folder", in: window.contentView) != nil }
     #expect(try footer() == ("–", "Reading…"), "first read")
     let firstReadSidebar = sidebarCount()
-    // The sidebar learns this folder's count on its own, so also pin the flag that shows `0` while it is unknown.
-    let firstReadZero = window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
+    #expect(["", "2"].contains(firstReadSidebar), "first read: unknown count is blank or the real count is known")
+    // The sidebar learns the real count independently; until then, the count stays blank.
+    let firstReadShowsZero = window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
         .folderTree.showsZeroForUnknownCurrent
 
     // It stops part way; the failure page's Retry, held.
@@ -230,10 +231,11 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     try await waitUntil { scanner.started == 2 && controller.session.folderScan?.isReadingFolder == true }
     #expect(try footer() == ("–", "Reading…"), "held retry")
     // #238: the root check before 「读取失败」 gives the sidebar time to learn the folder's own full count, so a
-    // held retry shows the first read's unknown `0` or that count, never the failed read's `—`.
+    // held retry shows the first read's blank unknown count or that real count, never the failed read's `—`.
     #expect([firstReadSidebar, "2"].contains(sidebarCount()), "held retry: sidebar count as for a first read")
-    #expect(firstReadZero == true && window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
-        .folderTree.showsZeroForUnknownCurrent == firstReadZero, "held retry: unknown count shows 0 as for a first read")
+    #expect(sidebarCount() != "—", "held retry clears the failed-read count")
+    #expect(firstReadShowsZero == false && window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
+        .folderTree.showsZeroForUnknownCurrent == firstReadShowsZero, "held retry: unknown count stays blank as for a first read")
 
     // Released: the completed name and count.
     scanner.release()
