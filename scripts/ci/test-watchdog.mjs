@@ -2,8 +2,9 @@
 // Runs one test command under a deadline and leaves evidence when it hangs (#391). The command's output is copied
 // to the terminal and to <out>/test.log. When the deadline passes, the watchdog samples the test processes (`sample`,
 // and `spindump` when passwordless sudo exists), records `ps` CPU/RSS for the whole tree, then sends TERM and, after a
-// grace period, KILL to the command's process group. Exit status: the command's own status, 128+signal when a signal
-// ended it, or 124 when the watchdog ended it.
+// grace period, KILL to the command's process group and to every process of the tree by pid (swift test starts
+// swiftpm-testing-helper in a process group of its own). Exit status: the command's own status, 128+signal when a
+// signal ended it, or 124 when the watchdog ended it.
 //
 //   node scripts/ci/test-watchdog.mjs --out ci-logs/macui --timeout-seconds 1500 [--deadline-epoch N]
 //     [--sample-seconds 10] [--grace-seconds 15] [--match 'swiftpm-testing|PackageTests'] -- swift test …
@@ -89,7 +90,7 @@ export function exitStatus({ timedOut, code, signal }) {
 
 const run = (cmd, args, options = {}) => spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options });
 
-/** Samples the hung tree into <out>/stacks and returns the paths it wrote. */
+/** Samples the hung tree into <out>/stacks; returns the paths it wrote and the tree it found. */
 export function captureDiagnostics({ root, out, sampleSeconds, match, log }) {
   const dir = path.join(out, 'stacks');
   fs.mkdirSync(dir, { recursive: true });
@@ -115,8 +116,11 @@ export function captureDiagnostics({ root, out, sampleSeconds, match, log }) {
     }
   }
   if (!sudo) log('watchdog: no passwordless sudo, spindump skipped');
-  return written;
+  return { written, tree };
 }
+
+const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function watch(options, { log = line => process.stderr.write(`${line}\n`), now = Date.now } = {}) {
   fs.mkdirSync(options.out, { recursive: true });
@@ -126,26 +130,40 @@ export async function watch(options, { log = line => process.stderr.write(`${lin
   const child = spawn(options.command[0], options.command.slice(1), { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   for (const [stream, sink] of [[child.stdout, process.stdout], [child.stderr, process.stderr]])
     stream.on('data', chunk => { sink.write(chunk); logFile.write(chunk); });
-  let timedOut = false, killTimer;
-  const group = signal => { try { process.kill(-child.pid, signal); } catch { /* already gone */ } };
+  let timedOut = false, pids = [], killTimer;
+  const signal = name => {
+    for (const target of [-child.pid, ...pids]) { try { process.kill(target, name); } catch { /* already gone */ } }
+  };
+  const kill = () => {
+    if (!pids.some(alive) && !alive(child.pid)) return;
+    log('watchdog: sending KILL');
+    signal('SIGKILL');
+  };
   const timer = setTimeout(() => {
     timedOut = true;
     log(`watchdog: deadline passed after ${Math.round(budget / 1000)} s; capturing diagnostics`);
-    const files = captureDiagnostics({ root: child.pid, out: options.out, sampleSeconds: options.sampleSeconds,
-      match: options.match, log });
-    log(`watchdog: wrote ${files.join(', ')}`);
+    const { written, tree } = captureDiagnostics({ root: child.pid, out: options.out,
+      sampleSeconds: options.sampleSeconds, match: options.match, log });
+    pids = tree.map(p => p.pid).filter(pid => pid !== child.pid);
+    log(`watchdog: wrote ${written.join(', ')}`);
     log('watchdog: sending TERM');
-    group('SIGTERM');
-    killTimer = setTimeout(() => { log('watchdog: sending KILL'); group('SIGKILL'); }, options.graceSeconds * 1000);
+    signal('SIGTERM');
+    killTimer = setTimeout(kill, options.graceSeconds * 1000);
   }, budget);
   const result = await new Promise(resolve => {
     child.on('error', error => resolve({ code: 127, error }));
     child.on('close', (code, signal) => resolve({ code, signal }));
   });
   clearTimeout(timer);
-  clearTimeout(killTimer);
-  // The test runner can leave helpers in the group after the leader exits.
-  if (timedOut) group('SIGKILL');
+  if (timedOut) {
+    // The leader can exit on TERM while the test helper, in its own group, keeps running: give it the grace period.
+    const until = Date.now() + options.graceSeconds * 1000;
+    while (pids.some(alive) && Date.now() < until) await sleep(200);
+    clearTimeout(killTimer);
+    kill();
+    const survivors = pids.filter(alive);
+    if (survivors.length) log(`watchdog: still alive after KILL: ${survivors.join(', ')}`);
+  }
   await new Promise(resolve => logFile.end(resolve));
   if (result.error) log(`watchdog: cannot start ${options.command[0]}: ${result.error.message}`);
   const status = exitStatus({ timedOut, ...result });

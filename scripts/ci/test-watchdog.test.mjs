@@ -104,3 +104,19 @@ test('a hung command is sampled, recorded and killed with 124', { skip: process.
   assert.match(fs.readFileSync(path.join(out, 'stacks', samples[0]), 'utf8'), /Call graph|Analysis of sampling/);
   assert.equal(spawnSync('pgrep', ['-f', "trap '' TERM; sleep 60"]).status, 1, 'no process of the group survives');
 });
+
+test('a hung helper in its own process group is killed when the leader exits on TERM', { skip: process.platform !== 'darwin' && 'needs macOS sample' }, () => {
+  const out = tempDir();
+  // Like swift test: the leader dies on TERM, its helper runs in a group of its own and ignores TERM.
+  const helper = "perl -e 'setpgrp(0, 0); $SIG{TERM} = q(IGNORE); sleep 60; # helper-391'";
+  const started = Date.now();
+  const run = spawnSync('node', [script, '--out', out, '--timeout-seconds', '1', '--sample-seconds', '1',
+    '--grace-seconds', '1', '--match', 'helper-391', '--', 'sh', '-c', `${helper} & wait`], { encoding: 'utf8' });
+  assert.equal(run.status, TIMEOUT_STATUS, run.stderr);
+  // The helper holds the output pipe open, so a watchdog that misses it waits the helper's full 60 s.
+  assert.ok(Date.now() - started < 30_000, `took ${Date.now() - started} ms`);
+  assert.match(run.stderr, /sending KILL/);
+  assert.doesNotMatch(run.stderr, /still alive/);
+  assert.ok(fs.readdirSync(path.join(out, 'stacks')).some(name => name.startsWith('sample-')));
+  assert.equal(spawnSync('pgrep', ['-f', 'helper-391']).status, 1, 'the helper does not survive the watchdog');
+});
