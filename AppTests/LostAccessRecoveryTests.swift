@@ -1423,6 +1423,7 @@ func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async t
 @MainActor @Test(.timeLimit(.minutes(3)))
 func t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() async throws {
     let f = try await RecoveryFixture()
+    let started = StartedTasks()
     try await withAsyncTeardown {
         let c = f.controller(); defer { c.window?.close() }
         c.browseRecoveredFolder(f.b, rootID: f.rootB)
@@ -1440,7 +1441,7 @@ func t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() async th
 
         await f.mounts.pauseEnumeration(after: 1)
         let phase = RecoveryForegroundPhase(monitor: f.services.monitor, roots: roots)
-        let waiter = Task { @MainActor in try await phase.run() }
+        let waiter = started.track(Task { @MainActor in try await phase.run() })
         defer { waiter.cancel() }
         try await f.mounts.waitUntilPaused()
         #expect(await f.mounts.paused)
@@ -1463,6 +1464,8 @@ func t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() async th
         #expect(!(await f.mounts.paused))
         print("i333 cancellation: held B released and real foreground drained without resuming cancelled waiter")
     } teardown: {
+        started.cancelAll()
+        await started.awaitAll { await f.mounts.release() }
         f.remove(); await f.mounts.release()
     }
 }
@@ -1484,6 +1487,7 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
     #expect(try t231Fix2AppRecordedRoot(recorded) == f.a.absoluteString)
     c.browseRecoveredFolder(f.b, rootID: f.rootB)
     try await f.ready(c, folder: f.b)
+    let started = StartedTasks()
     try await withAsyncTeardown {
         await f.services.monitor.start()
         let roots = Set(await f.services.files.records().map(\.id))
@@ -1506,6 +1510,7 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
             print("i333 fix1 GREEN: held B; first foreground registered and pending with only A ready; move two blocked")
             await f.mounts.release()
         }
+        started.track(checker)
         defer { checker.cancel() }
         try await first.run()
         try await checker.value
@@ -1555,7 +1560,8 @@ func t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() async t
         await f.mounts.release()
         try await f.ready(c, folder: replacement)
     } teardown: {
-        await f.mounts.release()
+        started.cancelAll()
+        await started.awaitAll { await f.mounts.release() }
     }
 }
 

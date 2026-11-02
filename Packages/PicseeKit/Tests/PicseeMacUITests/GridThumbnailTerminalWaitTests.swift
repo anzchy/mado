@@ -83,13 +83,11 @@ private actor I392Loader {
     return (scheduler, loader, entry, token)
 }
 
-/// Without the fix a cancelled waiter would wait forever; this frees it after 5 s, so it returns into a stopped
-/// scheduler (no token) and the expectations fail instead of the run hanging.
-@MainActor private func i392Fallback(_ scheduler: GridThumbnailScheduler) -> Task<Void, Never> {
-    Task { @MainActor in
-        guard (try? await Task.sleep(for: .seconds(5))) != nil else { return }
-        scheduler.stop()
-    }
+/// Awaits a cancelled waiter. Without the fix it would wait forever: when the test's time limit cancels the test, this
+/// stops the scheduler, so the waiter returns into a stopped scheduler (no token) and the expectations fail instead of
+/// the run hanging. Cancellation, not a wall clock, drives it, so a stalled main actor cannot fire it (#390).
+@MainActor private func i392Await(_ waiter: Task<Void, Never>, freeing scheduler: GridThumbnailScheduler) async {
+    await withTaskCancellationHandler { await waiter.value } onCancel: { Task { @MainActor in scheduler.stop() } }
 }
 
 @Test(.timeLimit(.minutes(2))) @MainActor func i392PreCancelledTerminalWaitReturnsWhileRecordStaysPending() async throws {
@@ -98,11 +96,9 @@ private actor I392Loader {
     let seen = I392Observation()
     let waiter = i392Waiter(scheduler, at: 0, item: entry.itemID, seen)
     waiter.cancel() // before the waiter task first runs: it calls waitForTerminal already cancelled
-    let fallback = i392Fallback(scheduler)
-    await waiter.value
-    fallback.cancel()
+    await i392Await(waiter, freeing: scheduler)
     #expect(seen.returns == 1)
-    // Stopped by the fallback, the record is gone and a later wait would never end: stop here.
+    // Freed by a stop, the record is gone and a later wait would never end: stop here.
     try #require(seen.token == token, "the record is still the pending one")
     #expect(!seen.hasResult && !seen.hasFailure && !seen.displaysFailure)
     #expect(seen.itemActive)
@@ -121,13 +117,10 @@ private actor I392Loader {
     let waiterA = i392Waiter(scheduler, at: 0, item: entry.itemID, a)
     let waiterB = i392Waiter(scheduler, at: 0, item: entry.itemID, b)
     try await waitUntil { a.registering && b.registering }
-    let fallback = i392Fallback(scheduler)
-    defer { fallback.cancel() }
     if offMain { await Task.detached { waiterA.cancel() }.value } else { waiterA.cancel() }
-    await waiterA.value
-    fallback.cancel()
+    await i392Await(waiterA, freeing: scheduler)
     #expect(a.returns == 1)
-    try #require(a.token == token, "A returned on its own cancel, not on the fallback's stop")
+    try #require(a.token == token, "A returned on its own cancel, not on a stop")
     #expect(!a.hasResult && !a.hasFailure && !a.displaysFailure && a.itemActive)
     #expect(b.returns == 0, "cancelling A does not return B")
     await loader.release(entry.itemID)
@@ -177,11 +170,8 @@ func i392CancelledSubsetOfWaitersReturnsAndRestSeeResult(mask: Int) async throws
     let seen = (0..<3).map { _ in I392Observation() }
     let waiters = seen.map { i392Waiter(scheduler, at: 0, item: entry.itemID, $0) }
     try await waitUntil { seen.allSatisfy(\.registering) }
-    let fallback = i392Fallback(scheduler)
-    defer { fallback.cancel() }
     let cancelled = (0..<3).filter { mask & (1 << $0) != 0 }, kept = (0..<3).filter { mask & (1 << $0) == 0 }
-    for k in cancelled { waiters[k].cancel(); await waiters[k].value }
-    fallback.cancel()
+    for k in cancelled { waiters[k].cancel(); await i392Await(waiters[k], freeing: scheduler) }
     for k in cancelled {
         #expect(seen[k].returns == 1, "mask=\(mask) waiter \(k)")
         try #require(seen[k].token == token, "mask=\(mask) waiter \(k) returned on its own cancel")
@@ -203,13 +193,10 @@ func i392CancelledSubsetOfWaitersReturnsAndRestSeeResult(mask: Int) async throws
     let x = I392Observation()
     let waiterX = i392Waiter(scheduler, at: 7, item: nil, x)
     try await waitUntil { x.registering }
-    let fallback = i392Fallback(scheduler)
-    defer { fallback.cancel() }
     waiterX.cancel()
-    await waiterX.value
-    fallback.cancel()
+    await i392Await(waiterX, freeing: scheduler)
     #expect(x.returns == 1 && x.token == nil)
-    try #require(scheduler.token(at: 0) == token, "X returned on its own cancel, not on the fallback's stop")
+    try #require(scheduler.token(at: 0) == token, "X returned on its own cancel, not on a stop")
     await loader.release(entry.itemID)
     await scheduler.waitForTerminal(at: 0)
     #expect(scheduler.result(at: 0) != nil)
