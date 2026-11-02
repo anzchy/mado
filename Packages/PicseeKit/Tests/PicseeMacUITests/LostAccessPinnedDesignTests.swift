@@ -40,9 +40,9 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
         .appendingPathComponent("../../../..").standardizedFileURL
     let directory = root.appendingPathComponent("design/prototypes/picsee-browser/states")
     let page = try Data(contentsOf: directory.appendingPathComponent("permission-denied.html"))
-    #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == "1cdbfc0955dddd49fdf224c87a310d25afafdde14bc4811f6ae9249ff7c89fb4")
+    #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == "5e32473422a6d92199874a7e60907a9327ba00e25825f09dd26f8e1a8454af29")
     let manifest = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
-    #expect(SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined() == "e0996d6de74c3c2b692c2d0cea798e9c5cd7149b17ee9ba71db7897537e6781e")
+    #expect(SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined() == "c8abe6f749db6e2c00bd4585ca7d62c68288a1795bb1c1e444f5cd40490d4bee")
 }
 
 @Test(arguments: LostAccessCase.all) @MainActor private func t229LostAccessPinnedNativeComposition(_ sample: LostAccessCase) throws {
