@@ -67,9 +67,10 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     let scene = StatesScene(), leases = FolderReadingNativeLeases(), scanner = FolderReadingNativeScanner()
     defer { scene.window.close() }
     let coordinator = FolderScanCoordinator(access: leases, scanner: scanner)
+    let started = StartedTasks()
     try await withAsyncTeardown {
         scene.session.folderScan = coordinator
-        let task = coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/A"), rootID: AccessRootID())
+        let task = started.track(coordinator.begin(folder: URL(fileURLWithPath: "/native-folder/A"), rootID: AccessRootID()))
         await scanner.waitForStart()
         scene.state.refresh(); scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
         #expect(scene.session.imageStatus == .readingFolder)
@@ -93,7 +94,8 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
         await scanner.finish(); try await task.value
         #expect(await leases.balance == [1, 1])
     } teardown: {
-        coordinator.cancel(); await scanner.finish()
+        coordinator.cancel(); started.cancelAll()
+        await started.awaitAll { await scanner.finish() }
     }
 }
 

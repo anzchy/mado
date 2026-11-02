@@ -274,28 +274,35 @@ func t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_ code: Int) async throws {
 func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: Bool) async throws {
     let gate = RootCheckProbeGate()
     let f = try await RootCheckFixture(sourceExists: { gate.probe($0, codec: $1) })
-    defer { gate.release(); f.remove() }
-    let stamp = f.monitor.state.stamp(for: f.root)
-    let before = await f.mounts.enumerations
-    let report = Task { @MainActor in
-        await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
-                                         file: f.base.appendingPathComponent("Root/broken.jpg"))
+    defer { f.remove() }
+    let started = StartedTasks()
+    try await withAsyncTeardown {
+        let stamp = f.monitor.state.stamp(for: f.root)
+        let before = await f.mounts.enumerations
+        let report = Task { @MainActor in
+            await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
+                                             file: f.base.appendingPathComponent("Root/broken.jpg"))
+        }
+        started.track(report)
+        try await rootCheckWait { gate.calls > 0 }
+        // Reaching here on MainActor while the probe waits is the heartbeat.
+        #expect(gate.waiting)
+        #expect(!gate.ranOnMain)
+        #expect(!gate.ranUnscoped)
+        #expect(f.codec.activeScopes > 0)
+        if stale { f.monitor.state.reauthorize(f.root, volumeUUID: "111") }
+        else { report.cancel() }
+        let expected = f.monitor.state.snapshot(for: f.root)
+        await f.mounts.disconnect()
+        gate.release()
+        await report.value
+        #expect(f.monitor.state.snapshot(for: f.root) == expected)
+        #expect(await f.mounts.enumerations == before)
+        #expect(f.codec.activeScopes == 0)
+    } teardown: {
+        started.cancelAll()
+        await started.awaitAll { gate.release() }
     }
-    try await rootCheckWait { gate.calls > 0 }
-    // Reaching here on MainActor while the probe waits is the heartbeat.
-    #expect(gate.waiting)
-    #expect(!gate.ranOnMain)
-    #expect(!gate.ranUnscoped)
-    #expect(f.codec.activeScopes > 0)
-    if stale { f.monitor.state.reauthorize(f.root, volumeUUID: "111") }
-    else { report.cancel() }
-    let expected = f.monitor.state.snapshot(for: f.root)
-    await f.mounts.disconnect()
-    gate.release()
-    await report.value
-    #expect(f.monitor.state.snapshot(for: f.root) == expected)
-    #expect(await f.mounts.enumerations == before)
-    #expect(f.codec.activeScopes == 0)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func t229Fix3StaleAndCancelledReportsNeverProbe() async throws {
@@ -319,6 +326,7 @@ func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: B
 @MainActor @Test(.timeLimit(.minutes(3))) func t229Fix3ConcurrentSourceReportsCoalesceAndCancellationIsPerCaller() async throws {
     let gate = RootCheckProbeGate()
     let f = try await RootCheckFixture(sourceExists: { gate.probe($0, codec: $1) })
+    let started = StartedTasks()
     try await withAsyncTeardown {
         let stamp = f.monitor.state.stamp(for: f.root)
         let before = await f.mounts.enumerations
@@ -327,6 +335,7 @@ func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: B
             await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
                                              file: f.base.appendingPathComponent("Root/broken.jpg"))
         } }
+        reports.forEach { started.track($0) }
         try await rootCheckWait { gate.calls > 0 }
         // The probe is held; this window only observes unwanted duplicate probes.
         try await Task.sleep(for: .milliseconds(100))
@@ -342,7 +351,9 @@ func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: B
         #expect(f.monitor.state.snapshot(for: f.root)?.availability == .lost(.diskNotConnected))
         #expect(f.codec.activeScopes == 0)
     } teardown: {
-        gate.release(); f.remove(); await f.mounts.release()
+        gate.release(); started.cancelAll()
+        await started.awaitAll { await f.mounts.release() }
+        f.remove(); await f.mounts.release()
     }
 }
 
@@ -352,24 +363,31 @@ func t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_ stale: B
         if url.lastPathComponent == "broken.jpg" { _ = gate.probe(url, codec: codec); return true }
         return false
     })
-    defer { gate.release(); f.remove() }
-    let stamp = f.monitor.state.stamp(for: f.root)
-    let before = await f.mounts.enumerations
-    let present = Task { @MainActor in
-        await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
-                                         file: f.base.appendingPathComponent("Root/broken.jpg"))
+    defer { f.remove() }
+    let started = StartedTasks()
+    try await withAsyncTeardown {
+        let stamp = f.monitor.state.stamp(for: f.root)
+        let before = await f.mounts.enumerations
+        let present = Task { @MainActor in
+            await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.corruptImage),
+                                             file: f.base.appendingPathComponent("Root/broken.jpg"))
+        }
+        started.track(present)
+        try await rootCheckWait { gate.calls > 0 }
+        #expect(gate.waiting)
+        // A different missing source and explicit access evidence still reach root checks.
+        await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.unsupportedFormat),
+                                         file: f.base.appendingPathComponent("Root/gone.jpg"))
+        await f.monitor.reportReadFailure(f.root, from: stamp, error: NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES)))
+        #expect(await f.mounts.enumerations - before == 2)
+        gate.release()
+        await present.value
+        #expect(f.monitor.state.snapshot(for: f.root)?.availability == .readable)
+        #expect(f.codec.activeScopes == 0)
+    } teardown: {
+        started.cancelAll()
+        await started.awaitAll { gate.release() }
     }
-    try await rootCheckWait { gate.calls > 0 }
-    #expect(gate.waiting)
-    // A different missing source and explicit access evidence still reach root checks.
-    await f.monitor.reportReadFailure(f.root, from: stamp, error: ImageLoadError(.unsupportedFormat),
-                                     file: f.base.appendingPathComponent("Root/gone.jpg"))
-    await f.monitor.reportReadFailure(f.root, from: stamp, error: NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES)))
-    #expect(await f.mounts.enumerations - before == 2)
-    gate.release()
-    await present.value
-    #expect(f.monitor.state.snapshot(for: f.root)?.availability == .readable)
-    #expect(f.codec.activeScopes == 0)
 }
 
 

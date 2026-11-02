@@ -96,6 +96,8 @@ actor FolderScanControlledScanner: FolderScanning {
     func finish(_ index: Int = 0, failing: Bool = false, error: (any Error & Sendable)? = nil) {
         send(.finish(failing, error), at: index)
     }
+    /// Teardown (#392): ends every scan that has started, so a test that exits early can await its scan tasks.
+    func finishStarted() { for index in calls.indices { send(.finish(false, nil), at: index) } }
 }
 
 @MainActor struct FolderScanFixture {

@@ -45,9 +45,9 @@ private actor FailNextMetadataScan: FolderScanning {
     func names() -> [String] { coordinator.snapshot?.entries.map(\.url.lastPathComponent) ?? [] }
     func refresh() async throws { try await #require(coordinator.refresh()).value }
     func close() async throws {
+        defer { f.remove() }
         coordinator.end()
         try await waitUntil { self.f.source.active == 0 && self.f.scope.counts[0] == self.f.scope.counts[1] }
-        f.remove()
     }
 }
 

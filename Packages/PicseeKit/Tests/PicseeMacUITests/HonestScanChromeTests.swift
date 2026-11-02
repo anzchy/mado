@@ -44,6 +44,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/i142-chrome/A"), root = AccessRootID()
     let c = FolderScanCoordinator(access: StatesLeases(), scanner: scanner)
+    let started = StartedTasks()
     try await withAsyncTeardown { @MainActor in
         scene.session.folderScan = c
         let label = try #require(scene.chrome.groups.flatMap(\.subviews).compactMap { $0 as? NSTextField }
@@ -60,7 +61,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         }
         expectText("")
         await Task.yield()
-        let task = c.begin(folder: folder, rootID: root)
+        let task = started.track(c.begin(folder: folder, rootID: root))
         expectText(reading)
         try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate")
         #expect(c.snapshot?.isComplete == false && c.completedImageCount == nil)
@@ -76,7 +77,8 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         c.setConditions(.init(selectedExtensions: ["png"]))
         scene.session.beginFolderEntry(shownImage: nil, hasCompleteGrid: true)
         await Task.yield()
-        let replacement = c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"), rootID: root)
+        let replacement = started.track(c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"),
+            rootID: root))
         try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate")
         expectText(reading)
         #expect(scene.session.cancelFolderEntry() == .grid)
@@ -85,7 +87,7 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         try await replacement.value
         expectText(images(2))
         await Task.yield()
-        let failing = c.begin(folder: folder, rootID: root)
+        let failing = started.track(c.begin(folder: folder, rootID: root))
         try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate")
         expectText(reading)
         await scanner.finish(2, failed: true)
@@ -93,6 +95,8 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         #expect(c.completedImageCount == nil && c.failure != nil)
         expectText("")
     } teardown: {
-        c.end(); await scanner.finishAll()
+        // Release the held scans, then wait for every scan task this test started (#392 item 4).
+        c.end(); started.cancelAll()
+        await started.awaitAll { await scanner.finishAll() }
     }
 }

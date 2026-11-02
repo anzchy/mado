@@ -137,3 +137,39 @@ private struct TeardownProbe: Error {}
     #expect(cores.allSatisfy { $0 == cores[0] }, "ConditionWait.swift copies differ")
     #expect(cores[0].contains("Duration.seconds(100)"))
 }
+
+private actor I392Hold {
+    private var waiter: CheckedContinuation<Void, Never>?, opened = false
+    func hold() async { if !opened { await withCheckedContinuation { waiter = $0 } } }
+    func open() { opened = true; waiter?.resume(); waiter = nil }
+}
+
+/// Teardown waits for every tracked task, running its release action between looks, even when the test task itself
+/// is already cancelled (as after a time limit).
+@Test(.timeLimit(.minutes(2))) func i392StartedTasksAwaitAllReleasesAndWaitsEvenWhenCancelled() async throws {
+    let started = StartedTasks(), hold = I392Hold()
+    let held = started.track(Task { await hold.hold(); return 1 })
+    #expect(!started.allEnded)
+    let teardown = Task {
+        withUnsafeCurrentTask { $0?.cancel() }
+        var releases = 0
+        await started.awaitAll { releases += 1; await hold.open() }
+        return (releases, started.allEnded)
+    }
+    let (releases, ended) = await teardown.value
+    #expect(ended && releases >= 1)
+    #expect(await held.value == 1)
+    started.cancelAll() // cancelling ended tasks is harmless
+}
+
+/// A task that outlives the limit is reported at the call site instead of being left behind silently.
+@Test(.timeLimit(.minutes(2))) func i392StartedTasksAwaitAllRecordsATaskStillRunning() async throws {
+    let started = StartedTasks(), hold = I392Hold()
+    started.track(Task { await hold.hold() })
+    await withKnownIssue("the held task is still running when the limit ends") {
+        await started.awaitAll(limit: .milliseconds(50))
+    } matching: { issue in issue.comments.contains { $0.rawValue.contains("still running") } }
+    await hold.open()
+    await started.awaitAll()
+    #expect(started.allEnded)
+}

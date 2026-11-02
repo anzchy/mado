@@ -227,31 +227,37 @@ private actor P303ChangedTicketSignalCache: ThumbnailCaching {
     defer { decoder.release.open() }
     let cache = P303ChangedTicketSignalCache(directory: cacheDirectory)
     let pipeline = ImageIOPipeline(decoder: decoder, thumbnailCache: cache)
-    let oldSource = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)
-    let oldWork = Task { try await oldSource.image(maximumPixelSize: 64) }
-    var decoding = decoder.started.makeAsyncIterator()
-    _ = await decoding.next()
-    try blueBytes.write(to: file)
-    try FileManager.default.setAttributes([.modificationDate: time], ofItemAtPath: file.path)
-    #expect(try FileRevisionReader.read(file) == revision)
-    let expectedB = try ImageIODecoder().decode(ImageDecodeRequest(fileURL: file, maximumPixelSize: 64))
-    let newSource = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)
-    let newWork = Task { try await newSource.image(maximumPixelSize: 64) }
-    var changed = cache.changed.makeAsyncIterator()
-    _ = await changed.next() // B's durable ticket was prepared while A remains held.
-    decoder.release.signal()
-    do { _ = try await oldWork.value; Issue.record("old decoded pixels delivered after B replaced A") }
-    catch let error as ImageLoadError { #expect(error.kind == .sourceChanged) }
-    let (_, newImage) = try await newWork.value
-    #expect(try rgba(newImage.image) == rgba(expectedB.image))
-    #expect(decoder.count == 2)
-    await oldSource.close()
-    await newSource.close()
-    let restartDecoder = P303CountingDecoder()
-    let reopened = try await AccessImageSource.open(.root(root, file: file), access: access,
-        pipeline: ImageIOPipeline(decoder: restartDecoder, thumbnailCache: ThumbnailDiskCache(directory: cacheDirectory)))
-    let (_, durableB) = try await reopened.image(maximumPixelSize: 64)
-    await reopened.close()
-    #expect(try rgba(durableB.image) == rgba(expectedB.image))
-    #expect(restartDecoder.count == 0)
+    let started = StartedTasks()
+    try await withAsyncTeardown {
+        let oldSource = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)
+        let oldWork = started.track(Task { try await oldSource.image(maximumPixelSize: 64) })
+        var decoding = decoder.started.makeAsyncIterator()
+        _ = await decoding.next()
+        try blueBytes.write(to: file)
+        try FileManager.default.setAttributes([.modificationDate: time], ofItemAtPath: file.path)
+        #expect(try FileRevisionReader.read(file) == revision)
+        let expectedB = try ImageIODecoder().decode(ImageDecodeRequest(fileURL: file, maximumPixelSize: 64))
+        let newSource = try await AccessImageSource.open(.root(root, file: file), access: access, pipeline: pipeline)
+        let newWork = started.track(Task { try await newSource.image(maximumPixelSize: 64) })
+        var changed = cache.changed.makeAsyncIterator()
+        _ = await changed.next() // B's durable ticket was prepared while A remains held.
+        decoder.release.signal()
+        do { _ = try await oldWork.value; Issue.record("old decoded pixels delivered after B replaced A") }
+        catch let error as ImageLoadError { #expect(error.kind == .sourceChanged) }
+        let (_, newImage) = try await newWork.value
+        #expect(try rgba(newImage.image) == rgba(expectedB.image))
+        #expect(decoder.count == 2)
+        await oldSource.close()
+        await newSource.close()
+        let restartDecoder = P303CountingDecoder()
+        let reopened = try await AccessImageSource.open(.root(root, file: file), access: access,
+            pipeline: ImageIOPipeline(decoder: restartDecoder, thumbnailCache: ThumbnailDiskCache(directory: cacheDirectory)))
+        let (_, durableB) = try await reopened.image(maximumPixelSize: 64)
+        await reopened.close()
+        #expect(try rgba(durableB.image) == rgba(expectedB.image))
+        #expect(restartDecoder.count == 0)
+    } teardown: {
+        started.cancelAll(); decoder.release.open()
+        await started.awaitAll()
+    }
 }

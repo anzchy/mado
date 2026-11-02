@@ -21,8 +21,12 @@ private extension ThumbnailDiskCache {
 
 @MainActor private func suspendCache(_ cache: ThumbnailDiskCache) async throws -> SettingsCacheGate {
     let gate = SettingsCacheGate()
-    Task.detached { await cache.suspendForSettingsTest(gate) }
-    try await waitUntil { gate.isSuspended }
+    let suspending = Task.detached { await cache.suspendForSettingsTest(gate) }
+    do { try await waitUntil { gate.isSuspended } } catch {
+        // The caller never receives the gate on this path, so release the held cache actor here (#392).
+        gate.resume(); await suspending.value
+        throw error
+    }
     #expect(gate.isSuspended)
     return gate
 }

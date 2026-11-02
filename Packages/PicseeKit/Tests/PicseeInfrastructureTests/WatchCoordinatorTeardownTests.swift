@@ -71,15 +71,21 @@ private final class GatedWatcher: FolderWatching, @unchecked Sendable {
     // Switching roots while the new subscribe is held, then releasing: both roots end up stopped.
     do {
         let (w, other) = try await section(); defer { w.f.remove() }
-        let gate = GatedWatcher(w.f.hub); defer { gate.open() }
-        var switching: FolderScanCoordinator? = make(w, gate)
-        try await switching?.begin(folder: w.url("F"), rootID: w.rootID).value
-        gate.close()
-        let pending = switching?.begin(folder: w.f.url("other/K"), rootID: other)
-        try await waitUntil { gate.waiting == 1 }
-        switching = nil
-        gate.open()
-        _ = try? await pending?.value
-        try await released(w, "root switch held, then release")
+        let gate = GatedWatcher(w.f.hub), started = StartedTasks()
+        try await withAsyncTeardown {
+            var switching: FolderScanCoordinator? = make(w, gate)
+            try await switching?.begin(folder: w.url("F"), rootID: w.rootID).value
+            gate.close()
+            let pending = switching?.begin(folder: w.f.url("other/K"), rootID: other)
+            if let pending { started.track(pending) }
+            try await waitUntil { gate.waiting == 1 }
+            switching = nil
+            gate.open()
+            _ = try? await pending?.value
+            try await released(w, "root switch held, then release")
+        } teardown: {
+            started.cancelAll()
+            await started.awaitAll { gate.open() }
+        }
     }
 }
