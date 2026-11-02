@@ -8,18 +8,21 @@ import PicseeCore
 private actor I142ChromeScanner: FolderScanning {
     private var nextIndex = 0
     private var endings: [Int: CheckedContinuation<Void, any Error>] = [:]
-    private var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
     func scan(in folder: URL, root: ItemIdentityRoot, options: FolderScanOptions,
         emit: @Sendable ([FolderEntry]) async throws -> Void) async throws {
+        try Task.checkCancellation()
         let index = nextIndex; nextIndex += 1
         try await emit(["a.png", "b.jpg", "c.png"].map { FolderEntry(url: folder.appendingPathComponent($0), root: root) })
+        try Task.checkCancellation()
         try await withCheckedThrowingContinuation { continuation in
             endings[index] = continuation
-            waiters.removeValue(forKey: index)?.resume()
         }
     }
-    func started(_ index: Int) async {
-        if endings[index] == nil { await withCheckedContinuation { waiters[index] = $0 } }
+    func started(_ index: Int) -> Bool { endings[index] != nil }
+    func finishAll() {
+        let pending = Array(endings.values)
+        endings.removeAll()
+        for ending in pending { ending.resume(throwing: CancellationError()) }
     }
     func finish(_ index: Int, failed: Bool = false) {
         let ending = endings.removeValue(forKey: index)
@@ -28,11 +31,25 @@ private actor I142ChromeScanner: FolderScanning {
     }
 }
 
+/// Bound the held scanner handshake, yielding the MainActor while the scan reaches its gate.
+private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async throws -> Bool {
+    let clock = ContinuousClock(), deadline = clock.now + .seconds(5)
+    while clock.now < deadline {
+        if await scanner.started(index) { return true }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    return await scanner.started(index)
+}
+
 @Test(.timeLimit(.minutes(2))) @MainActor func i142WI2RenderedChromeFollowsScanProjectionCancelAndFailure() async throws {
     let scene = StatesScene(), scanner = I142ChromeScanner()
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/i142-chrome/A"), root = AccessRootID()
     let c = FolderScanCoordinator(access: StatesLeases(), scanner: scanner)
+    defer {
+        c.end()
+        Task { await scanner.finishAll() }
+    }
     scene.session.folderScan = c
     let label = try #require(scene.chrome.groups.flatMap(\.subviews).compactMap { $0 as? NSTextField }
         .first { $0.accessibilityIdentifier() == "chrome.filename" })
@@ -47,9 +64,10 @@ private actor I142ChromeScanner: FolderScanning {
         String(format: String(localized: "Images: %lld"), Int64(count))
     }
     expectText("")
+    await Task.yield()
     let task = c.begin(folder: folder, rootID: root)
     expectText(reading)
-    await scanner.started(0)
+    try #require(await i142ChromeStarted(scanner, 0), "Scan phase 0 did not reach its held gate within 5 seconds")
     #expect(c.snapshot?.isComplete == false && c.completedImageCount == nil)
     expectText(reading)
     await scanner.finish(0)
@@ -58,19 +76,22 @@ private actor I142ChromeScanner: FolderScanning {
         c.setConditions(.init(selectedExtensions: extensions))
         expectText(images(count))
         #expect(c.completedImageCount == count)
+        await Task.yield()
     }
     c.setConditions(.init(selectedExtensions: ["png"]))
     scene.session.beginFolderEntry(shownImage: nil, hasCompleteGrid: true)
+    await Task.yield()
     let replacement = c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"), rootID: root)
-    await scanner.started(1)
+    try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate within 5 seconds")
     expectText(reading)
     #expect(scene.session.cancelFolderEntry() == .grid)
     expectText(images(2))
     await scanner.finish(1)
     try await replacement.value
     expectText(images(2))
+    await Task.yield()
     let failing = c.begin(folder: folder, rootID: root)
-    await scanner.started(2)
+    try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate within 5 seconds")
     expectText(reading)
     await scanner.finish(2, failed: true)
     await #expect(throws: CocoaError.self) { try await failing.value }
