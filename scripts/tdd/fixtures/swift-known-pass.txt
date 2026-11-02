@@ -1,0 +1,26 @@
+Building for debugging...
+[0/6] Write sources
+[0/6] /SCRATCH/LaneFixtures/.build/arm64-apple-macosx/debug/LaneFixturesPackageTests.derived/runner.swift
+[2/6] Write sources
+[3/6] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Compiling LaneTests FixtureTests.swift
+[6/8] Emitting module LaneTests
+[7/10] Compiling LaneFixturesPackageTests runner.swift
+[8/10] Emitting module LaneFixturesPackageTests
+[8/10] Write Objects.LinkFileList
+[9/10] Linking LaneFixturesPackageTests
+Build complete! (2.07s)
+Test Suite 'All tests' started at 2026-11-02 21:13:51.425.
+Test Suite 'All tests' passed at 2026-11-02 21:13:51.426.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test passing() started.
+◇ Test failing() started.
+◇ Test knownOnly() started.
+✔ Test failing() passed after 0.001 seconds.
+✔ Test passing() passed after 0.001 seconds.
+━ Test knownOnly() recorded a known issue at FixtureTests.swift:3:43: Expectation failed: 1 == 0
+━ Test knownOnly() passed after 0.001 seconds with 1 known issue.
+━ Test run with 3 tests in 0 suites passed after 0.001 seconds with 1 known issue.
