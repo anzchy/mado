@@ -123,7 +123,7 @@ module.exports=async(page,{design,states,screenshot})=>{
   ['empty-folder.html?case=no-subfolders',{tiles:0,minRecents:1,maxRecents:10,buttons:['选择其他文件夹…'],drop:true}],
   ['empty-folder.html?theme=dark',{dark:true,tiles:3}],
   ['empty-folder.html?drag=over',{tiles:3,dragOver:true}],
-  ['permission-denied.html',{unavailable:true,buttons:['重新选择文件夹…','选择其他文件夹…']}],
+  ['permission-denied.html',{unavailable:true,buttons:['重新选择文件夹…'],absent:['选择其他文件夹…']}],
   ['permission-denied.html?cause=volume',{unavailable:true,text:'等待磁盘连接',texts:['重新确认访问权限'],notText:['不需要再选择'],buttons:['选择其他文件夹…'],absent:['重新选择文件夹…']}],
   ['permission-denied.html?cause=missing',{unavailable:true,text:'找不到',buttons:['在新位置选择…','选择其他文件夹…']}],
   ['permission-denied.html?cause=unknown',{unavailable:true,text:'无法访问此文件夹',buttons:['重新选择文件夹…','选择其他文件夹…']}],
