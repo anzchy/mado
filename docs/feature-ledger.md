@@ -333,11 +333,11 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-02 | doc-gardener | 70369f9..87ae1d56 |
+| 打开与输入 | 2026-11-02 | doc-gardener | 70369f9..f89a0cab |
 | 查看与画布 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | C 沉浸界面 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | 外观与显示偏好 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
-| 文件夹浏览 | 2026-11-02 | doc-gardener | 70369f9..87ae1d56 |
+| 文件夹浏览 | 2026-11-02 | doc-gardener | 70369f9..f89a0cab |
 | Filmstrip | 2026-10-28 | doc-gardener | 00a5c6d..50a495a。历史复核见 git log -p -- docs/feature-ledger.md |
 | 网格、选择与菜单 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
 | 信息与元数据 | 2026-11-01 | doc-gardener | 0b6f03c..a9ad5e5 |
