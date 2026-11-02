@@ -251,7 +251,9 @@ func t232LostSidebarRefinementKeepsEveryWindowCauseCurrentWithoutReads() async t
             #expect(row.accessLossCause == cause)
             #expect(row.accessibilityValue() as? String == expected)
             #expect(row.accessibilityHelp() == expected)
-            #expect(try t232SidebarLostPage(controller).titleLabel.stringValue == String(localized: String.LocalizationValue(title)))
+            #expect(try t232SidebarLostPage(controller).titleLabel.stringValue == String(format:
+                String(localized: String.LocalizationValue(cause == .notFound ? "Can’t Find “%@”" : "Unable to Access “%@”")),
+                try #require(controller.waitingAccessPosition).folderURL.lastPathComponent))
         }
     }
 
