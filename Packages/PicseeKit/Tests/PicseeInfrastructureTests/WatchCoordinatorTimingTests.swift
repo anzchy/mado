@@ -14,11 +14,15 @@ import PicseeApplication
     defer { initial.cancel() }
     try await w.trace.waitForEnd(generation: 1, at: 0)
     let step = 10, writes = Array(stride(from: 0, to: 3000, by: 100)), lastWrite = writes[writes.count - 1]
+    // Update times are settle points by construction; completion waits at the frozen clock enforce the bounds.
     var updates: [(at: Int, names: [String])] = [], shown = w.names()
+    var expectedGeneration: UInt64 = 1
     // Only the three flush boundaries suspend the burst driver. Each wait requires an actual scan end,
     // rather than accepting begins == ends before the watch callback has even reached the MainActor.
     func settle(at t: Int) async throws {
-        try await w.trace.waitForEnd(generation: UInt64(updates.count + 2), at: t)
+        expectedGeneration += 1
+        try await w.trace.waitForEnd(generation: expectedGeneration, at: t)
+        #expect(w.trace.begins == Array(1...expectedGeneration), "t=\(t) unexpected scan generations")
         #expect(w.trace.begins == w.trace.ends.map(\.generation), "t=\(t) unmatched refresh begin/end")
         #expect(w.trace.ends.allSatisfy { $0.outcome == .complete })
         if w.names() != shown { shown = w.names(); updates.append((t, shown)) }
@@ -32,8 +36,16 @@ import PicseeApplication
     }
     w.clock.advance(to: 3000)
     try await settle(at: 3000)
-    // Finish the original observation window without polling or creating additional actor turns.
-    w.clock.advance(to: lastWrite + 3000)
+    // All three delivered callbacks have matching scan ends. Prove the remaining observation window
+    // fires no callbacks: it cannot queue a later refresh that teardown would otherwise hide.
+    #expect(w.clock.deliveredCount == 3)
+    let tailDeliveries = w.clock.advance(to: lastWrite + 3000)
+    #expect(tailDeliveries == 0, "quiet window unexpectedly delivered a watch callback")
+    #expect(expectedGeneration == 4)
+    #expect(c.sourceSnapshot?.version.generation == expectedGeneration)
+    #expect(w.trace.begins == Array(1...expectedGeneration))
+    #expect(w.trace.begins == w.trace.ends.map(\.generation), "final window has unmatched scan begin/end")
+    #expect(w.trace.ends.allSatisfy { $0.outcome == .complete })
     let during = updates.filter { $0.at <= lastWrite }
     // A continuous burst still updates at least once per max wait (here at 1000 and 2000, then 3000 after it).
     #expect(during.count >= lastWrite / WatchHub.maxWaitMilliseconds, "updates during the burst: \(updates.map(\.at))")
