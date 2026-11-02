@@ -24,6 +24,7 @@ import PicseeApplication
 /// independent of the system's full keyboard access setting, and refuse it once the panel is hidden or disabled.
 @Test @MainActor func issue114PanelCoverageControlsFocusOnlyWhileShownAndEnabled() throws {
     let (shell, window) = issue114CoverageShell()
+    defer { window.contentView = nil; window.close() }
     let panel = shell.displayPanel
     let controls: [NSControl] = [panel.closeButton, panel.sizeSlider, panel.namesCheckbox, panel.fitPopup]
     shell.setDisplayPanelOpen(true)
@@ -46,7 +47,8 @@ import PicseeApplication
 
 /// grid-display.html `--shadow-soft` / `--color-panel`: the panel follows the window between light and dark.
 @Test @MainActor func issue114PanelCoverageAppearanceChangeRefreshesSurface() throws {
-    let (shell, _) = issue114CoverageShell()
+    let (shell, window) = issue114CoverageShell()
+    defer { window.contentView = nil; window.close() }
     let panel = shell.displayPanel
     shell.setDisplayPanelOpen(true)
     for (name, opacity) in [(NSAppearance.Name.darkAqua, Float(0.45)), (.aqua, Float(0.08))] {
@@ -64,6 +66,7 @@ import PicseeApplication
 /// Esc reaches the panel as `cancelOperation(_:)` from its controls' responder chain and closes it.
 @Test @MainActor func issue114PanelCoverageCancelOperationCloses() throws {
     let (shell, window) = issue114CoverageShell()
+    defer { window.contentView = nil; window.close() }
     shell.setDisplayPanelOpen(true)
     #expect(shell.isDisplayPanelOpen)
     shell.displayPanel.cancelOperation(nil)

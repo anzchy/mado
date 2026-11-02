@@ -21,6 +21,11 @@ import PicseeApplication
         window.contentView = shell
         shell.layoutSubtreeIfNeeded()
     }
+    /// Detaches the views, so nothing in this window outlives the test (#316 f89a0cab).
+    func close() {
+        window.contentView = nil
+        window.close()
+    }
     func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                          windowNumber: window.windowNumber, context: nil, characters: characters,
@@ -41,6 +46,7 @@ import PicseeApplication
 
 @Test @MainActor func issue114Fix1EscapeClosesOpenPanelFromAnyFocus() throws {
     let scene = Issue114Fix1Scene()
+    defer { scene.close() }
     let shell = scene.shell
     let focusTargets: [NSView] = [shell.displayPanel.sizeSlider, shell.displayPanel.fitPopup,
                                   scene.grid.collectionView, shell.sortButton, shell.displayButton]
@@ -64,6 +70,7 @@ import PicseeApplication
 
 @Test @MainActor func issue114Fix1TabInsidePanelFollowsPanelLoop() throws {
     let scene = Issue114Fix1Scene()
+    defer { scene.close() }
     let shell = scene.shell
     let panel = shell.displayPanel
     shell.setDisplayPanelOpen(true)
@@ -91,6 +98,7 @@ import PicseeApplication
 
 @Test @MainActor func issue114Fix1OutsideClickClosesPanelAndClickStillLands() throws {
     let scene = Issue114Fix1Scene()
+    defer { scene.close() }
     let shell = scene.shell
     let panel = shell.displayPanel
     // Inside the panel and on the Display button (which toggles by itself) the panel stays open.
@@ -120,6 +128,7 @@ import PicseeApplication
     let other = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 300),
                          styleMask: [.titled], backing: .buffered, defer: false)
     other.isReleasedWhenClosed = false
+    defer { other.close() }
     shell.setDisplayPanelOpen(true)
     shell.dismissDisplayPanel(forMouseDown: scene.mouseDown(on: scene.grid, in: other))
     #expect(shell.isDisplayPanelOpen)
