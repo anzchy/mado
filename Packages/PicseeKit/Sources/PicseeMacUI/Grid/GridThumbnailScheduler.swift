@@ -32,7 +32,8 @@ enum GridThumbnailPixelSizing {
     private var snapshot: FolderSnapshot?
     private var records: [Int: Record] = [:]
     private var currentCoverage: ThumbnailCoverage?
-    private var terminalWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
+    /// Each waiter carries an id, so a cancelled waiter removes only itself.
+    private var terminalWaiters: [Int: [(id: UUID, continuation: CheckedContinuation<Void, Never>)]] = [:]
     var activeItemIDs: Set<ItemID> { Set(records.values.filter { !$0.deferred }.map(\.itemID)) }
     private enum PinOperation: Sendable {
         case pin(RenderKey, DecodedImage), unpin(RenderKey), settle(CheckedContinuation<Void, Never>)
@@ -197,14 +198,28 @@ enum GridThumbnailPixelSizing {
     }
     func shouldDisplayFailure(at index: Int) -> Bool { records[index]?.failed == true }
     /// Returns once the record at `index` is terminal, the scheduler cancels its work, or the calling task is cancelled.
+    /// After a cancelled return the record may still be pending.
     func waitForTerminal(at index: Int) async {
         if Task.isCancelled { return }
         if let record = records[index], record.task == nil,
            (record.result != nil || record.failed || record.deferred) { return }
-        await withCheckedContinuation { terminalWaiters[index, default: []].append($0) }
+        let id = UUID()
+        // A cancel can arrive on any thread, before or after the continuation is stored; the main-actor hop runs
+        // after the store either way, and finds nothing when the index already ended.
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { terminalWaiters[index, default: []].append((id, $0)) }
+        } onCancel: {
+            Task { @MainActor in self.resumeCancelledWaiter(id, at: index) }
+        }
     }
     private func resumeTerminalWaiters(at index: Int) {
-        for waiter in terminalWaiters.removeValue(forKey: index) ?? [] { waiter.resume() }
+        for waiter in terminalWaiters.removeValue(forKey: index) ?? [] { waiter.continuation.resume() }
+    }
+    private func resumeCancelledWaiter(_ id: UUID, at index: Int) {
+        guard var waiters = terminalWaiters[index], let position = waiters.firstIndex(where: { $0.id == id }) else { return }
+        let waiter = waiters.remove(at: position)
+        terminalWaiters[index] = waiters.isEmpty ? nil : waiters
+        waiter.continuation.resume()
     }
 
     func stop() { cancelAll(); snapshot = nil }
