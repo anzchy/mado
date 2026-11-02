@@ -67,8 +67,8 @@ import PicseeInfrastructure
     #expect(!count.isHidden)
 }
 
-/// folder-loading.html: the folder being read shows `0` in the sidebar until its count is known (device: blank).
-@Test @MainActor func issue282SidebarShowsZeroForTheFolderBeingRead() throws {
+/// #142 owner decision / page 24: an unknown count is absent visually and from the AX label.
+@Test @MainActor func issue282SidebarLeavesUnknownCountBlankForTheFolderBeingRead() async throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -76,25 +76,47 @@ import PicseeInfrastructure
     shell.mainContent.addSubview(grid)
     let presentation = GridViewerPresentation(canvas: NSView(), chrome: NSView(), state: NSView(),
         grid: grid, inspector: NSView(), shell: shell)
-    let folder = URL(fileURLWithPath: "/tmp/picsee-reading-282-zero")
+    let folder = URL(fileURLWithPath: "/tmp/picsee-reading-282-unknown")
+    @MainActor func expectCount(_ count: Int?) throws {
+        let row = try #require(shell.folderTree.rows.first(where: { $0.current }))
+        #expect(row.countLabel.stringValue == (count.map(String.init) ?? ""))
+        #expect(row.countLabel.isHidden == (count == nil))
+        let images = count.map { String(format: String(localized: "%lld images"), Int64($0)) }
+        #expect(row.accessibilityLabel() == (images.map { "\(folder.lastPathComponent), \($0)" } ?? folder.lastPathComponent))
+    }
     shell.showFolderTree(current: GridSidebarFolder(url: folder), parent: nil,
         children: [GridSidebarFolder(url: folder.appendingPathComponent("child"))])
     presentation.showGrid(reading: true)
-    let current = try #require(shell.folderTree.rows.first(where: { $0.current }))
-    #expect(current.countLabel.stringValue == "0")
-    #expect(!current.countLabel.isHidden)
+    try expectCount(nil)
     let child = try #require(shell.folderTree.rows.first(where: { !$0.current }))
-    #expect(child.countLabel.isHidden, "only the folder being read shows 0")
+    #expect(child.countLabel.stringValue.isEmpty && child.countLabel.isHidden)
+    #expect(child.accessibilityLabel() == "child")
+    await Task.yield()
 
-    // The tree can be rebuilt while reading (sidebar rows arrive late).
+    // Late sidebar arrival and repeated nil updates cannot create a count.
     shell.showFolderTree(current: GridSidebarFolder(url: folder), parent: nil, children: [])
-    #expect(shell.folderTree.rows.first(where: { $0.current })?.countLabel.stringValue == "0")
+    try expectCount(nil)
     shell.updateFolderCount(nil, for: folder)
-    #expect(shell.folderTree.rows.first(where: { $0.current })?.countLabel.stringValue == "0")
-
-    // After reading an unknown count is blank again; a known count is shown as is.
+    try expectCount(nil)
+    presentation.showGrid(reading: true)
+    try expectCount(nil)
     presentation.showGrid(reading: false)
-    #expect(shell.folderTree.rows.first(where: { $0.current })?.countLabel.isHidden == true)
-    shell.updateFolderCount(12, for: folder)
-    #expect(shell.folderTree.rows.first(where: { $0.current })?.countLabel.stringValue == "12")
+    try expectCount(nil)
+    await Task.yield()
+
+    // A real count (including completed zero) survives reading toggles and tree rebuilds.
+    for count in [12, 0] {
+        shell.updateFolderCount(count, for: folder)
+        try expectCount(count)
+        presentation.showGrid(reading: true)
+        try expectCount(count)
+        shell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
+        try expectCount(count)
+        presentation.showGrid(reading: false)
+        try expectCount(count)
+        await Task.yield()
+    }
+    shell.updateFolderCount(nil, for: folder)
+    presentation.showGrid(reading: true)
+    try expectCount(nil)
 }

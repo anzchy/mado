@@ -145,7 +145,7 @@ import PicseeApplication
     }
 }
 
-@Test @MainActor func resumeReadingFooterShowsReadingOnTheFailedSurface() {
+@Test @MainActor func resumeReadingFooterShowsReadingOnTheFailedSurface() throws {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     f.showFailedSurface()
     let before = f.footer
@@ -154,8 +154,9 @@ import PicseeApplication
     f.presentation.resumeReadingFooter(true)
     #expect(f.footer.name == "–")
     #expect(f.footer.count == "Reading…")
-    #expect(f.shell.folderTree.showsZeroForUnknownCurrent)
-    #expect(f.footer.sidebarZero == "0")
+    let row = try #require(f.shell.folderTree.rows.first { $0.current })
+    #expect(row.countLabel.stringValue.isEmpty && row.countLabel.isHidden)
+    #expect(row.accessibilityLabel() == "picsee-resume-reading")
     #expect(!f.shell.isHidden && !f.presentation.isGridVisible)
 }
 
@@ -186,4 +187,23 @@ import PicseeApplication
     f.presentation.resumeReadingFooter(true)
     #expect(f.footer == before)
     #expect(f.presentation.isGridVisible && !f.shell.folderTree.showsZeroForUnknownCurrent)
+}
+
+/// Page 24F-A → page 24: Retry removes both the failure dash and its AX status.
+@Test @MainActor func i142WI1RetryClearsFailedSidebarCountAndAccessibility() async throws {
+    let f = ResumeReadingFixture(); defer { f.window.close() }
+    f.showFailedSurface()
+    for _ in 0..<2 {
+        f.shell.setReadFailedStatus(true)
+        let failed = try #require(f.shell.folderTree.rows.first { $0.current })
+        #expect(failed.countLabel.stringValue == "—" && !failed.countLabel.isHidden)
+        #expect(failed.accessibilityLabel() == "picsee-resume-reading, Read incomplete")
+        f.presentation.resumeReadingFooter(true)
+        let reading = try #require(f.shell.folderTree.rows.first { $0.current })
+        #expect(reading.countLabel.stringValue.isEmpty && reading.countLabel.isHidden)
+        #expect(reading.accessibilityLabel() == "picsee-resume-reading")
+        #expect(f.footer.name == "–" && f.footer.count == "Reading…")
+        #expect(!f.shell.isHidden && !f.presentation.isGridVisible)
+        await Task.yield()
+    }
 }
