@@ -5,11 +5,10 @@ import PicseeApplication
 import PicseeInfrastructure
 import PicseeMacUI
 
-@MainActor private func r2Wait(_ condition: @MainActor () async -> Bool) async {
-    for _ in 0..<2000 {
-        if await condition() || Task.isCancelled { return }
-        try? await Task.sleep(for: .milliseconds(5))
-    }
+@MainActor private func r2Wait(
+    fileID: String = #fileID, line: Int = #line, _ condition: @MainActor () async -> Bool
+) async throws {
+    try await waitUntil(fileID: fileID, line: line) { await condition() }
 }
 
 @MainActor private final class ReaderMotion: ReduceMotionSource {
@@ -157,19 +156,19 @@ private actor ReaderMetadata: InspectorMetadataReading {
     }
 }
 
-@MainActor private func readerSettle(_ rig: ReaderRig, _ controller: CanvasWindowController) async {
+@MainActor private func readerSettle(_ rig: ReaderRig, _ controller: CanvasWindowController) async throws {
     controller.open(rig.a, accessRequest: .fileGrant(rig.a))
-    await r2Wait { controller.session.imageLoader.phase == .settled && rig.pipeline.completedHeaders > 0 }
+    try await r2Wait { controller.session.imageLoader.phase == .settled && rig.pipeline.completedHeaders > 0 }
     #expect(controller.hasImage)
     #expect(controller.route(.inspector, from: .key))
-    await r2Wait { if case .known = controller.inspector.value { true } else { false } }
+    try await r2Wait { if case .known = controller.inspector.value { true } else { false } }
     if case .known = controller.inspector.value {} else { Issue.record("Inspector must populate before reader loss") }
 }
 
-@MainActor private func readerHoldReconcile(_ rig: ReaderRig, _ controller: CanvasWindowController) async {
+@MainActor private func readerHoldReconcile(_ rig: ReaderRig, _ controller: CanvasWindowController) async throws {
     rig.pipeline.armHeader()
     controller.reconcileStandaloneImage()
-    await r2Wait { rig.pipeline.heldHeader }
+    try await r2Wait { rig.pipeline.heldHeader }
     #expect(rig.pipeline.heldHeader)
 }
 
@@ -178,8 +177,8 @@ private actor ReaderMetadata: InspectorMetadataReading {
     let viewer = rig.controller()
     let window = try #require(viewer.window)
     defer { rig.clean(window) }
-    await readerSettle(rig, viewer)
-    await readerHoldReconcile(rig, viewer)
+    try await readerSettle(rig, viewer)
+    try await readerHoldReconcile(rig, viewer)
     let observer = readerSheetObserver(viewer, window)
     defer { NotificationCenter.default.removeObserver(observer) }
     try rig.denyA()
@@ -187,13 +186,13 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(viewer.hasImage)
     #expect(window.attachedSheet == nil)
     viewer.inspector.select(itemID: nil, url: rig.a, access: .fileGrant(rig.a), refresh: true)
-    await r2Wait { window.attachedSheet != nil }
+    try await r2Wait { window.attachedSheet != nil }
     #expect(window.attachedSheet != nil)
     readerClear(viewer, window)
     rig.assertScopesAreFiles()
     let completed = rig.pipeline.completedHeaders
     rig.pipeline.releaseHeader()
-    await r2Wait { rig.pipeline.completedHeaders > completed }
+    try await r2Wait { rig.pipeline.completedHeaders > completed }
     readerClear(viewer, window)
 }
 
@@ -202,19 +201,19 @@ private actor ReaderMetadata: InspectorMetadataReading {
     let viewer = rig.controller()
     let window = try #require(viewer.window)
     defer { rig.clean(window) }
-    await readerSettle(rig, viewer)
-    await readerHoldReconcile(rig, viewer)
+    try await readerSettle(rig, viewer)
+    try await readerHoldReconcile(rig, viewer)
     let observer = readerSheetObserver(viewer, window)
     defer { NotificationCenter.default.removeObserver(observer) }
     try rig.denyA()
     #expect(FileManager.default.fileExists(atPath: rig.a.path))
     viewer.session.requireImageResolution(4096)
-    await r2Wait { window.attachedSheet != nil }
+    try await r2Wait { window.attachedSheet != nil }
     #expect(window.attachedSheet != nil)
     readerClear(viewer, window)
     let completed = rig.pipeline.completedHeaders
     rig.pipeline.releaseHeader()
-    await r2Wait { rig.pipeline.completedHeaders > completed }
+    try await r2Wait { rig.pipeline.completedHeaders > completed }
     readerClear(viewer, window)
     rig.assertScopesAreFiles()
 }
@@ -225,15 +224,15 @@ private actor ReaderMetadata: InspectorMetadataReading {
     let viewer = rig.controller(reader: metadata)
     let window = try #require(viewer.window)
     defer { rig.clean(window) }
-    await readerSettle(rig, viewer)
+    try await readerSettle(rig, viewer)
     await metadata.armHeldFailure(rig.a)
     viewer.inspector.select(itemID: nil, url: rig.a, access: .fileGrant(rig.a), refresh: true)
-    await r2Wait { await metadata.held }
+    try await r2Wait { await metadata.held }
     viewer.openInput([rig.b])
-    await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.b }
+    try await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.b }
     let b = try #require(viewer.session.imageLoader.presented)
     await metadata.release()
-    await r2Wait { await metadata.completed > 0 }
+    try await r2Wait { await metadata.completed > 0 }
     try await Task.sleep(for: .milliseconds(30))
     #expect(viewer.session.imageLoader.presented?.key == b.key)
     #expect(window.title == "reader-b.png")
@@ -241,13 +240,13 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(window.attachedSheet == nil)
 
     viewer.open(rig.a, accessRequest: .fileGrant(rig.a))
-    await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.a }
-    await r2Wait { if case .known = viewer.inspector.value { true } else { false } }
+    try await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.a }
+    try await r2Wait { if case .known = viewer.inspector.value { true } else { false } }
     await metadata.armHeldFailure(rig.a)
     viewer.inspector.select(itemID: nil, url: rig.a, access: .fileGrant(rig.a), refresh: true)
-    await r2Wait { await metadata.held }
+    try await r2Wait { await metadata.held }
     #expect(await metadata.held)
-    await readerHoldReconcile(rig, viewer)
+    try await readerHoldReconcile(rig, viewer)
     let a = try #require(viewer.session.imageLoader.presented)
     let generation = viewer.session.imageLoader.generation
     try rig.denyA()
@@ -255,13 +254,13 @@ private actor ReaderMetadata: InspectorMetadataReading {
     let probe = viewer.reportFileGrantReadFailure(rig.a)
     rig.pipeline.armAdmission(rig.b)
     viewer.openInput([rig.b])
-    await r2Wait { rig.pipeline.heldAdmission }
+    try await r2Wait { rig.pipeline.heldAdmission }
     #expect(rig.pipeline.heldAdmission)
     await probe.value
     let priorMetadataCompletions = await metadata.completed
     await metadata.release()
-    await r2Wait { await metadata.completed > priorMetadataCompletions }
-    await r2Wait { viewer.inspector.value == .unreadable || window.attachedSheet != nil }
+    try await r2Wait { await metadata.completed > priorMetadataCompletions }
+    try await r2Wait { viewer.inspector.value == .unreadable || window.attachedSheet != nil }
     // The old selection is still current, but its presentation input stamp predates B.
     await viewer.reportFileGrantReadFailure(rig.a).value
     #expect(viewer.session.imageLoader.generation == generation)
@@ -270,7 +269,7 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(window.attachedSheet == nil)
     let priorHeaderCompletions = rig.pipeline.completedHeaders
     rig.pipeline.releaseHeader()
-    await r2Wait { rig.pipeline.completedHeaders > priorHeaderCompletions }
+    try await r2Wait { rig.pipeline.completedHeaders > priorHeaderCompletions }
     #expect(rig.pipeline.completedHeaders > priorHeaderCompletions)
     // The I/O gate has completed; allow its actor release/catch to deliver while B is still held.
     try await Task.sleep(for: .milliseconds(100))
@@ -279,7 +278,7 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(viewer.session.imageLoader.presented?.key == a.key)
     #expect(window.attachedSheet == nil)
     rig.pipeline.releaseAdmission()
-    await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.b }
+    try await r2Wait { viewer.session.imageLoader.phase == .settled && window.representedURL == rig.b }
     #expect(viewer.session.imageLoader.presented?.fileURL == rig.b)
     #expect(window.title == "reader-b.png")
     #expect(viewer.inspector.name == "reader-b.png")
@@ -297,11 +296,11 @@ private actor ReaderMetadata: InspectorMetadataReading {
     let viewer = rig.controller(reader: metadata)
     let window = try #require(viewer.window)
     defer { rig.clean(window) }
-    await readerSettle(rig, viewer)
-    await readerHoldReconcile(rig, viewer)
+    try await readerSettle(rig, viewer)
+    try await readerHoldReconcile(rig, viewer)
     await metadata.armFailure(rig.a)
     viewer.inspector.select(itemID: nil, url: rig.a, access: .fileGrant(rig.a), refresh: true)
-    await r2Wait { viewer.inspector.value == .unreadable }
+    try await r2Wait { viewer.inspector.value == .unreadable }
     await viewer.reportFileGrantReadFailure(rig.a).value
     #expect(viewer.hasImage)
     #expect(viewer.inspector.value == .unreadable)
@@ -315,7 +314,7 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(try handle.read(upToCount: 1)?.isEmpty == false)
     try handle.close()
     viewer.session.requireImageResolution(4096)
-    await r2Wait { viewer.session.imageLoader.phase == .failed }
+    try await r2Wait { viewer.session.imageLoader.phase == .failed }
     #expect(viewer.session.imageLoader.phase == .failed)
     await viewer.reportFileGrantReadFailure(rig.a).value
     let after = rig.pipeline.counts
@@ -334,34 +333,34 @@ private actor ReaderMetadata: InspectorMetadataReading {
         let viewer = rig.controller(reader: metadata)
         let window = try #require(viewer.window)
         defer { rig.clean(window) }
-        await readerSettle(rig, viewer)
+        try await readerSettle(rig, viewer)
         if !loader {
             // Inspector visibility changes must not accidentally start another loader read in this episode.
             viewer.session.requireImageResolution(4096)
-            await r2Wait { viewer.session.imageLoader.phase == .settled }
+            try await r2Wait { viewer.session.imageLoader.phase == .settled }
             #expect(viewer.session.imageLoader.phase == .settled)
         }
         await metadata.armHeldFailure(rig.a)
         viewer.inspector.select(itemID: nil, url: rig.a, access: .fileGrant(rig.a), refresh: true)
-        await r2Wait { await metadata.held }
+        try await r2Wait { await metadata.held }
         #expect(await metadata.held)
-        await readerHoldReconcile(rig, viewer)
+        try await readerHoldReconcile(rig, viewer)
         let a = try #require(viewer.session.imageLoader.presented)
         let generation = viewer.session.imageLoader.generation
         let unsupported = rig.base.appendingPathComponent("unsupported.zip")
         try Data([0x50, 0x4b]).write(to: unsupported)
         viewer.openInput([unsupported])
-        await r2Wait { window.attachedSheet != nil }
+        try await r2Wait { window.attachedSheet != nil }
         let rejected = try #require(window.attachedSheet)
         #expect(viewer.session.imageLoader.presented?.key == a.key)
         #expect(viewer.session.imageLoader.generation == generation)
         window.endSheet(rejected, returnCode: .alertFirstButtonReturn)
-        await r2Wait { window.attachedSheet == nil }
+        try await r2Wait { window.attachedSheet == nil }
         try rig.denyA()
         let completed = await metadata.completed
         await metadata.release()
-        await r2Wait { await metadata.completed > completed }
-        await r2Wait { viewer.inspector.value != .loading }
+        try await r2Wait { await metadata.completed > completed }
+        try await r2Wait { viewer.inspector.value != .loading }
         await viewer.reportFileGrantReadFailure(rig.a).value
         #expect(viewer.session.imageLoader.presented?.key == a.key)
         #expect(viewer.session.imageLoader.generation == generation)
@@ -383,7 +382,7 @@ private actor ReaderMetadata: InspectorMetadataReading {
             #expect(viewer.route(.inspector, from: .key))
             #expect(viewer.inspectorVisible)
         }
-        await r2Wait { window.attachedSheet != nil }
+        try await r2Wait { window.attachedSheet != nil }
         #expect(window.attachedSheet != nil)
         readerClear(viewer, window)
         #expect(FileManager.default.fileExists(atPath: rig.a.path))
@@ -445,8 +444,8 @@ private final class ReaderMoveAfterIdentity: FileIdentityResourceReading, @unche
             rig.clean(window)
             if kind == "systemTrash", let moved = moving.moved { try? FileManager.default.removeItem(at: moved) }
         }
-        await readerSettle(rig, viewer)
-        await readerHoldReconcile(rig, viewer)
+        try await readerSettle(rig, viewer)
+        try await readerHoldReconcile(rig, viewer)
         moving.arm()
         await viewer.reportFileGrantReadFailure(file).value
         #expect(moving.count == 1)
@@ -454,14 +453,14 @@ private final class ReaderMoveAfterIdentity: FileIdentityResourceReading, @unche
         #expect(window.attachedSheet == nil)
         rig.pipeline.releaseHeader()
         if kind == "systemTrash" {
-            await r2Wait { viewer.session.imageLoader.fileURL == nil || window.attachedSheet != nil }
+            try await r2Wait { viewer.session.imageLoader.fileURL == nil || window.attachedSheet != nil }
             #expect(!viewer.hasImage)
             #expect(viewer.session.imageLoader.fileURL == nil)
             #expect(window.representedURL == nil)
             #expect(window.title == "Picsee")
         } else {
             let moved = try #require(moving.moved)
-            await r2Wait {
+            try await r2Wait {
                 viewer.session.imageLoader.presented?.fileURL.standardizedFileURL.resolvingSymlinksInPath()
                     == moved.standardizedFileURL.resolvingSymlinksInPath() || window.attachedSheet != nil
             }

@@ -236,6 +236,9 @@ private actor I392Hold {
         ("Packages/PicseeKit/Tests/PicseeApplicationTests/Issue233InspectorFailureCallbackTests.swift", "func r2CallbackWait"),
         ("AppTests/Issue233ReplacementProbeTests.swift", "func replacementWait"),
         ("AppTests/SidebarTreeControllerTests.swift", "func waitForSidebar"),
+        ("AppTests/Issue233FileGrantReaderFailureTests.swift", "func r2Wait"),
+        ("AppTests/Issue233FileGrantLossTests.swift", "func lossWait"),
+        ("Packages/PicseeKit/Tests/PicseeMacUITests/Page22EmptyFolderTests.swift", "func waitForScanEnd"),
     ]
     for (path, name) in helpers {
         let lines = try String(contentsOf: repo.appendingPathComponent(path), encoding: .utf8)
@@ -245,7 +248,7 @@ private actor I392Hold {
         let end = try #require(lines[start...].firstIndex { $0 == indent + "}" }, "\(path): end of \(name)")
         let body = lines[start...end].joined(separator: "\n")
         #expect(body.contains("waitUntil("), "\(path): \(name) does not use waitUntil")
-        for banned in ["0..<", "Clock", "deadline", "timeout", "seconds("] {
+        for banned in ["0..<", "Clock", "deadline", "timeout", "seconds(", "spins"] {
             #expect(!body.contains(banned), "\(path): \(name) keeps \(banned)")
         }
     }
