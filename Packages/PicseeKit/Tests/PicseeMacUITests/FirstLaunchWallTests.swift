@@ -6,12 +6,12 @@ import PicseeApplication
 private let i315Samples = ["alley", "lakeside", "hillside", "gate", "temple", "lakehouse"]
 private let i315Missing = URL(fileURLWithPath: "/picsee-i315-missing.jpg")
 
-@MainActor private func i315Launch(_ urls: [String: URL]?) async -> FirstLaunchView {
+@MainActor private func i315Launch(_ urls: [String: URL]?) async throws -> FirstLaunchView {
     _ = NSApplication.shared
     let view = FirstLaunchView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),
                                openButton: ViewerStateButton(frame: .zero), sampleURLs: urls)
     view.pinAccessibility()
-    await waitForSamples(view)
+    try await waitForSamples(view)
     return view
 }
 
@@ -70,7 +70,7 @@ private let i315Missing = URL(fileURLWithPath: "/picsee-i315-missing.jpg")
     defer { scene.window.close() }
     let home = try launch(in: scene)
     #expect(home.sampleLoadCompleted == false, "init waited for decode")
-    await waitForSamples(home)
+    try await waitForSamples(home)
     #expect(home.sampleLoadCompleted)
     let containers = tileContainers(home)
     #expect(containers.count == count)
@@ -90,7 +90,7 @@ private let i315Missing = URL(fileURLWithPath: "/picsee-i315-missing.jpg")
     for failing in ["gate", "alley"] {
         var urls: [String: URL] = [:]
         for name in i315Samples { urls[name] = name == failing ? i315Missing : FirstLaunchView.sampleURL(name: name) }
-        let view = await i315Launch(urls)
+        let view = try await i315Launch(urls)
         #expect(view.sampleLoadCompleted)
         let containers = tileContainers(view)
         #expect(containers.count == 60, "failing \(failing)")
@@ -106,11 +106,11 @@ private let i315Missing = URL(fileURLWithPath: "/picsee-i315-missing.jpg")
 }
 
 @Test @MainActor func i315WallShowsNoTilesWhenEverySampleFails() async throws {
-    let reference = await i315Launch(nil)
+    let reference = try await i315Launch(nil)
     let expectedFrames = reference.semanticViews.map(\.frame)
     let allMissing = Dictionary(uniqueKeysWithValues: i315Samples.map { ($0, i315Missing) })
     for urls in [allMissing, [:]] {
-        let view = await i315Launch(urls)
+        let view = try await i315Launch(urls)
         #expect(view.sampleLoadCompleted, "\(urls.count) urls")
         let containers = tileContainers(view)
         #expect(containers.count == 60, "\(urls.count) urls")
@@ -296,7 +296,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
             urls = [:]
             for name in i315Samples { urls?[name] = name == failing ? i315Missing : FirstLaunchView.sampleURL(name: name) }
         }
-        let view = await i315Launch(urls)
+        let view = try await i315Launch(urls)
         #expect(view.sampleLoadCompleted, "failing \(failing ?? "none")")
         let before = tileContainers(view).map { ($0.name, $0.isHidden, cgImage(imageLayer($0))) }
         #expect(before.count == 60)
@@ -352,7 +352,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
-    await waitForSamples(home)
+    try await waitForSamples(home)
     #expect(home.sampleLoadCompleted)
     let wall = try #require(wallView(home))
     for (appearance, page) in [(NSAppearance.Name.aqua, light), (.darkAqua, dark)] {
@@ -527,7 +527,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
 @Test @MainActor func i315DragSequencesRoundTripToIdleAndActive() async throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
-    await waitForSamples(home)
+    try await waitForSamples(home)
     #expect(home.sampleLoadCompleted)
     let appearances: [NSAppearance.Name] = [.aqua, .darkAqua]
     var reference: [NSAppearance.Name: [Bool: WallPresentation]] = [:]
@@ -584,7 +584,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     defer { scene.window.close() }
     #expect(home.sampleLoadCompleted == false, "decode finished before the drag began")
     scene.state.setFirstLaunchDragActive(true)
-    await waitForSamples(home)
+    try await waitForSamples(home)
     #expect(home.sampleLoadCompleted)
     let wall = try #require(wallView(home))
     let tiles = try #require(wallLayer("first-launch.wall.tiles", in: home))
@@ -603,7 +603,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     home.layoutSubtreeIfNeeded()
     let (fresh, freshHome) = try i315Scene()
     defer { fresh.window.close() }
-    await waitForSamples(freshHome)
+    try await waitForSamples(freshHome)
     #expect(freshHome.sampleLoadCompleted)
     #expect(try wallPresentation(home) == wallPresentation(freshHome), "idle after a drag that spanned decode")
 }
@@ -735,7 +735,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     let dragAlpha = try i315DragWallAlpha()
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
-    await waitForSamples(home)
+    try await waitForSamples(home)
     let idle = try wallPresentation(home)
     scene.state.setFirstLaunchDragActive(true)
     home.layoutSubtreeIfNeeded()
@@ -970,4 +970,22 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
         #expect(from != to, "drag \(drag) fade does not move")
         previous = target
     }
+}
+
+/// #398: a sample wait in a cancelled test either finds the samples loaded or throws once, naming the condition; it
+/// never returns silently with the samples still loading. (The samples load in milliseconds, so this cannot hold the
+/// load open; `i398SweptWaitHelpersUseTheSharedWait` pins the wait itself to the shared cancellation-driven one.)
+@Test(.timeLimit(.minutes(2))) @MainActor func i398CancelledSampleWaitThrowsNamingTheCondition() async throws {
+    _ = NSApplication.shared
+    let view = FirstLaunchView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),
+                               openButton: ViewerStateButton(frame: .zero), sampleURLs: nil)
+    let outcome = await Task { @MainActor in
+        withUnsafeCurrentTask { $0?.cancel() }
+        do {
+            try await waitForSamples(view)
+            return view.sampleLoadCompleted ? "completed" : "returned with the samples still loading"
+        } catch { return String(describing: error) }
+    }.value
+    #expect(outcome == "completed" || outcome.contains("sampleLoadCompleted"), "\(outcome)")
+    try await waitUntil("samples loaded") { view.sampleLoadCompleted }
 }

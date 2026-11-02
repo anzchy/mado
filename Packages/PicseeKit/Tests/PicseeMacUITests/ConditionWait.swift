@@ -34,31 +34,38 @@ func waitUntil(
 /// their gates (#392). A test that exits early leaves no work running into the next test.
 final class StartedTasks: @unchecked Sendable {
     private let lock = NSLock()
-    private var running = 0
+    private var running: [UUID: String] = [:]
     private var cancels: [@Sendable () -> Void] = []
-    @discardableResult func track<Success: Sendable, Failure: Error>(_ task: Task<Success, Failure>) -> Task<Success, Failure> {
-        lock.withLock { running += 1; cancels.append { task.cancel() } }
-        Task.detached { _ = await task.result; self.lock.withLock { self.running -= 1 } }
+    /// Tracks `task`, remembering the site that started it so a teardown cut short can name it.
+    @discardableResult func track<Success: Sendable, Failure: Error>(
+        _ task: Task<Success, Failure>, fileID: String = #fileID, line: Int = #line
+    ) -> Task<Success, Failure> {
+        let id = UUID()
+        lock.withLock { running[id] = "\(fileID):\(line)"; cancels.append { task.cancel() } }
+        Task.detached { _ = await task.result; _ = self.lock.withLock { self.running.removeValue(forKey: id) } }
         return task
     }
-    var allEnded: Bool { lock.withLock { running == 0 } }
+    var allEnded: Bool { lock.withLock { running.isEmpty } }
+    var runningCount: Int { lock.withLock { running.count } }
     func cancelAll() { for cancel in lock.withLock({ cancels }) { cancel() } }
     /// Waits until every tracked task has ended, running `releasing` before each look so a task that reaches its gate
-    /// after teardown began is still let through. The test's own cancellation does not cut this short; a task still
-    /// running after `limit` is recorded as an issue at the call site instead of being left behind silently.
+    /// after teardown began is still let through. Nothing but the cancellation of the waiting task, which is the
+    /// owning test's time limit, ends it early (#398); it then records one issue naming the site of each task still
+    /// running instead of leaving them behind silently.
     func awaitAll(
-        limit: Duration = conditionWaitDefaultTimeout, fileID: String = #fileID, line: Int = #line,
-        isolation: isolated (any Actor)? = #isolation, releasing: () async -> Void = {}
+        fileID: String = #fileID, line: Int = #line, isolation: isolated (any Actor)? = #isolation,
+        releasing: () async -> Void = {}
     ) async {
-        let clock = ContinuousClock(), deadline = clock.now.advanced(by: limit)
         while true {
             await releasing()
-            guard !allEnded, clock.now < deadline else { break }
-            await withCheckedContinuation { resumed in
-                DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(5)) { resumed.resume() }
-            }
+            if allEnded || Task.isCancelled { break }
+            try? await Task.sleep(for: .milliseconds(5))
         }
-        if !allEnded { Issue.record("a started task was still running \(limit) after teardown at \(fileID):\(line)") }
+        let sites = lock.withLock { running.values.sorted() }
+        if !sites.isEmpty {
+            let list = sites.joined(separator: ", ")
+            Issue.record("teardown at \(fileID):\(line) was cancelled with started tasks still running: \(list)")
+        }
     }
 }
 

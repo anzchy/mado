@@ -30,13 +30,9 @@ private func sameSidebarURL(_ lhs: URL, _ rhs: URL) -> Bool {
 }
 
 @MainActor private func waitForSidebar(_ stage: String, refreshing watch: (any FolderWatching)? = nil,
-    _ condition: () async -> Bool) async throws {
+    fileID: String = #fileID, line: Int = #line, _ condition: () async -> Bool) async throws {
     watch?.reconcileAll()
-    let deadline = ContinuousClock.now + .seconds(30)
-    while await !condition(), ContinuousClock.now < deadline {
-        try await Task.sleep(for: .milliseconds(50))
-    }
-    try #require(await condition(), "Sidebar stage timed out after 30 seconds: \(stage)")
+    try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) { await condition() }
 }
 
 @MainActor private func sidebarCondition(for seconds: Double,
@@ -452,10 +448,10 @@ private enum SidebarHandoffDelivery {
         clock.fireScheduledChanges()
     }
     enumerator.releaseChildrenRead()
-    let delivered = await sidebarCondition(for: 2) {
+    // One external change must refresh D with count 0 without another event or reconcile.
+    try await waitForSidebar("D refreshed to count 0 by one external change") {
         tree.rows.first(where: { sameSidebarURL($0.folderURL, d) })?.countLabel.stringValue == "0"
     }
-    #expect(delivered, "one external change must refresh D with count 0 without another event or reconcile")
     #expect(tree.rows.contains { sameSidebarURL($0.folderURL, b) })
 }
 

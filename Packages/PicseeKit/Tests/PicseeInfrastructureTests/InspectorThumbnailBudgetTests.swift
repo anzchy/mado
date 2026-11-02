@@ -31,13 +31,11 @@ private final class InspectorDecodeGate: ImageDecoding, @unchecked Sendable {
     }
 }
 
-private func inspectorWait(_ condition: () async -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + .seconds(10)
-    while ContinuousClock.now < deadline, !Task.isCancelled {
-        if await condition() { return true }
-        try? await Task.sleep(for: .milliseconds(5))
-    }
-    return await condition()
+/// On the shared cancellation-driven wait (#398): a condition that never holds fails the test here, naming it.
+private func inspectorWait(
+    _ comment: String, fileID: String = #fileID, line: Int = #line, _ condition: () async -> Bool
+) async throws {
+    try await waitUntil(comment, fileID: fileID, line: line) { await condition() }
 }
 
 private struct InspectorFailingDecoder: ImageDecoding {
@@ -104,9 +102,8 @@ private actor RootThumbnailLease: AccessLeasing {
         let url = fixture("landscape-3x2.png")
         let task = Task { try await ImageIOInspectorMetadataReader(access: ThumbnailLease(), pipeline: pipeline)
             .read(url, access: .fileGrant(url)) }
-        let queued = await inspectorWait { await pipeline.admission.activity().waiting == 1 }
-        if !queued { task.cancel() }
-        #expect(queued)
+        do { try await inspectorWait("read queued") { await pipeline.admission.activity().waiting == 1 } }
+        catch { task.cancel(); throw error }
         #expect(budget.usage.reserved == 0)
         if cancel {
             task.cancel()
@@ -129,9 +126,8 @@ private actor RootThumbnailLease: AccessLeasing {
         let budget = try #require(pipeline.cache.budget), url = fixture("landscape-3x2.png")
         let task = Task { try await ImageIOInspectorMetadataReader(access: ThumbnailLease(), pipeline: pipeline)
             .read(url, access: .fileGrant(url)) }
-        let started = await inspectorWait { gate.started }
-        #expect(started)
-        if !started { task.cancel(); gate.open(); _ = try? await task.value; return }
+        do { try await inspectorWait("decode started") { gate.started } }
+        catch { task.cancel(); gate.open(); _ = try? await task.value; throw error }
         #expect(budget.usage.reserved > 0)
         if outcome == "cancel" { task.cancel(); #expect(budget.usage.reserved > 0) }
         gate.open()
