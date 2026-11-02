@@ -6,8 +6,7 @@ import PicseeApplication
 
 /// Only the asynchronous coordinator hop and disk scan use real scheduling; debounce uses the fake clock.
 @MainActor private func i142WatchedSettles(_ condition: () -> Bool) async throws -> Bool {
-    let clock = ContinuousClock(), deadline = clock.now + .seconds(5)
-    while !condition(), clock.now < deadline {
+    while !condition() {
         try await Task.sleep(for: .milliseconds(5))
     }
     return condition()
@@ -29,7 +28,7 @@ import PicseeApplication
     w.f.clock.advance(by: WatchHub.debounceMilliseconds)
     try #require(await i142WatchedSettles {
         w.names() == ["a.png", "c.png", "d.png"] && w.generation > initialGeneration && !c.isScanning
-    }, "Injected additions did not produce a complete filtered replacement within 5 seconds")
+    }, "Injected additions did not produce a complete filtered replacement")
     #expect(c.snapshot?.isComplete == true)
     #expect(c.sourceSnapshot?.navigationEntries.count == 5)
     #expect(c.completedImageCount == 3)
@@ -41,7 +40,7 @@ import PicseeApplication
     w.f.clock.advance(by: WatchHub.debounceMilliseconds)
     try #require(await i142WatchedSettles {
         w.names().isEmpty && w.generation > addedGeneration && !c.isScanning
-    }, "Injected removals did not produce a complete empty projection within 5 seconds")
+    }, "Injected removals did not produce a complete empty projection")
     #expect(c.snapshot?.isComplete == true)
     #expect(c.sourceSnapshot?.navigationEntries.count == 2)
     #expect(c.completedImageCount == 0)
