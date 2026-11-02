@@ -87,12 +87,6 @@ private actor EntrySink {
     }
 }
 
-/// The pre-#392 shape, kept only for WatchCoordinatorTimingTests until #390 rewrites it; new waits use `waitUntil`,
-/// which throws. Bounded and cancelled like `waitUntil`; false when the wait ended without the condition holding.
-@MainActor func mainPoll(_ condition: () -> Bool) async -> Bool {
-    (try? await waitUntil { condition() }) != nil
-}
-
 @Test(.timeLimit(.minutes(2))) @MainActor func watchedCoordinatorRefreshIsSilentAndConvergesOnDisk() async throws {
     let w = try await WatchedCoordinator(files: ["F/a.png", "F/b.png", "G/g.png"]); defer { w.f.remove() }
     let c = w.coordinator
