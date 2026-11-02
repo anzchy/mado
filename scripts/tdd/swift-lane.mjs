@@ -77,7 +77,7 @@ function parseOutput(text) {
         statuses.filter(v => v === 'skipped').length !== xct.skipped) invalid = true;
   }
   const swiftStarts = lines.filter(l => /^◇ Test run started\./.test(l)).length;
-  const swiftSummaries = [...clean.matchAll(/^[✔✘] Test run with (\d+) tests? in \d+ suites? (passed|failed) after .+ seconds(?:\.| with \d+ issues?\.)$/gm)];
+  const swiftSummaries = [...clean.matchAll(/^[✔✘━] Test run with (\d+) tests? in \d+ suites? (passed|failed) after .+ seconds(?:\.| with \d+ (?:known )?issues?(?: \(including \d+ known issues?\))?\.)$/gm)];
   let swift = null;
   if (swiftStarts || swiftSummaries.length) {
     if (swiftStarts !== 1 || swiftSummaries.length !== 1) invalid = true;
@@ -86,7 +86,8 @@ function parseOutput(text) {
       // terminal events, never unique labels; cross-check with the run's total.
       const total = +swiftSummaries[0][1];
       const failed = lines.filter(l => /^✘ Test (?!run with ).+ failed after /.test(l)).length;
-      const passed = lines.filter(l => /^✔ Test (?!run with ).+ passed after /.test(l)).length;
+      // A test whose only issues are known passes with a ━ marker.
+      const passed = lines.filter(l => /^[✔━] Test (?!run with ).+ passed after /.test(l)).length;
       const skipped = lines.filter(l => /^➜ Test .+ skipped(?::| after |\.)/.test(l)).length;
       if (failed + passed + skipped !== total ||
           ((swiftSummaries[0][2] === 'failed') !== (failed > 0))) invalid = true;

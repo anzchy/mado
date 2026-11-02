@@ -16,7 +16,7 @@ Create `Tests/LaneTests/`, then run from the worktree root:
 scripts/heavy-lock.sh python3 scripts/tdd/fixtures/capture.py /absolute/path/to/scratch
 ```
 
-The generator writes each exact test source alongside scratch, runs `swift test --package-path <scratch>` for each source, and writes `fixture-capture.txt` with commands, exit codes and full output in scratch's parent. It refreshes the ten tracked output fixtures here. Append fixture names after the scratch path to capture only those variants and keep earlier captures unchanged.
+The generator writes each exact test source alongside scratch, runs `swift test --package-path <scratch>` for each source, and writes `fixture-capture.txt` with commands, exit codes and full output in scratch's parent. It refreshes the twelve tracked output fixtures here. Append fixture names after the scratch path to capture only those variants and keep earlier captures unchanged.
 
 | Fixture | Exit | Expected completed results |
 |---|---|---|
@@ -28,6 +28,8 @@ The generator writes each exact test source alongside scratch, runs `swift test 
 | swift-duplicate | 1 | 4 total, 2 failed and 2 skipped, all displayed as “same” |
 | xctest-partial-crash | 1 | first class assertion fails, second class traps; no XCTest root completion |
 | xctest-two-assertions | 1 | 1 executed case, 2 failure events, 1 failed case |
+| swift-known-pass | 0 | 3 total, 3 passed, one of them with a known issue (`withKnownIssue`) |
+| swift-known-fail | 1 | 3 total, 2 passed (one with a known issue), 1 failed; summary counts the known issue |
 | swift-crash-name-pass | 0 | 1 passed test named “does not crash” |
 | swift-crash-name-fail | 1 | 1 failed test named “does not crash”; crash-related assertion prose |
 

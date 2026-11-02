@@ -47,6 +47,8 @@ for (const [fixture, code, expected, kind] of [
   ['xctest-two-assertions',1,{total:1,failed:1,passed:0,skipped:0},'assertion-failure'],
   ['swift-crash-name-pass',0,{total:1,failed:0,passed:1,skipped:0},'green'],
   ['swift-crash-name-fail',1,{total:1,failed:1,passed:0,skipped:0},'assertion-failure'],
+  ['swift-known-pass',0,{total:3,failed:0,passed:3,skipped:0},'green'],
+  ['swift-known-fail',1,{total:3,failed:1,passed:2,skipped:0},'assertion-failure'],
 ]) {
   test(`${fixture}: counted once, classified ${kind} by real plugin`, () => {
     const r = run(fixture,code,{stderr:fixture.startsWith('xctest')});
