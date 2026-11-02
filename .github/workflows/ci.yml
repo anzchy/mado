@@ -22,8 +22,10 @@ concurrency:
 jobs:
   # The package suite runs as two processes (#391): the non-UI targets, and PicseeMacUITests one test at a time,
   # because its window tests saturate the runner's main actor when Swift Testing runs them in parallel. Each run is
-  # wrapped in scripts/ci/test-watchdog.mjs, which ends it 3 minutes before the job timeout with `sample`/`spindump`
-  # stacks and ps CPU/RSS, and the logs, xunit results and stacks are uploaded even when the job fails.
+  # wrapped in scripts/ci/test-watchdog.mjs and the logs, xunit results and stacks are uploaded even when the job fails.
+  # Watchdog margin, against timeout-minutes: 30 (1800 s): the deadline is JOB_STARTED + 1560 s (or 1500 s after the
+  # step starts, if earlier), leaving 240 s: at most 90 s of capture (--capture-seconds default: ps, then `sample`, then
+  # `spindump`, each call cut off at what is left), 15 s TERM grace, KILL, and about 130 s for the upload.
   package-tests:
     name: Package tests (non-UI)
     runs-on: macos-26
@@ -42,7 +44,7 @@ jobs:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-tests --timeout-seconds 1500
-          --deadline-epoch $((JOB_STARTED + 1620)) --
+          --deadline-epoch $((JOB_STARTED + 1560)) --
           swift test --package-path Packages/PicseeKit --skip 'PicseeMacUITests\.'
           --xunit-output ci-logs/package-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Upload test logs
@@ -69,7 +71,7 @@ jobs:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-macui-tests --timeout-seconds 1500
-          --deadline-epoch $((JOB_STARTED + 1620)) --
+          --deadline-epoch $((JOB_STARTED + 1560)) --
           swift test --package-path Packages/PicseeKit --no-parallel
           --skip '(PicseeCoreTests|PicseeApplicationTests|PicseeInfrastructureTests)\.'
           --xunit-output ci-logs/package-macui-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
