@@ -196,7 +196,9 @@ enum GridThumbnailPixelSizing {
         return record.failed && record.task == nil
     }
     func shouldDisplayFailure(at index: Int) -> Bool { records[index]?.failed == true }
+    /// Returns once the record at `index` is terminal, the scheduler cancels its work, or the calling task is cancelled.
     func waitForTerminal(at index: Int) async {
+        if Task.isCancelled { return }
         if let record = records[index], record.task == nil,
            (record.result != nil || record.failed || record.deferred) { return }
         await withCheckedContinuation { terminalWaiters[index, default: []].append($0) }
