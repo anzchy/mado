@@ -43,7 +43,7 @@ import PicseeApplication
     shell.setSearchStatus(resultCount: 3, term: "")
     shell.setReadFailedStatus(true)
     let (name, count) = try readFailedFooter(shell)
-    #expect(name.stringValue == "\u{2013}" && !name.isHidden)
+    #expect(name.stringValue == "\u{2014}" && !name.isHidden)
     #expect(count.stringValue == String(localized: "Read incomplete") && count.stringValue == "Read incomplete")
     #expect(!count.isHidden && count.frame.width >= ceil(count.cell?.cellSize.width ?? .infinity))
     let row = try readFailedRow(shell, folder)
@@ -90,11 +90,11 @@ enum GridFooterMode: CaseIterable, Sendable { case normal, reading, failed }
             let footer = try readFailedFooter(shell)
             switch mode {
             case .failed:
-                #expect(footer.name.stringValue == "\u{2013}" && footer.count.stringValue == "Read incomplete", "\(label)")
+                #expect(footer.name.stringValue == "\u{2014}" && footer.count.stringValue == "Read incomplete", "\(label)")
                 #expect(try readFailedRow(shell, folder).countLabel.stringValue == "\u{2014}", "\(label)")
                 #expect(!shell.searchButton.isEnabled && !shell.sortButton.isEnabled, "\(label)")
             case .reading:
-                #expect(footer.name.stringValue == "\u{2013}" && footer.count.stringValue == "Reading…", "\(label)")
+                #expect(footer.name.stringValue == "\u{2014}" && footer.count.stringValue == "Reading…", "\(label)")
             case .normal:
                 #expect(footer.name.stringValue == name && footer.count.stringValue == count, "\(label)")
                 let row = try readFailedRow(shell, folder)

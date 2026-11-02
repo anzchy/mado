@@ -152,7 +152,7 @@ import PicseeApplication
     #expect(before.name == "DSC_0000.jpg" && before.count == "3 images")
     #expect(!f.shell.isHidden && !f.presentation.isGridVisible)
     f.presentation.resumeReadingFooter(true)
-    #expect(f.footer.name == "–")
+    #expect(f.footer.name == "—")
     #expect(f.footer.count == "Reading…")
     let row = try #require(f.shell.folderTree.rows.first { $0.current })
     #expect(row.countLabel.stringValue.isEmpty && row.countLabel.isHidden)
@@ -202,7 +202,7 @@ import PicseeApplication
         let reading = try #require(f.shell.folderTree.rows.first { $0.current })
         #expect(reading.countLabel.stringValue.isEmpty && reading.countLabel.isHidden)
         #expect(reading.accessibilityLabel() == "picsee-resume-reading")
-        #expect(f.footer.name == "–" && f.footer.count == "Reading…")
+        #expect(f.footer.name == "—" && f.footer.count == "Reading…")
         #expect(!f.shell.isHidden && !f.presentation.isGridVisible)
         await Task.yield()
     }

@@ -3,8 +3,8 @@ import Testing
 import PicseeApplication
 @testable import PicseeMacUI
 
-/// #332: the footer status on page 26 (Lost Access, `– 无法访问` for every cause) and page 22 (empty folder, `– 0 张图片`).
-private let lostEmptyDash = "\u{2013}"
+/// #332: the footer status on page 26 (Lost Access, `— 无法访问` for every cause) and page 22 (empty folder, `— 0 张图片`).
+private let lostEmptyDash = "\u{2014}"
 private let lostEmptyCauses: [AccessLossCause] = [.diskNotConnected, .notFound, .accessExpired, .unknown]
 private let lostEmptyFolderURL = URL(fileURLWithPath: "/lost-empty/待整理")
 private let lostEmptyParentURL = URL(fileURLWithPath: "/lost-empty")

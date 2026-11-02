@@ -178,14 +178,14 @@ import PicseeInfrastructure
         }
     }
 
-    // folder-loading.html: `<span>—</span>` in Avenir Next is 7px wide (ink x 63–69); `正在读取…` starts at x 82.
+    // folder-loading.html uses U+2014 and a 12px text gap. Preserve the gap after the native font’s actual glyph width.
     shell.setReadingStatus(true)
     shell.layoutSubtreeIfNeeded()
-    #expect(file.stringValue == "–")
+    #expect(file.stringValue == "—")
     expectFits(file, "reading")
     expectFits(count, "reading")
     #expect(textBox(file).minX == 63)
-    #expect(abs(textBox(count).minX - 82) <= 1)
+    #expect(textBox(count).minX - textBox(file).maxX == 12)
     shell.setReadingStatus(false)
     shell.layoutSubtreeIfNeeded()
     expectFits(file, "after reading")

@@ -114,7 +114,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     // Fix round 5: a failed read must not keep the reading footer.
     window.contentView?.layoutSubtreeIfNeeded()
     // #238: the pinned 24F-A footer keeps the dash in the name slot and reads 「读取未完成」.
-    #expect(try footer().name.stringValue == "–", "failure: name")
+    #expect(try footer().name.stringValue == "—", "failure: name")
     #expect(try footer().count.stringValue != String(localized: "Reading…"), "failure: count")
     #expect(try footer().count.stringValue == String(localized: "Read incomplete"), "failure: count")
     if let sheet = window.attachedSheet { window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
@@ -135,7 +135,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     controller.openGrantedFolder(try #require(folders["Hold"]))
     try await waitUntil { controller.session.folderScan?.isReadingFolder == true }
     try await waitUntil { issue281View("state.cancel-folder", in: window.contentView) != nil }
-    try expectFooter("–", "Reading…", "reading")
+    try expectFooter("—", "Reading…", "reading")
     let cancel = try #require(issue281View("state.cancel-folder", in: window.contentView) as? NSButton)
     cancel.performClick(nil)
     try await waitUntil { controller.gridSearchAvailable }
@@ -164,7 +164,7 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
 }
 
 /// Fix round 6 (gpt-auditor F1): Retry on the failed-read page starts a read on the shell's reading surface, so the
-/// footer shows `–` / `Reading…` and the sidebar counts as for a first read until the retry completes.
+/// footer shows `—` / `Reading…` and the sidebar counts as for a first read until the retry completes.
 @Test(.timeLimit(.minutes(3))) @MainActor func issue281RetryAfterFailedReadShowsTheReadingFooter() async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
@@ -213,7 +213,7 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     controller.openGrantedFolder(folder)
     try await waitUntil { scanner.started == 1 && controller.session.folderScan?.isReadingFolder == true }
     try await waitUntil { issue281View("state.cancel-folder", in: window.contentView) != nil }
-    #expect(try footer() == ("–", "Reading…"), "first read")
+    #expect(try footer() == ("—", "Reading…"), "first read")
     let firstReadSidebar = sidebarCount()
     #expect(["", "2"].contains(firstReadSidebar), "first read: unknown count is blank or the real count is known")
     // The sidebar learns the real count independently; until then, the count stays blank.
@@ -228,7 +228,7 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     let retry = try #require(issue281View("state.retry-folder", in: window.contentView) as? NSButton)
     retry.performClick(nil)
     try await waitUntil { scanner.started == 2 && controller.session.folderScan?.isReadingFolder == true }
-    #expect(try footer() == ("–", "Reading…"), "held retry")
+    #expect(try footer() == ("—", "Reading…"), "held retry")
     // #238: the root check before 「读取失败」 gives the sidebar time to learn the folder's own full count, so a
     // held retry shows the first read's blank unknown count or that real count, never the failed read's `—`.
     #expect([firstReadSidebar, "2"].contains(sidebarCount()), "held retry: sidebar count as for a first read")

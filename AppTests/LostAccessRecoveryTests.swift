@@ -1149,7 +1149,7 @@ private struct Issue314Scanner: FolderScanning {
 }
 
 /// Fix round 5 (device run parity-281-fix4-10301906): page 26 kept the reading footer, `–` and `Reading…`, because the
-/// read that ended on the lost-access page never cleared it. #332: page 26's footer status is `–` / 无法访问.
+/// read that ended on the lost-access page never cleared it. #332: page 26's footer status is `—` / 无法访问 (glyph aligned in #354 fix1).
 @MainActor @Test(.timeLimit(.minutes(3))) func t281Fix5LostAccessPageFooterIsNotReading() async throws {
     let f = try await RecoveryFixture(); defer { f.remove() }
     let c = f.controller(); defer { c.window?.close() }
@@ -1158,7 +1158,7 @@ private struct Issue314Scanner: FolderScanning {
         shell.layoutSubtreeIfNeeded()
         let name = try #require(t281Fix5Label("grid.current-file-status", in: shell))
         let count = try #require(t281Fix5Label("grid.folder-count", in: shell))
-        #expect(!name.isHidden && name.stringValue == "\u{2013}", "\(step): name \(name.stringValue)")
+        #expect(!name.isHidden && name.stringValue == "\u{2014}", "\(step): name \(name.stringValue)")
         #expect(!count.isHidden && count.stringValue == String(localized: "Unavailable"), "\(step): count \(count.stringValue)")
         #expect(count.stringValue != String(localized: "Reading…"), "\(step): reading footer")
         #expect(!shell.searchField.isEnabled && !shell.sortButton.isEnabled, "\(step): footer actions as on main")
@@ -1196,7 +1196,7 @@ func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async t
         shell.layoutSubtreeIfNeeded()
         let name = try #require(t281Fix5Label("grid.current-file-status", in: shell))
         let count = try #require(t281Fix5Label("grid.folder-count", in: shell))
-        #expect(!name.isHidden && name.stringValue == "\u{2013}")
+        #expect(!name.isHidden && name.stringValue == "\u{2014}")
         #expect(!count.isHidden && count.stringValue == String(localized: "Unavailable"))
         #expect(!shell.searchField.isEnabled && !shell.sortButton.isEnabled)
         #expect(!shell.folderTree.isHidden)
