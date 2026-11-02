@@ -1,26 +1,35 @@
 #!/usr/bin/env node
 // Runs one test command under a deadline and leaves evidence when it hangs (#391). The command's output is copied
-// to the terminal and to <out>/test.log. When the deadline passes, the watchdog samples the test processes (`sample`,
-// and `spindump` when passwordless sudo exists), records `ps` CPU/RSS for the whole tree, then sends TERM and, after a
-// grace period, KILL to the command's process group and to every process of the tree by pid (swift test starts
-// swiftpm-testing-helper in a process group of its own). Exit status: the command's own status, 128+signal when a
-// signal ended it, or 124 when the watchdog ended it.
+// to the terminal and to <out>/test.log. When the deadline passes, the watchdog records `ps` CPU/RSS for the command's
+// process tree, samples the test processes (`sample`, then `spindump` when passwordless sudo exists) within a capture
+// budget, then sends TERM and, after a grace period, KILL to the command's process group and to every process of the
+// tree by pid (swift test starts swiftpm-testing-helper in a process group of its own). The tree is also recorded
+// every few seconds while the command runs, so a helper whose parent already exited is still found. Exit status: the
+// command's own status, 128+signal when a signal ended it, or 124 when the watchdog ended it.
 //
 //   node scripts/ci/test-watchdog.mjs --out ci-logs/macui --timeout-seconds 1500 [--deadline-epoch N]
-//     [--sample-seconds 10] [--grace-seconds 15] [--match 'swiftpm-testing|PackageTests'] -- swift test …
+//     [--sample-seconds 10] [--capture-seconds 90] [--grace-seconds 15] [--snapshot-seconds 30] [--no-spindump]
+//     [--match 'swiftpm-testing|PackageTests'] -- swift test …
+//
+// PICSEE_WATCHDOG_NO_SPINDUMP=1 has the same effect as --no-spindump.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const TIMEOUT_STATUS = 124;
-const DEFAULTS = { sampleSeconds: 10, graceSeconds: 15, match: 'swiftpm-testing|PackageTests' };
+const DEFAULTS = { sampleSeconds: 10, captureSeconds: 90, graceSeconds: 15, snapshotSeconds: 30, spindump: true,
+  match: 'swiftpm-testing|PackageTests' };
+// Extra time a sample or spindump call gets beyond its sampling duration, to write and symbolicate its report.
+const REPORT_SECONDS = 20;
 
 /** Options before `--`, the command after it. Throws on anything it does not understand. */
-export function parseArgs(argv) {
+export function parseArgs(argv, env = process.env) {
   const split = argv.indexOf('--');
   if (split < 0 || split === argv.length - 1) throw Error('usage: test-watchdog.mjs [options] -- <command …>');
   const options = { ...DEFAULTS, command: argv.slice(split + 1) };
+  if (env.PICSEE_WATCHDOG_NO_SPINDUMP === '1') options.spindump = false;
   const flags = argv.slice(0, split);
   const number = (flag, value) => {
     const n = Number(value);
@@ -29,13 +38,16 @@ export function parseArgs(argv) {
   };
   for (let i = 0; i < flags.length; i += 2) {
     const [flag, value] = [flags[i], flags[i + 1]];
+    if (flag === '--no-spindump') { options.spindump = false; i -= 1; continue; }
     if (value === undefined) throw Error(`${flag} needs a value`);
     switch (flag) {
       case '--out': options.out = value; break;
       case '--timeout-seconds': options.timeoutSeconds = number(flag, value); break;
       case '--deadline-epoch': options.deadlineEpoch = number(flag, value); break;
       case '--sample-seconds': options.sampleSeconds = number(flag, value); break;
+      case '--capture-seconds': options.captureSeconds = number(flag, value); break;
       case '--grace-seconds': options.graceSeconds = number(flag, value); break;
+      case '--snapshot-seconds': options.snapshotSeconds = number(flag, value); break;
       case '--match': options.match = value; break;
       default: throw Error(`unknown option ${flag}`);
     }
@@ -53,14 +65,20 @@ export function budgetMs({ timeoutSeconds, deadlineEpoch }, nowMs) {
   return Math.max(0, Math.min(...limits));
 }
 
-/** Pids of `root` and all its descendants, from `ps -A -o pid=,ppid=,command=` text. */
-export function processTree(psText, root) {
-  const children = new Map(), commands = new Map();
+/** Every process in `ps -A -o pid=,ppid=,command=` text, as Map pid → { ppid, command }. */
+export function parseProcesses(psText) {
+  const processes = new Map();
   for (const line of psText.split('\n')) {
     const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
-    if (!m) continue;
-    const [pid, ppid] = [Number(m[1]), Number(m[2])];
-    commands.set(pid, m[3]);
+    if (m) processes.set(Number(m[1]), { ppid: Number(m[2]), command: m[3] });
+  }
+  return processes;
+}
+
+/** Pids of `root` and all its descendants, from `ps -A -o pid=,ppid=,command=` text. */
+export function processTree(psText, root) {
+  const processes = parseProcesses(psText), children = new Map();
+  for (const [pid, { ppid }] of processes) {
     if (!children.has(ppid)) children.set(ppid, []);
     children.get(ppid).push(pid);
   }
@@ -68,8 +86,8 @@ export function processTree(psText, root) {
   while (queue.length) {
     const pid = queue.shift();
     if (tree.some(p => p.pid === pid)) continue;
-    if (pid !== root && !commands.has(pid)) continue;
-    tree.push({ pid, command: commands.get(pid) ?? '' });
+    if (pid !== root && !processes.has(pid)) continue;
+    tree.push({ pid, command: processes.get(pid)?.command ?? '' });
     queue.push(...(children.get(pid) ?? []));
   }
   return tree;
@@ -84,45 +102,84 @@ export function sampleTargets(tree, match) {
 
 export function exitStatus({ timedOut, code, signal }) {
   if (timedOut) return TIMEOUT_STATUS;
-  if (signal) return 128 + ({ SIGHUP: 1, SIGINT: 2, SIGKILL: 9, SIGTERM: 15 }[signal] ?? 0);
+  if (signal) return 128 + (os.constants.signals[signal] ?? 0);
   return code ?? 1;
 }
 
-const run = (cmd, args, options = {}) => spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options });
+export const defaultRun = (cmd, args, options = {}) =>
+  spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options });
+const LIST = ['-A', '-o', 'pid=,ppid=,command='];
+const failed = result => result.error || result.status !== 0;
+const describe = (what, result) => `${what} failed (status ${result.status ?? 'none'}` +
+  `${result.signal ? `, ${result.signal}` : ''}${result.error ? `, ${result.error.message}` : ''})` +
+  `${(result.stderr ?? '').trim() ? `: ${result.stderr.trim()}` : ''}`;
 
-/** Samples the hung tree into <out>/stacks; returns the paths it wrote and the tree it found. */
-export function captureDiagnostics({ root, out, sampleSeconds, match, log }) {
+/**
+ * Records and samples the hung tree into <out>/stacks within `captureSeconds`, and returns the paths it wrote, the
+ * tree it found and the captures it skipped. `known` holds processes seen by earlier snapshots; one is kept only
+ * while `ps` still lists it with the same command, so a reused pid is never signalled.
+ */
+export function captureDiagnostics({ root, known = [], out, sampleSeconds, captureSeconds, spindump = true, match,
+  log, run = defaultRun, now = Date.now }) {
+  const started = now();
+  const left = () => captureSeconds * 1000 - (now() - started);
   const dir = path.join(out, 'stacks');
   fs.mkdirSync(dir, { recursive: true });
-  const written = [];
-  const psFields = ['-o', 'pid=,ppid=,%cpu=,rss=,etime=,state=,command='];
-  const tree = processTree(run('ps', ['-A', '-o', 'pid=,ppid=,command=']).stdout ?? '', root);
-  const psFile = path.join(dir, 'ps.txt');
-  const header = 'PID PPID %CPU RSS(KB) ELAPSED STATE COMMAND\n';
-  const rows = tree.map(p => run('ps', [...psFields, '-p', String(p.pid)]).stdout?.trim()).filter(Boolean);
-  fs.writeFileSync(psFile, header + rows.join('\n') + '\n');
-  written.push(psFile);
-  const sudo = run('sudo', ['-n', 'true']).status === 0;
-  for (const { pid, command } of sampleTargets(tree, match)) {
-    log(`watchdog: sampling ${pid} for ${sampleSeconds} s: ${command}`);
-    const sampleFile = path.join(dir, `sample-${pid}.txt`);
-    const sample = run('sample', [String(pid), String(sampleSeconds), '-file', sampleFile]);
-    if (fs.existsSync(sampleFile)) written.push(sampleFile);
-    else log(`watchdog: sample ${pid} wrote nothing (status ${sample.status}): ${(sample.stderr ?? '').trim()}`);
-    if (sudo) {
-      const spinFile = path.join(dir, `spindump-${pid}.txt`);
-      run('sudo', ['-n', 'spindump', String(pid), String(sampleSeconds), '-file', spinFile]);
-      if (fs.existsSync(spinFile)) written.push(spinFile);
-    }
+  const written = [], skipped = [], notes = [];
+  const listing = run('ps', LIST, { timeout: 10_000 });
+  let tree;
+  if (failed(listing)) {
+    // Without a process list only the command's own group can be signalled.
+    const note = `${describe('ps', listing)}; only the command's process group will be signalled`;
+    log(`watchdog: ${note}`);
+    notes.push(note);
+    tree = [{ pid: root, command: '' }];
+  } else {
+    tree = processTree(listing.stdout, root);
+    const current = parseProcesses(listing.stdout);
+    for (const p of known)
+      if (!tree.some(t => t.pid === p.pid) && current.get(p.pid)?.command === p.command) tree.push(p);
   }
-  if (!sudo) log('watchdog: no passwordless sudo, spindump skipped');
-  return { written, tree };
+  const psFile = path.join(dir, 'ps.txt');
+  const rows = [];
+  for (const p of tree) {
+    const row = run('ps', ['-o', 'pid=,ppid=,%cpu=,rss=,etime=,state=,command=', '-p', String(p.pid)], { timeout: 10_000 });
+    if (!failed(row) && row.stdout.trim()) rows.push(row.stdout.trim());
+  }
+  fs.writeFileSync(psFile, ['PID PPID %CPU RSS(KB) ELAPSED STATE COMMAND', ...rows, ...notes.map(n => `# ${n}`)].join('\n') + '\n');
+  written.push(psFile);
+
+  const targets = sampleTargets(tree, match);
+  // A capture starts only when its whole sampling duration fits in what is left, and is cut off at that budget.
+  const capture = (label, cmd, args, file, start) => {
+    if (left() < (sampleSeconds + 1) * 1000) { skipped.push(label); return; }
+    log(`watchdog: ${start}`);
+    const result = run(cmd, args, { timeout: Math.min((sampleSeconds + REPORT_SECONDS) * 1000, left()) });
+    if (fs.existsSync(file)) written.push(file);
+    else log(`watchdog: ${describe(label, result)}, no report written`);
+  };
+  for (const { pid, command } of targets) {
+    const file = path.join(dir, `sample-${pid}.txt`);
+    capture(`sample ${pid}`, 'sample', [String(pid), String(sampleSeconds), '-file', file], file,
+      `sampling ${pid} for ${sampleSeconds} s: ${command}`);
+  }
+  if (!spindump) log('watchdog: spindump disabled');
+  else if (left() < (sampleSeconds + 1) * 1000) skipped.push(...targets.map(({ pid }) => `spindump ${pid}`));
+  else if (failed(run('sudo', ['-n', 'true'], { timeout: 5_000 }))) log('watchdog: no passwordless sudo, spindump skipped');
+  else for (const { pid } of targets) {
+    const file = path.join(dir, `spindump-${pid}.txt`);
+    capture(`spindump ${pid}`, 'sudo', ['-n', 'spindump', String(pid), String(sampleSeconds), '-file', file], file,
+      `spindump of ${pid} for ${sampleSeconds} s`);
+  }
+  if (skipped.length) log(`watchdog: capture budget of ${captureSeconds} s spent; skipped ${skipped.join(', ')}`);
+  return { written, tree, skipped };
 }
 
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function watch(options, { log = line => process.stderr.write(`${line}\n`), now = Date.now } = {}) {
+export async function watch(options, { log = line => process.stderr.write(`${line}\n`), now = Date.now,
+  run = defaultRun } = {}) {
   fs.mkdirSync(options.out, { recursive: true });
   const logFile = fs.createWriteStream(path.join(options.out, 'test.log'));
   const budget = budgetMs(options, now());
@@ -131,19 +188,28 @@ export async function watch(options, { log = line => process.stderr.write(`${lin
   for (const [stream, sink] of [[child.stdout, process.stdout], [child.stderr, process.stderr]])
     stream.on('data', chunk => { sink.write(chunk); logFile.write(chunk); });
   let timedOut = false, pids = [], killTimer;
+  const known = [];
+  const snapshot = setInterval(() => {
+    const listing = run('ps', LIST, { timeout: 10_000 });
+    if (failed(listing) || child.pid === undefined) return;
+    for (const p of processTree(listing.stdout, child.pid))
+      if (p.pid !== child.pid && !known.some(k => k.pid === p.pid)) known.push(p);
+  }, options.snapshotSeconds * 1000);
   const signal = name => {
     for (const target of [-child.pid, ...pids]) { try { process.kill(target, name); } catch { /* already gone */ } }
   };
   const kill = () => {
-    if (!pids.some(alive) && !alive(child.pid)) return;
+    if (!pids.some(alive) && !alive(child.pid) && !alive(-child.pid)) return;
     log('watchdog: sending KILL');
     signal('SIGKILL');
   };
   const timer = setTimeout(() => {
     timedOut = true;
+    clearInterval(snapshot);
     log(`watchdog: deadline passed after ${Math.round(budget / 1000)} s; capturing diagnostics`);
-    const { written, tree } = captureDiagnostics({ root: child.pid, out: options.out,
-      sampleSeconds: options.sampleSeconds, match: options.match, log });
+    const { written, tree } = captureDiagnostics({ root: child.pid, known, out: options.out,
+      sampleSeconds: options.sampleSeconds, captureSeconds: options.captureSeconds, spindump: options.spindump,
+      match: options.match, log, run, now });
     pids = tree.map(p => p.pid).filter(pid => pid !== child.pid);
     log(`watchdog: wrote ${written.join(', ')}`);
     log('watchdog: sending TERM');
@@ -155,6 +221,7 @@ export async function watch(options, { log = line => process.stderr.write(`${lin
     child.on('close', (code, signal) => resolve({ code, signal }));
   });
   clearTimeout(timer);
+  clearInterval(snapshot);
   if (timedOut) {
     // The leader can exit on TERM while the test helper, in its own group, keeps running: give it the grace period.
     const until = Date.now() + options.graceSeconds * 1000;
@@ -163,6 +230,10 @@ export async function watch(options, { log = line => process.stderr.write(`${lin
     kill();
     const survivors = pids.filter(alive);
     if (survivors.length) log(`watchdog: still alive after KILL: ${survivors.join(', ')}`);
+  } else if (child.pid !== undefined && alive(-child.pid)) {
+    // The command finished but left members of its process group behind; they must not outlive the step.
+    log('watchdog: command exited; killing what is left of its process group');
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
   }
   await new Promise(resolve => logFile.end(resolve));
   if (result.error) log(`watchdog: cannot start ${options.command[0]}: ${result.error.message}`);
