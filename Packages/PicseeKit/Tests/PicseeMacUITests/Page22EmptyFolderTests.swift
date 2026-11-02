@@ -169,9 +169,8 @@ let page22Now = Date(timeIntervalSince1970: 1_615_809_600) // 2021-03-15T12:00:0
         try await task.value
         sync()
     }
-    func waitForScanEnd() async {
-        var spins = 0
-        while coordinator.isScanning && spins < 10_000 { await Task.yield(); spins += 1 }
+    func waitForScanEnd(fileID: String = #fileID, line: Int = #line) async throws {
+        try await waitUntil("scan ended", fileID: fileID, line: line) { !coordinator.isScanning }
     }
     var itemCount: Int { grid.collectionView(grid.collectionView, numberOfItemsInSection: 0) }
     func keyWalk() -> [NSView] {
@@ -369,12 +368,12 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     switch ending {
     case "items":
         await scene.scanner.finish(1, ["sub/a.png", "sub/b.png"])
-        await scene.waitForScanEnd()
+        try await scene.waitForScanEnd()
         scene.sync()
         #expect(scene.itemCount == 2 && !scene.shell.emptyFolderVisible)
     case "empty":
         await scene.scanner.finish(1)
-        await scene.waitForScanEnd()
+        try await scene.waitForScanEnd()
         scene.sync()
         #expect(scene.shell.emptyFolderVisible && scene.session.folderRecursiveEnabled)
     default:
@@ -386,7 +385,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
         scene.sync()
         #expect(scene.shell.emptyFolderVisible && !scene.session.folderRecursiveEnabled)
         await scene.scanner.finish(1, ["sub/late.png"])
-        await scene.waitForScanEnd()
+        try await scene.waitForScanEnd()
         scene.sync()
         #expect(scene.shell.emptyFolderVisible, "a late completion is ignored")
     }
