@@ -240,17 +240,90 @@ class RebaseVerifyTests(unittest.TestCase):
 
     def test_rebase_preserves_patch_with_shifted_hunks_and_blob_ids(self):
         git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
-        self.commit("base", **{"App/a.swift": "prefix\na\nsuffix\n"})
+        self.commit("base", **{"App/a.swift": "before 1\nbefore 2\nbefore 3\nprefix\na\nsuffix\n"})
         self.old_base = self.head()
-        self.commit("edit", **{"App/a.swift": "prefix\na2\nsuffix\n"})
+        self.commit("edit", **{"App/a.swift": "before 1\nbefore 2\nbefore 3\nprefix\na2\nsuffix\n"})
         self.old_head = self.head()
         git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
-        self.commit("upstream", **{"App/a.swift": "upstream\nprefix\na\nsuffix\n"})
+        self.commit("upstream", **{"App/a.swift": "upstream\nbefore 1\nbefore 2\nbefore 3\nprefix\na\nsuffix\n"})
         self.new_base = self.head()
         git(self.repo, "cherry-pick", self.old_head, env=self.env)
         result = self.verify()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("CODE same", result.stdout)
+
+    def compare_edits(self, base, old_edit, new_edit):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("base", **{"App/a.swift": base})
+        self.old_base = self.new_base = self.head()
+        self.commit("edit", **{"App/a.swift": old_edit})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+        self.commit("edit", **{"App/a.swift": new_edit})
+        return self.verify()
+
+    def test_replacing_first_or_second_identical_line_differs(self):
+        result = self.compare_edits("a\nmiddle\na\n", "b\nmiddle\na\n", "a\nmiddle\nb\n")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_inserting_same_return_at_different_locations_differs(self):
+        lines = [f"line {i}\n" for i in range(1, 41)]
+        result = self.compare_edits("".join(lines), "".join(lines[:5] + ["return\n"] + lines[5:]),
+                                    "".join(lines[:30] + ["return\n"] + lines[30:]))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_deleting_first_or_last_identical_line_differs(self):
+        result = self.compare_edits("}\nmiddle\n}\n", "middle\n}\n", "}\nmiddle\n")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_function_suffix_context_distinguishes_identical_nearby_lines(self):
+        body = "    context\n" * 5 + "    return old\n" + "    context\n" * 5
+        base = "func first() {\n" + body + "}\nfunc second() {\n" + body + "}\n"
+        result = self.compare_edits(base, base.replace("    return old", "    return new", 1),
+                                    base[:base.index("func second")] +
+                                    base[base.index("func second"):].replace("    return old", "    return new", 1))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_rebase_preserves_patch_when_distant_hunk_in_same_file_changes(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        base = "".join(f"line {i}\n" for i in range(1, 61))
+        self.commit("base", **{"App/a.swift": base})
+        self.old_base = self.head()
+        self.commit("edit", **{"App/a.swift": base.replace("line 10\n", "edited 10\n")})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("upstream", **{"App/a.swift": base.replace("line 50\n", "upstream 50\n")})
+        self.new_base = self.head()
+        git(self.repo, "cherry-pick", self.old_head, env=self.env)
+        result = self.verify()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE same", result.stdout)
+
+    def test_subdirectory_invocation_compares_the_whole_repository(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        (self.repo / "sub").mkdir()
+        self.commit("base", **{"sub/s.txt": "base\n"})
+        self.old_base = self.new_base = self.head()
+        self.commit("edit", **{"sub/s.txt": "same\n", "App/a.swift": "old edit\n"})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+        self.commit("edit", **{"sub/s.txt": "same\n", "App/a.swift": "new edit\n"})
+        root = self.verify()
+        sub = subprocess.run(["zsh", str(Path(__file__).with_name("rebase-verify.sh").resolve()),
+                              self.old_base, self.old_head, self.new_base, self.head()],
+                             cwd=self.repo / "sub", capture_output=True, text=True)
+        self.assertEqual(root.returncode, 1, root.stdout + root.stderr)
+        self.assertIn("CODE differ", root.stdout)
+        self.assertEqual(sub.returncode, root.returncode, sub.stdout + sub.stderr)
+        self.assertEqual(sub.stdout, root.stdout)
 
     def test_generated_ledger_is_excluded_and_ledger_only_is_empty(self):
         (self.repo / "docs").mkdir()
