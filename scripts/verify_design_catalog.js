@@ -39,7 +39,7 @@ const GRID_BAR_CASES=[...GRID_BAR_PAGES.map(n=>n+'.html'),'empty-folder.html?the
  'grid-light.html?scroll=behind','grid-dark.html?scroll=behind','grid-light.html?transparency=reduced','grid-dark.html?transparency=reduced'];
 // Pages that show the viewer command bar keep the bytes they had before #317 (user: 「不改，只改网格底栏」).
 // Change this list only together with a deliberate viewer design change.
-const VIEWER_BAR_SHA256={'viewer-quiet':'1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101','viewer-controls':'a42fee6602541b08b4fa601c493afcb26a187a95068d7ac4e8ccf983b5c981af','viewer-inspector':'7611b8dd969eabbb9380d584ca1d12239319e8bcc920cd6bb8e2eed9031c76b0','image-error':'98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb','original-size':'8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'a3adff92d1bfd4f479a7136486d6b73bc851a6c90e9289435009fdfb0652c2f5','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
+const VIEWER_BAR_SHA256={'viewer-quiet':'1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101','viewer-controls':'0fae9834fe355d410efbfb4172e0036fec5cff67fa03a4b0c2e17a4e7dbe4c80','viewer-inspector':'d35be19fb247bee4642ddce699db764bd66231798e66439358d5877b0082a413','image-error':'98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb','original-size':'8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'87608c3f46431660e6920074834d798e82960571002aa9a2da4562cf41857992','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
 module.exports=async(page,{design,states,screenshot})=>{
  const base=design+'/prototypes/picsee-browser/states/';
  const errors=[],failures=[],results=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))failures.push({url:r.url(),status:r.status()})});
@@ -61,8 +61,59 @@ module.exports=async(page,{design,states,screenshot})=>{
   if(state.name==='viewer-filmstrip'&&(await page.locator('.c-filmstrip-images button').count()!==12||await page.locator('.navigation-pod').count()))throw Error('Filmstrip regression');
   results.push({name:state.name,passed:true});
  }
+ // #347: chosen frosted Viewer Tools and Thumbnail Size variants are rendered design inputs.
+ const variantFailures=[];let viewerToolVariants=0,thumbnailSizeVariants=0;
+ for(const file of ['viewer-controls','viewer-inspector','viewer-filmstrip'])for(const theme of ['light','dark']){
+  await page.setViewportSize({width:1280,height:800});await page.goto(base+file+'.html?theme='+theme);
+  for(const image of ['white','black']){
+   // Extreme light/dark image backdrops exercise the real composited material, not a mocked style function.
+   await page.addStyleTag({content:'.picture-stage{background:'+image+'}.large-image{visibility:hidden}'});
+   const got=await page.evaluate(()=>({theme:document.documentElement.className,pods:[...document.querySelectorAll('[data-viewer-controls]')].map(e=>{
+    const s=getComputedStyle(e),r=e.getBoundingClientRect();return{kind:e.dataset.viewerControls,fill:s.backgroundColor,blur:s.backdropFilter,radius:s.borderRadius,shadow:s.boxShadow,visible:r.width>0&&r.height>0,opacity:s.opacity,color:s.color,
+     icons:[...e.querySelectorAll('button,select')].map(b=>({color:getComputedStyle(b).color,opacity:getComputedStyle(b).opacity}))}})}));
+   viewerToolVariants++;
+   const expected=file==='viewer-filmstrip'?['leading','zoom']:['leading','navigation','zoom'];
+   if(!got.theme.includes('theme-'+theme)||JSON.stringify(got.pods.map(p=>p.kind).sort())!==JSON.stringify(expected))variantFailures.push(file+' '+theme+': theme/groups');
+   const expectedMaterial=await page.evaluate(theme=>{
+    const probe=document.createElement('i');document.body.append(probe);
+    probe.style.backgroundColor='color-mix(in srgb, '+(theme==='light'?'#fff':'#141821')+' 50%, transparent)';probe.style.boxShadow='var(--shadow-soft)';
+    const s=getComputedStyle(probe),result={fill:s.backgroundColor,shadow:s.boxShadow};probe.remove();return result;
+   },theme);
+   for(const [index,p] of got.pods.entries()){
+    if(p.fill!==expectedMaterial.fill||p.shadow!==expectedMaterial.shadow)variantFailures.push(file+' '+theme+': panel/shadow '+JSON.stringify(p));
+    if(!await page.locator('[data-viewer-controls]').nth(index).evaluate(e=>e.checkVisibility({opacityProperty:true,visibilityProperty:true})))variantFailures.push(file+' '+theme+': tools hidden by ancestor');
+    if(p.blur!=='blur(20px) saturate(1.6)'||!p.fill.endsWith(' / 0.5)')||p.radius!=='6px'||p.shadow==='none'||!p.visible||p.opacity!=='1')variantFailures.push(file+' '+theme+' '+image+': material '+JSON.stringify(p));
+    if(p.icons.some(i=>i.opacity!=='1'||i.color!==(theme==='light'?'rgb(26, 26, 26)':'rgb(229, 231, 235)')))variantFailures.push(file+' '+theme+' '+image+': icon foreground');
+   }
+  }
+ }
+ for(const file of ['grid-light','grid-dark']){
+  let invariant;
+  for(const [query,size] of [['',220],['?thumbnail-size=140',140],['?thumbnail-size=220',220],['?thumbnail-size=280',280],['?thumbnail-size=invalid',220]]){
+   await page.setViewportSize({width:1280,height:800});await page.goto(base+file+'.html'+query);
+   const got=await page.evaluate(()=>{
+    const grid=document.querySelector('.photo-grid'),s=getComputedStyle(grid),rect=grid.getBoundingClientRect();
+    const bar=document.querySelector('.grid-bottom-bar'),b=bar.getBoundingClientRect(),bs=getComputedStyle(bar);
+    const cells=[...grid.querySelectorAll('.photo-cell')].map(e=>{const t=e.querySelector('.thumbnail-wrap').getBoundingClientRect(),r=e.getBoundingClientRect();return{width:r.width,height:t.height}});
+    // Exercise actual overflow, keeping the fixture's title/AX full name available.
+    const cell=grid.querySelector('.photo-cell'),label=cell.querySelector('.photo-name');label.textContent='很长的中英文件名 — A very long photograph filename with details — 2026.jpg';cell.title=label.textContent;
+    const ls=getComputedStyle(label),lr=label.getBoundingClientRect();
+    return{size:getComputedStyle(grid).getPropertyValue('--thumb-min').trim(),width:rect.width,gap:parseFloat(s.columnGap),columns:s.gridTemplateColumns.split(' ').length,cells,
+     label:{ellipsis:ls.textOverflow,wrap:ls.whiteSpace,overflow:ls.overflow,clipped:label.scrollWidth>label.clientWidth,inside:lr.right<=cell.getBoundingClientRect().right,full:cell.title===label.textContent},
+     bar:{rect:[b.x,b.y,b.width,b.height],fill:bs.backgroundColor,border:bs.borderTop,html:bar.innerHTML},overflow:document.documentElement.scrollWidth>innerWidth};
+   });
+   thumbnailSizeVariants++;
+   const columns=Math.floor((got.width+got.gap)/(size+got.gap)),width=(got.width-(columns-1)*got.gap)/columns;
+   if(got.size!==size+'px'||got.columns!==columns||got.cells.some(c=>Math.abs(c.width-width)>.1||Math.abs(c.height-size*.72)>.1)||got.overflow)variantFailures.push(file+query+': geometry '+JSON.stringify(got));
+   if(got.label.ellipsis!=='ellipsis'||got.label.wrap!=='nowrap'||got.label.overflow!=='hidden'||!got.label.clipped||!got.label.inside||!got.label.full)variantFailures.push(file+query+': filename '+JSON.stringify(got.label));
+   if(invariant&&JSON.stringify(got.bar)!==invariant)variantFailures.push(file+query+': Bottom Bar changed with size');
+   invariant=JSON.stringify(got.bar);
+  }
+ }
+ if(variantFailures.length)throw Error('#347 variants: '+variantFailures.join(' | '));
  // Each manifest sha256 pins the exact bytes of its page.
  for(const state of catalog.states){const actual=await page.evaluate(async f=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',await(await fetch(f,{cache:'no-store'})).arrayBuffer()))].map(b=>b.toString(16).padStart(2,'0')).join(''),state.file);if(actual!==state.sha256)throw Error(state.file+' SHA256 mismatch: manifest '+state.sha256+', actual '+actual)}
+ // #347 explicitly updates only the 14/16/33 viewer pins for the chosen frosted tools; other viewer pins remain fixed.
  // #317: page 21 is the Home with the Image Wall of home-image-wall.html (user: 「C 取代 B4 外观，保留拖入反馈」), and
  // every grid Bottom Bar matches grid-footer-fill.html. Expected values are read from those reference pages, not retyped.
  const barIssues=[];const shows={bar:[],viewer:[]};
@@ -238,5 +289,5 @@ module.exports=async(page,{design,states,screenshot})=>{
  await page.getByRole('button',{name:'33 胶片条展开 · C',exact:true}).click();await page.frameLocator('iframe').locator('.c-filmstrip').waitFor();
  if(screenshot)await page.screenshot({path:screenshot});
  await page.goto(design+'/prototypes/picsee-browser/viewer-v2.html');await page.getByTestId('large-viewer').waitFor();await page.keyboard.press('Escape');if(await page.locator('.photo-cell').count()!==12)throw Error('Interactive prototype regression');
- if(errors.length||failures.length)throw Error(JSON.stringify({errors,failures}));return{passed:true,stateCount:results.length,hashesPinned:catalog.states.length,subcases:subcases.length+windowCases.length,journeys:journeyIds,branchPlays,canonicalPreview:true,legacy4313Preview:true,interactivePrototype:true,results,errors,failures};
+ if(errors.length||failures.length)throw Error(JSON.stringify({errors,failures}));return{passed:true,stateCount:results.length,hashesPinned:catalog.states.length,viewerToolVariants,thumbnailSizeVariants,subcases:subcases.length+windowCases.length,journeys:journeyIds,branchPlays,canonicalPreview:true,legacy4313Preview:true,interactivePrototype:true,results,errors,failures};
 };

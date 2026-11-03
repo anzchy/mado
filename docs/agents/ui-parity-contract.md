@@ -26,6 +26,17 @@
 
 在 brief 发出前固定设计源的 Git SHA 与上述哈希；实现中设计源改变就重写受影响的行和参考截图，不沿用旧截图。预期几何偏差、比较区域和动态数据遮罩必须在取图前约定；不得看见差异后才扩大容差或遮罩。
 
+| #347 设计变体（后续 #349 / #351 固定输入） | Selector | Property → Value |
+|---|---|---|
+| 14 `viewer-controls`、16 `viewer-inspector`、33 `viewer-filmstrip`，`?theme=light`，1280×800 | `.viewer-floating-controls > [data-viewer-controls]`；14/16 的 `leading/navigation/zoom`，33 的 `leading/zoom` | `background-color` → `color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`（panel `#fff`，opacity `50%`）；`backdrop-filter` 与 `-webkit-backdrop-filter` → `blur(20px) saturate(1.6)` |
+| 同三页 `?theme=dark`（无参数默认），1280×800 | 同上 | 同上，panel `#141821`，仍为 `50%`、`blur(20px) saturate(1.6)` |
+| 同三页浅 / 深 | 同上；后代 `.ds-icon-button`、`svg` | `border-radius` → `var(--radius-control)` = `6px`；`box-shadow` → 既有 `var(--shadow-soft)`；图标 `color` → `var(--color-text)` = 浅 `#1a1a1a` / 深 `#e5e7eb`；SVG `filter` → `drop-shadow(var(--tool-icon-halo))`（`0 0 1px var(--color-panel)`） |
+| 11 `grid-light` / 12 `grid-dark`，`?thumbnail-size=140`，1280×800 | `.photo-grid`；`.thumbnail-wrap` | `--thumb-min` → `140px`；`height` → `100.8px` |
+| 同 11/12，`?thumbnail-size=220`（无参数 / 无效参数默认） | 同上 | `--thumb-min` → `220px`；`height` → `158.4px` |
+| 同 11/12，`?thumbnail-size=280` | 同上 | `--thumb-min` → `280px`；`height` → `201.6px` |
+| 同 11/12，全三档、浅 / 深 | `.photo-grid`；`.photo-name`；`.grid-bottom-bar` | 列 → `repeat(auto-fill,minmax(min(var(--thumb-min),100%),1fr))`（最小列宽，余宽均分；实际 frame 推导见状态稿 README）；名称 → `nowrap/hidden/ellipsis`；Bottom Bar → 原位置、高 `40px`、`--color-bg` 的 `80%`、无顶线 |
+| #347 共用输入与不变区域 | `viewer-grid-variants.css`、`_ds/picsee-ui-system/tokens/viewer-grid.css`；16 `.inspector`、33 `.c-filmstrip` | opacity / blur / saturation 与尺寸值只在 token 文件定义；信息面板和胶片条 DOM / 既有样式不变。网页 blur 数值是设计参考；原生材质按 #346 选平台 blur，不照抄 CSS 数字。固定版本时同时 pin HTML、manifest 与两个共用 CSS 的 SHA256 |
+
 ## 对照与审计
 
 1. 使用相同 manifest 视口、外观、语言和确定性素材，在 HTTP 预览里渲染 HTML；在**签名且 sandbox 开启**的 App 中经真实入口到达同一状态。按 `$macos-device-test` 先查并取得共享 GUI 锁，记录 App 完整 SHA、签名、设备/macOS、窗口 bounds、backing scale、设计 tree OID、HTML/manifest 哈希和运行 ID。窗口原图、网页原图、日志与比对图保存在 `~/.picsee/device-runs/<run-id>/`，不进公开仓库。

@@ -1,0 +1,23 @@
+/* #347: opt-in state styles. Other catalog pages do not load this file. */
+@import url("_ds/picsee-ui-system/tokens/viewer-grid.css");
+
+/* Retain each pod's existing radius, shadow, position and geometry. */
+.prototype-shell .viewer-floating-controls > [data-viewer-controls] {
+  background: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent);
+  -webkit-backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation));
+  backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation));
+}
+.viewer-floating-controls > [data-viewer-controls] .ds-icon-button {
+  color: var(--color-text);
+}
+.viewer-floating-controls > [data-viewer-controls] svg {
+  filter: drop-shadow(var(--tool-icon-halo));
+}
+
+.photo-grid { --thumb-min: var(--thumbnail-size-default); }
+[data-thumbnail-size="140"] .photo-grid { --thumb-min: var(--thumbnail-size-min); }
+[data-thumbnail-size="280"] .photo-grid { --thumb-min: var(--thumbnail-size-max); }
+.prototype-shell .photo-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--thumb-min), 100%), 1fr));
+}
+.prototype-shell .thumbnail-wrap { height: calc(var(--thumb-min) * var(--thumbnail-height-ratio)); }
