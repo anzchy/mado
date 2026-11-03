@@ -58,10 +58,11 @@ running: the load is cancelled or its result discarded, and progress UI disappea
 ### 7. Tasks cancelled on close
 Work the closing window or owner started (decode, metadata read, thumbnail, scan, file access) is cancelled when it
 closes — releasing a resource the task holds is not enough on its own. Every resource the work held (security-scoped
-access, decoder, memory) is also released: nothing stays alive past its owner. Prove the task stopped with a test
-that observes the cancellation (the task sees `Task.isCancelled` or throws `CancellationError`) or that no late side
-effect follows the close (no write, no publish, no cache insert), or with a named device run when only a real window
-close shows it.
+access, decoder, memory) is also released: nothing stays alive past its owner. Prove the cancellation directly: a
+test observes that the task's cancellation flag or handle is cancelled (`Task.isCancelled` is true, or the task throws
+`CancellationError`), or that the task ends early instead of running to completion. Name a device run when only a real
+window close shows it. A test that only shows nothing was written or published after the close proves the result was
+held back, not that the task stopped; that check belongs to case 8.
 
 ### 8. Late or stale completion
 A result that completes after it was superseded (newer request, different item, closed window) is never delivered
