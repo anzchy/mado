@@ -200,7 +200,7 @@ import PicseeCore
         spaceKeycap.layer?.borderWidth = 1
         quickLookLabel.stringValue = String(localized: "Quick Look")
         quickLookLabel.font = .systemFont(ofSize: 12)
-        quickLookLabel.textColor = DesignColor.textSecondary.nsColor
+        quickLookLabel.textColor = DesignColor.textPrimary.nsColor
         sortButton.isBordered = false
         sortButton.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil)
         sortButton.target = self
@@ -287,6 +287,8 @@ import PicseeCore
             footerLeadingDivider.layer?.backgroundColor = DesignColor.divider.nsColor.cgColor
             toggleButton.layer?.backgroundColor = preferencesStore.value.gridSidebarVisible
                 ? DesignColor.hoverBackground.nsColor.cgColor : NSColor.clear.cgColor
+            toggleButton.contentTintColor = preferencesStore.value.gridSidebarVisible
+                ? DesignColor.textPrimary.nsColor : DesignColor.textSecondary.nsColor
             displayButton.layer?.backgroundColor = isDisplayPanelOpen
                 ? DesignColor.hoverBackground.nsColor.cgColor : NSColor.clear.cgColor
             spaceKeycap.layer?.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
@@ -414,10 +416,11 @@ import PicseeCore
                                    width: searchWidth, height: 28)
         keyboardHint.isHidden = !footerActionsEnabled || footer.bounds.width <= 800 || !searchField.isHidden
         keyboardHint.setAccessibilityHidden(keyboardHint.isHidden)
-        let keycapWidth = spaceKeycap.intrinsicContentSize.width
-        let quickLookWidth = quickLookLabel.intrinsicContentSize.width
+        let keycapWidth = Self.cellWidth(spaceKeycap)
+        let quickLookWidth = Self.cellWidth(quickLookLabel)
         let hintWidth = keycapWidth + 5 + quickLookWidth
-        keyboardHint.frame = NSRect(x: searchButton.frame.minX - 16 - hintWidth, y: 6,
+        // Page 11/12: the hint span's 7pt trailing margin precedes the Bottom Bar's 16pt gap.
+        keyboardHint.frame = NSRect(x: searchButton.frame.minX - 7 - 16 - hintWidth, y: 6,
                                     width: hintWidth, height: 28)
         spaceKeycap.frame = NSRect(x: 0, y: 5, width: keycapWidth, height: 18)
         quickLookLabel.frame = NSRect(x: keycapWidth + 5, y: 6, width: quickLookWidth, height: 18)
