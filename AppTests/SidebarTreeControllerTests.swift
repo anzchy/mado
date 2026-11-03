@@ -30,9 +30,16 @@ private func sameSidebarURL(_ lhs: URL, _ rhs: URL) -> Bool {
 }
 
 @MainActor private func waitForSidebar(_ stage: String, refreshing watch: (any FolderWatching)? = nil,
+    state: () -> String = { "" },
     fileID: String = #fileID, line: Int = #line, _ condition: () async -> Bool) async throws {
     watch?.reconcileAll()
-    try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) { await condition() }
+    do { try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) { await condition() } } catch {
+        // On stdout, so CI's uploaded first-attempt log names the state a stuck stage saw (#425).
+        let seen = state()
+        guard !seen.isEmpty else { throw error }
+        print("sidebar stage \(stage) timed out; state: \(seen)")
+        throw ConditionWaitError(description: "\(error); state: \(seen)")
+    }
 }
 
 @MainActor private func sidebarCondition(for seconds: Double,
@@ -181,6 +188,25 @@ private actor SidebarLeaseTracker: AccessLeasing {
     func release(_ lease: AccessLease) { active -= 1 }
 }
 
+/// The real leases behind a watch hub, counted so a test can wait for every watch stream to stop (#425).
+private actor SidebarLeaseCount: AccessLeasing {
+    let access: any AccessLeasing
+    private(set) var active = 0
+    init(_ access: any AccessLeasing) { self.access = access }
+    func acquire(_ request: AccessRequest) async throws -> AccessLease {
+        let lease = try await access.acquire(request)
+        active += 1
+        return lease
+    }
+    func release(_ lease: AccessLease) async {
+        await access.release(lease)
+        active -= 1
+    }
+    func relocatedFolder(_ folder: URL, rootID: AccessRootID) async throws -> URL? {
+        try await access.relocatedFolder(folder, rootID: rootID)
+    }
+}
+
 private actor SidebarBlockedCount: SidebarFolderEnumerating {
     let child: URL
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -314,55 +340,92 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
     let directChildren = try await SidebarFolderBrowser(access: access,
         enumerator: SystemSidebarFolderEnumerator()).children(in: a, rootID: root)
     #expect(directChildren.map(\.lastPathComponent) == ["B"])
+    let leases = SidebarLeaseCount(access)
     let services = AccessServices(files: access,
         recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")),
-        browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+        browser: FolderBrowser(), watch: WatchHub(access: leases, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
         preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: Task { services },
         motionPolicy: MotionPolicy(source: SidebarMotionSource()))
     defer { controller.window?.close() }
     controller.browseRecoveredFolder(a, rootID: root)
     let tree = try sidebarTree(controller)
-    try await waitForSidebar("A scan") { controller.session.folderScan?.sourceSnapshot?.isComplete == true }
-    try await waitForSidebar("A tree") {
+    do {
+        try await sidebarCancelRestoreStages(controller, tree: tree, services: services, a: a, b: b, c: c, image: image)
+    } catch {
+        try? await closeAndAwaitSidebarWatches(controller, leases: leases)
+        throw error
+    }
+    try await closeAndAwaitSidebarWatches(controller, leases: leases)
+}
+
+/// Closing the window ends the scan and the sidebar tree; their watch streams stop when the hub releases every lease.
+@MainActor private func closeAndAwaitSidebarWatches(_ controller: CanvasWindowController,
+    leases: SidebarLeaseCount) async throws {
+    controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: controller.window))
+    controller.window?.close()
+    try await waitUntil("sidebar watch leases released") { await leases.active == 0 }
+}
+
+/// The tree rows and the folder scan, for a stage that never arrives (#425).
+@MainActor private func sidebarState(_ controller: CanvasWindowController, tree: GridSidebarTreeView) -> String {
+    let rows = tree.rows.map { row in
+        "\(row.folderURL.path)\(row.current ? " (current)" : "") count=\(row.countLabel.stringValue)"
+    }
+    let scan = controller.session.folderScan
+    return "rows=\(rows) scan folder=\(scan?.sourceSnapshot?.version.folder.path ?? "none") " +
+        "complete=\(scan?.sourceSnapshot?.isComplete == true) reading=\(scan?.isReadingFolder == true) " +
+        "recursive=\(scan?.recursiveEnabled == true) entries=\(scan?.sourceSnapshot?.navigationEntries.count ?? 0) " +
+        "grid=\(controller.gridShellVisible)"
+}
+
+@MainActor private func sidebarCancelRestoreStages(_ controller: CanvasWindowController, tree: GridSidebarTreeView,
+    services: AccessServices, a: URL, b: URL, c: URL, image: Data) async throws {
+    let fm = FileManager.default
+    var atClick = "", afterCancel = ""
+    let state = { "\(sidebarState(controller, tree: tree)); at B click: \(atClick); after Cancel: \(afterCancel)" }
+    try await waitForSidebar("A scan", state: state) { controller.session.folderScan?.sourceSnapshot?.isComplete == true }
+    try await waitForSidebar("A tree", state: state) {
         tree.rows.contains { sameSidebarURL($0.folderURL, b) }
     }
-    try await waitForSidebar("direct counts") {
+    try await waitForSidebar("direct counts", state: state) {
         tree.rows.first(where: { sameSidebarURL($0.folderURL, a) })?.countLabel.stringValue == "1" &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, b) })?.countLabel.stringValue == "1"
     }
     #expect(tree.rows.first(where: { sameSidebarURL($0.folderURL, a) })?.countLabel.stringValue == "1")
     _ = controller.session.setFolderRecursiveEnabled(true)
-    try await waitForSidebar("recursive grid keeps direct tree count") {
+    try await waitForSidebar("recursive grid keeps direct tree count", state: state) {
         controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 2 &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, a) })?.countLabel.stringValue == "1"
     }
+    atClick = sidebarState(controller, tree: tree)
     tree.rows.first(where: { sameSidebarURL($0.folderURL, b) })?.performClick(nil)
     #expect(tree.rows.first(where: { $0.current }).map { sameSidebarURL($0.folderURL, b) } == true)
     let cancel = try sidebarCancelButton(controller)
     cancel.performClick(nil)
-    try await waitForSidebar("restore A tree") {
+    afterCancel = sidebarState(controller, tree: tree)
+    try await waitForSidebar("restore A tree", state: state) {
         tree.rows.first(where: { $0.current }).map { sameSidebarURL($0.folderURL, a) } == true &&
         tree.rows.contains { sameSidebarURL($0.folderURL, b) }
     }
     try fm.createDirectory(at: c, withIntermediateDirectories: true)
     try image.write(to: c.appendingPathComponent("c.png"))
-    try await waitForSidebar("added C", refreshing: services.watch) {
+    try await waitForSidebar("added C", refreshing: services.watch, state: state) {
         tree.rows.contains { sameSidebarURL($0.folderURL, c) } &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, c) })?.countLabel.stringValue == "1"
     }
     try image.write(to: c.appendingPathComponent("c2.png"))
-    try await waitForSidebar("changed C image count", refreshing: services.watch) {
+    try await waitForSidebar("changed C image count", refreshing: services.watch, state: state) {
         tree.rows.first(where: { sameSidebarURL($0.folderURL, c) })?.countLabel.stringValue == "2"
     }
     let d = a.appendingPathComponent("D")
     try fm.moveItem(at: c, to: d)
-    try await waitForSidebar("renamed C to D", refreshing: services.watch) {
+    try await waitForSidebar("renamed C to D", refreshing: services.watch, state: state) {
         !tree.rows.contains { sameSidebarURL($0.folderURL, c) } &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, d) })?.countLabel.stringValue == "2"
     }
     try fm.removeItem(at: b)
-    try await waitForSidebar("removed B", refreshing: services.watch) {
+    try await waitForSidebar("removed B", refreshing: services.watch, state: state) {
         !tree.rows.contains { sameSidebarURL($0.folderURL, b) } &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, d) })?.countLabel.stringValue == "2"
     }
