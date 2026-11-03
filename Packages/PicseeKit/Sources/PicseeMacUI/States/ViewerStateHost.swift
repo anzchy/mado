@@ -378,8 +378,8 @@ public final class ViewerStateHost: NSView {
         image.setAccessibilityLabel(iconLabel)
         if !failure { image.setAccessibilityElement(false) }
         addSubview(image); stateIcon = image
-        // Keep the status diagnostics as title/name/reason; page 25 renders the latter two as one muted line.
-        let visibleLines = imageFailure ? [textLines[0], textLines[1] + " · " + textLines[2]] : textLines
+        // Keep the status diagnostics as title/name/reason; page 25 renders the latter two as one muted message.
+        let visibleLines = imageFailure ? [textLines[0], (textLines[1].isEmpty ? "" : textLines[1] + " · ") + textLines[2]] : textLines
         for (index, line) in visibleLines.enumerated() {
             let field = NSTextField(labelWithString: line)
             field.font = index == 0 ? .systemFont(ofSize: 16, weight: .medium) : DesignMetrics.font("ui")
@@ -390,6 +390,7 @@ public final class ViewerStateHost: NSView {
             field.cell?.usesSingleLineMode = imageFailure
             field.maximumNumberOfLines = imageFailure ? 1 : 0
             if imageFailure { field.lineBreakMode = .byTruncatingMiddle }
+            if imageFailure && index == 1 { field.toolTip = line }
             let id = index == 0 ? "state.heading" : failure
                 ? (index == 1 ? "state.filename" : "state.reason")
                 : (index == 1 ? "state.description" : "state.drop-hint")
@@ -414,6 +415,7 @@ public final class ViewerStateHost: NSView {
             addSubview(button); buttons.append(button)
         }
         setAccessibilityChildren([image] + stateLabels + buttons)
+        if imageFailure { refreshImageErrorColors() }
         needsLayout = true
         layoutSubtreeIfNeeded()
     }
@@ -480,12 +482,13 @@ public final class ViewerStateHost: NSView {
     private func layoutImageError(icon: NSImageView) {
         let heading = stateLabels[0], message = stateLabels[1]
         let available = max(0, bounds.width - 48)
+        let messageHeight = fitImageErrorMessage(message, width: available)
         let rowHeight: CGFloat = buttons.count > 1 ? 43 : 35
-        let contentHeight: CGFloat = 32 + 18 + 23 + 9 + 22.1 + 18 + rowHeight
+        let contentHeight: CGFloat = 32 + 18 + 23 + 9 + messageHeight + 18 + rowHeight
         var top = bounds.midY + contentHeight / 2
         icon.frame = NSRect(x: bounds.midX - 16, y: top - 32, width: 32, height: 32)
         top -= 32 + 18
-        for (field, height) in [(heading, CGFloat(23)), (message, CGFloat(22.1))] {
+        for (field, height) in [(heading, CGFloat(23)), (message, messageHeight)] {
             let width = min(available, ceil(field.intrinsicContentSize.width))
             field.frame = NSRect(x: bounds.midX - width / 2, y: top - height, width: width, height: height)
             top -= height + (field === heading ? 9 : 18)
@@ -502,7 +505,39 @@ public final class ViewerStateHost: NSView {
             button.frame = NSRect(x: left, y: top - offset - 35, width: widths[index], height: 35)
             left += widths[index] + 16
         }
-        refreshImageErrorColors()
+    }
+
+    /// Reserve the whole reason before fitting the filename. At the minimum window
+    /// width the reason itself needs wrapping; never let AppKit elide the joined text.
+    private func fitImageErrorMessage(_ field: NSTextField, width: CGFloat) -> CGFloat {
+        let name = textLines[1], reason = textLines[2]
+        let attributes: [NSAttributedString.Key: Any] = [.font: field.font!]
+        func inkWidth(_ text: String) -> CGFloat { (text as NSString).size(withAttributes: attributes).width }
+        let textWidth = max(0, width - 4) // NSTextFieldCell's horizontal padding.
+        let suffix = name.isEmpty ? reason : " · " + reason
+        let wraps = inkWidth(suffix) + (name.isEmpty ? 0 : inkWidth("…")) > textWidth
+        let nameBudget = max(0, textWidth - inkWidth(wraps ? " · " : suffix))
+        var fittedName = name
+        if !name.isEmpty && inkWidth(name) > nameBudget {
+            let characters = Array(name)
+            func candidate(_ count: Int) -> String {
+                String(characters.prefix((count + 1) / 2)) + "…" + String(characters.suffix(count / 2))
+            }
+            var lower = 0, upper = characters.count
+            while lower < upper {
+                let count = (lower + upper + 1) / 2
+                if inkWidth(candidate(count)) <= nameBudget { lower = count } else { upper = count - 1 }
+            }
+            fittedName = candidate(lower)
+        }
+        field.cell?.wraps = wraps
+        field.cell?.usesSingleLineMode = !wraps
+        field.maximumNumberOfLines = wraps ? 0 : 1
+        field.lineBreakMode = wraps ? .byWordWrapping : .byClipping
+        field.stringValue = name.isEmpty ? reason : fittedName + (wraps ? " · \n" : " · ") + reason
+        guard wraps else { return 22.1 }
+        let size = field.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 10000))
+        return max(22.1, ceil(size.height))
     }
 
     public override func layout() {

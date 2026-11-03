@@ -61,6 +61,7 @@ import PicseeApplication
     #expect(message.stringValue == "DSC_0342.jpg · The file may be damaged or its format unreadable.")
     #expect(imageError446Node("state.reason", scene.state) == nil)
     #expect(heading.font?.pointSize == 16 && message.font?.pointSize == 13)
+    #expect(heading.lineBreakMode == .byTruncatingMiddle)
     #expect(!retry.isBordered && !next.isBordered)
     #expect(retry.layer?.cornerRadius == 6)
     #expect(abs(next.frame.minX - retry.frame.maxX - 16) <= 1)
@@ -96,12 +97,15 @@ import PicseeApplication
                 scene.state.display(status, nextEnabled: nextEnabled)
                 scene.state.layoutSubtreeIfNeeded()
                 let message = try #require(imageError446Node("state.filename", scene.state) as? NSTextField)
-                #expect(message.stringValue == name + " · The file may be damaged or its format unreadable.")
+                let full = (name.isEmpty ? "" : name + " · ") + "The file may be damaged or its format unreadable."
+                #expect(message.toolTip == full)
+                #expect(message.stringValue.hasSuffix("The file may be damaged or its format unreadable."))
+                if name.isEmpty { #expect(message.stringValue == full) }
                 #expect(message.maximumNumberOfLines == 1 && message.cell?.usesSingleLineMode == true)
-                #expect(message.lineBreakMode == .byTruncatingMiddle)
+                #expect(message.lineBreakMode == .byClipping)
                 #expect(abs(message.frame.height - 22.1) <= 1)
                 #expect(scene.state.bounds.insetBy(dx: 24, dy: 24).contains(message.frame))
-                #expect(message.accessibilityLabel() == message.stringValue)
+                #expect(message.accessibilityLabel() == full)
                 #expect(scene.state.textLines == ["Unable to read this image", name, "The file may be damaged or its format unreadable."])
                 #expect(scene.state.buttons.compactMap { $0.identifier?.rawValue } == (nextEnabled ? ["state.retry", "state.next"] : ["state.retry"]))
                 #expect(scene.state.subviews.compactMap { $0 as? NSTextField }.count == 2)
@@ -198,5 +202,91 @@ import PicseeApplication
     for (language, expected) in [("en", key), ("zh-Hans", "文件可能已损坏或当前格式不可读取。")] {
         let unit = try #require((localizations[language] as? [String: Any])?["stringUnit"] as? [String: Any])
         #expect(unit["value"] as? String == expected)
+    }
+}
+
+/// #446 fix1: preserve every reason glyph; only the name may elide. At the
+/// 238pt content minimum the reason itself must wrap inside the pin's 24pt padding.
+@Test @MainActor func imageError446FilenameOnlyEllipsisKeepsReasonDrawnAcrossResize() throws {
+    let scene = imageError446Scene()
+    defer { scene.window.close() }
+    let failures: [(ViewerImageFailure, String)] = [
+        (.corruptImage, "The file may be damaged or its format unreadable."),
+        (.unsupportedFormat, "This image format is not supported."),
+        (.resourceLimit, "This image exceeds the available resources."),
+        (.sourceChanged, "The file changed again while it was being opened."),
+        (.access, "Access to this image is unavailable.")
+    ]
+    let longName = String(repeating: "摄影🌙e\u{301}-long-name-", count: 80) + ".jpg"
+    for (kind, reason) in failures {
+        for name in [longName, "月亮🌙.jpg", ""] {
+            scene.state.frame.size = NSSize(width: 1280, height: 800)
+            scene.state.display(.failed(kind, name), nextEnabled: true)
+            let message = try #require(imageError446Node("state.filename", scene.state) as? NSTextField)
+            let wideText = message.stringValue
+            let wideFrame = message.frame
+            let full = (name.isEmpty ? "" : name + " · ") + reason
+            for width: CGFloat in [1280, 238, 800, 238, 1280] {
+                scene.window.setContentSize(NSSize(width: width, height: 800))
+                scene.content.frame.size = NSSize(width: width, height: 800)
+                scene.state.frame = scene.content.bounds
+                scene.state.needsLayout = true
+                scene.state.layoutSubtreeIfNeeded()
+                #expect(message.stringValue.hasSuffix(reason))
+                #expect(message.toolTip == full && message.accessibilityLabel() == full)
+                #expect(scene.state.bounds.insetBy(dx: 24, dy: 24).contains(message.frame))
+                #expect(message.lineBreakMode != .byTruncatingMiddle && message.lineBreakMode != .byTruncatingTail)
+                let cell = try #require(message.cell)
+                let measured = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: message.bounds.width, height: 10000))
+                #expect(measured.height <= message.bounds.height + 0.5)
+                if width >= 800 {
+                    let ink = (message.stringValue as NSString).size(withAttributes: [.font: message.font!]).width
+                    #expect(ink <= message.bounds.width)
+                    #expect(abs(message.frame.height - 22.1) <= 1)
+                } else {
+                    #expect(cell.wraps && !cell.usesSingleLineMode)
+                    #expect(message.maximumNumberOfLines == 0)
+                    #expect(message.frame.height > 22.1)
+                }
+                let drawnName = message.stringValue.components(separatedBy: " · ").first ?? ""
+                if name == longName {
+                    #expect(drawnName.contains("…"))
+                    #expect(drawnName.hasPrefix("摄") && drawnName.hasSuffix(".jpg"))
+                    #expect(!drawnName.contains("�"))
+                } else if width == 1280 {
+                    #expect(message.stringValue == full)
+                }
+                for button in scene.state.buttons { #expect(button.frame.maxY < message.frame.minY) }
+                if width == 1280 {
+                    #expect(message.stringValue == wideText && message.frame == wideFrame)
+                }
+            }
+            scene.state.display(.failed(kind, name), nextEnabled: true)
+            let repeated = try #require(imageError446Node("state.filename", scene.state) as? NSTextField)
+            #expect(repeated.stringValue == wideText && repeated.frame == wideFrame)
+        }
+    }
+}
+
+@Test @MainActor func imageError446ActionColorsFollowAppearanceWithoutLayout() throws {
+    let scene = imageError446Scene()
+    defer { scene.window.close() }
+    scene.state.display(.failed(.corruptImage, "photo.jpg"), nextEnabled: true)
+    let retry = try #require(scene.state.buttons.first)
+    let next = try #require(scene.state.buttons.last)
+    let originalFrames = scene.state.buttons.map(\.frame)
+    for (appearance, fill, accent) in [(NSAppearance.Name.aqua, UInt32(0x2563eb), UInt32(0x2354c1)),
+                                      (.darkAqua, UInt32(0x1d4ed8), UInt32(0x60a5fa))] {
+        scene.window.appearance = NSAppearance(named: appearance)
+        scene.state.viewDidChangeEffectiveAppearance()
+        let background = try #require(retry.layer?.backgroundColor)
+        imageError446Color(try #require(NSColor(cgColor: background)), fill)
+        imageError446Color(try #require(retry.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor), 0xffffff)
+        var resolvedNextInk: NSColor?
+        scene.state.effectiveAppearance.performAsCurrentDrawingAppearance {
+            resolvedNextInk = (next.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB)
+        }
+        imageError446Color(try #require(resolvedNextInk), accent)
+        #expect(scene.state.buttons.map(\.frame) == originalFrames)
     }
 }
