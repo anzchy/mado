@@ -362,9 +362,7 @@ function show() {
   P('p-frame').style.width = i.w * sc + 'px'; P('p-frame').style.height = i.h * sc + 'px';
   P('p-frame').innerHTML = `<iframe inert tabindex="-1" title="${esc(i.title)}" src="${srcOf(p, q)}" style="width:${i.w}px;height:${i.h}px;transform:scale(${sc})"></iframe>`;
   const frame = P('p-frame').querySelector('iframe');
-  frame.addEventListener('load', () => frame.contentDocument.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-  }));
+  frame.addEventListener('load', () => frame.contentDocument?.addEventListener('keydown', handlePlayerKeydown));
 }
 function open(list, title, from) {
   seq = list; at = 0; opener = from; P('p-title').textContent = title;
@@ -389,7 +387,7 @@ document.addEventListener('click', e => {
 P('p-prev').onclick = () => { if (at > 0) { at--; show(); } };
 P('p-next').onclick = () => { if (at < seq.length - 1) { at++; show(); } };
 P('p-close').onclick = close;
-document.addEventListener('keydown', e => {
+function handlePlayerKeydown(e) {
   if (P('player').hidden) return;
   if (e.key === 'Escape') { e.preventDefault(); close(); }
   else if (e.key === 'ArrowLeft') P('p-prev').click();
@@ -397,9 +395,10 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Tab') {
     const f = [...P('player').querySelectorAll('button, a[href]')].filter(x => !x.disabled);
     const i = f.indexOf(document.activeElement), n = f.length;
-    e.preventDefault(); f[(i + (e.shiftKey ? n - 1 : 1) + n) % n].focus();
+    e.preventDefault(); f[i < 0 ? (e.shiftKey ? n - 1 : 0) : (i + (e.shiftKey ? n - 1 : 1) + n) % n].focus();
   }
-});
+}
+document.addEventListener('keydown', handlePlayerKeydown);
 addEventListener('resize', () => { if (!P('player').hidden) show(); });
 
 fetch('manifest.json').then(r => { if (!r.ok) throw 0; return r.json(); })
