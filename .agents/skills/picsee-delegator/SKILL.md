@@ -100,8 +100,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    lines), then `$SK/scripts/rebase-verify.sh <old-base> <audited-head> <new-base> <new-head>`. A verdict covers a
    patch: compare the full patch except `docs/feature-ledger.md` and `docs/feature-ledger.html` (regenerated and
    checked by the ledger gate), preserving paths, renames, deletions, modes and binary content while normalizing
-   blob IDs and hunk line offsets. `CODE same` keeps audits and smoke; `CODE differ` → quick combination check by
-   both auditors before gates; `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
+   blob IDs and hunk line offsets, then replaying the audited patch in an isolated index on the new base and
+   comparing the resulting tree to the new head to verify edit locations. `CODE same` keeps audits and smoke;
+   `CODE differ` → quick combination check by both auditors before gates. A clean cherry-pick can still report
+   `CODE differ` when upstream changes the three context lines around an edit; use the same combination check.
+   `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
 7. **Gardener** — first `node scripts/ledger/garden-gate.mjs <base> <head>` (re-push: add `--since <gardened head>

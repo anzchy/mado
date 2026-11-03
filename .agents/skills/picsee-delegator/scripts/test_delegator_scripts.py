@@ -262,6 +262,90 @@ class RebaseVerifyTests(unittest.TestCase):
         self.commit("edit", **{"App/a.swift": new_edit})
         return self.verify()
 
+    def test_identical_u3_context_in_different_blocks_differs(self):
+        body = "context\n" * 5 + "target\n" + "after\n" * 5
+        base = "first\n" + body + "second\n" + body
+        first_edit = base.replace("target\n", "edited\n", 1)
+        second_edit = base[:base.index("second\n")] + base[base.index("second\n"):].replace(
+            "target\n", "edited\n", 1)
+        result = self.compare_edits(base, first_edit, second_edit)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_repeated_context_locations_survive_distant_upstream_shifts(self):
+        initial_base = self.old_base
+        for delete_prefix in (False, True):
+            with self.subTest(delete_prefix=delete_prefix):
+                self.old_base = initial_base
+                git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+                prefix = "".join(f"prefix {i}\n" for i in range(1, 31))
+                body = "context\n" * 5 + "target\n" + "after\n" * 5
+                blocks = "first\n" + body + "second\n" + body
+                self.commit("base", **{"App/a.swift": prefix + blocks})
+                self.old_base = self.head()
+                self.commit("edit", **{"App/a.swift": (prefix + blocks).replace("target\n", "edited\n", 1)})
+                self.old_head = self.head()
+                git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+                shifted = ("" if delete_prefix else prefix + prefix) + blocks
+                self.commit("upstream", **{"App/a.swift": shifted})
+                self.new_base = self.head()
+                git(self.repo, "cherry-pick", self.old_head, env=self.env)
+                # Real index and unstaged work must survive comparison.
+                (self.repo / "notes.md").write_text("staged scratch\n")
+                git(self.repo, "add", "notes.md", env=self.env)
+                (self.repo / "notes.md").write_text("unstaged scratch\n")
+                before = (self.head(), git(self.repo, "diff", "--binary"),
+                          git(self.repo, "diff", "--cached", "--binary"))
+                result = self.verify()
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("CODE same", result.stdout)
+                self.assertEqual(before, (self.head(), git(self.repo, "diff", "--binary"),
+                                         git(self.repo, "diff", "--cached", "--binary")))
+                git(self.repo, "restore", "--staged", "notes.md", env=self.env)
+                git(self.repo, "restore", "notes.md", env=self.env)
+                git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+                second = shifted.index("second\n")
+                self.commit("edit", **{"App/a.swift": shifted[:second] + shifted[second:].replace(
+                    "target\n", "edited\n", 1)})
+                result = self.verify()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("CODE differ", result.stdout)
+
+    def test_upstream_deleting_original_block_cannot_retarget_identical_block(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        body = "context\n" * 5 + "target\n" + "after\n" * 5
+        base = "first\n" + body + "second\n" + body
+        self.commit("base", **{"App/a.swift": base})
+        self.old_base = self.head()
+        self.commit("edit", **{"App/a.swift": base.replace("target\n", "edited\n", 1)})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        surviving = "second\n" + body
+        self.commit("upstream", **{"App/a.swift": surviving})
+        self.new_base = self.head()
+        self.commit("edit", **{"App/a.swift": surviving.replace("target\n", "edited\n", 1)})
+        result = self.verify()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_nearby_upstream_context_conservatively_differs(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        base = "".join(f"line {i}\n" for i in range(1, 31))
+        self.commit("base", **{"App/a.swift": base})
+        self.old_base = self.head()
+        self.commit("edit", **{"App/a.swift": base.replace("line 10\n", "edited 10\n")})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("upstream", **{"App/a.swift": base.replace("line 8\n", "upstream 8\n")})
+        self.new_base = self.head()
+        git(self.repo, "cherry-pick", self.old_head, env=self.env)
+        result = self.verify()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE differ", result.stdout)
+
     def test_replacing_first_or_second_identical_line_differs(self):
         result = self.compare_edits("a\nmiddle\na\n", "b\nmiddle\na\n", "a\nmiddle\nb\n")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
