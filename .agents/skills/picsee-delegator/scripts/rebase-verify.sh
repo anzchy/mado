@@ -1,18 +1,24 @@
 #!/bin/zsh
 # rebase-verify.sh <old-base> <old-head> <new-base> <new-head> — run after rebasing an audited branch.
-# Compares the commit messages and the changed App/AppTests/Packages/UITests/project.yml lines of
+# Compares the commit messages and the changed App/AppTests/Packages/UITests/project.yml/scripts/.github lines of
 # old-base..old-head with new-base..new-head. An audit or device-smoke verdict covers a patch, so it only carries
 # over when CODE is same. Exit 0: both same. 1: code differs (send the combination back for a quick audit check,
 # then rerun gates and smoke). 2: messages differ (fix them before pushing; wins over 1, both lines still print).
-# 3: usage.
+# 3: usage or invalid ref. 4: empty comparison (no evidence to carry forward).
 set -u
 (( $# == 4 )) || { echo "usage: rebase-verify.sh <old-base> <old-head> <new-base> <new-head>"; exit 3; }
-paths=(App AppTests Packages UITests project.yml)
+paths=(App AppTests Packages UITests project.yml scripts .github)
 for r in "$@"; do git rev-parse -q --verify "$r^{commit}" >/dev/null || { echo "unknown commit: $r"; exit 3; }; done
 msgs() { git log --reverse --format='%s%n%b%n--' "$1..$2"; }
-code() { git diff -U0 "$1" "$2" -- $paths | grep '^[-+]' | grep -v '^+++\|^---' | LC_ALL=C sort | shasum | cut -d' ' -f1; }
+code() { git diff -U0 "$1" "$2" -- $paths | grep '^[-+]' | grep -v '^+++\|^---' | LC_ALL=C sort; }
 rc=0
 if [[ "$(msgs $1 $2)" == "$(msgs $3 $4)" ]]; then echo "MESSAGES same"; else echo "MESSAGES differ"; rc=2; fi
-a=$(code $1 $2) b=$(code $3 $4)
+old=$(code $1 $2) new=$(code $3 $4)
+if [[ -z $old || -z $new ]]; then
+  echo "CODE empty comparison: old=${#old} new=${#new}; cannot carry an audit across an empty patch" >&2
+  exit 4
+fi
+a=$(print -r -- "$old" | shasum | cut -d' ' -f1)
+b=$(print -r -- "$new" | shasum | cut -d' ' -f1)
 if [[ $a == $b ]]; then echo "CODE same $a"; else echo "CODE differ $a -> $b"; (( rc == 0 )) && rc=1; fi
 exit $rc
