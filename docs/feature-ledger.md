@@ -280,7 +280,7 @@ v0.0.1 起就是门槛，范围是 J1/J2 的页面（见计划 P3「MVP 还需�
 | A11Y-01 | VoiceOver | Absent | 无 | P3-10、P6-04 | — | 开 VoiceOver 走一遍打开→网格→大图→Inspector，每个控件都有正确的名称，隐藏的工具不被读出 |
 | A11Y-02 | 纯键盘操作 | Partial | 单元 | P0-09、P6-04 | `Packages/PicseeKit/Sources/PicseeApplication/Viewer/InspectorFocus.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`App/CanvasWindowController.swift`、`App/Commands/CommandMenu.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Inspector/InspectorPanel.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 不碰鼠标完成打开目录、选图、看大图、返回、打开 Inspector；焦点始终可见（28 页）。限制：网格键盘选图与 Esc 返回仅单元（P3-01）；读取态与网格中侧栏开关、宽度分隔条的 Tab 焦点仅单元（P3-10）；⌘O 选目录、空态按钮 Tab/Esc @1x 通过（[记录](validation/P1.md#p1-07空态加载失败取消菜单焦点与中英文本)），该记录是 B4 之前的空态，B4 首次打开按钮的 Tab/Esc 仅单元、真机未验；新 Inspector 关闭按钮焦点与 Esc 仅单元，失败态焦点环未验；网格、底栏、Inspector 关闭按钮的正反向 Tab 链（含无结果时清除按钮）仅单元；主菜单 ⌘I（快捷键与菜单项）在网格搜索编辑中保留搜索框编辑器与光标，仅 App 单元；侧栏子目录树行的 Tab 与方向键焦点仅单元（P3-10 slice 3）；空文件夹 22 页（FOLDER-08）的 Tab 焦点与焦点恢复仅单元；画布在按键把焦点移到画布时显示 2 pt 强调色环：Tab/Shift-Tab、工具或 Inspector 的 Esc、焦点在 Inspector 关闭按钮时按 ⌘I 关闭 Inspector；环已显示时，←/→（画布按键或主菜单键等价）在按键当时打开的相邻图保留该环，异步才开始的翻图（如首次需先建立文件夹扫描）不保留；Return/Space/Enter 开图、点击、程序化聚焦及网格/Finder/工具栏开图不显示，←/→ 未打开新图时也不会让之后的开图保留该环；浅深渲染与重绘调度单元，主菜单 ←/→、⌘I 与 Inspector Esc 的控制器路径 App 单元（#362），真机未验；签名真机未验；「读取失败」（24F-A，FOLDER-01）的「重试」焦点与取消重试后回到「读取失败」的焦点恢复仅单元，签名真机未验（#238）。 |
 | A11Y-03 | 对比度与焦点不被遮挡 | Absent | 无 | P6-04 | — | 浅色和深色下文字与控件对比度符合 `design/DESIGN.md` 的目标；获得焦点的控件不被其他元素挡住 |
-| A11Y-04 | 中英文界面 | Partial | 单元 | P1-07、P6-04、P6-09 | `App/Resources/Localizable.xcstrings`、`App/Commands/CommandMenu.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Inspector/InspectorPanel.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/States/`、`Packages/PicseeKit/Sources/PicseeMacUI/Shortcuts/`、`Packages/PicseeKit/Tests/PicseeMacUITests/ViewerLocalizationTests.swift` | 系统语言切到中文或英文，界面文字跟随变化，没有截断和未翻译的键名。限制：中文目录、空态/错误态局部布局与图标名称仅单元；侧栏“隐藏/显示/调整侧栏宽度”及设置窗口各分区（通用、显示、缓存、更新、关于；含缩略图缓存、清理缓存、缓存失败提示、「即将推出」标注）、网格缩略图失败占位「无法显示缩略图」及其 VoiceOver 标签中英文条目未上屏验证；Inspector 新字符串 en/zh-Hans 已入 catalog；侧栏失效文件夹的「Unavailable／无法访问」（#232）仅单元，屏上显示未验；新重连提示英文 “Choose File Again…” / “Choose this image again to reconnect access.” 与简体中文「重新选择文件…」/「请重新选择这张图片以恢复访问。」均未上屏验证；系统语言切换、中文签名像素未验；全界面截断检查待 P6-04。B4 首次打开的 6 条新文案（拖入提示、拖入时「松开即可打开」、⌘O、三个格式标签）中英文条目已入 catalog，中文屏上显示与截断未验；页 26 标题「找不到“<文件夹名>”」/“Can’t Find “%@””与「无法访问“<文件夹名>”」/“Unable to Access “%@””及找不到说明的中英文条目已入 catalog，屏上显示与截断未写入验证记录。诊断面板 19 个新字符串（17 个标签与 2 段说明）与“诊断信息”窗口标题的中英文屏上显示未验（P3-07）；Help、报告问题、键盘快捷键、收藏、最近、信息、显示与「即将推出」的中英文条目及菜单/入口 AX 仅单元，屏上显示与截断未验；快捷键窗口中英文目录文案与实际视图同一来源，屏上显示未验，中英文无截断、键帽字形完整、行名与键帽居中、卡片副标题完整及其内边距仅渲染断言；24F-A「没能读完…」、重试与选择其他文件夹…及底栏「读取未完成」的中英文上屏未验（#238）。 |
+| A11Y-04 | 中英文界面 | Partial | 单元 | P1-07、P6-04、P6-09 | `App/Resources/Localizable.xcstrings`、`App/Commands/CommandMenu.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Inspector/InspectorPanel.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/States/`、`Packages/PicseeKit/Sources/PicseeMacUI/Shortcuts/`、`Packages/PicseeKit/Tests/PicseeMacUITests/ViewerLocalizationTests.swift` | 系统语言切到中文或英文，界面文字跟随变化，没有截断和未翻译的键名。限制：中文目录、空态/错误态局部布局与图标名称仅单元；侧栏“隐藏/显示/调整侧栏宽度”及设置窗口各分区（通用、显示、缓存、更新、关于；含缩略图缓存、清理缓存、缓存失败提示、「即将推出」标注）、网格缩略图失败占位「无法显示缩略图」及其 VoiceOver 标签中英文条目未上屏验证；Inspector 新字符串 en/zh-Hans 已入 catalog；侧栏失效文件夹的「Unavailable／无法访问」（#232）仅单元，屏上显示未验；新重连提示英文 “Choose File Again…” / “Choose this image again to reconnect access.” 与简体中文「重新选择文件…」/「请重新选择这张图片以恢复访问。」均未上屏验证；系统语言切换、中文签名像素未验；全界面截断检查待 P6-04。B4 首次打开的 3 条新文案（拖入提示、拖入时「松开即可打开」、⌘O）中英文条目已入 catalog，中文屏上显示与截断未验；页 26 标题「找不到“<文件夹名>”」/“Can’t Find “%@””与「无法访问“<文件夹名>”」/“Unable to Access “%@””及找不到说明的中英文条目已入 catalog，屏上显示与截断未写入验证记录。诊断面板 19 个新字符串（17 个标签与 2 段说明）与“诊断信息”窗口标题的中英文屏上显示未验（P3-07）；Help、报告问题、键盘快捷键、收藏、最近、信息、显示与「即将推出」的中英文条目及菜单/入口 AX 仅单元，屏上显示与截断未验；快捷键窗口中英文目录文案与实际视图同一来源，屏上显示未验，中英文无截断、键帽字形完整、行名与键帽居中、卡片副标题完整及其内边距仅渲染断言；24F-A「没能读完…」、重试与选择其他文件夹…及底栏「读取未完成」的中英文上屏未验（#238）。 |
 
 ### 分发
 
@@ -333,11 +333,11 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
+| 打开与输入 | 2026-11-03 | doc-gardener | 496a3c1..06e76cf |
 | 查看与画布 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
 | C 沉浸界面 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
 | 外观与显示偏好 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| 文件夹浏览 | 2026-11-03 | doc-gardener | 59fe006..96e1c8b |
+| 文件夹浏览 | 2026-11-03 | doc-gardener | 496a3c1..06e76cf |
 | Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 网格、选择与菜单 | 2026-11-03 | doc-gardener | 59fe006..96e1c8b |
 | 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
@@ -347,7 +347,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 可访问性与本地化 | 2026-11-03 | doc-gardener | f8cce19..dce67c9；8269922..f853983 |
+| 可访问性与本地化 | 2026-11-03 | doc-gardener | 496a3c1..06e76cf |
 | 分发 | 2026-11-02 | doc-gardener | d069b65..c202172 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
