@@ -65,6 +65,7 @@ Apple说明外观可沿App→Window→View继承，并可在相应层覆盖：[N
 | 上一张 / 下一张 | chevron.left / chevron.right |
 | 搜索 / 排序 / 信息 | magnifyingglass / arrow.up.arrow.down / info.circle |
 | 文件夹 / 收藏 | folder / heart（选中可用heart.fill） |
+| 图片无法读取（#446） | photo（32pt，线框，muted 颜色） |
 | 放大 / 缩小 / 胶片条 | plus / minus / film |
 | 关闭 / 快捷键帮助 | xmark / keyboard |
 

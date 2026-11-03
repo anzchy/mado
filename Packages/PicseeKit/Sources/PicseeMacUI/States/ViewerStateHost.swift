@@ -359,31 +359,37 @@ public final class ViewerStateHost: NSView {
 
     private func composeState(_ status: ViewerImageStatus, actions: [(String, String)]) {
         composedState = status
+        let imageFailure: Bool
+        if case .failed = status { imageFailure = true } else { imageFailure = false }
         let failure: Bool
         switch status {
         case .failed, .folderScanFailed: failure = true
         default: failure = false
         }
         let iconLabel = Self.stateIconLabel(failure: failure)
-        let image = NSImageView(image: NSImage(systemSymbolName: failure
+        let image = NSImageView(image: NSImage(systemSymbolName: imageFailure ? "photo" : failure
             ? "exclamationmark.triangle" : DesignSymbol.folder.name,
             accessibilityDescription: iconLabel)!)
-        image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 28, weight: .regular)
-        image.imageScaling = .scaleProportionallyDown
+        image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: imageFailure ? 32 : 28, weight: .regular)
+        image.imageScaling = imageFailure ? .scaleProportionallyUpOrDown : .scaleProportionallyDown
+        if imageFailure { image.contentTintColor = DesignColor.textSecondary.nsColor }
         image.setAccessibilityIdentifier("state.icon")
         image.setAccessibilityRole(.image)
         image.setAccessibilityLabel(iconLabel)
         if !failure { image.setAccessibilityElement(false) }
         addSubview(image); stateIcon = image
-        for (index, line) in textLines.enumerated() {
+        // Keep the status diagnostics as title/name/reason; page 25 renders the latter two as one muted line.
+        let visibleLines = imageFailure ? [textLines[0], textLines[1] + " · " + textLines[2]] : textLines
+        for (index, line) in visibleLines.enumerated() {
             let field = NSTextField(labelWithString: line)
             field.font = index == 0 ? .systemFont(ofSize: 16, weight: .medium) : DesignMetrics.font("ui")
             field.textColor = failure && index == 2 ? DesignColor.errorText.nsColor :
                 index == 0 ? DesignColor.textPrimary.nsColor : DesignColor.textSecondary.nsColor
             field.alignment = .center
-            field.cell?.wraps = true
-            field.cell?.usesSingleLineMode = false
-            field.maximumNumberOfLines = 0
+            field.cell?.wraps = !imageFailure
+            field.cell?.usesSingleLineMode = imageFailure
+            field.maximumNumberOfLines = imageFailure ? 1 : 0
+            if imageFailure { field.lineBreakMode = .byTruncatingMiddle }
             let id = index == 0 ? "state.heading" : failure
                 ? (index == 1 ? "state.filename" : "state.reason")
                 : (index == 1 ? "state.description" : "state.drop-hint")
@@ -398,6 +404,13 @@ public final class ViewerStateHost: NSView {
             button.bezelStyle = .rounded; button.focusRingType = .exterior
             button.identifier = NSUserInterfaceItemIdentifier(action.1)
             button.setAccessibilityIdentifier(action.1)
+            button.setAccessibilityLabel(action.0)
+            if imageFailure {
+                button.isBordered = false
+                button.font = .systemFont(ofSize: 13)
+                button.wantsLayer = true
+                button.layer?.cornerRadius = 6
+            }
             addSubview(button); buttons.append(button)
         }
         setAccessibilityChildren([image] + stateLabels + buttons)
@@ -441,12 +454,62 @@ public final class ViewerStateHost: NSView {
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
         if let readingViews { layoutReading(readingViews) }
+        if case .failed? = composedState, let stateIcon { layoutImageError(icon: stateIcon) }
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        if case .failed? = composedState { refreshImageErrorColors() }
+    }
+
+    private func refreshImageErrorColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            for button in buttons {
+                let primary = button.identifier?.rawValue == "state.retry"
+                button.layer?.backgroundColor = primary ? DesignColor.primaryFill.nsColor.cgColor : NSColor.clear.cgColor
+                button.attributedTitle = NSAttributedString(string: button.title, attributes: [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: (primary ? DesignColor.onPrimary : .selectionText).nsColor,
+                ])
+            }
+        }
+    }
+
+    /// image-error.html: SVG32, h2 normal line box23 + margin18, paragraph22.1 + margin9.
+    /// Actions have margin18; the text button's margin-top8 makes the 35pt boxes differ by4pt.
+    private func layoutImageError(icon: NSImageView) {
+        let heading = stateLabels[0], message = stateLabels[1]
+        let available = max(0, bounds.width - 48)
+        let rowHeight: CGFloat = buttons.count > 1 ? 43 : 35
+        let contentHeight: CGFloat = 32 + 18 + 23 + 9 + 22.1 + 18 + rowHeight
+        var top = bounds.midY + contentHeight / 2
+        icon.frame = NSRect(x: bounds.midX - 16, y: top - 32, width: 32, height: 32)
+        top -= 32 + 18
+        for (field, height) in [(heading, CGFloat(23)), (message, CGFloat(22.1))] {
+            let width = min(available, ceil(field.intrinsicContentSize.width))
+            field.frame = NSRect(x: bounds.midX - width / 2, y: top - height, width: width, height: height)
+            top -= height + (field === heading ? 9 : 18)
+        }
+        let font = NSFont.systemFont(ofSize: 13)
+        let widths = buttons.map { button in
+            ceil((button.title as NSString).size(withAttributes: [.font: font]).width) +
+                (button.identifier?.rawValue == "state.retry" ? 32 : 16)
+        }
+        let total = widths.reduce(0, +) + CGFloat(max(0, buttons.count - 1)) * 16
+        var left = bounds.midX - total / 2
+        for (index, button) in buttons.enumerated() {
+            let offset: CGFloat = buttons.count == 1 ? 0 : index == 0 ? 4 : 8
+            button.frame = NSRect(x: left, y: top - offset - 35, width: widths[index], height: 35)
+            left += widths[index] + 16
+        }
+        refreshImageErrorColors()
     }
 
     public override func layout() {
         super.layout()
         if let readingViews { layoutReading(readingViews); return }
         guard composedState != nil, let icon = stateIcon else { return }
+        if case .failed? = composedState { layoutImageError(icon: icon); return }
         let available = max(0, bounds.width - 32)
         let textWidth = min(640, available)
         func measure(_ field: NSTextField, width: CGFloat) -> CGFloat {

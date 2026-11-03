@@ -36,7 +36,7 @@ import PicseeApplication
     #expect(stateView("first-launch.heading", in: scene.state)?.accessibilityLabel() == scene.state.textLines[0])
 }
 
-@Test @MainActor func issue92FailureStateWrapsAtCompactSizeAndTracksNext() throws {
+@Test @MainActor func issue92FailureStateTruncatesAtCompactSizeAndTracksNext() throws {
     let scene = StatesScene(width: 800)
     defer { scene.window.close() }
     scene.state.frame.size.height = 680
@@ -46,16 +46,14 @@ import PicseeApplication
     let icon = try frame("state.icon", in: scene.state)
     let heading = try frame("state.heading", in: scene.state)
     let filename = try frame("state.filename", in: scene.state)
-    let reason = try frame("state.reason", in: scene.state)
     let retry = try frame("state.retry", in: scene.state)
     let next = try frame("state.next", in: scene.state)
     #expect(icon.size == NSSize(width: 32, height: 32))
     #expect(stateView("state.icon", in: scene.state)?.accessibilityLabel() == "Unreadable image")
     #expect(icon.minY > heading.maxY)
     #expect(heading.minY > filename.maxY)
-    #expect(filename.minY > reason.maxY)
-    #expect(reason.minY > retry.maxY)
-    #expect(filename.height > 18)
+    #expect(filename.minY > retry.maxY)
+    #expect(abs(filename.height - 22.1) <= 1)
     #expect(retry.minX < next.minX)
     #expect(retry.minY > 80)
     scene.state.display(.failed(.corruptImage, longName), nextEnabled: false)
@@ -100,13 +98,13 @@ import PicseeApplication
         #expect(scene.state.bounds.size == size)
         scene.state.display(.failed(.corruptImage, "very-long-" + String(repeating: "摄影旅行照片-", count: 18) + ".jpg"), nextEnabled: true)
         try assertVisibleComposition(scene.state,
-            ids: ["state.icon", "state.heading", "state.filename", "state.reason", "state.retry", "state.next"],
+            ids: ["state.icon", "state.heading", "state.filename", "state.retry", "state.next"],
             expectedGaps: [("state.icon", "state.heading", 18), ("state.heading", "state.filename", 9),
-                           ("state.filename", "state.reason", 9), ("state.reason", "state.retry", 18)])
+                           ("state.filename", "state.retry", 22)])
         let retry = try frame("state.retry", in: scene.state)
         let next = try frame("state.next", in: scene.state)
         #expect(abs(next.minX - retry.maxX - 16) <= 0.5)
-        #expect(try frame("state.filename", in: scene.state).height > 30)
+        #expect(abs(try frame("state.filename", in: scene.state).height - 22.1) <= 1)
         scene.state.display(.empty)
         scene.state.layoutSubtreeIfNeeded()
         let wall = try frame("first-launch.wall", in: scene.state)
@@ -179,12 +177,13 @@ private func appTranslation(_ key: String, language: String) throws -> String {
     #expect(scene.state.bounds.contains(try frame("first-launch.shortcut", in: scene.state)))
 
     scene.state.display(.failed(.corruptImage, String(repeating: "旅行照片-", count: 25) + ".jpg"), nextEnabled: true)
-    let reason = try #require(stateView("state.reason", in: scene.state) as? NSTextField)
-    reason.stringValue = String(repeating: try appTranslation("The file may be damaged or its format unreadable.", language: "zh-Hans"), count: 5)
+    let message = try #require(stateView("state.filename", in: scene.state) as? NSTextField)
+    message.stringValue = String(repeating: "旅行照片-", count: 25) + ".jpg · " + (try appTranslation("The file may be damaged or its format unreadable.", language: "zh-Hans"))
     scene.state.needsLayout = true
     try assertVisibleComposition(scene.state,
-        ids: ["state.icon", "state.heading", "state.filename", "state.reason", "state.retry", "state.next"],
+        ids: ["state.icon", "state.heading", "state.filename", "state.retry", "state.next"],
         expectedGaps: [("state.icon", "state.heading", 18), ("state.heading", "state.filename", 9),
-                       ("state.filename", "state.reason", 9), ("state.reason", "state.retry", 18)])
-    #expect(try frame("state.reason", in: scene.state).height > 30)
+                       ("state.filename", "state.retry", 22)])
+    #expect(abs(try frame("state.filename", in: scene.state).height - 22.1) <= 1)
+    #expect(message.lineBreakMode == .byTruncatingMiddle && message.maximumNumberOfLines == 1)
 }
