@@ -9,7 +9,8 @@ import { parseAppResult, runAppLane } from '../tdd/app-lane.mjs';
 import { classifyFlaky } from './flaky-gate.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const fixtures = ['a1','a4','a5'].map(id => readFileSync(new URL(`./fixtures/app-${id}.txt`, import.meta.url),'utf8'));
+const fixtures = ['a1','a4-diagnostic','a5'].map(id => readFileSync(new URL(`./fixtures/app-${id}.txt`, import.meta.url),'utf8'));
+const recordedA4 = readFileSync(new URL('./fixtures/app-a4.txt', import.meta.url), 'utf8');
 const names = ['t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves','sidebarCancelRestoresPriorTreeAndWatchRefreshRemovesDeletedChild','t229Fix2RecoveryFollowsRootMovedWhileReadable'];
 const result = (stdout=fixtures[0], extra={}) => ({stdout,stderr:'',status:1,signal:null,...extra});
 const issueLines = fixtures.map(s=>s.split('\n').find(l=>l.includes('recorded an issue')));
@@ -28,7 +29,7 @@ function harness(sequence, options={}) {
   return {status,calls,stdout,stderr,evidencePath};
 }
 
-test('each recorded known failure matches exact name and issue',()=>{
+test('each recorded or derived known failure matches exact name and issue',()=>{
   fixtures.forEach((text,i)=>{
     assert.equal(parseAppResult(result(text)).reliable,true);
     const got=classifyFlaky(result(text));
@@ -36,6 +37,53 @@ test('each recorded known failure matches exact name and issue',()=>{
     assert.deepEqual(got.names,[names[i]]);
     assert.deepEqual(got.issues,[i===1?425:379]);
   });
+});
+test('derived A4 diagnostic fixture changes only the recorded issue line', () => {
+  const recordedIssue = recordedA4.split('\n').find(line => line.includes('recorded an issue'));
+  assert.equal(fixtures[1].replace(issueLines[1], recordedIssue), recordedA4);
+  assert.match(issueLines[1], /; state: rows=\[.+; at B click: rows=\[.+; after Cancel: rows=\[/);
+});
+test('A4 diagnostic fixture issue sites agree with the final live Swift source', () => {
+  const source = readFileSync(path.join(root, 'AppTests/SidebarTreeControllerTests.swift'), 'utf8').split('\n');
+  const signature = parseAppResult(result(fixtures[1])).issues[0].signature;
+  const location = /^SidebarTreeControllerTests\.swift:(\d+):2: Caught error: wait timed out after 100\.0 seconds at PicseeAppTests\/SidebarTreeControllerTests\.swift:(\d+) \(sidebar stage: restore A tree\); state: /.exec(signature);
+  assert.ok(location, 'derived fixture represents the diagnostic restore-A wait failure');
+  const annotation = source.findIndex(line => line.includes(`@Test(`) && line.includes(`func ${names[1]}()`));
+  const restore = source.findIndex(line => line.includes('try await waitForSidebar("restore A tree", state: state)'));
+  assert.ok(annotation >= 0 && restore >= 0, 'both native issue sites exist');
+  assert.equal(Number(location[1]), annotation + 1);
+  assert.equal(Number(location[2]), restore + 1);
+});
+test('A4 diagnostics do not authorize other stages, locations, errors, or missing state', () => {
+  for (const text of [
+    fixtures[1].replace('restore A tree', 'load B tree'),
+    fixtures[1].replace('SidebarTreeControllerTests.swift:305:2', 'SidebarTreeControllerTests.swift:306:2'),
+    fixtures[1].replace('SidebarTreeControllerTests.swift:389 (sidebar stage:', 'SidebarTreeControllerTests.swift:390 (sidebar stage:'),
+    fixtures[1].replace('Caught error: wait timed out after 100.0 seconds', 'Caught error: unexpected folder failure'),
+    fixtures[1].replace(/; state: rows=.*$/m, ''),
+    fixtures[1].replace(/; state: rows=.*$/m, '; state: '),
+  ]) {
+    assert.equal(parseAppResult(result(text)).reliable, true);
+    denied(result(text));
+  }
+});
+test('A4 old stale signature and 180-second time-limit variant remain denied', () => {
+  const timeLimit = fixtures[1].replace(issueLines[1],
+    `✘ Test ${names[1]}() recorded an issue at SidebarTreeControllerTests.swift:305:2: Time limit was exceeded: 180.000 seconds`);
+  for (const text of [recordedA4, timeLimit]) {
+    assert.equal(parseAppResult(result(text)).reliable, true);
+    denied(result(text));
+  }
+});
+test('A4 cannot hide an additional foreign issue on the same failed test', () => {
+  const foreignIssue = `✘ Test ${names[1]}() recorded an issue at Other.swift:1:1: Expectation failed`;
+  const text = fixtures[1].replace(issueLines[1], `${issueLines[1]}\n${foreignIssue}`)
+    .replaceAll('with 1 issue.', 'with 2 issues.');
+  const parsed = parseAppResult(result(text));
+  assert.equal(parsed.reliable, true);
+  assert.equal(parsed.unattributedIssues, false);
+  assert.equal(parsed.issues.length, 2);
+  denied(result(text));
 });
 test('all-known complete subset allows multiple failures',()=>{
   const got=classifyFlaky(result(combined));

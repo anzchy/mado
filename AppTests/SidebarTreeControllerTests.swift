@@ -141,6 +141,7 @@ private final class SidebarHandoffEventSource: FolderEventSource, @unchecked Sen
     }
     private let lock = NSLock()
     private var handlers: [UUID: @Sendable ([FolderChangeHint]) -> Void] = [:]
+    var liveStreams: Int { lock.withLock { handlers.count } }
     func start(watching url: URL, onHints: @escaping @Sendable ([FolderChangeHint]) -> Void) throws -> any FolderEventStream {
         let id = UUID()
         lock.withLock { handlers[id] = onHints }
@@ -186,25 +187,6 @@ private actor SidebarLeaseTracker: AccessLeasing {
         return AccessLease(url: root, rootID: AccessRootID())
     }
     func release(_ lease: AccessLease) { active -= 1 }
-}
-
-/// The real leases behind a watch hub, counted so a test can wait for every watch stream to stop (#425).
-private actor SidebarLeaseCount: AccessLeasing {
-    let access: any AccessLeasing
-    private(set) var active = 0
-    init(_ access: any AccessLeasing) { self.access = access }
-    func acquire(_ request: AccessRequest) async throws -> AccessLease {
-        let lease = try await access.acquire(request)
-        active += 1
-        return lease
-    }
-    func release(_ lease: AccessLease) async {
-        await access.release(lease)
-        active -= 1
-    }
-    func relocatedFolder(_ folder: URL, rootID: AccessRootID) async throws -> URL? {
-        try await access.relocatedFolder(folder, rootID: rootID)
-    }
 }
 
 private actor SidebarBlockedCount: SidebarFolderEnumerating {
@@ -328,7 +310,8 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
     let b = a.appendingPathComponent("B")
     let c = a.appendingPathComponent("C")
     try fm.createDirectory(at: b, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: base) }
+    var needsEarlyCleanup = true
+    defer { if needsEarlyCleanup { try? fm.removeItem(at: base) } }
     let image = try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().appendingPathComponent("TestAssets/synthetic/portrait-2x3.png"))
     try image.write(to: a.appendingPathComponent("a.png"))
@@ -340,40 +323,39 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
     let directChildren = try await SidebarFolderBrowser(access: access,
         enumerator: SystemSidebarFolderEnumerator()).children(in: a, rootID: root)
     #expect(directChildren.map(\.lastPathComponent) == ["B"])
-    let leases = SidebarLeaseCount(access)
+    let watch = Sidebar425Watch(WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
     let services = AccessServices(files: access,
         recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")),
-        browser: FolderBrowser(), watch: WatchHub(access: leases, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+        browser: FolderBrowser(), watch: watch)
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
         preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: Task { services },
         motionPolicy: MotionPolicy(source: SidebarMotionSource()))
-    defer { controller.window?.close() }
-    controller.browseRecoveredFolder(a, rootID: root)
-    let tree = try sidebarTree(controller)
-    do {
+    needsEarlyCleanup = false
+    try await withAsyncTeardown {
+        controller.browseRecoveredFolder(a, rootID: root)
+        let tree = try sidebarTree(controller)
         try await sidebarCancelRestoreStages(controller, tree: tree, services: services, a: a, b: b, c: c, image: image)
-    } catch {
-        try? await closeAndAwaitSidebarWatches(controller, leases: leases)
-        throw error
+    } teardown: {
+        _ = await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)
     }
-    try await closeAndAwaitSidebarWatches(controller, leases: leases)
-}
-
-/// Closing the window ends the scan and the sidebar tree; their watch streams stop when the hub releases every lease.
-@MainActor private func closeAndAwaitSidebarWatches(_ controller: CanvasWindowController,
-    leases: SidebarLeaseCount) async throws {
-    controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: controller.window))
-    controller.window?.close()
-    try await waitUntil("sidebar watch leases released") { await leases.active == 0 }
 }
 
 /// The tree rows and the folder scan, for a stage that never arrives (#425).
-@MainActor private func sidebarState(_ controller: CanvasWindowController, tree: GridSidebarTreeView) -> String {
+@MainActor private func sidebarState(_ controller: CanvasWindowController, tree: GridSidebarTreeView,
+    testRoot: URL) -> String {
+    let root = testRoot.standardizedFileURL.pathComponents
+    func label(_ folder: URL) -> String {
+        let path = folder.standardizedFileURL.pathComponents
+        guard path.starts(with: root) else { return "other" }
+        let relative = path.dropFirst(root.count)
+        return relative.isEmpty ? "." : relative.joined(separator: "/")
+    }
     let rows = tree.rows.map { row in
-        "\(row.folderURL.path)\(row.current ? " (current)" : "") count=\(row.countLabel.stringValue)"
+        "\(label(row.folderURL))\(row.current ? " (current)" : "") count=\(row.countLabel.stringValue)"
     }
     let scan = controller.session.folderScan
-    return "rows=\(rows) scan folder=\(scan?.sourceSnapshot?.version.folder.path ?? "none") " +
+    let scanFolder = scan?.sourceSnapshot.map { label($0.version.folder) } ?? "none"
+    return "rows=\(rows) scan folder=\(scanFolder) " +
         "complete=\(scan?.sourceSnapshot?.isComplete == true) reading=\(scan?.isReadingFolder == true) " +
         "recursive=\(scan?.recursiveEnabled == true) entries=\(scan?.sourceSnapshot?.navigationEntries.count ?? 0) " +
         "grid=\(controller.gridShellVisible)"
@@ -383,7 +365,7 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
     services: AccessServices, a: URL, b: URL, c: URL, image: Data) async throws {
     let fm = FileManager.default
     var atClick = "", afterCancel = ""
-    let state = { "\(sidebarState(controller, tree: tree)); at B click: \(atClick); after Cancel: \(afterCancel)" }
+    let state = { "\(sidebarState(controller, tree: tree, testRoot: a.deletingLastPathComponent())); at B click: \(atClick); after Cancel: \(afterCancel)" }
     try await waitForSidebar("A scan", state: state) { controller.session.folderScan?.sourceSnapshot?.isComplete == true }
     try await waitForSidebar("A tree", state: state) {
         tree.rows.contains { sameSidebarURL($0.folderURL, b) }
@@ -398,12 +380,12 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
         controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 2 &&
         tree.rows.first(where: { sameSidebarURL($0.folderURL, a) })?.countLabel.stringValue == "1"
     }
-    atClick = sidebarState(controller, tree: tree)
+    atClick = sidebarState(controller, tree: tree, testRoot: a.deletingLastPathComponent())
     tree.rows.first(where: { sameSidebarURL($0.folderURL, b) })?.performClick(nil)
     #expect(tree.rows.first(where: { $0.current }).map { sameSidebarURL($0.folderURL, b) } == true)
     let cancel = try sidebarCancelButton(controller)
     cancel.performClick(nil)
-    afterCancel = sidebarState(controller, tree: tree)
+    afterCancel = sidebarState(controller, tree: tree, testRoot: a.deletingLastPathComponent())
     try await waitForSidebar("restore A tree", state: state) {
         tree.rows.first(where: { $0.current }).map { sameSidebarURL($0.folderURL, a) } == true &&
         tree.rows.contains { sameSidebarURL($0.folderURL, b) }
@@ -528,4 +510,262 @@ private enum SidebarHandoffDelivery {
 
 @Test(.timeLimit(.minutes(3))) @MainActor func sidebarWatchCallbackDuringOwnedReadTriggersFollowUpRefresh() async throws {
     try await expectSidebarHandoffDelivery(.duringOwnedRead)
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor func sidebar425DiagnosticStateSanitizesRowsAndScanAcrossPrivateRoots() async throws {
+    _ = NSApplication.shared
+    let fm = FileManager.default
+    let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try fm.createDirectory(at: base, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+    let scope = SystemSecurityScope()
+    let access = try FileAccess(scope: scope, bookmarks: scope,
+        store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "sidebar425-diagnostics")
+    let root = try await access.grant(folder: base)
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: SidebarMotionSource()))
+    defer { controller.window?.close() }
+    let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 240, height: 600))
+    let scan = FolderScanCoordinator(access: access, scanner: FolderBrowser())
+    defer { scan.end() }
+    // Shares a string prefix with the first root, but is not its descendant.
+    let outside = base.appendingPathComponent("private-first-root-neighbor")
+    try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+    var states: [String] = []
+    for name in ["private-first-root", "private-second-root"] {
+        let testRoot = base.appendingPathComponent(name)
+        let a = testRoot.appendingPathComponent("A")
+        try fm.createDirectory(at: a, withIntermediateDirectories: true)
+        try Data([1]).write(to: a.appendingPathComponent("one.png"))
+        tree.show(current: .init(url: a, count: 7), parent: nil, children: [
+            .init(url: a.appendingPathComponent("B"), count: 2),
+            .init(url: a.appendingPathComponent("C"), count: 3),
+            .init(url: a.appendingPathComponent("D"), count: 4),
+            .init(url: outside, count: 5),
+        ])
+        controller.session.folderScan = scan
+        try await scan.begin(folder: a, rootID: root).value
+        let state = sidebarState(controller, tree: tree, testRoot: testRoot)
+        #expect(state.hasPrefix("rows=[\"A (current) count=7\", \"A/B count=2\", \"A/C count=3\", \"A/D count=4\", \"other count=5\"] scan folder=A "))
+        #expect(state.contains("complete=true reading=false recursive=false entries=1"))
+        #expect(!state.contains(base.path) && !state.contains("private-") && !state.contains("file://"))
+        states.append(state)
+
+        try await scan.begin(folder: outside, rootID: root).value
+        let outsideState = sidebarState(controller, tree: tree, testRoot: testRoot)
+        #expect(outsideState.contains("scan folder=other complete=true reading=false recursive=false entries=0"))
+        #expect(!outsideState.contains(outside.path) && !outsideState.contains("private-first-root-neighbor"))
+
+        controller.session.folderScan = nil
+        let emptyState = sidebarState(controller, tree: tree, testRoot: testRoot)
+        #expect(emptyState.contains("scan folder=none complete=false reading=false recursive=false entries=0"))
+        #expect(!emptyState.contains(base.path))
+    }
+    #expect(states.count == 2 && states[0] == states[1])
+}
+
+/// Test-owned admission and completion tracking for watches, not a general controller-idle fence.
+private final class Sidebar425Watch: FolderWatching, @unchecked Sendable {
+    private final class Subscription: FolderWatchSubscription, @unchecked Sendable {
+        private let subscription: any FolderWatchSubscription
+        private let didCancel: @Sendable () -> Void
+        private let lock = NSLock()
+        private var cancellation: Task<Void, Never>?
+        init(_ subscription: any FolderWatchSubscription, didCancel: @escaping @Sendable () -> Void) {
+            self.subscription = subscription; self.didCancel = didCancel
+        }
+        func cancel() async {
+            let task = lock.withLock {
+                if let cancellation { return cancellation }
+                let task = Task { [subscription, didCancel] in
+                    await subscription.cancel()
+                    didCancel()
+                }
+                cancellation = task
+                return task
+            }
+            await task.value
+        }
+    }
+    private let hub: any FolderWatching
+    private let lock = NSLock()
+    private var stopped = false
+    private var registering = 0
+    private var subscriptions: [UUID: Subscription] = [:]
+    init(_ hub: any FolderWatching) { self.hub = hub }
+    func subscribe(rootID: AccessRootID, folder: URL, recursive: Bool,
+        onChange: @escaping @Sendable () -> Void) async throws -> any FolderWatchSubscription {
+        try lock.withLock {
+            guard !stopped else { throw CancellationError() }
+            registering += 1
+        }
+        defer { lock.withLock { registering -= 1 } }
+        let underlying = try await hub.subscribe(rootID: rootID, folder: folder, recursive: recursive, onChange: onChange)
+        let id = UUID()
+        let subscription = Subscription(underlying) { [self] in
+            _ = lock.withLock { subscriptions.removeValue(forKey: id) }
+        }
+        let retiring = lock.withLock { subscriptions[id] = subscription; return stopped }
+        if retiring { await subscription.cancel(); throw CancellationError() }
+        return subscription
+    }
+    func reconcileAll() {
+        if lock.withLock({ !stopped }) { hub.reconcileAll() }
+    }
+    func stop() {
+        let retiring = lock.withLock { stopped = true; return Array(subscriptions.values) }
+        for subscription in retiring { Task { await subscription.cancel() } }
+    }
+    /// A fresh task gets its cleanup opportunity even when the caller's test has already been cancelled.
+    func drain() async -> Bool {
+        await Task.detached { [self] in
+            let deadline = ContinuousClock.now + .seconds(2)
+            while !lock.withLock({ registering == 0 && subscriptions.isEmpty }) {
+                if ContinuousClock.now >= deadline { return false }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            return true
+        }.value
+    }
+}
+
+/// Best effort for admitted watches only. An incomplete drain keeps the root and preserves the behavior result.
+@MainActor private func closeAndAwaitSidebarWatches(_ controller: CanvasWindowController,
+    watch: Sidebar425Watch, testRoot: URL) async -> Bool {
+    watch.stop()
+    // The controller is the NSWindow delegate; close delivers windowWillClose exactly once.
+    controller.window?.close()
+    let completed = await watch.drain()
+    if completed { try? FileManager.default.removeItem(at: testRoot) }
+    else { print("sidebar watch teardown: best-effort 2-second limit reached; test root retained") }
+    return completed
+}
+
+/// Gates the external lease boundary while the real WatchHub runs its transitions.
+private actor Sidebar425GatedLeases: AccessLeasing {
+    nonisolated let acquireGate = SidebarHandoffGate()
+    nonisolated let releaseGate = SidebarHandoffGate()
+    let root: URL
+    private(set) var active = 0
+    init(root: URL = URL(fileURLWithPath: "/sidebar425")) { self.root = root }
+    func acquire(_ request: AccessRequest) async -> AccessLease {
+        await acquireGate.holdIfArmed()
+        active += 1
+        return AccessLease(url: root, rootID: nil)
+    }
+    func release(_ lease: AccessLease) async {
+        await releaseGate.holdIfArmed()
+        active -= 1
+    }
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor func sidebar425TeardownIncludesAcquireBeforeAnyLeaseExists() async throws {
+    let leases = Sidebar425GatedLeases(), source = SidebarHandoffEventSource()
+    let watch = Sidebar425Watch(WatchHub(access: leases, source: source, scheduler: SidebarHandoffClock()))
+    let started = StartedTasks(), root = AccessRootID()
+    leases.acquireGate.arm()
+    let registration = started.track(Task {
+        try await watch.subscribe(rootID: root, folder: URL(fileURLWithPath: "/sidebar425/A"), recursive: true) { }
+    })
+    try await withAsyncTeardown {
+        try await waitUntil { leases.acquireGate.isHolding }
+        #expect(await leases.active == 0)
+        watch.stop()
+        var finished: Bool?
+        let draining = started.track(Task { @MainActor in finished = await watch.drain() })
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(finished == nil, "zero leases cannot finish teardown while registration is acquiring")
+        leases.acquireGate.release()
+        await #expect(throws: CancellationError.self) { _ = try await registration.value }
+        await draining.value
+        #expect(finished == true && source.liveStreams == 0)
+        #expect(await leases.active == 0)
+        await #expect(throws: CancellationError.self) {
+            let unexpected = try await watch.subscribe(rootID: root, folder: URL(fileURLWithPath: "/sidebar425/B"), recursive: true) { }
+            await unexpected.cancel()
+        }
+    } teardown: {
+        watch.stop(); leases.acquireGate.release(); leases.releaseGate.release()
+        if let subscription = try? await registration.value { await subscription.cancel() }
+        started.cancelAll(); await started.awaitAll()
+    }
+}
+
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
+func sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled: Bool) async throws {
+    let leases = Sidebar425GatedLeases(), source = SidebarHandoffEventSource()
+    let watch = Sidebar425Watch(WatchHub(access: leases, source: source, scheduler: SidebarHandoffClock()))
+    let started = StartedTasks()
+    let subscription = try await watch.subscribe(rootID: AccessRootID(), folder: URL(fileURLWithPath: "/sidebar425/A"), recursive: true) { }
+    leases.releaseGate.arm()
+    let first = started.track(Task { await subscription.cancel() })
+    try await withAsyncTeardown {
+        try await waitUntil { leases.releaseGate.isHolding }
+        let duplicate = started.track(Task { await subscription.cancel() })
+        watch.stop()
+        var finished: Bool?
+        let draining = started.track(Task { @MainActor in finished = await watch.drain() })
+        if cancelled { draining.cancel() }
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(finished == nil, "duplicate cancel and parent cancellation cannot finish before real lease release")
+        leases.releaseGate.release()
+        await first.value; await duplicate.value; await draining.value
+        #expect(finished == true && source.liveStreams == 0)
+        #expect(await leases.active == 0)
+        watch.stop()
+        #expect(await watch.drain())
+    } teardown: {
+        watch.stop(); leases.acquireGate.release(); leases.releaseGate.release()
+        started.cancelAll(); await started.awaitAll()
+        await subscription.cancel()
+    }
+}
+
+private enum Sidebar425BehaviorError: Error, Equatable { case original }
+
+@Test(.timeLimit(.minutes(3))) @MainActor func sidebar425TeardownTimeoutRetainsRootAndOriginalErrorWithoutThrowing() async throws {
+    _ = NSApplication.shared
+    let fm = FileManager.default, started = StartedTasks()
+    let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try fm.createDirectory(at: base, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+    let sentinel = base.appendingPathComponent("sentinel")
+    try Data([1]).write(to: sentinel)
+    let leases = Sidebar425GatedLeases(root: base), source = SidebarHandoffEventSource()
+    let watch = Sidebar425Watch(WatchHub(access: leases, source: source, scheduler: SidebarHandoffClock()))
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: SidebarMotionSource()))
+    let subscription = try await watch.subscribe(rootID: AccessRootID(), folder: base, recursive: true) { }
+    leases.releaseGate.arm()
+    let cancellation = started.track(Task { await subscription.cancel() })
+    try await withAsyncTeardown {
+        try await waitUntil { leases.releaseGate.isHolding }
+        do {
+            try await withAsyncTeardown { throw Sidebar425BehaviorError.original } teardown: {
+                let before = ContinuousClock.now
+                let completed = await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)
+                let elapsed = ContinuousClock.now - before
+                #expect(!completed)
+                #expect(elapsed >= .milliseconds(1800) && elapsed < .seconds(10), "best-effort limit is two seconds, subject to scheduling")
+                #expect(fm.fileExists(atPath: sentinel.path))
+            }
+            #expect(Bool(false), "original behavior error was swallowed by cleanup")
+        } catch {
+            #expect(error as? Sidebar425BehaviorError == .original)
+        }
+        leases.releaseGate.release()
+        await cancellation.value
+        #expect(await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base))
+        #expect(!fm.fileExists(atPath: base.path))
+        #expect(await leases.active == 0 && source.liveStreams == 0)
+    } teardown: {
+        watch.stop(); leases.acquireGate.release(); leases.releaseGate.release()
+        started.cancelAll(); await started.awaitAll()
+        await subscription.cancel()
+        controller.window?.close()
+    }
 }
