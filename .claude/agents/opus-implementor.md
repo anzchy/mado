@@ -35,6 +35,9 @@ coverage); the workflow does not commit, you commit per WI after the green gates
   **test** files of that WI, never production files. A RED made by breaking a fixture or asset is not a RED.
 - UI work: the design-derived assertion rows are the first RED, asserted on rendered geometry (layer frames
   after transforms, converted corner points), not on layout inputs.
+- Test matrix: every applicable row of the brief's Interaction & lifecycle section
+  (`docs/agents/interaction-lifecycle-checklist.md`) becomes a design-tests entry or a named device run before
+  implementation; map row → test in the handoff.
 - Only the heavy job goes under `scripts/heavy-lock.sh`, one command per call. No GUI, no App launch, no device
   scripts unless the brief says so (then follow its device-smoke section).
 - Stage named paths only; commit per WI as `<type>(<scope>): <summary>`, body names the issue, WP and ledger
