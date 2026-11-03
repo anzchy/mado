@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("gui-lock.sh")
-# Optional real mdpro GUI script: PICSEE_MDPRO_SCRIPT must name it in its repository,
+# Optional real mdpro GUI script: PICSEE_MDPRO_GUI_SCRIPT must name it in its repository,
 # so its repository-relative heavy-lock dependency remains available. Never copy it.
 UUID4 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 ACQUIRED = re.compile(r"ACQUIRED (\S+) acquisition_id=(\S+)\n\Z")
@@ -284,16 +284,16 @@ class GuiLockTests(GuiLockBase):
 class MdproInteropTests(GuiLockBase):
     def setUp(self):
         super().setUp()
-        script = os.environ.get("PICSEE_MDPRO_SCRIPT")
-        if not script:
-            self.skipTest("PICSEE_MDPRO_SCRIPT not set (requires mdpro GUI script)")
-        self.mdpro = Path(script).expanduser().resolve()
+        script = os.environ.get("PICSEE_MDPRO_GUI_SCRIPT")
+        if script is None:
+            self.skipTest("PICSEE_MDPRO_GUI_SCRIPT not set (requires mdpro GUI script)")
+        self.mdpro = Path(script).expanduser()
         if not self.mdpro.is_file():
-            self.skipTest(f"mdpro GUI script unavailable: {self.mdpro}")
-        # Same layout used by mdpro's gui-lock.sh when locating this dependency.
-        self.mdpro_heavy = self.mdpro.parent.joinpath("../../../..", "scripts/heavy-lock.sh").resolve()
+            self.fail(f"mdpro GUI script unavailable: {self.mdpro}")
+        # Match mdpro's dirname "$0"/../../../.. before following symlinks.
+        self.mdpro_heavy = self.mdpro.parent.joinpath("../../../..", "scripts/heavy-lock.sh")
         if not self.mdpro_heavy.is_file():
-            self.skipTest(f"mdpro heavy-lock script unavailable: {self.mdpro_heavy}")
+            self.fail(f"mdpro heavy-lock script unavailable: {self.mdpro_heavy}")
         self.mdpro_env = {key: value for key, value in self.env.items() if not key.startswith("MDPRO_")}
         # Exercise real lock ownership, with mdpro's supported deterministic
         # admission sample; host memory pressure is outside this fixture's scope.
@@ -347,9 +347,9 @@ class MdproInteropTests(GuiLockBase):
 class MdproInteropFixtureTests(unittest.TestCase):
     def interop_result(self, script):
         env = dict(os.environ)
-        env.pop("PICSEE_MDPRO_SCRIPT", None)
+        env.pop("PICSEE_MDPRO_GUI_SCRIPT", None)
         if script is not None:
-            env["PICSEE_MDPRO_SCRIPT"] = str(script)
+            env["PICSEE_MDPRO_GUI_SCRIPT"] = str(script)
         result = unittest.TestResult()
         with patch.dict(os.environ, env, clear=True):
             unittest.defaultTestLoader.loadTestsFromTestCase(MdproInteropTests).run(result)
@@ -364,17 +364,44 @@ class MdproInteropFixtureTests(unittest.TestCase):
             self.assertIn(reason, message)
 
     def test_unset_script_skips_explicitly(self):
-        self.assert_pair_skipped(None, "PICSEE_MDPRO_SCRIPT not set")
+        self.assert_pair_skipped(None, "PICSEE_MDPRO_GUI_SCRIPT not set")
 
-    def test_unavailable_script_or_dependency_skips_explicitly(self):
+    def assert_pair_failed(self, script, reason):
+        result = self.interop_result(script)
+        self.assertEqual(result.testsRun, 2)
+        self.assertEqual(result.skipped + result.errors, [])
+        self.assertEqual(len(result.failures), 2)
+        for _, message in result.failures:
+            self.assertIn(reason, message)
+
+    def test_legacy_heavy_script_variable_does_not_configure_gui(self):
+        with patch.dict(os.environ, {"PICSEE_MDPRO_SCRIPT": "/missing/heavy-lock.sh"}):
+            self.assert_pair_skipped(None, "PICSEE_MDPRO_GUI_SCRIPT not set")
+
+    def test_unavailable_script_or_dependency_fails_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assert_pair_skipped(root / "missing.sh", "missing.sh")
-            self.assert_pair_skipped(root, str(root))
+            self.assert_pair_failed(root / "missing.sh", "mdpro GUI script unavailable:")
+            self.assert_pair_failed(root, "mdpro GUI script unavailable:")
+            self.assert_pair_failed("", "mdpro GUI script unavailable:")
             script = root / ".agents/skills/mdpro-delegator/scripts/gui-lock.sh"
             script.parent.mkdir(parents=True)
             script.write_text("exit 42\n")
-            self.assert_pair_skipped(script, "heavy-lock.sh")
+            self.assert_pair_failed(script, "mdpro heavy-lock script unavailable:")
+
+    def test_symlink_dependency_uses_invoked_path_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target/.agents/skills/mdpro-delegator/scripts/gui-lock.sh"
+            target.parent.mkdir(parents=True)
+            target.write_text("exit 42\n")
+            heavy = root / "target/scripts/heavy-lock.sh"
+            heavy.parent.mkdir()
+            heavy.write_text("exit 42\n")
+            link = root / "invoked/.agents/skills/mdpro-delegator/scripts/gui-lock.sh"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(target)
+            self.assert_pair_failed(link, "mdpro heavy-lock script unavailable:")
 
     def test_present_broken_script_is_not_skipped(self):
         with tempfile.TemporaryDirectory() as directory:

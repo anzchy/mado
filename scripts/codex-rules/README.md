@@ -46,3 +46,9 @@ For an ordinary topic push: `python3 scripts/codex-rules/push-guard.py`.
 After rebasing an owned unmerged PR branch, obtain the exact current remote tip and use
 `python3 scripts/codex-rules/push-guard.py --expected-remote-oid <full-oid>`. The lease
 must be the observed tip; never use the guarded force option on `main`.
+
+Optional mdpro interop tests use `PICSEE_MDPRO_SCRIPT` for mdpro’s `scripts/heavy-lock.sh`
+(Node heavy-lock tests) and `PICSEE_MDPRO_GUI_SCRIPT` for mdpro’s
+`.agents/skills/mdpro-delegator/scripts/gui-lock.sh` (Python GUI-lock tests).
+Run the GUI script in its repository so its heavy-lock dependency is available; only an
+unset GUI variable skips, while a configured invalid script or dependency fails.
