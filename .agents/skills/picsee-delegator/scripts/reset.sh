@@ -17,23 +17,26 @@ for timer in PICSEE_RESET_CONTEXT_SECS PICSEE_RESET_POLL_SECS; do
     echo "FAIL reset $name: invalid $timer=$value"; exit 1
   fi
 done
-# Exclude transcript quotations and anything before the last reset/startup marker.
+# Parse one screen only: the last boundary and bottom-most eligible footer win.
+# A chooser is a boundary, but its footer still belongs to the pre-start UI.
 footer() {
-  awk -v mode="${1:-context}" '
+  LC_ALL=C awk '
     /^[[:space:]]*```/ { if (fence == "`") fence = ""; else if (!fence) fence = "`"; next }
     /^[[:space:]]*~~~/ { if (fence == "~") fence = ""; else if (!fence) fence = "~"; next }
     fence { next }
-    /Where should the new conversation run/ || /^[[:space:]]*([>❯›] )?\/new[[:space:]]*$/ || /Starting MCP servers/ { ctx = ""; seen = 1; next }
-    /^[[:space:]]*Context [0-9]+% used[[:space:]]*$/ {
+    /^[[:space:]]*Where should the new conversation run/ { ctx = ""; seen = 1; started = 0; next }
+    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ {
+      ctx = ""; seen = 1; started = 1; next
+    }
+    started && /^[[:space:]]*Context [0-9]+% used[[:space:]]*$/ {
       ctx = $0; sub(/^[[:space:]]*/, "", ctx); sub(/[[:space:]]*$/, "", ctx)
     }
-    END { if (mode == "boundary") print seen + 0; else print ctx }
+    END { printf "%d:%s\n", seen, ctx }
   '
 }
 st=$(herdr agent get $name 2>&1 | grep -oE '"agent_status":"[a-z]+"' | cut -d'"' -f4)
 case $st in idle|done) ;; *) echo "FAIL reset $name: status $st, not idle"; exit 1;; esac
 old=$(herdr agent get $name 2>&1 | grep -oE '"value":"[^"]+"' | head -1 | cut -d'"' -f4)
-old_ctx=$(herdr pane read $pane 2>&1 | footer)
 herdr pane send-text $pane '/new' >/dev/null
 # The first Enter can be swallowed by the slash-command popup; press until the chooser shows.
 for i in 1 2 3; do
@@ -45,19 +48,19 @@ herdr pane send-keys $pane enter >/dev/null
 # MCP startup can delay the context footer; wait for it before judging the reset.
 typeset -F SECONDS
 deadline=$((SECONDS + context_secs))
-fresh=0
+boundary_seen=0
 while true; do
-  screen=$(herdr pane read $pane 2>&1)
-  ctx=$(print -r -- "$screen" | footer)
-  # An unchanged markerless footer is not evidence of a new session. Require
-  # a reset boundary, or the old footer to disappear/change before accepting it.
-  if [[ $ctx != "$old_ctx" || $(print -r -- "$screen" | footer boundary) == 1 ]]; then
-    fresh=1
-  fi
-  (( fresh )) || ctx=""
+  parsed=$(herdr pane read $pane 2>&1 | footer)
+  [[ ${parsed%%:*} == 1 ]] && boundary_seen=1
+  ctx=${parsed#*:}
   [[ -n $ctx ]] && break
   if (( SECONDS >= deadline )); then
-    echo "FAIL reset $name: no context line after ${context_secs}s"; exit 1
+    if (( ! boundary_seen )); then
+      echo "FAIL reset $name: no new-session boundary seen within ${context_secs}s; check the pane"
+    else
+      echo "FAIL reset $name: no context line after ${context_secs}s"
+    fi
+    exit 1
   fi
   sleep $poll_secs
 done
