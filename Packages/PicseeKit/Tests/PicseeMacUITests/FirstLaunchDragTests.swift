@@ -87,7 +87,7 @@ import PicseeApplication
     let children = try #require(scene.state.accessibilityChildren() as? [NSView])
     #expect(children.map { $0.accessibilityIdentifier() }.contains("first-launch.heading"))
     #expect(children.map { $0.accessibilityIdentifier() }.contains("state.open"))
-    #expect(children.map { $0.accessibilityIdentifier() }.contains("first-launch.chip.images"))
+    #expect(!children.contains { $0.accessibilityIdentifier().hasPrefix("first-launch.chip.") })
     #expect(!children.contains { $0.accessibilityIdentifier().hasPrefix("first-launch.wall") })
 }
 
@@ -111,15 +111,20 @@ import PicseeApplication
     let scene = StatesScene()
     defer { scene.window.close() }
     let launch = try #require(scene.state.subviews.compactMap { $0 as? FirstLaunchView }.first)
-    let chip = try #require(b4View("first-launch.chip.images", in: scene.state))
+    let drop = try #require(b4View("first-launch.drop", in: scene.state))
+    let wall = try #require(b4View("first-launch.wall", in: scene.state))
     scene.state.setFirstLaunchDragActive(true)
     launch.layoutSubtreeIfNeeded()
     launch.reduceMotionOverride = true
     launch.reduceTransparencyOverride = true
+    // #441 removed the chip this test used as its witness. Leave a stale look the overrides alone would not repair,
+    // so only the live notification can bring back Reduce Transparency's opaque drop and hidden wall.
+    drop.layer?.backgroundColor = NSColor.clear.cgColor
+    wall.alphaValue = 1
     NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
     launch.layoutSubtreeIfNeeded()
-    #expect(chip.layer?.borderWidth == 1)
-    #expect((chip.layer?.backgroundColor?.alpha ?? 0) == 1)
+    #expect((drop.layer?.backgroundColor?.alpha ?? 0) == 1)
+    #expect(wall.alphaValue == 0)
 }
 
 @Test @MainActor func p316B4PhotosDoNotInterceptFileDrags() throws {
@@ -149,20 +154,14 @@ import PicseeApplication
     defer { scene.window.close() }
     let launch = try #require(scene.state.subviews.compactMap { $0 as? FirstLaunchView }.first)
     let drop = try #require(b4View("first-launch.drop", in: scene.state))
-    let chip = try #require(b4View("first-launch.chip.images", in: scene.state))
     launch.appearance = NSAppearance(named: .aqua)
     launch.setDragActive(true)
     try light.assertColor(colour(drop.layer?.backgroundColor), ".theme-light", "--color-accent-soft", viewport: 960)
-    try light.assertColor(colour(chip.layer?.backgroundColor), ".theme-light", "--color-group-bg", viewport: 960)
-    let lightBorder = chip.layer?.borderColor
     launch.appearance = NSAppearance(named: .darkAqua)
     launch.setDragActive(false); launch.setDragActive(true)
     try dark.assertColor(colour(drop.layer?.backgroundColor), ".theme-dark", "--color-accent-soft", viewport: 960)
-    try dark.assertColor(colour(chip.layer?.backgroundColor), ".theme-dark", "--color-group-bg", viewport: 960)
-    #expect(chip.layer?.borderColor != lightBorder)
     launch.reduceTransparencyOverride = true
     launch.setDragActive(false); launch.setDragActive(true)
-    try dark.assertColor(colour(chip.layer?.backgroundColor), ".theme-dark", "--color-surface", viewport: 960)
     try dark.assertColor(colour(drop.layer?.backgroundColor), ".rt.over .drop", "background", viewport: 960)
 }
 
@@ -171,14 +170,18 @@ import PicseeApplication
     let launch = FirstLaunchView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),
         openButton: ViewerStateButton(frame: .zero))
     launch.appearance = NSAppearance(named: .aqua)
-    let chip = try #require(b4View("first-launch.chip.images", in: launch))
+    // #441 removed the chip witness; Reduce Transparency shows on the Home only during a drag.
+    let drop = try #require(b4View("first-launch.drop", in: launch))
+    let wall = try #require(b4View("first-launch.wall", in: launch))
+    launch.setDragActive(true)
     launch.reduceTransparencyOverride = true
-    #expect(chip.layer?.borderWidth == 1)
-    #expect(chip.layer?.backgroundColor?.alpha == 1)
+    let opaque = drop.layer?.backgroundColor
+    #expect(opaque?.alpha == 1)
+    #expect(wall.alphaValue == 0)
     launch.reduceTransparencyOverride = false
-    #expect(chip.layer?.borderWidth == 0)
-    #expect(abs((chip.layer?.backgroundColor?.alpha ?? 0) - 0.8) < 0.001)
+    #expect((drop.layer?.backgroundColor?.alpha ?? 1) < 1)
+    #expect(abs(wall.alphaValue - 0.4) < 0.001)
     launch.reduceTransparencyOverride = true
-    #expect(chip.layer?.borderWidth == 1)
-    #expect(chip.layer?.backgroundColor?.alpha == 1)
+    #expect(drop.layer?.backgroundColor == opaque)
+    #expect(wall.alphaValue == 0)
 }

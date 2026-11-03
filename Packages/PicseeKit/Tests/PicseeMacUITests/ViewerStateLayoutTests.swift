@@ -171,15 +171,12 @@ private func appTranslation(_ key: String, language: String) throws -> String {
     scene.state.display(.empty)
     let heading = try #require(stateView("first-launch.heading", in: scene.state) as? NSTextField)
     let hint = try #require(stateView("first-launch.shortcut", in: scene.state) as? NSTextField)
-    let chip = try #require(stateView("first-launch.chip.images", in: scene.state) as? NSTextField)
     heading.stringValue = try appTranslation("Drop a photo folder here", language: "zh-Hans")
     hint.stringValue = try appTranslation("or press ⌘O", language: "zh-Hans")
-    chip.stringValue = try appTranslation("One or more images", language: "zh-Hans")
     scene.state.needsLayout = true
     scene.state.layoutSubtreeIfNeeded()
     #expect(scene.state.bounds.contains(try frame("first-launch.heading", in: scene.state)))
-    #expect(scene.state.bounds.contains(try frame("first-launch.chip.images", in: scene.state)))
-    #expect(try frame("first-launch.chip.images", in: scene.state).width >= 70)
+    #expect(scene.state.bounds.contains(try frame("first-launch.shortcut", in: scene.state)))
 
     scene.state.display(.failed(.corruptImage, String(repeating: "旅行照片-", count: 25) + ".jpg"), nextEnabled: true)
     let reason = try #require(stateView("state.reason", in: scene.state) as? NSTextField)

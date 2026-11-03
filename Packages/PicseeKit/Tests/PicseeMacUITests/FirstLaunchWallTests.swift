@@ -21,7 +21,7 @@ private let i315Missing = URL(fileURLWithPath: "/picsee-i315-missing.jpg")
     scene.state.display(.empty)
     scene.state.layoutSubtreeIfNeeded()
     let home = try launch(in: scene)
-    #expect(scene.state.textLines == ["Drop a photo folder here", "or press ⌘O", "Folder", "One or more images", "Common image formats"])
+    #expect(scene.state.textLines == ["Drop a photo folder here", "or press ⌘O"])
     #expect(scene.state.buttons.map(\.title) == ["Choose Folder…"])
     let ids = wallTestIdentifiers(in: scene.state)
     #expect(!ids.contains("first-launch.stack"), "stack still composed")
@@ -494,7 +494,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
         let context = "seed 0x3153 size \(size)"
         let titleBar = CGFloat(try pinned.length(":root", "--title-bar-height", viewport: size.width))
         let views = centreViews(home)
-        try #require(views.count == 7, "\(context)")
+        try #require(views.count == 4, "\(context)")
         let group = views.map { $0.convert($0.bounds, to: home) }.reduce(views[0].convert(views[0].bounds, to: home)) { $0.union($1) }
         let drop = try #require(wallTestView("first-launch.drop", in: home))
         let dropFrame = drop.convert(drop.bounds, to: home)
@@ -503,12 +503,51 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
         #expect(i315Close(group.midX, size.width / 2, 0.5), "\(context) group midX \(group.midX)")
         let heading = try #require(wallTestView("first-launch.heading", in: home))
         let button = try #require(wallTestView("state.open", in: home))
-        let chip = try #require(wallTestView("first-launch.chip.images", in: home))
+        #expect(wallTestView("first-launch.chip.images", in: home) == nil, "\(context) chips row")
         #expect(i315Close(heading.frame.minY - button.frame.maxY, gap, 1), "\(context) heading→button")
-        #expect(i315Close(button.frame.minY - chip.frame.maxY, gap, 1), "\(context) button→chips")
-        #expect(heading.frame.height == 24 && button.frame.height == 30 && chip.frame.height == 20,
-                "\(context) heights \(heading.frame.height) \(button.frame.height) \(chip.frame.height)")
+        #expect(heading.frame.height == 24 && button.frame.height == 30,
+                "\(context) heights \(heading.frame.height) \(button.frame.height)")
     }
+}
+
+/// #441: with the chips row gone, the hint and the button keep re-pinned page 21's positions, measured from the
+/// content top (the native title bar strip is the contract's exception), in both appearances, idle and dragging.
+@Test @MainActor func i441CentreKeepsPinnedPositionsAt1280x800() throws {
+    let pinned = try PinnedDesign.page("first-launch")
+    let viewport: Double = 1280
+    let titleBar = try pinned.length(":root", "--title-bar-height", viewport: viewport)
+    let inset = try pinned.length(".home-centre", "inset", viewport: viewport)
+    let gap = try pinned.length(".home-centre", "gap", viewport: viewport)
+    let hintHeight = try pinned.length(".home-centre h2", "line-height", viewport: viewport)
+    let buttonHeight = try pinned.length(".home-sub .mock-primary", "height", viewport: viewport)
+    let box = 800 - titleBar - 2 * inset
+    let hintTop = inset + (box - (hintHeight + gap + buttonHeight)) / 2
+    let expected = [hintTop, hintTop + hintHeight, hintTop + hintHeight + gap, hintTop + hintHeight + gap + buttonHeight]
+    // Chromium measured the re-pinned page at 1280×800: hint 345–369, button 387–417 from the content top.
+    #expect(expected == [345, 369, 387, 417], "derived \(expected)")
+    let (scene, home) = try i315Scene(NSSize(width: 1280, height: 800))
+    defer { scene.window.close() }
+    try #require(home.bounds.height == 800)
+    let heading = try #require(wallTestView("first-launch.heading", in: home))
+    let button = try #require(wallTestView("state.open", in: home))
+    var frames: [[CGFloat]] = []
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        for drag in [false, true] {
+            let context = "\(appearance.rawValue) drag \(drag)"
+            home.appearance = NSAppearance(named: appearance)
+            scene.state.setFirstLaunchDragActive(drag)
+            home.layoutSubtreeIfNeeded()
+            let top = home.bounds.height - CGFloat(titleBar)
+            let h = heading.convert(heading.bounds, to: home), b = button.convert(button.bounds, to: home)
+            let measured = [top - h.maxY, top - h.minY, top - b.maxY, top - b.minY]
+            for (got, want) in zip(measured, expected) {
+                #expect(i315Close(got, CGFloat(want), 1), "\(context) measured \(measured) want \(expected)")
+            }
+            #expect(Double(b.height) == buttonHeight, "\(context) button height \(b.height)")
+            frames.append(measured)
+        }
+    }
+    #expect(Set(frames.map { $0.map { Int(($0 * 100).rounded()) } }).count == 1, "centre moves between presentations \(frames)")
 }
 
 // MARK: - WI-4 drag lifecycle on the wall and drop prompt (pinned page 21)
@@ -779,8 +818,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
 
 // MARK: - WI-5 the wall is invisible to accessibility and never intercepts drags or clicks
 
-private let i315AXChildren = ["first-launch.heading", "state.open", "first-launch.shortcut",
-                              "first-launch.chip.folder", "first-launch.chip.images", "first-launch.chip.formats"]
+private let i315AXChildren = ["first-launch.heading", "state.open", "first-launch.shortcut"]
 
 @MainActor private func i315Descendants(_ view: NSView) -> [NSView] {
     view.subviews.flatMap { [$0] + i315Descendants($0) }
@@ -832,7 +870,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
                 y: CGFloat.random(in: frame.minY...frame.maxY, using: &generator))
     }
     let centre = centreViews(home).map(\.frame)
-    try #require(centre.count == 7)
+    try #require(centre.count == 4)
     for point in points {
         let context = "seed 0x3155 point \(point)"
         #expect(wall.hitTest(point) == nil, "\(context) wall hit")
@@ -852,12 +890,8 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
 // MARK: - WI-6 the centre stays readable with the scrim behind it (pinned page 21)
 
 @Test @MainActor func i315CentreReadableAtSupportedSizes() throws {
-    let padding = try i315B4Page(dark: false).edges(".chips span", "padding", viewport: 960)
     let sizes = [NSSize(width: 800, height: 680)]
         + generatedSizes(seed: 0x3156, count: 30, width: 800...2400, height: 680...1600)
-    let chinese: [String: String] = [
-        "first-launch.chip.folder": "文件夹", "first-launch.chip.images": "单张或多张图片",
-        "first-launch.chip.formats": "常见图片格式"]
     let scene = StatesScene(width: 960)
     defer { scene.window.close() }
     scene.state.display(.empty)
@@ -871,25 +905,19 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
                 if language == "zh" {
                     let heading = try #require(wallTestView("first-launch.heading", in: home) as? NSTextField)
                     heading.stringValue = dragActive ? "松开即可打开" : "把照片文件夹拖到这里"
-                    for (id, label) in chinese {
-                        (try #require(wallTestView(id, in: home) as? NSTextField)).stringValue = label
-                    }
+                    let shortcut = try #require(wallTestView("first-launch.shortcut", in: home) as? NSTextField)
+                    shortcut.stringValue = "或按 ⌘O"
                 }
                 home.needsLayout = true
                 home.layoutSubtreeIfNeeded()
                 let drop = try #require(wallTestView("first-launch.drop", in: home)).frame
                 let views = centreViews(home)
-                try #require(views.count == 7, "\(context)")
+                try #require(views.count == 4, "\(context)")
                 for view in views {
                     let id = view.accessibilityIdentifier()
                     #expect(!view.isHidden && view.alphaValue > 0, "\(context) \(id) hidden")
                     #expect(view.frame.width > 0 && view.frame.height > 0, "\(context) \(id) frame \(view.frame)")
                     #expect(drop.contains(view.frame), "\(context) \(id) \(view.frame) outside drop \(drop)")
-                    if id.hasPrefix("first-launch.chip."), let chip = view as? NSTextField {
-                        let measured = ceil((chip.stringValue as NSString).size(withAttributes: [.font: chip.font!]).width)
-                        #expect(chip.frame.width >= measured + CGFloat(padding.left + padding.right),
-                                "\(context) \(id) width \(chip.frame.width) text \(measured)")
-                    }
                 }
                 for (i, a) in views.enumerated() {
                     for b in views[(i + 1)...] {
@@ -916,7 +944,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
     #expect(scrim.frame == wall.bounds, "scrim \(scrim.frame) wall \(wall.bounds)")
     let wallIndex = try #require(home.subviews.firstIndex { $0 === wall })
     let above = [try #require(wallTestView("first-launch.drop", in: home))] + centreViews(home)
-    try #require(above.count == 8)
+    try #require(above.count == 5)
     for view in above {
         let index = try #require(home.subviews.firstIndex { $0 === view }, "\(view.accessibilityIdentifier()) not a Home subview")
         #expect(wallIndex < index, "\(view.accessibilityIdentifier()) index \(index) below wall \(wallIndex)")

@@ -78,7 +78,7 @@ private struct InputHintCatalog: Decodable {
         print("inputHint AX", width, nodes.map { ($0.accessibilityRole()?.rawValue, $0.accessibilityIdentifier(), $0.accessibilityLabel()) })
         let hint = try #require(nodes.compactMap { $0 as? NSTextField }.first { $0.accessibilityIdentifier() == "first-launch.shortcut" })
         let button = try #require(scene.state.buttons.first)
-        #expect(scene.state.textLines == ["Drop a photo folder here", "or press ⌘O", "Folder", "One or more images", "Common image formats"])
+        #expect(scene.state.textLines == ["Drop a photo folder here", "or press ⌘O"])
         #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.open"])
         #expect(hint.accessibilityRole() == .staticText)
         #expect(hint.accessibilityLabel() == "or press ⌘O")
@@ -117,11 +117,11 @@ private struct InputHintCatalog: Decodable {
     defer { scene.session.closeImage(); scene.window.close() }
     scene.window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); scene.window.orderFront(nil)
     let rows: [(ViewerImageStatus, [String], [String])] = [
-        (.empty, ["Drop a photo folder here", "or press ⌘O", "Folder", "One or more images", "Common image formats"], ["state.open"]),
+        (.empty, ["Drop a photo folder here", "or press ⌘O"], ["state.open"]),
         (.loading("B.png"), ["Opening B.png…"], ["state.cancel"]),
         (.failed(.corruptImage, "B.png"), ["Unable to read this image", "B.png", "The file may be damaged or its format unreadable."], ["state.retry", "state.next"]),
         (.detailLimited, ["Showing reduced detail"], []), (.showing, [], []),
-        (.empty, ["Drop a photo folder here", "or press ⌘O", "Folder", "One or more images", "Common image formats"], ["state.open"])
+        (.empty, ["Drop a photo folder here", "or press ⌘O"], ["state.open"])
     ]
     for (status, lines, buttons) in rows {
         scene.state.display(status, nextEnabled: true)
