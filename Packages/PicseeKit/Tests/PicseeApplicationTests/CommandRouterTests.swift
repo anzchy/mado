@@ -60,3 +60,29 @@ import PicseeApplication
     #expect(firstHost.opens == 1)
     #expect(secondHost.opens == 0)
 }
+
+/// #348: a ⌘ zoom key resolves to the bare key's command, so key entry still yields to a text field.
+@Test @MainActor func cmdZoomKeyEntryBlockedInTextInput() {
+    let router = CommandRouter()
+    let host = FakeSessionHost()
+    let session = ViewerSession(host: host)
+    session.setInspectorVisible(true) // Text input lives in the Inspector.
+    #expect([CommandID.fit, .actualPixels, .zoomIn, .zoomOut].allSatisfy { !$0.usesCommand })
+    let cases: [(String, CommandID)] = [("0", .actualPixels), ("9", .fit), ("+", .zoomIn), ("=", .zoomIn),
+                                        ("-", .zoomOut), ("−", .zoomOut)]
+    for (key, expected) in cases {
+        #expect(CommandID.matching(key: key, command: true) == expected, "⌘\(key)")
+        session.updateFocus(.canvas)
+        host.lastCanvasCommand = nil
+        #expect(router.route(expected, from: .key, to: session))
+        #expect(host.lastCanvasCommand == expected)
+        host.lastCanvasCommand = nil
+        session.updateFocus(.textInput)
+        let zoom = host.zoom
+        #expect(!router.route(expected, from: .key, to: session), "⌘\(key) in a text field")
+        #expect(host.lastCanvasCommand == nil)
+        #expect(host.zoom == zoom)
+        #expect(router.route(expected, from: .button, to: session))
+        #expect(host.lastCanvasCommand == expected)
+    }
+}

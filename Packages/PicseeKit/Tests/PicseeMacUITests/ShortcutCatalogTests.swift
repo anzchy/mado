@@ -197,3 +197,25 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(withoutSearch.source(for: item("focusGridSearch:")) == nil)
     #expect(catalog.source(for: item("focusGridSearch:"))?.id == "menu:Search current folder")
 }
+
+/// #348: the catalog's zoom keycaps stay bare, and each one is still caught by a menu binding.
+@Test @MainActor func zoomKeycapsAllResolve() throws {
+    let zoom: Set<String> = ["command:fit", "command:actualPixels", "command:zoomIn", "command:zoomOut"]
+    for language in [EntryPointLanguage.english, .simplifiedChinese] {
+        let catalog = ShortcutCatalog(menu: issue219Menu(), language: language)
+        let viewer = try #require(catalog.cards.first { $0.id == .viewer })
+        var checked = 0
+        for row in viewer.rows where row.sources.contains(where: { zoom.contains($0.id) }) {
+            #expect(!row.keycaps.contains("⌘"), "\(row.name)")
+            #expect(row.sources.count == row.keycaps.count)
+            for (source, cap) in zip(row.sources, row.keycaps) {
+                let id = try #require(CommandID(rawValue: String(source.id.dropFirst("command:".count))))
+                let key = cap == "−" ? "-" : cap
+                #expect(CommandID.matching(key: key, command: false) == id, "\(cap)")
+                #expect(id.alternateMenuBindings.contains(CommandKeyBinding(key: key, command: false)), "\(cap)")
+                checked += 1
+            }
+        }
+        #expect(checked == 4)
+    }
+}
