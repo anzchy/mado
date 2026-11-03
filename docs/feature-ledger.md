@@ -120,7 +120,7 @@
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| VIEW-01 | 适应窗口 | Partial | 单元 | P1-03 | `Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasPlacement.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridViewerPresentation.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift` | 分别打开横图和竖图，都完整居中显示；拖动改窗口大小，图随之适应。限制：不超过 1× 适应、1× 时对齐 backing 网格；0 键、View › Fit 与改窗口后重新适应 @1x 真机通过（[记录](validation/P1.md#运行-20261023-114600-view-01-04-05-minip1-0337mac-mini-1x)）；显式重开回到 fit；Inspector 打开时，窗口宽于 720 pt 的 viewer 画布变窄，此时按画布区域 fit 仅单元、真机未验；P1-08 的全尺寸内容窗口（适应区含标题栏条带）与比例指示器入口真机未验；比例指示器改为无静态填充/边框的 12 pt 系统 sans 次要文字、hover 才填充，适应/1:1/自定义百分比内容仅有渲染与布局单元（#364），真机未验；@2x 未验。 |
+| VIEW-01 | 适应窗口 | Partial | 单元 | P1-03 | `Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasPlacement.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridViewerPresentation.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift` | 分别打开横图和竖图，都完整居中显示；拖动改窗口大小，图随之适应。限制：不超过 1× 适应、1× 时对齐 backing 网格；0 键、View › Fit 与改窗口后重新适应 @1x 真机通过（[记录](validation/P1.md#运行-20261023-114600-view-01-04-05-minip1-0337mac-mini-1x)）；显式重开回到 fit；Inspector 打开时，窗口宽于 720 pt 的 viewer 画布变窄，此时按画布区域 fit 仅单元、真机未验；P1-08 的全尺寸内容窗口（适应区含标题栏条带）与比例指示器入口真机未验；比例指示器改为无静态填充/边框的 12 pt 系统 sans 主文字色、hover 才填充，适应/1:1/自定义百分比内容仅有渲染与布局单元（#364），真机未验；@2x 未验。 |
 | VIEW-02 | 实际像素 1:1 | Partial | 单元 | P0-03、P1-03 | `Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasTransform.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 按 1，在 2× 屏上一个图像像素对应一个物理像素；窗口拖到 1× 外接屏后仍是 1:1（27 页）。限制：P0-03 的 `1` 键在 [@2x](validation/P0.md#p0-03画布真机验收7view-02--view-03)、[@1x](validation/P0.md#p0-03画布真机验收-1x7view-02--view-03mac-mini) 已验；actualPixels 的路由 1/菜单/按钮真机未验；跨屏拖窗、中文和 VoiceOver 未验；多文件仅显示首个。 |
 | VIEW-03 | 以光标为锚点缩放 | Partial | 单元 | P0-03、P1-03 | `Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasTransform.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 触控板捏合或按 +/−，光标下的那个像素始终停在光标下。限制：zoomIn/zoomOut：P0-03 的 +/− 在 [@2x](validation/P0.md#p0-03画布真机验收7view-02--view-03)、[@1x](validation/P0.md#p0-03画布真机验收-1x7view-02--view-03mac-mini) 已验；捏合、完整 VoiceOver 未验；现按键路由/菜单/按钮真机未验；按钮或指针在面板/画布外时以中心缩放，锚点选择已单测。 |
 | VIEW-04 | 平移与边界 | Partial | 单元 | P1-03 | `Packages/PicseeKit/Sources/PicseeCore/Canvas/CanvasTransform.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift` | 放大后拖动，图像不会被拖出可见范围；回到适应窗口后位置复原（27 页）；限制：四向边界与 0 复原 @1x 真机通过（合成拖动，[记录](validation/P1.md#运行-20261023-114600-view-01-04-05-minip1-0337mac-mini-1x)）；真实鼠标/触控板拖动与 @2x 未验。 |
@@ -334,13 +334,13 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
 | 打开与输入 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
-| 查看与画布 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
-| C 沉浸界面 | 2026-11-03 | doc-gardener | 4ca72f8..7f825a3 |
+| 查看与画布 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
+| C 沉浸界面 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 外观与显示偏好 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 文件夹浏览 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
-| Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..7f825a3 |
-| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 4ca72f8..7f825a3 |
-| 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..7f825a3 |
+| Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
+| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
+| 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 授权与文件访问 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 缓存与资源 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 命令与键盘 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
