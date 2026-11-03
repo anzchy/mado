@@ -4,8 +4,11 @@
 # old-base..old-head with new-base..new-head. An audit or device-smoke verdict covers a patch, so it only carries
 # over when CODE is same. Exit 0: both same. 1: code differs (send the combination back for a quick audit check,
 # then rerun gates and smoke). 2: messages differ (fix them before pushing; wins over 1, both lines still print).
+# A clean cherry-pick with upstream changes within three context lines can still report CODE differ;
+# send that combination to both auditors for a quick check, then rerun gates and smoke.
 # 3: usage or invalid ref. 4: empty comparison (no evidence to carry forward).
 set -eu
+script_dir=${0:A:h}
 set -o pipefail
 (( $# == 4 )) || { echo "usage: rebase-verify.sh <old-base> <old-head> <new-base> <new-head>"; exit 3; }
 for r in "$@"; do git rev-parse -q --verify "$r^{commit}" >/dev/null || { echo "unknown commit: $r"; exit 3; }; done
@@ -14,6 +17,8 @@ msgs() { git log --reverse --format='%s%n%b%n--' "$1..$2"; }
 # Blob IDs and hunk offsets may change on a clean rebase. Retain hunk lengths,
 # patch order, paths, modes, rename metadata, source/context lines, hunk suffix
 # context and binary payloads. Changed surrounding context conservatively differs.
+# Normalized hunk bodies alone cannot distinguish repeated identical blocks;
+# also replay the old patch on new-base and compare its resulting tree to new-head.
 code() {
   git -C "$repo_root" diff --binary --full-index --no-ext-diff --no-textconv --no-color -M -U3 \
     --src-prefix=a/ --dst-prefix=b/ "$1" "$2" -- . \
@@ -29,5 +34,10 @@ if [[ -z $old || -z $new ]]; then
 fi
 a=$(print -r -- "$old" | shasum | cut -d' ' -f1)
 b=$(print -r -- "$new" | shasum | cut -d' ' -f1)
-if [[ $a == $b ]]; then echo "CODE same $a"; else echo "CODE differ $a -> $b"; if (( rc == 0 )); then rc=1; fi; fi
+if [[ $a == $b ]] && python3 "$script_dir/rebase-verify-tree.py" "$repo_root" "$1" "$2" "$3" "$4"; then
+  echo "CODE same $a"
+else
+  echo "CODE differ $a -> $b (patch or replayed tree differs)"
+  if (( rc == 0 )); then rc=1; fi
+fi
 exit $rc
