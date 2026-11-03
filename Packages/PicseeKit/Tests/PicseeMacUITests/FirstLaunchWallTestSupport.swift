@@ -84,8 +84,7 @@ func generatedSizes(seed: UInt64, count: Int, width: ClosedRange<CGFloat>, heigh
 }
 
 @MainActor func centreViews(_ launch: FirstLaunchView) -> [NSView] {
-    ["first-launch.heading", "state.open", "first-launch.shortcut", "first-launch.shortcut-key",
-     "first-launch.chip.folder", "first-launch.chip.images", "first-launch.chip.formats"]
+    ["first-launch.heading", "state.open", "first-launch.shortcut", "first-launch.shortcut-key"]
         .compactMap { wallTestView($0, in: launch) }
 }
 

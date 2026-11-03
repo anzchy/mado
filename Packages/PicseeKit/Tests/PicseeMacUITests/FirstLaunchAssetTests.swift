@@ -43,10 +43,7 @@ import Testing
         ("Drop a photo folder here", "把照片文件夹拖到这里"),
         ("Release to open", "松开即可打开"),
         ("Choose Folder…", "选择文件夹…"),
-        ("or press ⌘O", "或按 ⌘O"),
-        ("Folder", "文件夹"),
-        ("One or more images", "单张或多张图片"),
-        ("Common image formats", "常见图片格式")
+        ("or press ⌘O", "或按 ⌘O")
     ]
     for (english, chinese) in approved {
         let entry = try #require(strings[english] as? [String: Any])
@@ -58,5 +55,30 @@ import Testing
         }
         #expect(value("en") == english)
         #expect(value("zh-Hans") == chinese)
+    }
+}
+
+// #441, owner 2026-11-03: 「打开首页的这行字我不喜欢，删掉」. The chips' three strings leave the catalog, and no other
+// entry carries their text under a new key.
+@Test func i441CatalogDropsChipStrings() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))
+    let catalog = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let strings = try #require(catalog["strings"] as? [String: Any])
+    for key in ["Folder", "One or more images", "Common image formats"] {
+        #expect(strings[key] == nil, "\(key) is still in the catalog")
+    }
+    // A chip under a new key would keep its pair; "Folders" → 文件夹 (the sidebar section) is not a chip.
+    let chipPairs = [["Folder", "文件夹"], ["One or more images", "单张或多张图片"], ["Common image formats", "常见图片格式"]]
+    for (key, entry) in strings {
+        let localizations = (entry as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+        let values = ["en", "zh-Hans"].map { language -> String? in
+            let unit = (localizations[language] as? [String: Any])?["stringUnit"] as? [String: Any]
+            return unit?["value"] as? String
+        }
+        #expect(!chipPairs.contains { $0 == values.compactMap { $0 } }, "\(key) carries chip text \(values)")
+        #expect(!chipPairs.map(\.[0]).contains(values[0] ?? ""), "\(key) en = \(values[0] ?? "")")
     }
 }
