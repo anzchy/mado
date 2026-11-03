@@ -9,8 +9,7 @@ import { classifyFlaky } from "../ci/flaky-gate.mjs";
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
 const bundle = ".build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest";
 const crashRecords = [
-  /^error: Exited with signal code \d+\s*$/i,
-  /^error: Process '[^'\r\n]+' exited with (?:unexpected )?signal code \d+\s*$/i,
+  /^error: (?:Process '[^'\r\n]+' )?Exited with [^\r\n]*\bsignal\b[^\r\n]*$/i,
   /^(?:[^:\r\n]+\.swift:\d+(?::\d+)?: )?Fatal error:(?: |$)/,
   /^Test (?:Case|Suite) '.+' crashed(?: \([^\r\n]*\))?\.?$/,
   /^✘ Test .+ crashed after \d+(?:\.\d+)? seconds(?: with \d+ issues?)?\.$/,
