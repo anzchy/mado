@@ -23,6 +23,12 @@ UI review when this range changes visible UI (otherwise state `无 UI 变化`):
 - Check relevant actions, resize, light/dark, keyboard/focus, accessibility and zh/en text separately. After a fix, the delegator assigns the independent device-verification role to rebuild and recapture affected states under the GUI lock. Review that role's new raw images and exact fixed-build SHA; if recapture is missing, mark the state `NOT VERIFIED`. Do not clear all 20 pages or @2x based on a smaller sample; no `Shipped` upgrade from pixel resemblance alone.
 - Before the UI PR merges, give a separate `UI-Parity` gate verdict for every changed reachable state and every required viewport/appearance/scale/action in its brief. `PASS` requires the pinned Prototype, raw signed-App captures from the PR head (or proved App/design/input-identical documentation successor), independent device-verifier record, and this audit. A required `FAIL` or `NOT VERIFIED` blocks merge. `PENDING` requires a named future work package and an unreachable state; do not reinterpret a reachable mismatch as an exception.
 
+Interaction & lifecycle review when the brief has that section (otherwise state `无交互/生命周期变化`): use
+[`docs/agents/interaction-lifecycle-checklist.md`](../../../../../docs/agents/interaction-lifecycle-checklist.md). Check
+each applicable row has a discriminating proving test or named device run, each `n/a` reason holds against the code,
+and no reachable case (Esc, focus, refresh, close, relaunch, cancel mid-load, tasks cancelled on close, late/stale
+completion) is missing — a missing row is at least Medium.
+
 Beyond the dimensions, judge these specifically:
 - <5–10 bullets on the risky points: correctness traces, cancellation/generations, fences held, ledger honesty,
   tests discriminate, RED genuine, size rule>

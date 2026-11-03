@@ -38,6 +38,16 @@ Each changed state gets one row per design rule it depends on. The delegator cop
 - No state is `AUTO-PASS` until all its rows are green. A row that can't be asserted gets `NOT VERIFIED` and a reason in the handoff, never a silent omission.
 - Auditors check each row against the pinned CSS; a missing row is at least Medium for a user-visible state.
 
+## Interaction & lifecycle (required for a new or changed mode, panel or async load; otherwise write `无交互/生命周期变化`)
+
+Use [`docs/agents/interaction-lifecycle-checklist.md`](../../../../../docs/agents/interaction-lifecycle-checklist.md).
+One row per case — Esc, focus, refresh, close, relaunch, cancel mid-load, tasks cancelled on close, late/stale
+completion — or `n/a` with a reason. Visual dimensions stay in the UI sections above; do not repeat them here.
+
+| Case | Start state | Event sequence | Expected result | Proving test or device run |
+|---|---|---|---|---|
+| `<case>` | `<…>` | `<…>` | `<…>` | `<test name / Device-Smoke step / n/a: reason>` |
+
 ## WI-0 — probe the risky seam first (only if an assumption needs the device)
 <exact probe; throwaway code allowed, never committed; what to record; "if it can't be delivered, record NOT VERIFIED
 and continue"; "if <bad outcome>, stop and report — that is High">
@@ -58,6 +68,8 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
 - Kimi / no plugin: write the tests first; run only them
   (`scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --filter <Name>`); paste the FAILING assertion
   output (not compile errors) in the handoff; implement; rerun the same filter; paste GREEN.
+- Test matrix: every applicable Interaction & lifecycle row becomes a matrix entry (or a named device run) before
+  implementation; the handoff maps row → test.
 - Changing an existing assertion: only where it asserts the old behaviour; list before/after/why.
 
 ## Gates (paste decisive lines)
