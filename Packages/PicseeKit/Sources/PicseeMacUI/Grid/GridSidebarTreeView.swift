@@ -166,6 +166,38 @@ public struct GridSidebarFolder: Sendable, Equatable {
     }
 }
 
+/// These coming-soon controls stay disabled while retaining the pinned sidebar ink.
+/// Native disabled NSButton drawing attenuates even an attributed title or template image.
+@MainActor private final class GridSidebarAddFolderButton: NSButton {
+    override func draw(_ dirtyRect: NSRect) {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let ink = DesignColor.textSecondary.nsColor
+            let text = NSAttributedString(string: title, attributes: [
+                .font: NSFont.systemFont(ofSize: 12, weight: .regular), .foregroundColor: ink,
+            ])
+            let hasLabel = !title.isEmpty
+            let glyphSize: CGFloat = hasLabel ? 15 : 14
+            let textSize = text.size()
+            let groupWidth = glyphSize + (hasLabel ? 7 + textSize.width : 0)
+            let glyph = NSRect(x: bounds.midX - groupWidth / 2, y: bounds.midY - glyphSize / 2,
+                width: glyphSize, height: glyphSize)
+            // grid-light/folder-loading: SVG viewBox 24, M12 5v14M5 12h14.
+            ink.setStroke()
+            let plus = NSBezierPath()
+            plus.lineWidth = glyphSize * 1.75 / 24
+            plus.lineCapStyle = .round
+            plus.move(to: NSPoint(x: glyph.midX, y: glyph.minY + glyphSize * 5 / 24))
+            plus.line(to: NSPoint(x: glyph.midX, y: glyph.minY + glyphSize * 19 / 24))
+            plus.move(to: NSPoint(x: glyph.minX + glyphSize * 5 / 24, y: glyph.midY))
+            plus.line(to: NSPoint(x: glyph.minX + glyphSize * 19 / 24, y: glyph.midY))
+            plus.stroke()
+            if hasLabel {
+                text.draw(at: NSPoint(x: glyph.maxX + 7, y: bounds.midY - textSize.height / 2))
+            }
+        }
+    }
+}
+
 @MainActor public final class GridSidebarTreeView: NSView {
     public let heading = NSTextField(labelWithString: "")
     public let guide = NSView()
@@ -174,8 +206,8 @@ public struct GridSidebarFolder: Sendable, Equatable {
     public var onSelectFolder: ((URL) -> Void)?
     private let scroll = NSScrollView()
     private let document = NSView()
-    private let addFolderButton = NSButton()
-    private let addFolderPlusButton = NSButton()
+    private let addFolderButton = GridSidebarAddFolderButton()
+    private let addFolderPlusButton = GridSidebarAddFolderButton()
     private let addFolderBorder = CAShapeLayer()
     public private(set) var parent: GridSidebarFolder?
     private var currentFolder: GridSidebarFolder?
@@ -198,7 +230,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
         guide.wantsLayer = true
         guide.layer?.backgroundColor = DesignColor.divider.nsColor.cgColor
         guide.isHidden = true
-        addFolderPlusButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        addFolderPlusButton.title = ""
         addFolderPlusButton.isBordered = false
         addFolderPlusButton.isEnabled = false
         addFolderPlusButton.refusesFirstResponder = true
@@ -208,9 +240,6 @@ public struct GridSidebarFolder: Sendable, Equatable {
         document.addSubview(addFolderPlusButton)
         addFolderButton.title = String(localized: "Add Folder")
         addFolderButton.font = .systemFont(ofSize: 12)
-        addFolderButton.attributedTitle = NSAttributedString(string: addFolderButton.title, attributes: [
-            .font: addFolderButton.font!, .foregroundColor: DesignColor.textSecondary.nsColor,
-        ])
         addFolderButton.isBordered = false
         addFolderButton.isEnabled = false
         addFolderButton.refusesFirstResponder = true
@@ -232,7 +261,8 @@ public struct GridSidebarFolder: Sendable, Equatable {
             heading.textColor = DesignColor.textSecondary.nsColor
             guide.layer?.backgroundColor = DesignColor.divider.nsColor.cgColor
             addFolderBorder.strokeColor = DesignColor.divider.nsColor.cgColor
-            addFolderPlusButton.contentTintColor = DesignColor.textSecondary.nsColor
+            addFolderButton.needsDisplay = true
+            addFolderPlusButton.needsDisplay = true
         }
     }
     public func show(current: GridSidebarFolder, parent: GridSidebarFolder?, children: [GridSidebarFolder]) {
@@ -313,8 +343,10 @@ public struct GridSidebarFolder: Sendable, Equatable {
         document.frame = NSRect(x: 0, y: 0, width: bounds.width, height: documentHeight)
         heading.frame = NSRect(x: compact ? 20 : 22, y: documentHeight - headerTop - headerHeight,
             width: max(0, bounds.width - 66), height: headerHeight)
-        addFolderPlusButton.frame = NSRect(x: max(0, bounds.width - 38), y: heading.frame.minY - 3,
-            width: 20, height: 20)
+        let sidebarPadding: CGFloat = viewportWidth <= 1050 ? 8 : 12
+        // Sidebar border1 + padding + heading padding10 + tiny-button18 (SVG14 + padding2×2).
+        addFolderPlusButton.frame = NSRect(x: max(0, bounds.width - 1 - sidebarPadding - 10 - 18),
+            y: heading.frame.minY - 2, width: 18, height: 18)
         var rowY = documentHeight - firstRowTop
         for (index, row) in rows.enumerated() {
             row.compact = compact
@@ -323,7 +355,6 @@ public struct GridSidebarFolder: Sendable, Equatable {
             row.frame = NSRect(x: x, y: rowY, width: max(0, bounds.width - x - 12), height: rowHeight)
             row.layoutSubtreeIfNeeded()
         }
-        let sidebarPadding: CGFloat = viewportWidth <= 1050 ? 8 : 12
         addFolderButton.frame = NSRect(x: sidebarPadding + 4, y: rowY - 12 - 30,
             width: max(0, bounds.width - 2 * sidebarPadding - 1 - 8), height: 30)
         addFolderBorder.frame = addFolderButton.bounds

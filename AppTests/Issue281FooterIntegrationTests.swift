@@ -47,6 +47,53 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     return view.subviews.lazy.compactMap { issue281View(id, in: $0) }.first
 }
 
+/// #437: inspect the installed controls, including the ink that AppKit used to dim when disabled.
+/// grid-light.html / folder-loading.html at 1280×800: muted #6b7280; tiny-button x155.
+@MainActor private func issue437ExpectSidebarInk(in root: NSView) throws {
+    root.layoutSubtreeIfNeeded()
+    let tree = try #require(issue281View("grid.sidebar.add-folder", in: root)?.superview)
+    for id in ["grid.sidebar.add-folder", "grid.sidebar.add-folder-plus"] {
+        let button = try #require(issue281View(id, in: root) as? NSButton)
+        #expect(!button.isEnabled)
+        #expect(button.refusesFirstResponder)
+        #expect(button.accessibilityLabel() == "\(String(localized: "Add Folder")) · \(String(localized: "Coming Soon"))")
+        if id.hasSuffix("-plus") {
+            #expect(abs(tree.convert(button.bounds, from: button).minX - 155) <= 1)
+        }
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil,
+            pixelsWide: Int(button.bounds.width), pixelsHigh: Int(button.bounds.height),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.size = button.bounds.size
+        button.cacheDisplay(in: button.bounds, to: bitmap)
+        func inkCount(_ area: NSRect, minimumAlpha: CGFloat) -> Int {
+            var count = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<bitmap.pixelsWide where area.contains(NSPoint(x: CGFloat(x), y: CGFloat(y))) {
+                    guard let c = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                    if c.alphaComponent > minimumAlpha && abs(c.redComponent - 107.0 / 255) < 0.08
+                        && abs(c.greenComponent - 114.0 / 255) < 0.08
+                        && abs(c.blueComponent - 128.0 / 255) < 0.08 { count += 1 }
+                }
+            }
+            return count
+        }
+        if id.hasSuffix("-plus") {
+            // A 1.02pt SVG stroke straddles pixels: its full-opacity paint can rasterize below .85 alpha.
+            // The MacUI SVG-mask oracle verifies the exact alpha coverage independently.
+            #expect(inkCount(button.bounds.insetBy(dx: 3, dy: 3), minimumAlpha: 0.2) > 0,
+                "header plus visibly uses the muted token")
+        } else {
+            let textWidth = (button.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width
+            let start = (button.bounds.width - (15 + 7 + textWidth)) / 2
+            #expect(inkCount(NSRect(x: start, y: 7, width: 15, height: 16), minimumAlpha: 0.2) > 0,
+                "add-folder plus is painted inside its box")
+            #expect(inkCount(NSRect(x: start + 22, y: 5, width: textWidth, height: 20), minimumAlpha: 0.85) > 3,
+                "add-folder label visibly uses the muted token")
+        }
+    }
+}
+
 /// Audit M1: the footer's name and count across the real open-folder path (completion, Cancel Reading through the
 /// restore closure, failure and Retry, and back from the viewer), each label wide enough for its whole string.
 @Test(.timeLimit(.minutes(3))) @MainActor func issue281FooterFollowsTheOpenFolderPathUntruncated() async throws {
@@ -77,6 +124,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
         motionPolicy: MotionPolicy(source: Issue281MotionSource()))
     let window = try #require(controller.window)
     defer { window.close() }
+    window.appearance = NSAppearance(named: .aqua)
     let scanner = Issue281Scanner()
     controller.folderScanningOverride = scanner
     window.setContentSize(NSSize(width: 1280, height: 772))
@@ -106,6 +154,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     controller.openGrantedFolder(try #require(folders["Shown"]))
     try await waitUntil { controller.gridSearchAvailable }
     try expectFooter("DSC_0341.png", "3 images", "completion")
+    try issue437ExpectSidebarInk(in: try #require(window.contentView))
 
     // A read that stops part way, then Retry (what the failure page's Retry calls). A folder prompt the failed
     // open may attach is dismissed first.
@@ -136,6 +185,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     try await waitUntil { controller.session.folderScan?.isReadingFolder == true }
     try await waitUntil { issue281View("state.cancel-folder", in: window.contentView) != nil }
     try expectFooter("—", "Reading…", "reading")
+    try issue437ExpectSidebarInk(in: try #require(window.contentView))
     let cancel = try #require(issue281View("state.cancel-folder", in: window.contentView) as? NSButton)
     cancel.performClick(nil)
     try await waitUntil { controller.gridSearchAvailable }
