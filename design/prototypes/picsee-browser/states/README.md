@@ -26,7 +26,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | `index.html` | 从manifest加载的浏览索引，不另维护一份页面列表 | 是 |
 | 22个同名HTML | 正式静态状态；不声明按钮行为已实现 | 是 |
 | `journeys.html` | 用户旅程图，是[计划 §1.6](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md)旅程索引的视图（ADR-013），两者不一致时以 §1.6 为准；卡片只引用本目录的状态稿，不显示实现进度（进度看功能账簿）。不是状态稿，不进 `manifest.json`，由 `index.html` 链接 | 是 |
-| `home-image-wall.html` | 首页图片墙参考稿，图片墙外观的来源：2026-10-30 用户在三个方向中选定 C（斜置拼贴、缓慢漂移）并要求放大（「选C，但是图片墙可以放大」），之后定为「C 取代 B4 外观，保留拖入反馈」（[grilling 记录](../../../../docs/plans/20261030-bottom-bar-home-wall-grilling.md)，spec #311）。正式状态是 21 `first-launch.html`（#317），`design:check` 从本页读取倾斜、透明度、圆角、阴影、漂移和居中按钮的期望值。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照 21，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
+| `home-image-wall.html` | 首页图片墙参考稿，图片墙外观的来源：2026-10-30 用户在三个方向中选定 C（斜置拼贴、缓慢漂移）并要求放大（「选C，但是图片墙可以放大」），之后定为「C 取代 B4 外观，保留拖入反馈」（[grilling 记录](../../../../docs/plans/20261030-bottom-bar-home-wall-grilling.md)，spec #311）。正式状态是 21 `first-launch.html`（#317），`design:check` 从本页读取倾斜、透明度、圆角、阴影和漂移的期望值；21 的中央是 B4 的，不取本页的中央（#441）。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照 21，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
 | `grid-footer-fill.html` | 打开文件夹后的常驻底栏参考稿，80% 底栏外观的来源：2026-10-30 用户选定「填充 80%（很实）」、不要顶部分隔线（「不要，靠 80% 底色区分」），只有未打开文件夹的窗口没有底栏（「只有未打开文件夹的窗口没有底栏」），spec #311。正式状态是 11/12 和其他画网格底栏的页面（#317），`design:check` 从本页读取填充、分隔线和左侧竖线的期望值。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照这些正式页，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
 | `assets/images/`、`assets/manifest.json` | 13个按内容哈希命名的共享图片，替代95处重复base64 | 是 |
 | `_ds/` | 设计系统编译后的运行时副本，由import工具同步 | 是，保证预览可直接运行 |
@@ -47,7 +47,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | `folder-loading.html`（24） | 正在读取：进度、「取消读取」 | `?case=failed` 读取失败 · 24F-A（#236 用户选定）：读取中途停止、授权根仍可读时，内容区居中写「没能读完“待整理”」和一句说明，「重试」为主按钮并持有键盘焦点，另有「选择其他文件夹…」；不显示部分网格，侧栏该文件夹与底栏都不显示部分计数，底栏写「读取未完成」。授权根不可读属于 26 |
 | `settings.html`（35 设置 · B） | 设置窗口，左侧边栏（用户：「选B」）选中「通用」：外观、始终显示大图工具、语言说明。缓存大小、版本与构建号、上次检查时间都是示例，旁边标「示例」。App 还没有的控件置灰、不可聚焦并标「即将推出」（用户：「显示但置灰」）：「显示」三项（PREF-03）、「更新」的自动检查与立即检查（DIST-05）、「关于」的三个链接 | `?section=general\|display\|cache\|update\|about` 选中对应分类；「显示」与 15 页面板是同一组偏好 |
 | `shortcuts.html`（36 键盘快捷键 · C） | 帮助 → 键盘快捷键打开的只读窗口（用户：「选 C」），三张卡片：文件与窗口（任何时候）、网格（浏览文件夹时）、大图（查看一张图片时）；没有搜索 | `?card=files\|grid\|viewer` 给该卡片加虚线描边，只用于对照，App 没有这个状态 |
-| `first-launch.html`（21 首次打开） | 首页：没有底栏和侧栏，图片墙在「选择文件夹」和拖入提示后面缓慢漂移，「减弱动态效果」时不动 | `?drag=over` 拖入时：图片墙淡到 40%，拖入提示和虚线框用强调色；`?theme=dark` 深色 |
+| `first-launch.html`（21 首次打开） | 首页：没有底栏和侧栏，中央是 B4 的拖入提示「把照片文件夹拖到这里」和「选择文件夹…」「或按 ⌘O」，两行相距 18 pt，没有格式标签行（#441，用户：「打开首页的这行字我不喜欢，删掉」「B4 centre; re-pin page 21 (Recommended)」）；图片墙在中央后面缓慢漂移，「减弱动态效果」时不动 | `?drag=over` 拖入时：图片墙淡到 40%，提示改为「松开即可打开」并用强调色，虚线框用强调色；`?theme=dark` 深色 |
 | `grid-light.html`、`grid-dark.html`（11/12 网格） | 底栏盖在网格上，窗口底色 80%，没有顶部分隔线 | `?scroll=behind` 多两行图片并把一行滚到底栏后面；`?transparency=reduced` 「减弱透明度」时底栏 100% |
 
 22、24、26、35、36、21 都接受 `?theme=dark`；11/12 各是一种外观。35、36 由分支 `prototype/shortcuts-sheet` 上的 `prototype-settings.html?variant=B`、`prototype-shortcuts.html?variant=C` 定稿而来，原型文件不进本目录。15 页面板里的「键盘快捷键」入口已去掉（用户：「Page 15 中去掉快捷键入口」）。
@@ -87,7 +87,7 @@ Swift 默认几何 oracle 仍有效：`.thumbnail-wrap` 读取 root `--thumbnail
 
 每页的 `sha256` 固定当前 HTML 的原始字节。修改正式状态稿后，先确认设计变更，再对该 HTML 运行 `shasum -a 256 <文件>`，将结果写入 `manifest.json` 对应条目；不要为绕过测试而重新固定哈希。`npm run design:check`（先 `npm ci --ignore-scripts` 与 `npx playwright install chromium`；可本地运行，CI 也在 `Design check` job 中运行）用 `package-lock.json` 固定的 Playwright 在两个空闲端口上起预览服务，运行 `scripts/verify_design_catalog.js`：先跑 `scripts/design/*.test.mjs` 与快捷键对照，再检查 22 页的资源与布局、每页 HTML 与 `sha256` 一致、15 页没有「键盘快捷键」、35/36 的分类与卡片（逐个查询参数、浅深色、示例数值都标「示例」、35 每个分类的控件逐个列为可用或「即将推出」、36 每个可见行都有 `data-shortcut`）、22/26 的来源与 22/24/26 的子情况（24 读取失败：「重试」持有焦点、没有部分网格或计数、子情况样式只用设计 token）（含收起的子文件夹、PENDING(P3-14) 标注，以及说明文字没有只剩一两个字的行：字距在 −1…+1 px 之间逐档检查，结果不随机器字体变化），以及 `journeys.html` 的入口表、只播放主路径、每条支线结果播到正确的目的页、没有手写进度徽章、不引用原型文件和播放器焦点（含点过预览之后的 Esc 与 Tab）。端口可用 `PICSEE_DESIGN_PORT`、`PICSEE_STATES_PORT` 指定。
 
-画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin，其他大图页的 pin 保持不变。
+画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态（21 的中央不与参考稿比较，按 B4 中央检查：提示、按钮、间距 18、没有格式标签行，#441）、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin，其他大图页的 pin 保持不变。
 
 以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
 

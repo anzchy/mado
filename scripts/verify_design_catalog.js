@@ -174,7 +174,7 @@ module.exports=async(page,{design,states,screenshot})=>{
    tiles:tiles?{transform:t.transform,opacity:t.opacity,columns:t.gridTemplateColumns,rows:t.gridAutoRows,gap:t.rowGap+' '+t.columnGap,box:[t.left,t.right,t.top,t.height].join(' '),count:tiles.children.length,
     motion:[t.animationDuration,t.animationDirection,t.animationTimingFunction,t.animationIterationCount].join(' '),keyframes:anim?JSON.stringify(anim.effect.getKeyframes().map(k=>[k.offset,k.translate])):'none',
     radius:cs(img).borderRadius,shadow:cs(img).boxShadow,fit:cs(img).objectFit,offset:cs(even).transform,veil:cs(wall,'::after').backgroundImage}:null,
-   heading:(q('main h2')||{}).innerText,button:q('.mock-primary')&&[q('.mock-primary').innerText,...rect(q('.mock-primary'))],hint:prompt&&[prompt.innerText,...rect(prompt)],
+   heading:(q('main h2')||{}).innerText,chips:/文件夹 · |单张或多张图片|常见图片格式/.test(document.body.innerText),button:q('.mock-primary')&&[q('.mock-primary').innerText,...rect(q('.mock-primary'))],hint:prompt&&[prompt.innerText,...rect(prompt)],
    onTop:(b=>!!b&&document.elementFromPoint(b.left+b.width/2,b.top+b.height/2)===q('.mock-primary'))(q('.mock-primary')&&q('.mock-primary').getBoundingClientRect()),
    wallAlpha:wall&&tiles?+cs(wall).opacity*+t.opacity:0,dragOver:!!q('[data-drop-target].is-drag-over'),promptColor:prompt?cs(prompt).color:null,accentText:token('var(--color-accent-text)'),outline:outline?cs(outline).borderTopColor:null}};
  const homeRef={};for(const theme of ['light','dark']){await page.setViewportSize({width:1280,height:800});await page.goto(base+'home-image-wall.html?theme='+theme);homeRef[theme]=await page.evaluate(homeProbe)}
@@ -183,10 +183,14 @@ module.exports=async(page,{design,states,screenshot})=>{
   if(got.dark!==dark)bad.push('dark='+got.dark);if(got.bar)bad.push('shows the Bottom Bar');if(got.sidebar)bad.push('shows the sidebar');
   if(!got.tiles)bad.push('no Image Wall');else{if(!got.wallHidden)bad.push('wall not aria-hidden or takes pointer events');if(JSON.stringify(got.wallRect)!==JSON.stringify(want.wallRect))bad.push('wall '+got.wallRect+', want '+want.wallRect);
    for(const k of Object.keys(want.tiles))if(got.tiles[k]!==want.tiles[k])bad.push('wall '+k+' '+JSON.stringify(got.tiles[k])+', want '+JSON.stringify(want.tiles[k]))}
-  for(const k of ['heading','button','hint'])if(JSON.stringify(got[k])!==JSON.stringify(want[k]))bad.push(k+' '+JSON.stringify(got[k])+', want '+JSON.stringify(want[k]));if(!got.onTop)bad.push('centre button is covered');
+  // The centre is B4's, not the reference page's: drop hint, then 「选择文件夹…」, 18 apart, and no chips row (#441).
+  if(got.heading!=='把照片文件夹拖到这里'||!got.hint||got.hint[0]!==got.heading)bad.push('hint '+JSON.stringify(got.hint)+', want the B4 drop hint');
+  if(!got.button||got.button[0]!=='选择文件夹…')bad.push('button '+JSON.stringify(got.button)+', want 选择文件夹…');else if(got.hint&&got.button[1]-got.hint[1]-got.hint[4]!==18)bad.push('hint→button gap '+(got.button[1]-got.hint[1]-got.hint[4])+', want 18');
+  if(got.chips||over.chips)bad.push('shows the chips row');if(!got.onTop)bad.push('centre button is covered');
   // Drag-over keeps B4's feedback: the wall fades and the drop prompt highlights with the accent (#311).
   if(!over.dragOver)bad.push('?drag=over: no drop target in drag-over');if(!(over.wallAlpha<got.wallAlpha))bad.push('?drag=over: wall does not fade ('+over.wallAlpha+' vs '+got.wallAlpha+')');
   if(over.promptColor!==over.accentText||got.promptColor===got.accentText)bad.push('?drag=over: drop prompt not highlighted ('+got.promptColor+' → '+over.promptColor+')');
+  if(over.heading!=='松开即可打开')bad.push('?drag=over: hint reads '+JSON.stringify(over.heading)+', want 松开即可打开');
   if(!over.outline||/^rgba\(0, 0, 0, 0\)$|transparent/.test(over.outline))bad.push('?drag=over: no drop outline');
   if(bad.length)barIssues.push(url+': '+bad.join(', '));
  }
