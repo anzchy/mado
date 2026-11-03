@@ -79,7 +79,7 @@ private actor HomeOpeningGate {
         state.linkKeyViews(to: canvas, chrome: chrome)
         session.chromeHost = host
     }
-    var toolPoint: NSPoint { chrome.tools[0].convert(NSPoint(x: 15, y: 14), to: content) }
+    var toolPoint: NSPoint { chrome.tools[2].convert(NSPoint(x: 15, y: 14), to: content) }
     @discardableResult func open(_ file: URL) -> Task<Void, Never>? {
         let pipeline = StatesPipeline(), leases = StatesLeases()
         session.openImage(file, maximumPixelSize: 512) {
@@ -100,7 +100,7 @@ private actor HomeOpeningGate {
 @MainActor private func loopIDs(_ canvas: NSView) -> [String] { keyLoop(from: canvas).map { $0.accessibilityIdentifier() } }
 
 @MainActor private func expectHidden(_ chrome: ViewerChromeOverlay, _ content: NSView, _ canvas: NSView, _ stage: String) {
-    let point = chrome.tools[0].convert(NSPoint(x: 15, y: 14), to: content)
+    let point = chrome.tools[2].convert(NSPoint(x: 15, y: 14), to: content)
     #expect(chrome.groups.allSatisfy { $0.isHidden }, "\(stage): groups hidden")
     #expect(chrome.tools.allSatisfy { $0.isHidden }, "\(stage): tools hidden")
     #expect(!(content.hitTest(point) is ChromeToolView), "\(stage): hit test falls through, got \(String(describing: content.hitTest(point)))")
@@ -110,14 +110,14 @@ private actor HomeOpeningGate {
 }
 
 @MainActor private func expectShown(_ chrome: ViewerChromeOverlay, _ content: NSView, _ canvas: NSView, _ stage: String) {
-    let point = chrome.tools[0].convert(NSPoint(x: 15, y: 14), to: content)
+    let point = chrome.tools[2].convert(NSPoint(x: 15, y: 14), to: content)
     let children = (chrome.accessibilityChildren() ?? []).compactMap { $0 as? NSView }
     #expect(chrome.groups.allSatisfy { !$0.isHidden }, "\(stage): groups shown")
     #expect(chrome.tools.allSatisfy { !$0.isHidden }, "\(stage): tools shown")
-    #expect(content.hitTest(point) === chrome.tools[0], "\(stage): the first tool is hit, got \(String(describing: content.hitTest(point)))")
-    #expect(chrome.tools.allSatisfy { tool in children.contains { $0 === tool } }, "\(stage): all 7 tools are accessible")
-    #expect(chrome.tools[0].acceptsFirstResponder, "\(stage): the first tool takes focus")
-    #expect(keyLoop(from: canvas).contains { $0 === chrome.tools[0] }, "\(stage): the first tool is in the key loop \(loopIDs(canvas))")
+    #expect(content.hitTest(point) === chrome.tools[2], "\(stage): the 更多 tool is hit, got \(String(describing: content.hitTest(point)))")
+    #expect(chrome.tools.allSatisfy { tool in children.contains { $0 === tool } }, "\(stage): all 8 tools are accessible")
+    #expect(chrome.tools[2].acceptsFirstResponder, "\(stage): the 更多 tool takes focus")
+    #expect(keyLoop(from: canvas).contains { $0 === chrome.tools[2] }, "\(stage): the 更多 tool is in the key loop \(loopIDs(canvas))")
 }
 
 private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
@@ -136,7 +136,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     content.addSubview(canvas); content.addSubview(chrome)
     window.contentView = content
     chrome.linkKeyViews(to: canvas)
-    let point = chrome.tools[0].convert(NSPoint(x: 15, y: 14), to: content)
+    let point = chrome.tools[2].convert(NSPoint(x: 15, y: 14), to: content)
     var requested = true, home = false
     let ops = HomeOp.allCases
     for index in 0..<(ops.count * ops.count * ops.count * ops.count) {
@@ -154,9 +154,9 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
             let stage = "flag \(hidesOnHome) sequence \(index) step \(step) op \(op)"
             #expect(chrome.groups.allSatisfy { $0.isHidden == !model }, "\(stage): groups")
             #expect(chrome.tools.allSatisfy { $0.isHidden == !model }, "\(stage): tools")
-            #expect(chrome.accessibilityChildren()?.count == (model ? 7 : 0), "\(stage): accessibility children")
-            #expect((content.hitTest(point) === chrome.tools[0]) == model, "\(stage): hit test")
-            #expect(chrome.tools[0].acceptsFirstResponder == model, "\(stage): first responder")
+            #expect(chrome.accessibilityChildren()?.count == (model ? 8 : 0), "\(stage): accessibility children")
+            #expect((content.hitTest(point) === chrome.tools[2]) == model, "\(stage): hit test")
+            #expect(chrome.tools[2].acceptsFirstResponder == model, "\(stage): first responder")
             #expect((canvas.nextKeyView is ChromeToolView) == model, "\(stage): key loop")
         }
     }
@@ -253,7 +253,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     for status in statuses {
         scene.state.display(status)
         expectShown(scene.chrome, scene.content, scene.canvas, "\(status)")
-        #expect(scene.chrome.accessibilityChildren()?.count == 7 + (scene.chrome.filename == nil ? 0 : 1))
+        #expect(scene.chrome.accessibilityChildren()?.count == 8 + (scene.chrome.filename == nil ? 0 : 1))
         scene.state.display(.empty)
         expectHidden(scene.chrome, scene.content, scene.canvas, "\(status) then the Home")
         #expect(loopIDs(scene.canvas) == ["state.open"], "\(status) then the Home: \(loopIDs(scene.canvas))")
@@ -284,7 +284,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     await scene.open(URL(fileURLWithPath: "/A.png"))?.value
     try await waitUntil { scene.state.isHidden }
     expectShown(scene.chrome, scene.content, scene.canvas, "showing an image")
-    #expect(scene.window.makeFirstResponder(scene.chrome.tools[0]))
+    #expect(scene.window.makeFirstResponder(scene.chrome.tools[2]))
     #expect(scene.session.inspectorFocus.focus == .tools)
     scene.session.cancelImageOpening()
     try await waitUntil { !scene.state.isHidden }

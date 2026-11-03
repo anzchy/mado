@@ -163,9 +163,21 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public func resolve(_ target: ContextMenuTarget) -> [ItemID] {
         target.resolve(availableItemIDs: orderedItemIDs)
     }
+    private var appMenuTracking = false
+    private var chromeMenuOpen = false
     public func setMenuTracking(_ tracking: Bool) {
-        isMenuTracking = tracking
-        chrome.setLock(.menu, active: tracking, at: clock.now)
+        appMenuTracking = tracking
+        applyMenuLock()
+    }
+    /// #444: a viewer pod menu (缩放模式, 更多) is open. It holds the menu lock on its own, so the App menu
+    /// closing (or a command routed from the pod menu) cannot release the lock while the pod menu is on screen.
+    public func setChromeMenuOpen(_ open: Bool) {
+        chromeMenuOpen = open
+        applyMenuLock()
+    }
+    private func applyMenuLock() {
+        isMenuTracking = appMenuTracking || chromeMenuOpen
+        chrome.setLock(.menu, active: isMenuTracking, at: clock.now)
         synchronizeChrome()
     }
     public func updateFocus(_ context: FocusContext) {
@@ -238,7 +250,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public func isEnabled(_ command: CommandID) -> Bool {
         switch command {
         case .fit, .actualPixels, .zoomIn, .zoomOut: imageCommandsAvailable
-        case .escape: inspectorFocus.focus != .canvas || (filePreviewSet == nil && previewSet != nil) || canReturnSingleImage
+        case .escape: inspectorFocus.focus != .canvas || canReturnToSource
         case .open: true
         case .inspector: inspectorFocus.isVisible || imageCommandsAvailable || (mode == .browsing && currentItemID != nil)
         case .preview, .enter: mode == .browsing && !orderedItemIDs.isEmpty
@@ -257,6 +269,43 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         case .search: false
         }
     }
+    /// #444: Esc (with canvas focus) and 返回网格 return to the grid of a folder preview, or a single image to its folder.
+    public var canReturnToSource: Bool { (filePreviewSet == nil && previewSet?.origin != nil) || canReturnSingleImage }
+    /// The return part of Esc, without its keyboard-focus step: 返回网格 returns even when a tool holds focus.
+    public func returnToSource() {
+        if filePreviewSet == nil, let origin = previewSet?.origin {
+            selection = origin.selection
+            scrollAnchor = origin.scrollAnchor
+            previewSet = nil
+            mode = .browsing
+            host?.returnToGrid()
+        } else if canReturnSingleImage {
+            (host as? any ViewerSingleImageReturnHost)?.returnSingleImageToFolder()
+        }
+    }
+    /// #444: the folder sidebar beside the viewer exists only for a preview entered from a folder grid.
+    public var canToggleViewerSidebar: Bool {
+        mode == .viewing && filePreviewSet == nil && previewSet?.origin != nil && chromeHost?.viewerSidebarAvailable == true
+    }
+    /// The grid and the viewer share one sidebar visibility (#444 owner acceptance).
+    public var isViewerSidebarShown: Bool { canToggleViewerSidebar && displayPreferences.gridSidebarVisible }
+    public func perform(intent: ViewerChromeIntent) {
+        switch intent {
+        case .returnToGrid:
+            guard canReturnToSource else { return }
+            activity()
+            if inspectorFocus.focus != .canvas {
+                inspectorFocus.escape()
+                syncFocusLock()
+                host?.applyFocus(.canvas)
+            }
+            returnToSource()
+        case .toggleSidebar:
+            guard canToggleViewerSidebar else { return }
+            activity()
+            chromeHost?.performChromeIntent(.toggleSidebar)
+        }
+    }
     private var canReturnSingleImage: Bool {
         mode == .viewing && previewSet == nil && filePreviewSet == nil
             && (host as? any ViewerSingleImageReturnHost)?.canReturnToFolder == true
@@ -272,14 +321,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 inspectorFocus.escape()
                 syncFocusLock()
                 host?.applyFocus(.canvas)
-            } else if filePreviewSet == nil, let origin = previewSet?.origin {
-                selection = origin.selection
-                scrollAnchor = origin.scrollAnchor
-                previewSet = nil
-                mode = .browsing
-                host?.returnToGrid()
-            } else if canReturnSingleImage {
-                (host as? any ViewerSingleImageReturnHost)?.returnSingleImageToFolder()
+            } else {
+                returnToSource()
             }
         } else if command == .preview || command == .enter {
             previewSet = PreviewSet(items: orderedItemIDs, sourceVersion: sourceVersion,

@@ -18,7 +18,8 @@ import PicseeApplication
         styleMask: .borderless, backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false; window.contentView = overlay
     defer { window.close() }
-    let tool = try #require(overlay.tools.first)
+    // #444: page 14's leading pod has no 打开 tool; 侧栏 is disabled without a folder, so 上一张 is the routed tool.
+    let tool = overlay.tools[3]
     overlay.pointerMoved(NSPoint(x: 30, y: 30))
     #expect(session.chrome.locks == [.pointerHover])
     tool.mouseDown(with: try chromeMouse(tool, .leftMouseDown, NSPoint(x: 10, y: 10)))
@@ -27,11 +28,11 @@ import PicseeApplication
     overlay.pointerMoved(NSPoint(x: 480, y: 320))
     #expect(session.chrome.visibility == .locked([.pointerPress]))
     tool.mouseUp(with: try chromeMouse(tool, .leftMouseUp, NSPoint(x: -10, y: -10)))
-    #expect(host.opened == 0)
+    #expect(host.navigation.isEmpty)
     #expect(session.nextHideDeadline == 102.5)
     tool.mouseDown(with: try chromeMouse(tool, .leftMouseDown, NSPoint(x: 10, y: 10)))
     tool.mouseUp(with: try chromeMouse(tool, .leftMouseUp, NSPoint(x: 10, y: 10)))
-    #expect(host.opened == 1)
+    #expect(host.navigation == [.previous])
     host.hasImage = false
     let disabled = try #require(overlay.tools.last)
     disabled.mouseDown(with: try chromeMouse(disabled, .leftMouseDown, NSPoint(x: 10, y: 10)))

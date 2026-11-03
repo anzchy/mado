@@ -14,12 +14,15 @@ import PicseeApplication
     let content = NSView(frame: window.contentView!.bounds)
     let canvas = CanvasView(frame: content.bounds, session: session)
     let overlay = ViewerChromeOverlay(frame: content.bounds, session: session)
+    // #444: the 缩放模式 tool opens a menu; a real NSMenu popup would block the main actor in tests.
+    overlay.menuPresenter = RecordingMenuPresenter()
     content.addSubview(canvas); content.addSubview(overlay); window.contentView = content
     host.overlay = overlay; host.canvas = canvas; session.chromeHost = host
     overlay.linkKeyViews(to: canvas)
     defer { window.close() }
     window.makeKeyAndOrderFront(nil)
-    for tool in [overlay.tools[4], overlay.tools[5]] {
+    // #444: page 14 leading pod 侧栏/返回网格/更多 replaces 打开/信息, so tool indices after it shift by one.
+    for tool in [overlay.tools[5], overlay.tools[6]] {
         let visual = try #require(tool.subviews.first as? NSHostingView<ChromeToolFace>)
         window.makeFirstResponder(tool)
         #expect(visual.rootView.state.contains(.keyboardFocused))

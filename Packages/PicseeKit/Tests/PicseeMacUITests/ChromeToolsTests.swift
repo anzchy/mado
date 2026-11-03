@@ -31,13 +31,17 @@ import PicseeApplication
     window.contentView = overlay
     defer { window.close() }
     #expect(overlay.groups.count == 3)
-    #expect(overlay.tools.map(\.command) == [.open, .inspector, .previous, .next, .zoomOut, .actualPixels, .zoomIn])
+    // #444, page 14: 侧栏 / 返回网格 / 更多 lead; Open and Inspector stay on their menu items and shortcuts.
+    #expect(overlay.tools.map(\.kind) == [.intent(.toggleSidebar), .intent(.returnToGrid), .more, .command(.previous),
+        .command(.next), .command(.zoomOut), .command(.actualPixels), .command(.zoomIn)])
+    let presenter = RecordingMenuPresenter()
+    presenter.choose = 1
+    overlay.menuPresenter = presenter
     overlay.refresh(filename: "lake.png", position: "2 / 12")
     #expect(overlay.filename == "lake.png")
     #expect(overlay.position == "2 / 12")
     for tool in overlay.tools { tool.activate() }
-    #expect(host.opened == 1)
-    #expect(host.inspections == [true])
+    #expect(host.opened == 0 && host.inspections.isEmpty)
     #expect(host.navigation == [.previous, .next])
     #expect(host.entries.map(\.0) == [.zoomOut, .actualPixels, .zoomIn])
     #expect(host.entries.allSatisfy { $0.1 == .button })
@@ -45,7 +49,7 @@ import PicseeApplication
     overlay.refresh()
     #expect(overlay.filename == nil)
     #expect(overlay.position == nil)
-    for tool in overlay.tools.dropFirst(2) { tool.activate() }
+    for tool in overlay.tools.dropFirst(3) { tool.activate() }
     #expect(host.entries.count == 3)
     #expect(host.navigation.count == 2)
     #expect(ScaleIndicator(actualPixels: false) {}.label == "Fit window")
