@@ -83,6 +83,10 @@ export function keySites(source) {
 // layout C has the three cards 文件与窗口, 网格 and 大图 (spec #212 story 26), none of which holds them.
 export const EXCLUDED_MENUS = { edit: 'Edit menu: standard text editing, acts only in the search field' };
 
+// Hidden alternates that work but are not shown on the page, by command: ⌘= is the unshifted ⌘+ on a US layout
+// (#348; the owner asked for ⌘+ / ⌘− / ⌘0 / ⌘9). Only these exact keys are dropped; every other key is compared.
+export const UNDISPLAYED_ALIASES = { zoomIn: '⌘=' };
+
 const MODIFIERS = [['control', '⌃'], ['option', '⌥'], ['shift', '⇧'], ['command', '⌘']];
 const NAMED = { ' ': 'Space', '\r': 'Return', '\u{1b}': 'Esc', '\u{f702}': '←', '\u{f703}': '→', '\u{f700}': '↑', '\u{f701}': '↓', '-': '−', '\t': 'Tab' };
 
@@ -101,9 +105,10 @@ const listOf = (source, re, what) => {
 /** Every shortcut the code implements, as Map id → { keys, source }. */
 export function codeShortcuts(read) {
   const shortcuts = new Map(), problems = [];
-  const add = (id, keys, source) => {
+  // groups: the keys as the page shows them, shown form first, then the bare alternates; one group for most rows.
+  const add = (id, keys, source, groups = [keys]) => {
     if (shortcuts.has(id)) problems.push(`duplicate shortcut id ${id}`);
-    shortcuts.set(id, { keys, source });
+    shortcuts.set(id, { keys, source, groups });
   };
 
   // CommandID: the implemented commands, their default keys and whether they use ⌘.
@@ -116,18 +121,44 @@ export function codeShortcuts(read) {
     .map(([, id, literal]) => [id, swiftString(literal)]));
   const menuFilter = commandID.match(/static var menuCommands: \[Self\] \{ allCases\.filter \{ \$0\.isImplemented && \$0 != \.(\w+) \} \}/);
   if (!menuFilter) throw Error('cannot parse CommandID.menuCommands');
+  // #348: a zoom command shows its ⌘ form (commandKey) and keeps the bare key, plus any extra keys, as hidden alternates.
+  const commandKeyBlock = commandID.match(/var commandKey: String\? \{\s*switch self \{([\s\S]*?)\n {8}\}/);
+  if (!commandKeyBlock) throw Error('cannot parse CommandID.commandKey');
+  const commandKey = Object.fromEntries([...commandKeyBlock[1].matchAll(/case \.(\w+): "((?:[^"\\]|\\.)*)"/g)]
+    .map(([, id, literal]) => [id, swiftString(literal)]));
+  for (const [shape, what] of [
+    [/var menuBinding: CommandKeyBinding \{\s*CommandKeyBinding\(key: commandKey \?\? defaultKey, command: commandKey != nil \|\| usesCommand\)\s*\}/, 'CommandID.menuBinding'],
+    [/var alternateMenuBindings: \[CommandKeyBinding\] \{\s*guard commandKey != nil else \{ return \[\] \}\s*let bare = CommandKeyBinding\(key: defaultKey, command: usesCommand\)/, 'CommandID.alternateMenuBindings']])
+    if (!shape.test(commandID)) throw Error(`cannot parse ${what}`);
+  const extra = commandID.match(/return self == \.(\w+) \? \[bare, ((?:CommandKeyBinding\(key: "[^"]+", command: (?:true|false)\)(?:, )?)+)\] : \[bare\]\n/);
+  if (!extra) throw Error('cannot parse the extra alternates in CommandID.alternateMenuBindings');
+  const extraBindings = [...extra[2].matchAll(/CommandKeyBinding\(key: "([^"]+)", command: (true|false)\)/g)]
+    .map(([, literal, command]) => ({ key: swiftString(literal), command: command === 'true' }));
 
-  // CommandMenu installs CommandID.menuCommands with defaultKey and ⌘ when usesCommand.
+  // CommandMenu installs CommandID.menuCommands with menuBinding, then each alternate as a hidden item that keeps its key.
   const menu = read(FILES.menu);
-  for (const shape of [/for id in CommandID\.menuCommands \{/, /keyEquivalent: id\.defaultKey\)/,
-    /item\.keyEquivalentModifierMask = id\.usesCommand \? \[\.command\] : \[\]/])
+  for (const shape of [/for id in CommandID\.menuCommands \{\s*let binding = id\.menuBinding\s*let item = NSMenuItem\([^\n]*keyEquivalent: binding\.key\)\s*item\.keyEquivalentModifierMask = binding\.command \? \[\.command\] : \[\]/,
+    /for id in CommandID\.menuCommands \{\s*for \(index, binding\) in id\.alternateMenuBindings\.enumerated\(\) \{\s*let item = NSMenuItem\([^\n]*keyEquivalent: binding\.key\)\s*item\.keyEquivalentModifierMask = binding\.command \? \[\.command\] : \[\]/,
+    /item\.isHidden = true\s*item\.allowsKeyEquivalentWhenHidden = true/])
     if (!shape.test(menu)) throw Error(`CommandMenu.swift no longer installs CommandID.menuCommands as expected (${shape})`);
+  const binding = (key, command) => glyphs(key, command ? ['command'] : []);
   for (const id of implemented) {
     if (!(id in defaultKey)) throw Error(`CommandID.${id} has no defaultKey`);
     // The command left out of menuCommands (search) has its own menu item, parsed below by its title.
     if (id === menuFilter[1]) continue;
-    add(`command:${id}`, glyphs(defaultKey[id], usesCommand.includes(id) ? ['command'] : []), FILES.commandID);
+    const bare = binding(defaultKey[id], usesCommand.includes(id));
+    if (!(id in commandKey)) { add(`command:${id}`, bare, FILES.commandID); continue; }
+    // The shown ⌘ form first, then the hidden alternates in install order, less the aliases the page leaves out.
+    const extras = id === extra[1] ? extraBindings.map(b => binding(b.key, b.command)) : [];
+    const listed = extras.filter(keys => UNDISPLAYED_ALIASES[id] !== keys.join(''));
+    if (UNDISPLAYED_ALIASES[id] && listed.length === extras.length)
+      problems.push(`UNDISPLAYED_ALIASES names ${UNDISPLAYED_ALIASES[id]} for ${id}, which the code no longer installs`);
+    const groups = [binding(commandKey[id], true), [bare, ...listed].flat()];
+    add(`command:${id}`, groups.flat(), FILES.commandID, groups);
   }
+  for (const id of Object.keys(UNDISPLAYED_ALIASES)) if (id !== extra[1])
+    problems.push(`UNDISPLAYED_ALIASES names ${id}, which has no extra alternates`);
+  for (const id of Object.keys(commandKey)) if (!implemented.includes(id)) problems.push(`CommandID.commandKey names ${id}, which is not implemented`);
 
   // Menu items with a literal title and a literal, non-empty key equivalent.
   let literalKeys = 0;
@@ -227,7 +258,10 @@ export function compare({ shortcuts, problems }, rows) {
       else if (code.excluded) out.push(`page lists ${id}, which is excluded: ${code.excluded}`);
     }
     if (row.ids.every(id => shortcuts.has(id))) {
-      const want = row.ids.flatMap(id => shortcuts.get(id).keys);
+      // A row with several commands shows each group across them: ⌘+ ⌘− before + −.
+      const groups = row.ids.map(id => shortcuts.get(id).groups ?? [shortcuts.get(id).keys]);
+      const want = groups[0].flatMap((_, g) => groups.flatMap(gs => gs[g] ?? []));
+      if (groups.some(gs => gs.length !== groups[0].length)) out.push(`${row.ids.join('|')} (${row.name}) joins commands with different key groups`);
       if (JSON.stringify(want) !== JSON.stringify(row.keys))
         out.push(`${row.ids.join('|')} (${row.name}) shows ${row.keys.join(' ') || 'no keys'}, the code has ${want.join(' ')}`);
     }
