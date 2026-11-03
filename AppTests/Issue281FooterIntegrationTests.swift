@@ -48,7 +48,9 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
 }
 
 /// #437: inspect the installed controls, including the ink that AppKit used to dim when disabled.
-/// grid-light.html / folder-loading.html at 1280×800: muted #6b7280; tiny-button x155.
+/// design/prototypes/picsee-browser/states/{grid-light,folder-loading}.html at 1280×800:
+/// muted #6b7280; tiny-button x155. Their @media (max-width:1050px) changes sidebar
+/// horizontal padding from 12 to 8, moving the control to x159 in a 196pt sidebar.
 @MainActor private func issue437ExpectSidebarInk(in root: NSView) throws {
     root.layoutSubtreeIfNeeded()
     let tree = try #require(issue281View("grid.sidebar.add-folder", in: root)?.superview)
@@ -58,7 +60,13 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
         #expect(button.refusesFirstResponder)
         #expect(button.accessibilityLabel() == "\(String(localized: "Add Folder")) · \(String(localized: "Coming Soon"))")
         if id.hasSuffix("-plus") {
-            #expect(abs(tree.convert(button.bounds, from: button).minX - 155) <= 1)
+            let x = tree.convert(button.bounds, from: button).minX
+            let geometry = "header plus x=\(x), window=\(String(describing: root.window?.frame)), "
+                + "content=\(root.bounds), sidebar=\(tree.bounds), "
+                + "screen=\(String(describing: root.window?.screen?.frame)), "
+                + "visibleScreen=\(String(describing: root.window?.screen?.visibleFrame))"
+            #expect(root.bounds.width == 1280, "1280pt design viewport required: \(geometry)")
+            #expect(abs(x - 155) <= 1, "\(geometry)")
         }
         let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil,
             pixelsWide: Int(button.bounds.width), pixelsHigh: Int(button.bounds.height),
@@ -127,9 +135,11 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     window.appearance = NSAppearance(named: .aqua)
     let scanner = Issue281Scanner()
     controller.folderScanningOverride = scanner
-    window.setContentSize(NSSize(width: 1280, height: 772))
     controller.showWindow(nil)
     window.orderFrontRegardless()
+    // Showing a window can constrain its frame to the runner's screen. Pin the design
+    // viewport afterwards so the x155 assertion never silently uses the <=1050 breakpoint.
+    window.setContentSize(NSSize(width: 1280, height: 800))
 
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
         try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
