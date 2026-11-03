@@ -5,9 +5,20 @@ import PicseeApplication
 @MainActor private final class GridPhotoSurface: NSView {
     var onAppearanceChange: (() -> Void)?
     var onLayout: (() -> Void)?
+    /// Drawn above the subviews' layers, which AppKit attaches after manually added sublayers.
+    var overlayLayer: CALayer?
     override func layout() {
         super.layout()
         onLayout?()
+        raiseOverlay()
+    }
+    override func viewWillDraw() {
+        super.viewWillDraw()
+        raiseOverlay()
+    }
+    private func raiseOverlay() {
+        guard let overlayLayer, let layer, layer.sublayers?.last !== overlayLayer else { return }
+        layer.addSublayer(overlayLayer)
     }
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -61,7 +72,10 @@ import PicseeApplication
         selectionOutline.borderWidth = 1
         selectionOutline.cornerRadius = DesignMetrics.radii["inner"]!
         selectionOutline.isHidden = true
+        // Above the opaque tile's layer, which would otherwise cover the 1pt stroke (#405).
+        selectionOutline.zPosition = 1
         surface.layer?.addSublayer(selectionOutline)
+        surface.overlayLayer = selectionOutline
         currentRing.frame = tile.frame.insetBy(dx: -4, dy: -4)
         currentRing.cornerRadius = DesignMetrics.radii["inner"]! + 4
         currentRing.borderWidth = 2
