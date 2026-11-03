@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
@@ -26,8 +26,20 @@ process.exitCode=Number(process.env.SWIFT_EXIT);
 const require = createRequire(import.meta.url);
 const cache = path.join(process.env.HOME, '.claude/plugins/cache/xiaolai/tdd-guardian');
 const plugin = process.env.PICSEE_TDD_PLUGIN_ROOT || path.join(cache, '0.10.2');
-const exec = require(path.join(plugin, 'scripts/tdd-guardian/lib/exec.js'));
-const { classifyRedRun } = require(path.join(plugin, 'scripts/tdd-guardian/lib/verification.js'));
+// Keep the real plugin optional, and load it only inside tests that use it.
+function pluginTest(name, fn) {
+  test(name, t => {
+    const execPath = path.join(plugin, 'scripts/tdd-guardian/lib/exec.js');
+    const verificationPath = path.join(plugin, 'scripts/tdd-guardian/lib/verification.js');
+    if (!existsSync(execPath) || !existsSync(verificationPath)) {
+      t.skip(`tdd-guardian plugin cache not found at ${plugin}`);
+      return;
+    }
+    const exec = require(execPath);
+    const { classifyRedRun } = require(verificationPath);
+    return fn({ exec, classifyRedRun });
+  });
+}
 function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false } = {}) {
   const argvFile = path.join(temp, 'argv.json');
   const env = { ...process.env, PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
@@ -50,7 +62,7 @@ for (const [fixture, code, expected, kind] of [
   ['swift-known-pass',0,{total:3,failed:0,passed:3,skipped:0},'green'],
   ['swift-known-fail',1,{total:3,failed:1,passed:2,skipped:0},'assertion-failure'],
 ]) {
-  test(`${fixture}: counted once, classified ${kind} by real plugin`, () => {
+  pluginTest(`${fixture}: counted once, classified ${kind} by real plugin`, ({ exec, classifyRedRun }) => {
     const r = run(fixture,code,{stderr:fixture.startsWith('xctest')});
     assert.deepEqual(exec.parseCounts(r.stdout,r.stderr),expected);
     assert.equal(r.status,code,r.stderr);
@@ -58,7 +70,7 @@ for (const [fixture, code, expected, kind] of [
     assert.equal((r.stdout.match(/^Tests run:/gm)||[]).length,1);
   });
 }
-test('compile failure is runner-error/environment with no count line', () => {
+pluginTest('compile failure is runner-error/environment with no count line', ({ exec, classifyRedRun }) => {
   const r = run('compile-fail',1);
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
@@ -75,7 +87,7 @@ test('missing filter fails closed rather than running the full suite', () => {
   assert.equal(r.status,64);
   assert.doesNotMatch(r.stdout,/Tests run:/);
 });
-test('a runner failure after a completed pass is not assertion RED', () => {
+pluginTest('a runner failure after a completed pass is not assertion RED', ({ exec }) => {
   const r = run('swift-pass',1);
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
@@ -86,12 +98,12 @@ test('captured fixtures contain no private home prefix', () => {
   }
 });
 
-test('partial XCTest crash after assertion failure is environment, with no count line', () => {
+pluginTest('partial XCTest crash after assertion failure is environment, with no count line', ({ exec }) => {
   const r=run('xctest-partial-crash',1);
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
 });
-test('duplicate Swift display names preserve two failed and two skipped tests', () => {
+pluginTest('duplicate Swift display names preserve two failed and two skipped tests', ({ exec }) => {
   const r=run('swift-duplicate',1);
   assert.equal(r.status,1,r.stderr);
   assert.deepEqual(exec.parseCounts(r.stdout,r.stderr),{total:4,failed:2,passed:0,skipped:2});
@@ -100,23 +112,23 @@ test('records the literal filter beside its count line for the output tail', () 
   const r=run('swift-fail',1,{filter:'sameFilter'});
   assert.match(r.stdout,/swift-lane filter=sameFilter\nTests run: 3, Failures: 1/);
 });
-test('two completed fixture streams fail closed', () => {
+pluginTest('two completed fixture streams fail closed', ({ exec }) => {
   const r=run('swift-fail',1,{split:true});
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
 });
-test('crash diagnostics in stderr override a completed failing stdout result', () => {
+pluginTest('crash diagnostics in stderr override a completed failing stdout result', ({ exec }) => {
   const r=run('swift-fail',1,{crashStderr:true});
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
 });
 
-test('XCTest subtotals without root completion are rejected even without a crash marker', () => {
+pluginTest('XCTest subtotals without root completion are rejected even without a crash marker', ({ exec }) => {
   const r=run('xctest-fail',1,{truncateRoot:true});
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
 });
-test('a started Swift Testing stream must finish even when XCTest finished elsewhere', () => {
+pluginTest('a started Swift Testing stream must finish even when XCTest finished elsewhere', ({ exec }) => {
   const r=run('xctest-fail',1,{incompleteSwift:true});
   assert.equal(r.status,70);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
@@ -138,7 +150,7 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   assert.ok(heavy.filter(l=>l.name!=='app-red').every(l=>l.probeCommand.startsWith('scripts/heavy-lock.sh swift test ')));
 });
 
-test('crash-related test name and assertion message on stderr remain assertion RED', () => {
+pluginTest('crash-related test name and assertion message on stderr remain assertion RED', ({ exec, classifyRedRun }) => {
   const r=run('swift-crash-name-fail',1,{stderr:true});
   assert.equal(r.status,1,r.stderr);
   const counts=exec.parseCounts(r.stdout,r.stderr);
