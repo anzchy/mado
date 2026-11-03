@@ -263,22 +263,56 @@ private let issue348ZoomIDs: [CommandID] = [.fit, .actualPixels, .zoomIn, .zoomO
     // Select All is nil-targeted and goes to the key window, which AppTests do not have; the guard
     // letting ⌘A through is the assertion here, the selection itself is device smoke.
 
-    // Over the whole real menu, the field claims exactly the five ⌘ zoom keys.
-    for (characters, code, extra) in zoomKeys {
-        #expect(CommandMainMenu.defersToTextField(try scene.event(characters, code, extra.union(.command))))
-    }
+    // Over the whole real menu, the field claims exactly the five ⌘ zoom items.
+    var claimed: [String] = []
     var checked = 0
-    func check(_ menu: NSMenu) throws {
+    func check(_ menu: NSMenu) {
         for item in menu.items {
-            if let submenu = item.submenu { try check(submenu) }
-            guard !item.keyEquivalent.isEmpty, !item.isHidden else { continue }
-            if let raw = item.representedObject as? String, let id = CommandID(rawValue: raw),
-               issue348ZoomIDs.contains(id) { continue }
-            let event = try scene.event(item.keyEquivalent, 0, item.keyEquivalentModifierMask)
-            #expect(!CommandMainMenu.defersToTextField(event), "\(item.title)")
-            checked += 1
+            if let submenu = item.submenu { check(submenu) }
+            guard !item.keyEquivalent.isEmpty else { continue }
+            if CommandMainMenu.defersToTextField(item) { claimed.append(item.keyEquivalent) } else { checked += 1 }
         }
     }
-    try check(try #require(NSApp.mainMenu))
+    check(try #require(NSApp.mainMenu))
+    #expect(claimed.sorted() == zoomKeys.map(\.0).sorted())
     #expect(checked > 10)
+}
+
+/// AppKit localizes key equivalents per layout (AZERTY ⌘0 arrives as "à"), so the field's claim must follow
+/// whatever the menu item matches, not the catalog characters. A remapped item models that on any test layout.
+@Test(.timeLimit(.minutes(3))) @MainActor func textFieldKeepsCmdZoomKeysOnAnyLayout() throws {
+    let scene = try Issue348Scene()
+    defer { scene.close() }
+    let session = scene.controller.session
+    let remapped = scene.zoomItems().filter { $0.keyEquivalentModifierMask.contains(.command) }
+    #expect(remapped.count == 5)
+    let original = remapped.map(\.keyEquivalent)
+    let layout = ["à", "ç", "é", "è", "ù"]
+    for (item, key) in zip(remapped, layout) { item.keyEquivalent = key }
+    defer { for (item, key) in zip(remapped, original) { item.keyEquivalent = key } }
+    let actual = try #require(zip(remapped, layout).first { $0.0.representedObject as? String == "actualPixels" })
+
+    let field = NSTextField(frame: NSRect(x: 10, y: 10, width: 100, height: 24))
+    field.stringValue = "abc"
+    scene.window.contentView?.addSubview(field)
+    #expect(scene.window.makeFirstResponder(field))
+    let editor = try #require(field.currentEditor() as? NSTextView)
+    let before = try scene.snapshot()
+    // AZERTY ⌘0 / ⌘9 and German ⌘⇧0 as delivered, then every remapped item key.
+    let events: [(String, UInt16, NSEvent.ModifierFlags)] = [("à", 29, []), ("ç", 25, []), ("=", 29, .shift)]
+        + layout.map { ($0, 50, []) }
+    for (characters, code, extra) in events {
+        #expect(try !scene.command(characters, code, extra), "⌘\(characters) belongs to the field")
+        let now = try scene.snapshot()
+        #expect(now.0 == before.0, "⌘\(characters) zoomed behind the field")
+        #expect(now.1 == before.1, "⌘\(characters)")
+        #expect(scene.window.firstResponder === editor)
+    }
+    #expect(remapped.map(\.keyEquivalent) == layout, "the field's turn leaves the menu keys as they were")
+    #expect(try scene.command("i", 34), "other ⌘ keys still reach the menu")
+
+    // Positive control: without a field, AppKit does match the remapped key.
+    #expect(scene.window.makeFirstResponder(scene.canvas))
+    #expect(try scene.command(actual.1, 50))
+    #expect(session.zoomMode == .actualPixels)
 }

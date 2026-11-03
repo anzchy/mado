@@ -27,11 +27,28 @@ final class CommandMainMenu: NSMenu {
     // NSMenu's nonisolated override runs on AppKit's main thread; the owner is main-actor bound.
     nonisolated(unsafe) weak var commandOwner: CommandMenu?
 
-    /// ⌘ zoom keys belong to a focused text field first (CMD-02); other ⌘ keys still reach the menu.
-    static func defersToTextField(_ event: NSEvent) -> Bool {
-        guard event.modifierFlags.intersection([.command, .control, .option]) == .command,
-              let key = event.charactersIgnoringModifiers else { return false }
-        return CommandID.matching(key: key, command: true)?.commandKey != nil
+    /// ⌘ zoom items yield to a focused text field (CMD-02); other ⌘ items still match.
+    /// Judged per item, so the field wins whatever character AppKit's layout localization matches.
+    @MainActor static func defersToTextField(_ item: NSMenuItem) -> Bool {
+        guard item.keyEquivalentModifierMask.contains(.command), !item.keyEquivalent.isEmpty,
+              let raw = item.representedObject as? String, let id = CommandID(rawValue: raw) else { return false }
+        return id.commandKey != nil
+    }
+
+    nonisolated(unsafe) private var yielded: [(NSMenuItem, String)] = []
+
+    /// Makes the field's items unmatchable for one menu match; `restoreTextFieldItems` puts their keys back.
+    @MainActor private func suspendTextFieldItems() {
+        func items(_ menu: NSMenu) -> [NSMenuItem] {
+            menu.items.flatMap { [$0] + ($0.submenu.map(items) ?? []) }
+        }
+        yielded = items(self).filter(Self.defersToTextField).map { ($0, $0.keyEquivalent) }
+        for (item, _) in yielded { item.keyEquivalent = "" }
+    }
+
+    @MainActor private func restoreTextFieldItems() {
+        for (item, key) in yielded { item.keyEquivalent = key }
+        yielded = []
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -42,14 +59,14 @@ final class CommandMainMenu: NSMenu {
             }
             guard allowsBareEquivalent else { return false }
         }
-        if Self.defersToTextField(event) {
+        var editing = false
+        if event.modifierFlags.contains(.command) {
             let windowNumber = event.windowNumber
-            let editing = MainActor.assumeIsolated { [commandOwner] in
+            editing = MainActor.assumeIsolated { [commandOwner] in
                 let window = NSApp.window(withWindowNumber: windowNumber)
                     ?? commandOwner?.activeWindowController?.window ?? NSApp.keyWindow
                 return window?.firstResponder is NSTextInputClient
             }
-            if editing { return false }
         }
         let inspectorKey = event.keyCode == 34 && event.modifierFlags.contains(.command)
             && event.modifierFlags.intersection([.control, .option, .shift]).isEmpty
@@ -59,6 +76,10 @@ final class CommandMainMenu: NSMenu {
             let target = owner?.activeWindowController
             return (target, target?.captureGridSearchEditor())
         } : nil
+        // AppKit itself then decides which item the event matches; the field's items cannot be it.
+        nonisolated(unsafe) let menu = self
+        if editing { MainActor.assumeIsolated { menu.suspendTextFieldItems() } }
+        defer { if editing { MainActor.assumeIsolated { menu.restoreTextFieldItems() } } }
         let handled = super.performKeyEquivalent(with: event)
         if handled, let (target, editor) = targetAndEditor, let target, let editor {
             MainActor.assumeIsolated { target.restoreGridSearchEditor(editor) }
