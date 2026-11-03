@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./gates-rows.mjs', import.meta.url));
 const head = '3de39c6012345678901234567890123456789012';
-const complete = `head=${head}\nswift=0\nlcov=0\nlines 10/10\nxcodegen=0\nxcodebuild=0\nnode=0\nledger=0\ndiffcheck=0\nDONE\n`;
+const complete = `head=${head}\nswift=0\nlcov=0\nlines 10/10\nxcodegen=0\nxcodebuild=0\nnode=0\nledger=0\ndiffcheck=0\ndesign=0\nDONE\n`;
 
 function runRows(t, summary, args = []) {
   const directory = mkdtempSync(join(tmpdir(), 'picsee-gates-rows-'));
@@ -143,7 +143,7 @@ test('summary and CI rows pass checkGates; stale CI carries NOT VERIFIED', async
   const table = rows => `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${rows}\n| audit | N/A | — | tooling-only test |\n| device-smoke | N/A | — | no user-visible change |\n`;
   const current = runRows(t, complete, ['--ci', fileURLToPath(new URL('./fixtures/ci-success.json', import.meta.url)), '--head', head]);
   assert.equal(current.status, 0, current.stderr);
-  assert.equal(current.stdout.trim().split('\n').length, 7);
+  assert.equal(current.stdout.trim().split('\n').length, 8);
   assert.deepEqual(checkGates(table(current.stdout.trim()), head), { ok: true });
 
   const stale = runRows(t, complete, ['--ci', fileURLToPath(new URL('./fixtures/ci-stale.json', import.meta.url)), '--head', head]);
@@ -157,10 +157,35 @@ function assertAmbiguous(t, summary) {
   const result = runRows(t, summary, ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   const rows = result.stdout.trim().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) assert.match(row, new RegExp(`\\| NOT VERIFIED \\| ${head} \\| owner-gates summary ambiguous \\|$`));
   assert.doesNotMatch(result.stdout, /\| PASS \|/);
 }
+
+for (const [design, status, lint] of [['0', 'PASS', { ok: true }], ['7', 'FAIL', { ok: false, reason: 'design-check is a FAIL row' }], [undefined, 'NOT VERIFIED', { ok: true }]]) {
+  test(`design=${design ?? 'missing'} survives summary, Gates rows and PR lint`, async t => {
+    const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+    const summary = complete.replace('design=0\n', design === undefined ? '' : `design=${design}\n`);
+    const result = runRows(t, summary, ['--ci', fileURLToPath(new URL('./fixtures/ci-success.json', import.meta.url)), '--head', head]);
+    assert.equal(result.status, 0, result.stderr);
+    const source = design === undefined ? 'owner-gates summary missing design' : `owner-gates design=${design}`;
+    assert.ok(result.stdout.trim().split('\n').includes(`| design-check | ${status} | ${head} | ${source} |`), result.stdout);
+    const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling-only test |\n| device-smoke | N/A | — | no user-visible change |\n`;
+    assert.deepEqual(checkGates(body, head), lint);
+  });
+}
+
+test('duplicate design evidence including whitespace is ambiguous', t => {
+  assertAmbiguous(t, complete.replace('design=0\n', 'design=0\ndesign = 7\n'));
+});
+
+test('malformed design evidence makes every lane unverified', t => {
+  const result = runRows(t, complete.replace('design=0', 'design=invalid'), ['--head', head]);
+  assert.equal(result.status, 0, result.stderr);
+  const rows = result.stdout.trim().split('\n');
+  assert.equal(rows.length, 7);
+  for (const row of rows) assert.match(row, new RegExp(`\\| NOT VERIFIED \\| ${head} \\| owner-gates summary malformed \\|$`));
+});
 
 test('gates-rows rejects duplicate lane keys as ambiguous', t => {
   assertAmbiguous(t, complete.replace('node=0\n', 'node=0\nnode=1\n'));
@@ -174,7 +199,7 @@ test('gates-rows rejects a malformed recognised lane value', t => {
   const result = runRows(t, complete.replace('node=0', 'node=abc'), ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   const rows = result.stdout.trim().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) assert.match(row, new RegExp(`\\| NOT VERIFIED \\| ${head} \\| owner-gates summary malformed \\|$`));
   assert.doesNotMatch(result.stdout, /\| (?:PASS|FAIL) \|/);
 });
@@ -187,7 +212,7 @@ test('gates-rows rejects DONE followed by another record as ambiguous', t => {
   assertAmbiguous(t, complete + 'late=1\n');
 });
 
-test('gates-rows converts a complete owner-gates summary to six PASS rows', t => {
+test('gates-rows converts a complete owner-gates summary to seven PASS rows', t => {
   const result = runRows(t, complete, ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.stdout.trim().split('\n'), [
@@ -197,6 +222,7 @@ test('gates-rows converts a complete owner-gates summary to six PASS rows', t =>
     `| node-tooling | PASS | ${head} | owner-gates node=0 |`,
     `| ledger | PASS | ${head} | owner-gates ledger=0 |`,
     `| diff-check | PASS | ${head} | owner-gates diffcheck=0 |`,
+    `| design-check | PASS | ${head} | owner-gates design=0 |`,
   ]);
 });
 
@@ -204,7 +230,7 @@ test('gates-rows marks every row NOT VERIFIED without final DONE', t => {
   const result = runRows(t, complete.replace('DONE\n', ''), ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   const rows = result.stdout.trim().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) assert.match(row, new RegExp(`\\| NOT VERIFIED \\| ${head} \\| owner-gates summary incomplete \\|$`));
   assert.doesNotMatch(result.stdout, /\| PASS \|/);
 });
@@ -214,7 +240,7 @@ test('gates-rows marks every row NOT VERIFIED for a stale summary head', t => {
   const result = runRows(t, complete, ['--head', currentHead]);
   assert.equal(result.status, 0, result.stderr);
   const rows = result.stdout.trim().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) assert.match(row, new RegExp(`\\| NOT VERIFIED \\| ${head} \\| owner-gates stale head ${head.slice(0, 7)} \\|$`));
   assert.doesNotMatch(result.stdout, /\| PASS \|/);
 });
@@ -223,14 +249,14 @@ test('gates-rows converts a non-zero lane exit to FAIL', t => {
   const result = runRows(t, complete.replace('xcodebuild=0', 'xcodebuild=1'), ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`^\\| unsigned-build \\| FAIL \\| ${head} \\| owner-gates xcodebuild=1 \\|$`, 'm'));
-  assert.equal(result.stdout.match(/\| PASS \|/g).length, 5);
+  assert.equal(result.stdout.match(/\| PASS \|/g).length, 6);
 });
 
 test('gates-rows marks a missing key NOT RUN with a reason', t => {
   const result = runRows(t, complete.replace('node=0\n', ''), ['--head', head]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^\| node-tooling \| NOT RUN \| — \| owner-gates summary missing node \|\n/m);
-  assert.equal(result.stdout.match(/\| PASS \|/g).length, 5);
+  assert.equal(result.stdout.match(/\| PASS \|/g).length, 6);
 });
 
 test('gates-rows rejects a missing summary without emitting PASS', t => {

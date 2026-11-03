@@ -6,6 +6,8 @@
 #   / the Swift "Test run with N tests" line / DONE
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree or head mismatch.
 # The Swift, Xcode build and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
+# design:check needs npm ci --ignore-scripts and Playwright Chromium in the gated worktree;
+# without either prerequisite it fails closed (design != 0).
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }

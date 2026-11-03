@@ -504,7 +504,8 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
     #134 combination bugs were caught exactly this way.)
   - `MESSAGES differ` (exit 2): fix the messages before pushing.
 - Then rerun all gates yourself: `scripts/owner-gates.sh <worktree> <sha> <prefix>` (run it in the background; the
-  summary must end with `DONE`).
+  summary must end with `DONE`). Its `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the
+  gated worktree; without them it fails closed (`design≠0`).
 
 #### Catch combinations early, not at PR time
 

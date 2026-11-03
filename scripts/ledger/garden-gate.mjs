@@ -167,11 +167,14 @@ function guardedCells(rows) {
   for (const row of rows) {
     const count = (seen.get(row.ID) ?? 0) + 1;
     seen.set(row.ID, count);
-    cells.set(`${row.ID}#${count}`, JSON.stringify(GUARDED_CELLS.map((name) => {
-      const value = row[name] ?? null;
-      // Only the suffix starting at the first exact 限制： is an owner-editable note.
-      return name === "怎么确认" && value !== null ? value.split("限制：", 1)[0] : value;
-    })));
+    cells.set(`${row.ID}#${count}`, {
+      hasLimitation: row["怎么确认"]?.includes("限制：") ?? false,
+      guarded: JSON.stringify(GUARDED_CELLS.map((name) => {
+        const value = row[name] ?? null;
+        // Only the suffix starting at the first exact 限制： is an owner-editable note.
+        return name === "怎么确认" && value !== null ? value.split("限制：", 1)[0] : value;
+      })),
+    });
   }
   return cells;
 }
@@ -191,7 +194,10 @@ function unresolvedReason(since, head) {
     const after = guardedCells(readLedger(commit));
     if (before.size !== after.size) return `${short} adds or removes ledger rows`;
     for (const [key, value] of after) {
-      if (before.get(key) !== value) return `${short} changes the 状态, 验证 or 怎么确认 cell of ${key.split("#")[0]}`;
+      const previous = before.get(key);
+      if (previous?.guarded !== value.guarded || (previous.hasLimitation && !value.hasLimitation)) {
+        return `${short} changes the 状态, 验证 or 怎么确认 cell of ${key.split("#")[0]} (acceptance changed or limitation removed)`;
+      }
     }
   }
   const markdown = fileAt(head, LEDGER);

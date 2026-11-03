@@ -88,7 +88,8 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
 4. **Audit** — every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
-   a summary without `DONE` is no evidence.
+   `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
+   fails closed (`design≠0`). A summary without `DONE` is no evidence.
 5. **Apply verdict** — merge both verdicts. C/H block → fix + fresh-context confirm by each auditor; at most 2 auditor rounds
    per item (blind audit + one confirm). C/H still open after round 2 → stop and ask the user whether to continue. User-visible/AC Medium → one fix round, no
    confirm. Other Medium/Low → PR "Still open". If consulting
@@ -107,7 +108,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    (`picsee-wt/owner-gates`), never in one an implementer is using; carry its diff to the branch as a patch (guide §5.7).
 8. **PR & merge** — body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. Build Gates with
    `gh run view <id> --json headSha,url,status,conclusion,jobs > run.json`, then
-   `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the six owner-gates lanes and CI
+   `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the seven owner-gates lanes (including `design-check`) and CI
    `app-tests`; add audit and device-smoke rows, keep every status, SHA and source honest and run the PR-body lint. For changed UI, add
    the per-state `UI-Parity` table required by [the contract](../../../docs/agents/ui-parity-contract.md). Before
    merge, every changed reachable state needs design-derived automated assertions (geometry from the pinned CSS checked

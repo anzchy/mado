@@ -32,7 +32,7 @@ for. The script prints one line and its reason on stderr. Any other line goes in
 | No changed path is mapped, and no commit names a ledger row ID or a plan WP ID | **Skip** the gardener | `Ledger-Gardener: SKIP <base7>..<head7> (no mapped paths)` |
 | PR opens and the range is mapped | Run `pr` once | `RUN` |
 | Re-push after a fix round or a rebase, last verdict CLEAN or UPDATED | Rerun only if the commits since the gardened head are mapped; otherwise reuse the verdict for the new head | `Ledger-Gardener: REUSE <V> <base7>..<head7> (no mapped change since <S7>)` or `RUN` |
-| After NEEDS-OWNER | No rerun when every commit since the gardened head changes only the ledger md/html, no 状态, 验证 or 怎么确认 cell and no row is added or removed, and the HTML check passes | `Ledger-Gardener: RESOLVED <base7>..<head7> (owner fixed rows after NEEDS-OWNER at <S7>)` or `RUN` |
+| After NEEDS-OWNER | No rerun when every commit since the gardened head changes only the ledger md/html, leaves 状态 and 验证 unchanged and 怎么确认 unchanged before the first 「限制：」, leaves a 「限制：」 marker in every row that already had one, adds or removes no row, and the HTML check passes | `Ledger-Gardener: RESOLVED <base7>..<head7> (owner fixed rows after NEEDS-OWNER at <S7>)` or `RUN` |
 | Last verdict BLOCK | Always rerun | `RUN` |
 
 **Mapped** means a changed path is under `App/`, `Packages/*/Sources/` or `docs/validation/`, is `project.yml`,
@@ -43,6 +43,7 @@ Commit messages are mapped when they name an existing row ID or a `P<n>-<nn>[a-z
 The gate fails closed. A `--since` that is not an ancestor of head, as after a rebase, makes it judge the whole
 merge-base..head range, so a mapped PR gives `RUN`. Any error (unknown ref, unreadable ledger, git failure) gives `RUN`.
 The gate never writes the ledger: SKIP, REUSE and RESOLVED set no area review date.
+Text appended after 「限制：」 is trusted as a limitation, so new acceptance must never be written there.
 The gate ignores branch names: it maps IDs only from commit messages, and paths only from the changed files.
 
 | Mode | Trigger | Range |

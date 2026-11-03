@@ -167,7 +167,7 @@ for (const [name, before, after, resolved] of [
   ["acceptance edit before marker", "打开一张 JPEG，画布显示该图。限制：真机未验", "打开两张 JPEG，画布显示该图。限制：真机未验", false],
   ["changed marker-free cell", "按 ⌘1，图片按像素 1:1 显示", "按 ⌘2，图片按像素 1:1 显示", false],
   ["add limitation with identical raw prefix", "按 ⌘1，图片按像素 1:1 显示 |", "按 ⌘1，图片按像素 1:1 显示 限制：待验证 |", true],
-  ["remove limitation with identical raw prefix", "打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|", true],
+  ["remove limitation with identical raw prefix", "打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|", false],
   ["edit between first and second marker", "限制：真机未验", "限制：新限制；限制：后续说明", true],
   ["whitespace before marker", "该图。限制：", "该图。 限制：", false],
   ["leading cell padding", "| 打开一张 JPEG", "|  打开一张 JPEG", false],
@@ -190,6 +190,35 @@ for (const [name, before, after, resolved] of [
     if (!resolved) assert.match(result.stderr, /cell of VIEW-0[12]/);
   });
 }
+
+for (const status of ["Partial", "Shipped"]) {
+  test(`removing VIEW-01 ${status} limitation gives RUN with unchanged acceptance prefix`, (t) => {
+    const r = makeRepo(t);
+    if (status !== "Partial") {
+      r.commitLedger("docs: status fixture", r.read(LEDGER).replace("| Partial |", `| ${status} |`));
+    }
+    const original = r.read(LEDGER);
+    assert.match(original, new RegExp(`\\| VIEW-01 \\|[^\\n]*\\| ${status} \\|`));
+    assert.ok(original.includes("打开一张 JPEG，画布显示该图。限制：真机未验 |"));
+    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    r.commitLedger("docs: remove limitation", original.replace("打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|"));
+    const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
+    assert.equal(result.line, "RUN");
+    assert.match(result.stderr, /VIEW-01/);
+  });
+}
+
+test("unsafe intermediate limitation removal cannot be hidden by restoration", (t) => {
+  const r = makeRepo(t);
+  const original = r.read(LEDGER);
+  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  r.commitLedger("docs: remove limitation", original.replace("打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|"));
+  r.commitLedger("docs: restore limitation", original);
+  assert.equal(r.read(LEDGER), original);
+  const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
+  assert.equal(result.line, "RUN");
+  assert.match(result.stderr, /VIEW-01/);
+});
 
 test("unsafe intermediate acceptance edit cannot be hidden by a revert", (t) => {
   const r = makeRepo(t);
