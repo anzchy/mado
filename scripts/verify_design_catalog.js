@@ -206,14 +206,15 @@ module.exports=async(page,{design,states,screenshot})=>{
   ['empty-folder.html?theme=dark',{dark:true,tiles:3}],
   ['empty-folder.html?drag=over',{tiles:3,dragOver:true}],
   ['permission-denied.html',{unavailable:true,buttons:['重新选择文件夹…'],absent:['选择其他文件夹…']}],
-  ['permission-denied.html?cause=volume',{unavailable:true,text:'等待磁盘连接',texts:['重新确认访问权限'],notText:['不需要再选择'],buttons:['选择其他文件夹…'],absent:['重新选择文件夹…']}],
+  ['permission-denied.html?cause=volume',{focus:'选择其他文件夹…',unavailable:true,text:'等待磁盘连接',texts:['重新确认访问权限'],notText:['不需要再选择'],buttons:['选择其他文件夹…'],absent:['重新选择文件夹…']}],
+  ...['case=volume','case=volume&theme=dark','cause=volume&theme=dark'].map(query=>['permission-denied.html?'+query,{dark:query.includes('theme=dark'),unavailable:true,text:'等待磁盘连接',buttons:['选择其他文件夹…'],absent:['重新选择文件夹…'],focus:'选择其他文件夹…'}]),
   ['permission-denied.html?cause=missing',{unavailable:true,text:'找不到',buttons:['在新位置选择…','选择其他文件夹…']}],
   ['permission-denied.html?cause=unknown',{unavailable:true,text:'无法访问此文件夹',buttons:['重新选择文件夹…','选择其他文件夹…']}],
   ['permission-denied.html?case=moved',{unavailable:false,strip:'不是这个？选择其他文件夹…',cells:true}],
   ['permission-denied.html?theme=dark',{dark:true,unavailable:true}],
   // 24 读取失败 (24F-A, #236): no partial grid or count, 「重试」 holds key focus, the footer reads 读取未完成.
-  ['folder-loading.html',{buttons:['取消读取'],absent:['重试'],noGrid:true,rootCount:''}],
-  ['folder-loading.html?theme=dark',{dark:true,buttons:['取消读取'],absent:['重试'],noGrid:true,rootCount:''}],
+  ['folder-loading.html',{focus:'取消读取',buttons:['取消读取'],absent:['重试'],noGrid:true,rootCount:''}],
+  ['folder-loading.html?theme=dark',{dark:true,focus:'取消读取',buttons:['取消读取'],absent:['重试'],noGrid:true,rootCount:''}],
   ['folder-loading.html?case=failed',{text:'没能读完“待整理”',texts:['读取在中途停止了'],buttons:['重试','选择其他文件夹…'],absent:['取消读取'],focus:'重试',noGrid:true,noCount:true,footer:'读取未完成',tokens:'failed'}],
   ['folder-loading.html?case=failed&theme=dark',{dark:true,text:'没能读完“待整理”',buttons:['重试','选择其他文件夹…'],focus:'重试',noGrid:true,noCount:true,footer:'读取未完成'}],
  ];
@@ -311,7 +312,19 @@ module.exports=async(page,{design,states,screenshot})=>{
  for(const button of await page.locator('[data-play-branch]').all()){
   const id=await button.getAttribute('data-play-branch');await button.click();const played=[];
   for(let n=0;n<10;n++){played.push(await page.locator('#player').evaluate(p=>p.dataset.page+(p.dataset.query?'?'+p.dataset.query:'')));const next=page.locator('#p-next');if(await next.isDisabled())break;await next.click()}
-  (branchPlayed[id]=branchPlayed[id]||[]).push(played);branchPlays++;await page.keyboard.press('Escape');
+  (branchPlayed[id]=branchPlayed[id]||[]).push(played);branchPlays++;
+  await page.waitForFunction(()=>{const frame=document.querySelector('#p-frame iframe');return frame?.contentDocument?.readyState==='complete'&&frame.contentDocument.URL===frame.src});
+  await page.keyboard.press('Escape');if(await page.locator('#player').isVisible())throw Error(id+': branch Esc did not close the loaded preview');
+  if(!await button.evaluate(b=>document.activeElement===b))throw Error(id+': branch Esc did not restore opener focus');
+ }
+ // Focused recovery actions in intermediate branch states must also leave the player with Escape.
+ for(const [name,query,focus] of [['folder-loading','case=failed','重试'],['permission-denied','cause=volume','选择其他文件夹…']]){
+  const opener=page.locator('[data-page="'+name+'"][data-query="'+query+'"]').first();await opener.click();
+  await page.waitForFunction(()=>{const frame=document.querySelector('#p-frame iframe');return frame?.contentDocument?.readyState==='complete'&&frame.contentDocument.URL===frame.src});
+  const actual=await page.locator('#p-frame iframe').evaluate(frame=>frame.contentDocument.activeElement.textContent.trim());
+  if(actual!==focus)throw Error(name+'?'+query+': embedded focus '+JSON.stringify(actual)+' instead of '+focus);
+  await page.keyboard.press('Escape');if(await page.locator('#player').isVisible())throw Error(name+'?'+query+': embedded Esc did not close');
+  if(!await opener.evaluate(b=>document.activeElement===b))throw Error(name+'?'+query+': embedded Esc did not restore opener focus');
  }
  const sortedJSON=o=>JSON.stringify(Object.keys(o).sort().map(k=>[k,o[k].map(s=>s.join('>')).sort()]));
  if(sortedJSON(branchPlayed)!==sortedJSON(BRANCH_PLAYS))for(const id of new Set([...Object.keys(BRANCH_PLAYS),...Object.keys(branchPlayed)])){const want=(BRANCH_PLAYS[id]||[]).map(s=>s.join('>')).sort(),got=(branchPlayed[id]||[]).map(s=>s.join('>')).sort();if(JSON.stringify(want)!==JSON.stringify(got))journeyIssues.push(id+': branch plays '+(got.join(' ; ')||'none')+' instead of '+(want.join(' ; ')||'none'))}
