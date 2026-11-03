@@ -161,13 +161,43 @@ test("RESOLVED after a ledger-only owner commit", (t) => {
   );
 });
 
-test("not RESOLVED when the owner commit edits a 怎么确认 cell", (t) => {
+// #416 supersedes the previous expectation that limitation-only edits require RUN.
+for (const [name, before, after, resolved] of [
+  ["limitation-only edit", "打开一张 JPEG，画布显示该图。限制：真机未验", "打开一张 JPEG，画布显示该图。限制：真机与 @2x 未验", true],
+  ["acceptance edit before marker", "打开一张 JPEG，画布显示该图。限制：真机未验", "打开两张 JPEG，画布显示该图。限制：真机未验", false],
+  ["changed marker-free cell", "按 ⌘1，图片按像素 1:1 显示", "按 ⌘2，图片按像素 1:1 显示", false],
+  ["add limitation with identical raw prefix", "按 ⌘1，图片按像素 1:1 显示 |", "按 ⌘1，图片按像素 1:1 显示 限制：待验证 |", true],
+  ["remove limitation with identical raw prefix", "打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|", true],
+  ["edit between first and second marker", "限制：真机未验", "限制：新限制；限制：后续说明", true],
+  ["whitespace before marker", "该图。限制：", "该图。 限制：", false],
+  ["leading cell padding", "| 打开一张 JPEG", "|  打开一张 JPEG", false],
+  ["marker-free trailing padding", "1:1 显示 |", "1:1 显示  |", false],
+]) {
+  test(`owner fix: ${name}`, (t) => {
+    const r = makeRepo(t);
+    // Disambiguate the capability label from the acceptance text before the owner range.
+    if (name === "marker-free trailing padding") {
+      r.commitLedger("chore: distinct fixture label", r.read(LEDGER).replace("| VIEW-02 | 1:1 显示 |", "| VIEW-02 | 原始像素 |"));
+    }
+    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    const original = r.read(LEDGER);
+    assert.ok(original.includes(before));
+    const head = r.commitLedger("docs(ledger): owner", original.replace(before, after));
+    const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
+    assert.equal(result.line, resolved
+      ? `Ledger-Gardener: RESOLVED ${short(r.base)}..${short(head)} (owner fixed rows after NEEDS-OWNER at ${short(gardened)})`
+      : "RUN");
+    if (!resolved) assert.match(result.stderr, /cell of VIEW-0[12]/);
+  });
+}
+
+test("unsafe intermediate acceptance edit cannot be hidden by a revert", (t) => {
   const r = makeRepo(t);
   const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
-  r.commitLedger("docs(ledger): owner", r.read(LEDGER).replace("限制：真机未验 |\n| VIEW-02", "限制：真机与 @2x 未验 |\n| VIEW-02"));
-  const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
-  assert.equal(result.line, "RUN");
-  assert.match(result.stderr, /cell of VIEW-01/);
+  const original = r.read(LEDGER);
+  r.commitLedger("docs: edit acceptance", original.replace("打开一张 JPEG", "打开两张 JPEG"));
+  r.commitLedger("docs: restore acceptance and fix limitation", original.replace("限制：真机未验", "限制：未做真机验收"));
+  assert.equal(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER").line, "RUN");
 });
 
 for (const [cell, from, to] of [["状态", "| Partial | 单元 | P0-09", "| Shipped | 单元 | P0-09"], ["验证", "| Partial | 单元 | P0-09", "| Partial | 真机 | P0-09"]]) {
