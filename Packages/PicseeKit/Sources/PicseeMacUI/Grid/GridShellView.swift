@@ -307,6 +307,7 @@ import PicseeCore
         folderTree.isHidden = false
         folderTree.show(current: current, parent: parent, children: children)
         refreshEmptyFolder()
+        if mode == .viewerSidebar { onViewerSidebarKeyViewsChange?() }
     }
     /// Page 22 after a complete empty scan (ADR-014); its tiles follow the folder tree's current children.
     public func setEmptyFolderState(_ isEmpty: Bool, recents: [RecentFolder], now: Date) {
@@ -362,11 +363,45 @@ import PicseeCore
     public func updateFolderCount(_ count: Int?, for url: URL) {
         folderTree.updateCount(count, for: url)
     }
+    /// #444: `.viewerSidebar` shows only the folder sidebar, beside the viewer canvas; the footer, the grid area
+    /// and the display panel belong to the grid surface and hide.
+    public enum Mode: Sendable { case grid, viewerSidebar }
+    public private(set) var mode: Mode = .grid
+    public func setMode(_ mode: Mode) {
+        guard self.mode != mode else { return }
+        self.mode = mode
+        let viewer = mode == .viewerSidebar
+        if viewer { setDisplayPanelOpen(false, restoringFocus: false) }
+        for part in [footer, mainContent] {
+            part.isHidden = viewer
+            part.setAccessibilityHidden(viewer)
+        }
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+        if !viewer { updateKeyViewLoop() }
+    }
+    /// The grid surface: shown, and not the viewer's sidebar. Grid-only paths (search, footer status) test this.
+    public var isGridSurface: Bool { !isHidden && mode == .grid }
+    /// Called when the viewer's sidebar is about to hide while it holds keyboard focus.
+    public var onViewerSidebarFocusLoss: (() -> Void)?
+    /// Called when the viewer's sidebar replaced its rows; the viewer's key loop links them (ViewerStateFocus).
+    public var onViewerSidebarKeyViewsChange: (() -> Void)?
+    /// One visibility for the grid and the viewer (#444 owner acceptance).
+    public var sidebarVisible: Bool { preferencesStore.value.gridSidebarVisible }
+    /// The sidebar's width, a live divider drag included; 0 while it is hidden.
+    public var sidebarWidth: CGFloat { mainFrame.minX }
+    /// The viewer's sidebar stops in its key loop after the tools: the resize divider, then the folder rows.
+    public var viewerSidebarKeyViews: [NSView] {
+        guard mode == .viewerSidebar, !isHidden, sidebarVisible else { return [] }
+        return [divider] + folderTree.rows
+    }
     public var mainFrame: NSRect {
         let visible = preferencesStore.value.gridSidebarVisible
         let sidebarWidth = visible ? (liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)) : 0
-        return NSRect(x: sidebarWidth, y: 40, width: max(0, bounds.width - sidebarWidth),
-                      height: max(0, bounds.height - 40))
+        // In the viewer there is no footer, so the sidebar runs the shell's full height.
+        let footerHeight: CGFloat = mode == .viewerSidebar ? 0 : 40
+        return NSRect(x: sidebarWidth, y: footerHeight, width: max(0, bounds.width - sidebarWidth),
+                      height: max(0, bounds.height - footerHeight))
     }
     public func gridContentFrame(topInset: CGFloat = 0) -> NSRect {
         let bounds = mainContent.bounds
@@ -377,10 +412,12 @@ import PicseeCore
         super.layout()
         let main = mainFrame
         sidebar.isHidden = !preferencesStore.value.gridSidebarVisible
-        sidebar.frame = NSRect(x: 0, y: 40, width: main.minX, height: main.height)
-        mainContent.frame = main
+        sidebar.frame = NSRect(x: 0, y: main.minY, width: main.minX, height: main.height)
+        // The viewer's sidebar mode keeps the hidden grid area (and its collection view) at its last grid size:
+        // a zero-width grid would ask AppKit for a zero item size.
+        if mode == .grid { mainContent.frame = main }
         footer.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 40)
-        for content in mainContent.subviews {
+        for content in mainContent.subviews where mode == .grid {
             if let grid = content as? GridBrowserView {
                 if !optionedGrids.contains(grid) {
                     optionedGrids.add(grid)
@@ -491,7 +528,8 @@ import PicseeCore
                                   width: max(0, sidebar.bounds.width - 28), height: 20)
         folderTree.frame = NSRect(x: 0, y: 0, width: sidebar.bounds.width,
                                   height: max(0, recentsButton.frame.minY - 4))
-        folderTree.viewportWidth = bounds.width
+        // The tree's compact rule follows the window, which is wider than a viewer-mode shell.
+        folderTree.viewportWidth = if mode == .viewerSidebar, let superview { superview.bounds.width } else { bounds.width }
         sidebarRule.frame = NSRect(x: max(0, sidebar.bounds.width - 1), y: 0, width: 1,
                                    height: sidebar.bounds.height)
         divider.frame = NSRect(x: max(0, sidebar.bounds.width - 5), y: 0, width: 5,
@@ -514,7 +552,13 @@ import PicseeCore
     @objc private func toggleFromButton() { toggleSidebar() }
     public func toggleSidebar() {
         var value = preferencesStore.value
-        if value.gridSidebarVisible && window?.firstResponder === divider { window?.makeFirstResponder(toggleButton) }
+        // In the viewer the presentation hands focus to the canvas (the footer toggle is hidden there), before the
+        // sidebar hides under it.
+        if mode == .grid, value.gridSidebarVisible, window?.firstResponder === divider { window?.makeFirstResponder(toggleButton) }
+        if mode == .viewerSidebar, value.gridSidebarVisible, let focused = window?.firstResponder as? NSView,
+           focused.isDescendant(of: sidebar) {
+            onViewerSidebarFocusLoss?()
+        }
         value.gridSidebarVisible.toggle()
         preferencesStore.value = value
         refreshToggleLabel()
@@ -576,7 +620,8 @@ import PicseeCore
     }
     private var pageKeyViews: [NSView] { emptyFolderView.isHidden ? [] : emptyFolderView.keyViews }
     private func updateKeyViewLoop() {
-        guard let focusAnchor else { return }
+        // The viewer's loop (canvas → tools → sidebar) is linked by ViewerStateFocus.
+        guard mode == .grid, let focusAnchor else { return }
         (focusTail ?? focusAnchor).nextKeyView = toggleButton
         let page = pageKeyViews
         let nextAction: NSView = footerActionsEnabled ? (searchField.isHidden ? searchButton : searchField)

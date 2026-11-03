@@ -5,6 +5,7 @@ import PicseeApplication
 @MainActor public enum ViewerStateFocus {
     private static func controls(_ state: ViewerStateHost, _ chrome: ViewerChromeOverlay) -> [NSView] {
         state.buttons.filter(\.acceptsFirstResponder) + chrome.tools.filter(\.acceptsFirstResponder)
+            + chrome.trailingKeyViews().filter(\.acceptsFirstResponder)
     }
     public static func link(canvas: NSView, state: ViewerStateHost, chrome: ViewerChromeOverlay) {
         if chrome.tools.contains(where: { !$0.isHiddenOrHasHiddenAncestor && $0.isAccessibilityEnabled() != $0.acceptsFirstResponder }) {
