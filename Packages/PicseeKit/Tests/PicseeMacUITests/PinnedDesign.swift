@@ -565,6 +565,14 @@ extension PinnedDesign {
         return (width, parts[1])
     }
 
+    /// Elements in the markup (outside `<style>`) whose class list contains `token` as a whole word.
+    func classCount(_ token: String) -> Int {
+        let markup = html.replacingOccurrences(of: "(?s)<style\\b[^>]*>.*?</style>", with: "",
+            options: .regularExpression)
+        return Self.matches("class=\"([^\"]*)\"", in: markup).compactMap(\.first)
+            .filter { $0.split(separator: " ").contains(Substring(token)) }.count
+    }
+
     func childCount(tag: String, inClass: String) throws -> Int {
         let blocks = Self.matches("(?s)<div class=\"\(inClass)\"[^>]*>(.*?)</div>", in: html)
         guard blocks.count == 1, let body = blocks.first?.first else {

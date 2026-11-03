@@ -50,7 +50,8 @@ import PicseeApplication
         for case let photo as GridPhotoItem in grid.collectionView.visibleItems() {
             let id = try #require(photo.representedItemID)
             #expect(photo.isSelected == grid.selection.selectedItemIDs.contains(id))
-            #expect(photo.isSelectionBadgeVisible == photo.isSelected)
+            // Owner decision 2026-11-03 (#405): no ✓ badge at any selection count.
+            #expect(gridCheckGlyphs(in: photo.view).isEmpty)
         }
     }
     try click(1)
@@ -123,7 +124,8 @@ import PicseeApplication
     #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 0, section: 0), IndexPath(item: 2, section: 0)])
 }
 
-@Test @MainActor func page32BadgeMatchesPinnedRenderedCellInBothAppearances() throws {
+// Owner decision 2026-11-03 (#405): no ✓ badge at any selection count; page 32 draws none on its three selected cells.
+@Test @MainActor func page32SelectedCellDrawsNoBadgeInBothAppearances() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/picsee-badge")
     let entry = FolderEntry(url: folder.appendingPathComponent("A.jpg"),
@@ -131,24 +133,11 @@ import PicseeApplication
     let cell = GridPhotoItem()
     cell.configure(entry)
     cell.isSelected = true
-    let badge = try #require(cell.view.subviews.compactMap { $0 as? NSTextField }
-        .first { $0.stringValue == "✓" })
-    let tile = try #require(cell.view.subviews.first { $0.frame.minY == 32 && $0.frame.height > 100 })
-    #expect(badge.frame.size == NSSize(width: 18, height: 18))
-    #expect(tile.frame.maxX - badge.frame.maxX == 7)
-    #expect(tile.frame.maxY - badge.frame.maxY == 7)
-    #expect(badge.layer?.borderWidth == 1)
-    #expect(badge.layer?.borderColor?.components == [1, 1, 1, 1])
-    let appearances: [(NSAppearance.Name, [CGFloat])] = [
-        (.aqua, [37.0 / 255, 99.0 / 255, 235.0 / 255, 1]),
-        (.darkAqua, [29.0 / 255, 78.0 / 255, 216.0 / 255, 1])
-    ]
-    for (appearance, expected) in appearances {
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         cell.view.appearance = NSAppearance(named: appearance)
-        let actual = try #require(badge.layer?.backgroundColor?.components)
-        #expect(zip(actual, expected).allSatisfy { abs($0 - $1) < 0.001 })
+        #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(appearance.rawValue)")
+        #expect(try gridCheckRegionHits(cell, fill: try gridSelectedCheckFill(appearance)) == 0, "\(appearance.rawValue)")
     }
-    #expect(!badge.isAccessibilityElement())
 }
 
 @Test @MainActor func gridStandaloneMouseSelectionAndEmptyClick() throws {
