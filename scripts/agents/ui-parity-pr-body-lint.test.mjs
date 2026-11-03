@@ -29,6 +29,24 @@ const completeGates = (currentHead = head) => {
   ]);
 };
 
+test('PR template Gates rows satisfy checkGates and follow the emitted lane order', () => {
+  const template = readFileSync(new URL('../../.agents/skills/pr/SKILL.md', import.meta.url), 'utf8');
+  const gates = template.match(/## Gates\n([\s\S]*?)\nDevice-Smoke:/)?.[1];
+  assert.ok(gates, 'missing template Gates table');
+  const body = `## Gates\n${gates}`.replaceAll('<head-sha>', head);
+  assert.deepEqual(checkGates(body, head), { ok: true });
+  const lanes = text => [...text.matchAll(/^\| ([a-z-]+) \|/gm)].map(match => match[1]);
+  assert.deepEqual(lanes(body), lanes(completeGates()));
+});
+
+test('UI parity contract lists every fixed Gates lane', () => {
+  const contract = readFileSync(new URL('../../docs/agents/ui-parity-contract.md', import.meta.url), 'utf8');
+  const fixed = contract.match(/固定 lanes 为 (.*?)，各出现一次/)?.[1];
+  assert.ok(fixed, 'missing fixed lane list');
+  const lanes = [...completeGates().matchAll(/^\| ([a-z-]+) \|/gm)].map(match => match[1]);
+  assert.deepEqual([...fixed.matchAll(/`([^`]+)`/g)].map(match => match[1]), lanes);
+});
+
 function assertGatesRejectedByAPIAndCLI(t, fixture, reason) {
   const direct = checkGates(fixture(head), head);
   const repo = mkdtempSync(join(tmpdir(), 'picsee-gates-layout-'));
