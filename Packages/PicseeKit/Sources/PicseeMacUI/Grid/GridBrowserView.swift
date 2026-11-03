@@ -683,23 +683,29 @@ private enum GridPageMove {
         guard !entries.isEmpty, let geometry else { return }
         let current = currentItemID.flatMap { indices[$0] } ?? 0
         let delta: Int
+        let includingUnchangedTarget: Bool
         switch move {
-        case .first: delta = -current
-        case .last: delta = entries.count - 1 - current
+        case .first:
+            delta = -current
+            includingUnchangedTarget = true
+        case .last:
+            delta = entries.count - 1 - current
+            includingUnchangedTarget = true
         case .page(let direction):
             let insets = scrollView.contentInsets
             let height = max(0, scrollView.contentView.documentVisibleRect.height - insets.top - insets.bottom)
             // Only the gaps between fitting rows count; even a short viewport advances one row.
             let rows = max(1, Int((height + geometry.rowGap) / (geometry.itemSize.height + geometry.rowGap)))
             delta = direction * rows * geometry.columns
+            includingUnchangedTarget = false
         }
-        moveCurrent(by: delta, preservingSelection: preservingSelection, includingCurrent: true)
+        moveCurrent(by: delta, preservingSelection: preservingSelection, includingUnchangedTarget: includingUnchangedTarget)
     }
-    private func moveCurrent(by delta: Int, preservingSelection: Bool, includingCurrent: Bool = false) {
+    private func moveCurrent(by delta: Int, preservingSelection: Bool, includingUnchangedTarget: Bool = false) {
         guard !entries.isEmpty else { return }
         let current = currentItemID.flatMap { indices[$0] } ?? 0
         let next = max(0, min(entries.count - 1, current + delta))
-        guard includingCurrent || next != current || currentItemID == nil, let id = itemID(at: next) else { return }
+        guard includingUnchangedTarget || next != current || currentItemID == nil, let id = itemID(at: next) else { return }
         currentItemID = id
         if preservingSelection {
             selection.focus(id, in: entries.map(\.itemID))
