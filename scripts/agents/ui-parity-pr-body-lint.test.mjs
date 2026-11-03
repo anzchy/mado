@@ -374,3 +374,182 @@ test('rename out of App still checks the deleted App path', t => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /UI-Parity/);
 });
+
+const codeGateLanes = ['package-tests', 'package-macui-tests', 'app-tests', 'unsigned-build', 'walking-skeleton'];
+const staleGate = (lane, sha = oldHead, source = 'recorded run', currentHead = head) => {
+  const row = `| ${lane} | PASS | ${sha} | ${source} |`;
+  const body = completeGates(currentHead);
+  return body.includes(`| ${lane} |`)
+    ? body.replace(new RegExp(`^\\| ${lane} \\|.*$`, 'm'), row)
+    : body + row + '\n';
+};
+const staleFailure = lane => ({ ok: false, reason: `${lane} PASS has a stale head without CODE same evidence` });
+const changedPathsAdapter = changed => ({
+  isAncestor: () => true,
+  inputsChanged: (_sha, _head, inputs) => inputs.some(input => changed.some(file => input === '.' || file === input || file.startsWith(input))),
+});
+
+test('Gates accepts ancestor package evidence after a garden-only commit', () => {
+  assert.deepEqual(checkGates(staleGate('package-tests'), head, changedPathsAdapter(['docs/feature-ledger.md'])), { ok: true });
+});
+
+test('Gates accepts every code lane after unrelated docs-only commits', () => {
+  for (const lane of codeGateLanes) {
+    assert.deepEqual(checkGates(staleGate(lane), head, changedPathsAdapter(['docs/notes.md'])), { ok: true }, lane);
+  }
+});
+
+test('Gates rejects changed code inputs even with CODE same evidence', () => {
+  for (const lane of codeGateLanes) {
+    for (const source of ['recorded run', `recorded run CODE same ${codeSame}`]) {
+      assert.deepEqual(checkGates(staleGate(lane, oldHead, source), head, changedPathsAdapter(['App/Changed.swift'])), staleFailure(lane));
+    }
+  }
+});
+
+test('Gates checks ledger, design and tooling inputs separately', () => {
+  for (const [lane, changed] of [['ledger', 'docs/feature-ledger.md'], ['design-check', 'design/index.html'], ['node-tooling', 'scripts/agents/new.test.mjs']]) {
+    assert.deepEqual(checkGates(staleGate(lane), head, changedPathsAdapter([changed])), staleFailure(lane));
+    assert.deepEqual(checkGates(staleGate(lane), head, changedPathsAdapter([])), { ok: true });
+  }
+  // Agent tests read repository documents and references, so their conservative input is the entire tree.
+  assert.deepEqual(checkGates(staleGate('node-tooling'), head, changedPathsAdapter(['docs/notes.md'])), staleFailure('node-tooling'));
+  assert.deepEqual(checkGates(staleGate('ledger'), head, changedPathsAdapter(['docs/notes.md'])), { ok: true });
+});
+
+test('Gates keeps historical CODE same policy for non-ancestor and undeclared lanes', () => {
+  const nonAncestor = { isAncestor: () => false, inputsChanged: () => false };
+  for (const lane of ['package-tests', 'package-coverage', 'diff-check', 'audit', 'device-smoke', 'gardener', 'unknown-lane']) {
+    const adapter = lane === 'package-tests' ? nonAncestor : changedPathsAdapter([]);
+    assert.deepEqual(checkGates(staleGate(lane), head, adapter), staleFailure(lane));
+    assert.deepEqual(checkGates(staleGate(lane, oldHead, `CODE same ${codeSame}`), head, adapter), { ok: true });
+    for (const source of [`code same ${codeSame}`, 'CODE same abc1234']) {
+      assert.deepEqual(checkGates(staleGate(lane, oldHead, source), head, adapter), staleFailure(lane));
+    }
+  }
+});
+
+test('Gates fails closed on unknown SHA and git adapter errors', () => {
+  for (const adapter of [
+    { isAncestor: () => undefined, inputsChanged: () => false },
+    { isAncestor: () => { throw Error('git unavailable'); }, inputsChanged: () => false },
+    { isAncestor: () => true, inputsChanged: () => undefined },
+    { isAncestor: () => true, inputsChanged: () => { throw Error('diff failed'); } },
+  ]) {
+    assert.deepEqual(checkGates(staleGate('package-tests'), head, adapter), staleFailure('package-tests'));
+    assert.deepEqual(checkGates(staleGate('package-tests', oldHead, `CODE same ${codeSame}`), head, adapter), { ok: true });
+  }
+});
+
+test('Gates supports 7-40 hex ancestor SHAs and stays pure without an adapter', () => {
+  for (const sha of [oldHead.slice(0, 7), oldHead.slice(0, 8), oldHead, oldHead.toUpperCase()]) {
+    assert.deepEqual(checkGates(staleGate('package-tests', sha), head, changedPathsAdapter([])), { ok: true });
+    assert.deepEqual(checkGates(staleGate('package-tests', sha), head), staleFailure('package-tests'));
+  }
+  for (const sha of ['aaaaaa', 'a'.repeat(41), 'zzzzzzz']) {
+    assert.match(checkGates(staleGate('package-tests', sha), head, changedPathsAdapter([])).reason, /needs a 7-40 hex SHA/);
+  }
+  assert.deepEqual(checkGates(completeGates(), head), { ok: true });
+});
+
+function gatesGitFixture(t) {
+  const repo = mkdtempSync(join(tmpdir(), 'picsee-gates-ancestor-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  const change = file => {
+    const segments = file.split('/');
+    if (segments.length > 1) mkdirSync(join(repo, ...segments.slice(0, -1)), { recursive: true });
+    writeFileSync(join(repo, file), `changed ${file}\n`);
+    git('add', file);
+    git('commit', '-qm', `change ${file}`);
+    return git('rev-parse', 'HEAD');
+  };
+  const base = change('seed.txt');
+  git('branch', 'base');
+  const run = (lane, sha, source = 'recorded run') => {
+    const body = join(repo, 'body.md');
+    writeFileSync(body, table + '\n' + staleGate(lane, sha, source, git('rev-parse', 'HEAD')) + '\nDevice-Smoke: n/a — test fixture\n');
+    const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
+    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body], { cwd: repo, encoding: 'utf8' });
+  };
+  return { repo, git, change, base, run };
+}
+const assertCLIPass = result => {
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /UI-Parity PR body: PASS/);
+};
+const assertCLIStale = (result, lane) => {
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.ok(result.stderr.includes(staleFailure(lane).reason), result.stderr);
+};
+
+test('CLI accepts a garden-only ancestor and resolves short SHA evidence', t => {
+  const { base, change, run } = gatesGitFixture(t);
+  change('docs/feature-ledger.md');
+  for (const sha of [base, base.slice(0, 7), base.slice(0, 8), base.toUpperCase()]) {
+    assertCLIPass(run('package-tests', sha));
+  }
+  assertCLIStale(run('ledger', base), 'ledger');
+  assertCLIStale(run('unsigned-build', base), 'unsigned-build');
+});
+
+test('CLI guards every mandatory input for every declared code lane', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  const mandatoryFiles = ['App/Changed.swift', 'AppTests/Changed.swift', 'Packages/Changed.swift', 'UITests/Changed.swift', 'project.yml'];
+  let pairs = 0;
+  for (const file of mandatoryFiles) {
+    git('checkout', '-q', '--detach', base);
+    change(file);
+    for (const lane of codeGateLanes) {
+      assertCLIStale(run(lane, base), lane);
+      assertCLIStale(run(lane, base, `CODE same ${codeSame}`), lane);
+      pairs++;
+    }
+  }
+  assert.equal(pairs, codeGateLanes.length * mandatoryFiles.length);
+  git('checkout', '-q', '--detach', base);
+  change('docs/notes.md');
+  for (const lane of codeGateLanes) assertCLIPass(run(lane, base));
+});
+
+test('CLI enforces real ledger, design and agent tooling inputs', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  for (const [lane, file] of [['ledger', 'docs/feature-ledger.html'], ['design-check', 'scripts/verify_design_catalog.js'], ['node-tooling', 'scripts/agents/tool.mjs']]) {
+    git('checkout', '-q', '--detach', base);
+    change(file);
+    assertCLIStale(run(lane, base), lane);
+    assertCLIStale(run(lane, base, `CODE same ${codeSame}`), lane);
+    assertCLIPass(run('package-tests', base));
+  }
+});
+
+test('CLI requires CODE same for pre-rebase and unknown SHAs', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  const divergent = change('docs/pre-rebase.md');
+  git('checkout', '-q', '--detach', base);
+  change('docs/rebased.md');
+  for (const sha of [divergent, 'f'.repeat(40)]) {
+    assertCLIStale(run('package-tests', sha), 'package-tests');
+    assertCLIPass(run('package-tests', sha, `CODE same ${codeSame}`));
+    assertCLIStale(run('package-tests', sha, `code same ${codeSame}`), 'package-tests');
+  }
+});
+
+test('CLI guards transitive test assets, design files and perf fixtures for every code lane', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  const files = ['TestAssets/synthetic/landscape-3x2.png', 'design/picsee-ui-system/tokens/colors.css', 'scripts/perf/fixtures/signpost-messages.json'];
+  let pairs = 0;
+  for (const file of files) {
+    git('checkout', '-q', '--detach', base);
+    change(file);
+    for (const lane of codeGateLanes) {
+      assertCLIStale(run(lane, base), lane);
+      assertCLIStale(run(lane, base, `CODE same ${codeSame}`), lane);
+      pairs++;
+    }
+  }
+  assert.equal(pairs, codeGateLanes.length * files.length);
+});
