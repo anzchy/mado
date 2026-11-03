@@ -52,3 +52,22 @@ Optional mdpro interop tests use `PICSEE_MDPRO_SCRIPT` for mdpro’s `scripts/he
 `.agents/skills/mdpro-delegator/scripts/gui-lock.sh` (Python GUI-lock tests).
 Run the GUI script in its repository so its heavy-lock dependency is available; only an
 unset GUI variable skips, while a configured invalid script or dependency fails.
+
+Opt in to the light pre-push checks with `git config --local core.hooksPath scripts/git-hooks`.
+This repository-local setting applies to linked worktrees too and replaces any previous hooks
+path; inspect `git config --get core.hooksPath` before installing. Git invokes the hook during
+the push started by `push-guard.py`, after that guard has checked the role and destination.
+The hook checks generated ledger HTML and shortcut table sync without a browser. Set
+`PICSEE_PR_BODY=/absolute/path/to/body.md` to also lint the body with the trusted base validator
+against the exact local OID Git is pushing. It blocks a supplied body when the pushed commit
+is not HEAD. Deletion records skip body lint. No Swift, Xcode or browser design suite runs.
+
+For a direct lint run, use
+`node scripts/agents/local-pr-lint.mjs --body-file /path/to/body.md --expect <pushed-SHA>`
+(optionally `--base origin/main`). Without `--expect`, HEAD must match the upstream branch's
+locally stored tip; fetch as appropriate, since this check does not contact the remote.
+The runner extracts a temporary base snapshot so the validator and its imports come from
+that ref, then checks the current worktree's HEAD and removes the snapshot.
+
+Git's `--no-verify` bypasses the hook; CI remains the authority. This opt-in hook adds no
+new options or permission to `push-guard.py`, and does not replace role/destination checks.
