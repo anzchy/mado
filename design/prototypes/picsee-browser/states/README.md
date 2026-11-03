@@ -56,7 +56,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 
 ## #347 · Viewer Tools 与 Thumbnail Size 对照映射
 
-Owner 于 2026-11-03 回复「A A C」：220 保留原高度比例，窄窗规则继续生效；图标、计数与缩放文字使用文字色及 halo。本表取代上一轮 `.72 × size` 的高度和仅图标处理。14/16/33 无参数仍为深色，`?theme=light|dark` 切换外观并保留其他根 class。
+Owner 于 2026-11-03 回复「A A C」：220 保留原高度比例，窄窗规则继续生效；图标、计数与缩放文字使用文字色及 halo。本表取代上一轮 `.72 × size` 的高度和仅图标处理。14/16/33 无参数仍为深色，`?theme=light|dark` 切换外观并保留其他根 class。13 `viewer-quiet.html`、25 `image-error.html`、27 `original-size.html` 也接受相同查询（#447，owner：「Add light pins (Recommended)」）；无参数或无效参数仍为原深色，13 的工具仍隐藏。三页的浅色背景/文字沿用 14 的 tokens，浅色工具填充、blur 与 inset backing 同 14；深色工具保留原实色，未随之改成半透明。
 
 **固定输入**：五页都把 canonical `design/picsee-ui-system/tokens/viewer-grid.css`（与 `_ds` 副本逐字相同）内联为 `<style data-viewer-grid-tokens>`；14/16/33 的 `<style data-viewer-tools>` 内联 `viewer-grid-variants.css` 的作者源。没有 linked stylesheet 或 `@import` 决定这些页的几何或颜色。Grid 的尺寸规则在既有 inline media cascade 内，`PinnedDesign.swift` 直接解析同一份被 HTML SHA 固定的规则。修改作者源后必须同步内联和 manifest；design check 检查同步。
 
@@ -79,7 +79,7 @@ Owner 于 2026-11-03 回复「A A C」：220 保留原高度比例，窄窗规�
 
 `npm run design:check` / `node scripts/verify_design_catalog.js` 在真实浏览器检查两种外观、480/720/1050/1280/1600 × 140/220/280、无参数/无效参数回退、长中英名截断与底栏不随尺寸变化。Viewer 检查三页 × 两种外观 × 平白/平黑底图，以截图内控件实际合成颜色与实际 glyph/text 核心像素计算对比度（glyph ≥3:1，计数和缩放文字 ≥4.5:1），并检查 halo；这不是原生设备验收。
 
-16 的信息面板不变；33 只更新计数文字的文字色/halo，胶片条面板、图像、导航和布局规则不变。**13/25/27/28/34 保留的 solid tools 仅用于各自其他状态的旧对照，tool fill 已被本表的 14/16/33 取代，#351 不得使用它们作工具填充 oracle**。尤其浅色 Inspector 应用 `viewer-inspector.html?theme=light` 对照 tool fill，不用 page34。
+16 的信息面板不变；33 只更新计数文字的文字色/halo，胶片条面板、图像、导航和布局规则不变。**13/25/27 的深色以及 28/34 保留的 solid tools 仅用于各自其他状态的旧对照，tool fill 已被本表的 14/16/33 取代，#351 不得使用它们作工具填充 oracle**。尤其浅色 Inspector 应用 `viewer-inspector.html?theme=light` 对照 tool fill，不用 page34。
 
 Swift 默认几何 oracle 仍有效：`.thumbnail-wrap` 读取 root `--thumbnail-height` → `--thumbnail-height-base`，默认只解析原 clamp/200/165（≤720 直接 150），无须解析属性变体乘法。`GridThumbnailParity281Tests` 的 1280/188.16 与各断点默认行、`GridShellTests`、`PinnedDesignTests` 的默认值保持一致；后续 #349 另断言尺寸变体。
 
@@ -91,13 +91,13 @@ Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计
 | --- | --- |
 | `folder-loading.html` | `9531f552f4cc9fc4295315a988305671614a5ce1de7065c41425f28f4467328c` |
 | `permission-denied.html` | `9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62` |
-| `manifest.json`（整份文件） | `3d4e8d83d8155d2688d1d3a7493c303e4563b3ced586418ab561de5d595ec6b3` |
+| `manifest.json`（#443 当时的整份文件，#447 后已更新） | `3d4e8d83d8155d2688d1d3a7493c303e4563b3ced586418ab561de5d595ec6b3` |
 
 ## 维护
 
 每页的 `sha256` 固定当前 HTML 的原始字节。修改正式状态稿后，先确认设计变更，再对该 HTML 运行 `shasum -a 256 <文件>`，将结果写入 `manifest.json` 对应条目；不要为绕过测试而重新固定哈希。`npm run design:check`（先 `npm ci --ignore-scripts` 与 `npx playwright install chromium`；可本地运行，CI 也在 `Design check` job 中运行）用 `package-lock.json` 固定的 Playwright 在两个空闲端口上起预览服务，运行 `scripts/verify_design_catalog.js`：先跑 `scripts/design/*.test.mjs` 与快捷键对照，再检查 22 页的资源与布局、每页 HTML 与 `sha256` 一致、15 页没有「键盘快捷键」、35/36 的分类与卡片（逐个查询参数、浅深色、示例数值都标「示例」、35 每个分类的控件逐个列为可用或「即将推出」、36 每个可见行都有 `data-shortcut`）、22/26 的来源与 22/24/26 的子情况（24 读取失败：「重试」持有焦点、没有部分网格或计数、子情况样式只用设计 token）（含收起的子文件夹、PENDING(P3-14) 标注，以及说明文字没有只剩一两个字的行：字距在 −1…+1 px 之间逐档检查，结果不随机器字体变化），以及 `journeys.html` 的入口表、只播放主路径、每条支线结果播到正确的目的页、没有手写进度徽章、不引用原型文件和播放器焦点（含点过预览之后的 Esc 与 Tab）。端口可用 `PICSEE_DESIGN_PORT`、`PICSEE_STATES_PORT` 指定。
 
-画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态（21 的中央不与参考稿比较，按 B4 中央检查：提示、按钮、间距 18、没有格式标签行，#441）、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin，其他大图页的 pin 保持不变。
+画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态（21 的中央不与参考稿比较，按 B4 中央检查：提示、按钮、间距 18、没有格式标签行，#441）、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin；#447 再更新 13/25/27 三项 pin，加入浅色对照并保留原深色外观，其他大图页的 pin 保持不变。
 
 以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
 
