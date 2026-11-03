@@ -39,7 +39,7 @@ export function checkUIParity(body, files) {
   return { ok: false, reason: 'UI files changed; PR body needs a populated ## UI-Parity table' };
 }
 
-const gateLanes = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-build', 'node-tooling', 'ledger', 'diff-check', 'audit', 'device-smoke'];
+const gateLanes = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-build', 'node-tooling', 'ledger', 'diff-check', 'design-check', 'audit', 'device-smoke'];
 const gateStatuses = new Set(['PASS', 'FAIL', 'NOT RUN', 'N/A', 'NOT VERIFIED']);
 
 function stripFencedCodeBlocks(body) {

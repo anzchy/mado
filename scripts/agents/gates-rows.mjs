@@ -8,6 +8,7 @@ const lanes = [
   ['node-tooling', 'node'],
   ['ledger', 'ledger'],
   ['diff-check', 'diffcheck'],
+  ['design-check', 'design'],
 ];
 const usage = 'usage: node scripts/agents/gates-rows.mjs [<summary.txt>] [--ci <run.json>] [--head <sha>]';
 const args = process.argv.slice(2);
@@ -59,7 +60,9 @@ if (!valid) {
       } else {
         rows.push(...lanes.map(([lane, key]) => {
           const exit = lines.find(line => line.startsWith(`${key}=`))?.slice(key.length + 1);
-          if (exit === undefined) return `| ${lane} | NOT RUN | — | owner-gates summary missing ${key} |`;
+          if (exit === undefined) return key === 'design'
+            ? `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary missing ${key} |`
+            : `| ${lane} | NOT RUN | — | owner-gates summary missing ${key} |`;
           const status = exit === '0' ? 'PASS' : 'FAIL';
           return `| ${lane} | ${status} | ${head} | owner-gates ${key}=${exit} |`;
         }));

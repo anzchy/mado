@@ -23,6 +23,7 @@ const completeGates = (currentHead = head) => {
     `| node-tooling | PASS | ${sha} | owner-gates node=0 |`,
     `| ledger | PASS | ${sha} | owner-gates ledger=0 |`,
     `| diff-check | PASS | ${sha} | owner-gates diffcheck=0 |`,
+    `| design-check | PASS | ${sha} | owner-gates design=0 |`,
     '| audit | N/A | — | tooling-only change |',
     '| device-smoke | N/A | — | no user-visible change |',
   ]);
@@ -157,6 +158,12 @@ test('Gates rejects a missing app-tests lane', () => {
   assert.match(result.reason, /missing app-tests/);
 });
 
+test('Gates requires design-check even in a legacy body', t => {
+  assertGatesRejectedByAPIAndCLI(t, currentHead => completeGates(currentHead)
+    .split('\n').filter(line => !line.startsWith('| design-check |')).join('\n'),
+  /missing design-check lane/);
+});
+
 test('Gates rejects a duplicate lane', () => {
   const result = checkGates(completeGates() + '| ledger | N/A | — | duplicate |\n', head);
   assert.equal(result.ok, false);
@@ -230,6 +237,7 @@ test('Gates rejects PR 307 historical prose and accepts its fail-closed transcri
     '| node-tooling | NOT VERIFIED | 639588e7 | original reports Node tests on an older head; no CODE same evidence |',
     '| ledger | NOT VERIFIED | 639588e7 | original reports ledger check on an older head; no CODE same evidence |',
     '| diff-check | NOT VERIFIED | 639588e7 | original reports diff check on an older head; no CODE same evidence |',
+    '| design-check | NOT VERIFIED | 639588e7 | historical PR has no design gate evidence |',
     '| audit | NOT VERIFIED | 639588e7 | original audit confirmed an older head; no CODE same evidence |',
     '| device-smoke | NOT VERIFIED | 639588e7 | original smoke passed on an older head; no CODE same evidence |',
   ]);
