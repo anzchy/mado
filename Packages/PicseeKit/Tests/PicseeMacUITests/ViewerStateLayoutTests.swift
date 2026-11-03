@@ -178,12 +178,13 @@ private func appTranslation(_ key: String, language: String) throws -> String {
 
     scene.state.display(.failed(.corruptImage, String(repeating: "旅行照片-", count: 25) + ".jpg"), nextEnabled: true)
     let message = try #require(stateView("state.filename", in: scene.state) as? NSTextField)
-    message.stringValue = String(repeating: "旅行照片-", count: 25) + ".jpg · " + (try appTranslation("The file may be damaged or its format unreadable.", language: "zh-Hans"))
     scene.state.needsLayout = true
     try assertVisibleComposition(scene.state,
         ids: ["state.icon", "state.heading", "state.filename", "state.retry", "state.next"],
         expectedGaps: [("state.icon", "state.heading", 18), ("state.heading", "state.filename", 9),
                        ("state.filename", "state.retry", 22)])
     #expect(abs(try frame("state.filename", in: scene.state).height - 22.1) <= 1)
-    #expect(message.lineBreakMode == .byTruncatingMiddle && message.maximumNumberOfLines == 1)
+    #expect(message.lineBreakMode == .byClipping && message.maximumNumberOfLines == 1)
+    #expect(message.stringValue.hasSuffix(scene.state.textLines[2]))
+    #expect(message.toolTip == scene.state.textLines[1] + " · " + scene.state.textLines[2])
 }
