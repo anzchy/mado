@@ -60,7 +60,8 @@ const gateInputs = {
   'node-tooling': ['.'],
   ledger: ledgerInputs,
   'design-check': ['App/', 'Packages/', 'design/', 'scripts/', 'package.json', 'package-lock.json', '.github/workflows/ci.yml'],
-  'package-coverage': null,
+  // Swift coverage also reads its runner, LCOV exporter/aggregator and gate config.
+  'package-coverage': [...codeInputs, '.agents/skills/picsee-delegator/scripts/', '.claude/tdd-guardian/config.json'],
   'diff-check': null,
   audit: null,
   'device-smoke': null,
@@ -152,6 +153,9 @@ export function checkGates(body, head, git) {
     if (status === 'FAIL') return { ok: false, reason: `${lane} is a FAIL row` };
     if (status === 'PASS' && !head.toLowerCase().startsWith(sha.toLowerCase())) {
       const changed = ancestorInputsChanged(git, lane, sha, head);
+      if (changed === true && /\bCODE same [0-9a-f]{40}\b/.test(source)) {
+        return { ok: false, reason: `${lane} PASS has a stale head: inputs changed since ${sha}` };
+      }
       if (changed === true || (changed !== false && !/\bCODE same [0-9a-f]{40}\b/.test(source))) {
         return { ok: false, reason: `${lane} PASS has a stale head without CODE same evidence` };
       }
@@ -175,8 +179,17 @@ export function checkGates(body, head, git) {
 
 // Only the CLI touches git; checkGates receives evidence through this boundary.
 function gitAdapter() {
-  const options = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
-  const resolve = sha => execFileSync('git', ['rev-parse', '--verify', `${sha.toLowerCase()}^{commit}`], options).trim();
+  const cwd = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  const options = { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
+  const resolve = sha => {
+    // Match object IDs uniquely, without peeling annotated tags into commits.
+    const matches = execFileSync('git', ['rev-parse', `--disambiguate=${sha.toLowerCase()}`], options).trim().split('\n');
+    if (matches.length !== 1 || !matches[0] ||
+        execFileSync('git', ['cat-file', '-t', matches[0]], options).trim() !== 'commit') {
+      throw Error('SHA must uniquely name a commit object');
+    }
+    return matches[0];
+  };
   const quiet = args => {
     try {
       execFileSync('git', args, options);

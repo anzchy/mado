@@ -51,7 +51,7 @@ Ledger-Gardener: <the line from the gardener or from scripts/ledger/garden-gate.
 <optional: potential ramifications of merge>
 ```
 
-A `PASS` row may cite head or a resolvable ancestor SHA whose declared lane inputs are unchanged through head; the input table lives in `scripts/agents/ui-parity-pr-body-lint.mjs`. A known ancestor with changed inputs fails. Non-ancestor or unresolved SHAs and lanes without reliable declared inputs still need `CODE same <40-hex>` in Source.
+A `PASS` row may cite head or an ancestor SHA uniquely identifying a commit object itself (without peeling tags) whose declared lane inputs are unchanged through head; the input table lives in `scripts/agents/ui-parity-pr-body-lint.mjs`. Input paths are relative to the repository root; `package-coverage` includes coverage configuration and runner/export/aggregation scripts. A known ancestor with changed inputs fails; with CODE same present, the message identifies the SHA since which inputs changed. Non-ancestor or unresolved SHAs and lanes without reliable declared inputs still need `CODE same <40-hex>` in Source.
 
 Build owner-gate and CI `app-tests` rows with `gh run view <id> --json headSha,url,status,conclusion,jobs > run.json`, then `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>`.
 
