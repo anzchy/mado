@@ -319,3 +319,65 @@ import PicseeApplication
     #expect(canvas.session.zoomMode == .fit)
     #expect(try canvasRedBounds(canvas) == CGRect(x: 166, y: 16, width: 100, height: 200))
 }
+
+/// #348: each ⌘ zoom key leaves the canvas exactly where its bare key does, pointer inside or outside.
+@Test @MainActor func cmdZoomKeysMatchBareKeys() throws {
+    _ = NSApplication.shared
+    var hosts: [CanvasTestHost] = [] // ViewerSession.host is weak.
+    func stack() throws -> (CanvasView, ViewerSession, CanvasPointerWindow) {
+        let session = ViewerSession()
+        let canvas = CanvasView(frame: .init(x: 0, y: 0, width: 432, height: 232), session: session)
+        let window = CanvasPointerWindow(contentRect: .init(x: -20000, y: -20000, width: 432, height: 232),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = canvas
+        window.showsCanvas = true
+        canvas.appearance = NSAppearance(named: .aqua)
+        let host = CanvasTestHost()
+        host.canvas = canvas
+        session.host = host
+        hosts.append(host)
+        canvas.onCommand = { CommandRouter().route($0, from: .key, to: session) }
+        canvas.install(try canvasImage(.init(width: 800, height: 400)))
+        return (canvas, session, window)
+    }
+    let (a, aSession, aWindow) = try stack()
+    let (b, bSession, bWindow) = try stack()
+    defer { aWindow.close(); bWindow.close(); withExtendedLifetime(hosts) {} }
+    func key(_ canvas: CanvasView, _ characters: String, _ code: UInt16, _ flags: NSEvent.ModifierFlags) throws {
+        canvas.keyDown(with: try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+            timestamp: 0, windowNumber: canvas.window?.windowNumber ?? 0, context: nil, characters: characters,
+            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)))
+    }
+    // (⌘ characters, ⌘ key code, bare characters, bare key code)
+    let plus = ("+", UInt16(24), "+", UInt16(24)), equals = ("=", UInt16(24), "=", UInt16(24))
+    let minus = ("-", UInt16(27), "-", UInt16(27)), unicodeMinus = ("−", UInt16(27), "−", UInt16(27))
+    let actual = ("0", UInt16(29), "1", UInt16(18)), fit = ("9", UInt16(25), "0", UInt16(29))
+    let sequence = [plus, plus, minus, actual, plus, fit, equals, equals, unicodeMinus, actual, minus, fit]
+    var firstPlus: [Data] = []
+    for pointer in [a.convert(CGPoint(x: 100, y: 60), to: nil), CGPoint(x: 9000, y: 9000)] {
+        aWindow.pointer = pointer
+        bWindow.pointer = pointer
+        CommandRouter().route(.fit, from: .button, to: aSession)
+        CommandRouter().route(.fit, from: .button, to: bSession)
+        var modes: [CanvasZoomMode] = []
+        for (index, step) in sequence.enumerated() {
+            try key(a, step.0, step.1, .command)
+            try key(b, step.2, step.3, [])
+            #expect(aSession.zoomMode == bSession.zoomMode, "step \(index) at \(pointer)")
+            let aPixels = try canvasBitmap(a).tiffRepresentation
+            #expect(aPixels == (try canvasBitmap(b).tiffRepresentation), "step \(index) at \(pointer)")
+            if index == 0, let aPixels { firstPlus.append(aPixels) }
+            modes.append(aSession.zoomMode)
+        }
+        #expect(modes.contains(.fit) && modes.contains(.actualPixels))
+        #expect(modes.contains { if case .custom = $0 { true } else { false } })
+    }
+    #expect(firstPlus.count == 2 && firstPlus[0] != firstPlus[1], "the pointer anchors ⌘ zoom")
+    let mode = aSession.zoomMode
+    let pixels = try canvasBitmap(a).tiffRepresentation
+    try key(a, "0", 29, [.control, .command])
+    try key(a, "0", 29, [.option, .command])
+    #expect(aSession.zoomMode == mode)
+    #expect(try canvasBitmap(a).tiffRepresentation == pixels)
+}
