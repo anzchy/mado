@@ -619,28 +619,29 @@ private final class Sidebar425Watch: FolderWatching, @unchecked Sendable {
         for subscription in retiring { Task { await subscription.cancel() } }
     }
     /// A fresh task gets its cleanup opportunity even when the caller's test has already been cancelled.
-    func drain() async -> Bool {
+    func drain() async -> (completed: Bool, elapsed: Duration) {
         await Task.detached { [self] in
-            let deadline = ContinuousClock.now + .seconds(2)
+            let before = ContinuousClock.now
+            let deadline = before + .seconds(2)
             while !lock.withLock({ registering == 0 && subscriptions.isEmpty }) {
-                if ContinuousClock.now >= deadline { return false }
+                if ContinuousClock.now >= deadline { return (false, ContinuousClock.now - before) }
                 try? await Task.sleep(for: .milliseconds(5))
             }
-            return true
+            return (true, ContinuousClock.now - before)
         }.value
     }
 }
 
 /// Best effort for admitted watches only. An incomplete drain keeps the root and preserves the behavior result.
 @MainActor private func closeAndAwaitSidebarWatches(_ controller: CanvasWindowController,
-    watch: Sidebar425Watch, testRoot: URL) async -> Bool {
+    watch: Sidebar425Watch, testRoot: URL) async -> (completed: Bool, elapsed: Duration) {
     watch.stop()
     // The controller is the NSWindow delegate; close delivers windowWillClose exactly once.
     controller.window?.close()
-    let completed = await watch.drain()
-    if completed { try? FileManager.default.removeItem(at: testRoot) }
+    let result = await watch.drain()
+    if result.completed { try? FileManager.default.removeItem(at: testRoot) }
     else { print("sidebar watch teardown: best-effort 2-second limit reached; test root retained") }
-    return completed
+    return result
 }
 
 /// Gates the external lease boundary while the real WatchHub runs its transitions.
@@ -674,7 +675,7 @@ private actor Sidebar425GatedLeases: AccessLeasing {
         #expect(await leases.active == 0)
         watch.stop()
         var finished: Bool?
-        let draining = started.track(Task { @MainActor in finished = await watch.drain() })
+        let draining = started.track(Task { @MainActor in finished = (await watch.drain()).completed })
         try await Task.sleep(for: .milliseconds(30))
         #expect(finished == nil, "zero leases cannot finish teardown while registration is acquiring")
         leases.acquireGate.release()
@@ -706,7 +707,7 @@ func sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled: Boo
         let duplicate = started.track(Task { await subscription.cancel() })
         watch.stop()
         var finished: Bool?
-        let draining = started.track(Task { @MainActor in finished = await watch.drain() })
+        let draining = started.track(Task { @MainActor in finished = (await watch.drain()).completed })
         if cancelled { draining.cancel() }
         try await Task.sleep(for: .milliseconds(30))
         #expect(finished == nil, "duplicate cancel and parent cancellation cannot finish before real lease release")
@@ -715,7 +716,7 @@ func sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled: Boo
         #expect(finished == true && source.liveStreams == 0)
         #expect(await leases.active == 0)
         watch.stop()
-        #expect(await watch.drain())
+        #expect((await watch.drain()).completed)
     } teardown: {
         watch.stop(); leases.acquireGate.release(); leases.releaseGate.release()
         started.cancelAll(); await started.awaitAll()
@@ -747,9 +748,10 @@ private enum Sidebar425BehaviorError: Error, Equatable { case original }
         do {
             try await withAsyncTeardown { throw Sidebar425BehaviorError.original } teardown: {
                 let before = ContinuousClock.now
-                let completed = await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)
+                let (completed, drainElapsed) = await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)
                 let elapsed = ContinuousClock.now - before
                 #expect(!completed)
+                #expect(drainElapsed < .seconds(5), "detached two-second drain has three seconds of scheduling margin, excluding the main-actor hop")
                 #expect(elapsed >= .milliseconds(1800), "two-second drain must not time out early; main-actor queueing can delay observation")
                 #expect(fm.fileExists(atPath: sentinel.path))
             }
@@ -759,7 +761,7 @@ private enum Sidebar425BehaviorError: Error, Equatable { case original }
         }
         leases.releaseGate.release()
         await cancellation.value
-        #expect(await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base))
+        #expect((await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)).completed)
         #expect(!fm.fileExists(atPath: base.path))
         #expect(await leases.active == 0 && source.liveStreams == 0)
     } teardown: {
