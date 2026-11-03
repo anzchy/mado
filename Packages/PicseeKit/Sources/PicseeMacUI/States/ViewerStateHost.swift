@@ -215,9 +215,7 @@ public final class ViewerStateHost: NSView {
         let notice = status == .detailLimited
         switch status {
         case .empty:
-            textLines = [String(localized: "Drop a photo folder here"),
-                         String(localized: "or press ⌘O"), String(localized: "Folder"),
-                         String(localized: "One or more images"), String(localized: "Common image formats")]
+            textLines = [String(localized: "Drop a photo folder here"), String(localized: "or press ⌘O")]
             actions = [(String(localized: "Choose Folder…"), "state.open")]
         case .loading(let name):
             showsProgress = true

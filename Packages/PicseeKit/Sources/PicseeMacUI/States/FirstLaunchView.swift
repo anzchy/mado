@@ -2,23 +2,6 @@ import AppKit
 import ImageIO
 import os
 
-@MainActor final class CenteredChipLabel: NSTextField {
-    var textDrawRect: NSRect {
-        let typeface = font!
-        let textHeight = ceil(typeface.ascender - typeface.descender + typeface.leading)
-        return NSRect(x: 0, y: (bounds.height - textHeight) / 2, width: bounds.width, height: textHeight)
-    }
-    override func draw(_ dirtyRect: NSRect) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        NSAttributedString(string: stringValue, attributes: [
-            .font: font!,
-            .foregroundColor: textColor!,
-            .paragraphStyle: paragraph
-        ]).draw(in: textDrawRect)
-    }
-}
-
 /// The Home's Image Wall: decorative only, never hit, never an accessibility element.
 @MainActor private final class FirstLaunchWallView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -38,7 +21,6 @@ import os
     private let heading = NSTextField(labelWithString: "")
     private let shortcut = NSTextField(labelWithString: "")
     private let shortcutKey = NSTextField(labelWithString: "⌘O")
-    private let chips = (0..<3).map { _ in CenteredChipLabel(labelWithString: "") }
     private let sampleURLs: [String: URL]?
     private(set) var sampleLoadCompleted = false
     private var dragActive = false
@@ -54,7 +36,7 @@ import os
     private var driftElapsed: CFTimeInterval = 0
     private var driftRunningSince: CFTimeInterval?
     private var tilesRest = CGPoint.zero
-    var semanticViews: [NSView] { [heading, openButton, shortcut] + chips }
+    var semanticViews: [NSView] { [heading, openButton, shortcut] }
     private var reduceMotion: Bool { reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     private var reduceTransparency: Bool { reduceTransparencyOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency }
     private var theme: DesignTheme {
@@ -119,14 +101,6 @@ import os
         shortcutKey.setAccessibilityElement(false)
         shortcutKey.setAccessibilityIdentifier("first-launch.shortcut-key")
         addSubview(heading); addSubview(openButton); addSubview(shortcut); addSubview(shortcutKey)
-        for (index, chip) in chips.enumerated() {
-            chip.font = .systemFont(ofSize: 12)
-            chip.alignment = .center
-            chip.setAccessibilityElement(true); chip.setAccessibilityRole(.staticText)
-            chip.wantsLayer = true
-            chip.setAccessibilityIdentifier(["first-launch.chip.folder", "first-launch.chip.images", "first-launch.chip.formats"][index])
-            addSubview(chip)
-        }
         refreshStyle()
         loadSamples()
         NSWorkspace.shared.notificationCenter.addObserver(self,
@@ -216,7 +190,6 @@ import os
     }
     private func refreshStyle(animateWall: Bool = false) {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let dark = theme == .dark
             let bg = DesignColor.canvasBackground.nsColor.usingColorSpace(.deviceRGB)!
             let border = DesignColor.divider.nsColor.usingColorSpace(.deviceRGB)!
             let tint = DesignColor.accent.nsColor.usingColorSpace(.deviceRGB)!
@@ -224,17 +197,6 @@ import os
             shortcut.stringValue = String(localized: "or press ⌘O")
             heading.setAccessibilityLabel(heading.stringValue)
             shortcut.setAccessibilityLabel(shortcut.stringValue)
-            for (chip, key) in zip(chips, ["Folder", "One or more images", "Common image formats"]) {
-                chip.stringValue = String(localized: String.LocalizationValue(key))
-                chip.setAccessibilityLabel(chip.stringValue)
-                chip.textColor = DesignColor.textSecondary.nsColor
-                chip.layer?.cornerRadius = 10
-                let group = dark ? NSColor(srgbRed: 15 / 255, green: 18 / 255, blue: 28 / 255, alpha: 0.6)
-                    : DesignColor.sidebarBackground.nsColor.withAlphaComponent(0.8)
-                chip.layer?.backgroundColor = (reduceTransparency ? DesignColor.sidebarBackground.nsColor : group).cgColor
-                chip.layer?.borderWidth = reduceTransparency ? 1 : 0
-                chip.layer?.borderColor = border.cgColor
-            }
             // Page 21 `.is-drag-over [data-drop-prompt]`: `--color-accent-text`.
             heading.textColor = (dragActive ? DesignColor.selectionText : DesignColor.textPrimary).nsColor
             shortcut.textColor = DesignColor.textSecondary.nsColor
@@ -325,10 +287,9 @@ import os
         dropOutline.frame = dropArea.bounds
         dropOutline.path = CGPath(roundedRect: dropArea.bounds.insetBy(dx: 0.75, dy: 0.75),
                                   cornerWidth: 14, cornerHeight: 14, transform: nil)
-        // The B4 centre stays at native point size when the window changes size.
-        let chipWidths = chips.map { ceil(($0.stringValue as NSString).size(withAttributes: [.font: $0.font!]).width) + 18 }
-        let chipTotal = chipWidths.reduce(0, +) + 12
-        let centreHeight: CGFloat = 24 + 18 + 30 + 18 + 20
+        // The B4 centre stays at native point size when the window changes size; page 21 `.home-centre`:
+        // the drop hint, an 18 pt gap, then the button row (#441: no chips row).
+        let centreHeight: CGFloat = 24 + 18 + 30
         let centreTop = dropArea.frame.midY + centreHeight / 2
         heading.frame = NSRect(x: w / 2 - 240, y: centreTop - 24, width: 480, height: 24)
         let buttonWidth = ceil((openButton.title as NSString).size(withAttributes: [.font: openButton.font!]).width) + 28
@@ -339,11 +300,6 @@ import os
         openButton.frame = NSRect(x: w / 2 - groupWidth / 2, y: heading.frame.minY - 18 - 30, width: buttonWidth, height: 30)
         shortcut.frame = NSRect(x: openButton.frame.maxX + 12, y: openButton.frame.midY - 9, width: shortcutWidth, height: 18)
         shortcutKey.frame = NSRect(x: shortcut.frame.maxX + 4, y: openButton.frame.midY - 9, width: keyWidth, height: 18)
-        var x = w / 2 - chipTotal / 2
-        for (chip, width) in zip(chips, chipWidths) {
-            chip.frame = NSRect(x: x, y: openButton.frame.minY - 18 - 20, width: width, height: 20)
-            x += width + 6
-        }
     }
     private func layoutWall(_ size: NSSize) {
         wall.frame = NSRect(origin: .zero, size: size)

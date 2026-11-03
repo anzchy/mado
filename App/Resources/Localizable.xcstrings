@@ -3671,10 +3671,7 @@
     },
     "Drop a photo folder here": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Drop a photo folder here"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"把照片文件夹拖到这里"}}}},
     "Release to open": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Release to open"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"松开即可打开"}}}},
-    "or press ⌘O": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"or press ⌘O"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"或按 ⌘O"}}}},
-    "Folder": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Folder"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"文件夹"}}}},
-    "One or more images": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"One or more images"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"单张或多张图片"}}}},
-    "Common image formats": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Common image formats"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"常见图片格式"}}}}
+    "or press ⌘O": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"or press ⌘O"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"或按 ⌘O"}}}}
   },
   "version": "1.0"
 }
