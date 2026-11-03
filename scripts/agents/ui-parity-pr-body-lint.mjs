@@ -42,6 +42,42 @@ export function checkUIParity(body, files) {
 const gateLanes = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-build', 'node-tooling', 'ledger', 'diff-check', 'design-check', 'audit', 'device-smoke'];
 const gateStatuses = new Set(['PASS', 'FAIL', 'NOT RUN', 'N/A', 'NOT VERIFIED']);
 
+const codeInputs = ['App/', 'AppTests/', 'Packages/', 'UITests/', 'project.yml',
+  'TestAssets/', 'design/', 'scripts/perf/fixtures/',
+  '.github/workflows/ci.yml', '.github/actions/', 'scripts/ci/', 'scripts/tdd/', 'scripts/heavy-lock.sh'];
+const ledgerInputs = ['docs/feature-ledger.md', 'docs/feature-ledger.html', 'scripts/ledger/',
+  'package.json', '.github/workflows/ci.yml'];
+// Conservative input supersets of the jobs in ci.yml and pr-body.yml. Null means
+// file equality alone cannot reliably establish that lane's evidence is current.
+const gateInputs = {
+  'package-tests': codeInputs,
+  'package-macui-tests': codeInputs,
+  'app-tests': codeInputs,
+  // These jobs also depend on the generated-ledger precheck in unsigned-build.
+  'unsigned-build': [...codeInputs, ...ledgerInputs],
+  'walking-skeleton': [...codeInputs, ...ledgerInputs],
+  // Agent/perf tests read documents, templates and repository references too.
+  'node-tooling': ['.'],
+  ledger: ledgerInputs,
+  'design-check': ['App/', 'Packages/', 'design/', 'scripts/', 'package.json', 'package-lock.json', '.github/workflows/ci.yml'],
+  'package-coverage': null,
+  'diff-check': null,
+  audit: null,
+  'device-smoke': null,
+  gardener: null,
+};
+
+function ancestorInputsChanged(git, lane, sha, head) {
+  const inputs = Object.hasOwn(gateInputs, lane) ? gateInputs[lane] : null;
+  if (!inputs || !git) return undefined;
+  try {
+    if (git.isAncestor(sha, head) === true) return git.inputsChanged(sha, head, inputs);
+  } catch {
+    // An unavailable revision or failed git operation proves neither equality nor change.
+  }
+  return undefined;
+}
+
 function stripFencedCodeBlocks(body) {
   const lines = [];
   let fence;
@@ -58,7 +94,7 @@ function stripFencedCodeBlocks(body) {
   return lines.join('\n');
 }
 
-export function checkGates(body, head) {
+export function checkGates(body, head, git) {
   const unfencedBody = stripFencedCodeBlocks(body);
   const headings = unfencedBody.match(/^#{1,6}\s+gates\b.*$/gmi) ?? [];
   const setextHeadings = [...unfencedBody.matchAll(/^([^\r\n]+)\r?\n[ \t]*(?:=+|-+)[ \t]*$/gmi)]
@@ -114,9 +150,11 @@ export function checkGates(body, head) {
       if (!source || source === '-' || source === '—') return { ok: false, reason: `${lane} ${status} needs a Source reason` };
     }
     if (status === 'FAIL') return { ok: false, reason: `${lane} is a FAIL row` };
-    if (status === 'PASS' && !head.toLowerCase().startsWith(sha.toLowerCase()) &&
-        !/\bCODE same [0-9a-f]{40}\b/.test(source)) {
-      return { ok: false, reason: `${lane} PASS has a stale head without CODE same evidence` };
+    if (status === 'PASS' && !head.toLowerCase().startsWith(sha.toLowerCase())) {
+      const changed = ancestorInputsChanged(git, lane, sha, head);
+      if (changed === true || (changed !== false && !/\bCODE same [0-9a-f]{40}\b/.test(source))) {
+        return { ok: false, reason: `${lane} PASS has a stale head without CODE same evidence` };
+      }
     }
   }
 
@@ -133,6 +171,25 @@ export function checkGates(body, head) {
     }
   }
   return { ok: true };
+}
+
+// Only the CLI touches git; checkGates receives evidence through this boundary.
+function gitAdapter() {
+  const options = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
+  const resolve = sha => execFileSync('git', ['rev-parse', '--verify', `${sha.toLowerCase()}^{commit}`], options).trim();
+  const quiet = args => {
+    try {
+      execFileSync('git', args, options);
+      return 0;
+    } catch (error) {
+      if (error.status === 1) return 1;
+      throw error;
+    }
+  };
+  return {
+    isAncestor: (sha, head) => quiet(['merge-base', '--is-ancestor', resolve(sha), resolve(head)]) === 0,
+    inputsChanged: (sha, head, inputs) => quiet(['diff', '--quiet', resolve(sha), resolve(head), '--', ...inputs]) === 1,
+  };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -155,7 +212,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       }
       if (result.ok) {
         const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-        result = checkGates(body, head);
+        result = checkGates(body, head, gitAdapter());
       }
       if (!result.ok) { console.error(result.reason); process.exitCode = 1; }
       else console.log('UI-Parity PR body: PASS');
