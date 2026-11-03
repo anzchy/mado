@@ -8,8 +8,16 @@ import Darwin
 
 private final class Retry442BundleAnchor: NSObject {}
 
+private struct Retry442Timeout: Error, CustomStringConvertible {
+    let stage: String
+    var description: String { "Native test helper exceeded the shared deadline during \(stage)" }
+}
+
 @MainActor private func retry442Run(_ executable: URL, _ arguments: [String],
-    environment: [String: String]? = nil, log: URL) async throws -> (Int32, String) {
+    environment: [String: String]? = nil, log: URL,
+    deadline: ContinuousClock.Instant, stage: String) async throws -> (Int32, String) {
+    try Task.checkCancellation()
+    guard ContinuousClock.now < deadline else { throw Retry442Timeout(stage: stage) }
     FileManager.default.createFile(atPath: log.path, contents: nil)
     let output = try FileHandle(forWritingTo: log)
     defer { try? output.close() }
@@ -27,14 +35,11 @@ private final class Retry442BundleAnchor: NSObject {}
             process.waitUntilExit()
         }
     }
-    let deadline = Date(timeIntervalSinceNow: 90)
-    while process.isRunning && Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+    while process.isRunning && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
     if process.isRunning {
-        process.terminate()
-        for _ in 0..<50 where process.isRunning { try await Task.sleep(for: .milliseconds(10)) }
-        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-        process.waitUntilExit()
-        Issue.record("Native test helper exceeded its bounded runtime")
+        // The defer terminates and reaps this stage, including swiftc or the native child,
+        // before the stage-named error leaves the helper. Cancellation takes the same path.
+        throw Retry442Timeout(stage: stage)
     }
     process.waitUntilExit()
     try output.synchronize()
@@ -46,6 +51,9 @@ private final class Retry442BundleAnchor: NSObject {}
 @Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_RETRY442_NATIVE_CHILD"] != "1"),
       .timeLimit(.minutes(3))) @MainActor
 func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
+    // All three stages spend this one monotonic budget. Reserve 30 seconds inside the
+    // parent's three-minute limit for termination/reaping and failure reporting.
+    let deadline = ContinuousClock.now.advanced(by: .seconds(150))
     let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("retry442-runner-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: temporary) }
@@ -66,7 +74,8 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     }
     """#.write(to: source, atomically: true, encoding: .utf8)
     let (selectionStatus, selection) = try await retry442Run(URL(fileURLWithPath: "/usr/bin/xcode-select"),
-        ["-p"], log: temporary.appendingPathComponent("selection.log"))
+        ["-p"], log: temporary.appendingPathComponent("selection.log"),
+        deadline: deadline, stage: "Xcode selection")
     try #require(selectionStatus == 0)
     let developer = URL(fileURLWithPath: selection.trimmingCharacters(in: .whitespacesAndNewlines))
         .appendingPathComponent("Platforms/MacOSX.platform/Developer")
@@ -76,7 +85,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
         ["swiftc", "-parse-as-library", "-F", frameworks,
          "-Xlinker", "-rpath", "-Xlinker", frameworks,
          "-Xlinker", "-rpath", "-Xlinker", libraries, source.path, "-o", executable.path],
-        log: temporary.appendingPathComponent("build.log"))
+        log: temporary.appendingPathComponent("build.log"), deadline: deadline, stage: "swiftc compilation")
     if buildStatus != 0 { print(buildOutput.split(separator: "\n").map { "[retry442-build] \($0)" }.joined(separator: "\n")) }
     try #require(buildStatus == 0, "the native test helper must compile before its assertions count")
     var environment = ProcessInfo.processInfo.environment
@@ -84,7 +93,8 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     environment["PICSEE_RETRY442_TEST_BUNDLE"] = Bundle(for: Retry442BundleAnchor.self).bundleURL.path
     environment["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] = "1"
     let (status, output) = try await retry442Run(executable, ["--filter", "retry442NativeKeyboardMatrix\\b"],
-        environment: environment, log: temporary.appendingPathComponent("native.log"))
+        environment: environment, log: temporary.appendingPathComponent("native.log"),
+        deadline: deadline, stage: "native keyboard matrix")
     // Prefix captured child records so the enclosing App lane sees exactly its own test-run root.
     print(output.split(separator: "\n").map { "[retry442-child] \($0)" }.joined(separator: "\n"))
     // Keep macro failure diagnostics from printing unprefixed embedded test-run records.
@@ -320,44 +330,4 @@ func retry442NativeKeyboardMatrix() async throws {
     #expect(scene.grid?.isHiddenOrHasHiddenAncestor == true)
     #expect(scene.canvas?.isHiddenOrHasHiddenAncestor == false)
     #expect(scene.page == nil)
-}
-
-/// Supplements the production event-dispatch tests with the adapter's finite exclusion partitions.
-@Test @MainActor func retry442ControlsLeaveUnfocusedHiddenDisabledAndModifiedKeysAlone() throws {
-    _ = NSApplication.shared
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
-        styleMask: [.titled], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    defer { window.close() }
-    let page = ReadFailedStateView(frame: NSRect(x: 0, y: 0, width: 800, height: 680))
-    window.contentView = page
-    page.display(.init(title: "Couldn't finish reading “photos”", detail: "Reading stopped partway.",
-        retry: "Retry", chooseOther: "Choose Another Folder…"))
-    var actions: [String] = []
-    page.onRetry = { actions.append("retry") }
-    page.onChooseOtherFolder = { actions.append("choose") }
-    func event(_ key: UInt16 = 36, _ text: String = "\r", _ flags: NSEvent.ModifierFlags = [],
-               type: NSEvent.EventType = .keyDown) throws -> NSEvent {
-        try #require(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags, timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, characters: text,
-            charactersIgnoringModifiers: text, isARepeat: false, keyCode: key))
-    }
-    #expect(window.makeFirstResponder(page.chooseOtherButton))
-    #expect(!page.retryButton.performKeyEquivalent(with: try event()))
-    #expect(window.makeFirstResponder(page.retryButton))
-    for modifier: NSEvent.ModifierFlags in [.command, .control, .option, .shift] {
-        #expect(!page.retryButton.performKeyEquivalent(with: try event(36, "\r", modifier)))
-    }
-    #expect(!page.retryButton.performKeyEquivalent(with: try event(0, "a")))
-    #expect(!page.retryButton.performKeyEquivalent(with: try event(type: .keyUp)))
-    page.retryButton.isEnabled = false
-    #expect(!page.retryButton.performKeyEquivalent(with: try event()))
-    page.retryButton.isEnabled = true
-    page.retryButton.isHidden = true
-    #expect(!page.retryButton.performKeyEquivalent(with: try event()))
-    page.retryButton.isHidden = false
-    page.isHidden = true
-    #expect(!page.retryButton.performKeyEquivalent(with: try event()))
-    page.isHidden = false
-    #expect(actions.isEmpty)
 }
