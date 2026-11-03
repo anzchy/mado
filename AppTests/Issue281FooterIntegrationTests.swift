@@ -163,6 +163,19 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     }
 }
 
+/// The sidebar's own image count, held until released, so a test can choose when the sidebar learns it (#379).
+private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
+    private var released = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func children(in folder: URL, root: URL) -> [URL] { [] }
+    func imageCount(in folder: URL, root: URL) async throws -> Int {
+        if !released { await withCheckedContinuation { waiters.append($0) } }
+        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "png" }.count
+    }
+    func release() { released = true; for waiter in waiters { waiter.resume() }; waiters.removeAll() }
+}
+
 /// Fix round 6 (gpt-auditor F1): Retry on the failed-read page starts a read on the shell's reading surface, so the
 /// footer shows `—` / `Reading…` and the sidebar counts as for a first read until the retry completes.
 @Test(.timeLimit(.minutes(3))) @MainActor func issue281RetryAfterFailedReadShowsTheReadingFooter() async throws {
@@ -190,6 +203,8 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     defer { window.close() }
     let scanner = Issue281GatedRetryScanner()
     controller.folderScanningOverride = scanner
+    let counter = Issue281GatedSidebarCounter()
+    controller.sidebarBrowserOverride = SidebarFolderBrowser(access: access, enumerator: counter)
     window.setContentSize(NSSize(width: 1280, height: 772))
     controller.showWindow(nil)
     window.orderFrontRegardless()
@@ -214,11 +229,13 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     try await waitUntil { scanner.started == 1 && controller.session.folderScan?.isReadingFolder == true }
     try await waitUntil { issue281View("state.cancel-folder", in: window.contentView) != nil }
     #expect(try footer() == ("—", "Reading…"), "first read")
-    let firstReadSidebar = sidebarCount()
-    #expect(["", "2"].contains(firstReadSidebar), "first read: unknown count is blank or the real count is known")
-    // The sidebar learns the real count independently; until then, the count stays blank.
+    // The sidebar counts the folder on its own; while that count is held, it stays blank.
+    #expect(sidebarCount() == "", "first read: unknown count is blank")
     let firstReadShowsZero = window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
         .folderTree.showsZeroForUnknownCurrent
+    // #379: the order CI hit, forced: the sidebar learns the real count before the read fails.
+    await counter.release()
+    try await waitUntil { sidebarCount() == "2" }
 
     // It stops part way; the failure page's Retry, held.
     scanner.release()
@@ -229,10 +246,8 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
     retry.performClick(nil)
     try await waitUntil { scanner.started == 2 && controller.session.folderScan?.isReadingFolder == true }
     #expect(try footer() == ("—", "Reading…"), "held retry")
-    // #238: the root check before 「读取失败」 gives the sidebar time to learn the folder's own full count, so a
-    // held retry shows the first read's blank unknown count or that real count, never the failed read's `—`.
-    #expect([firstReadSidebar, "2"].contains(sidebarCount()), "held retry: sidebar count as for a first read")
-    #expect(sidebarCount() != "—", "held retry clears the failed-read count")
+    // #238: a held retry keeps the folder's known count, never the failed read's `—`.
+    #expect(sidebarCount() == "2", "held retry: the known count, not the failed read's dash")
     #expect(firstReadShowsZero == false && window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
         .folderTree.showsZeroForUnknownCurrent == firstReadShowsZero, "held retry: unknown count stays blank as for a first read")
 
