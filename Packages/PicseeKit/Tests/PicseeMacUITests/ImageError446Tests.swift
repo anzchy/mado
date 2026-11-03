@@ -61,7 +61,8 @@ import PicseeApplication
     #expect(message.stringValue == "DSC_0342.jpg · The file may be damaged or its format unreadable.")
     #expect(imageError446Node("state.reason", scene.state) == nil)
     #expect(heading.font?.pointSize == 16 && message.font?.pointSize == 13)
-    #expect(heading.lineBreakMode == .byTruncatingMiddle)
+    // fix2 brief supersedes the old assertion that explicitly required heading truncation.
+    #expect(heading.lineBreakMode == .byWordWrapping)
     #expect(!retry.isBordered && !next.isBordered)
     #expect(retry.layer?.cornerRadius == 6)
     #expect(abs(next.frame.minX - retry.frame.maxX - 16) <= 1)
@@ -288,5 +289,33 @@ import PicseeApplication
         }
         imageError446Color(try #require(resolvedNextInk), accent)
         #expect(scene.state.buttons.map(\.frame) == originalFrames)
+    }
+}
+
+/// Exercise the actual cell's truncation detection, not AX/stringValue alone.
+@Test @MainActor func imageError446HeadingIsFullyDrawnAcrossLanguagesAndWidths() throws {
+    let scene = imageError446Scene()
+    defer { scene.window.close() }
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        scene.window.appearance = NSAppearance(named: appearance)
+        for title in ["Unable to read this image", "无法读取这张图片"] {
+            scene.state.display(.failed(.corruptImage, "DSC_0342.jpg"), nextEnabled: true)
+            let heading = try #require(imageError446Node("state.heading", scene.state) as? NSTextField)
+            // SwiftPM does not bundle the App catalog: inject its exact localized title.
+            heading.stringValue = title
+            for width: CGFloat in [1280, 960, 238, 1280] {
+                scene.window.setContentSize(NSSize(width: width, height: 800))
+                scene.content.frame.size = NSSize(width: width, height: 800)
+                scene.state.frame = scene.content.bounds
+                scene.state.needsLayout = true
+                scene.state.layoutSubtreeIfNeeded()
+                let cell = try #require(heading.cell)
+                #expect(cell.expansionFrame(withFrame: heading.bounds, in: heading).isEmpty,
+                        "Heading drawn with truncation: \(title), width=\(width), \(appearance)")
+                let measured = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: heading.bounds.width, height: 10000))
+                #expect(measured.height <= heading.bounds.height + 0.5)
+                #expect(scene.state.bounds.insetBy(dx: 24, dy: 0).contains(heading.frame))
+            }
+        }
     }
 }
