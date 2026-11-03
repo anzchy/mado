@@ -127,3 +127,36 @@ test('a modifier mask set in a later function does not change an earlier item', 
     .replace('@objc private func showDiagnostics(', 'func laterSettings() { let settings = NSMenuItem(); settings.keyEquivalentModifierMask = [.option] }\n    @objc private func showDiagnostics('));
   assert.deepEqual(check(read), []);
 });
+
+// #348 fix round 2. Zoom commands show their ⌘ form, then the bare key; ⌘= is the one undisplayed alias.
+const ZOOM_ROW = '<kbd>⌘</kbd><kbd>+</kbd><kbd>⌘</kbd><kbd>−</kbd><kbd>+</kbd><kbd>−</kbd>';
+test('the ⌘= exclusion does not hide the bare zoom key', () => {
+  fails(withChange(FILES.page, replaceOnce(ZOOM_ROW, '<kbd>⌘</kbd><kbd>+</kbd><kbd>⌘</kbd><kbd>−</kbd><kbd>−</kbd>')),
+    /command:zoomIn\|command:zoomOut .* shows ⌘ \+ ⌘ − −, the code has ⌘ \+ ⌘ − \+ −/);
+});
+
+test('the ⌘= exclusion does not hide the shown ⌘ form', () => {
+  fails(withChange(FILES.page, replaceOnce(ZOOM_ROW, '<kbd>⌘</kbd><kbd>−</kbd><kbd>+</kbd><kbd>−</kbd>')),
+    /command:zoomIn\|command:zoomOut .* shows ⌘ − \+ −, the code has ⌘ \+ ⌘ − \+ −/);
+});
+
+test('the ⌘= exclusion does not hide another extra alternate', () => {
+  fails(withChange(FILES.commandID, replaceOnce('CommandKeyBinding(key: "=", command: true)',
+    'CommandKeyBinding(key: "=", command: true), CommandKeyBinding(key: "*", command: true)')),
+  /command:zoomIn\|command:zoomOut .* the code has ⌘ \+ ⌘ − \+ ⌘ \* −/);
+});
+
+test('a ⌘= on the page is refused while it is an undisplayed alias', () => {
+  fails(withChange(FILES.page, replaceOnce(ZOOM_ROW, '<kbd>⌘</kbd><kbd>+</kbd><kbd>⌘</kbd><kbd>−</kbd><kbd>+</kbd><kbd>⌘</kbd><kbd>=</kbd><kbd>−</kbd>')),
+    /command:zoomIn\|command:zoomOut .* the code has ⌘ \+ ⌘ − \+ −/);
+});
+
+test('an excluded alias the code no longer installs fails', () => {
+  fails(withChange(FILES.commandID, replaceOnce('CommandKeyBinding(key: "=", command: true)', 'CommandKeyBinding(key: "*", command: true)')),
+    /UNDISPLAYED_ALIASES names ⌘= for zoomIn, which the code no longer installs/);
+});
+
+test('a bare fit key on the page without the ⌘ form fails', () => {
+  fails(withChange(FILES.page, replaceOnce('<kbd>⌘</kbd><kbd>9</kbd><kbd>0</kbd>', '<kbd>0</kbd>')),
+    /command:fit \(适应窗口\) shows 0, the code has ⌘ 9 0/);
+});
