@@ -226,7 +226,7 @@
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| CMD-01 | 基础快捷键 | Partial | 单元 | P0-09、P6-09 | `Packages/PicseeKit/Sources/PicseeCore/Commands/`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/CommandRouter.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/CanvasWindowController.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ChromeWindowCommands.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Shortcuts/`、`App/UI/ShortcutWindow.swift`、`App/AppDelegate.swift`、`Packages/PicseeKit/Sources/PicseeApplication/EntryPoints/EntryPoint.swift`；菜单 ID：`command.preview.menu`、`command.enter.menu` | Space、←/→、Esc、Enter、0/1、+/−、⌘F、⌘O、⌘I 在菜单、按钮和键盘上触发的是同一个动作；未实现的不在菜单里显示快捷键。限制：preview/enter 接网格与菜单仅单元，search 的命令目录仅单元，⌘F 的网格 App 接线未验（查看态不可用）；既有菜单/按键与 ⌘W @1x 真机一致；现用工具按钮、新网格快捷键与焦点、Picsee › 设置…（⌘,）未验；按钮仅合成点击。Help › 键盘快捷键（`help.keyboard-shortcuts.menu`）可打开单实例三卡片只读窗口；⌘W 关闭、目录来源与中英文/浅深布局、键帽字形、行名与键帽居中、卡片副标题及其内边距仅单元和渲染断言，签名真机未验；Help 菜单结构与中英文 AX 仅单元，真机未验；报告问题见 CMD-06。View 菜单的缩放项现显示 ⌘+ / ⌘− / ⌘0（实际像素）/ ⌘9（适应），⌘= 同 ⌘+；裸 0/1/+/− 由隐藏菜单项保留原路径，网格中这些项仍不可用，输入框聚焦时 ⌘ 缩放键交给输入框（CMD-02），仅单元与 App 测试（#348），菜单中英文显示与真机按键未验；快捷键窗口与工具提示仍只列裸键。 |
+| CMD-01 | 基础快捷键 | Partial | 单元 | P0-09、P6-09 | `Packages/PicseeKit/Sources/PicseeCore/Commands/`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/CommandRouter.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/CanvasWindowController.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ChromeWindowCommands.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift`、`Packages/PicseeKit/Sources/PicseeMacUI/Shortcuts/`、`App/UI/ShortcutWindow.swift`、`App/AppDelegate.swift`、`Packages/PicseeKit/Sources/PicseeApplication/EntryPoints/EntryPoint.swift`；菜单 ID：`command.preview.menu`、`command.enter.menu`、`command.zoomIn.menu`、`command.zoomOut.menu`、`command.actualPixels.menu`、`command.fit.menu`、`command.<id>.menu.alt.<n>`（隐藏的裸键备用项） | Space、←/→、Esc、Enter、0/1、+/−、⌘F、⌘O、⌘I 在菜单、按钮和键盘上触发的是同一个动作；未实现的不在菜单里显示快捷键。限制：preview/enter 接网格与菜单仅单元，search 的命令目录仅单元，⌘F 的网格 App 接线未验（查看态不可用）；既有菜单/按键与 ⌘W @1x 真机一致；现用工具按钮、新网格快捷键与焦点、Picsee › 设置…（⌘,）未验；按钮仅合成点击。Help › 键盘快捷键（`help.keyboard-shortcuts.menu`）可打开单实例三卡片只读窗口；⌘W 关闭、目录来源与中英文/浅深布局、键帽字形、行名与键帽居中、卡片副标题及其内边距仅单元和渲染断言，签名真机未验；Help 菜单结构与中英文 AX 仅单元，真机未验；报告问题见 CMD-06。View 菜单的缩放项现显示 ⌘+ / ⌘− / ⌘0（实际像素）/ ⌘9（适应），⌘= 同 ⌘+；裸 0/1/+/− 由隐藏菜单项保留原路径，网格中这些项仍不可用，输入框聚焦时 ⌘ 缩放键交给输入框（CMD-02），仅单元与 App 测试（#348），菜单中英文显示与真机按键未验；快捷键窗口与工具提示仍只列裸键。 |
 | CMD-02 | 输入框和菜单优先 | Partial | 单元 | P0-09 | `Packages/PicseeKit/Sources/PicseeApplication/Viewer/CommandRouter.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/PicseeKit/Sources/PicseeApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/Commands/CommandWindow.swift` | 在搜索框里按 Space 或 ←，只编辑文字不翻图；菜单打开时按 Esc 只关菜单。限制：网格底栏搜索框见 GRID-07，DEBUG 预览搜索框不是已验路径；@1x 裸键证据来自已移除的 Inspector 占位字段（含打开目录后的 ←/→），网格搜索框中的裸键行为签名真机未验（见 GRID-07）；Edit 菜单与菜单 Esc @1x 真机通过；非画布窗口裸键未验；P3-01 改 Esc 顺序与 Space/Enter 预览后未复验。⌘+ / ⌘= / ⌘− / ⌘0 / ⌘9 在输入框聚焦时归输入框，菜单不缩放，按菜单项判定、不依赖键盘布局所报字符，其他 ⌘ 键仍走菜单（#348）；仅 App 测试（美式布局，以改写菜单项键模拟布局本地化），非美式布局与真实输入框中的 ⌘ 键真机未验。 |
 | CMD-03 | 自定义快捷键 | Absent | 无 | P4-04 | — | 在设置里改一个快捷键，立即生效；与已有快捷键冲突时提示 |
 | CMD-04 | 鼠标与触控板预设 | Absent | 无 | P4-04 | — | 切换滚轮为“翻图”或“缩放”，行为随之改变；不影响文本框里的选区和系统手势 |
@@ -334,7 +334,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
 | 打开与输入 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
-| 查看与画布 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
+| 查看与画布 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b；4ca72f8..fa9300c |
 | C 沉浸界面 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 外观与显示偏好 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 文件夹浏览 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
@@ -343,7 +343,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 授权与文件访问 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 缓存与资源 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
-| 命令与键盘 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
+| 命令与键盘 | 2026-11-03 | doc-gardener | 4ca72f8..fa9300c |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
