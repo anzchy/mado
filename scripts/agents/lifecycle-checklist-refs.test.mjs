@@ -22,25 +22,54 @@ function checklistLinks(path) {
   return links;
 }
 
+// One behaviour-bearing requirement per case: a case body cannot be emptied or
+// weakened without failing here. Not a copy of the prose.
+const cases = [
+  ['Esc', [/one Esc never closes two layers/]],
+  ['Focus', [/first responder/]],
+  ['Refresh', [/old content is not shown/]],
+  ['Close', [/no orphaned/]],
+  ['Relaunch', [/no longer exist/]],
+  ['Cancel mid-load', [/cancelled or its result discarded/, /progress UI disappears/]],
+  ['Tasks cancelled on close', [/\bis cancelled\b/, /released/, /observes the cancellation|no late side effect/, /device run/]],
+  ['Late or stale completion', [/never delivered/, /not with a sleep/]],
+];
+
+function caseBody(text, heading) {
+  const start = text.search(new RegExp(`^### .*${heading}\\s*$`, 'm'));
+  assert.ok(start >= 0, `case heading "${heading}" missing`);
+  const rest = text.slice(start).split('\n').slice(1).join('\n');
+  return rest.split(/^##/m)[0];
+}
+
 test('checklist names every lifecycle case and the four-part case shape', () => {
   assert.ok(existsSync(resolve(root, checklistPath)), `${checklistPath} missing`);
   const text = read(checklistPath);
-  for (const heading of ['Esc', 'Focus', 'Refresh', 'Close', 'Relaunch', 'Cancel mid-load', 'Tasks cancelled on close', 'Late or stale completion']) {
-    assert.match(text, new RegExp(`^### .*${heading}`, 'm'), `case heading "${heading}" missing`);
+  for (const [heading, requirements] of cases) {
+    const body = caseBody(text, heading);
+    for (const requirement of requirements) assert.match(body, requirement, `case "${heading}" lacks ${requirement}`);
   }
   assert.match(text, /start state → event sequence → expected result → proving test or device run/);
   assert.match(text, /`n\/a`/);
 });
 
+test('tasks cancelled on close requires cancellation, not only release', () => {
+  const body = caseBody(read(checklistPath), 'Tasks cancelled on close');
+  assert.doesNotMatch(body, /cancelled or released/, 'release must not substitute for cancellation');
+});
+
 test('checklist points to the brief template visual rows instead of repeating them', () => {
   const text = read(checklistPath);
-  assert.ok(checklistLinksTo(text, 'brief-template.md'), 'checklist must link the brief template');
+  assert.ok(linksTo(checklistPath, 'brief-template.md'), 'checklist must link an existing brief template');
   for (const dimension of ['zh/en', 'light/dark', '@1x/@2x']) assert.ok(text.includes(dimension), `${dimension} not named`);
   assert.doesNotMatch(text, /\| *State *\| *Selector/, 'checklist must not copy the design-derived assertion table');
 });
 
-function checklistLinksTo(text, target) {
-  return [...text.matchAll(/\]\(([^)\s]+)\)/g)].some((m) => m[1].endsWith(target));
+// A relative link in `path` whose target ends in `target` and exists on disk.
+function linksTo(path, target) {
+  return [...read(path).matchAll(/\]\(([^)\s#]+)(?:#[^)\s]*)?\)/g)]
+    .map((m) => resolve(root, dirname(path), m[1]))
+    .some((abs) => abs.endsWith(`/${target}`) && existsSync(abs));
 }
 
 test('brief template has an interaction and lifecycle section linking the checklist', () => {
@@ -49,12 +78,18 @@ test('brief template has an interaction and lifecycle section linking the checkl
   assert.ok(checklistLinks(briefTemplate).length >= 1, 'no link to the checklist');
   const testFirst = text.split(/^## Test-first/m)[1]?.split(/^## /m)[0] ?? '';
   assert.match(testFirst, /Interaction & lifecycle/, 'Test-first step must pull the lifecycle rows into the test matrix');
+  const section = text.split(/^## Interaction & lifecycle/m)[1].split(/^## /m)[0];
+  assert.match(section, /^\| *Case *\| *Start state *\| *Event sequence *\| *Expected result *\| *Proving test or device run *\|$/m,
+    'brief table columns must match the checklist case shape');
 });
 
 test('audit request template asks auditors to check the lifecycle section', () => {
   const text = read(auditTemplate);
   assert.ok(checklistLinks(auditTemplate).length >= 1, 'no link to the checklist');
   assert.match(text, /Interaction & lifecycle/, 'auditors are not pointed at the brief section');
+  assert.match(text, /on\s+every\s+brief/, 'auditors must check the section on every brief');
+  assert.match(text, /missing (that )?section\s+is\s+(itself\s+)?a\s+finding/, 'a missing section must be a finding');
+  assert.doesNotMatch(text, /when the brief has that section/, 'wording must not let auditors skip a brief without the section');
 });
 
 test('implementer agents put the lifecycle rows into the test matrix', () => {
