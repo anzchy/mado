@@ -35,7 +35,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101"
+      "sha256": "c0d243a55d7d4e07ed13c0897ac0befcd2d056703e6341f13a8676d162723f1b"
     },
     {
       "name": "viewer-controls",
@@ -131,7 +131,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb"
+      "sha256": "447e72eb584e194da639ab6d860d9e8bd56c4c7968eb5a9ebd72e7fd5d6417a5"
     },
     {
       "name": "permission-denied",
@@ -155,7 +155,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9"
+      "sha256": "d31194981b4f7ebcd4c80754aaf3d92f3acb9f4cb82fb5ccfff399f1f289374c"
     },
     {
       "name": "keyboard-focus",

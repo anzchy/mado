@@ -37,9 +37,9 @@ const SHORTCUT_CARDS=[['files','文件与窗口','任何时候'],['grid','网格
 const GRID_BAR_PAGES=['grid-light','grid-dark','grid-display','empty-folder','search-empty','folder-loading','permission-denied','compact-grid','components','grid-context-menu','grid-multiselect'];
 const GRID_BAR_CASES=[...GRID_BAR_PAGES.map(n=>n+'.html'),'empty-folder.html?theme=dark','empty-folder.html?drag=over','permission-denied.html?theme=dark','folder-loading.html?case=failed','folder-loading.html?case=failed&theme=dark',
  'grid-light.html?scroll=behind','grid-dark.html?scroll=behind','grid-light.html?transparency=reduced','grid-dark.html?transparency=reduced'];
-// #317 retained prior viewer bytes; #347 deliberately supersedes tool fill on 14/16/33 only.
-// Other viewer pages retain their old pins and are not #351 tool-fill oracles.
-const VIEWER_BAR_SHA256={'viewer-quiet':'1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101','viewer-controls':'8577ac87f024fd2d8923d003de44b2b5a4ae410215b1a9cf9d170d5fc86551c1','viewer-inspector':'18ccde89fe43e8514f42d26af03a45b92de18f5f3faf322fed1709bb97723d75','image-error':'98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb','original-size':'8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'5e29ff116c256162441366a9a78d1dadc3454384d30e23e8b42463c2fadeb83c','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
+// #317 retained prior viewer bytes; #347 updates 14/16/33, #447 adds light variants to 13/25/27.
+// Retained solid dark tools on the other viewer pages are not #351 tool-fill oracles.
+const VIEWER_BAR_SHA256={'viewer-quiet':'c0d243a55d7d4e07ed13c0897ac0befcd2d056703e6341f13a8676d162723f1b','viewer-controls':'8577ac87f024fd2d8923d003de44b2b5a4ae410215b1a9cf9d170d5fc86551c1','viewer-inspector':'18ccde89fe43e8514f42d26af03a45b92de18f5f3faf322fed1709bb97723d75','image-error':'447e72eb584e194da639ab6d860d9e8bd56c4c7968eb5a9ebd72e7fd5d6417a5','original-size':'d31194981b4f7ebcd4c80754aaf3d92f3acb9f4cb82fb5ccfff399f1f289374c','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'5e29ff116c256162441366a9a78d1dadc3454384d30e23e8b42463c2fadeb83c','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
 module.exports=async(page,{design,states,screenshot})=>{
  const base=design+'/prototypes/picsee-browser/states/';
  const errors=[],failures=[],results=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))failures.push({url:r.url(),status:r.status()})});
@@ -61,6 +61,47 @@ module.exports=async(page,{design,states,screenshot})=>{
   if(state.name==='viewer-filmstrip'&&(await page.locator('.c-filmstrip-images button').count()!==12||await page.locator('.navigation-pod').count()))throw Error('Filmstrip regression');
   results.push({name:state.name,passed:true});
  }
+ // #447: list the new theme cases; page 14 light is their material oracle.
+ const lightPinProbe=()=>{
+  const body=getComputedStyle(document.body);
+  const pods=[...document.querySelectorAll('[data-viewer-controls]')].map(e=>{
+   const s=getComputedStyle(e),b=getComputedStyle(e,'::before');
+   return{kind:e.dataset.viewerControls,fill:s.backgroundColor,blur:s.backdropFilter,
+    backing:{content:b.content,fill:b.backgroundColor,inset:b.inset,radius:b.borderRadius,z:b.zIndex,pointer:b.pointerEvents},
+    visible:e.checkVisibility({opacityProperty:true,visibilityProperty:true})};
+  }).sort((a,b)=>a.kind.localeCompare(b.kind));
+  return{bg:body.backgroundColor,text:body.color,pods};
+ };
+ await page.setViewportSize({width:1280,height:800});await page.goto(base+'viewer-controls.html?theme=light');
+ const lightPinReference=await page.evaluate(lightPinProbe),lightPinFailures=[],lightPinTable=[];
+ for(const file of ['viewer-quiet','image-error','original-size']){
+  for(const query of ['', '?theme=dark', '?theme=invalid', '?theme=', '?theme=light']){
+   await page.goto(base+file+'.html'+query);
+   const got=await page.evaluate(lightPinProbe),light=query==='?theme=light';
+   lightPinTable.push({page:file,query,...got});
+   const theme=await page.evaluate(()=>({light:document.documentElement.classList.contains('theme-light'),dark:document.documentElement.classList.contains('theme-dark')}));
+   if(theme.light!==light||theme.dark===light)lightPinFailures.push(file+query+': theme '+JSON.stringify(theme));
+   if(got.bg!==(light?lightPinReference.bg:'rgb(15, 17, 21)')||got.text!==(light?lightPinReference.text:'rgb(229, 231, 235)'))lightPinFailures.push(file+query+': body '+JSON.stringify(got));
+   if(got.pods.map(p=>p.kind).join(',')!=='leading,navigation,zoom')lightPinFailures.push(file+query+': missing tool groups');
+   for(const pod of got.pods){
+    const ref=lightPinReference.pods.find(p=>p.kind===pod.kind);
+    if(pod.visible!==(file!=='viewer-quiet'))lightPinFailures.push(file+query+': visibility '+pod.kind);
+    if(light){
+     if(pod.fill!==ref?.fill||pod.blur!==ref?.blur||JSON.stringify(pod.backing)!==JSON.stringify(ref?.backing))lightPinFailures.push(file+query+': material '+JSON.stringify(pod));
+    }else if(pod.fill!=='rgb(20, 24, 33)'||pod.blur!=='none'||pod.backing.content!=='none')lightPinFailures.push(file+query+': dark material '+JSON.stringify(pod));
+   }
+   if(query==='?theme=light'||query==='?theme=dark'){
+    await page.evaluate(()=>document.documentElement.classList.add('review-marker'));
+    for(let repeat=0;repeat<2;repeat++){
+     await page.evaluate(()=>{const script=[...document.scripts].find(s=>s.textContent.includes("get('theme')"));if(script)(0,eval)(script.textContent)});
+     const classes=await page.evaluate(()=>[...document.documentElement.classList]);
+     if(!classes.includes('review-marker')||!classes.includes('theme-'+(light?'light':'dark'))||classes.includes('theme-'+(light?'dark':'light'))||JSON.stringify(await page.evaluate(lightPinProbe))!==JSON.stringify(got))lightPinFailures.push(file+query+': repeated switch changed classes/rendering');
+    }
+   }
+  }
+ }
+ console.log('#447 theme tokens '+JSON.stringify(lightPinTable));
+ if(lightPinFailures.length)throw Error('#447 light pins: '+lightPinFailures.join(' | '));
  // #347 fix1: owner A A C (2026-11-03) replaces the .72 height oracle and adds rendered contrast.
  const variantFailures=[],contrastTable=[],geometryTable=[];let viewerToolVariants=0,thumbnailSizeVariants=0;
  const canonicalTokens=await (await page.request.get(design+'/picsee-ui-system/tokens/viewer-grid.css')).text();
@@ -138,7 +179,7 @@ module.exports=async(page,{design,states,screenshot})=>{
  if(variantFailures.length)throw Error('#347 fix1 variants: '+variantFailures.join(' | '));
  // Each manifest sha256 pins the exact bytes of its page.
  for(const state of catalog.states){const actual=await page.evaluate(async f=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',await(await fetch(f,{cache:'no-store'})).arrayBuffer()))].map(b=>b.toString(16).padStart(2,'0')).join(''),state.file);if(actual!==state.sha256)throw Error(state.file+' SHA256 mismatch: manifest '+state.sha256+', actual '+actual)}
- // #347 explicitly updates only the 14/16/33 viewer pins for the chosen frosted tools; other viewer pins remain fixed.
+ // #347 pins 14/16/33 frosted tools; #447 pins the light variants on 13/25/27, retaining their dark tools.
  // #317: page 21 is the Home with the Image Wall of home-image-wall.html (user: 「C 取代 B4 外观，保留拖入反馈」), and
  // every grid Bottom Bar matches grid-footer-fill.html. Expected values are read from those reference pages, not retyped.
  const barIssues=[];const shows={bar:[],viewer:[]};
