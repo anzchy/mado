@@ -312,7 +312,8 @@ class ResetTests(unittest.TestCase):
                "(verify the session id changes after the next turn)\n")
 
     def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2",
-                  poll="0.01", prefix="", startup="Starting MCP servers (3/4)", timer_var=None, old_context=""):
+                  poll="0.01", prefix="", startup="Starting MCP servers (3/4)", timer_var=None, old_context="",
+                  ready_boundary="/new", locale=None):
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -350,6 +351,7 @@ case "$1 $2" in
       if [ "$n" -lt "$RESET_DELAY" ] || [ -z "$RESET_CONTEXT" ]; then
         printf '%s\\n' "$RESET_STARTUP"
       else
+        printf '%s\\n' "$RESET_READY_BOUNDARY"
         printf '%s\\n' "$RESET_CONTEXT"
       fi
     fi
@@ -366,8 +368,10 @@ esac
                    "RESET_STATE": str(root), "RESET_STATUS": status, "RESET_CHOOSER": str(int(chooser)),
                    "RESET_DELAY": str(delay), "RESET_CONTEXT": context,
                    "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
-                   "RESET_OLD_CONTEXT": old_context,
+                   "RESET_OLD_CONTEXT": old_context, "RESET_READY_BOUNDARY": ready_boundary,
                    "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": poll}
+            if locale:
+                env["LC_ALL"] = locale
             if timer_var:
                 env[timer_var] = deadline
                 if timer_var == "PICSEE_RESET_POLL_SECS":
@@ -443,15 +447,63 @@ esac
                 self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
 
     def test_markerless_stale_footer_cannot_succeed_early(self):
-        result, _ = self.run_reset(old_context="Context 0% used", delay=3,
-                                   startup="Context 0% used", context="Context 12% used")
+        result, _ = self.run_reset(old_context="Context 0% used", delay=3, deadline="0.1",
+                                   startup="Context 0% used", context="Context 12% used", ready_boundary="")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    NO_BOUNDARY = ("FAIL reset fixture-agent: no new-session boundary seen within 0.1s; "
+                   "check the pane\n")
 
     def test_unchanged_markerless_zero_never_proves_reset(self):
-        result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1")
+        result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1", ready_boundary="")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_blank_then_stale_zero_never_proves_reset(self):
+        result, _ = self.run_reset(old_context="Context 0% used", delay=1, startup="", deadline="0.1",
+                                   ready_boundary="")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_boundary_does_not_latch_across_reads(self):
+        result, _ = self.run_reset(delay=1, startup="/new", deadline="0.1", ready_boundary="")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_footer_under_last_chooser_is_not_session_context(self):
+        for context in ("Context 0% used", "Context 37% used"):
+            with self.subTest(context=context):
+                result, _ = self.run_reset(prefix="/new\nWhere should the new conversation run?",
+                                           context=context, ready_boundary="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_chooser_footer_waits_for_started_session(self):
+        result, _ = self.run_reset(delay=1, startup="Where should the new conversation run?\nContext 37% used")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_boundary_prefixes_work_in_c_locale(self):
+        for boundary in ("/new", "> /new", "❯ /new", "› /new", "Starting MCP servers (3/4)"):
+            for context in ("Context 0% used", "Context 12% used"):
+                with self.subTest(boundary=boundary, context=context):
+                    result, _ = self.run_reset(ready_boundary=boundary, locale="C", context=context)
+                    self.assertEqual(result.returncode, 0 if context == "Context 0% used" else 1,
+                                     result.stdout + result.stderr)
+                    self.assertEqual(result.stdout, self.SUCCESS if context == "Context 0% used" else
+                                     "FAIL reset fixture-agent: Context 12% used after /new\n")
+
+    def test_quoted_boundaries_never_prove_reset(self):
+        for boundary in ('> /new', '> Starting MCP servers (3/4)',
+                         '> Where should the new conversation run?', '"Starting MCP servers (3/4)"'):
+            # > /new is a real Codex prompt; blockquoted startup/chooser text is not.
+            if boundary == '> /new':
+                continue
+            with self.subTest(boundary=boundary):
+                result, _ = self.run_reset(ready_boundary=boundary, deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_fenced_context_quote_is_ignored(self):
         for fence in ("```", "~~~"):
@@ -463,9 +515,9 @@ esac
 
     def test_fenced_reset_marker_does_not_freshen_stale_footer(self):
         result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1",
-                                   context="Context 0% used\n```\n/new\n```")
+                                   context="Context 0% used\n```\n/new\n```", ready_boundary="")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_nonzero_context_fails_even_after_startup(self):
         for delay in (0, 3):
