@@ -270,7 +270,15 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
         }
     }
 
-    private func loadPayload(_ ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
+    public nonisolated var supportsMemoryReuse: Bool { true }
+
+    public func revalidateMemory(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
+        try ticket.request.accessPermit?.check()
+        let validated = try await loadPayload(ticket, reusing: image)
+        return try AccessWorkPermit.admitting(ticket.request.accessPermit) { validated }
+    }
+
+    private func loadPayload(_ ticket: ThumbnailCacheTicket, reusing resident: DecodedImage? = nil) async throws -> DecodedImage? {
         try Task.checkCancellation()
         guard ticket.generation == CacheIndexLocks.shared.generation(for: directory) else { return nil }
         guard let render = ticket.request.renderKey,
@@ -288,6 +296,12 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
         guard PayloadLeaseRegistry.shared.acquire(payload.path) else { return nil }
         var leaseHeld = true
         defer { if leaseHeld { PayloadLeaseRegistry.shared.release(payload.path) } }
+        func damagedPayload() -> DecodedImage? {
+            PayloadLeaseRegistry.shared.release(payload.path)
+            leaseHeld = false
+            removeDamagedEntry(ticket)
+            return nil
+        }
         await afterReadLeaseAcquired?()
         try ticket.request.accessPermit?.check()
         try Task.checkCancellation()
@@ -302,18 +316,25 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) == 1,
               (CGImageSourceGetType(source) as String?) == UTType.png.identifier,
-              CGImageSourceGetStatusAtIndex(source, 0) == .statusComplete,
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, decodeOptions as CFDictionary),
-              image.width > 0, image.height > 0,
-              image.width <= ticket.request.maximumPixelSize,
-              image.height <= ticket.request.maximumPixelSize else {
-            PayloadLeaseRegistry.shared.release(payload.path)
-            leaseHeld = false
-            removeDamagedEntry(ticket)
-            return nil
+              CGImageSourceGetStatusAtIndex(source, 0) == .statusComplete else { return damagedPayload() }
+        let image: CGImage
+        if let resident {
+            guard resident.itemID == render.itemID, resident.revision == render.revision,
+                  resident.sourcePixelSize == CGSize(width: row.sourceWidth, height: row.sourceHeight),
+                  resident.image.width > 0, resident.image.height > 0,
+                  resident.image.width <= ticket.request.maximumPixelSize,
+                  resident.image.height <= ticket.request.maximumPixelSize else { return nil }
+            image = resident.image
+        } else {
+            guard let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, decodeOptions as CFDictionary),
+                  decoded.width > 0, decoded.height > 0,
+                  decoded.width <= ticket.request.maximumPixelSize,
+                  decoded.height <= ticket.request.maximumPixelSize else { return damagedPayload() }
+            image = decoded
         }
         try Task.checkCancellation()
-        guard try fingerprint(ticket.request.fileURL, expected: render.revision) == ticket.sourceSHA256 else { return nil }
+        guard try fingerprint(ticket.request.fileURL, expected: render.revision) == ticket.sourceSHA256,
+              resident == nil || ticket.generation == CacheIndexLocks.shared.generation(for: directory) else { return nil }
         try Task.checkCancellation()
         touch(ticket.key.filename)
         return DecodedImage(image: image,
@@ -322,6 +343,10 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
     }
 
     public func store(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws {
+        _ = try await storeForMemory(image, for: ticket)
+    }
+
+    public func storeForMemory(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws -> Bool {
         try ticket.request.accessPermit?.check()
         try Task.checkCancellation()
         guard let render = ticket.request.renderKey,
@@ -335,26 +360,26 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
               image.sourcePixelSize.width > 0, image.sourcePixelSize.height > 0,
               image.sourcePixelSize.width.isFinite, image.sourcePixelSize.height.isFinite,
               image.sourcePixelSize.width <= Double(Int32.max),
-              image.sourcePixelSize.height <= Double(Int32.max) else { return }
+              image.sourcePixelSize.height <= Double(Int32.max) else { return false }
         guard image.itemID == render.itemID, image.revision == render.revision else {
             throw ImageLoadError(.sourceChanged, itemID: render.itemID, revision: image.revision)
         }
         let bytes = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(bytes, UTType.png.identifier as CFString, 1, nil) else { return }
+        guard let destination = CGImageDestinationCreateWithData(bytes, UTType.png.identifier as CFString, 1, nil) else { return false }
         CGImageDestinationAddImage(destination, image.image, nil) // No original EXIF/GPS metadata.
-        guard CGImageDestinationFinalize(destination) else { return }
+        guard CGImageDestinationFinalize(destination) else { return false }
         guard let payload = Self.removingPNGMetadata(from: bytes as Data),
-              payload.count > 0, payload.count <= Self.maximumPayloadBytes else { return }
+              payload.count > 0, payload.count <= Self.maximumPayloadBytes else { return false }
         // Re-read after decode and encoding. Metadata alone cannot prove same-inode writes.
         guard try sourceMatches(ticket, render: render) else {
             throw ImageLoadError(.sourceChanged, itemID: render.itemID, revision: render.revision)
         }
         try Task.checkCancellation()
-        guard ticket.generation == CacheIndexLocks.shared.generation(for: directory) else { return }
+        guard ticket.generation == CacheIndexLocks.shared.generation(for: directory) else { return false }
         guard writeRetrySkipsRemaining == 0 else {
             skippedWriteCount += 1
             writeRetrySkipsRemaining -= 1
-            return
+            return false
         }
         var didWrite = false
         do {
@@ -432,6 +457,7 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
             lastWriteFailure = String(describing: error)
             logger.error("Thumbnail cache write failed; retry after one skipped attempt: \(Self.publicErrorCode(error), privacy: .public)")
         }
+        return didWrite && ticket.generation == CacheIndexLocks.shared.generation(for: directory)
     }
 
     private func sourceMatches(_ ticket: ThumbnailCacheTicket, render: RenderKey) throws -> Bool {

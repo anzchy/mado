@@ -83,6 +83,9 @@ public actor AccessImageSource {
                                cached.sourcePixelSize.width.isFinite, cached.sourcePixelSize.height.isFinite {
                                 try Task.checkCancellation()
                                 try accessPermit?.check()
+                                await cacheProvider?.retainThumbnail(cached, for: ticket)
+                                try Task.checkCancellation()
+                                try accessPermit?.check()
                                 return (request, Self.tagged(cached, with: accessPermit))
                             }
                         } catch is CancellationError { throw CancellationError() }
@@ -103,7 +106,11 @@ public actor AccessImageSource {
                 try Task.checkCancellation()
                 try accessPermit?.check()
                 if let thumbnailCache, let ticket {
-                    do { try await thumbnailCache.store(image, for: ticket) }
+                    do {
+                        if try await thumbnailCache.storeForMemory(image, for: ticket) {
+                            await cacheProvider?.retainThumbnail(image, for: ticket)
+                        }
+                    }
                     catch is CancellationError { throw CancellationError() }
                     catch where AccessReadFailure.isPermissionDenied(error) { throw error }
                     catch let error as ImageLoadError where error.kind == .sourceChanged { throw error }
