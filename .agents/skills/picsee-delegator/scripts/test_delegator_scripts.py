@@ -182,6 +182,56 @@ class OwnerGatesRefusalTests(unittest.TestCase):
         self.assertIn("no worktree", summary)
 
 
+class OwnerGatesDesignTests(unittest.TestCase):
+    """Exercise the real shell orchestration with cheap external-command fixtures."""
+
+    def test_design_status_log_and_completion_order(self):
+        for design_rc in (0, 7):
+            with self.subTest(design_rc=design_rc), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                work, home, out, tools = (root / name for name in ("work", "home", "out", "tools"))
+                commands = home / ".picsee/tools/xcodegen/bin"
+                for directory in (work, out, tools, commands, work / "scripts/tdd", work / "coverage"):
+                    directory.mkdir(parents=True, exist_ok=True)
+                env = {**os.environ, "HOME": str(home), "PICSEE_GATES_OUT": str(out),
+                       "DESIGN_RC": str(design_rc), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+                       "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+                git(work, "init", "-q", "-b", "main", env=env)
+                git(work, "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "fixture", env=env)
+                source = Path(__file__).parent
+                for name in ("owner-gates.sh", "lcov-total.py"):
+                    (tools / name).write_text((source / name).read_text())
+
+                def executable(path, text):
+                    path.write_text("#!/bin/sh\n" + text)
+                    path.chmod(0o755)
+
+                for folder in ("agents", "tdd", "ledger"):
+                    directory = work / "scripts" / folder
+                    directory.mkdir(exist_ok=True)
+                    (directory / "fixture.test.mjs").write_text("// command fixture\n")
+                executable(work / "scripts/heavy-lock.sh", 'export TEST_HEAVY_HELD=1\nexec "$@"\n')
+                (work / "scripts/tdd/swift-lcov.sh").write_text("echo 'LF:1\nLH:1\nFNF:1\nFNH:1' > coverage/lcov.info\n")
+                for command in ("xcodegen", "xcodebuild", "node"):
+                    executable(commands / command, "exit 0\n")
+                executable(commands / "swift", "echo 'Test run with 1 tests passed'\n")
+                executable(commands / "npm", '''
+[ "$*" = 'run design:check' ] || exit 90
+[ "$TEST_HEAVY_HELD" = 1 ] || exit 91
+grep -q '^DONE$' "$PICSEE_GATES_OUT/t-summary.txt" && exit 92
+echo "design fixture rc=$DESIGN_RC"
+exit "$DESIGN_RC"
+''')
+                result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "t", "HEAD"],
+                                        capture_output=True, text=True, env=env, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                summary = (out / "t-summary.txt").read_text().splitlines()
+                self.assertIn(f"design={design_rc}", summary)
+                self.assertEqual(summary[-1], "DONE")
+                self.assertLess(summary.index(f"design={design_rc}"), summary.index("DONE"))
+                self.assertEqual((out / "t-design.log").read_text().strip(), f"design fixture rc={design_rc}")
+
+
 class ResolvePart3Tests(unittest.TestCase):
     """Part 3 conflicts append the branch's suffix over the merge base; main's text is never dropped (#243 near-miss)."""
 

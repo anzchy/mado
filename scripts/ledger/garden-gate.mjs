@@ -51,7 +51,7 @@ function fileAt(commit, path) {
   return git("show", `${commit}:${path}`);
 }
 
-function splitTableRow(line) {
+function splitTableRow(line, raw = false) {
   const cells = [];
   let cell = "";
   let inCode = false;
@@ -60,14 +60,14 @@ function splitTableRow(line) {
     const character = body[index];
     if (character === "`" && body[index - 1] !== "\\") inCode = !inCode;
     if (character === "|" && !inCode && body[index - 1] !== "\\") {
-      cells.push(cell.trim());
+      cells.push(raw ? cell : cell.trim());
       cell = "";
     } else {
       cell += character;
     }
   }
-  cells.push(cell.trim());
-  return cells.map((value) => value.replaceAll("\\|", "|"));
+  cells.push(raw ? cell : cell.trim());
+  return raw ? cells : cells.map((value) => value.replaceAll("\\|", "|"));
 }
 
 // Every row of every table with an ID column, in file order.
@@ -79,7 +79,14 @@ function parseLedgerRows(markdown) {
     const header = splitTableRow(lines[index]);
     index += 2;
     const body = [];
-    while (index < lines.length && lines[index].startsWith("|")) body.push(splitTableRow(lines[index++]));
+    while (index < lines.length && lines[index].startsWith("|")) {
+      const line = lines[index++];
+      const cells = splitTableRow(line);
+      const confirmation = header.indexOf("怎么确认");
+      // Preserve the exact acceptance bytes, including Markdown escapes and cell padding.
+      if (confirmation >= 0) cells[confirmation] = splitTableRow(line, true)[confirmation];
+      body.push(cells);
+    }
     if (!header.includes("ID")) continue;
     for (const cells of body) {
       const row = Object.fromEntries(header.map((name, column) => [name, cells[column]]));
@@ -160,7 +167,11 @@ function guardedCells(rows) {
   for (const row of rows) {
     const count = (seen.get(row.ID) ?? 0) + 1;
     seen.set(row.ID, count);
-    cells.set(`${row.ID}#${count}`, JSON.stringify(GUARDED_CELLS.map((name) => row[name] ?? null)));
+    cells.set(`${row.ID}#${count}`, JSON.stringify(GUARDED_CELLS.map((name) => {
+      const value = row[name] ?? null;
+      // Only the suffix starting at the first exact 限制： is an owner-editable note.
+      return name === "怎么确认" && value !== null ? value.split("限制：", 1)[0] : value;
+    })));
   }
   return cells;
 }
@@ -230,7 +241,7 @@ function decide(argv) {
   if (options.verdict === "NEEDS-OWNER") {
     const reason = unresolvedReason(since, head);
     if (reason) return { line: "RUN", reason: `not resolved: ${reason}` };
-    return { line: `Ledger-Gardener: RESOLVED ${range} (owner fixed rows after NEEDS-OWNER at ${sinceShort})`, reason: "only ledger fixes that leave 状态, 验证 and 怎么确认 unchanged; HTML in sync" };
+    return { line: `Ledger-Gardener: RESOLVED ${range} (owner fixed rows after NEEDS-OWNER at ${sinceShort})`, reason: "only ledger fixes that leave 状态, 验证 and acceptance before 限制： unchanged; HTML in sync" };
   }
   if (REUSABLE.has(options.verdict)) {
     const reason = mappedReason(since, head);

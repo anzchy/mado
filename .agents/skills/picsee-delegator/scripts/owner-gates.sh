@@ -2,10 +2,10 @@
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
 # implementer's head; never trust a reported "all green". Writes <out>/<prefix>-summary.txt (out defaults to
 # ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
-#   head=<full sha> / swift= / lcov= (0 only at 100%) / lines a/b functions c/d [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck=
+#   head=<full sha> / swift= / lcov= (0 only at 100%) / lines a/b functions c/d [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
 #   / the Swift "Test run with N tests" line / DONE
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree or head mismatch.
-# Only the two heavy jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
+# The Swift, Xcode build and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -30,5 +30,6 @@ $hl xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_A
 node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs > $o/$p-node.log 2>&1; echo "node=$?" >> $s
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; echo "ledger=$?" >> $s
 git diff --check "$base"..HEAD > /dev/null 2>&1; echo "diffcheck=$?" >> $s
+$hl npm run design:check > $o/$p-design.log 2>&1; echo "design=$?" >> $s
 grep -E 'Test run with .* tests' $o/$p-swift.log | tail -1 >> $s
 echo DONE >> $s
