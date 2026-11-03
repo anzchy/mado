@@ -405,6 +405,46 @@ esac
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, self.SUCCESS)
 
+    def test_header_over_prior_transcript_never_proves_freshness(self):
+        transcripts = ("› hello\n• Hello!", "› hello", "• Ran a tool", "└ tool output",
+                       "Previous model reply", "```\nold reply\n```", "> quoted reply",
+                       "Tip: old model reply", "› Ask Codex to do anything else", "/tmp/old-model-output")
+        for transcript in transcripts:
+            for percent in (0, 3):
+                with self.subTest(transcript=transcript, percent=percent):
+                    screen = LIVE_RESET_SCREEN.replace("› Ask Codex to do anything",
+                                                      transcript + "\n› Ask Codex to do anything")
+                    screen = screen.replace("Context 0%", f"Context {percent}%")
+                    result, _ = self.run_reset(context=screen, ready_boundary="", startup="",
+                                               deadline="0.1", locale="C",
+                                               session_before="old-session", session_after="old-session")
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_transcript_before_bottommost_footer_revokes_header_proof(self):
+        for percent in (0, 3):
+            with self.subTest(percent=percent):
+                screen = LIVE_RESET_SCREEN + f"› hello\n• Hello!\n› Ask Codex to do anything\nContext {percent}% used"
+                result, _ = self.run_reset(context=screen, ready_boundary="", startup="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_short_old_nonzero_screen_waits_for_real_fresh_screen(self):
+        old = LIVE_RESET_SCREEN.replace("› Ask Codex to do anything", "› hello\n• Hello!")
+        old = old.replace("Context 0%", "Context 3%")
+        result, _ = self.run_reset(delay=1, startup=old, context=LIVE_RESET_SCREEN,
+                                   ready_boundary="", session_before="old-session", session_after="old-session")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+        self.assertGreaterEqual(result.pane_gets, 3)
+
+    def test_empty_welcome_screen_allows_known_tips_and_box_art(self):
+        screen = LIVE_RESET_SCREEN.replace("› Ask Codex to do anything",
+            "╭──╮\n│  │\n╰──╯\n  Tip: Use /help to see available commands.\n› Ask Codex to do anything")
+        result, _ = self.run_reset(context=screen, ready_boundary="", locale="C")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
     def test_changed_session_id_proves_markerless_footer(self):
         result, _ = self.run_reset(session_before="old-session", session_after="new-session", ready_boundary="")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -495,7 +535,7 @@ esac
             with self.subTest(quoted=quoted):
                 result, _ = self.run_reset(context=quoted, deadline="0.1")
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_unchanged_id_with_header_uses_bottommost_footer(self):
         for context in ("Context 12% used", "Context 0% used\nContext 12% used"):
@@ -572,7 +612,7 @@ esac
             with self.subTest(quote=quote):
                 result, _ = self.run_reset(context="", deadline="0.1", startup=f">_ OpenAI Codex (v0.166.0)\n{quote}")
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_markerless_stale_footer_cannot_succeed_early(self):
         result, _ = self.run_reset(old_context="Context 0% used", delay=3, deadline="0.1",
@@ -637,7 +677,7 @@ esac
                 result, _ = self.run_reset(context="", deadline="0.1",
                                            startup=f">_ OpenAI Codex (v0.166.0)\n{fence}text\nContext 0% used\n{fence}\nStill starting")
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_fenced_reset_marker_does_not_freshen_stale_footer(self):
         result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1",

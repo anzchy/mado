@@ -4,7 +4,7 @@
 # Verified 2026-10-22 on Codex 0.163.0: `/new` opens a "Where should the new conversation run?"
 # chooser (option 1 = current worktree, preselected), so two Enters are needed, sent with
 # `herdr pane send-keys` (agent send-keys does not submit). Require a fresh Codex
-# header above the footer in the same read, or an optional pane session id change.
+# header over an empty transcript above the footer in the same read, or an optional pane session id change.
 # herdr may retain the old id until the first turn; an unchanged id is not a veto.
 set -eu
 name=$1 pane=$2
@@ -21,25 +21,59 @@ done
 # Parse one screen only: the last boundary and bottom-most eligible footer win.
 # A chooser is a boundary, but its footer still belongs to the pre-start UI.
 footer() {
-  LC_ALL=C awk -v proved="${1:-0}" '
-    BEGIN { seen = proved; started = proved }
-    /^[[:space:]]*```/ { if (fence == "`") fence = ""; else if (!fence) fence = "`"; next }
-    /^[[:space:]]*~~~/ { if (fence == "~") fence = ""; else if (!fence) fence = "~"; next }
-    fence { next }
-    /^[[:space:]]*Where should the new conversation run/ { ctx = ""; started = 0; next }
-    # Commands/startup text clear earlier screen proof, but are not fresh headers.
-    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ {
-      ctx = ""; started = proved; next
-    }
-    /^[[:space:]]*>_ OpenAI Codex \(v[0-9][^)]*\)[[:space:]]*$/ {
-      ctx = ""; seen = 1; started = 1; next
-    }
-    started && (/^[[:space:]]*Context [0-9]+% used[[:space:]]*$/ ||
-      /^[[:space:]]*(GPT-|gpt-)[^[:space:]]+[[:space:]]+[[:alnum:]_-]+[[:space:]]+·[[:space:]]+Context [0-9]+% used([[:space:]]+·.*)?[[:space:]]*$/) {
-      match($0, /Context [0-9]+% used/); ctx = substr($0, RSTART, RLENGTH)
-    }
-    END { printf "%d:%s\n", seen, ctx }
-  '
+  python3 -c '
+import re, sys
+proved = sys.argv[1] == "1"
+seen = started = proved
+clean = metadata = False
+ctx = fence = ""
+# Exact welcome text only: arbitrary Tip: prose or prompt text is transcript.
+welcome = {"› Ask Codex to do anything", "? for shortcuts",
+           "Tip: Use /help to see available commands."}
+for raw in sys.stdin:
+    line = raw.strip()
+    if line.startswith(("```", "~~~")):
+        mark = line[:3]
+        fence = "" if fence == mark else fence or mark
+        clean = metadata = False
+        seen = proved
+        continue
+    if fence:
+        continue
+    if re.fullmatch(r">_ OpenAI Codex \(v[0-9][^)]*\)", line):
+        ctx = ""
+        seen = started = clean = metadata = True
+        continue
+    if line.startswith("Where should the new conversation run"):
+        ctx = ""
+        started = clean = metadata = False
+        continue
+    if re.fullmatch(r"(?:(?:>|❯|›) )?/new", line) or re.match(r"Starting MCP servers(?:\s|$)", line):
+        ctx = ""
+        started = proved
+        clean = metadata = False
+        continue
+    match = re.fullmatch(r"Context [0-9]+% used", line) or re.fullmatch(
+        r"(?:GPT-|gpt-)\S+\s+[\w-]+\s+·\s+Context [0-9]+% used(?:\s+·.*)?", line)
+    if match:
+        # Always replace ctx: a dirty transcript before the bottom-most footer
+        # revokes the header even when an earlier clean footer was visible.
+        ctx = re.search(r"Context [0-9]+% used", line).group() if started and (proved or clean) else ""
+        metadata = False
+        continue
+    if not line:
+        continue
+    # The worktree line immediately under the saved title is header metadata.
+    if metadata and re.fullmatch(r"(?:~/|/)[^\n]+", line):
+        metadata = False
+        continue
+    metadata = False
+    if line in welcome or all(c.isspace() or "\u2500" <= c <= "\u259f" or "\u2800" <= c <= "\u28ff" for c in line):
+        continue
+    clean = False
+    seen = proved
+print(f"{int(seen or bool(ctx))}:{ctx}")
+' "${1:-0}"
 }
 # Decode the documented nested field; unrelated JSON "value" fields are not identities.
 # Missing/malformed/unavailable pane metadata falls back to visible screen evidence.
