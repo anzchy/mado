@@ -1,0 +1,11 @@
+/* #347: opt-in tokens for Viewer Tools and Grid Thumbnail Size state variants. */
+:root {
+  --tool-background-opacity: 50%;
+  --tool-background-blur: 20px;
+  --tool-background-saturation: 1.6;
+  --thumbnail-size-min: 140px;
+  --thumbnail-size-default: 220px;
+  --thumbnail-size-max: 280px;
+  --thumbnail-height-ratio: .72;
+  --tool-icon-halo: 0 0 1px var(--color-panel);
+}

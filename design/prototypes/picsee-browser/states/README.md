@@ -54,11 +54,30 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 
 `shortcuts.html` 每一行的 `data-shortcut` 写它对应的命令（`command:<CommandID>`、`menu:<菜单标题>` 或 `key:<按键处理>`，多个用 `|` 分隔）。`scripts/design/shortcut-model.mjs` 从 `CommandID.swift`、`App/Commands/CommandMenu.swift`、`ChromeWindowCommands.swift` 读出菜单快捷键，与页面逐行比较：页面上每个 `<li>` 都算一行，没有 `data-shortcut` 的行、行外的按键、多一行、少一行或按键不同都失败。`App/` 与 `Packages/PicseeKit/Sources` 里每处 `keyDown` 的 `case`、`keyCode ==` 和 `.onKeyPress` 处理的按键，都要在该脚本的 `KEY_SITES` 里登记为页面上的某一行或写明不列入的理由（如聚焦控件内的 Tab/Space/Return、侧栏分隔条的方向键）；新增未登记的按键或登记的按键消失都失败。不比较：`keyDown` 里的修饰键变体（网格里 ⇧/⌘ 加方向键），以及同一文件里同一按键的第二处处理。编辑菜单的撤销、剪切、拷贝、粘贴、全选只作用于搜索框，不列入。
 
+## #347 · Viewer Tools 与 Thumbnail Size 对照映射
+
+这组变体仅由 11/12/14/16/33 加载 `viewer-grid-variants.css`，值来自 `_ds/picsee-ui-system/tokens/viewer-grid.css`；其他状态不加载它。14/16/33 的默认外观仍是深色。`?theme=light|dark` 只切换外观，不改变布局；16 的图片信息面板、33 的胶片条保持现有规则。33 的前后翻图在胶片条里，没有独立 navigation pod。
+
+| 页面 / URL | Selector | Property | Value |
+| --- | --- | --- | --- |
+| 14 `viewer-controls.html?theme=light`、16 `viewer-inspector.html?theme=light`、33 `viewer-filmstrip.html?theme=light` | `.viewer-floating-controls > [data-viewer-controls]`（14/16：`leading`、`navigation`、`zoom`；33：`leading`、`zoom`） | `background-color`; `backdrop-filter` / `-webkit-backdrop-filter` | `color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`；`--color-panel: #fff`、`--tool-background-opacity: 50%`；`blur(20px) saturate(1.6)`（`--tool-background-blur` / `--tool-background-saturation`） |
+| 同三页 `?theme=dark`（也为无参数默认） | 同上 | 同上 | 同上，`--color-panel: #141821`；仍为 `50%`、`blur(20px) saturate(1.6)` |
+| 14/16/33，浅 / 深 | 同上；后代 `.ds-icon-button` 与 `svg` | `border-radius`; `box-shadow`; `color`; `filter` | 保留 `var(--radius-control)` = `6px` 与 `var(--shadow-soft)`；图标改用 `var(--color-text)`（浅 `#1a1a1a` / 深 `#e5e7eb`），`drop-shadow(var(--tool-icon-halo))` = `0 0 1px var(--color-panel)` 边缘衬底，便于在明暗图像上辨认 |
+| 11 `grid-light.html?thumbnail-size=140`、12 `grid-dark.html?thumbnail-size=140` | `.photo-grid`; `.thumbnail-wrap` | `--thumb-min`; `height` | `var(--thumbnail-size-min)` = `140px`；`calc(var(--thumb-min) * var(--thumbnail-height-ratio))` = `100.8px` |
+| 11/12 `?thumbnail-size=220`（也为无参数 / 无效参数默认） | 同上 | 同上 | `var(--thumbnail-size-default)` = `220px`；高 `158.4px` |
+| 11/12 `?thumbnail-size=280` | 同上 | 同上 | `var(--thumbnail-size-max)` = `280px`；高 `201.6px` |
+| 11/12，三档尺寸与两种外观 | `.photo-grid`; `.photo-name` | `grid-template-columns`; `white-space`; `overflow`; `text-overflow` | `repeat(auto-fill, minmax(min(var(--thumb-min), 100%), 1fr))`；`nowrap` / `hidden` / `ellipsis`（既有名称规则） |
+| 11/12，三档尺寸与两种外观 | `.grid-bottom-bar` | 位置 / 高 / 填充 / 顶线 | 保持既有 `data-bottom-bar`：窗口底部、高 `40px`、`--color-bg` 的 `80%`、无顶线；`?transparency=reduced` 与 `?scroll=behind` 可与尺寸参数组合 |
+
+沿用选定原型的列规则：Thumbnail Size 是列的**最小宽度**，列均分余宽；网格可用宽 `A`、列距 `G` 时，列数 `n = max(1, floor((A + G) / (size + G)))`，实际 cell 宽 `(A - (n - 1)G) / n`。缩略图框高为 size × `.72`，cell 与框之间的既有内边距不变。预览中 1 CSS px 对应原生设计的 1 pt；原生实现应断言推导出的实际 frame，不能把最小列宽当作固定 cell 宽。
+
+`npm run design:check` 在真实浏览器中检查上述值、全部现有工具组、浅深外观、明暗极端底图、三档实际 frame、长中英名称截断和 Bottom Bar 不随尺寸改变。它也检查无参数与错误参数回到 220。测试临时换长名称与明暗底图，不改变静态素材或演示文件名。
+
 ## 维护
 
 每页的 `sha256` 固定当前 HTML 的原始字节。修改正式状态稿后，先确认设计变更，再对该 HTML 运行 `shasum -a 256 <文件>`，将结果写入 `manifest.json` 对应条目；不要为绕过测试而重新固定哈希。`npm run design:check`（先 `npm ci --ignore-scripts` 与 `npx playwright install chromium`；可本地运行，CI 也在 `Design check` job 中运行）用 `package-lock.json` 固定的 Playwright 在两个空闲端口上起预览服务，运行 `scripts/verify_design_catalog.js`：先跑 `scripts/design/*.test.mjs` 与快捷键对照，再检查 22 页的资源与布局、每页 HTML 与 `sha256` 一致、15 页没有「键盘快捷键」、35/36 的分类与卡片（逐个查询参数、浅深色、示例数值都标「示例」、35 每个分类的控件逐个列为可用或「即将推出」、36 每个可见行都有 `data-shortcut`）、22/26 的来源与 22/24/26 的子情况（24 读取失败：「重试」持有焦点、没有部分网格或计数、子情况样式只用设计 token）（含收起的子文件夹、PENDING(P3-14) 标注，以及说明文字没有只剩一两个字的行：字距在 −1…+1 px 之间逐档检查，结果不随机器字体变化），以及 `journeys.html` 的入口表、只播放主路径、每条支线结果播到正确的目的页、没有手写进度徽章、不引用原型文件和播放器焦点（含点过预览之后的 Esc 与 Tab）。端口可用 `PICSEE_DESIGN_PORT`、`PICSEE_STATES_PORT` 指定。
 
-画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）。
+画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin，其他大图页的 pin 保持不变。
 
 以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
 
