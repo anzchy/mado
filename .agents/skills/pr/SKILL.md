@@ -32,6 +32,7 @@ Use this template for writing the PR body:
 | node-tooling | PASS | <head-sha> | <owner-gates evidence> |
 | ledger | PASS | <head-sha> | <check output> |
 | diff-check | PASS | <head-sha> | <check output> |
+| design-check | PASS | <head-sha> | <owner-gates evidence> |
 | audit | N/A | — | <reason> |
 | device-smoke | N/A | — | <reason> |
 
