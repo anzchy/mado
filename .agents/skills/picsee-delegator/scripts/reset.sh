@@ -17,7 +17,19 @@ for i in 1 2 3; do
   herdr pane read $pane 2>&1 | grep -q 'Where should the new conversation run' && break
 done
 herdr pane read $pane 2>&1 | grep -q 'Where should the new conversation run' || { echo "FAIL reset $name: chooser never appeared"; exit 1; }
-herdr pane send-keys $pane enter >/dev/null; sleep 4
-ctx=$(herdr pane read $pane 2>&1 | grep -oE 'Context [0-9]+% used' | tail -1)
+herdr pane send-keys $pane enter >/dev/null
+# MCP startup can delay the context footer; wait for it before judging the reset.
+context_secs=${PICSEE_RESET_CONTEXT_SECS:-30}
+poll_secs=${PICSEE_RESET_POLL_SECS:-0.25}
+typeset -F SECONDS
+deadline=$((SECONDS + context_secs))
+while true; do
+  ctx=$(herdr pane read $pane 2>&1 | grep -oE 'Context [0-9]+% used' | tail -1)
+  [[ -n $ctx ]] && break
+  if (( SECONDS >= deadline )); then
+    echo "FAIL reset $name: no context line after ${context_secs}s"; exit 1
+  fi
+  sleep $poll_secs
+done
 case $ctx in "Context 0% used") ;; *) echo "FAIL reset $name: $ctx after /new"; exit 1;; esac
 echo "reset $name old_session=$old $ctx (verify the session id changes after the next turn)"

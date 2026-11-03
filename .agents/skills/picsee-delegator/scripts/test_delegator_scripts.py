@@ -305,5 +305,110 @@ class ResolvePart3Tests(unittest.TestCase):
         self.assertIn('<<<<<<<', out)
 
 
+class ResetTests(unittest.TestCase):
+    """Run the real reset CLI through chooser/startup/context transitions."""
+
+    SUCCESS = ("reset fixture-agent old_session=old-session Context 0% used "
+               "(verify the session id changes after the next turn)\n")
+
+    def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2"):
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            herdr = root / "herdr"
+            herdr.write_text('''#!/bin/sh
+case "$1 $2" in
+  'agent get')
+    printf '{"agent_status":"%s","value":"old-session"}\\n' "$RESET_STATUS"
+    ;;
+  'pane send-text')
+    echo 0 > "$RESET_STATE/enters"
+    echo 0 > "$RESET_STATE/reads"
+    ;;
+  'pane send-keys')
+    n=$(cat "$RESET_STATE/enters")
+    echo $((n + 1)) > "$RESET_STATE/enters"
+    ;;
+  'pane read')
+    n=$(cat "$RESET_STATE/enters")
+    if [ "$RESET_CHOOSER" = 0 ]; then
+      echo 'ordinary pane, no chooser'
+    elif [ "$n" -lt 2 ]; then
+      echo 'Where should the new conversation run?'
+    else
+      n=$(cat "$RESET_STATE/reads")
+      echo $((n + 1)) > "$RESET_STATE/reads"
+      if [ "$n" -lt "$RESET_DELAY" ] || [ -z "$RESET_CONTEXT" ]; then
+        echo 'Starting MCP servers (3/4)'
+      else
+        printf '%s\\n' "$RESET_CONTEXT"
+      fi
+    fi
+    ;;
+  *) exit 90 ;;
+esac
+''')
+            herdr.chmod(0o755)
+            # Bypass the existing chooser's fixed sleeps as well as the configured zero poll interval.
+            sleep = root / "sleep"
+            sleep.write_text("#!/bin/sh\nexit 0\n")
+            sleep.chmod(0o755)
+            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                   "RESET_STATE": str(root), "RESET_STATUS": status, "RESET_CHOOSER": str(int(chooser)),
+                   "RESET_DELAY": str(delay), "RESET_CONTEXT": context,
+                   "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": "0"}
+            started = time.monotonic()
+            result = subprocess.run(["zsh", str(Path(__file__).with_name("reset.sh")),
+                                     "fixture-agent", "fixture-pane"],
+                                    capture_output=True, text=True, env=env, timeout=5)
+            return result, time.monotonic() - started
+
+    def test_empty_startup_reads_preserve_success(self):
+        for delay in (0, 1, 3, 12):
+            with self.subTest(delay=delay):
+                result, _ = self.run_reset(delay=delay)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_done_status_can_reset(self):
+        result, _ = self.run_reset(status="done")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_missing_context_waits_for_and_names_timeout(self):
+        result, elapsed = self.run_reset(context="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+        self.assertGreaterEqual(elapsed, 0.09)
+
+    def test_zero_deadline_observes_immediate_context(self):
+        result, _ = self.run_reset(deadline="0")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_zero_deadline_without_context_fails(self):
+        result, _ = self.run_reset(context="", deadline="0")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0s\n")
+
+    def test_nonzero_context_fails_even_after_startup(self):
+        for delay in (0, 3):
+            with self.subTest(delay=delay):
+                result, _ = self.run_reset(delay=delay, context="Context 12% used")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+
+    def test_busy_status_refuses_reset(self):
+        result, _ = self.run_reset(status="busy")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: status busy, not idle\n")
+
+    def test_missing_chooser_fails(self):
+        result, _ = self.run_reset(chooser=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: chooser never appeared\n")
+
+
 if __name__ == "__main__":
     unittest.main()
