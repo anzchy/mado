@@ -148,8 +148,14 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private var standaloneRecheckAfterOpen = false
     var onRecentsChanged: (([RecentFolder]) -> Void)?
     var canNavigate: Bool { fileURL != nil && window?.attachedSheet == nil }
-    var gridShellVisible: Bool { gridShell != nil && !gridShell.isHidden }
-    func toggleGridSidebar() { if gridShellVisible { gridShell.toggleSidebar() } }
+    /// The grid surface; the shell also shows in the viewer as its sidebar (#444), which is not the grid.
+    var gridShellVisible: Bool { gridShell != nil && gridShell.isGridSurface }
+    /// ⌃⌘S: the grid's sidebar, or the viewer's sidebar beside a preview entered from the grid (one shared visibility).
+    var sidebarToggleAvailable: Bool { gridShellVisible || session.canToggleViewerSidebar }
+    func toggleGridSidebar() {
+        if gridShellVisible { gridShell.toggleSidebar() }
+        else { session.perform(intent: .toggleSidebar) }
+    }
     var gridSearchAvailable: Bool { gridShellVisible && !gridView.isHidden && gridShell.searchAvailable }
     private var inspectorHost: NSHostingView<MotionPolicyContent<InspectorPanel>>!
     private var inspectorOverlayMode = false
@@ -225,6 +231,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                                             hidesOnHome: true)
         chromeOverlay.autoresizingMask = [.width, .height]
         chromeOverlay.setAccessibilityIdentifier("chrome.tools")
+        chromeOverlay.menuPresenter = PopUpChromeMenuPresenter()
+        // #444: 更多 lists the App menu's implemented viewer items for this window's image.
+        chromeOverlay.moreMenuProvider = { [weak self] in
+            guard let self, let owner = (NSApp.mainMenu as? CommandMainMenu)?.commandOwner else { return nil }
+            return owner.makeViewerMoreMenu(fileName: self.session.imageLoader.fileURL?.lastPathComponent)
+        }
         content.addSubview(chromeOverlay)
         gridShell = GridShellView(frame: NSRect(x: 0, y: 0, width: content.bounds.width,
                                                 height: content.bounds.height - 28), preferencesStore: preferencesStore)
@@ -695,7 +707,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         let content = NSRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: max(0, bounds.height - height))
         gridView.frame = gridShell.gridContentFrame(topInset: height)
         lostAccessView.frame = content
-        if rebindStrip != nil, !gridShell.isHidden, !stateHost.isHidden, let parent = stateHost.superview {
+        if rebindStrip != nil, gridShell.isGridSurface, !stateHost.isHidden, let parent = stateHost.superview {
             stateHost.frame = gridShell.mainContent.convert(content, to: parent)
         }
         if let strip = rebindStrip {
@@ -996,7 +1008,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             gridFolderURL = nil
             cancelSidebarTree()
             gridShell.showFolder(nil)
-            presentation.showViewer()
+            showViewerSurface()
             inspectorHost.isHidden = !inspectorVisible
             layoutInspector()
         }
@@ -1686,7 +1698,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         return window?.firstResponder === canvas ? .canvas : .panel
     }
     private var isGridSearchFocused: Bool {
-        guard gridShell != nil, !gridShell.isHidden, !gridShell.searchField.isHidden,
+        guard gridShell != nil, gridShell.isGridSurface, !gridShell.searchField.isHidden,
               let responder = window?.firstResponder else { return false }
         return responder === gridShell.searchField || responder === gridShell.searchField.currentEditor()
     }
@@ -1776,6 +1788,11 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     }
     /// Public toggle for the grid footer's later info button.
     func toggleInspector() { _ = route(.inspector, from: .button) }
+    /// The viewer surface, with the folder sidebar beside it when this preview came from the grid (#444).
+    private func showViewerSurface() {
+        presentation.viewerSidebarAvailable = session.canToggleViewerSidebar
+        presentation.showViewer()
+    }
     private func layoutInspector() {
         guard inspectorHost != nil else { return }
         if let width = window?.contentView?.bounds.width {
@@ -1785,6 +1802,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                 inspectorHost.rootView = inspectorRootView(overlay: overlay)
             }
         }
+        presentation.viewerSidebarAvailable = session.canToggleViewerSidebar
         presentation.layoutInspector(visible: inspectorVisible && !inspectorHost.isHidden)
         layoutRebindStrip()
         canvas.synchronizeViewport()
@@ -1841,7 +1859,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         guard let entry = gridProjection.entry(for: id), let rootID = gridFolderRoot,
               gridProjection.snapshot?.version.rootID == rootID else { return }
         searchProjection.cancel()
-        presentation.showViewer()
+        showViewerSurface()
         inspectorHost.isHidden = !inspectorVisible
         layoutInspector()
         open(entry.url, accessRequest: .root(rootID, file: entry.url), fromFolderScan: true)
@@ -1923,7 +1941,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         guard session.folderScan?.failure != nil, waitingAccessPosition == nil else { return }
         stateHost.refresh()
         // On the reading surface only: a silent refresh failing under a shown grid keeps the grid and its footer.
-        guard !gridShell.isHidden, gridView.isHidden, let page = stateHost.readFailedView else { return }
+        guard gridShell.isGridSurface, gridView.isHidden, let page = stateHost.readFailedView else { return }
         gridShell.setReadFailedStatus(true)
         gridShell.linkKeyViews(from: page.retryButton, through: page.chooseOtherButton)
         _ = window?.makeFirstResponder(page.retryButton)
@@ -2008,6 +2026,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                 if let window { GridWindowIdentity.showFolder(snapshot.version.folder, in: window) }
             case .viewer(let file):
                 // A grid preview reopens inside its restored grid; Esc still returns there.
+                presentation.viewerSidebarAvailable = session.canToggleViewerSidebar
                 presentation.show(target)
                 inspectorHost.isHidden = !inspectorVisible
                 layoutInspector()
@@ -2029,7 +2048,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         gridProjection = FolderGridProjection()
         gridPreviewScrollOffset = nil
         session.leaveBrowsing()
-        presentation.showViewer()
+        showViewerSurface()
         canvas.showFailure()
         window?.title = "Picsee"
         window?.representedURL = nil
@@ -2057,6 +2076,13 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             menuTracking: menuTracking(), focus: focusContext, keyCode: event.keyCode,
             gridSearchFocused: isGridSearchFocused) {
             return route(.escape, from: .key)
+        }
+        // #444: the viewer's sidebar rows and divider do not handle Tab; the Session walks canvas → tools → sidebar,
+        // and AppKit's own loop would be refused at the canvas while the Session focus is still on the tools.
+        if event.keyCode == 48, !menuTracking(), event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           let view = window?.firstResponder as? NSView, gridShell.viewerSidebarKeyViews.contains(where: { $0 === view }) {
+            session.tab(reverse: event.modifierFlags.contains(.shift))
+            return true
         }
         guard !menuTracking(), inspectorVisible else { return false }
         if !gridView.isHidden, event.keyCode == 48 {
@@ -2112,7 +2138,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
 
 // Untested native effect; the Session runs it only after menu and Inspector/panel Esc (package-tested).
 extension CanvasWindowController: ViewerSingleImageReturnHost {
-    var canReturnToFolder: Bool { gridView.isHidden && fileURL != nil && window?.attachedSheet == nil }
+    // #444: the 返回网格 tool asks during window setup, before the grid exists.
+    var canReturnToFolder: Bool { gridView?.isHidden == true && fileURL != nil && window?.attachedSheet == nil }
     func returnSingleImageToFolder() {
         if let fileURL { returnToFolder(of: fileURL) }
     }
@@ -2132,6 +2159,15 @@ extension CanvasWindowController: ViewerChromeHost {
     }
     func focusChromeTool(reverse: Bool, entering: Bool) -> Bool {
         ViewerStateFocus.move(reverse: reverse, entering: entering, state: stateHost, chrome: chromeOverlay)
+    }
+    /// A viewer preview opened from the folder grid can show that grid's sidebar (#444).
+    var viewerSidebarAvailable: Bool { gridFolderRoot != nil }
+    func performChromeIntent(_ intent: ViewerChromeIntent) {
+        guard intent == .toggleSidebar else { return }
+        gridShell.toggleSidebar()
+        layoutInspector()
+        chromeOverlay.refresh(session: session)
+        stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
     }
 }
 
@@ -2450,7 +2486,7 @@ extension CanvasWindowController: FolderScanHost {
             // Retry from the failed-read page reads again on the shell's reading surface; page 26 is not a read.
             if waitingAccessPosition == nil { presentation.resumeReadingFooter(session.folderScan?.isReadingFolder == true) }
             // Retry from 「读取失败」: the Reading State takes the focus 「重试」 held.
-            if waitingAccessPosition == nil, session.folderScan?.isReadingFolder == true, !gridShell.isHidden, gridView.isHidden {
+            if waitingAccessPosition == nil, session.folderScan?.isReadingFolder == true, gridShell.isGridSurface, gridView.isHidden {
                 showReadingState()
             }
             return
@@ -2499,5 +2535,13 @@ extension CanvasWindowController: FolderScanHost {
                 "outcome=%{public}s generation=%{public}llu", outcome.rawValue, generation)
             logger.notice("FolderScan outcome=\(outcome.rawValue, privacy: .public) generation=\(generation, privacy: .public)")
         }
+    }
+}
+
+/// #444: the viewer pod menus pop up above their tool, so they never cover the bottom pods (page 14 opens upward).
+/// Untested native effect; the package tests the menus through a recording presenter.
+@MainActor final class PopUpChromeMenuPresenter: ChromeMenuPresenting {
+    func present(_ menu: NSMenu, from view: NSView) {
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.bounds.maxY + menu.size.height + 6), in: view)
     }
 }
