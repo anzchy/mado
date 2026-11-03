@@ -62,7 +62,11 @@ import PicseeInfrastructure
         #expect(count.frame.minX - file.frame.maxX == 8, "12pt between the text boxes")
         let hint = try #require(issue281FooterView("grid.keyboard-hint", in: shell))
         #expect(!hint.isHidden)
-        #expect(hint.frame.maxX + 16 == shell.searchButton.frame.minX)
+        let design = try PinnedDesign.page(appearance == .darkAqua ? "grid-dark" : "grid-light")
+        // .keyboard-hint>span margin-right + .grid-bottom-bar gap.
+        let hintGap = try design.length(".keyboard-hint>span", "margin-right", viewport: 1280)
+            + design.length(".grid-bottom-bar", "gap", viewport: 1280)
+        #expect(abs(Double(shell.searchButton.frame.minX - hint.frame.maxX) - hintGap) < 0.01)
         #expect(hint.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue) == ["Space", "Quick Look"])
 
         let other = try #require(grid.displayedItemIDs.first)
