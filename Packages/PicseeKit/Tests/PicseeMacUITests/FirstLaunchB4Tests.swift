@@ -109,5 +109,6 @@ import PicseeApplication
     launch.setDragActive(true); try check("dark drag")
     launch.setDragActive(false)
     heading.stringValue = "把照片文件夹拖到这里"; shortcut.stringValue = "或按 ⌘O"; try check("zh idle")
+    launch.setDragActive(true)
     heading.stringValue = "松开即可打开"; try check("zh drag")
 }

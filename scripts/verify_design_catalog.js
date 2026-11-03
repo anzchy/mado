@@ -186,6 +186,8 @@ module.exports=async(page,{design,states,screenshot})=>{
   // The centre is B4's, not the reference page's: drop hint, then 「选择文件夹…」, 18 apart, and no chips row (#441).
   if(got.heading!=='把照片文件夹拖到这里'||!got.hint||got.hint[0]!==got.heading)bad.push('hint '+JSON.stringify(got.hint)+', want the B4 drop hint');
   if(!got.button||got.button[0]!=='选择文件夹…')bad.push('button '+JSON.stringify(got.button)+', want 选择文件夹…');else if(got.hint&&got.button[1]-got.hint[1]-got.hint[4]!==18)bad.push('hint→button gap '+(got.button[1]-got.hint[1]-got.hint[4])+', want 18');
+  // At 1280×800 the Swift tests pin these from the content top (345 and 387 below the 38 px title bar).
+  if(got.hint&&got.button&&(got.hint[1]!==383||got.button[1]!==425))bad.push('hint top '+got.hint[1]+' / button top '+got.button[1]+', want 383 / 425');
   if(got.chips||over.chips)bad.push('shows the chips row');if(!got.onTop)bad.push('centre button is covered');
   // Drag-over keeps B4's feedback: the wall fades and the drop prompt highlights with the accent (#311).
   if(!over.dragOver)bad.push('?drag=over: no drop target in drag-over');if(!(over.wallAlpha<got.wallAlpha))bad.push('?drag=over: wall does not fade ('+over.wallAlpha+' vs '+got.wallAlpha+')');

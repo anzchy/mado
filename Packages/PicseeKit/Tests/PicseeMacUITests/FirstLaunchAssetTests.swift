@@ -80,5 +80,6 @@ import Testing
         }
         #expect(!chipPairs.contains { $0 == values.compactMap { $0 } }, "\(key) carries chip text \(values)")
         #expect(!chipPairs.map(\.[0]).contains(values[0] ?? ""), "\(key) en = \(values[0] ?? "")")
+        #expect(!["单张或多张图片", "常见图片格式"].contains(values[1] ?? ""), "\(key) zh-Hans = \(values[1] ?? "")")
     }
 }
