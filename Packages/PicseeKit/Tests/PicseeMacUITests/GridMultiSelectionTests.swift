@@ -124,7 +124,8 @@ import PicseeApplication
     #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 0, section: 0), IndexPath(item: 2, section: 0)])
 }
 
-// Owner decision 2026-11-03 (#405): no ✓ badge at any selection count; page 32 draws none on its three selected cells.
+// Owner decision 2026-11-03 (#405, 1B): no ✓ badge at any selection count, deviating from page 32, which draws one
+// on each of its three selected cells.
 @Test @MainActor func page32SelectedCellDrawsNoBadgeInBothAppearances() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/picsee-badge")

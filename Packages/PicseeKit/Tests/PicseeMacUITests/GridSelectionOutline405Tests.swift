@@ -5,10 +5,11 @@ import PicseeApplication
 @testable import PicseeMacUI
 
 // #405 WI-2: with the ✓ badge gone, a selected cell that is not the Current Item is marked by the 1pt
-// Selection stroke at the tile edge (#281 model: Current Item = 2pt ring, Selection = 1pt edge), from
-// grid-multiselect.html `.photo-cell.is-selected .thumbnail-wrap{box-shadow:inset 0 0 0 1px var(--color-accent)}`.
-// The stroke must render above the opaque tile, not under it. (`.layout-exploration` on pages 11/32 replaces
-// that inset with the 2px ring on every selected cell; the native split predates #405 and is unchanged here.)
+// Selection stroke at the tile edge, and that stroke must render above the opaque tile, not under it. The 1pt
+// width comes from the base rule `.photo-cell.is-selected .thumbnail-wrap{box-shadow:inset 0 0 0 1px …}`, which
+// `.layout-exploration` overrides on pages 11, 12 and 32 with a 2px offset ring on every selected cell; the
+// native split (2pt ring on Current Item only, 1pt edge on other selected cells) is the model the owner kept
+// (#405, 2B), an owner-chosen deviation from those pages.
 
 /// The 2pt band inside the tile's right edge, mid-height (clear of the corner radius).
 @MainActor private func edgeBand(_ cell: GridPhotoItem) throws -> NSRect {
