@@ -224,12 +224,74 @@ exit "$DESIGN_RC"
 ''')
                 result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "t", "HEAD"],
                                         capture_output=True, text=True, env=env, timeout=20)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.returncode, 0 if design_rc == 0 else 1, result.stdout + result.stderr)
                 summary = (out / "t-summary.txt").read_text().splitlines()
                 self.assertIn(f"design={design_rc}", summary)
                 self.assertEqual(summary[-1], "DONE")
                 self.assertLess(summary.index(f"design={design_rc}"), summary.index("DONE"))
                 self.assertEqual((out / "t-design.log").read_text().strip(), f"design fixture rc={design_rc}")
+
+
+
+class OwnerGatesExitTests(unittest.TestCase):
+    """The completed summary and exit status must agree for every lane."""
+
+    def test_each_lane_failure_and_pass_fail_pass_reruns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            work, out, commands, tools = (root / name for name in ("work", "out", "bin", "tools"))
+            for path in (work, out, commands, tools, work / "scripts/tdd", work / "coverage"):
+                path.mkdir(parents=True, exist_ok=True)
+            env = {**os.environ, "HOME": str(root / "home"), "PATH": str(commands) + ":" + os.environ["PATH"],
+                   "PICSEE_GATES_OUT": str(out), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+            # owner-gates prepends this directory, before any installed native tools.
+            first = root / "home/.picsee/tools/xcodegen/bin"
+            first.mkdir(parents=True)
+            git(work, "init", "-q", "-b", "main", env=env)
+            git(work, "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "fixture", env=env)
+            for name in ("owner-gates.sh", "lcov-total.py"):
+                (tools / name).write_text(Path(__file__).with_name(name).read_text())
+            def executable(path, text):
+                path.write_text("#!/bin/sh\n" + text)
+                path.chmod(0o755)
+            executable(work / "scripts/heavy-lock.sh", 'exec "$@"\n')
+            (work / "scripts/tdd/swift-lcov.sh").write_text(
+                '[ "$FAIL_LANE" = lcov ] && exit 7\n'
+                "echo 'LF:1\nLH:1\nFNF:1\nFNH:1' > coverage/lcov.info\n")
+            for directory in ("agents", "tdd", "ledger"):
+                folder = work / "scripts" / directory
+                folder.mkdir(exist_ok=True)
+                (folder / "fixture.test.mjs").write_text("// fixture\n")
+            for command, lane in (("swift", "swift"), ("xcodegen", "xcodegen"), ("xcodebuild", "xcodebuild"),
+                                  ("npm", "design"), ("node", "node")):
+                executable(first / command, f'''lane={lane}
+[ "$lane" = node ] && [ "$1" != --test ] && lane=ledger
+[ "$FAIL_LANE" = "$lane" ] && exit 7
+[ "$FAIL_LANE" = missing ] && [ "$lane" = xcodegen ] && exec picsee_missing_tool_423
+[ "$lane" = swift ] && echo 'Test run with 1 tests passed'
+exit 0
+''')
+            executable(first / "python3", '[ "$FAIL_LANE" = lcov-total ] && exit 7\nexit 0\n')
+            real_git = subprocess.check_output(["which", "git"], text=True).strip()
+            executable(first / "git", f'''[ "$FAIL_LANE" = diffcheck ] && [ "$1" = diff ] && exit 7
+exec "{real_git}" "$@"
+''')
+            lanes = ("swift", "lcov", "xcodegen", "xcodebuild", "node", "ledger", "diffcheck", "design")
+            for fail in ("", *lanes, "lcov-total", "missing", ""):
+                with self.subTest(fail=fail):
+                    result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "t", "HEAD"],
+                                            env={**env, "FAIL_LANE": fail}, capture_output=True, text=True, timeout=20)
+                    summary = (out / "t-summary.txt").read_text().splitlines()
+                    statuses = [line for line in summary if line.split("=")[0] in lanes]
+                    expected = {lane: 0 for lane in lanes}
+                    if fail:
+                        expected[{"missing": "xcodegen", "lcov-total": "lcov"}.get(fail, fail)] = 127 if fail == "missing" else 7
+                    self.assertEqual(statuses, [f"{lane}={expected[lane]}" for lane in lanes])
+                    self.assertEqual(result.returncode, 1 if fail else 0, result.stdout + result.stderr)
+                    self.assertEqual(summary[-1], "DONE")
+                    for line in statuses:
+                        self.assertIn(line, result.stdout)
 
 
 class ResolvePart3Tests(unittest.TestCase):
