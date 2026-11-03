@@ -27,6 +27,13 @@ final class CommandMainMenu: NSMenu {
     // NSMenu's nonisolated override runs on AppKit's main thread; the owner is main-actor bound.
     nonisolated(unsafe) weak var commandOwner: CommandMenu?
 
+    /// ⌘ zoom keys belong to a focused text field first (CMD-02); other ⌘ keys still reach the menu.
+    static func defersToTextField(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .control, .option]) == .command,
+              let key = event.charactersIgnoringModifiers else { return false }
+        return CommandID.matching(key: key, command: true)?.commandKey != nil
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             let allowsBareEquivalent = MainActor.assumeIsolated {
@@ -34,6 +41,15 @@ final class CommandMainMenu: NSMenu {
                     && !(NSApp.keyWindow?.firstResponder is NSTextInputClient)
             }
             guard allowsBareEquivalent else { return false }
+        }
+        if Self.defersToTextField(event) {
+            let windowNumber = event.windowNumber
+            let editing = MainActor.assumeIsolated { [commandOwner] in
+                let window = NSApp.window(withWindowNumber: windowNumber)
+                    ?? commandOwner?.activeWindowController?.window ?? NSApp.keyWindow
+                return window?.firstResponder is NSTextInputClient
+            }
+            if editing { return false }
         }
         let inspectorKey = event.keyCode == 34 && event.modifierFlags.contains(.command)
             && event.modifierFlags.intersection([.control, .option, .shift]).isEmpty
@@ -123,12 +139,26 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         search.keyEquivalentModifierMask = [.command]
         search.setAccessibilityIdentifier("grid.search.menu")
         for id in CommandID.menuCommands {
-            let item = NSMenuItem(title: id.menuTitle, action: #selector(invoke(_:)), keyEquivalent: id.defaultKey)
-            item.keyEquivalentModifierMask = id.usesCommand ? [.command] : []
+            let binding = id.menuBinding
+            let item = NSMenuItem(title: id.menuTitle, action: #selector(invoke(_:)), keyEquivalent: binding.key)
+            item.keyEquivalentModifierMask = binding.command ? [.command] : []
             item.representedObject = id.rawValue
             item.setAccessibilityIdentifier("command.\(id.rawValue).menu")
             item.target = self
             (id == .open ? file : view).addItem(item)
+        }
+        // Hidden alternates keep the bare keys on their old menu path; they follow every shown item.
+        for id in CommandID.menuCommands {
+            for (index, binding) in id.alternateMenuBindings.enumerated() {
+                let item = NSMenuItem(title: id.menuTitle, action: #selector(invoke(_:)), keyEquivalent: binding.key)
+                item.keyEquivalentModifierMask = binding.command ? [.command] : []
+                item.representedObject = id.rawValue
+                item.setAccessibilityIdentifier("command.\(id.rawValue).menu.alt.\(index)")
+                item.target = self
+                item.isHidden = true
+                item.allowsKeyEquivalentWhenHidden = true
+                (id == .open ? file : view).addItem(item)
+            }
         }
         let always = view.addItem(withTitle: String(localized: "Always Show Tools"), action: #selector(toggleAlwaysShowTools(_:)), keyEquivalent: "")
         always.target = self
