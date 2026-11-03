@@ -153,6 +153,34 @@ class RebaseVerifyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("MESSAGES differ", result.stdout)
 
+    def test_test_and_tooling_only_patches_same_or_different(self):
+        for path in ("AppTests/Only.swift", "UITests/Only.swift", "scripts/check.sh", ".github/workflows/check.yml"):
+            for same in (True, False):
+                with self.subTest(path=path, same=same):
+                    git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+                    (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+                    self.commit("test: patch", **{path: "old patch\n"})
+                    self.old_head = self.head()
+                    git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+                    (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+                    self.commit("test: patch", **{path: "old patch\n" if same else "changed patch\n"})
+                    result = self.verify()
+                    self.assertEqual(result.returncode, 0 if same else 1, result.stdout + result.stderr)
+                    self.assertIn("CODE same" if same else "CODE differ", result.stdout)
+                    self.assertNotIn("da39a3ee5e6b4b0d3255bfef95601890afd80709", result.stdout)
+
+    def test_empty_input_on_either_side_fails_loudly(self):
+        script = str(Path(__file__).with_name("rebase-verify.sh"))
+        for old_empty, new_empty in ((True, True), (True, False), (False, True)):
+            with self.subTest(old_empty=old_empty, new_empty=new_empty):
+                result = subprocess.run(["zsh", script, self.old_base, self.old_base if old_empty else self.old_head,
+                                         self.old_base, self.old_base if new_empty else self.old_head],
+                                        cwd=self.repo, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("empty", (result.stdout + result.stderr).lower())
+                self.assertNotIn("CODE same", result.stdout)
+                self.assertNotIn("da39a3ee", result.stdout)
+
     def test_unknown_commit_exits_3(self):
         result = subprocess.run(["zsh", str(Path(__file__).with_name("rebase-verify.sh")), "nope", "HEAD", "HEAD",
                                  "HEAD"], cwd=self.repo, capture_output=True, text=True)
