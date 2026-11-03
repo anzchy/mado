@@ -50,11 +50,13 @@ function status(result, expected, pattern) {
 test('broken real ledger HTML blocks; regenerated HTML passes the hook without a PR body', t => {
   const f = fixture(t);
   f.write('docs/feature-ledger.html', '<p>broken</p>');
-  const broken = f.run();
+  f.git('add', '.'); f.git('commit', '-qm', 'commit drift');
+  const broken = f.run({ oid: f.git('rev-parse', 'HEAD') });
   assert.notEqual(broken.status, 0, broken.stdout + broken.stderr);
   assert.match(broken.stdout + broken.stderr, /ledger|stale|out.of.date/i);
   execFileSync(process.execPath, ['scripts/ledger/build.mjs'], { cwd: f.repo });
-  status(f.run(), 0, /shortcut-model PASS/);
+  f.git('add', '.'); f.git('commit', '-qm', 'commit correction');
+  status(f.run({ oid: f.git('rev-parse', 'HEAD') }), 0, /shortcut-model PASS/);
 });
 
 test('shortcut table drift blocks via the real standalone browser-free checker', t => {
@@ -62,11 +64,13 @@ test('shortcut table drift blocks via the real standalone browser-free checker',
   const file = 'design/prototypes/picsee-browser/states/shortcuts.html';
   const original = readFileSync(join(f.repo, file), 'utf8');
   f.write(file, original.replace('data-shortcut="menu:Quit Picsee"', 'data-shortcut="menu:Unknown command"'));
-  const broken = f.run();
+  f.git('add', '.'); f.git('commit', '-qm', 'commit drift');
+  const broken = f.run({ oid: f.git('rev-parse', 'HEAD') });
   assert.notEqual(broken.status, 0, broken.stdout + broken.stderr);
   assert.match(broken.stdout + broken.stderr, /shortcut-model FAIL/);
   f.write(file, original);
-  status(f.run(), 0, /shortcut-model PASS/);
+  f.git('add', '.'); f.git('commit', '-qm', 'commit correction');
+  status(f.run({ oid: f.git('rev-parse', 'HEAD') }), 0, /shortcut-model PASS/);
 });
 
 test('stale PR body blocks and corrected body passes against Git pre-push local OID', t => {
@@ -83,5 +87,59 @@ test('empty input cannot certify a supplied body; deletions skip lint and absent
   status(f.run({ suppliedBody: true, stdin: '' }), 2, /push|input|commit/i);
   writeFileSync(f.body, 'not a valid PR body');
   status(f.run({ suppliedBody: true, oid: '0'.repeat(40) }), 0);
-  status(f.run({ stdin: '' }), 0, /shortcut-model PASS/);
+  status(f.run(), 0, /shortcut-model PASS/);
+});
+
+
+test('disk regeneration cannot conceal committed stale ledger HTML', t => {
+  const f = fixture(t);
+  f.write('docs/feature-ledger.html', '<p>stale committed HTML</p>');
+  f.git('add', 'docs/feature-ledger.html'); f.git('commit', '-qm', 'stale ledger');
+  const stale = f.git('rev-parse', 'HEAD');
+  execFileSync(process.execPath, ['scripts/ledger/build.mjs'], { cwd: f.repo });
+  const corrected = readFileSync(join(f.repo, 'docs/feature-ledger.html'), 'utf8');
+  const result = f.run({ oid: stale });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /ledger.*stale/i);
+  assert.equal(readFileSync(join(f.repo, 'docs/feature-ledger.html'), 'utf8'), corrected);
+  // Valid older OID remains valid despite a stale HEAD and dirty checkout.
+  status(f.run({ oid: f.head }), 0, /shortcut-model PASS/);
+  f.git('add', 'docs/feature-ledger.html'); f.git('commit', '-qm', 'correct ledger');
+  // Valid HEAD must not conceal a stale older OID.
+  const nonHead = f.run({ oid: stale });
+  assert.notEqual(nonHead.status, 0, nonHead.stdout + nonHead.stderr);
+  assert.match(nonHead.stdout + nonHead.stderr, /ledger.*stale/i);
+});
+
+test('shortcut check uses pushed OID despite HEAD and checkout drift', t => {
+  const f = fixture(t);
+  const file = 'design/prototypes/picsee-browser/states/shortcuts.html';
+  const original = readFileSync(join(f.repo, file), 'utf8');
+  f.write(file, original.replace('data-shortcut="menu:Quit Picsee"', 'data-shortcut="menu:Unknown command"'));
+  f.git('add', file); f.git('commit', '-qm', 'stale shortcuts');
+  const stale = f.git('rev-parse', 'HEAD');
+  status(f.run({ oid: f.head }), 0, /shortcut-model PASS/);
+  f.write(file, original);
+  const dirty = f.run({ oid: stale });
+  assert.notEqual(dirty.status, 0, dirty.stdout + dirty.stderr);
+  assert.match(dirty.stdout + dirty.stderr, /shortcut-model FAIL/);
+  f.git('add', file); f.git('commit', '-qm', 'correct shortcuts');
+  const nonHead = f.run({ oid: stale });
+  assert.notEqual(nonHead.status, 0, nonHead.stdout + nonHead.stderr);
+  assert.match(nonHead.stdout + nonHead.stderr, /shortcut-model FAIL/);
+});
+
+test('all non-deletion refs are checked and deletion-only or empty input is a no-op', t => {
+  const f = fixture(t);
+  f.write('docs/feature-ledger.html', 'stale');
+  f.git('add', 'docs/feature-ledger.html'); f.git('commit', '-qm', 'stale ledger');
+  const stale = f.git('rev-parse', 'HEAD');
+  execFileSync(process.execPath, ['scripts/ledger/build.mjs'], { cwd: f.repo });
+  const result = f.run({ stdin: `refs/heads/valid ${f.head} refs/heads/valid ${f.base}\nrefs/heads/stale ${stale} refs/heads/stale ${f.base}\n` });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /ledger.*stale/i);
+  // Neither a deletion nor empty input has content to check, even with dirty disk.
+  f.write('docs/feature-ledger.html', 'still stale on disk');
+  status(f.run({ oid: '0'.repeat(40) }), 0);
+  status(f.run({ stdin: '' }), 0);
 });

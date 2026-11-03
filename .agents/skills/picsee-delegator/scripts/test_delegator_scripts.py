@@ -86,6 +86,8 @@ class RebaseVerifyTests(unittest.TestCase):
                     "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
         git(self.repo, "init", "-q", "-b", "main", env=self.env)
         (self.repo / "App").mkdir()
+        (self.repo / "App/blob.bin").write_bytes(b"\x00original\xff")
+        git(self.repo, "add", "App/blob.bin", env=self.env)
         self.commit("init", **{"App/a.swift": "a\n", "App/b.swift": "b\n", "notes.md": "n\n"})
         self.old_base = self.head()
         self.commit("feat: topic\n\n#7 P1-01 VIEW-01", **{"App/a.swift": "a2\n"})
@@ -180,6 +182,90 @@ class RebaseVerifyTests(unittest.TestCase):
                 self.assertIn("empty", (result.stdout + result.stderr).lower())
                 self.assertNotIn("CODE same", result.stdout)
                 self.assertNotIn("da39a3ee", result.stdout)
+
+    def test_full_patch_identity_mutations_differ(self):
+        for mutation in ("rename", "deletion", "chmod", "binary", "different-path",
+                         "package-lock.json", "design/state.html", "--flag", "++flag"):
+            with self.subTest(mutation=mutation):
+                git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+                if mutation == "different-path":
+                    (self.repo / "App/other.swift").write_text("a2\n")
+                else:
+                    (self.repo / "App/a.swift").write_text("a2\n")
+                if mutation == "rename":
+                    git(self.repo, "mv", "App/b.swift", "App/c.swift", env=self.env)
+                elif mutation == "deletion":
+                    git(self.repo, "rm", "App/b.swift", env=self.env)
+                elif mutation == "chmod":
+                    (self.repo / "App/b.swift").chmod(0o755)
+                elif mutation == "binary":
+                    (self.repo / "App/blob.bin").write_bytes(b"\x00changed\xff")
+                elif mutation in ("--flag", "++flag"):
+                    with (self.repo / "App/a.swift").open("a") as f:
+                        f.write(mutation + "\n")
+                elif mutation in ("package-lock.json", "design/state.html"):
+                    path = self.repo / mutation
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("changed\n")
+                git(self.repo, "add", "-A", env=self.env)
+                git(self.repo, "commit", "-qm", "feat: topic\n\n#7 P1-01 VIEW-01", env=self.env)
+                result = self.verify()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("CODE differ", result.stdout)
+
+    def test_identical_edit_in_a_different_existing_path_differs(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("base", **{"App/b.swift": "a\n"})
+        self.old_base = self.head()
+        self.new_base = self.old_base
+        self.commit("edit", **{"App/a.swift": "a2\n"})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+        self.commit("edit", **{"App/b.swift": "a2\n"})
+        result = self.verify()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_removing_double_minus_source_line_is_significant(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("base", **{"App/a.swift": "a\n--flag\n"})
+        self.old_base = self.new_base = self.head()
+        self.commit("edit", **{"App/a.swift": "a2\n--flag\n"})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.new_base, env=self.env)
+        self.commit("edit", **{"App/a.swift": "a2\n"})
+        result = self.verify()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("CODE differ", result.stdout)
+
+    def test_rebase_preserves_patch_with_shifted_hunks_and_blob_ids(self):
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("base", **{"App/a.swift": "prefix\na\nsuffix\n"})
+        self.old_base = self.head()
+        self.commit("edit", **{"App/a.swift": "prefix\na2\nsuffix\n"})
+        self.old_head = self.head()
+        git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
+        self.commit("upstream", **{"App/a.swift": "upstream\nprefix\na\nsuffix\n"})
+        self.new_base = self.head()
+        git(self.repo, "cherry-pick", self.old_head, env=self.env)
+        result = self.verify()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CODE same", result.stdout)
+
+    def test_generated_ledger_is_excluded_and_ledger_only_is_empty(self):
+        (self.repo / "docs").mkdir()
+        self.commit("feat: topic\n\n#7 P1-01 VIEW-01", **{
+            "App/a.swift": "a2\n", "docs/feature-ledger.md": "generated\n",
+            "docs/feature-ledger.html": "generated html\n"})
+        result = self.verify()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CODE same", result.stdout)
+        self.old_base = self.new_base = self.head()
+        self.commit("ledger only", **{"docs/feature-ledger.md": "regenerated\n"})
+        self.old_head = self.head()
+        result = self.verify()
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("empty", result.stderr)
 
     def test_unknown_commit_exits_3(self):
         result = subprocess.run(["zsh", str(Path(__file__).with_name("rebase-verify.sh")), "nope", "HEAD", "HEAD",
