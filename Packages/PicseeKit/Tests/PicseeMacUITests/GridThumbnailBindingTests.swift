@@ -145,7 +145,8 @@ private actor HeldGridImagePort {
         #expect(cell.representedItemID == [a, b][index].itemID)
         #expect(cell.tileLayer?.contents != nil)
         #expect(cell.isSelected == selected, "\(phase) cell \(index)")
-        #expect(cell.isSelectionBadgeVisible == selected, "\(phase) cell \(index)")
+        // Owner decision 2026-11-03 (#405): no ✓ badge at any selection count.
+        #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(phase) cell \(index)")
     }
     try assertCell(0, selected: true, phase: "loaded")
     try assertCell(1, selected: true, phase: "loaded")

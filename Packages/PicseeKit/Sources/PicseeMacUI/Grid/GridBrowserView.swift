@@ -34,7 +34,6 @@ import PicseeApplication
     private let selectionOutline = CALayer()
     private let placeholder = NSTextField(labelWithString: String(localized: "Thumbnail pending"))
     private let nameLabel = NSTextField(labelWithString: "")
-    private let selectionBadge = NSTextField(labelWithString: "✓")
     private var showsName = true
 
     public override func loadView() {
@@ -57,15 +56,8 @@ import PicseeApplication
         nameLabel.maximumNumberOfLines = 1
         nameLabel.wantsLayer = true
         nameLabel.layer?.cornerRadius = DesignMetrics.radii["inner"]!
-        selectionBadge.alignment = .center
-        selectionBadge.textColor = .white
-        selectionBadge.font = .systemFont(ofSize: 12, weight: .semibold)
-        selectionBadge.wantsLayer = true
-        selectionBadge.layer?.cornerRadius = 9
-        selectionBadge.layer?.borderWidth = 1
-        selectionBadge.isHidden = true
-        selectionBadge.setAccessibilityElement(false)
         // Selection stays at the tile edge; Current Item has a 2pt clear gap and 2pt stroke.
+        // No ✓ badge at any selection count: pages 11 and 32 draw no `.selected-check` (#405).
         selectionOutline.borderWidth = 1
         selectionOutline.cornerRadius = DesignMetrics.radii["inner"]!
         selectionOutline.isHidden = true
@@ -78,7 +70,6 @@ import PicseeApplication
         surface.addSubview(tile)
         surface.addSubview(placeholder)
         surface.addSubview(nameLabel)
-        surface.addSubview(selectionBadge)
         surface.setAccessibilityRole(.button)
         view = surface
         layoutContent()
@@ -91,8 +82,6 @@ import PicseeApplication
         tile.frame = NSRect(x: 4, y: showsName ? 32 : 4, width: width, height: height)
         placeholder.frame = tile.frame
         nameLabel.frame = NSRect(x: 4, y: 4, width: width, height: 21)
-        selectionBadge.frame = NSRect(x: tile.frame.maxX - 25, y: tile.frame.maxY - 25,
-            width: 18, height: 18)
         selectionOutline.frame = tile.frame
         currentRing.frame = tile.frame.insetBy(dx: -4, dy: -4)
     }
@@ -168,14 +157,12 @@ import PicseeApplication
         var accent = NSColor.clear.cgColor
         var fill = NSColor.clear.cgColor
         var surface = NSColor.clear.cgColor
-        var badgeFill = NSColor.clear.cgColor
         var ring = NSColor.clear.cgColor
         view.effectiveAppearance.performAsCurrentDrawingAppearance {
             ring = DesignColor.focusRing.nsColor.cgColor
             accent = DesignColor.accent.nsColor.cgColor
             fill = DesignColor.selectionFill.nsColor.cgColor
             surface = DesignColor.sidebarBackground.nsColor.cgColor
-            badgeFill = DesignColor.primaryFill.nsColor.cgColor
         }
         selectionOutline.borderColor = accent
         selectionOutline.isHidden = !isSelected
@@ -184,14 +171,10 @@ import PicseeApplication
         currentRing.isHidden = !isCurrent
         // grid-light.html: the Current Item's name row carries the accent wash too, before anything is selected.
         nameLabel.layer?.backgroundColor = isSelected || isCurrent ? fill : NSColor.clear.cgColor
-        selectionBadge.layer?.backgroundColor = badgeFill
-        selectionBadge.layer?.borderColor = NSColor(calibratedRed: 1, green: 1, blue: 1, alpha: 1).cgColor
-        selectionBadge.isHidden = !isSelected
         // VoiceOver tells the Current Item apart from Selection; whole keys keep zh-Hans 「已选中，当前」 punctuation.
         view.setAccessibilityValue(isSelected && isCurrent ? String(localized: "Selected, Current")
             : isSelected ? String(localized: "Selected") : isCurrent ? String(localized: "Current") : "")
     }
-    public var isSelectionBadgeVisible: Bool { !selectionBadge.isHidden }
 }
 
 /// grid-display.html `.grid-tools-panel`: Thumbnail Size, Show File Names, Thumbnails (Fill and Crop / Fit Entire Image).

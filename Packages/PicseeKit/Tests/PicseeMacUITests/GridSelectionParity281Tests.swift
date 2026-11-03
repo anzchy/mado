@@ -73,7 +73,8 @@ import PicseeCore
             .first { $0.stringValue == "DSC_0342.jpg" })
         // grid-light.html: the single .is-selected cell is the Current Item: ring plus tinted name row, no ✓.
         #expect(!cell.currentRingLayer.isHidden)
-        #expect(!cell.isSelectionBadgeVisible)
+        // Owner decision 2026-11-03 (#405): no ✓ badge at any selection count.
+        #expect(gridCheckGlyphs(in: cell.view).isEmpty)
         let expectedFill = try design.color(".layout-exploration .photo-cell.is-selected .photo-name",
             "background", viewport: 1280)
         let fillColor = try #require(name.layer?.backgroundColor)
