@@ -31,7 +31,7 @@ const cases = [
   ['Close', [/no orphaned/]],
   ['Relaunch', [/no longer exist/]],
   ['Cancel mid-load', [/cancelled or its result discarded/, /progress UI disappears/]],
-  ['Tasks cancelled on close', [/\bis cancelled\b/, /released/, /observes the cancellation|no late side effect/, /device run/]],
+  ['Tasks cancelled on close', [/\bis cancelled\b/, /released/, /cancellation flag or handle is cancelled/, /ends early/, /device run/]],
   ['Late or stale completion', [/never delivered/, /not with a sleep/]],
 ];
 
@@ -53,9 +53,33 @@ test('checklist names every lifecycle case and the four-part case shape', () => 
   assert.match(text, /`n\/a`/);
 });
 
+// Case 7 must not offer release or suppression (a missing side effect, a discarded
+// result) as an alternative to cancellation, whatever the punctuation between them.
+const notCancellation = String.raw`(?:releas\w*|suppress\w*|discard\w*|ignor\w*|(?:no\s+)?late\s+side\s+effects?|not\s+delivered)`;
+const cancellationAlternative = new RegExp(
+  String.raw`cancel\w*[\s,;:()\[\]\x60'"/—–-]*(?:\bor\b|\/)[^.]{0,60}?\b${notCancellation}` +
+    String.raw`|\b${notCancellation}[\s,;:()\[\]\x60'"/—–-]*(?:\bor\b|\/)[^.]{0,20}?\bcancel`,
+  'i',
+);
+
+test('the case 7 guard rejects release or suppression offered instead of cancellation', () => {
+  for (const fixture of [
+    'is cancelled, or released when its window closes', // gpt-auditor i410-confirm M1 counterexample
+    'is cancelled or released when its window closes',
+    'is cancelled (or released) when its window closes',
+    'is cancelled / released when its window closes',
+    'is cancelled; or\nreleased when its window closes',
+    'is released or cancelled when its window closes',
+    'observes the cancellation (`CancellationError`) or that no late side effect follows the close',
+    'is cancelled, or its result is suppressed',
+  ]) {
+    assert.match(fixture, cancellationAlternative, `guard misses: ${fixture}`);
+  }
+});
+
 test('tasks cancelled on close requires cancellation, not only release', () => {
   const body = caseBody(read(checklistPath), 'Tasks cancelled on close');
-  assert.doesNotMatch(body, /cancelled or released/, 'release must not substitute for cancellation');
+  assert.doesNotMatch(body, cancellationAlternative, 'release or suppression must not substitute for cancellation');
 });
 
 test('checklist points to the brief template visual rows instead of repeating them', () => {
