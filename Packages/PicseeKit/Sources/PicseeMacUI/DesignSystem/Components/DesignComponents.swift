@@ -160,7 +160,7 @@ public struct ScaleIndicator: View {
         Button(action: activate) {
             Text(label)
                 .font(Font(DesignMetrics.font("uiSmall")))
-                .foregroundStyle(DesignColor.textSecondary.color)
+                .foregroundStyle(DesignColor.textPrimary.color)
                 .padding(5)
                 .frame(minWidth: 100)
         }

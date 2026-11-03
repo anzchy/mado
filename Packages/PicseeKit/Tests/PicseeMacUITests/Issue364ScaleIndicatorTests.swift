@@ -54,7 +54,10 @@ private struct Issue364PinnedScaleLabel: View {
         let minWidth = try design.length(selector, "min-width", viewport: 1280)
         let padding = try design.length(".zoom-label", "padding", viewport: 1280)
         let radius = try design.length(".zoom-label", "border-radius", viewport: 1280)
-        let textColor = try design.color(".zoom-label", "color", viewport: 1280)
+        let textColor = try design.color(".viewer-floating-controls > [data-viewer-controls] .zoom-label", "color", viewport: 1280)
+        let primary = theme == .dark ? [229.0, 231.0, 235.0] : [26.0, 26.0, 26.0]
+        #expect(textColor == PinnedDesign.Color(red: primary[0] / 255, green: primary[1] / 255,
+                                               blue: primary[2] / 255, alpha: 1))
         let hoverColor = try design.color(".zoom-label:hover", "background", viewport: 1280)
         func reference(_ label: String, _ hovered: Bool) -> Issue364PinnedScaleLabel {
             Issue364PinnedScaleLabel(label: label, hovered: hovered, fontSize: fontSize,
