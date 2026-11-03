@@ -34,7 +34,7 @@ private let statesLocalizationKeys = [
     "Show Inspector", "Hide Inspector", "Focus Canvas", "Inspector Placeholder",
     "Cancel", "Retry", "Close", "Open Recent", "Always Show Tools", "Zoom mode", "Fit window",
     "Previous Image", "Next Image", "Previous image", "Next image", "Zoom in", "Zoom out",
-    "Show image information", "Open folder", "Enter Full Screen", "Exit Full Screen", "Component Preview",
+    "Show image information", "Hide image information", "More browse actions", "Return to grid", "Show sidebar", "Hide sidebar", "Open folder", "Enter Full Screen", "Exit Full Screen", "Component Preview",
     "This File Can’t Be Opened", "“%@” isn’t a supported image format.",
     "None of These Files Can Be Opened", "None of the dropped or opened files is a supported image.",
     "You can also drop images or folders here.",

@@ -101,16 +101,14 @@ import PicseeApplication
 @Test @MainActor func statesHiddenLinksRefreshActualInspectorAccessibilityAndLoadingBoundary() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
-    let inspector = try #require(scene.chrome.tools.first { $0.command == .inspector })
+    // #444: page 14 has no Inspector tool; Inspector stays on View › Show Inspector (⌘I) and the 更多 menu.
+    #expect(!scene.chrome.tools.contains { $0.command == .inspector })
     scene.session.setInspectorVisible(true)
     scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
     #expect(scene.session.isEnabled(.inspector))
-    #expect(inspector.isAccessibilityEnabled())
     scene.session.setInspectorVisible(false)
     scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
     #expect(!scene.session.isEnabled(.inspector))
-    #expect(!inspector.isAccessibilityEnabled())
-    #expect(!inspector.acceptsFirstResponder)
     scene.state.display(.loading(""))
     #expect(scene.state.showsProgress)
     #expect(scene.state.textLines == ["Opening …"])

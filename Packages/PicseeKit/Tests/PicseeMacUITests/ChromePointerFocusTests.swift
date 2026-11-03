@@ -32,6 +32,8 @@ import PicseeApplication
     let content = NSView(frame: window.contentView!.bounds)
     let canvas = CanvasView(frame: content.bounds, session: session)
     let overlay = ViewerChromeOverlay(frame: content.bounds, session: session)
+    // #444: the 缩放模式 tool opens a menu; a real NSMenu popup would block the main actor in tests.
+    overlay.menuPresenter = RecordingMenuPresenter()
     content.addSubview(canvas); content.addSubview(overlay); window.contentView = content
     host.canvas = canvas; host.overlay = overlay; session.chromeHost = host
     // Mirror CanvasWindowController's production veto, which a plain NSPanel misses.
@@ -71,7 +73,12 @@ import PicseeApplication
     window.sendEvent(try chromeKey(48, "\t", shift: true))
     #expect(window.firstResponder === overlay.tools.last)
     window.sendEvent(try chromeKey(48, "\t", shift: true))
-    let keyboardTool = overlay.tools[5]
+    // #444: page 14 leading pod 侧栏/返回网格/更多 replaces 打开/信息, so tool indices after it shift by one.
+    // The 缩放模式 control opens its mode menu; choosing 1:1 keeps the Space path observable.
+    let menuPresenter = RecordingMenuPresenter()
+    menuPresenter.choose = 1
+    overlay.menuPresenter = menuPresenter
+    let keyboardTool = overlay.tools[6]
     let visual = try #require(keyboardTool.subviews.first as? NSHostingView<ChromeToolFace>)
     #expect(window.firstResponder === keyboardTool)
     session.reportCanvasZoom(2)

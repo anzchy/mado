@@ -189,7 +189,7 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     let session = ViewerSession()
     let canvas = CanvasView(frame: frame, session: session)
     let tool = ChromeToolView(frame: NSRect(x: 180, y: 190, width: 40, height: 32),
-                              session: session, command: .open)
+                              session: session, kind: .command(.open))
     let host = Issue362Host()
     host.canvas = canvas
     session.host = host

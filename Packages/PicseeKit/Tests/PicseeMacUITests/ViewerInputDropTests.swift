@@ -81,7 +81,11 @@ import PicseeApplication
     let window = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false; window.contentView = content
     defer { window.close() }
-    let tool = try #require(chrome.tools.first)
+    // #444: page 14's leading pod has no 打开 tool; 更多 is always enabled and presents its menu.
+    let presenter = RecordingMenuPresenter()
+    chrome.menuPresenter = presenter
+    chrome.moreMenuProvider = { NSMenu(title: "More") }
+    let tool = chrome.tools[2]
     let point = content.convert(NSPoint(x: tool.bounds.midX, y: tool.bounds.midY), from: tool)
     #expect(content.hitTest(point) === tool)
     #expect(content.hitTest(NSPoint(x: 480, y: 100)) === canvas)
@@ -90,7 +94,7 @@ import PicseeApplication
     let up = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
         timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0))
     tool.mouseDown(with: down); tool.mouseUp(with: up)
-    #expect(host.opened == 1)
+    #expect(presenter.presented.count == 1 && presenter.presented.first?.anchor === tool)
     #expect(session.imageStatus == .empty)
     #expect(dropped.isEmpty)
     let board = NSPasteboard.withUniqueName()

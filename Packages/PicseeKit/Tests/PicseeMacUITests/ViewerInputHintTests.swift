@@ -102,8 +102,8 @@ private struct InputHintCatalog: Decodable {
         #expect(try inputHintVisibleInk(scene.content, in: local) > 10)
         print("inputHint geometry", width, hintFrame, "button", buttonFrame)
         #expect(scene.window.makeFirstResponder(scene.canvas))
-        let openTool = try #require(scene.chrome.tools.first)
-        for target: NSView in [button, openTool, scene.canvas] {
+        let moreTool = scene.chrome.tools[2]  // #444: 侧栏 and 返回网格 are disabled with no folder; 更多 is first in the loop.
+        for target: NSView in [button, moreTool, scene.canvas] {
             scene.window.selectNextKeyView(nil)
             #expect(scene.window.firstResponder === target)
         }

@@ -18,7 +18,8 @@ import PicseeApplication
     window.contentView = content
     defer { window.close() }
     overlay.linkKeyViews(to: canvas)
-    let first = try #require(overlay.tools.first)
+    // #444: page 14's leading pod has no 打开 tool; 侧栏 is disabled without a folder, so 上一张 is the routed tool.
+    let first = overlay.tools[3]
     let point = first.convert(NSPoint(x: 15, y: 14), to: content)
     #expect(content.hitTest(NSPoint(x: 480, y: 320)) === canvas)
     for visible in [true, false, true] {
@@ -28,9 +29,9 @@ import PicseeApplication
         if visible {
             #expect(content.hitTest(point) === first)
             #expect(first.acceptsFirstResponder)
-            #expect(canvas.nextValidKeyView === first)
+            #expect(canvas.nextValidKeyView === overlay.tools[2])  // 更多 is the first enabled tool
             #expect(window.makeFirstResponder(first))
-            #expect(overlay.accessibilityChildren()?.count == 7)
+            #expect(overlay.accessibilityChildren()?.count == 8)
         } else {
             #expect(content.hitTest(point) === canvas)
             #expect(overlay.tools.allSatisfy { !$0.acceptsFirstResponder })

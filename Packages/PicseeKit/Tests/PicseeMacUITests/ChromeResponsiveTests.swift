@@ -31,17 +31,20 @@ import PicseeApplication
         window.setContentSize(size)
         #expect(overlay.groups.map(\.frame.minY) == [y, y, y])
         #expect(overlay.groups.map(\.frame.height) == [38, 38, 38])
-        #expect(overlay.groups[0].frame == NSRect(x: 16, y: y, width: 72, height: 38))
-        #expect(overlay.groups[2].frame == NSRect(x: size.width - 212, y: y, width: 196, height: 38))
-        for tool in overlay.tools {
+        // #444, page 14: leading pod 104 wide (侧栏/返回网格/更多), zoom pod 174 wide with the 100×26 缩放模式 select.
+        #expect(overlay.groups[0].frame == NSRect(x: 16, y: y, width: 104, height: 38))
+        #expect(overlay.groups[2].frame == NSRect(x: size.width - 190, y: y, width: 174, height: 38))
+        for tool in overlay.tools where tool.command != .actualPixels {
             #expect(tool.frame.height == 28)
             #expect(tool.frame.minY == 5)
         }
+        #expect(overlay.tools[6].frame == NSRect(x: 37, y: 6, width: 100, height: 26))
         #expect(overlay.tools[0].frame.minX == 5)
         #expect(overlay.tools[1].frame.minX == 37)
-        #expect(overlay.tools[4].frame.minX == 5)
-        #expect(overlay.tools[5].frame.minX == 37)
-        #expect(overlay.tools[6].frame.minX == 161)
+        #expect(overlay.tools[2].frame.minX == 69)
+        #expect(overlay.tools[5].frame.minX == 5)
+        #expect(overlay.tools[6].frame.minX == 37)
+        #expect(overlay.tools[7].frame.minX == 139)
     }
 }
 

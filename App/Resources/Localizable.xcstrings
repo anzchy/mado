@@ -1182,6 +1182,8 @@
         }
       }
     },
+    "Hide image information": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Hide image information"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"隐藏图片信息"}}}},
+    "More browse actions": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"More browse actions"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"更多浏览操作"}}}},
     "Open folder": {
       "extractionState": "manual",
       "localizations": {

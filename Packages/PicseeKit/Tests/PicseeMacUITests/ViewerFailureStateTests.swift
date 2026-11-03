@@ -53,7 +53,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     defer { scene.session.closeImage(); scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/B.jpg"), pipeline: pipeline, leases: leases)?.value
     scene.state.refresh(); scene.chrome.refresh(); scene.chrome.setToolsVisible(true)
-    #expect(scene.chrome.tools.count == 7)
+    #expect(scene.chrome.tools.count == 8)  // #444: 侧栏 / 返回网格 / 更多 + ← → + − 缩放模式 +
     for tool in scene.chrome.tools {
         let point = tool.convert(NSPoint(x: tool.bounds.midX, y: tool.bounds.midY), to: scene.content)
         #expect(scene.content.hitTest(point) === tool)
@@ -62,8 +62,12 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     let point = retry.convert(NSPoint(x: retry.bounds.midX, y: retry.bounds.midY), to: scene.content)
     #expect(scene.content.hitTest(point) === retry)
     for command: CommandID in [.zoomOut, .actualPixels, .zoomIn] { #expect(!scene.session.isEnabled(command)) }
-    scene.chrome.tools.first?.activate()
-    #expect(scene.host.opens == 1)
+    // #444: 打开 left the pod; 更多 still presents its menu over a failed image.
+    let presenter = RecordingMenuPresenter()
+    scene.chrome.menuPresenter = presenter
+    scene.chrome.moreMenuProvider = { NSMenu(title: "More") }
+    scene.chrome.tools[2].activate()
+    #expect(presenter.presented.count == 1)
 }
 
 @Test @MainActor func statesLimitedKeepsActualPreviewAndDoesNotTakeFocus() async {
