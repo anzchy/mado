@@ -199,6 +199,33 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
     /// (the payload's real ratio is unknown until it is read), capped at the budget.
     package func cachedImage(for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
         guard let thumbnailCache, let key = ticket.request.renderKey else { return nil }
+        try Task.checkCancellation()
+        try ticket.request.accessPermit?.check()
+        let memoryPermitted: Bool
+        if thumbnailCache.supportsMemoryReuse { memoryPermitted = await cache.permits(ticket.request.priority) }
+        else { memoryPermitted = false }
+        let context = await snapshotContext()
+        if memoryPermitted, let resident = await cache.holdThumbnail(ticket, context: context) {
+            let validated: DecodedImage?
+            do {
+                validated = try await thumbnailCache.revalidateMemory(resident, for: ticket)
+                try Task.checkCancellation()
+                try ticket.request.accessPermit?.check()
+            } catch {
+                await unpin(key)
+                throw error
+            }
+            if let validated {
+                await cache.retainThumbnail(validated, for: ticket, context: context)
+                await unpin(key)
+                try Task.checkCancellation()
+                try ticket.request.accessPermit?.check()
+                await cache.thumbnailLookup(ticket, hit: true, context: context)
+                return validated
+            }
+            await unpin(key)
+        }
+        if memoryPermitted { await cache.thumbnailLookup(ticket, hit: false, context: context) }
         let edge = ticket.request.maximumPixelSize
         let cost = (try? DecodeBudget.outputCost(width: edge, height: edge, maximumPixelSize: edge, bytesPerPixel: 4,
             budget: configuration.budget)) ?? configuration.budget
@@ -208,6 +235,11 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
             cacheTrace?.diskLookup(hit: image != nil)
             return image
         }
+    }
+    package func retainThumbnail(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async {
+        guard thumbnailCache?.supportsMemoryReuse == true else { return }
+        let context = await snapshotContext()
+        await cache.retainThumbnail(image, for: ticket, context: context)
     }
     private func lookup(_ request: ImageDecodeRequest, key: RenderKey, observation: UUID) async throws -> ImageCacheRequest {
         let context = await snapshotContext()

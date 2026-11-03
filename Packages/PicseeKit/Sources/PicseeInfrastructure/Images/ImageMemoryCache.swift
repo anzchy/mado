@@ -35,6 +35,10 @@ public actor ImageMemoryCache {
         var variants: [DecodedImage] = []
         var stale = false
         var accessPermit: AccessWorkPermit?
+        // Durable pixels are consumable only by the lease-bound, content-validated path.
+        var leaseBound = false
+        var durableKey: DurableThumbnailKey?
+        var durableGeneration: UInt64 = 0
         // What admission reported, so the departure reports the same bytes whatever the entry holds by then.
         var admittedBytes = 0
     }
@@ -86,6 +90,7 @@ public actor ImageMemoryCache {
     func image(for key: RenderKey, context: ResourceSnapshotContext? = nil) -> DecodedImage? {
         defer { reportMovements() }
         guard let index = entries.firstIndex(where: { $0.key == key }) else { return nil }
+        guard !entries[index].leaseBound else { return nil }
         if entries[index].accessPermit?.isCurrent == false {
             entries[index].stale = true
             if entries[index].pins == 0 { depart(at: index, .discarded); emit(context); account(context) }
@@ -95,6 +100,55 @@ public actor ImageMemoryCache {
         entries.append(entry)
         emit(context)
         return entry.image
+    }
+    /// Holds the resident buffer in the shared ledger while the caller awaits source/payload validation.
+    /// Old authority is not renewed here, and no pixels may be delivered until validation succeeds.
+    func holdThumbnail(_ ticket: ThumbnailCacheTicket, context: ResourceSnapshotContext? = nil) -> DecodedImage? {
+        defer { reportMovements() }
+        guard let key = ticket.request.renderKey,
+              let index = entries.firstIndex(where: {
+                  $0.key == key && !$0.stale && $0.durableKey == ticket.key && $0.durableGeneration == ticket.generation
+              }) else { return nil }
+        entries[index].pins += 1
+        emit(context); account(context)
+        return entries[index].image
+    }
+    /// Only a successful durable read/store or revalidation supplies this proof.
+    func retainThumbnail(_ image: DecodedImage, for ticket: ThumbnailCacheTicket,
+                         context: ResourceSnapshotContext? = nil) {
+        defer { reportMovements() }
+        guard !Task.isCancelled, let key = ticket.request.renderKey,
+              image.itemID == key.itemID, image.revision == key.revision else { return }
+        holdingAuthority = true
+        _ = try? AccessWorkPermit.admitting(ticket.request.accessPermit) {
+            let tagged = DecodedImage(image: image.image, sourcePixelSize: image.sourcePixelSize,
+                formatIdentifier: image.formatIdentifier, revision: image.revision, itemID: image.itemID,
+                accessPermit: ticket.request.accessPermit)
+            if let index = entries.firstIndex(where: { $0.key == key }),
+               entries[index].pins > 0 || entries[index].image.image === image.image {
+                // A different pinned buffer keeps its own provenance and accounting.
+                guard entries[index].image.image === image.image else { return }
+                entries[index].image = tagged
+                entries[index].accessPermit = ticket.request.accessPermit
+                entries[index].stale = false
+            } else {
+                insert(tagged, for: key, accessPermit: ticket.request.accessPermit)
+            }
+            guard let index = entries.firstIndex(where: { $0.key == key && $0.image.image === image.image }) else { return }
+            entries[index].leaseBound = true
+            entries[index].durableKey = ticket.key
+            entries[index].durableGeneration = ticket.generation
+            let entry = entries.remove(at: index)
+            entries.append(entry)
+            recordRevision(key.revision, for: key.itemID)
+        }
+        holdingAuthority = false
+        emit(context)
+        trim(to: limit, context: context)
+    }
+    func thumbnailLookup(_ ticket: ThumbnailCacheTicket, hit: Bool, context: ResourceSnapshotContext? = nil) {
+        if hit { hits += 1 } else { misses += 1 }
+        context?.tracer.lookup(isPreview: ticket.request.isPreview, hit: hit)
     }
     func insert(_ image: DecodedImage, for key: RenderKey, context: ResourceSnapshotContext? = nil, accessPermit: AccessWorkPermit? = nil) {
         defer { reportMovements() }
@@ -125,6 +179,7 @@ public actor ImageMemoryCache {
                        !entries[index].variants.contains(where: { $0.image === entries[index].image.image }) {
                         entries[index].variants.append(entries[index].image)
                     }
+                    if entries[index].image.image !== image.image { entries[index].durableKey = nil }
                     entries[index].image = image
                     entries[index].accessPermit = image.accessPermit ?? entries[index].accessPermit
                     if replacesOrigin { entries[index].stale = false }
@@ -152,7 +207,9 @@ public actor ImageMemoryCache {
         emit(context)
         if entries[index].pins == 0 {
             if !entries[index].variants.isEmpty { entries[index].variants.removeAll(); emit(context) }
-            if entries[index].stale || entries[index].accessPermit?.isCurrent == false || entries[index].image.image.bytesPerRow * entries[index].image.image.height > capacity {
+            // Revoked durable pixels may remain dormant within budget. Only a new leased validation
+            // can renew their origin; ordinary session memory still drops revoked entries.
+            if entries[index].stale || (entries[index].accessPermit?.isCurrent == false && entries[index].durableKey == nil) || entries[index].image.image.bytesPerRow * entries[index].image.image.height > capacity {
                 depart(at: index, .discarded)
                 emit(context)
             }
@@ -271,7 +328,7 @@ public actor ImageMemoryCache {
             guard let image, !Task.isCancelled, image.itemID == request.key.itemID,
                   image.revision == request.key.revision else { return nil }
             // Independent waiters can complete after admission removed its shared job. Keep one buffer.
-            if let retained = entries.first(where: { $0.key == request.key && !$0.stale }) { return retained.image }
+            if let retained = entries.first(where: { $0.key == request.key && !$0.stale && !$0.leaseBound }) { return retained.image }
             // Telemetry is an external callback; publish it after releasing authority.
             insert(image, for: request.key, accessPermit: accessPermit)
             inserted = true

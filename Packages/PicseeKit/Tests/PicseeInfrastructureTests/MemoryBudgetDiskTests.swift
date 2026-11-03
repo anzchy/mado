@@ -100,6 +100,9 @@ private func diskPayloads(_ rig: DiskRig) throws -> [URL] {
         try #require(try diskPayloads(rig).count == 1, "the first load left a durable payload, so the next one is warm")
         let payload = source.image.bytesPerRow * source.image.height
         try #require(payload < square && (limit - payload) % 16 == 0)
+        // Native cold loads now retain proven pixels; clear residency so this fixture tests disk staging.
+        await pipeline.memoryPressure(.critical)
+        await pipeline.memoryPressure(.normal)
         // Leaves exactly the real payload's bytes free: enough for the pixels, not for the bound.
         let filler = cacheKey(900)
         await pipeline.pin(filler, image: cacheImage(try cachePixels(rows: (limit - payload) / 16), key: filler))
@@ -207,6 +210,8 @@ private func diskPayloads(_ rig: DiskRig) throws -> [URL] {
         let key = try #require(request.renderKey)
         await pipeline.pin(key, image: first)
         await pipeline.unpin(key)
+        // Keep the old buffer resident but unproven, forcing disk fallback to exercise its replacement.
+        await pipeline.cache.insert(first, for: key)
         let (again, second) = try await rig.load(pipeline, edge: 64, priority: .visible)
         try #require(again.renderKey == key)
         try #require(second.image !== first.image)
