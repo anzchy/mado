@@ -80,7 +80,7 @@ delegator 在 brief 中列出**本次新增或改变的所有可达状态和必�
 - **谁做**：不是实现者的角色（delegator，或有设备权限的审计者）。实现者仍不启动 App、不驱动 GUI。
 - **怎么做**：按 `$macos-device-test`，对 **PR head** 运行 `scripts/device/build.sh`，取共享 GUI 锁，`launch.sh`，`doctor.sh` 全部通过；按 `features/` 里对应配方，经真实用户路径走**一条**变更路径（配方缺失先补写，见 #176）；记录动作与结果状态，`cleanup.sh` 后释放锁。证据留在 `~/.picsee/device-runs/<run-id>/`。
 - **结论**：PR 描述写 `Device-Smoke: PASS|FAIL|NOT VERIFIED <head7> run=<id> — <走过的路径>`。`FAIL` 阻止合入，修复后重做；`NOT VERIFIED` 须写明具体阻碍（例如仅 @2x 可达）并经用户同意才能合入。
-- **时效**：结论只覆盖那份补丁。之后 App 代码有任何改动就重做；只改测试、文档、账簿，或 rebase 后 `rebase-verify.sh` 报 `CODE same`，结论保留。
+- **时效**：结论只覆盖那份补丁。rebase 后，`rebase-verify.sh` 比较完整补丁（仅排除由 `rebase-ledger.sh` 重写、由 ledger gate 检查的 `docs/feature-ledger.md` 和 `docs/feature-ledger.html`），保留路径、重命名、删除、文件模式和二进制内容，仅归一化 blob ID 与 hunk 行号偏移。报告 `CODE same` 时结论保留；`CODE differ` 时重新做组合审计和 smoke。测试、文档、design 与依赖文件也在比较范围内；exit 4 表示任一比较补丁为空，不提供结论沿用证据，delegator 须检查两段范围并取得适用的新证据、重跑 gates。
 - **不是升级**：冒烟不写 `docs/validation` 记录，不升级账簿行，也不替代批次真机对照；它只把「没人在真实 App 里走过这条路」挡在合入之前。
 
 ### 批次真机对照

@@ -89,7 +89,8 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
-   fails closed (`design≠0`). A summary without `DONE` is no evidence.
+   fails closed (`design≠0`). A summary without `DONE` is no evidence. Exit 1 means a lane failed even with `DONE`;
+   inspect the lane exit codes printed to stdout and the summary file, fix failures and rerun before pushing.
 5. **Apply verdict** — merge both verdicts. C/H block → fix + fresh-context confirm by each auditor; at most 2 auditor rounds
    per item (blind audit + one confirm). C/H still open after round 2 → stop and ask the user whether to continue. User-visible/AC Medium → one fix round, no
    confirm. Other Medium/Low → PR "Still open". If consulting
@@ -97,8 +98,12 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    once per auditor.
 6. **Rebase** — `$SK/scripts/rebase-ledger.sh` in the PR worktree (never pipe `git rebase`; it keeps `#` body
    lines), then `$SK/scripts/rebase-verify.sh <old-base> <audited-head> <new-base> <new-head>`. A verdict covers a
-   patch: `CODE same` keeps audits and smoke; `CODE differ` (a hand-resolved conflict) → quick combination check by
-   both auditors before gates; `MESSAGES differ` → fix before pushing. Rerun all gates yourself (guide §5.6).
+   patch: compare the full patch except `docs/feature-ledger.md` and `docs/feature-ledger.html` (regenerated and
+   checked by the ledger gate), preserving paths, renames, deletions, modes and binary content while normalizing
+   blob IDs and hunk line offsets. `CODE same` keeps audits and smoke; `CODE differ` → quick combination check by
+   both auditors before gates; `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
+   including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
+   any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
 7. **Gardener** — first `node scripts/ledger/garden-gate.mjs <base> <head>` (re-push: add `--since <gardened head>
    --verdict <V>`); SKIP/REUSE/RESOLVED → that line goes in the PR body, no gardener (rules:
    `docs/agents/doc-gardening.md` §When it runs). On `RUN`: `picsee-doc-gardener` (Claude subagent on Haiku / Codex
