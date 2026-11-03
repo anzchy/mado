@@ -17,6 +17,16 @@ public struct ReadFailedStateText: Equatable, Sendable {
     private var hoverTracking: NSTrackingArea?
     override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
     override var canBecomeKeyView: Bool { acceptsFirstResponder }
+    /// The focused 24F action takes bare Return before the menu's Open Selected Image equivalent.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown, event.keyCode == 36 || event.keyCode == 76,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+              window?.firstResponder === self, isEnabled, !isHiddenOrHasHiddenAncestor else {
+            return super.performKeyEquivalent(with: event)
+        }
+        performClick(nil)
+        return true
+    }
     override var focusRingMaskBounds: NSRect { bounds }
     override func drawFocusRingMask() {
         NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
