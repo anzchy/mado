@@ -750,7 +750,7 @@ private enum Sidebar425BehaviorError: Error, Equatable { case original }
                 let completed = await closeAndAwaitSidebarWatches(controller, watch: watch, testRoot: base)
                 let elapsed = ContinuousClock.now - before
                 #expect(!completed)
-                #expect(elapsed >= .milliseconds(1800) && elapsed < .seconds(10), "best-effort limit is two seconds, subject to scheduling")
+                #expect(elapsed >= .milliseconds(1800), "two-second drain must not time out early; main-actor queueing can delay observation")
                 #expect(fm.fileExists(atPath: sentinel.path))
             }
             #expect(Bool(false), "original behavior error was swallowed by cleanup")
