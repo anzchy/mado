@@ -41,10 +41,13 @@ import PicseeInfrastructure
     let pressed = ".ds-icon-button[aria-pressed=\"true\"]"
     #expect(try design.exactDeclaration(pressed, "color") == "var(--color-text)")
     #expect(try design.exactDeclaration(pressed, "background") == "var(--color-hover)")
+    let releasedColor = try design.exactDeclaration(".ds-icon-button", "color")
+    try #require(releasedColor.hasPrefix("var(") && releasedColor.hasSuffix(")"))
+    let releasedToken = String(releasedColor.dropFirst(4).dropLast())
     #expect(shell.toggleButton.state == (on ? .on : .off))
     #expect(shell.sidebar.isHidden == !on)
     try issue406Color(shell.toggleButton.contentTintColor,
-        design.color(":root", on ? "--color-text" : "--color-muted", viewport: 1280),
+        design.color(":root", on ? "--color-text" : releasedToken, viewport: 1280),
         appearance: shell.effectiveAppearance)
     let fill = shell.toggleButton.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))
     if on {
@@ -63,9 +66,10 @@ import PicseeInfrastructure
     let width = Double(shell.bounds.width)
     let expectedGap = try design.length(".keyboard-hint>span", "margin-right", viewport: width)
         + design.length(".grid-bottom-bar", "gap", viewport: width)
-    let hintFrame = hint.convert(hint.bounds, to: shell.footer)
+    // NSTextField draws its text 2pt inside its frame, as in the #281 status labels.
+    let textBox = label.convert(label.bounds.insetBy(dx: 2, dy: 0), to: shell.footer)
     let searchFrame = shell.searchButton.convert(shell.searchButton.bounds, to: shell.footer)
-    #expect(abs(Double(searchFrame.minX - hintFrame.maxX) - expectedGap) < 0.01)
+    #expect(abs(Double(searchFrame.minX - textBox.maxX) - expectedGap) < 0.01)
     // Label inherits :root · --color-text; only .ds-keycap · color is muted.
     try issue406Color(label.textColor, design.color(":root", "--color-text", viewport: width),
         appearance: shell.effectiveAppearance)

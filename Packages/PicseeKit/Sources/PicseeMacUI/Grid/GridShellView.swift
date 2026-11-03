@@ -420,7 +420,9 @@ import PicseeCore
         let quickLookWidth = Self.cellWidth(quickLookLabel)
         let hintWidth = keycapWidth + 5 + quickLookWidth
         // Page 11/12: the hint span's 7pt trailing margin precedes the Bottom Bar's 16pt gap.
-        keyboardHint.frame = NSRect(x: searchButton.frame.minX - 7 - 16 - hintWidth, y: 6,
+        // Match the text box: NSTextField draws 2pt inside its frame, as in the status labels below.
+        let hintTextInset: CGFloat = 2
+        keyboardHint.frame = NSRect(x: searchButton.frame.minX - 7 - 16 + hintTextInset - hintWidth, y: 6,
                                     width: hintWidth, height: 28)
         spaceKeycap.frame = NSRect(x: 0, y: 5, width: keycapWidth, height: 18)
         quickLookLabel.frame = NSRect(x: keycapWidth + 5, y: 6, width: quickLookWidth, height: 18)
