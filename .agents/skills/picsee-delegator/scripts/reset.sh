@@ -3,8 +3,8 @@
 # usage: reset.sh <agent-name> <pane-id>
 # Verified 2026-10-22 on Codex 0.163.0: `/new` opens a "Where should the new conversation run?"
 # chooser (option 1 = current worktree, preselected), so two Enters are needed, sent with
-# `herdr pane send-keys` (agent send-keys does not submit). herdr reports the new session id
-# only after the next turn, so the caller checks the id after the request starts.
+# `herdr pane send-keys` (agent send-keys does not submit). Prefer the pane session id
+# change as proof; when unavailable, require a visible same-read session boundary.
 set -eu
 name=$1 pane=$2
 context_secs=${PICSEE_RESET_CONTEXT_SECS-30}
@@ -20,23 +20,41 @@ done
 # Parse one screen only: the last boundary and bottom-most eligible footer win.
 # A chooser is a boundary, but its footer still belongs to the pre-start UI.
 footer() {
-  LC_ALL=C awk '
+  LC_ALL=C awk -v proved="${1:-0}" '
+    BEGIN { seen = proved; started = proved }
     /^[[:space:]]*```/ { if (fence == "`") fence = ""; else if (!fence) fence = "`"; next }
     /^[[:space:]]*~~~/ { if (fence == "~") fence = ""; else if (!fence) fence = "~"; next }
     fence { next }
     /^[[:space:]]*Where should the new conversation run/ { ctx = ""; seen = 1; started = 0; next }
-    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ {
+    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ ||
+    /^[[:space:]]*>_ OpenAI Codex \(v[0-9][^)]*\)[[:space:]]*$/ {
       ctx = ""; seen = 1; started = 1; next
     }
-    started && /^[[:space:]]*Context [0-9]+% used[[:space:]]*$/ {
-      ctx = $0; sub(/^[[:space:]]*/, "", ctx); sub(/[[:space:]]*$/, "", ctx)
+    started && (/^[[:space:]]*Context [0-9]+% used[[:space:]]*$/ ||
+      /^[[:space:]]*(GPT-|gpt-)[^[:space:]]+[[:space:]]+[[:alnum:]_-]+[[:space:]]+·[[:space:]]+Context [0-9]+% used([[:space:]]+·.*)?[[:space:]]*$/) {
+      match($0, /Context [0-9]+% used/); ctx = substr($0, RSTART, RLENGTH)
     }
     END { printf "%d:%s\n", seen, ctx }
   '
 }
+# Decode the documented nested field; unrelated JSON "value" fields are not identities.
+# Missing/malformed/unavailable pane metadata falls back to visible screen evidence.
+pane_session() {
+  herdr pane get "$pane" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    value = json.load(sys.stdin)["result"]["pane"]["agent_session"]["value"]
+    if isinstance(value, str) and value.strip():
+        print(value)
+except (ValueError, KeyError, TypeError):
+    pass
+'
+}
 st=$(herdr agent get $name 2>&1 | grep -oE '"agent_status":"[a-z]+"' | cut -d'"' -f4)
 case $st in idle|done) ;; *) echo "FAIL reset $name: status $st, not idle"; exit 1;; esac
 old=$(herdr agent get $name 2>&1 | grep -oE '"value":"[^"]+"' | head -1 | cut -d'"' -f4)
+old_pane_session=$(pane_session)
+[[ -z $old_pane_session ]] || old=$old_pane_session
 herdr pane send-text $pane '/new' >/dev/null
 # The first Enter can be swallowed by the slash-command popup; press until the chooser shows.
 for i in 1 2 3; do
@@ -50,12 +68,22 @@ typeset -F SECONDS
 deadline=$((SECONDS + context_secs))
 boundary_seen=0
 while true; do
-  parsed=$(herdr pane read $pane 2>&1 | footer)
+  current_session=$(pane_session)
+  session_proof=0
+  unchanged=0
+  if [[ -n $old_pane_session && -n $current_session ]]; then
+    if [[ $current_session != "$old_pane_session" ]]; then session_proof=1; else unchanged=1; fi
+  fi
+  parsed=$(herdr pane read $pane 2>&1 | footer $session_proof)
   [[ ${parsed%%:*} == 1 ]] && boundary_seen=1
   ctx=${parsed#*:}
+  # A known unchanged id overrides visual evidence until the next poll.
+  (( ! unchanged )) || ctx=""
   [[ -n $ctx ]] && break
   if (( SECONDS >= deadline )); then
-    if (( ! boundary_seen )); then
+    if (( unchanged )); then
+      echo "FAIL reset $name: session id unchanged after ${context_secs}s; check the pane"
+    elif (( ! boundary_seen )); then
       echo "FAIL reset $name: no new-session boundary seen within ${context_secs}s; check the pane"
     else
       echo "FAIL reset $name: no context line after ${context_secs}s"

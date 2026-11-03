@@ -305,6 +305,9 @@ class ResolvePart3Tests(unittest.TestCase):
         self.assertIn('<<<<<<<', out)
 
 
+LIVE_RESET_SCREEN = '\n  >_ OpenAI Codex (v0.166.0)\n     ~/Documents/mac-app/picsee-wt/device-v001\n\n\n\n\n                                           ⣀⣤⣤⣤⣀⣀\n                                        ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀\n                                      ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄\n                                     ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧\n                                  ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇\n                                 ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷\n                                ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀\n                                ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄\n                                ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿\n                                ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇\n                                  ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿\n                                  ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃\n                                  ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁\n                                   ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁\n                                    ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟\n                                       ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏\n                                              ⠈⠙⠛⠿⠿⠿⠿⠛⠉\n\n\n\n\n› Ask Codex to do anything\n\n  GPT-6-Sol medium · Context 0% used · ~/Documents/mac-app/picsee-wt/device-v001\n  ? for shortcuts\n'
+
+
 class ResetTests(unittest.TestCase):
     """Run the real reset CLI through chooser/startup/context transitions."""
 
@@ -313,7 +316,7 @@ class ResetTests(unittest.TestCase):
 
     def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2",
                   poll="0.01", prefix="", startup="Starting MCP servers (3/4)", timer_var=None, old_context="",
-                  ready_boundary="/new", locale=None):
+                  ready_boundary="/new", locale=None, session_before="", session_after="", session_delay=0):
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -323,6 +326,17 @@ class ResetTests(unittest.TestCase):
 case "$1 $2" in
   'agent get')
     printf '{"agent_status":"%s","value":"old-session"}\\n' "$RESET_STATUS"
+    ;;
+  'pane get')
+    count=0
+    [ ! -f "$RESET_STATE/gets" ] || count=$(cat "$RESET_STATE/gets")
+    echo $((count + 1)) > "$RESET_STATE/gets"
+    session=$RESET_SESSION_BEFORE
+    if [ -f "$RESET_STATE/enters" ] && [ "$(cat "$RESET_STATE/enters")" -ge 2 ] &&
+       [ "$(cat "$RESET_STATE/reads")" -ge "$RESET_SESSION_DELAY" ]; then
+      session=$RESET_SESSION_AFTER
+    fi
+    printf '{"result":{"pane":{"other":{"value":"wrong-id"},"agent_session":{"value":"%s"}}}}\\n' "$session"
     ;;
   'pane send-text')
     echo sent >> "$RESET_STATE/sends"
@@ -365,6 +379,8 @@ esac
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
             env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                   "RESET_SESSION_BEFORE": session_before, "RESET_SESSION_AFTER": session_after,
+                   "RESET_SESSION_DELAY": str(session_delay),
                    "RESET_STATE": str(root), "RESET_STATUS": status, "RESET_CHOOSER": str(int(chooser)),
                    "RESET_DELAY": str(delay), "RESET_CONTEXT": context,
                    "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
@@ -381,7 +397,101 @@ esac
                                      "fixture-agent", "fixture-pane"],
                                     capture_output=True, text=True, env=env, timeout=5)
             result.pane_sends = (root / "sends").read_text() if (root / "sends").exists() else ""
+            result.pane_gets = int((root / "gets").read_text()) if (root / "gets").exists() else 0
             return result, time.monotonic() - started
+
+    def test_real_saved_screen_with_missing_session_id_succeeds(self):
+        result, _ = self.run_reset(context=LIVE_RESET_SCREEN, ready_boundary="", locale="C")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_changed_session_id_proves_markerless_footer(self):
+        result, _ = self.run_reset(session_before="old-session", session_after="new-session", ready_boundary="")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_unchanged_session_id_never_accepts_header_or_command(self):
+        for screen in (LIVE_RESET_SCREEN, "/new\nContext 0% used"):
+            with self.subTest(screen=screen):
+                result, _ = self.run_reset(session_before="old-session", session_after="old-session",
+                                           context=screen, ready_boundary="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout,
+                                 "FAIL reset fixture-agent: session id unchanged after 0.1s; check the pane\n")
+
+    def test_session_id_change_is_polled_before_success(self):
+        result, _ = self.run_reset(session_before="old-session", session_after="new-session", session_delay=2)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+        self.assertGreaterEqual(result.pane_gets, 4)
+
+    def test_session_id_unavailable_on_either_side_uses_header(self):
+        for before, after in (("", "new-session"), ("old-session", "")):
+            with self.subTest(before=before, after=after):
+                result, _ = self.run_reset(session_before=before, session_after=after,
+                                           context=LIVE_RESET_SCREEN, ready_boundary="")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_changed_session_still_requires_footer_and_rejects_nonzero(self):
+        for context, expected in (("", "no context line after 0.1s"),
+                                  ("Context 12% used", "Context 12% used after /new")):
+            with self.subTest(context=context):
+                result, _ = self.run_reset(session_before="old-session", session_after="new-session",
+                                           context=context, ready_boundary="", startup="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, f"FAIL reset fixture-agent: {expected}\n")
+
+    def test_real_status_line_needs_proof_and_rejects_nonzero(self):
+        result, _ = self.run_reset(context=LIVE_RESET_SCREEN.replace("Context 0%", "Context 12%"),
+                                   ready_boundary="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+        footer = LIVE_RESET_SCREEN.splitlines()[-2]
+        result, _ = self.run_reset(context=footer, ready_boundary="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_quoted_or_fenced_header_cannot_prove_reset(self):
+        for header in ('> >_ OpenAI Codex (v0.166.0)', '" >_ OpenAI Codex (v0.166.0)"',
+                       '```\n>_ OpenAI Codex (v0.166.0)\n```'):
+            with self.subTest(header=header):
+                result, _ = self.run_reset(context=header + "\nContext 0% used", ready_boundary="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_header_must_precede_footer_in_same_read(self):
+        for delay, startup, context in ((0, "", "Context 0% used\n>_ OpenAI Codex (v0.166.0)"),
+                                         (1, ">_ OpenAI Codex (v0.166.0)", "Context 0% used")):
+            with self.subTest(delay=delay):
+                result, _ = self.run_reset(delay=delay, startup=startup, context=context,
+                                           ready_boundary="", deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_changed_id_does_not_accept_footer_under_chooser(self):
+        result, _ = self.run_reset(session_before="old-session", session_after="new-session",
+                                   prefix="Where should the new conversation run?", ready_boundary="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_unchanged_session_id_waits_on_nonzero_footer(self):
+        result, elapsed = self.run_reset(session_before="old-session", session_after="old-session",
+                                         context="Context 12% used", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout,
+                         "FAIL reset fixture-agent: session id unchanged after 0.1s; check the pane\n")
+        self.assertGreaterEqual(elapsed, 0.09)
+
+    def test_quoted_or_fenced_decorated_footer_is_ignored(self):
+        footer = LIVE_RESET_SCREEN.splitlines()[-2]
+        for quoted in ('> ' + footer.strip(), '"' + footer.strip() + '"',
+                       'The pane says ' + footer.strip(), '```\n' + footer + '\n```',
+                       '~~~\n' + footer + '\n~~~'):
+            with self.subTest(quoted=quoted):
+                result, _ = self.run_reset(context=quoted, deadline="0.1")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
 
     def test_empty_startup_reads_preserve_success(self):
         for delay in (0, 1, 3, 12):
