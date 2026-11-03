@@ -335,3 +335,48 @@ import PicseeApplication
         }
     }
 }
+
+@Test @MainActor func issue453Fix1ClampedPageKeysKeepMultiSelectionLikeArrows() {
+    let scene = PageKeyScene()
+    for (page, arrow, endpoint, selected): (UInt16, UInt16, Int, Set<Int>) in [
+        (121, 125, 119, [2, 119]), (116, 126, 0, [0, 2]),
+    ] {
+        scene.reset(endpoint, selected: selected.sorted())
+        scene.grid.restoreContentOffset(NSPoint(x: 0, y: endpoint == 0 ? 900 : 0))
+        let selection = scene.grid.selection
+        let nativeSelection = scene.grid.collectionView.selectionIndexPaths
+        let current = scene.grid.currentItemID, offset = scene.grid.contentOffset
+        let character = arrow == 125 ? "\u{F701}" : "\u{F700}"
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: scene.window.windowNumber, context: nil,
+            characters: character, charactersIgnoringModifiers: character, isARepeat: false, keyCode: arrow)!
+        for _ in 0..<2 {
+            scene.grid.collectionView.keyDown(with: event)
+            #expect(scene.grid.selection == selection)
+            #expect(scene.grid.contentOffset == offset)
+            scene.press(page)
+            #expect(scene.grid.currentItemID == current)
+            #expect(scene.grid.selection == selection, "clamped page key must preserve the picked set like its arrow")
+            #expect(scene.grid.collectionView.selectionIndexPaths == nativeSelection)
+            #expect(scene.grid.contentOffset == offset, "a clamped page key must not reveal an offscreen current item")
+        }
+    }
+}
+
+@Test @MainActor func issue453Fix1HomeEndExplicitlySelectAndRevealCurrentEndpoint() {
+    let scene = PageKeyScene()
+    for (key, endpoint, selected): (UInt16, Int, Set<Int>) in [(115, 0, [0, 2]), (119, 119, [2, 119])] {
+        for flags: NSEvent.ModifierFlags in [[], .shift] {
+            scene.reset(endpoint, selected: selected.sorted())
+            scene.grid.restoreContentOffset(NSPoint(x: 0, y: endpoint == 0 ? 900 : 0))
+            scene.press(key, flags)
+            #expect(scene.index == endpoint)
+            scene.expectSelected(flags.isEmpty ? [endpoint] : selected)
+            scene.expectRevealed()
+            let offset = scene.grid.contentOffset
+            scene.press(key, flags)
+            scene.expectSelected(flags.isEmpty ? [endpoint] : selected)
+            #expect(scene.grid.contentOffset == offset)
+        }
+    }
+}
