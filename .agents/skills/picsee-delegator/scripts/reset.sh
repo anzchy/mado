@@ -3,8 +3,9 @@
 # usage: reset.sh <agent-name> <pane-id>
 # Verified 2026-10-22 on Codex 0.163.0: `/new` opens a "Where should the new conversation run?"
 # chooser (option 1 = current worktree, preselected), so two Enters are needed, sent with
-# `herdr pane send-keys` (agent send-keys does not submit). Prefer the pane session id
-# change as proof; when unavailable, require a visible same-read session boundary.
+# `herdr pane send-keys` (agent send-keys does not submit). Require a fresh Codex
+# header above the footer in the same read, or an optional pane session id change.
+# herdr may retain the old id until the first turn; an unchanged id is not a veto.
 set -eu
 name=$1 pane=$2
 context_secs=${PICSEE_RESET_CONTEXT_SECS-30}
@@ -25,8 +26,11 @@ footer() {
     /^[[:space:]]*```/ { if (fence == "`") fence = ""; else if (!fence) fence = "`"; next }
     /^[[:space:]]*~~~/ { if (fence == "~") fence = ""; else if (!fence) fence = "~"; next }
     fence { next }
-    /^[[:space:]]*Where should the new conversation run/ { ctx = ""; seen = 1; started = 0; next }
-    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ ||
+    /^[[:space:]]*Where should the new conversation run/ { ctx = ""; started = 0; next }
+    # Commands/startup text clear earlier screen proof, but are not fresh headers.
+    /^[[:space:]]*((>|❯|›) )?\/new[[:space:]]*$/ || /^[[:space:]]*Starting MCP servers([[:space:]]|$)/ {
+      ctx = ""; started = proved; next
+    }
     /^[[:space:]]*>_ OpenAI Codex \(v[0-9][^)]*\)[[:space:]]*$/ {
       ctx = ""; seen = 1; started = 1; next
     }
@@ -70,20 +74,15 @@ boundary_seen=0
 while true; do
   current_session=$(pane_session)
   session_proof=0
-  unchanged=0
-  if [[ -n $old_pane_session && -n $current_session ]]; then
-    if [[ $current_session != "$old_pane_session" ]]; then session_proof=1; else unchanged=1; fi
+  if [[ -n $old_pane_session && -n $current_session && $current_session != "$old_pane_session" ]]; then
+    session_proof=1
   fi
   parsed=$(herdr pane read $pane 2>&1 | footer $session_proof)
   [[ ${parsed%%:*} == 1 ]] && boundary_seen=1
   ctx=${parsed#*:}
-  # A known unchanged id overrides visual evidence until the next poll.
-  (( ! unchanged )) || ctx=""
   [[ -n $ctx ]] && break
   if (( SECONDS >= deadline )); then
-    if (( unchanged )); then
-      echo "FAIL reset $name: session id unchanged after ${context_secs}s; check the pane"
-    elif (( ! boundary_seen )); then
+    if (( ! boundary_seen )); then
       echo "FAIL reset $name: no new-session boundary seen within ${context_secs}s; check the pane"
     else
       echo "FAIL reset $name: no context line after ${context_secs}s"
