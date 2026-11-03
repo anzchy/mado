@@ -42,7 +42,7 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
     let page = try Data(contentsOf: directory.appendingPathComponent("permission-denied.html"))
     #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == "5e32473422a6d92199874a7e60907a9327ba00e25825f09dd26f8e1a8454af29")
     let manifest = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
-    #expect(SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined() == "c8abe6f749db6e2c00bd4585ca7d62c68288a1795bb1c1e444f5cd40490d4bee")
+    #expect(SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined() == "995e6352bd6392980c2ed1c17495775a0936320c39013b67fa7006ca6f4b848e")
 }
 
 @Test(arguments: LostAccessCase.all) @MainActor private func t229LostAccessPinnedNativeComposition(_ sample: LostAccessCase) throws {

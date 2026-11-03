@@ -37,9 +37,9 @@ const SHORTCUT_CARDS=[['files','文件与窗口','任何时候'],['grid','网格
 const GRID_BAR_PAGES=['grid-light','grid-dark','grid-display','empty-folder','search-empty','folder-loading','permission-denied','compact-grid','components','grid-context-menu','grid-multiselect'];
 const GRID_BAR_CASES=[...GRID_BAR_PAGES.map(n=>n+'.html'),'empty-folder.html?theme=dark','empty-folder.html?drag=over','permission-denied.html?theme=dark','folder-loading.html?case=failed','folder-loading.html?case=failed&theme=dark',
  'grid-light.html?scroll=behind','grid-dark.html?scroll=behind','grid-light.html?transparency=reduced','grid-dark.html?transparency=reduced'];
-// Pages that show the viewer command bar keep the bytes they had before #317 (user: 「不改，只改网格底栏」).
-// Change this list only together with a deliberate viewer design change.
-const VIEWER_BAR_SHA256={'viewer-quiet':'1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101','viewer-controls':'0fae9834fe355d410efbfb4172e0036fec5cff67fa03a4b0c2e17a4e7dbe4c80','viewer-inspector':'d35be19fb247bee4642ddce699db764bd66231798e66439358d5877b0082a413','image-error':'98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb','original-size':'8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'87608c3f46431660e6920074834d798e82960571002aa9a2da4562cf41857992','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
+// #317 retained prior viewer bytes; #347 deliberately supersedes tool fill on 14/16/33 only.
+// Other viewer pages retain their old pins and are not #351 tool-fill oracles.
+const VIEWER_BAR_SHA256={'viewer-quiet':'1cb5ee6198cd4333f156095c35fa7e1ea03eccb03e3b0144bfe799794f2cd101','viewer-controls':'8577ac87f024fd2d8923d003de44b2b5a4ae410215b1a9cf9d170d5fc86551c1','viewer-inspector':'18ccde89fe43e8514f42d26af03a45b92de18f5f3faf322fed1709bb97723d75','image-error':'98573fc7914a86e4c55c55b233aa4901a26ba080763ddda92f4474405b7119cb','original-size':'8b4395816c23ae87fae0aa99efda248db30d09949a76273e2d9c38db6e17aab9','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'5e29ff116c256162441366a9a78d1dadc3454384d30e23e8b42463c2fadeb83c','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
 module.exports=async(page,{design,states,screenshot})=>{
  const base=design+'/prototypes/picsee-browser/states/';
  const errors=[],failures=[],results=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))failures.push({url:r.url(),status:r.status()})});
@@ -61,56 +61,81 @@ module.exports=async(page,{design,states,screenshot})=>{
   if(state.name==='viewer-filmstrip'&&(await page.locator('.c-filmstrip-images button').count()!==12||await page.locator('.navigation-pod').count()))throw Error('Filmstrip regression');
   results.push({name:state.name,passed:true});
  }
- // #347: chosen frosted Viewer Tools and Thumbnail Size variants are rendered design inputs.
- const variantFailures=[];let viewerToolVariants=0,thumbnailSizeVariants=0;
- for(const file of ['viewer-controls','viewer-inspector','viewer-filmstrip'])for(const theme of ['light','dark']){
+ // #347 fix1: owner A A C (2026-11-03) replaces the .72 height oracle and adds rendered contrast.
+ const variantFailures=[],contrastTable=[],geometryTable=[];let viewerToolVariants=0,thumbnailSizeVariants=0;
+ const canonicalTokens=await (await page.request.get(design+'/picsee-ui-system/tokens/viewer-grid.css')).text();
+ const viewerRules=await (await page.request.get(base+'viewer-grid-variants.css')).text();
+ const runtimeTokens=await (await page.request.get(base+'_ds/picsee-ui-system/tokens/viewer-grid.css')).text();
+ if(canonicalTokens!==runtimeTokens)variantFailures.push('canonical/runtime tokens differ');
+ for(const file of ['grid-light','grid-dark','viewer-controls','viewer-inspector','viewer-filmstrip']){
+  await page.goto(base+file+'.html');
+  const inline=await page.evaluate(()=>({links:[...document.querySelectorAll('link[rel="stylesheet"]')].map(e=>e.href),tokens:document.querySelector('style[data-viewer-grid-tokens]')?.textContent,tools:document.querySelector('style[data-viewer-tools]')?.textContent,imports:[...document.querySelectorAll('style')].some(e=>/@import\b/.test(e.textContent))}));
+  if(inline.imports||(file.startsWith('viewer')&&inline.tools?.trim()!==viewerRules.trim()))variantFailures.push(file+': external import or stale inline tool rules');
+  if(inline.links.length||inline.tokens?.trim()!==canonicalTokens.trim())variantFailures.push(file+': rendering is not fully inline/pinned');
+ }
+ for(const file of ['viewer-controls','viewer-inspector','viewer-filmstrip'])for(const theme of ['light','dark'])for(const backdrop of ['white','black']){
   await page.setViewportSize({width:1280,height:800});await page.goto(base+file+'.html?theme='+theme);
-  for(const image of ['white','black']){
-   // Extreme light/dark image backdrops exercise the real composited material, not a mocked style function.
-   await page.addStyleTag({content:'.picture-stage{background:'+image+'}.large-image{visibility:hidden}'});
-   const got=await page.evaluate(()=>({theme:document.documentElement.className,pods:[...document.querySelectorAll('[data-viewer-controls]')].map(e=>{
-    const s=getComputedStyle(e),r=e.getBoundingClientRect();return{kind:e.dataset.viewerControls,fill:s.backgroundColor,blur:s.backdropFilter,radius:s.borderRadius,shadow:s.boxShadow,visible:r.width>0&&r.height>0,opacity:s.opacity,color:s.color,
-     icons:[...e.querySelectorAll('button,select')].map(b=>({color:getComputedStyle(b).color,opacity:getComputedStyle(b).opacity}))}})}));
-   viewerToolVariants++;
-   const expected=file==='viewer-filmstrip'?['leading','zoom']:['leading','navigation','zoom'];
-   if(!got.theme.includes('theme-'+theme)||JSON.stringify(got.pods.map(p=>p.kind).sort())!==JSON.stringify(expected))variantFailures.push(file+' '+theme+': theme/groups');
-   const expectedMaterial=await page.evaluate(theme=>{
-    const probe=document.createElement('i');document.body.append(probe);
-    probe.style.backgroundColor='color-mix(in srgb, '+(theme==='light'?'#fff':'#141821')+' 50%, transparent)';probe.style.boxShadow='var(--shadow-soft)';
-    const s=getComputedStyle(probe),result={fill:s.backgroundColor,shadow:s.boxShadow};probe.remove();return result;
-   },theme);
-   for(const [index,p] of got.pods.entries()){
-    if(p.fill!==expectedMaterial.fill||p.shadow!==expectedMaterial.shadow)variantFailures.push(file+' '+theme+': panel/shadow '+JSON.stringify(p));
-    if(!await page.locator('[data-viewer-controls]').nth(index).evaluate(e=>e.checkVisibility({opacityProperty:true,visibilityProperty:true})))variantFailures.push(file+' '+theme+': tools hidden by ancestor');
-    if(p.blur!=='blur(20px) saturate(1.6)'||!p.fill.endsWith(' / 0.5)')||p.radius!=='6px'||p.shadow==='none'||!p.visible||p.opacity!=='1')variantFailures.push(file+' '+theme+' '+image+': material '+JSON.stringify(p));
-    if(p.icons.some(i=>i.opacity!=='1'||i.color!==(theme==='light'?'rgb(26, 26, 26)':'rgb(229, 231, 235)')))variantFailures.push(file+' '+theme+' '+image+': icon foreground');
-   }
+  await page.addStyleTag({content:'.picture-stage{background:'+backdrop+'}.large-image{visibility:hidden}'});
+  // Preserve unrelated root classes when switching theme (L2).
+  await page.evaluate(()=>{document.documentElement.classList.add('review-marker');const script=[...document.scripts].find(s=>s.textContent.includes("get('theme')"));if(script)(0,eval)(script.textContent)});
+  const got=await page.evaluate(()=>{
+   const box=e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};
+   const pods=[...document.querySelectorAll('[data-viewer-controls]')];
+   const surfaces=pods.map(e=>({kind:e.dataset.viewerControls,box:box(e),fill:getComputedStyle(e).backgroundColor,blur:getComputedStyle(e).backdropFilter,radius:getComputedStyle(e).borderRadius,shadow:getComputedStyle(e).boxShadow,visible:e.checkVisibility({opacityProperty:true,visibilityProperty:true})}));
+   const counter=document.querySelector('.viewer-file-label > span, .c-strip-count'),zoom=document.querySelector('.zoom-pod select');
+   const elements=[...pods.flatMap(p=>[...p.querySelectorAll('svg')].map((e,i)=>({e,kind:'glyph',name:p.dataset.viewerControls+'-icon-'+i}))),{e:counter,kind:'text',name:'counter'},{e:zoom,kind:'text',name:'zoom'}].map(({e,kind,name})=>{
+    if(!e)return{missing:true,kind,name};const p=e.closest('[data-viewer-controls],.c-filmstrip'),s=getComputedStyle(e);
+    return{kind,name,box:box(e),surface:box(p),color:s.color,halo:kind==='glyph'?s.filter:s.textShadow,visible:e.checkVisibility({opacityProperty:true,visibilityProperty:true})};
+   });
+   const probe=document.createElement('i');probe.style.boxShadow='var(--shadow-soft)';document.body.append(probe);const shadow=getComputedStyle(probe).boxShadow;probe.remove();
+   return{theme:document.documentElement.className,pods:surfaces,elements,shadow};
+  });
+  viewerToolVariants++;
+  const expected=file==='viewer-filmstrip'?['leading','zoom']:['leading','navigation','zoom'];
+  if(!got.theme.includes('theme-'+theme)||!got.theme.includes('review-marker')||JSON.stringify(got.pods.map(p=>p.kind).sort())!==JSON.stringify(expected))variantFailures.push(file+' '+theme+': theme/classes/groups');
+  const fill=await page.evaluate(theme=>{const e=document.createElement('i');e.style.backgroundColor='color-mix(in srgb,'+(theme==='light'?'#fff':'#141821')+' 50%,transparent)';document.body.append(e);const c=getComputedStyle(e).backgroundColor;e.remove();return c},theme);
+  for(const p of got.pods)if(p.fill!==fill||p.blur!=='blur(20px) saturate(1.6)'||p.radius!=='6px'||p.shadow!==got.shadow||!p.visible)variantFailures.push(file+' '+theme+': material '+p.kind);
+  const screenshot=(await page.screenshot()).toString('base64');
+  // Sample the actual screenshot: interior backing colour and the strongest rendered foreground pixel,
+  // after blur, alpha compositing, halo and font antialiasing. No computed-color-only contrast oracle.
+  const measured=await page.evaluate(async({screenshot,elements})=>{
+   const img=new Image();img.src='data:image/png;base64,'+screenshot;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);
+   const pixel=(x,y)=>[...ctx.getImageData(Math.floor(x),Math.floor(y),1,1).data].slice(0,3);
+   const lum=rgb=>rgb.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+   const contrast=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
+   return elements.map(e=>{if(e.missing)return e;const target=e.color.match(/[\d.]+/g).slice(0,3).map(Number);const bg=pixel(e.surface.x+e.surface.width/2,e.surface.y+4);let foreground,best=Infinity;
+    for(let y=Math.ceil(e.box.y);y<Math.floor(e.box.y+e.box.height);y++)for(let x=Math.ceil(e.box.x);x<Math.floor(e.box.x+e.box.width);x++){
+     const rgb=pixel(x,y),d=rgb.reduce((s,v,i)=>s+(v-target[i])**2,0);if(d<best){best=d;foreground=rgb;}
+    }
+    return{element:e.name,kind:e.kind,foreground,background:bg,ratio:foreground?contrast(foreground,bg):0,halo:e.halo,visible:e.visible,color:e.color};
+   });
+  },{screenshot,elements:got.elements});
+  for(const e of measured){if(!e.halo?.includes('1px'))variantFailures.push(file+': missing nonzero halo '+e.name);contrastTable.push({page:file,theme,backdrop,...e});
+   if(e.missing||!e.visible||!e.halo||e.halo==='none'||e.color!==(theme==='light'?'rgb(26, 26, 26)':'rgb(229, 231, 235)')||e.ratio<(e.kind==='glyph'?3:4.5))variantFailures.push(file+' '+theme+' '+backdrop+': rendered contrast '+JSON.stringify(e));
   }
  }
- for(const file of ['grid-light','grid-dark']){
+ for(const file of ['grid-light','grid-dark'])for(const viewport of [480,720,1050,1280,1600]){
   let invariant;
   for(const [query,size] of [['',220],['?thumbnail-size=140',140],['?thumbnail-size=220',220],['?thumbnail-size=280',280],['?thumbnail-size=invalid',220]]){
-   await page.setViewportSize({width:1280,height:800});await page.goto(base+file+'.html'+query);
+   await page.setViewportSize({width:viewport,height:800});await page.goto(base+file+'.html'+query);
    const got=await page.evaluate(()=>{
-    const grid=document.querySelector('.photo-grid'),s=getComputedStyle(grid),rect=grid.getBoundingClientRect();
-    const bar=document.querySelector('.grid-bottom-bar'),b=bar.getBoundingClientRect(),bs=getComputedStyle(bar);
+    const grid=document.querySelector('.photo-grid'),s=getComputedStyle(grid),rect=grid.getBoundingClientRect(),bar=document.querySelector('.grid-bottom-bar'),b=bar.getBoundingClientRect(),bs=getComputedStyle(bar);
     const cells=[...grid.querySelectorAll('.photo-cell')].map(e=>{const t=e.querySelector('.thumbnail-wrap').getBoundingClientRect(),r=e.getBoundingClientRect();return{width:r.width,height:t.height}});
-    // Exercise actual overflow, keeping the fixture's title/AX full name available.
     const cell=grid.querySelector('.photo-cell'),label=cell.querySelector('.photo-name');label.textContent='很长的中英文件名 — A very long photograph filename with details — 2026.jpg';cell.title=label.textContent;
-    const ls=getComputedStyle(label),lr=label.getBoundingClientRect();
-    return{size:getComputedStyle(grid).getPropertyValue('--thumb-min').trim(),width:rect.width,gap:parseFloat(s.columnGap),columns:s.gridTemplateColumns.split(' ').length,cells,
+    const ls=getComputedStyle(label),lr=label.getBoundingClientRect();return{size:s.getPropertyValue('--thumb-min').trim(),width:rect.width,gap:parseFloat(s.columnGap),columns:s.gridTemplateColumns.split(' ').length,cells,
      label:{ellipsis:ls.textOverflow,wrap:ls.whiteSpace,overflow:ls.overflow,clipped:label.scrollWidth>label.clientWidth,inside:lr.right<=cell.getBoundingClientRect().right,full:cell.title===label.textContent},
      bar:{rect:[b.x,b.y,b.width,b.height],fill:bs.backgroundColor,border:bs.borderTop,html:bar.innerHTML},overflow:document.documentElement.scrollWidth>innerWidth};
    });
    thumbnailSizeVariants++;
-   const columns=Math.floor((got.width+got.gap)/(size+got.gap)),width=(got.width-(columns-1)*got.gap)/columns;
-   if(got.size!==size+'px'||got.columns!==columns||got.cells.some(c=>Math.abs(c.width-width)>.1||Math.abs(c.height-size*.72)>.1)||got.overflow)variantFailures.push(file+query+': geometry '+JSON.stringify(got));
+   const min=viewport<=720?145:size,columns=viewport<=480?1:Math.max(1,Math.floor((got.width+got.gap)/(min+got.gap))),width=(got.width-(columns-1)*got.gap)/columns;
+   const baseHeight=viewport>=1600?200:viewport<=1050?165:Math.max(135,Math.min(225,viewport*.147));const height=viewport<=720?150:baseHeight*size/220;
+   geometryTable.push({page:file,viewport,size,columns:got.columns,track:got.cells[0]?.width,height:got.cells[0]?.height,query});
+   if(got.columns!==columns||got.cells.some(c=>Math.abs(c.width-width)>.1||Math.abs(c.height-height)>.1)||got.overflow||got.bar.rect[2]!==viewport)variantFailures.push(file+query+' @'+viewport+': geometry '+JSON.stringify(got));
    if(got.label.ellipsis!=='ellipsis'||got.label.wrap!=='nowrap'||got.label.overflow!=='hidden'||!got.label.clipped||!got.label.inside||!got.label.full)variantFailures.push(file+query+': filename '+JSON.stringify(got.label));
-   if(invariant&&JSON.stringify(got.bar)!==invariant)variantFailures.push(file+query+': Bottom Bar changed with size');
-   invariant=JSON.stringify(got.bar);
+   if(invariant&&JSON.stringify(got.bar)!==invariant)variantFailures.push(file+query+': Bottom Bar changed with size');invariant=JSON.stringify(got.bar);
   }
  }
- if(variantFailures.length)throw Error('#347 variants: '+variantFailures.join(' | '));
+ if(variantFailures.length)throw Error('#347 fix1 variants: '+variantFailures.join(' | '));
  // Each manifest sha256 pins the exact bytes of its page.
  for(const state of catalog.states){const actual=await page.evaluate(async f=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',await(await fetch(f,{cache:'no-store'})).arrayBuffer()))].map(b=>b.toString(16).padStart(2,'0')).join(''),state.file);if(actual!==state.sha256)throw Error(state.file+' SHA256 mismatch: manifest '+state.sha256+', actual '+actual)}
  // #347 explicitly updates only the 14/16/33 viewer pins for the chosen frosted tools; other viewer pins remain fixed.
@@ -289,5 +314,11 @@ module.exports=async(page,{design,states,screenshot})=>{
  await page.getByRole('button',{name:'33 胶片条展开 · C',exact:true}).click();await page.frameLocator('iframe').locator('.c-filmstrip').waitFor();
  if(screenshot)await page.screenshot({path:screenshot});
  await page.goto(design+'/prototypes/picsee-browser/viewer-v2.html');await page.getByTestId('large-viewer').waitFor();await page.keyboard.press('Escape');if(await page.locator('.photo-cell').count()!==12)throw Error('Interactive prototype regression');
- if(errors.length||failures.length)throw Error(JSON.stringify({errors,failures}));return{passed:true,stateCount:results.length,hashesPinned:catalog.states.length,viewerToolVariants,thumbnailSizeVariants,subcases:subcases.length+windowCases.length,journeys:journeyIds,branchPlays,canonicalPreview:true,legacy4313Preview:true,interactivePrototype:true,results,errors,failures};
+ if(errors.length||failures.length)throw Error(JSON.stringify({errors,failures}));return{passed:true,stateCount:results.length,hashesPinned:catalog.states.length,viewerToolVariants,thumbnailSizeVariants,contrastTable,geometryTable,subcases:subcases.length+windowCases.length,journeys:journeyIds,branchPlays,canonicalPreview:true,legacy4313Preview:true,interactivePrototype:true,results,errors,failures};
 };
+
+// Direct invocation runs the same real browser verification as the supported npm runner.
+if(require.main===module){
+ const run=require('node:child_process').spawnSync(process.execPath,[require('node:path').join(__dirname,'design-check.mjs')],{stdio:'inherit'});
+ process.exit(run.status??1);
+}
