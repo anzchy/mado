@@ -386,10 +386,11 @@ public final class ViewerStateHost: NSView {
             field.textColor = failure && index == 2 ? DesignColor.errorText.nsColor :
                 index == 0 ? DesignColor.textPrimary.nsColor : DesignColor.textSecondary.nsColor
             field.alignment = .center
-            field.cell?.wraps = !imageFailure
-            field.cell?.usesSingleLineMode = imageFailure
-            field.maximumNumberOfLines = imageFailure ? 1 : 0
-            if imageFailure { field.lineBreakMode = .byTruncatingMiddle }
+            let singleLineMessage = imageFailure && index == 1
+            field.cell?.wraps = !singleLineMessage
+            field.cell?.usesSingleLineMode = singleLineMessage
+            field.maximumNumberOfLines = singleLineMessage ? 1 : 0
+            if imageFailure { field.lineBreakMode = singleLineMessage ? .byTruncatingMiddle : .byWordWrapping }
             if imageFailure && index == 1 { field.toolTip = line }
             let id = index == 0 ? "state.heading" : failure
                 ? (index == 1 ? "state.filename" : "state.reason")
@@ -482,14 +483,19 @@ public final class ViewerStateHost: NSView {
     private func layoutImageError(icon: NSImageView) {
         let heading = stateLabels[0], message = stateLabels[1]
         let available = max(0, bounds.width - 48)
+        // Give the heading the content width, including the cell's horizontal padding.
+        // Page 25 permits wrapping; retain its 23pt line box when one line fits.
+        let headingSize = heading.cell!.cellSize(forBounds:
+            NSRect(x: 0, y: 0, width: available, height: 10000))
+        let headingHeight = max(23, ceil(headingSize.height))
         let messageHeight = fitImageErrorMessage(message, width: available)
         let rowHeight: CGFloat = buttons.count > 1 ? 43 : 35
-        let contentHeight: CGFloat = 32 + 18 + 23 + 9 + messageHeight + 18 + rowHeight
+        let contentHeight: CGFloat = 32 + 18 + headingHeight + 9 + messageHeight + 18 + rowHeight
         var top = bounds.midY + contentHeight / 2
         icon.frame = NSRect(x: bounds.midX - 16, y: top - 32, width: 32, height: 32)
         top -= 32 + 18
-        for (field, height) in [(heading, CGFloat(23)), (message, messageHeight)] {
-            let width = min(available, ceil(field.intrinsicContentSize.width))
+        for (field, height) in [(heading, headingHeight), (message, messageHeight)] {
+            let width = field === heading ? available : min(available, ceil(field.intrinsicContentSize.width))
             field.frame = NSRect(x: bounds.midX - width / 2, y: top - height, width: width, height: height)
             top -= height + (field === heading ? 9 : 18)
         }
