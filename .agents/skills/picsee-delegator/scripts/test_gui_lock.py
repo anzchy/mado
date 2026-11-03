@@ -3,17 +3,16 @@ import os
 import re
 import stat
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("gui-lock.sh")
-# mdpro's half of the shared lock (ADR-0141 WI-2), run read-only from `git show`, never edited.
-MDPRO_REPO = Path(os.environ.get("PICSEE_MDPRO_REPO", Path.home() / "Documents/mac-app/mdpro"))
-MDPRO_SCRIPT = "master:.agents/skills/mdpro-delegator/scripts/gui-lock.sh"
+# Optional real mdpro GUI script: PICSEE_MDPRO_SCRIPT must name it in its repository,
+# so its repository-relative heavy-lock dependency remains available. Never copy it.
 UUID4 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 ACQUIRED = re.compile(r"ACQUIRED (\S+) acquisition_id=(\S+)\n\Z")
 FIELDS = ["project", "session", "batch", "start", "pid", "expected_minutes", "purpose", "acquisition_id"]
@@ -29,6 +28,7 @@ class GuiLockBase(unittest.TestCase):
     def setUp(self):
         # A temporary HOME: the real ~/.cache/desktop-gui.lock and .mutex are never touched.
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
         self.cache = self.home / ".cache"
         self.lock = self.cache / "desktop-gui.lock"
@@ -36,9 +36,6 @@ class GuiLockBase(unittest.TestCase):
         self.mutex = self.cache / "desktop-gui.mutex"
         self.env = {**os.environ, "HOME": str(self.home), "PICSEE_GUI_LOCK_TEST": "1",
                     "PICSEE_GUI_LOCK_WAIT_SECONDS": "0.05"}
-
-    def tearDown(self):
-        self.tmp.cleanup()
 
     def run_lock(self, *args, script=SCRIPT, env=None):
         return subprocess.run(["zsh", str(script), *args], capture_output=True, text=True,
@@ -287,19 +284,42 @@ class GuiLockTests(GuiLockBase):
 class MdproInteropTests(GuiLockBase):
     def setUp(self):
         super().setUp()
-        try:
-            source = subprocess.run(["git", "-C", str(MDPRO_REPO), "show", MDPRO_SCRIPT], capture_output=True,
-                                    check=True).stdout
-        except (OSError, subprocess.CalledProcessError) as error:
-            reason = f"mdpro master not present at {MDPRO_REPO} ({error})"
-            print(f"SKIP interop: {reason}", file=sys.stderr)
-            self.skipTest(reason)
-        self.mdpro = self.home / "mdpro-gui-lock.sh"
-        self.mdpro.write_bytes(source)
+        script = os.environ.get("PICSEE_MDPRO_SCRIPT")
+        if not script:
+            self.skipTest("PICSEE_MDPRO_SCRIPT not set (requires mdpro GUI script)")
+        self.mdpro = Path(script).expanduser().resolve()
+        if not self.mdpro.is_file():
+            self.skipTest(f"mdpro GUI script unavailable: {self.mdpro}")
+        # Same layout used by mdpro's gui-lock.sh when locating this dependency.
+        self.mdpro_heavy = self.mdpro.parent.joinpath("../../../..", "scripts/heavy-lock.sh").resolve()
+        if not self.mdpro_heavy.is_file():
+            self.skipTest(f"mdpro heavy-lock script unavailable: {self.mdpro_heavy}")
         self.mdpro_env = {key: value for key, value in self.env.items() if not key.startswith("MDPRO_")}
+        # Exercise real lock ownership, with mdpro's supported deterministic
+        # admission sample; host memory pressure is outside this fixture's scope.
+        self.mdpro_env.update({"MDPRO_HEAVY_LOCK": str(self.home / "mdpro-heavy.lock"),
+                               "MDPRO_GUARD_TEST": "1",
+                               "MDPRO_LOAD_GUARD_LOG": str(self.home / "load-guard.log"),
+                               "MDPRO_LOAD_GUARD_ACTIVE": str(self.home / "load-guard-active"),
+                               "TMPDIR": str(self.home),
+                               "PICSEE_MDPRO_LOCK": str(self.home / "mdpro-heavy.lock"),
+                               "PICSEE_HEAVY_LOCK": str(self.home / "picsee-heavy.lock")})
 
     def run_mdpro(self, *args):
-        return self.run_lock(*args, script=self.mdpro, env=self.mdpro_env)
+        result = self.run_lock(*args, script=self.mdpro, env=self.mdpro_env)
+        if args[0] == "acquire" and result.returncode == 0:
+            acquisition_id = result.stdout.strip().removeprefix("acquisition_id=")
+            if UUID4.fullmatch(acquisition_id):
+                self.addCleanup(self.release_mdpro_keeper, acquisition_id)
+        return result
+
+    def release_mdpro_keeper(self, acquisition_id):
+        # Normal GUI release already stops the keeper. On assertion failure, stop
+        # only this test's keeper before TemporaryDirectory removes its owner.
+        if Path(self.mdpro_env["MDPRO_HEAVY_LOCK"]).exists():
+            result = subprocess.run([str(self.mdpro_heavy), "--release", acquisition_id],
+                                    env=self.mdpro_env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_mdpro_lock_is_busy_for_picsee_and_not_releasable(self):
         result = self.run_mdpro("acquire", "batch-m")
@@ -322,6 +342,88 @@ class MdproInteropTests(GuiLockBase):
         self.assertEqual(self.owner.read_text(), text)
         self.assertEqual(self.run_lock("release", "batch-p", "--acquisition-id", picsee_id).returncode, 0)
         self.assertFalse(self.lock.exists())
+
+
+class MdproInteropFixtureTests(unittest.TestCase):
+    def interop_result(self, script):
+        env = dict(os.environ)
+        env.pop("PICSEE_MDPRO_SCRIPT", None)
+        if script is not None:
+            env["PICSEE_MDPRO_SCRIPT"] = str(script)
+        result = unittest.TestResult()
+        with patch.dict(os.environ, env, clear=True):
+            unittest.defaultTestLoader.loadTestsFromTestCase(MdproInteropTests).run(result)
+        return result
+
+    def assert_pair_skipped(self, script, reason):
+        result = self.interop_result(script)
+        self.assertEqual(result.testsRun, 2)
+        self.assertEqual(result.failures + result.errors, [])
+        self.assertEqual(len(result.skipped), 2)
+        for _, message in result.skipped:
+            self.assertIn(reason, message)
+
+    def test_unset_script_skips_explicitly(self):
+        self.assert_pair_skipped(None, "PICSEE_MDPRO_SCRIPT not set")
+
+    def test_unavailable_script_or_dependency_skips_explicitly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assert_pair_skipped(root / "missing.sh", "missing.sh")
+            self.assert_pair_skipped(root, str(root))
+            script = root / ".agents/skills/mdpro-delegator/scripts/gui-lock.sh"
+            script.parent.mkdir(parents=True)
+            script.write_text("exit 42\n")
+            self.assert_pair_skipped(script, "heavy-lock.sh")
+
+    def test_present_broken_script_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / ".agents/skills/mdpro-delegator/scripts/gui-lock.sh"
+            script.parent.mkdir(parents=True)
+            script.write_text("exit 42\n")
+            heavy = root / "scripts/heavy-lock.sh"
+            heavy.parent.mkdir()
+            heavy.write_text("exit 42\n")
+            result = self.interop_result(script)
+        self.assertEqual(result.testsRun, 2)
+        self.assertEqual(result.skipped + result.errors, [])
+        self.assertEqual(len(result.failures), 2)
+        self.assertTrue(all("42" in failure for _, failure in result.failures))
+
+    def test_failed_assertion_releases_keeper_and_preserves_inherited_paths(self):
+        checked = []
+
+        class AbortedInterop(MdproInteropTests):
+            def test_abort(inner):
+                def check_keeper_released():
+                    self.assertTrue(inner.home.is_dir(), "check before temporary HOME cleanup")
+                    self.assertFalse(Path(inner.mdpro_env["MDPRO_HEAVY_LOCK"]).exists())
+                    checked.append(True)
+                inner.addCleanup(check_keeper_released)
+                result = inner.run_mdpro("acquire", "aborted-test")
+                inner.assertEqual(result.returncode, 0, result.stderr)
+                inner.fail("deliberate assertion after acquisition")
+
+        with tempfile.TemporaryDirectory() as directory:
+            sentinel = Path(directory) / "untouched-lock"
+            sentinel.mkdir()
+            owner = sentinel / "owner"
+            owner.write_text("sentinel owner bytes\n")
+            result = unittest.TestResult()
+            with patch.dict(os.environ, {"MDPRO_HEAVY_LOCK": str(sentinel),
+                                         "PICSEE_MDPRO_LOCK": str(sentinel),
+                                         "MDPRO_LOAD_GUARD_LOG": str(owner),
+                                         "MDPRO_LOAD_GUARD_ACTIVE": str(sentinel)}):
+                AbortedInterop("test_abort").run(result)
+            self.assertEqual(owner.read_text(), "sentinel owner bytes\n")
+            self.assertEqual(list(sentinel.iterdir()), [owner])
+        if result.skipped:
+            self.skipTest(result.skipped[0][1])
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.failures), 1)
+        self.assertIn("deliberate assertion after acquisition", result.failures[0][1])
+        self.assertEqual(checked, [True])
 
 
 if __name__ == "__main__":
