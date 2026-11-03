@@ -339,7 +339,7 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 外观与显示偏好 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 文件夹浏览 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
-| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
+| 网格、选择与菜单 | 2026-11-03 | doc-gardener | f8cce19..06fa122 |
 | 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 授权与文件访问 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 缓存与资源 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
