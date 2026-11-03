@@ -311,7 +311,8 @@ class ResetTests(unittest.TestCase):
     SUCCESS = ("reset fixture-agent old_session=old-session Context 0% used "
                "(verify the session id changes after the next turn)\n")
 
-    def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2"):
+    def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2",
+                  poll="0.01", prefix="", startup="Starting MCP servers (3/4)", timer_var=None, old_context=""):
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -323,14 +324,20 @@ case "$1 $2" in
     printf '{"agent_status":"%s","value":"old-session"}\\n' "$RESET_STATUS"
     ;;
   'pane send-text')
+    echo sent >> "$RESET_STATE/sends"
     echo 0 > "$RESET_STATE/enters"
     echo 0 > "$RESET_STATE/reads"
     ;;
   'pane send-keys')
+    echo sent >> "$RESET_STATE/sends"
     n=$(cat "$RESET_STATE/enters")
     echo $((n + 1)) > "$RESET_STATE/enters"
     ;;
   'pane read')
+    if [ ! -f "$RESET_STATE/enters" ]; then
+      printf '%s\\n' "$RESET_OLD_CONTEXT"
+      exit 0
+    fi
     n=$(cat "$RESET_STATE/enters")
     if [ "$RESET_CHOOSER" = 0 ]; then
       echo 'ordinary pane, no chooser'
@@ -339,8 +346,9 @@ case "$1 $2" in
     else
       n=$(cat "$RESET_STATE/reads")
       echo $((n + 1)) > "$RESET_STATE/reads"
+      printf '%s\\n' "$RESET_PREFIX"
       if [ "$n" -lt "$RESET_DELAY" ] || [ -z "$RESET_CONTEXT" ]; then
-        echo 'Starting MCP servers (3/4)'
+        printf '%s\\n' "$RESET_STARTUP"
       else
         printf '%s\\n' "$RESET_CONTEXT"
       fi
@@ -350,18 +358,25 @@ case "$1 $2" in
 esac
 ''')
             herdr.chmod(0o755)
-            # Bypass the existing chooser's fixed sleeps as well as the configured zero poll interval.
+            # Bypass external sleeps; deadline still uses the real monotonic shell timer.
             sleep = root / "sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
             env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
                    "RESET_STATE": str(root), "RESET_STATUS": status, "RESET_CHOOSER": str(int(chooser)),
                    "RESET_DELAY": str(delay), "RESET_CONTEXT": context,
-                   "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": "0"}
+                   "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
+                   "RESET_OLD_CONTEXT": old_context,
+                   "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": poll}
+            if timer_var:
+                env[timer_var] = deadline
+                if timer_var == "PICSEE_RESET_POLL_SECS":
+                    env["PICSEE_RESET_CONTEXT_SECS"] = "2"
             started = time.monotonic()
             result = subprocess.run(["zsh", str(Path(__file__).with_name("reset.sh")),
                                      "fixture-agent", "fixture-pane"],
                                     capture_output=True, text=True, env=env, timeout=5)
+            result.pane_sends = (root / "sends").read_text() if (root / "sends").exists() else ""
             return result, time.monotonic() - started
 
     def test_empty_startup_reads_preserve_success(self):
@@ -382,15 +397,75 @@ esac
         self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
         self.assertGreaterEqual(elapsed, 0.09)
 
-    def test_zero_deadline_observes_immediate_context(self):
-        result, _ = self.run_reset(deadline="0")
+    def test_invalid_timers_fail_before_any_pane_input(self):
+        invalid = ("0", "-1", "abc", "", " ", "inf", "Inf", "nan", "NaN", "1e400",
+                   "300.01", "999999999999999999999999999999", "1+1", "a[$(exit 91)]")
+        for var in ("PICSEE_RESET_CONTEXT_SECS", "PICSEE_RESET_POLL_SECS"):
+            for value in invalid:
+                with self.subTest(var=var, value=value):
+                    result, _ = self.run_reset(deadline=value, timer_var=var)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertEqual(result.stdout, f"FAIL reset fixture-agent: invalid {var}={value}\n")
+                    self.assertEqual(result.pane_sends, "")
+
+    def test_positive_decimal_timer_boundaries(self):
+        for var in ("PICSEE_RESET_CONTEXT_SECS", "PICSEE_RESET_POLL_SECS"):
+            for value in ("0.01", "300"):
+                with self.subTest(var=var, value=value):
+                    result, _ = self.run_reset(deadline=value, timer_var=var)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_stale_zero_before_new_session_cannot_succeed_early(self):
+        for marker in ("Where should the new conversation run?", "/new", "Starting MCP servers (3/4)"):
+            with self.subTest(marker=marker):
+                result, _ = self.run_reset(delay=3, context="Context 12% used",
+                                           prefix=f"Context 0% used\n{marker}")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+
+    def test_old_nonzero_above_new_zero_succeeds(self):
+        result, _ = self.run_reset(prefix="Context 12% used\n/new")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, self.SUCCESS)
 
-    def test_zero_deadline_without_context_fails(self):
-        result, _ = self.run_reset(context="", deadline="0")
+    def test_bottommost_new_footer_decides(self):
+        result, _ = self.run_reset(context="Context 0% used\nContext 12% used")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0s\n")
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+
+    def test_quoted_context_in_body_is_ignored(self):
+        for quote in ('The issue says "Context 0% used" during startup.', '"Context 0% used"',
+                      '> Context 0% used'):
+            with self.subTest(quote=quote):
+                result, _ = self.run_reset(context="", deadline="0.1", startup=f"/new\n{quote}")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_markerless_stale_footer_cannot_succeed_early(self):
+        result, _ = self.run_reset(old_context="Context 0% used", delay=3,
+                                   startup="Context 0% used", context="Context 12% used")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+
+    def test_unchanged_markerless_zero_never_proves_reset(self):
+        result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_fenced_context_quote_is_ignored(self):
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                result, _ = self.run_reset(context="", deadline="0.1",
+                                           startup=f"/new\n{fence}text\nContext 0% used\n{fence}\nStill starting")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+
+    def test_fenced_reset_marker_does_not_freshen_stale_footer(self):
+        result, _ = self.run_reset(old_context="Context 0% used", deadline="0.1",
+                                   context="Context 0% used\n```\n/new\n```")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
 
     def test_nonzero_context_fails_even_after_startup(self):
         for delay in (0, 3):
