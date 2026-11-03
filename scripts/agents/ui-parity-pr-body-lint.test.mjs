@@ -402,7 +402,9 @@ test('Gates accepts every code lane after unrelated docs-only commits', () => {
 test('Gates rejects changed code inputs even with CODE same evidence', () => {
   for (const lane of codeGateLanes) {
     for (const source of ['recorded run', `recorded run CODE same ${codeSame}`]) {
-      assert.deepEqual(checkGates(staleGate(lane, oldHead, source), head, changedPathsAdapter(['App/Changed.swift'])), staleFailure(lane));
+      assert.deepEqual(checkGates(staleGate(lane, oldHead, source), head, changedPathsAdapter(['App/Changed.swift'])), source.includes('CODE same')
+        ? { ok: false, reason: `${lane} PASS has a stale head: inputs changed since ${oldHead}` }
+        : staleFailure(lane));
     }
   }
 });
@@ -420,7 +422,7 @@ test('Gates checks ledger, design and tooling inputs separately', () => {
 test('Gates keeps historical CODE same policy for non-ancestor and undeclared lanes', () => {
   const nonAncestor = { isAncestor: () => false, inputsChanged: () => false };
   for (const lane of ['package-tests', 'package-coverage', 'diff-check', 'audit', 'device-smoke', 'gardener', 'unknown-lane']) {
-    const adapter = lane === 'package-tests' ? nonAncestor : changedPathsAdapter([]);
+    const adapter = ['package-tests', 'package-coverage'].includes(lane) ? nonAncestor : changedPathsAdapter([]);
     assert.deepEqual(checkGates(staleGate(lane), head, adapter), staleFailure(lane));
     assert.deepEqual(checkGates(staleGate(lane, oldHead, `CODE same ${codeSame}`), head, adapter), { ok: true });
     for (const source of [`code same ${codeSame}`, 'CODE same abc1234']) {
@@ -469,11 +471,11 @@ function gatesGitFixture(t) {
   };
   const base = change('seed.txt');
   git('branch', 'base');
-  const run = (lane, sha, source = 'recorded run') => {
+  const run = (lane, sha, source = 'recorded run', cwd = repo) => {
     const body = join(repo, 'body.md');
     writeFileSync(body, table + '\n' + staleGate(lane, sha, source, git('rev-parse', 'HEAD')) + '\nDevice-Smoke: n/a — test fixture\n');
     const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
-    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body], { cwd: repo, encoding: 'utf8' });
+    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body], { cwd, encoding: 'utf8' });
   };
   return { repo, git, change, base, run };
 }
@@ -483,7 +485,7 @@ const assertCLIPass = result => {
 };
 const assertCLIStale = (result, lane) => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.ok(result.stderr.includes(staleFailure(lane).reason), result.stderr);
+  assert.ok(result.stderr.includes(`${lane} PASS has a stale head`), result.stderr);
 };
 
 test('CLI accepts a garden-only ancestor and resolves short SHA evidence', t => {
@@ -552,4 +554,60 @@ test('CLI guards transitive test assets, design files and perf fixtures for ever
     }
   }
   assert.equal(pairs, codeGateLanes.length * files.length);
+});
+
+
+test('CLI rejects tag tree and blob object evidence without peeling to an ancestor', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  git('tag', '-a', 'ancestor-tag', base, '-m', 'annotated ancestor');
+  const objects = [git('rev-parse', 'ancestor-tag'), git('rev-parse', `${base}^{tree}`), git('rev-parse', `${base}:seed.txt`)];
+  change('docs/notes.md');
+  for (const object of objects) {
+    for (const sha of [object, object.slice(0, 7)]) {
+      assertCLIStale(run('package-tests', sha), 'package-tests');
+      assertCLIPass(run('package-tests', sha, `CODE same ${codeSame}`));
+    }
+  }
+});
+
+test('CLI reuses coverage evidence after garden and docs commits', t => {
+  const { base, change, run } = gatesGitFixture(t);
+  change('docs/feature-ledger.md');
+  change('docs/notes.md');
+  for (const sha of [base, base.slice(0, 7), base.toUpperCase()]) assertCLIPass(run('package-coverage', sha));
+});
+
+test('CLI rejects coverage evidence after any declared coverage input changes', t => {
+  const { git, base, change, run } = gatesGitFixture(t);
+  const files = ['App/Changed.swift', 'AppTests/Changed.swift', 'Packages/Changed.swift', 'UITests/Changed.swift',
+    'project.yml', 'TestAssets/fixture.png', 'design/tokens.css', 'scripts/perf/fixtures/data.json',
+    '.github/workflows/ci.yml', '.github/actions/xcode-setup/action.yml', 'scripts/ci/test.sh',
+    'scripts/tdd/swift-lcov.sh', 'scripts/heavy-lock.sh', '.claude/tdd-guardian/config.json',
+    '.agents/skills/picsee-delegator/scripts/owner-gates.sh', '.agents/skills/picsee-delegator/scripts/lcov-total.py'];
+  for (const file of files) {
+    git('checkout', '-q', '--detach', base);
+    change(file);
+    assertCLIStale(run('package-coverage', base), 'package-coverage');
+    assertCLIStale(run('package-coverage', base, `CODE same ${codeSame}`), 'package-coverage');
+  }
+});
+
+test('CLI checks the same lane inputs from a repository subdirectory', t => {
+  const { repo, git, base, change, run } = gatesGitFixture(t);
+  const cwd = join(repo, 'scripts/nested');
+  mkdirSync(cwd, { recursive: true });
+  change('Packages/Changed.swift');
+  assertCLIStale(run('package-tests', base, 'recorded run', cwd), 'package-tests');
+  git('checkout', '-q', '--detach', base);
+  change('docs/notes.md');
+  assertCLIPass(run('package-tests', base, 'recorded run', cwd));
+});
+
+test('CLI explains changed ancestor inputs even when Source contains CODE same', t => {
+  const { base, change, run } = gatesGitFixture(t);
+  change('Packages/Changed.swift');
+  const result = run('package-tests', base, `CODE same ${codeSame}`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.ok(result.stderr.includes(`inputs changed since ${base}`), result.stderr);
+  assert.doesNotMatch(result.stderr, /without CODE same/);
 });
