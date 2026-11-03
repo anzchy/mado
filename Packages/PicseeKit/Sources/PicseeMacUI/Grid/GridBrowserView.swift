@@ -237,8 +237,13 @@ private struct GridGeometry: Equatable {
     }
 }
 
+private enum GridPageMove {
+    case page(Int), first, last
+}
+
 @MainActor private final class GridCollectionView: NSCollectionView, NSUserInterfaceValidations {
     var onArrow: ((Int, Bool) -> Void)?
+    var onPageOrEdge: ((GridPageMove, Bool) -> Void)?
     var onClick: ((Int?, SelectionModifier) -> Void)?
     var onNativeSelectionChange: (() -> Void)?
     var columnStep = 1
@@ -251,6 +256,14 @@ private struct GridGeometry: Equatable {
         window?.makeFirstResponder(self)
     }
     override func keyDown(with event: NSEvent) {
+        let preserveSelection = !event.modifierFlags.intersection([.shift, .command]).isEmpty
+        switch event.keyCode {
+        case 116: onPageOrEdge?(.page(-1), preserveSelection); return
+        case 121: onPageOrEdge?(.page(1), preserveSelection); return
+        case 115: onPageOrEdge?(.first, preserveSelection); return
+        case 119: onPageOrEdge?(.last, preserveSelection); return
+        default: break
+        }
         let delta: Int
         switch event.keyCode {
         case 123: delta = -1
@@ -259,7 +272,7 @@ private struct GridGeometry: Equatable {
         case 126: delta = -columnStep
         default: super.keyDown(with: event); return
         }
-        onArrow?(delta, !event.modifierFlags.intersection([.shift, .command]).isEmpty)
+        onArrow?(delta, preserveSelection)
     }
     // Select All has no defined P3-09 model semantics; keep the native responder action inert.
     override func selectAll(_ sender: Any?) {}
@@ -350,6 +363,9 @@ private struct GridGeometry: Equatable {
         collectionView.delegate = self
         (collectionView as? GridCollectionView)?.onArrow = { [weak self] delta, preserveSelection in
             self?.moveCurrent(by: delta, preservingSelection: preserveSelection)
+        }
+        (collectionView as? GridCollectionView)?.onPageOrEdge = { [weak self] move, preserveSelection in
+            self?.moveCurrent(move, preservingSelection: preserveSelection)
         }
         (collectionView as? GridCollectionView)?.onClick = { [weak self] index, modifier in
             self?.clickItem(at: index, modifier: modifier)
@@ -663,11 +679,27 @@ private struct GridGeometry: Equatable {
     public func setCurrentItemID(_ id: ItemID?) {
         currentItemID = id.flatMap { indices[$0] != nil ? $0 : nil } ?? entries.first?.itemID
     }
-    private func moveCurrent(by delta: Int, preservingSelection: Bool) {
+    private func moveCurrent(_ move: GridPageMove, preservingSelection: Bool) {
+        guard !entries.isEmpty, let geometry else { return }
+        let current = currentItemID.flatMap { indices[$0] } ?? 0
+        let delta: Int
+        switch move {
+        case .first: delta = -current
+        case .last: delta = entries.count - 1 - current
+        case .page(let direction):
+            let insets = scrollView.contentInsets
+            let height = max(0, scrollView.contentView.documentVisibleRect.height - insets.top - insets.bottom)
+            // Only the gaps between fitting rows count; even a short viewport advances one row.
+            let rows = max(1, Int((height + geometry.rowGap) / (geometry.itemSize.height + geometry.rowGap)))
+            delta = direction * rows * geometry.columns
+        }
+        moveCurrent(by: delta, preservingSelection: preservingSelection, includingCurrent: true)
+    }
+    private func moveCurrent(by delta: Int, preservingSelection: Bool, includingCurrent: Bool = false) {
         guard !entries.isEmpty else { return }
         let current = currentItemID.flatMap { indices[$0] } ?? 0
         let next = max(0, min(entries.count - 1, current + delta))
-        guard next != current || currentItemID == nil, let id = itemID(at: next) else { return }
+        guard includingCurrent || next != current || currentItemID == nil, let id = itemID(at: next) else { return }
         currentItemID = id
         if preservingSelection {
             selection.focus(id, in: entries.map(\.itemID))
