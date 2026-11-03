@@ -56,8 +56,12 @@ The user leaves (navigates, switches mode, presses Esc, selects another item) wh
 running: the load is cancelled or its result discarded, and progress UI disappears.
 
 ### 7. Tasks cancelled on close
-Work started by the state (decode, metadata read, thumbnail, scan, file access) is cancelled or released when its
-window or owner closes: no task keeps a security-scoped resource, a decoder or memory alive past its owner.
+Work the closing window or owner started (decode, metadata read, thumbnail, scan, file access) is cancelled when it
+closes — releasing a resource the task holds is not enough on its own. Every resource the work held (security-scoped
+access, decoder, memory) is also released: nothing stays alive past its owner. Prove the task stopped with a test
+that observes the cancellation (the task sees `Task.isCancelled` or throws `CancellationError`) or that no late side
+effect follows the close (no write, no publish, no cache insert), or with a named device run when only a real window
+close shows it.
 
 ### 8. Late or stale completion
 A result that completes after it was superseded (newer request, different item, closed window) is never delivered
