@@ -44,7 +44,7 @@ import PicseeMacUI
         chrome = try #require(content.subviews.compactMap { $0 as? ViewerChromeOverlay }.first)
         shell = try #require(content.subviews.compactMap { $0 as? GridShellView }.first)
     }
-    var toolPoint: NSPoint { chrome.tools[0].convert(NSPoint(x: 15, y: 14), to: content) }
+    var toolPoint: NSPoint { chrome.tools[2].convert(NSPoint(x: 15, y: 14), to: content) }
     var keyLoop: [NSView] {
         var loop: [NSView] = []
         var view = canvas.nextKeyView
@@ -67,8 +67,8 @@ import PicseeMacUI
     func expectControls(_ stage: String) {
         let children = (chrome.accessibilityChildren() ?? []).compactMap { $0 as? NSView }
         #expect(groupsShown, "\(stage): the viewer controls show")
-        #expect(content.hitTest(toolPoint) === chrome.tools[0], "\(stage): the first control is hit-testable")
-        #expect(chrome.tools.allSatisfy { tool in children.contains { $0 === tool } }, "\(stage): all 7 controls are accessible")
+        #expect(content.hitTest(toolPoint) === chrome.tools[2], "\(stage): the 更多 control is hit-testable")
+        #expect(chrome.tools.allSatisfy { tool in children.contains { $0 === tool } }, "\(stage): all 8 controls are accessible")
         #expect(keyLoop.contains { $0 is ChromeToolView }, "\(stage): the controls are in the key loop")
     }
 }

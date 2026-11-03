@@ -286,6 +286,38 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         }
     }
 
+    /// #444: page 14's 「更多浏览操作」 menu, implemented items only: the file name, 显示/隐藏图片信息, 外观, 始终显示工具,
+    /// 键盘快捷键. 收藏图片 (GRID-12) and 显示缩略图条 (FILM-01) are not built yet, so they are not listed. Each item
+    /// uses the same action and represented object as its main-menu twin, so validation and effects are shared.
+    func makeViewerMoreMenu(fileName: String?) -> NSMenu {
+        let menu = NSMenu(title: String(localized: "More browse actions"))
+        if let fileName { menu.addItem(.sectionHeader(title: fileName)) }
+        let inspector = menu.addItem(withTitle: String(localized: "Show image information"), action: #selector(invoke(_:)),
+                                     keyEquivalent: "")
+        inspector.target = self
+        inspector.representedObject = CommandID.inspector.rawValue
+        inspector.identifier = NSUserInterfaceItemIdentifier("viewer.more.inspector")
+        menu.addItem(.separator())
+        // No delegate: closing this submenu must not end the App menu tracking that CommandMenu counts.
+        let appearanceMenu = NSMenu(title: String(localized: "Appearance"))
+        for (appearance, title) in [(DisplayAppearance.system, String(localized: "System")),
+                                    (.light, String(localized: "Light")), (.dark, String(localized: "Dark"))] {
+            let item = appearanceMenu.addItem(withTitle: title, action: #selector(selectAppearance(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = appearance.rawValue
+        }
+        let appearanceItem = menu.addItem(withTitle: appearanceMenu.title, action: nil, keyEquivalent: "")
+        appearanceItem.submenu = appearanceMenu
+        let always = menu.addItem(withTitle: String(localized: "Always Show Tools"), action: #selector(toggleAlwaysShowTools(_:)),
+                                  keyEquivalent: "")
+        always.target = self
+        always.identifier = NSUserInterfaceItemIdentifier("chrome.always-show-tools")
+        let shortcuts = menu.addItem(withTitle: String(localized: "Keyboard Shortcuts"), action: #selector(showShortcuts(_:)),
+                                     keyEquivalent: "")
+        shortcuts.target = self
+        shortcuts.representedObject = EntryPoint.keyboardShortcuts.rawValue
+        return menu
+    }
     @objc private func invoke(_ item: NSMenuItem) {
         guard let raw = item.representedObject as? String, let id = CommandID(rawValue: raw) else { return }
         if let target = windowController() {
@@ -306,7 +338,7 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         preferencesStore.value = value
     }
     @objc private func toggleSidebar(_ item: NSMenuItem) {
-        (NSApp.keyWindow?.windowController as? CanvasWindowController)?.toggleGridSidebar()
+        windowController()?.toggleGridSidebar()
     }
     @objc private func focusGridSearch(_ item: NSMenuItem) {
         windowController()?.route(.search, from: .menu)
@@ -368,14 +400,20 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         }
         if item.identifier?.rawValue == "grid.sidebar.toggle.menu" {
             item.title = String(localized: preferencesStore.value.gridSidebarVisible ? "Hide sidebar" : "Show sidebar")
-            return (NSApp.keyWindow?.windowController as? CanvasWindowController)?.gridShellVisible == true
+            return windowController()?.sidebarToggleAvailable == true
         }
         if item.action == #selector(focusGridSearch(_:)) {
             return (NSApp.keyWindow?.windowController as? CanvasWindowController)?.gridSearchAvailable == true
         }
         guard let raw = item.representedObject as? String, let id = CommandID(rawValue: raw) else { return false }
         let target = windowController()
-        if id == .inspector { item.title = target?.inspectorVisible == true ? String(localized: "Hide Inspector") : String(localized: "Show Inspector") }
+        if id == .inspector {
+            let visible = target?.inspectorVisible == true
+            // The viewer's 更多 menu keeps page 14's wording; View › Show Inspector keeps its own.
+            item.title = item.identifier?.rawValue == "viewer.more.inspector"
+                ? String(localized: visible ? "Hide image information" : "Show image information")
+                : String(localized: visible ? "Hide Inspector" : "Show Inspector")
+        }
         return target?.session.isEnabled(id) ?? (id == .open)
     }
     func menuNeedsUpdate(_ menu: NSMenu) {
