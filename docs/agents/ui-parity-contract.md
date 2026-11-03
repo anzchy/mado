@@ -26,16 +26,27 @@
 
 在 brief 发出前固定设计源的 Git SHA 与上述哈希；实现中设计源改变就重写受影响的行和参考截图，不沿用旧截图。预期几何偏差、比较区域和动态数据遮罩必须在取图前约定；不得看见差异后才扩大容差或遮罩。
 
-| #347 设计变体（后续 #349 / #351 固定输入） | Selector | Property → Value |
-|---|---|---|
-| 14 `viewer-controls`、16 `viewer-inspector`、33 `viewer-filmstrip`，`?theme=light`，1280×800 | `.viewer-floating-controls > [data-viewer-controls]`；14/16 的 `leading/navigation/zoom`，33 的 `leading/zoom` | `background-color` → `color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`（panel `#fff`，opacity `50%`）；`backdrop-filter` 与 `-webkit-backdrop-filter` → `blur(20px) saturate(1.6)` |
-| 同三页 `?theme=dark`（无参数默认），1280×800 | 同上 | 同上，panel `#141821`，仍为 `50%`、`blur(20px) saturate(1.6)` |
-| 同三页浅 / 深 | 同上；后代 `.ds-icon-button`、`svg` | `border-radius` → `var(--radius-control)` = `6px`；`box-shadow` → 既有 `var(--shadow-soft)`；图标 `color` → `var(--color-text)` = 浅 `#1a1a1a` / 深 `#e5e7eb`；SVG `filter` → `drop-shadow(var(--tool-icon-halo))`（`0 0 1px var(--color-panel)`） |
-| 11 `grid-light` / 12 `grid-dark`，`?thumbnail-size=140`，1280×800 | `.photo-grid`；`.thumbnail-wrap` | `--thumb-min` → `140px`；`height` → `100.8px` |
-| 同 11/12，`?thumbnail-size=220`（无参数 / 无效参数默认） | 同上 | `--thumb-min` → `220px`；`height` → `158.4px` |
-| 同 11/12，`?thumbnail-size=280` | 同上 | `--thumb-min` → `280px`；`height` → `201.6px` |
-| 同 11/12，全三档、浅 / 深 | `.photo-grid`；`.photo-name`；`.grid-bottom-bar` | 列 → `repeat(auto-fill,minmax(min(var(--thumb-min),100%),1fr))`（最小列宽，余宽均分；实际 frame 推导见状态稿 README）；名称 → `nowrap/hidden/ellipsis`；Bottom Bar → 原位置、高 `40px`、`--color-bg` 的 `80%`、无顶线 |
-| #347 共用输入与不变区域 | `viewer-grid-variants.css`、`_ds/picsee-ui-system/tokens/viewer-grid.css`；16 `.inspector`、33 `.c-filmstrip` | opacity / blur / saturation 与尺寸值只在 token 文件定义；信息面板和胶片条 DOM / 既有样式不变。网页 blur 数值是设计参考；原生材质按 #346 选平台 blur，不照抄 CSS 数字。固定版本时同时 pin HTML、manifest 与两个共用 CSS 的 SHA256 |
+#347（后续 #349/#351）固定映射，owner「A A C」（2026-11-03）；以下规则与状态稿 README 同步：
+
+| 页面 / URL | Selector | Property | Value |
+| --- | --- | --- | --- |
+| 14 `viewer-controls.html?theme=light`、16 `viewer-inspector.html?theme=light`、33 `viewer-filmstrip.html?theme=light` | `.viewer-floating-controls > [data-viewer-controls]`（14/16：`leading/navigation/zoom`；33：`leading/zoom`） | `background-color`; `backdrop-filter` / `-webkit-backdrop-filter` | `color-mix(in srgb,var(--color-panel) var(--tool-background-opacity),transparent)`；panel `#fff`，opacity `50%`；`blur(20px) saturate(1.6)` |
+| 同三页 `?theme=dark`（无参数默认） | 同上 | 同上 | panel `#141821`，opacity 仍 `50%`；同一 blur/saturation |
+| 同三页，两种外观 | `[data-viewer-controls]::before` | `inset`; `border-radius`; `background-color` | 内衬 `2px` / `4px`；panel 的 `50%`（`--tool-content-backing-opacity`），在外层 50% 上叠加，使控件内部有效 panel 比例为 75%；外层设置的默认含义不变 |
+| 同三页，两种外观 | `[data-viewer-controls] .ds-icon-button`、`.viewer-file-label > span`、`.zoom-label`；33 `.c-filmstrip .c-strip-count` | `color`; `text-shadow` | `var(--color-text)` = 浅 `#1a1a1a` / 深 `#e5e7eb`；`var(--tool-foreground-halo)` = `0 0 1px var(--color-panel)` |
+| 同三页，两种外观 | `[data-viewer-controls] svg` | `filter` | `drop-shadow(var(--tool-glyph-ink)) drop-shadow(var(--tool-foreground-halo))`；同位文字色叠印 `0 0 0 var(--color-text)` 减少细线抗锯齿稀释，外缘 halo 同上；不改 SVG 线宽 |
+| 同三页，两种外观 | `[data-viewer-controls]` | `border-radius`; `box-shadow` | 保留既有 `var(--radius-control)` = `6px` 与 `var(--shadow-soft)` |
+| 11 `grid-light.html?thumbnail-size=140`、12 `grid-dark.html?thumbnail-size=140`，宽 >720 | `[data-thumbnail-size="140"]`（根元素属性选择器）；`.photo-grid`；`.thumbnail-wrap` | `--thumb-min`; `height` | min track `140px`，高 `H(width) × 140 / 220`，1280 时约 `119.735px` |
+| 11/12 `?thumbnail-size=220`（无参数 / 无效参数默认），宽 >720 | `:root`；同上 | 同上 | min track `220px`，高 `H(width)`，1280 时 `188.16px` |
+| 11/12 `?thumbnail-size=280`，宽 >720 | `[data-thumbnail-size="280"]`（根元素属性选择器）；同上 | 同上 | min track `280px`，高 `H(width) × 280 / 220`，1280 时约 `239.476px` |
+| 11/12，全三档，宽 ≤720 | `.photo-grid`；`.thumbnail-wrap` | `grid-template-columns`; `height` | min track 固定 `145px`，高 `150px`；Thumbnail Size 在这里不影响几何 |
+| 11/12，全三档，宽 ≤480 | `.photo-grid`；`.thumbnail-wrap` | 同上 | 一列 `1fr`，高 `150px` |
+| 11/12，全三档、两种外观 | `.photo-name`；`.grid-bottom-bar` | 文件名 / 底栏 | 名称 `nowrap/hidden/ellipsis`；底栏保持窗口底部、高 `40px`、`--color-bg` 的 `80%`、无顶线；支持组合 `?transparency=reduced` / `?scroll=behind` |
+
+`H(width)`：默认 `clamp(135px,14.7vw,225px)`；既有 ≥1600 断点为 `200px`，≤1050 为 `165px`。宽 >720 时，网格可用宽 A、列距 G、最小列宽 size：`n=max(1,floor((A+G)/(size+G)))`，实际 cell 宽 `(A-(n-1)G)/n`。≤720 把 size 换为 145；≤480 固定 n=1。cell 的既有内边距、行距与列距仍按 media cascade。1 CSS px 对应原生设计 1 pt；浏览器小数以渲染帧为准。
+
+
+14/16/33 的 token 与规则全在 SHA 固定的 HTML inline style 内，不再依赖外链。canonical token 为 `design/picsee-ui-system/tokens/viewer-grid.css`，与 `_ds` 和各页 `data-viewer-grid-tokens` 同步。13/25/27/28/34 的 solid-tools 填充已被本映射取代，#351 不得选它们作为工具填充 oracle；33 计数的色/halo 更新，其余胶片条面板与布局不变。原生材质按 #346 使用平台 blur；自动对比度按 glyph ≥3:1、计数/缩放文字 ≥4.5:1 与 halo 验证，设备另验。
 
 ## 对照与审计
 

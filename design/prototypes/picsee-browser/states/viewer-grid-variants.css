@@ -1,23 +1,28 @@
-/* #347: opt-in state styles. Other catalog pages do not load this file. */
-@import url("_ds/picsee-ui-system/tokens/viewer-grid.css");
-
-/* Retain each pod's existing radius, shadow, position and geometry. */
+/* #347: authoring source only; pinned viewer pages inline these rules and canonical tokens. */
+/* Keep the existing pod geometry, corner radius and shadow. The outer material stays at 50%. */
 .prototype-shell .viewer-floating-controls > [data-viewer-controls] {
   background: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent);
   -webkit-backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation));
   backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation));
+  isolation: isolate;
 }
-.viewer-floating-controls > [data-viewer-controls] .ds-icon-button {
+/* An inset backing layer protects foreground contrast without changing the material setting. */
+.viewer-floating-controls > [data-viewer-controls]::before {
+  content: "";
+  position: absolute;
+  inset: var(--tool-content-inset);
+  border-radius: var(--tool-content-radius);
+  background: color-mix(in srgb, var(--color-panel) var(--tool-content-backing-opacity), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+.viewer-floating-controls > [data-viewer-controls] .ds-icon-button,
+.viewer-floating-controls > [data-viewer-controls] .viewer-file-label > span,
+.viewer-floating-controls > [data-viewer-controls] .zoom-label,
+.c-filmstrip .c-strip-count {
   color: var(--color-text);
+  text-shadow: var(--tool-foreground-halo);
 }
 .viewer-floating-controls > [data-viewer-controls] svg {
-  filter: drop-shadow(var(--tool-icon-halo));
+  filter: drop-shadow(var(--tool-glyph-ink)) drop-shadow(var(--tool-foreground-halo));
 }
-
-.photo-grid { --thumb-min: var(--thumbnail-size-default); }
-[data-thumbnail-size="140"] .photo-grid { --thumb-min: var(--thumbnail-size-min); }
-[data-thumbnail-size="280"] .photo-grid { --thumb-min: var(--thumbnail-size-max); }
-.prototype-shell .photo-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(var(--thumb-min), 100%), 1fr));
-}
-.prototype-shell .thumbnail-wrap { height: calc(var(--thumb-min) * var(--thumbnail-height-ratio)); }

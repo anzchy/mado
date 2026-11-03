@@ -56,22 +56,32 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 
 ## #347 · Viewer Tools 与 Thumbnail Size 对照映射
 
-这组变体仅由 11/12/14/16/33 加载 `viewer-grid-variants.css`，值来自 `_ds/picsee-ui-system/tokens/viewer-grid.css`；其他状态不加载它。14/16/33 的默认外观仍是深色。`?theme=light|dark` 只切换外观，不改变布局；16 的图片信息面板、33 的胶片条保持现有规则。33 的前后翻图在胶片条里，没有独立 navigation pod。
+Owner 于 2026-11-03 回复「A A C」：220 保留原高度比例，窄窗规则继续生效；图标、计数与缩放文字使用文字色及 halo。本表取代上一轮 `.72 × size` 的高度和仅图标处理。14/16/33 无参数仍为深色，`?theme=light|dark` 切换外观并保留其他根 class。
+
+**固定输入**：五页都把 canonical `design/picsee-ui-system/tokens/viewer-grid.css`（与 `_ds` 副本逐字相同）内联为 `<style data-viewer-grid-tokens>`；14/16/33 的 `<style data-viewer-tools>` 内联 `viewer-grid-variants.css` 的作者源。没有 linked stylesheet 或 `@import` 决定这些页的几何或颜色。Grid 的尺寸规则在既有 inline media cascade 内，`PinnedDesign.swift` 直接解析同一份被 HTML SHA 固定的规则。修改作者源后必须同步内联和 manifest；design check 检查同步。
 
 | 页面 / URL | Selector | Property | Value |
 | --- | --- | --- | --- |
-| 14 `viewer-controls.html?theme=light`、16 `viewer-inspector.html?theme=light`、33 `viewer-filmstrip.html?theme=light` | `.viewer-floating-controls > [data-viewer-controls]`（14/16：`leading`、`navigation`、`zoom`；33：`leading`、`zoom`） | `background-color`; `backdrop-filter` / `-webkit-backdrop-filter` | `color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`；`--color-panel: #fff`、`--tool-background-opacity: 50%`；`blur(20px) saturate(1.6)`（`--tool-background-blur` / `--tool-background-saturation`） |
-| 同三页 `?theme=dark`（也为无参数默认） | 同上 | 同上 | 同上，`--color-panel: #141821`；仍为 `50%`、`blur(20px) saturate(1.6)` |
-| 14/16/33，浅 / 深 | 同上；后代 `.ds-icon-button` 与 `svg` | `border-radius`; `box-shadow`; `color`; `filter` | 保留 `var(--radius-control)` = `6px` 与 `var(--shadow-soft)`；图标改用 `var(--color-text)`（浅 `#1a1a1a` / 深 `#e5e7eb`），`drop-shadow(var(--tool-icon-halo))` = `0 0 1px var(--color-panel)` 边缘衬底，便于在明暗图像上辨认 |
-| 11 `grid-light.html?thumbnail-size=140`、12 `grid-dark.html?thumbnail-size=140` | `.photo-grid`; `.thumbnail-wrap` | `--thumb-min`; `height` | `var(--thumbnail-size-min)` = `140px`；`calc(var(--thumb-min) * var(--thumbnail-height-ratio))` = `100.8px` |
-| 11/12 `?thumbnail-size=220`（也为无参数 / 无效参数默认） | 同上 | 同上 | `var(--thumbnail-size-default)` = `220px`；高 `158.4px` |
-| 11/12 `?thumbnail-size=280` | 同上 | 同上 | `var(--thumbnail-size-max)` = `280px`；高 `201.6px` |
-| 11/12，三档尺寸与两种外观 | `.photo-grid`; `.photo-name` | `grid-template-columns`; `white-space`; `overflow`; `text-overflow` | `repeat(auto-fill, minmax(min(var(--thumb-min), 100%), 1fr))`；`nowrap` / `hidden` / `ellipsis`（既有名称规则） |
-| 11/12，三档尺寸与两种外观 | `.grid-bottom-bar` | 位置 / 高 / 填充 / 顶线 | 保持既有 `data-bottom-bar`：窗口底部、高 `40px`、`--color-bg` 的 `80%`、无顶线；`?transparency=reduced` 与 `?scroll=behind` 可与尺寸参数组合 |
+| 14 `viewer-controls.html?theme=light`、16 `viewer-inspector.html?theme=light`、33 `viewer-filmstrip.html?theme=light` | `.viewer-floating-controls > [data-viewer-controls]`（14/16：`leading/navigation/zoom`；33：`leading/zoom`） | `background-color`; `backdrop-filter` / `-webkit-backdrop-filter` | `color-mix(in srgb,var(--color-panel) var(--tool-background-opacity),transparent)`；panel `#fff`，opacity `50%`；`blur(20px) saturate(1.6)` |
+| 同三页 `?theme=dark`（无参数默认） | 同上 | 同上 | panel `#141821`，opacity 仍 `50%`；同一 blur/saturation |
+| 同三页，两种外观 | `[data-viewer-controls]::before` | `inset`; `border-radius`; `background-color` | 内衬 `2px` / `4px`；panel 的 `50%`（`--tool-content-backing-opacity`），在外层 50% 上叠加，使控件内部有效 panel 比例为 75%；外层设置的默认含义不变 |
+| 同三页，两种外观 | `[data-viewer-controls] .ds-icon-button`、`.viewer-file-label > span`、`.zoom-label`；33 `.c-filmstrip .c-strip-count` | `color`; `text-shadow` | `var(--color-text)` = 浅 `#1a1a1a` / 深 `#e5e7eb`；`var(--tool-foreground-halo)` = `0 0 1px var(--color-panel)` |
+| 同三页，两种外观 | `[data-viewer-controls] svg` | `filter` | `drop-shadow(var(--tool-glyph-ink)) drop-shadow(var(--tool-foreground-halo))`；同位文字色叠印 `0 0 0 var(--color-text)` 减少细线抗锯齿稀释，外缘 halo 同上；不改 SVG 线宽 |
+| 同三页，两种外观 | `[data-viewer-controls]` | `border-radius`; `box-shadow` | 保留既有 `var(--radius-control)` = `6px` 与 `var(--shadow-soft)` |
+| 11 `grid-light.html?thumbnail-size=140`、12 `grid-dark.html?thumbnail-size=140`，宽 >720 | `[data-thumbnail-size="140"]`（根元素属性选择器）；`.photo-grid`；`.thumbnail-wrap` | `--thumb-min`; `height` | min track `140px`，高 `H(width) × 140 / 220`，1280 时约 `119.735px` |
+| 11/12 `?thumbnail-size=220`（无参数 / 无效参数默认），宽 >720 | `:root`；同上 | 同上 | min track `220px`，高 `H(width)`，1280 时 `188.16px` |
+| 11/12 `?thumbnail-size=280`，宽 >720 | `[data-thumbnail-size="280"]`（根元素属性选择器）；同上 | 同上 | min track `280px`，高 `H(width) × 280 / 220`，1280 时约 `239.476px` |
+| 11/12，全三档，宽 ≤720 | `.photo-grid`；`.thumbnail-wrap` | `grid-template-columns`; `height` | min track 固定 `145px`，高 `150px`；Thumbnail Size 在这里不影响几何 |
+| 11/12，全三档，宽 ≤480 | `.photo-grid`；`.thumbnail-wrap` | 同上 | 一列 `1fr`，高 `150px` |
+| 11/12，全三档、两种外观 | `.photo-name`；`.grid-bottom-bar` | 文件名 / 底栏 | 名称 `nowrap/hidden/ellipsis`；底栏保持窗口底部、高 `40px`、`--color-bg` 的 `80%`、无顶线；支持组合 `?transparency=reduced` / `?scroll=behind` |
 
-沿用选定原型的列规则：Thumbnail Size 是列的**最小宽度**，列均分余宽；网格可用宽 `A`、列距 `G` 时，列数 `n = max(1, floor((A + G) / (size + G)))`，实际 cell 宽 `(A - (n - 1)G) / n`。缩略图框高为 size × `.72`，cell 与框之间的既有内边距不变。预览中 1 CSS px 对应原生设计的 1 pt；原生实现应断言推导出的实际 frame，不能把最小列宽当作固定 cell 宽。
+`H(width)`：默认 `clamp(135px,14.7vw,225px)`；既有 ≥1600 断点为 `200px`，≤1050 为 `165px`。宽 >720 时，网格可用宽 A、列距 G、最小列宽 size：`n=max(1,floor((A+G)/(size+G)))`，实际 cell 宽 `(A-(n-1)G)/n`。≤720 把 size 换为 145；≤480 固定 n=1。cell 的既有内边距、行距与列距仍按 media cascade。1 CSS px 对应原生设计 1 pt；浏览器小数以渲染帧为准。
 
-`npm run design:check` 在真实浏览器中检查上述值、全部现有工具组、浅深外观、明暗极端底图、三档实际 frame、长中英名称截断和 Bottom Bar 不随尺寸改变。它也检查无参数与错误参数回到 220。测试临时换长名称与明暗底图，不改变静态素材或演示文件名。
+`npm run design:check` / `node scripts/verify_design_catalog.js` 在真实浏览器检查两种外观、480/720/1050/1280/1600 × 140/220/280、无参数/无效参数回退、长中英名截断与底栏不随尺寸变化。Viewer 检查三页 × 两种外观 × 平白/平黑底图，以截图内控件实际合成颜色与实际 glyph/text 核心像素计算对比度（glyph ≥3:1，计数和缩放文字 ≥4.5:1），并检查 halo；这不是原生设备验收。
+
+16 的信息面板不变；33 只更新计数文字的文字色/halo，胶片条面板、图像、导航和布局规则不变。**13/25/27/28/34 保留的 solid tools 仅用于各自其他状态的旧对照，tool fill 已被本表的 14/16/33 取代，#351 不得使用它们作工具填充 oracle**。尤其浅色 Inspector 应用 `viewer-inspector.html?theme=light` 对照 tool fill，不用 page34。
+
+Swift 默认几何 oracle 仍有效：`.thumbnail-wrap` 读取 root `--thumbnail-height` → `--thumbnail-height-base`，默认只解析原 clamp/200/165（≤720 直接 150），无须解析属性变体乘法。`GridThumbnailParity281Tests` 的 1280/188.16 与各断点默认行、`GridShellTests`、`PinnedDesignTests` 的默认值保持一致；后续 #349 另断言尺寸变体。
 
 ## 维护
 

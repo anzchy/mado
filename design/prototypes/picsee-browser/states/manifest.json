@@ -11,7 +11,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "0c95748ab5c9ff8b5aec61da151b47cb9fa8cb3cd8d98c1cbf7b21d29f143a6b"
+      "sha256": "7b8f7f99d4d75449846e5bd73970e9e5cc0cfe0cb88bb606aec467c5901fb6d5"
     },
     {
       "name": "grid-dark",
@@ -23,7 +23,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "845243d764af99af55565b4be2bb2c08d9a52c7a9bc529d1c35aef16bd29665c"
+      "sha256": "9f9a4b09ed8b3bda2c9a020b75ee205aa5dbfc4237f86f6702027fd42dcdcf0a"
     },
     {
       "name": "viewer-quiet",
@@ -47,7 +47,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "0fae9834fe355d410efbfb4172e0036fec5cff67fa03a4b0c2e17a4e7dbe4c80"
+      "sha256": "8577ac87f024fd2d8923d003de44b2b5a4ae410215b1a9cf9d170d5fc86551c1"
     },
     {
       "name": "grid-display",
@@ -71,7 +71,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "d35be19fb247bee4642ddce699db764bd66231798e66439358d5877b0082a413"
+      "sha256": "18ccde89fe43e8514f42d26af03a45b92de18f5f3faf322fed1709bb97723d75"
     },
     {
       "name": "first-launch",
@@ -227,7 +227,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "87608c3f46431660e6920074834d798e82960571002aa9a2da4562cf41857992"
+      "sha256": "5e29ff116c256162441366a9a78d1dadc3454384d30e23e8b42463c2fadeb83c"
     },
     {
       "name": "viewer-inspector-light",

@@ -1,0 +1,23 @@
+/* #347: owner A A C, 2026-11-03. Inline this source into pinned state HTML. */
+:root {
+  --tool-background-opacity: 50%;
+  --tool-background-blur: 20px;
+  --tool-background-saturation: 1.6;
+  --tool-content-backing-opacity: 50%;
+  --tool-content-inset: 2px;
+  --tool-content-radius: 4px;
+  --tool-glyph-ink: 0 0 0 var(--color-text);
+  --tool-foreground-halo: 0 0 1px var(--color-panel);
+  --thumbnail-size-min: 140px;
+  --thumbnail-size-default: 220px;
+  --thumbnail-size-max: 280px;
+  --thumbnail-scale-min: calc(140 / 220);
+  --thumbnail-scale-max: calc(280 / 220);
+  --thumbnail-height-base: clamp(135px,14.7vw,225px);
+  --thumbnail-height: var(--thumbnail-height-base);
+  --thumb-min: var(--thumbnail-size-default);
+  --thumbnail-height-wide: 200px;
+  --thumbnail-height-medium: 165px;
+  --thumbnail-height-compact: 150px;
+  --thumbnail-track-compact: 145px;
+}
