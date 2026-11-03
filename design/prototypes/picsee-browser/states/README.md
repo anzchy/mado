@@ -44,7 +44,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | --- | --- | --- |
 | `empty-folder.html`（22-BD） | 这一层有子文件夹：子文件夹卡片、「包含子文件夹浏览」「选择其他文件夹…」，内容区可拖入 | `?case=no-subfolders` 最近打开的文件夹；`?drag=over` 拖入时的提示 |
 | `permission-denied.html`（26-BC） | 授权失效：侧栏该文件夹变灰带 ⚠、子文件夹收起（› 与 `aria-expanded="false"`）；「重新选择文件夹…」「选择其他文件夹…」。侧栏「个人收藏」「最近查看」两行和「侧栏里的收藏和最近查看不受影响。」标为 **PENDING(P3-14)**：它们随 P3-14（J4）落地，P2-08c 验收不含（ADR-014） | `?cause=volume` 外接磁盘未连接；`?cause=missing` 找不到；`?cause=unknown` 原因分不清时的「无法访问此文件夹」；`?case=moved` 26M-C 同卷移动或改名后跟随，网格上方的提示条（不是权限失败）。各子情况同样带 PENDING(P3-14) 标注 |
-| `folder-loading.html`（24） | 正在读取：进度、「取消读取」 | `?case=failed` 读取失败 · 24F-A（#236 用户选定）：读取中途停止、授权根仍可读时，内容区居中写「没能读完“待整理”」和一句说明，「重试」为主按钮并持有键盘焦点，另有「选择其他文件夹…」；不显示部分网格，侧栏该文件夹与底栏都不显示部分计数，底栏写「读取未完成」。授权根不可读属于 26 |
+| `folder-loading.html`（24） | 正在读取：进度、「取消读取」持有初始键盘焦点（#443） | `?case=failed` 读取失败 · 24F-A（#236 用户选定）：读取中途停止、授权根仍可读时，内容区居中写「没能读完“待整理”」和一句说明，「重试」为主按钮并持有键盘焦点，另有「选择其他文件夹…」；不显示部分网格，侧栏该文件夹与底栏都不显示部分计数，底栏写「读取未完成」。授权根不可读属于 26 |
 | `settings.html`（35 设置 · B） | 设置窗口，左侧边栏（用户：「选B」）选中「通用」：外观、始终显示大图工具、语言说明。缓存大小、版本与构建号、上次检查时间都是示例，旁边标「示例」。App 还没有的控件置灰、不可聚焦并标「即将推出」（用户：「显示但置灰」）：「显示」三项（PREF-03）、「更新」的自动检查与立即检查（DIST-05）、「关于」的三个链接 | `?section=general\|display\|cache\|update\|about` 选中对应分类；「显示」与 15 页面板是同一组偏好 |
 | `shortcuts.html`（36 键盘快捷键 · C） | 帮助 → 键盘快捷键打开的只读窗口（用户：「选 C」），三张卡片：文件与窗口（任何时候）、网格（浏览文件夹时）、大图（查看一张图片时）；没有搜索 | `?card=files\|grid\|viewer` 给该卡片加虚线描边，只用于对照，App 没有这个状态 |
 | `first-launch.html`（21 首次打开） | 首页：没有底栏和侧栏，中央是 B4 的拖入提示「把照片文件夹拖到这里」和「选择文件夹…」「或按 ⌘O」，两行相距 18 pt，没有格式标签行（#441，用户：「打开首页的这行字我不喜欢，删掉」「B4 centre; re-pin page 21 (Recommended)」）；图片墙在中央后面缓慢漂移，「减弱动态效果」时不动 | `?drag=over` 拖入时：图片墙淡到 40%，提示改为「松开即可打开」并用强调色，虚线框用强调色；`?theme=dark` 深色 |
@@ -82,6 +82,16 @@ Owner 于 2026-11-03 回复「A A C」：220 保留原高度比例，窄窗规�
 16 的信息面板不变；33 只更新计数文字的文字色/halo，胶片条面板、图像、导航和布局规则不变。**13/25/27/28/34 保留的 solid tools 仅用于各自其他状态的旧对照，tool fill 已被本表的 14/16/33 取代，#351 不得使用它们作工具填充 oracle**。尤其浅色 Inspector 应用 `viewer-inspector.html?theme=light` 对照 tool fill，不用 page34。
 
 Swift 默认几何 oracle 仍有效：`.thumbnail-wrap` 读取 root `--thumbnail-height` → `--thumbnail-height-base`，默认只解析原 clamp/200/165（≤720 直接 150），无须解析属性变体乘法。`GridThumbnailParity281Tests` 的 1280/188.16 与各断点默认行、`GridShellTests`、`PinnedDesignTests` 的默认值保持一致；后续 #349 另断言尺寸变体。
+
+## #443 · 初始动作焦点
+
+Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计跟随 App。24 主状态的「取消读取」与 26 `?case=volume` / `?cause=volume` 的「选择其他文件夹…」在浅深色都持有初始键盘焦点并显示既有焦点环；24F 的「重试」保持不变。只更新设计源和测试，App 行为不变；对应账簿 FOLDER-01、ACCESS-03。
+
+| 固定输入 | SHA256 |
+| --- | --- |
+| `folder-loading.html` | `9531f552f4cc9fc4295315a988305671614a5ce1de7065c41425f28f4467328c` |
+| `permission-denied.html` | `9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62` |
+| `manifest.json`（整份文件） | `3d4e8d83d8155d2688d1d3a7493c303e4563b3ced586418ab561de5d595ec6b3` |
 
 ## 维护
 

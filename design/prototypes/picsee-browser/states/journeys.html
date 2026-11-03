@@ -361,6 +361,10 @@ function show() {
   const st = P('p-stage').getBoundingClientRect(), sc = Math.min((st.width - 36) / i.w, (st.height - 18) / i.h, 1);
   P('p-frame').style.width = i.w * sc + 'px'; P('p-frame').style.height = i.h * sc + 'px';
   P('p-frame').innerHTML = `<iframe inert tabindex="-1" title="${esc(i.title)}" src="${srcOf(p, q)}" style="width:${i.w}px;height:${i.h}px;transform:scale(${sc})"></iframe>`;
+  const frame = P('p-frame').querySelector('iframe');
+  frame.addEventListener('load', () => frame.contentDocument.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+  }));
 }
 function open(list, title, from) {
   seq = list; at = 0; opener = from; P('p-title').textContent = title;

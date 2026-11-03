@@ -119,7 +119,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "9f787a2baa3fec50c1594b492386287332bf7ac1aeb4a2c40965bdb0d005d9ea"
+      "sha256": "9531f552f4cc9fc4295315a988305671614a5ce1de7065c41425f28f4467328c"
     },
     {
       "name": "image-error",
@@ -143,7 +143,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "5e32473422a6d92199874a7e60907a9327ba00e25825f09dd26f8e1a8454af29"
+      "sha256": "9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62"
     },
     {
       "name": "original-size",
