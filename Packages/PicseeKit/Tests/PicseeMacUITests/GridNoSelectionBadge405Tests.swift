@@ -4,9 +4,12 @@ import PicseeCore
 import PicseeApplication
 @testable import PicseeMacUI
 
-// Owner decision 2026-11-03 (#405): no ✓ badge at any selection count. Pinned pages 11 (grid-light)
-// and 32 (grid-multiselect) draw no `.selected-check` element on any `.photo-cell.is-selected` cell;
-// selection is the 1pt accent outline plus the tinted name row (DESIGN.md L79).
+// Owner decision 2026-11-03 (#405, 1B): no ✓ badge at any selection count. This deviates from pinned page 32
+// (grid-multiselect), whose `.photo-cell.is-selected .thumbnail-wrap:after{content:"✓"}` draws one on every
+// selected cell. Native selection is the 1pt accent stroke plus the tinted name row.
+
+/// Page 32's live badge rule.
+let gridBadgeSelector = ".photo-cell.is-selected .thumbnail-wrap:after"
 
 /// Every "✓" text in the cell's view and layer trees, hidden or not.
 @MainActor func gridCheckGlyphs(in view: NSView) -> [String] {
@@ -64,13 +67,13 @@ func gridRasterHits(_ bitmap: NSBitmapImageRep, in rect: NSRect, _ match: (NSCol
     return hits
 }
 
-/// grid-multiselect.html `.selected-check{right:8px;top:8px;width:19px;height:19px}`, measured in the tile.
+/// Page 32's badge box `right:7px;top:7px;width:18px;height:18px` (border-box), measured in the tile.
 func gridSelectedCheckRegion(tile: NSRect) throws -> NSRect {
     let design = try PinnedDesign.page("grid-multiselect")
-    let right = try design.length(".selected-check", "right", viewport: 1280)
-    let top = try design.length(".selected-check", "top", viewport: 1280)
-    let width = try design.length(".selected-check", "width", viewport: 1280)
-    let height = try design.length(".selected-check", "height", viewport: 1280)
+    let right = try design.length(gridBadgeSelector, "right", viewport: 1280)
+    let top = try design.length(gridBadgeSelector, "top", viewport: 1280)
+    let width = try design.length(gridBadgeSelector, "width", viewport: 1280)
+    let height = try design.length(gridBadgeSelector, "height", viewport: 1280)
     return NSRect(x: tile.maxX - right - width, y: tile.maxY - top - height, width: width, height: height)
 }
 
@@ -83,7 +86,7 @@ func gridSelectedCheckRegion(tile: NSRect) throws -> NSRect {
     return try #require(gridViewRaster(swatch).colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB))
 }
 
-/// Pixels in the `.selected-check` region within 3/255 of its pinned `background` (badge fill) as rendered.
+/// Pixels in page 32's badge box within 3/255 of its pinned `background` (badge fill) as rendered.
 @MainActor func gridCheckRegionHits(_ cell: GridPhotoItem, fill: PinnedDesign.Color) throws -> Int {
     let tile = try #require(cell.tileLayer).frame
     let target = try gridRenderedColor(fill)
@@ -101,10 +104,10 @@ func gridSelectedCheckRegion(tile: NSRect) throws -> NSRect {
     return gridRasterHits(try gridCellRaster(cell), in: try gridSelectedCheckRegion(tile: tile)) { $0.alphaComponent > 0.99 }
 }
 
-/// `.selected-check` background per appearance: page 32 is light-only, so dark comes from page 12.
+/// Page 32's badge `background` per appearance, resolved through page 32's own `.theme-light`/`.theme-dark` tokens.
 func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesign.Color {
-    try PinnedDesign.page(appearance == .darkAqua ? "grid-dark" : "grid-multiselect")
-        .color(".selected-check", "background", viewport: 1280)
+    try PinnedDesign.page("grid-multiselect", appearance: appearance == .darkAqua ? "dark" : "light")
+        .color(gridBadgeSelector, "background", viewport: 1280)
 }
 
 @MainActor private func badgeGrid(_ count: Int, folderName: String)
@@ -131,21 +134,46 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
     return (views(view), view.layer.map(layers) ?? 0)
 }
 
-@Test func issue405PinnedPagesDrawNoSelectedCheckElement() throws {
-    for (page, minimumSelected) in [("grid-light", 1), ("grid-dark", 1), ("grid-multiselect", 2)] {
-        let design = try PinnedDesign.page(page)
-        #expect(design.classCount("selected-check") == 0, "\(page): no .selected-check element")
-        #expect(design.classCount("is-selected") >= minimumSelected, "\(page): .photo-cell.is-selected present")
-    }
+// The deviation, pinned both ways: page 32 does draw the badge, and the native cell does not.
+@Test @MainActor func issue405Page32DrawsBadgeButNativeCellOmitsItByOwnerDecision() throws {
     let page32 = try PinnedDesign.page("grid-multiselect")
     #expect(page32.classCount("is-selected") == 3, "page 32 has three selected cells")
-    // grid-multiselect.html `.selected-check` right/top 8px, width/height 19px: the region the raster samples.
-    #expect(try page32.length(".selected-check", "right", viewport: 1280) == 8)
-    #expect(try page32.length(".selected-check", "top", viewport: 1280) == 8)
-    #expect(try page32.length(".selected-check", "width", viewport: 1280) == 19)
-    #expect(try page32.length(".selected-check", "height", viewport: 1280) == 19)
+    #expect(try page32.raw(gridBadgeSelector, "content", viewport: 1280) == "\"✓\"", "page 32 draws ✓ per selected cell")
+    #expect(try page32.raw(gridBadgeSelector, "position", viewport: 1280) == "absolute")
+    #expect(try page32.length(gridBadgeSelector, "right", viewport: 1280) == 7)
+    #expect(try page32.length(gridBadgeSelector, "top", viewport: 1280) == 7)
+    #expect(try page32.length(gridBadgeSelector, "width", viewport: 1280) == 18)
+    #expect(try page32.length(gridBadgeSelector, "height", viewport: 1280) == 18)
+    #expect(try page32.border(gridBadgeSelector).width == 1, "1px on-accent border")
+    let onAccent = try page32.color(":root", "--color-on-accent", viewport: 1280)
+    let border = try page32.color(gridBadgeSelector, "border", viewport: 1280)
+    #expect(border.red == onAccent.red && border.green == onAccent.green && border.blue == onAccent.blue)
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-        #expect(try gridSelectedCheckFill(appearance).alpha > 0.9, "\(appearance.rawValue) fill is opaque")
+        let fill = try gridSelectedCheckFill(appearance)
+        let accent = try PinnedDesign.page("grid-multiselect", appearance: appearance == .darkAqua ? "dark" : "light")
+            .color(":root", "--color-accent-fill", viewport: 1280)
+        #expect(fill.alpha > 0.9, "\(appearance.rawValue) fill is opaque")
+        #expect(fill.red == accent.red && fill.green == accent.green && fill.blue == accent.blue,
+            "\(appearance.rawValue) fill is the accent fill")
+        let (grid, window, entries, root, folder) = badgeGrid(3, folderName: "picsee-405-deviation")
+        _ = window
+        grid.appearance = NSAppearance(named: appearance)
+        let ids = entries.map(\.itemID)
+        grid.display(FolderSnapshot(version: .init(rootID: root.id, folder: folder, generation: 1),
+            entries: entries, isComplete: true), selection: BrowserSelection())
+        var selection = BrowserSelection()
+        for (count, step) in [(0, { (_: inout BrowserSelection) in }),
+                              (1, { $0.click(ids[0], in: ids) }),
+                              (3, { $0.click(ids[2], modifier: .shift, in: ids) })] as [(Int, (inout BrowserSelection) -> Void)] {
+            step(&selection)
+            grid.synchronizeSelection(selection)
+            #expect(grid.selection.selectedItemIDs.count == count, "\(appearance.rawValue) count \(count)")
+            for cell in visibleCells(grid) {
+                #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(appearance.rawValue) count \(count): no ✓ in tree")
+                #expect(try gridCheckRegionHits(cell, fill: fill) == 0, "\(appearance.rawValue) count \(count): badge fill drawn")
+                #expect(try gridTileSurfaceHits(cell) > 300, "\(appearance.rawValue) count \(count): raster sees subview layers")
+            }
+        }
     }
 }
 
@@ -179,7 +207,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
                 #expect(cell.isSelected == selected)
                 #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(appearance.rawValue) count \(count): no ✓ in tree")
                 #expect(try gridCheckRegionHits(cell, fill: fill) == 0,
-                    "\(appearance.rawValue) count \(count) selected \(selected): .selected-check fill drawn")
+                    "\(appearance.rawValue) count \(count) selected \(selected): badge fill drawn")
                 #expect(try gridTileSurfaceHits(cell) > 300, "\(appearance.rawValue) count \(count): raster sees subview layers")
             }
         }
@@ -201,7 +229,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
             let selected = grid.selection.selectedItemIDs.contains(id)
             #expect(cell.isSelected == selected, "\(phase)")
             #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(phase): no ✓ in tree")
-            #expect(try gridCheckRegionHits(cell, fill: fill) == 0, "\(phase): .selected-check fill drawn")
+            #expect(try gridCheckRegionHits(cell, fill: fill) == 0, "\(phase): badge fill drawn")
             #expect(try gridTileSurfaceHits(cell) > 300, "\(phase): raster sees subview layers")
         }
     }
@@ -250,7 +278,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
                 if !setBeforeLoad { cell.isSelected = selected; cell.isCurrent = current }
                 cell.view.layoutSubtreeIfNeeded()
                 #expect(gridCheckGlyphs(in: cell.view).isEmpty, "\(state): no ✓ in tree")
-                #expect(try gridCheckRegionHits(cell, fill: fill) == 0, "\(state): .selected-check fill drawn")
+                #expect(try gridCheckRegionHits(cell, fill: fill) == 0, "\(state): badge fill drawn")
                 #expect(try gridTileSurfaceHits(cell) > 300, "\(state): raster sees subview layers")
                 #expect(cell.currentRingLayer.isHidden == !current, "\(state): ring ⇔ current")
                 let expected = selected && current ? "Selected, Current" : selected ? "Selected" : current ? "Current" : ""
@@ -296,4 +324,3 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
         #expect(cell.view.accessibilityValue() as? String == String(localized: "Selected"))
     }
 }
-

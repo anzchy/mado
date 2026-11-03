@@ -68,7 +68,7 @@ import PicseeApplication
         nameLabel.wantsLayer = true
         nameLabel.layer?.cornerRadius = DesignMetrics.radii["inner"]!
         // Selection stays at the tile edge; Current Item has a 2pt clear gap and 2pt stroke.
-        // No ✓ badge at any selection count: pages 11 and 32 draw no `.selected-check` (#405).
+        // No ✓ badge at any selection count, by owner decision (#405, 1B); page 32 draws one on every selected cell.
         selectionOutline.borderWidth = 1
         selectionOutline.cornerRadius = DesignMetrics.radii["inner"]!
         selectionOutline.isHidden = true
