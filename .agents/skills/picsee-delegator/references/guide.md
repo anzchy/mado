@@ -59,7 +59,7 @@ gardener is not BLOCK, and CI is green.
 them. A third slot is for gpt-imple-3's Low items only.
 
 **Panes that are too small.** p3 and p5 are often 2–3 rows tall, which leaves `herdr pane read` empty and makes
-`reset.sh` report `FAIL … after /new` falsely. Run `herdr pane zoom <pane>` to resize, then read again.
+`reset.sh` report `FAIL … no context line after 30s` (or the configured timeout) even if the reset worked. Run `herdr pane zoom <pane>` to resize, then read again.
 
 ---
 
@@ -319,7 +319,7 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 
 | Agent | Reset | Notes |
 |---|---|---|
-| Codex (p2–p5) | `.agents/skills/picsee-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Then check `Context 0% used` on screen. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
+| Codex (p2–p5) | `.agents/skills/picsee-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`PICSEE_RESET_CONTEXT_SECS`, interval `PICSEE_RESET_POLL_SECS`, default 0.25 s) and requires `Context 0% used`. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
 | opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent picsee-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
 | kimi-imple-1 (p7) | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
@@ -746,7 +746,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Missed that an implementer had finished (twice) | A screen-based poller ended with only a local log | Attach `listen-notify.py start` to a report/handoff poller; pin the exact delegator route and inspect queue receipt vs ACK |
-| `reset.sh` prints `FAIL … after /new` | pane too small to show "Context 0% used" | `herdr pane zoom`, read again; usually the reset did work |
+| `reset.sh` prints `FAIL … no context line after 30s` (or the configured timeout) | pane too small to show "Context 0% used", or startup still incomplete at the deadline | `herdr pane zoom`, read again; check startup before dispatching |
 | Prompt sent right after a reset "didn't land" | chooser still open or the pane redrawing | wait, check for "esc to interrupt" after ~20 s, resend |
 | A mid-rebase commit swallowed the implementer's message | `git rebase … | tail` hid the conflict | never pipe a rebase; check its exit code |
 | Rebase loop broke on `for f in $c` | zsh doesn't word-split unquoted variables | use `${=c}`, or compare the whole string |
