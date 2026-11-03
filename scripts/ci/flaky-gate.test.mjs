@@ -131,3 +131,40 @@ test('default output streams emit final result using recorded Node transport',()
   const code=`import {runAppLane} from ${JSON.stringify(new URL('../tdd/app-lane.mjs',import.meta.url).href)}; process.exitCode=runAppLane({spawn:()=>(${JSON.stringify({...pass,stderr:'default-stderr-marker\n'})})});`;
   const r=spawnSync(process.execPath,['--input-type=module','-e',code],{encoding:'utf8',cwd:root});assert.equal(r.status,0,r.stderr);assert.ok(r.stdout.includes(passing));assert.match(r.stdout,/Tests run: 2, Failures: 0, Errors: 0, Skipped: 1/);assert.equal(r.stderr,'default-stderr-marker\n');
 });
+
+for (const diagnostic of [
+  'error: Exited with unexpected signal code 9',
+  "error: Process '/SCRATCH/test' exited with unexpected signal code 9",
+  'error: Exited with signal code 9',
+  'error: Exited with signal SIGKILL',
+  "error: Process '/SCRATCH/test' exited with unexpected signal SIGKILL",
+]) {
+  for (const stream of ['stdout', 'stderr']) {
+    test(`signal exit refuses retry: ${stream}: ${diagnostic}`, () => {
+      const run = stream === 'stdout'
+        ? result(fixtures[0] + '\n' + diagnostic + '\n')
+        : result(fixtures[0], { stderr: diagnostic + '\n' });
+      denied(run);
+      const h = harness([run, pass]);
+      assert.equal(h.status, 70);
+      assert.equal(h.calls, 1);
+      assert.doesNotMatch(h.stdout, /retrying once|Tests run:/);
+      assert.equal(readFileSync(h.evidencePath, 'utf8'), run.stdout + '\n' + run.stderr);
+    });
+  }
+}
+
+test('first App attempt upload is nonfatal while App tests retain their exit status', () => {
+  const workflow = readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  const steps = workflow.split(/^      - name: /m);
+  const upload = steps.find(step => step.startsWith('Upload first App attempt\n'));
+  const lane = steps.find(step => step.startsWith('Run App tests\n'));
+  assert.ok(upload, 'first-attempt upload step exists');
+  assert.match(upload, /^        continue-on-error: true$/m);
+  assert.match(upload, /^        if: always\(\)$/m);
+  assert.match(upload, /^        uses: actions\/upload-artifact@[a-f0-9]{40}/m);
+  assert.match(upload, /^          path: \.build\/app-lane-attempt1\.log$/m);
+  assert.ok(lane, 'App lane step exists');
+  assert.match(lane, /^        run: node scripts\/tdd\/app-lane\.mjs$/m);
+  assert.doesNotMatch(lane, /continue-on-error:/);
+});
