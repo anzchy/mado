@@ -337,9 +337,9 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 | 查看与画布 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
 | C 沉浸界面 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
 | 外观与显示偏好 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| 文件夹浏览 | 2026-11-03 | doc-gardener | 59fe006..a6882cb |
+| 文件夹浏览 | 2026-11-03 | doc-gardener | 59fe006..96e1c8b |
 | Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
-| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 59fe006..a6882cb |
+| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 59fe006..96e1c8b |
 | 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 授权与文件访问 | 2026-11-02 | doc-gardener | 0b0c230..cd00e76 |
 | 缓存与资源 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
