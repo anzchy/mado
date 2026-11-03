@@ -326,6 +326,50 @@ module.exports=async(page,{design,states,screenshot})=>{
   await page.keyboard.press('Escape');if(await page.locator('#player').isVisible())throw Error(name+'?'+query+': embedded Esc did not close');
   if(!await opener.evaluate(b=>document.activeElement===b))throw Error(name+'?'+query+': embedded Esc did not restore opener focus');
  }
+ // Player keys must work from the preview's real startup focus, including reverse Tab entry.
+ const waitForJourneyPreview=()=>page.waitForFunction(()=>{const frame=document.querySelector('#p-frame iframe');return frame?.contentDocument?.readyState==='complete'&&frame.contentDocument.URL===frame.src});
+ const playerPosition=()=>page.locator('#player').evaluate(p=>({open:!p.hidden&&p.classList.contains('open'),page:p.dataset.page,query:p.dataset.query,step:document.getElementById('p-step').textContent.split(' · ')[0]}));
+ const focusedJourneyKeys=[
+  {name:'main J1 reading',opener:'[data-play="J1"]',page:'folder-loading',query:'',focus:'取消读取',left:'first-launch',right:'grid-light'},
+  {name:'J1-access volume',opener:'[data-play-branch="J1-access"][data-out="3"]',page:'permission-denied',query:'cause=volume',focus:'选择其他文件夹…',left:'grid-light',right:'grid-light'},
+ ];
+ for(const sample of focusedJourneyKeys)for(const key of ['ArrowRight','ArrowLeft','Tab','Shift+Tab']){
+  const opener=page.locator(sample.opener);await opener.click();await page.locator('#p-next').click();await waitForJourneyPreview();
+  const focused=await page.locator('#p-frame iframe').evaluate(frame=>({parentIsFrame:document.activeElement===frame,child:frame.contentDocument.activeElement.textContent.trim()}));
+  if(!focused.parentIsFrame||focused.child!==sample.focus)journeyIssues.push(sample.name+' '+key+': startup focus '+JSON.stringify(focused));
+  await page.keyboard.press(key);
+  const got=await playerPosition();
+  if(key.startsWith('Arrow')){
+   const expected={open:true,page:key==='ArrowRight'?sample.right:sample.left,query:'',step:(key==='ArrowRight'?'3':'1')+' / 3'};
+   if(JSON.stringify(got)!==JSON.stringify(expected))journeyIssues.push(sample.name+' '+key+': position '+JSON.stringify(got)+' instead of '+JSON.stringify(expected));
+  }else{
+   const correctControl=await page.evaluate(reverse=>{const controls=[...document.querySelectorAll('#player button, #player a[href]')].filter(x=>!x.disabled);return document.activeElement===controls[reverse?controls.length-1:0]},key==='Shift+Tab');
+   if(!correctControl)journeyIssues.push(sample.name+' '+key+': focus did not enter the '+(key==='Shift+Tab'?'last':'first')+' enabled parent control');
+   if(!got.open||got.page!==sample.page||got.query!==sample.query||got.step!=='2 / 3')journeyIssues.push(sample.name+' '+key+': changed position '+JSON.stringify(got));
+  }
+  await page.locator('#p-close').click();
+ }
+ // A parent-focused arrow must not run twice and skip over the middle step.
+ await page.locator('[data-play="J1"]').click();await waitForJourneyPreview();await page.locator('#p-next').focus();
+ if(!await page.locator('#p-next').evaluate(button=>document.activeElement===button&&!button.disabled))journeyIssues.push('parent ArrowRight: next control did not receive focus');
+ await page.keyboard.press('ArrowRight');
+ const parentPosition=await playerPosition();
+ if(!parentPosition.open||parentPosition.page!=='folder-loading'||parentPosition.query!==''||parentPosition.step!=='2 / 3')journeyIssues.push('parent ArrowRight: advanced other than one step '+JSON.stringify(parentPosition));
+ await page.locator('#p-close').click();
+ // A real sandboxed navigation supplies an opaque document; do not fake contentDocument.
+ const opaqueErrors=[],onOpaqueError=error=>opaqueErrors.push(error.message);page.on('pageerror',onOpaqueError);
+ try{
+  const opener=page.locator('[data-play="J1"]');await opener.click();await waitForJourneyPreview();
+  const opaque=await page.locator('#p-frame iframe').evaluate(frame=>new Promise(resolve=>{
+   frame.addEventListener('load',()=>resolve(frame.contentDocument===null),{once:true});
+   frame.setAttribute('sandbox','allow-scripts');const url=new URL(frame.src);url.searchParams.set('opaque-preview-check','1');frame.src=url.href;
+  }));
+  if(!opaque)journeyIssues.push('opaque preview: contentDocument was not null');
+  await page.locator('#p-close').click();
+  if(await page.locator('#player').isVisible())journeyIssues.push('opaque preview: parent close button did not close');
+  if(!await opener.evaluate(button=>document.activeElement===button))journeyIssues.push('opaque preview: parent close did not restore opener focus');
+  if(opaqueErrors.length)journeyIssues.push('opaque preview pageerror: '+opaqueErrors.join(' | '));
+ }finally{page.off('pageerror',onOpaqueError)}
  const sortedJSON=o=>JSON.stringify(Object.keys(o).sort().map(k=>[k,o[k].map(s=>s.join('>')).sort()]));
  if(sortedJSON(branchPlayed)!==sortedJSON(BRANCH_PLAYS))for(const id of new Set([...Object.keys(BRANCH_PLAYS),...Object.keys(branchPlayed)])){const want=(BRANCH_PLAYS[id]||[]).map(s=>s.join('>')).sort(),got=(branchPlayed[id]||[]).map(s=>s.join('>')).sort();if(JSON.stringify(want)!==JSON.stringify(got))journeyIssues.push(id+': branch plays '+(got.join(' ; ')||'none')+' instead of '+(want.join(' ; ')||'none'))}
  if(journeyIssues.length)throw Error('journeys.html: '+journeyIssues.join(' | '));
