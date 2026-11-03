@@ -110,7 +110,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     #expect(snapshot.decoding == .init(running: 0, waiting: 0, finished: 0))
 }
 
-@Test func diagnosticsDiskCacheableThumbnailsSkipTheMemoryLookup() async throws {
+@Test func diagnosticsDiskCacheableThumbnailsUseValidatedMemoryFirst() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)
@@ -123,17 +123,17 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
         _ = try await source.image(maximumPixelSize: 64, priority: .visible)
         await source.close()
     }
-    // A durable miss decodes fresh and the repeat is a disk hit: the memory cache is never asked.
+    // An eligible cold memory miss falls back to disk and fresh decode; the repeat reuses validated memory.
     var snapshot = await pipeline.diagnostics()
-    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 1)
-    #expect(snapshot.memoryCache?.hits == 0 && snapshot.memoryCache?.misses == 0)
+    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 0)
+    #expect(snapshot.memoryCache?.hits == 1 && snapshot.memoryCache?.misses == 1)
     // A load outside the disk cache (here a direct pipeline request, as the viewer's full image) is a memory lookup.
     _ = try await pipeline.image(for: try await pipeline.request(for: rig.file(), maximumPixelSize: 2048, identityRoot: rig.root))
     snapshot = await pipeline.diagnostics()
-    #expect(snapshot.memoryCache?.misses == 1)
+    #expect(snapshot.memoryCache?.misses == 2)
 }
 
-@Test func diagnosticsViewerImagesUpTo1024TakeTheDiskPathAndLargerOnesTheMemoryLookup() async throws {
+@Test func diagnosticsViewerImagesUpTo1024UseValidatedMemoryAndLargerUseOrdinaryMemory() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)
@@ -146,17 +146,17 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
         _ = try await source.image(maximumPixelSize: edge)
         await source.close()
     }
-    // A fit-size viewer image under a folder grant is one the disk cache holds: a miss, then a hit.
+    // An eligible fit-size viewer image first misses memory and disk, then hits validated memory.
     try await viewerLoad(.root(root, file: rig.file()), edge: 960)
     try await viewerLoad(.root(root, file: rig.file()), edge: 960)
     var snapshot = await pipeline.diagnostics()
-    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 1)
-    #expect(snapshot.memoryCache?.hits == 0 && snapshot.memoryCache?.misses == 0)
+    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 0)
+    #expect(snapshot.memoryCache?.hits == 1 && snapshot.memoryCache?.misses == 1)
     // Larger than 1024 px (Actual Pixels), or a single file without a folder grant: memory lookups only.
     try await viewerLoad(.root(root, file: rig.file()), edge: 2048)
     try await viewerLoad(.root(root, file: rig.file()), edge: 2048)
     try await viewerLoad(.fileGrant(rig.file()), edge: 960)
     snapshot = await pipeline.diagnostics()
-    #expect(snapshot.memoryCache?.misses == 2 && snapshot.memoryCache?.hits == 1)
-    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 1)
+    #expect(snapshot.memoryCache?.misses == 3 && snapshot.memoryCache?.hits == 2)
+    #expect(snapshot.diskCache?.misses == 1 && snapshot.diskCache?.hits == 0)
 }

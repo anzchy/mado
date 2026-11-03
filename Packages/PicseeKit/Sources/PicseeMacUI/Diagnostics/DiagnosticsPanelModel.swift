@@ -63,11 +63,11 @@ public final class DiagnosticsPanelModel {
         } catch { return false }
     }
 
-    /// Every request the disk cache can prepare (a folder-granted image, oriented SDR, frame 0, edge up to 1024 px),
-    /// grid thumbnail or viewer image alike, loads through it and decodes a durable miss fresh (AccessImageSource),
-    /// never asking the memory cache; only pins land there. The rest are memory lookups.
-    static let memoryLookupNote = "Hits and misses count memory lookups, made only by images the disk cache can’t hold: larger than 1024 px (such as Actual Pixels), opened as a single file without a folder grant, or not prepared by the disk cache. Everything else counts under Thumbnail Disk Cache; pinned pixels still show in Entries and Size."
-    static let diskLookupNote = "Counts grid thumbnails and viewer images up to 1024 px from folders you granted."
+    /// Eligible folder-granted thumbnails first reuse resident pixels after current content, access,
+    /// payload and generation validation. Misses load the disk cache, then decode fresh if needed.
+    /// Larger images, file grants and disk-ineligible requests use the ordinary memory path.
+    static let memoryLookupNote = "Hits and misses count memory lookups. Eligible folder-granted thumbnails first check resident pixels and count a hit only after current content, access and cache-generation validation. Memory misses fall back to Thumbnail Disk Cache. Larger images, single-file opens without a folder grant, and images not prepared by the disk cache use the ordinary memory path; pinned pixels still show in Entries and Size."
+    static let diskLookupNote = "Counts disk-cache fallback loads for eligible grid thumbnails and viewer images up to 1024 px from folders you granted. Validated resident memory hits count under Memory Cache."
 
     static func sections(_ snapshot: DiagnosticsSnapshot?) -> [DiagnosticsSection] {
         let count = { (value: Int?) in value.map(String.init) ?? unknown }

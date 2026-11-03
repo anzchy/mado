@@ -433,8 +433,8 @@ private func traitSets(_ view: some View) -> [String] {
 
 /// Every request the disk cache can hold (grid thumbnails and viewer images up to 1024 px under a folder grant)
 /// loads through it and decodes a durable miss fresh, so only the rest reach the memory lookup.
-private let memoryLookupNote = "Hits and misses count memory lookups, made only by images the disk cache can’t hold: larger than 1024 px (such as Actual Pixels), opened as a single file without a folder grant, or not prepared by the disk cache. Everything else counts under Thumbnail Disk Cache; pinned pixels still show in Entries and Size."
-private let diskLookupNote = "Counts grid thumbnails and viewer images up to 1024 px from folders you granted."
+private let memoryLookupNote = "Hits and misses count memory lookups. Eligible folder-granted thumbnails first check resident pixels and count a hit only after current content, access and cache-generation validation. Memory misses fall back to Thumbnail Disk Cache. Larger images, single-file opens without a folder grant, and images not prepared by the disk cache use the ordinary memory path; pinned pixels still show in Entries and Size."
+private let diskLookupNote = "Counts disk-cache fallback loads for eligible grid thumbnails and viewer images up to 1024 px from folders you granted. Validated resident memory hits count under Memory Cache."
 
 /// The accessibility label a view value carries, as its dumped text (nil when it has none).
 private func accessibilityLabelDump(_ view: some View) -> String? {

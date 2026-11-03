@@ -3635,36 +3635,36 @@
         }
       }
     },
-    "Hits and misses count memory lookups, made only by images the disk cache can’t hold: larger than 1024 px (such as Actual Pixels), opened as a single file without a folder grant, or not prepared by the disk cache. Everything else counts under Thumbnail Disk Cache; pinned pixels still show in Entries and Size.": {
+    "Hits and misses count memory lookups. Eligible folder-granted thumbnails first check resident pixels and count a hit only after current content, access and cache-generation validation. Memory misses fall back to Thumbnail Disk Cache. Larger images, single-file opens without a folder grant, and images not prepared by the disk cache use the ordinary memory path; pinned pixels still show in Entries and Size.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hits and misses count memory lookups, made only by images the disk cache can’t hold: larger than 1024 px (such as Actual Pixels), opened as a single file without a folder grant, or not prepared by the disk cache. Everything else counts under Thumbnail Disk Cache; pinned pixels still show in Entries and Size."
+            "value": "Hits and misses count memory lookups. Eligible folder-granted thumbnails first check resident pixels and count a hit only after current content, access and cache-generation validation. Memory misses fall back to Thumbnail Disk Cache. Larger images, single-file opens without a folder grant, and images not prepared by the disk cache use the ordinary memory path; pinned pixels still show in Entries and Size."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "命中与未命中只统计内存查找，仅磁盘缓存无法保存的图片会做这次查找：超过 1024 像素（如实际像素）、作为单个文件打开而没有文件夹授权，或磁盘缓存未能准备的图片。其余都计入“磁盘缩略图缓存”；钉住的像素仍计入条目和大小。"
+            "value": "命中与未命中统计内存查找。符合磁盘缓存条件的已授权文件夹缩略图先查驻留像素，验证当前内容、访问权限与缓存代次后才计为命中；未命中再读磁盘缩略图缓存。较大图片、没有文件夹授权的单文件，以及磁盘缓存未能准备的图片仍走普通内存路径；钉住的像素仍计入条目和大小。"
           }
         }
       }
     },
-    "Counts grid thumbnails and viewer images up to 1024 px from folders you granted.": {
+    "Counts disk-cache fallback loads for eligible grid thumbnails and viewer images up to 1024 px from folders you granted. Validated resident memory hits count under Memory Cache.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Counts grid thumbnails and viewer images up to 1024 px from folders you granted."
+            "value": "Counts disk-cache fallback loads for eligible grid thumbnails and viewer images up to 1024 px from folders you granted. Validated resident memory hits count under Memory Cache."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "统计已授权文件夹中的网格缩略图，以及不超过 1024 像素的查看器图片。"
+            "value": "统计已授权文件夹中符合缓存条件的网格缩略图，以及不超过 1024 像素的查看器图片的磁盘回退读取。验证后的驻留内存命中计入“内存缓存”。"
           }
         }
       }
