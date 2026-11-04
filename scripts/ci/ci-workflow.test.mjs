@@ -21,6 +21,20 @@ test('main pushes and dispatches never share a concurrency group; pull requests 
   assert.match(workflow, /^  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m);
 });
 
+test('App tests has a static readable job name even when the job is skipped', () => {
+  const name = jobBlock('app-tests').match(/^    name: (.+)$/m)?.[1];
+  assert.doesNotMatch(name ?? '', /\$\{\{|\}\}/, 'skipped jobs must not expose an unevaluated expression');
+  assert.equal(name, 'App tests');
+});
+
+test('required checks retain their public names', () => {
+  assert.match(jobBlock('walking-skeleton'), /^    name: Walking skeleton$/m);
+  const prBody = readFileSync(new URL('../../.github/workflows/pr-body.yml', import.meta.url), 'utf8');
+  for (const name of ['Agent tooling', 'PR body Gates']) {
+    assert.ok(prBody.split('\n').includes(`    name: ${name}`), name);
+  }
+});
+
 test('the App tests job keeps the exact unsigned build as its own step, and Walking skeleton reads that step', () => {
   assert.doesNotMatch(workflow, /^  unsigned-build:$/m, 'no separate unsigned-build job');
   const app = jobBlock('app-tests');
