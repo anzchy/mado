@@ -122,8 +122,11 @@ import PicseeCore
             let scene = Sidebar444Scene(size: size, sidebarWidth: sidebarWidth, inspector: inspector)
             defer { scene.close() }
             let label = "\(size) w \(sidebarWidth) inspector \(inspector)"
-            let w = CGFloat(sidebarWidth), contentWidth = scene.width - scene.panel
-            #expect(!scene.shell.isHidden, "\(label)")
+            let contentWidth = scene.width - scene.panel
+            // The sidebar never takes the pods' 318 pt from the canvas (fix round 1).
+            let w = sidebar444Width(CGFloat(sidebarWidth), content: contentWidth)
+            #expect(w > 0 && !scene.shell.isHidden, "\(label)")
+            #expect(scene.canvas.frame.width >= sidebar444PodClearance, "\(label)")
             #expect(scene.shell.frame == NSRect(x: 0, y: 0, width: w, height: size.height - 28), "\(label) shell \(scene.shell.frame)")
             let expected = NSRect(x: w, y: 0, width: contentWidth - w, height: size.height)
             #expect(scene.canvas.frame == expected, "\(label) canvas \(scene.canvas.frame)")
@@ -202,26 +205,97 @@ import PicseeCore
     #expect(scene.shell.isGridSurface)
 }
 
+/// #444 fix round 1 (narrow windows): the viewer keeps page 14's pods on the canvas (16+104+8+174+16 = 318 pt).
+/// The sidebar takes at most content − 318; below its 160 pt minimum (the grid divider's clamp) it is not laid out at
+/// that width, and it comes back when the window widens.
+private let sidebar444PodClearance: CGFloat = 318
+private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat {
+    let width = min(preferred, content - sidebar444PodClearance)
+    return width >= 160 ? width : 0
+}
+@MainActor private func expectPodsClear(_ scene: Sidebar444Scene, preferred: CGFloat, _ label: String) {
+    scene.content.layoutSubtreeIfNeeded()
+    let contentWidth = scene.width - scene.panel
+    let sidebar = sidebar444Width(preferred, content: contentWidth)
+    #expect(scene.shell.isHidden == (sidebar == 0), "\(label) sidebar \(sidebar)")
+    #expect(scene.shell.isAccessibilityHidden() == (sidebar == 0), "\(label)")
+    if sidebar > 0 { #expect(scene.shell.frame.width == sidebar, "\(label) shell \(scene.shell.frame)") }
+    else { #expect(scene.shell.viewerSidebarKeyViews.isEmpty, "\(label): a sidebar not laid out leaves the key loop") }
+    #expect(scene.canvas.frame.minX == sidebar && scene.canvas.frame.width == contentWidth - sidebar, "\(label) canvas \(scene.canvas.frame)")
+    #expect(scene.chrome.frame == scene.canvas.frame, "\(label)")
+    let canvas = scene.canvas.frame
+    for group in scene.chrome.groups where !group.isHidden {
+        let frame = group.convert(group.bounds, to: scene.content)
+        #expect(canvas.insetBy(dx: -0.5, dy: -0.5).contains(frame), "\(label) pod \(frame) outside canvas \(canvas)")
+        if sidebar > 0 { #expect(!frame.intersects(scene.shell.frame), "\(label) pod \(frame) over the sidebar") }
+    }
+    if sidebar > 0, let row = scene.shell.folderTree.rows.last(where: { !$0.visibleRect.isEmpty }) {
+        let centre = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: scene.content)
+        let hit = scene.content.hitTest(centre)
+        #expect(hit.map { $0 === row || $0.isDescendant(of: row) } == true, "\(label): the bottom sidebar row is hit, got \(String(describing: hit))")
+    }
+}
+
 @Test(arguments: [false, true])
 @MainActor func i444CompactWidthsKeepPodsClearOfSidebar(inspector: Bool) {
     var rows: [(NSSize, Double)] = stride(from: 160.0, through: 320, by: 8).map { (NSSize(width: 800, height: 680), $0) }
-    rows += [(NSSize(width: 238, height: 168), 160), (NSSize(width: 238, height: 168), 320)]
+    for width: CGFloat in [238, 400, 477, 478, 479, 513, 514, 515] {
+        for sidebarWidth in [160.0, 196, 320] { rows.append((NSSize(width: width, height: 168), sidebarWidth)) }
+    }
     for (size, sidebarWidth) in rows {
         let scene = Sidebar444Scene(size: size, sidebarWidth: sidebarWidth, inspector: inspector)
         defer { scene.close() }
-        let label = "\(size) w \(sidebarWidth) inspector \(inspector)"
-        let contentWidth = scene.width - scene.panel
-        #expect(scene.shell.frame.width == min(CGFloat(sidebarWidth), contentWidth), "\(label)")
-        #expect(scene.canvas.frame.width >= 0 && scene.canvas.frame.width.isFinite, "\(label)")
-        #expect(scene.chrome.frame.width == scene.canvas.frame.width, "\(label)")
-        guard size.width >= 800 else { continue }
-        let groups = scene.chrome.groups.map { $0.convert($0.bounds, to: nil) }
-        for group in groups { #expect(group.minX >= scene.shell.frame.maxX, "\(label) group \(group)") }
+        expectPodsClear(scene, preferred: CGFloat(sidebarWidth), "\(size) w \(sidebarWidth) inspector \(inspector)")
+        let groups = scene.chrome.groups.filter { !$0.isHidden }.map { $0.convert($0.bounds, to: nil) }
         for i in groups.indices { for j in groups.indices where i < j {
             let overlap = groups[i].intersection(groups[j])
-            #expect(overlap.isNull || overlap.width * overlap.height == 0, "\(label) \(i)/\(j)")
+            #expect(overlap.isNull || overlap.width * overlap.height == 0, "\(size) w \(sidebarWidth) \(i)/\(j)")
         } }
     }
+}
+
+/// A live resize with the sidebar shown: every step keeps the pods on the canvas, and widening brings the sidebar back.
+@Test @MainActor func i444LiveResizeKeepsPodsClearAndRestoresTheSidebar() {
+    let scene = Sidebar444Scene()
+    defer { scene.close() }
+    for width: CGFloat in [1280, 900, 600, 515, 514, 479, 478, 477, 400, 238, 477, 478, 600, 1280] {
+        scene.window.setContentSize(NSSize(width: width, height: 680))
+        scene.presentation.layoutInspector(visible: false)  // the App re-lays out on windowDidResize
+        expectPodsClear(scene, preferred: 196, "resize \(width)")
+        #expect(scene.session.isViewerSidebarShown, "the viewer's choice holds while the window is too narrow (\(width))")
+    }
+}
+
+/// The shell does not stretch with the window in the viewer: until the presentation lays it out again it keeps its
+/// width, so the folder tree is never laid out at the parent's width.
+@Test @MainActor func i444ViewerSidebarShellDoesNotAutoresizeItsWidth() {
+    let scene = Sidebar444Scene()
+    defer { scene.close() }
+    // The App's grid shell stretches with the window; enter the viewer again with that mask.
+    scene.presentation.showGrid(reading: false)
+    scene.shell.autoresizingMask = [.width, .height]
+    scene.presentation.showViewer()
+    scene.content.layoutSubtreeIfNeeded()
+    let width = scene.shell.frame.width
+    #expect(width == 196 && !scene.shell.isHidden)
+    scene.window.setContentSize(NSSize(width: 1000, height: 800))
+    #expect(scene.shell.frame.width == width, "shell \(scene.shell.frame)")
+    scene.presentation.showGrid(reading: false)
+    scene.presentation.layoutInspector(visible: false)
+    scene.window.setContentSize(NSSize(width: 1100, height: 800))
+    #expect(scene.shell.frame.width == 1100, "the grid shell still follows the window width")
+}
+
+/// The overlay answers only inside its own bounds, even where a pod's frame reaches past them.
+@Test @MainActor func i444OverlayHitTestStaysInsideItsBounds() {
+    let scene = Sidebar444Scene()
+    defer { scene.close() }
+    let pod = scene.chrome.groups[0]
+    pod.frame.origin.x = -40
+    let outside = scene.chrome.convert(NSPoint(x: -20, y: pod.frame.midY), to: scene.chrome.superview)
+    let inside = scene.chrome.convert(NSPoint(x: pod.frame.maxX - 4, y: pod.frame.midY), to: scene.chrome.superview)
+    #expect(scene.chrome.hitTest(outside) == nil)
+    #expect(scene.chrome.hitTest(inside) != nil)
 }
 
 @Test @MainActor func i444HitTestRightOfSidebarNeverReturnsShell() {

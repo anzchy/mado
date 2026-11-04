@@ -423,6 +423,7 @@ public final class ViewerChromeOverlay: NSView {
     private weak var canvas: NSView?
     public override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
+        guard bounds.contains(local) else { return nil }
         for group in groups.reversed() where !group.isHidden && group.frame.contains(local) {
             return group.hitTest(local)
         }

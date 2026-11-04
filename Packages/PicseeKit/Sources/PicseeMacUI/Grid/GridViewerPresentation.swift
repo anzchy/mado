@@ -35,14 +35,23 @@ import PicseeCore
         canvas.window?.makeFirstResponder(canvas)
         shell?.session?.updateFocus(.canvas)
     }
-    /// A sidebar that hides while it holds keyboard focus hands focus to the canvas.
-    private func applyViewerSidebarVisibility(_ shell: GridShellView) {
+    /// Page 14's pods need 16 + 104 + 8 + 174 + 16 pt of canvas; the sidebar never takes that from the viewer.
+    static let viewerPodClearance: CGFloat = 318
+    /// The sidebar's own minimum, the grid divider's clamp; a narrower viewer sidebar is not laid out at all.
+    static let minimumViewerSidebarWidth: CGFloat = 160
+    /// Shows the viewer's sidebar when the Session asks for it and the window leaves room beside the pods; returns its
+    /// width (0 while hidden). A sidebar that hides while it holds keyboard focus hands focus to the canvas.
+    private func applyViewerSidebarVisibility(_ shell: GridShellView, contentWidth: CGFloat) -> CGFloat {
+        shell.viewerSidebarLimit = contentWidth - Self.viewerPodClearance
+        let width = shell.sidebarWidth
         let show = viewerSidebarAvailable && shell.session?.isViewerSidebarShown == true
+            && width >= Self.minimumViewerSidebarWidth
         if !show, let responder = canvas.window?.firstResponder as? NSView, responder.isDescendant(of: shell) {
             focusCanvas()
         }
         shell.isHidden = !show
         shell.setAccessibilityHidden(!show)
+        return show ? width : 0
     }
     public func layoutInspector(visible: Bool) {
         guard let parent = canvas.superview else { return }
@@ -53,8 +62,7 @@ import PicseeCore
         let content = NSRect(x: bounds.minX, y: bounds.minY, width: contentWidth, height: bounds.height)
         inspectorVisible = visible
         if let shell, shell.mode == .viewerSidebar {
-            applyViewerSidebarVisibility(shell)
-            let sidebar = shell.isHidden ? 0 : min(shell.sidebarWidth, contentWidth)
+            let sidebar = applyViewerSidebarVisibility(shell, contentWidth: contentWidth)
             if !shell.isHidden {
                 shell.frame = NSRect(x: bounds.minX, y: bounds.minY, width: sidebar, height: max(0, bounds.height - 28))
                 shell.layoutSubtreeIfNeeded()
@@ -98,7 +106,6 @@ import PicseeCore
         }
         shell?.setReadingStatus(false)
         shell?.setMode(.viewerSidebar)
-        if let shell { applyViewerSidebarVisibility(shell) }
         state.autoresizingMask = [.width, .height]
         if let parent = state.superview { state.frame = parent.bounds }
         (grid as? GridBrowserView)?.setThumbnailsActive(false)
@@ -107,7 +114,7 @@ import PicseeCore
         canvas.isHidden = false
         chrome.isHidden = false
         setStateSurface(.viewer)
-        if let shell, !shell.isHidden { layoutInspector(visible: inspectorVisible) }
+        if shell != nil { layoutInspector(visible: inspectorVisible) }
     }
     public func showGrid(reading: Bool) {
         if let shell, shell.mode == .viewerSidebar {

@@ -372,6 +372,10 @@ import PicseeCore
         self.mode = mode
         let viewer = mode == .viewerSidebar
         if viewer { setDisplayPanelOpen(false, restoringFocus: false) }
+        // The presentation sizes the viewer's narrowed shell itself; stretching it with the window would lay the tree
+        // out once at the window's width first.
+        if viewer { autoresizesWidth = autoresizingMask.contains(.width); autoresizingMask.remove(.width) }
+        else if autoresizesWidth { autoresizingMask.insert(.width) }
         for part in [footer, mainContent] {
             part.isHidden = viewer
             part.setAccessibilityHidden(viewer)
@@ -380,6 +384,9 @@ import PicseeCore
         layoutSubtreeIfNeeded()
         if !viewer { updateKeyViewLoop() }
     }
+    /// The widest the viewer's sidebar may be at this window width (the presentation keeps the pods' room).
+    public var viewerSidebarLimit = CGFloat.greatestFiniteMagnitude
+    private var autoresizesWidth = false
     /// The grid surface: shown, and not the viewer's sidebar. Grid-only paths (search, footer status) test this.
     public var isGridSurface: Bool { !isHidden && mode == .grid }
     /// Called when the viewer's sidebar replaced its rows; the viewer's key loop links them (ViewerStateFocus).
@@ -395,7 +402,8 @@ import PicseeCore
         return [divider] + folderTree.rows
     }
     public var mainFrame: NSRect {
-        let sidebarWidth = sidebarLaidOut ? (liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)) : 0
+        let preferred = liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)
+        let sidebarWidth = !sidebarLaidOut ? 0 : mode == .viewerSidebar ? min(preferred, viewerSidebarLimit) : preferred
         // In the viewer there is no footer, so the sidebar runs the shell's full height.
         let footerHeight: CGFloat = mode == .viewerSidebar ? 0 : 40
         return NSRect(x: sidebarWidth, y: footerHeight, width: max(0, bounds.width - sidebarWidth),
