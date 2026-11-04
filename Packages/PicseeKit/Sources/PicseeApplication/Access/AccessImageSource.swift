@@ -56,6 +56,8 @@ public actor AccessImageSource {
         // A late invalidated memory result gets one fresh lease/attempt with memory disabled.
         // Balance each attempt before its final synchronous delivery gate; errors cannot decrement twice.
         var allowingMemory = true
+        // A normal loop exit avoids mapping an unreachable method tail in coverage.
+        let delivered: LeasedImage
         while true {
             let useMemory = allowingMemory
             pending += 1
@@ -159,8 +161,10 @@ public actor AccessImageSource {
                     throw error
                 }
             }
-            return (result.request, result.image)
+            delivered = result
+            break
         }
+        return (delivered.request, delivered.image)
     }
     private static func tagged(_ image: DecodedImage, with permit: AccessWorkPermit?) -> DecodedImage {
         guard let permit else { return image }
