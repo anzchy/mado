@@ -66,11 +66,18 @@ test('native jobs run only on the classifier saying so; Walking skeleton always 
 test('build caches: restored on pull requests and dispatches (unless cold), saved only by a passing main push', () => {
   const restores = [...workflow.matchAll(/^      - name: (Restore [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
   const saves = [...workflow.matchAll(/^      - name: (Save [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
-  assert.deepEqual(restores.map(match => match[1]), ['Restore SwiftPM build', 'Restore SwiftPM build', 'Restore DerivedData']);
-  assert.deepEqual(saves.map(match => match[1]), ['Save SwiftPM build', 'Save DerivedData']);
-  for (const [, , body] of restores) {
-    assert.match(body, /^        if: github\.event_name != 'push' && !inputs\.cold$/m);
+  assert.deepEqual(restores.map(match => match[1]),
+    ['Restore SwiftPM build', 'Restore SwiftPM build', 'Restore DerivedData', 'Restore Playwright browsers']);
+  assert.deepEqual(saves.map(match => match[1]), ['Save SwiftPM build', 'Save DerivedData', 'Save Playwright browsers']);
+  for (const [, name, body] of restores) {
+    const condition = name === 'Restore Playwright browsers' ? "github.event_name != 'push'" : "github.event_name != 'push' && !inputs.cold";
+    assert.ok(body.includes(`\n        if: ${condition}\n`) || body.startsWith(`        if: ${condition}\n`), name);
     assert.match(body, /uses: actions\/cache\/restore@[0-9a-f]{40} # v/);
+    if (name === 'Restore Playwright browsers') {
+      assert.match(body, /^          key: playwright-v1-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-\$\{\{ steps\.playwright\.outputs\.version \}\}$/m);
+      assert.doesNotMatch(body, /restore-keys:/, 'browsers restore only for the exact Playwright version');
+      continue;
+    }
     assert.match(body, /^          key: \$\{\{ steps\.(spm|dd)-key\.outputs\.key \}\}$/m);
     assert.match(body, /^          restore-keys: \$\{\{ steps\.(spm|dd)-key\.outputs\.prefix \}\}$/m);
   }
