@@ -111,7 +111,7 @@ branch protection（main）：`Walking skeleton`、`PR body Gates`、`Agent tool
 
 ### C2 unsigned build 并进 App tests job，ledger 检查移到 ubuntu
 
-- App tests job 的步骤依次是：`xcodebuild build …`（命令与现在完全相同，步骤名 "Build unsigned app"）→ `build-for-testing` → app-lane。job 输出 `unsigned_build=<build 步骤的 outcome>`。
+- App tests job 的步骤依次是：`xcodebuild build …`（与现在的命令相同，只多加 `'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'` 这一个 hashing 参数，步骤名 "Build unsigned app"）→ `build-for-testing` → app-lane。job 输出 `unsigned_build=<build 步骤的 outcome>`。
 - Walking skeleton 改为 `needs: [package-tests, package-macui-tests, app-tests, node-checks]`，检查的是 `needs.app-tests.outputs.unsigned_build == 'success'`，**不看 App tests job 的结论**。这样 App tests 和现在一样不是必需检查；要不要把它设为必需由 owner 决定（参考 #379 的 flaky 历史）。
 - App tests 的 `if:` 从 job 级移到测试步骤上，这样 `workflow_dispatch app_tests=false` 时仍然会构建。
 - 新增 ubuntu job `node-checks` 跑 `node scripts/ledger/build.mjs --check`，通过 Walking skeleton 成为必需检查。它在 push main 时也会跑，Agent tooling 不会。

@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+const BASELINE_BUILD = "xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci";
+const HASHING_SETTING = "'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'";
 const jobBlock = id => {
   const match = workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:\\n|(?![\\s\\S]))`, 'm'));
   assert.ok(match, `job ${id} exists`);
@@ -22,7 +24,10 @@ test('the App tests job keeps the exact unsigned build as its own step, and Walk
   const build = steps.find(step => step.startsWith('Build unsigned app\n'));
   assert.ok(build, 'Build unsigned app step exists');
   assert.match(build, /^        id: unsigned-build$/m);
-  assert.match(build, /^        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath \.build\/dd-ci\b/m);
+  // The baseline command (`xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+  // -derivedDataPath .build/dd-ci`) plus exactly one argument, the hashing flag (#479 acceptance criteria).
+  const run = build.split('\n').filter(line => line.startsWith('        run: '));
+  assert.deepEqual(run, [`        run: ${BASELINE_BUILD} ${HASHING_SETTING}`]);
   assert.doesNotMatch(build, /^        if:/m, 'the unsigned build runs on every event');
   assert.match(app, /^      unsigned_build: \$\{\{ steps\.unsigned-build\.outcome \}\}$/m);
   assert.ok(app.indexOf('Build unsigned app\n') < app.indexOf('Build App tests\n'), 'build runs before build-for-testing');
@@ -95,9 +100,9 @@ test('every cached build uses incremental file hashing, with identical flags in 
   const swift = [...workflow.matchAll(/^ {10}swift test --package-path Packages\/PicseeKit .*$/gm)].map(match => match[0]);
   assert.equal(swift.length, 2);
   for (const line of swift) assert.match(line, / -Xswiftc -enable-incremental-file-hashing$/);
-  const xcode = [...workflow.matchAll(/run: xcodebuild (build|build-for-testing) .*$/gm)].map(match => match[0]);
-  assert.equal(xcode.length, 2);
-  for (const line of xcode) {
-    assert.match(line, /-derivedDataPath \.build\/dd-ci 'OTHER_SWIFT_FLAGS=\$\(inherited\) -enable-incremental-file-hashing'$/);
-  }
+  const xcode = [...workflow.matchAll(/run: xcodebuild .*$/gm)].map(match => match[0]);
+  assert.deepEqual(xcode, [
+    `run: ${BASELINE_BUILD} ${HASHING_SETTING}`,
+    `run: ${BASELINE_BUILD.replace('xcodebuild build ', 'xcodebuild build-for-testing ')} ${HASHING_SETTING}`,
+  ]);
 });
