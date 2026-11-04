@@ -87,6 +87,11 @@ if (!valid) {
               typeof job[field] !== 'string' || /[\r\n|]/.test(job[field]))) {
           throw new Error('CI job name, status and conclusion must be strings without CR, LF or pipe');
         }
+        if (Array.isArray(job.steps) && job.steps.some(step => step &&
+            ['name', 'status', 'conclusion'].some(field =>
+              typeof step[field] === 'string' && /[\r\n|]/.test(step[field])))) {
+          throw new Error('CI step fields must not contain CR, LF or pipe');
+        }
       }
       const runHead = headSha.toLowerCase();
       const head = expectedHead?.toLowerCase();
@@ -112,10 +117,34 @@ if (!valid) {
           rows.push(decided
             ? `| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${url} |`
             : `| app-tests | NOT RUN | — | App tests skipped without a classifier decision ${url} |`);
-        } else if (jobs[0].conclusion === 'success') {
-          rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
         } else {
-          rows.push(`| app-tests | FAIL | ${headSha} | App tests ${jobs[0].conclusion} ${url} |`);
+          // gh run view --json jobs exports steps[].status/conclusion, not outcome.
+          // A successful job can be a build-only dispatch; only the test step proves that tests ran.
+          const job = jobs[0];
+          const steps = Array.isArray(job.steps) && job.steps.every(step => step &&
+            typeof step === 'object' && !Array.isArray(step) &&
+            ['name', 'status', 'conclusion'].every(field => typeof step[field] === 'string'))
+            ? job.steps : [];
+          const tests = steps.filter(step => step.name === 'Run App tests');
+          const result = tests.length === 1 && tests[0].status === 'completed' ? tests[0].conclusion : undefined;
+          if (result === 'success') {
+            rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
+          } else if (result === 'failure') {
+            rows.push(`| app-tests | FAIL | ${headSha} | App tests step failure ${url} |`);
+          } else if (result === 'skipped') {
+            const concluded = (name, conclusion) => {
+              const named = steps.filter(step => step.name === name);
+              return named.length === 1 && named[0].status === 'completed' && named[0].conclusion === conclusion;
+            };
+            // The pinned workflow skips Build/Run App tests only for dispatch app_tests=false;
+            // require the successful unsigned build too, so a build failure cannot claim that reason.
+            const buildOnly = concluded('Build unsigned app', 'success') && concluded('Build App tests', 'skipped');
+            rows.push(`| app-tests | NOT RUN | — | App tests skipped${buildOnly ? ' (build-only dispatch, app_tests=false)' : ''} ${url} |`);
+          } else if (['failure', 'cancelled'].includes(job.conclusion)) {
+            rows.push(`| app-tests | FAIL | ${headSha} | App tests ${job.conclusion} ${url} |`);
+          } else {
+            rows.push(`| app-tests | NOT VERIFIED | ${headSha} | App tests step evidence missing or invalid ${url} |`);
+          }
         }
       }
     }

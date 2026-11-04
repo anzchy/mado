@@ -4,7 +4,25 @@
   "status": "completed",
   "conclusion": "success",
   "jobs": [
-    { "name": "Walking skeleton", "conclusion": "success" },
-    { "name": "App tests", "status": "completed", "conclusion": "success" }
+    {
+      "name": "Walking skeleton",
+      "conclusion": "success",
+      "status": "completed"
+    },
+    {
+      "name": "App tests",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Run App tests",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T07:13:03Z",
+          "completedAt": "2026-11-04T07:15:41Z"
+        }
+      ]
+    }
   ]
 }
