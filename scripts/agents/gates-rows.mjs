@@ -131,7 +131,9 @@ if (!valid) {
             rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
           } else if (result === 'failure') {
             rows.push(`| app-tests | FAIL | ${headSha} | App tests step failure ${url} |`);
-          } else if (result === 'skipped') {
+          } else if (result === 'skipped' && ['failure', 'cancelled'].includes(job.conclusion)) {
+            rows.push(`| app-tests | FAIL | ${headSha} | App tests ${job.conclusion} (test step skipped) ${url} |`);
+          } else if (result === 'skipped' && job.conclusion === 'success') {
             const concluded = (name, conclusion) => {
               const named = steps.filter(step => step.name === name);
               return named.length === 1 && named[0].status === 'completed' && named[0].conclusion === conclusion;

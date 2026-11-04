@@ -234,6 +234,7 @@ for (const [conclusion, jobConclusion, expected] of [
   ['success', 'success', 'PASS'], ['success', 'failure', 'PASS'],
   ['failure', 'success', 'FAIL'], ['failure', 'failure', 'FAIL'],
   ['skipped', 'success', 'NOT RUN'],
+  ['skipped', 'failure', 'FAIL'], ['skipped', 'cancelled', 'FAIL'],
 ]) {
   test(`App test step ${conclusion} determines evidence when job is ${jobConclusion}`, t => {
     const run = structuredClone(nativeExport);
@@ -244,8 +245,43 @@ for (const [conclusion, jobConclusion, expected] of [
     const result = runCI(t, run, { expectedHead: run.headSha });
     assert.equal(result.status, 0, result.stderr);
     const reason = expected === 'PASS' ? run.url
-      : expected === 'FAIL' ? `App tests step failure ${run.url}` : `App tests skipped ${run.url}`;
+      : expected === 'FAIL' ? (conclusion === 'skipped'
+        ? `App tests ${jobConclusion} (test step skipped) ${run.url}` : `App tests step failure ${run.url}`)
+        : `App tests skipped ${run.url}`;
     assert.equal(result.stdout, `| app-tests | ${expected} | ${expected === 'NOT RUN' ? '—' : run.headSha} | ${reason} |\n`);
+  });
+}
+
+for (const failedBuild of ['Build App tests', 'Build unsigned app']) {
+  test(`${failedBuild} failure with skipped tests remains FAIL`, t => {
+    // Synthetic failure trace derived from the recorded native gh shape, not a claimed live failed run.
+    const run = structuredClone(nativeExport);
+    run.conclusion = 'failure';
+    const job = run.jobs[0];
+    job.conclusion = 'failure';
+    job.steps.find(step => step.name === failedBuild).conclusion = 'failure';
+    job.steps.find(step => step.name === 'Run App tests').conclusion = 'skipped';
+    if (failedBuild === 'Build unsigned app') {
+      job.steps.find(step => step.name === 'Build App tests').conclusion = 'skipped';
+    }
+    const result = runCI(t, run, { expectedHead: run.headSha });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | FAIL | ${run.headSha} | App tests failure (test step skipped) ${run.url} |\n`);
+  });
+}
+
+for (const conclusion of ['', 'unknown', 'neutral']) {
+  test(`skipped tests with unverified job conclusion ${JSON.stringify(conclusion)} cannot claim NOT RUN`, t => {
+    const run = validRun();
+    run.jobs[0].conclusion = conclusion;
+    run.jobs[0].steps = [
+      { name: 'Build unsigned app', status: 'completed', conclusion: 'success' },
+      { name: 'Build App tests', status: 'completed', conclusion: 'skipped' },
+      { name: 'Run App tests', status: 'completed', conclusion: 'skipped' },
+    ];
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests step evidence missing or invalid ${run.url} |\n`);
   });
 }
 
