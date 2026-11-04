@@ -234,3 +234,42 @@ func position445KeepsHonestReadingFailureAndRecursiveRescanLabels() async throws
     #expect(test.scene.session.zoomMode == .actualPixels)
     try test.expect("b.jpg  2 / 3")
 }
+
+@Test @MainActor func position445Fix1SelectedPreviewUsesSetOrderAndIndependentCount() async throws {
+    let test = Position445Scene()
+    defer { test.finish() }
+    try await test.begin()
+    let source = try #require(test.scan.sourceSnapshot)
+    let root = ItemIdentityRoot(id: test.root, url: test.folder)
+    let entries = (1...12).map {
+        FolderEntry(url: test.folder.appendingPathComponent(String(format: "image-%02d.png", $0)), root: root)
+    }
+    test.scan.replaceSourceSnapshot(.init(version: source.version, entries: entries, isComplete: true))
+    let ordered = try #require(test.scan.snapshot).navigationEntries
+    let previewHost = Position445PreviewHost(scene: test.scene, entries: ordered)
+    let session = test.scene.session
+    session.host = previewHost
+    session.enterFolderGrid(items: ordered.map(\.itemID), sourceVersion: .init(1))
+    session.select(ordered[9].itemID)
+    session.select(ordered[1].itemID, modifier: .command)
+    session.select(ordered[5].itemID, modifier: .command)
+    session.focus(ordered[1].itemID)
+    let router = CommandRouter()
+    _ = router.route(.enter, from: .key, to: session)
+    await session.imageLoader.loadTask?.value
+    #expect(session.previewSet?.itemIDs == [ordered[1].itemID, ordered[5].itemID, ordered[9].itemID])
+    #expect(session.imageLoader.fileURL == ordered[1].url)
+    try test.expect("image-02.png  1 / 3")
+    for (command, index, fraction) in [(CommandID.next, 5, "2 / 3"), (.next, 9, "3 / 3"), (.previous, 5, "2 / 3")] {
+        _ = router.route(command, from: .key, to: session)
+        await session.imageLoader.loadTask?.value
+        #expect(session.imageLoader.fileURL == ordered[index].url)
+        try test.expect("\(ordered[index].url.lastPathComponent)  \(fraction)")
+    }
+    // The set independently knows both membership and count, even without a folder coordinator.
+    session.folderScan = nil
+    try test.expect("image-06.png  2 / 3")
+    session.closeImage()
+    #expect(session.previewSet != nil)
+    try test.expect("")
+}
