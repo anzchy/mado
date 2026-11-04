@@ -44,6 +44,10 @@
   .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; border-bottom: 1px solid var(--color-border-subtle); }
   .row:last-child { border-bottom: 0; }
   .keys { display: inline-flex; gap: 4px; align-items: center; flex: none; }
+  .row.key-variants { height: 50px; }
+  .key-variants .keys { flex-direction: column; align-items: flex-end; gap: 2px; }
+  .key-variant { display: inline-flex; align-items: center; gap: 4px; }
+  .shortcut-card .hint { margin: 8px 0 4px; }
   kbd { font-family: var(--font-sans); font-size: var(--font-size-ui-sm); min-width: 22px; height: 22px; padding: 0 6px; display: inline-flex; align-items: center;
         justify-content: center; border-radius: var(--radius-inner); border: 1px solid var(--color-border); border-bottom-width: 2px; background: var(--color-bg); color: var(--color-text); }
 </style>
@@ -66,8 +70,13 @@
     </section>
     <section class="shortcut-card" id="card-grid" data-card="grid" aria-labelledby="card-grid-title">
       <h3 id="card-grid-title"><span class="title">网格</span><span class="when">浏览文件夹时</span></h3>
+      <p class="hint">按住 Shift 使用导航键时，保留已有选择并移动当前项。</p>
       <ul>
         <li class="row" data-shortcut="key:grid-arrows"><span class="name">移动当前项</span><span class="keys"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></span></li>
+        <li class="row key-variants" data-shortcut="key:grid-page-up"><span class="name">上移一页</span><span class="keys"><span class="key-variant"><kbd>Page Up</kbd></span><span class="key-variant"><kbd>⇧</kbd><kbd>Page Up</kbd></span></span></li>
+        <li class="row key-variants" data-shortcut="key:grid-page-down"><span class="name">下移一页</span><span class="keys"><span class="key-variant"><kbd>Page Down</kbd></span><span class="key-variant"><kbd>⇧</kbd><kbd>Page Down</kbd></span></span></li>
+        <li class="row key-variants" data-shortcut="key:grid-home"><span class="name">选择首项</span><span class="keys"><span class="key-variant"><kbd>Home</kbd></span><span class="key-variant"><kbd>⇧</kbd><kbd>Home</kbd></span></span></li>
+        <li class="row key-variants" data-shortcut="key:grid-end"><span class="name">选择末项</span><span class="keys"><span class="key-variant"><kbd>End</kbd></span><span class="key-variant"><kbd>⇧</kbd><kbd>End</kbd></span></span></li>
         <li class="row" data-shortcut="command:preview"><span class="name">用大图查看当前项</span><span class="keys"><kbd>Space</kbd></span></li>
         <li class="row" data-shortcut="command:enter"><span class="name">打开当前项</span><span class="keys"><kbd>Return</kbd></span></li>
         <li class="row" data-shortcut="menu:Search current folder"><span class="name">搜索当前文件夹</span><span class="keys"><kbd>⌘</kbd><kbd>F</kbd></span></li>

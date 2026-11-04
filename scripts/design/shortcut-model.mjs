@@ -3,7 +3,7 @@
 // implements: every keyed menu item in the command model, every implemented CommandID, and the key handlers outside
 // the menus. Every row on the page is compared; a row without data-shortcut or a keycap outside a row fails. Every key
 // code a keyDown, keyCode comparison or .onKeyPress handles must be declared in KEY_SITES, as a row or as an exclusion.
-// Not compared: modifier variants inside a keyDown handler (⇧/⌘ with the grid arrows), and a second site for a code
+// Not compared: modifier variants with the grid arrows, and a second site for a code
 // that a file already declares. Run by `npm run design:check`; `node scripts/design/shortcut-model.mjs` runs it alone
 // and exits 1 when the page and the code disagree. Sources are read through `read(path)` so tests can feed changed copies.
 import fs from 'node:fs';
@@ -25,6 +25,18 @@ export const KEY_HANDLERS = [
   { id: 'key:grid-arrows', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
     anchor: /case 123: delta = -1\s+case 124: delta = 1\s+case 125: delta = columnStep\s+case 126: delta = -columnStep/,
     keys: ['←', '→', '↑', '↓'] },
+  { id: 'key:grid-page-up', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+    anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 116: onPageOrEdge\?\(\.page\(-1\), preserveSelection\); return/,
+    keys: ['Page Up', '⇧', 'Page Up'] },
+  { id: 'key:grid-page-down', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+    anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 121: onPageOrEdge\?\(\.page\(1\), preserveSelection\); return/,
+    keys: ['Page Down', '⇧', 'Page Down'] },
+  { id: 'key:grid-home', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+    anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 115: onPageOrEdge\?\(\.first, preserveSelection\); return/,
+    keys: ['Home', '⇧', 'Home'] },
+  { id: 'key:grid-end', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+    anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 119: onPageOrEdge\?\(\.last, preserveSelection\); return/,
+    keys: ['End', '⇧', 'End'] },
   { id: 'key:viewer-tab', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
     anchor: /if event\.keyCode == 48 \{ onTab\?\(/, keys: ['Tab'] },
 ];
@@ -34,7 +46,9 @@ const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Spa
 const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
 const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissal, not a command';
 export const KEY_SITES = {
-  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift': { 123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows' },
+  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift': {
+    123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
+    116: 'key:grid-page-up', 121: 'key:grid-page-down', 115: 'key:grid-home', 119: 'key:grid-end' },
   'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
     36: { excluded: OPEN_KEY_RING }, 49: { excluded: OPEN_KEY_RING }, 76: { excluded: OPEN_KEY_RING } },
   'App/CanvasWindowController.swift': { 34: 'command:inspector', 53: 'command:escape', 49: 'command:preview', 36: 'command:enter', 76: 'command:enter',
