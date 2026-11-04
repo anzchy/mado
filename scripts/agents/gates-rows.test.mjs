@@ -373,6 +373,13 @@ test('PR-body workflow isolates PR tests from the trusted body-gates runner', as
   assert.ok(gatesJob, 'missing independent pr-body-gates job');
   assert.match(agentJob, /- name: Checkout PR head[\s\S]*?ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}[\s\S]*?path: pr-head/);
   assert.match(agentJob, /- name: Test agent tooling\n        working-directory: pr-head\n        run: node --test scripts\/agents\/\*\.test\.mjs/);
+  assert.match(agentJob, /runs-on: ubuntu-latest/);
+  assert.match(agentJob, /timeout-minutes: 5/);
+  const command = agentJob.match(/run: (node --test .+)/)?.[1];
+  assert.ok(command, 'missing tooling test command');
+  for (const suite of ['agents', 'perf', 'ledger', 'tdd']) {
+    assert.ok(command.split(/\s+/).includes(`scripts/${suite}/*.test.mjs`), `missing ${suite} suite`);
+  }
   assert.match(gatesJob, /if: github\.event_name == 'pull_request'/);
   assert.match(gatesJob, /- name: Checkout trusted base[\s\S]*?ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}[\s\S]*?path: trusted/);
   assert.match(gatesJob, /- name: Checkout PR head[\s\S]*?ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}[\s\S]*?path: pr-head/);
