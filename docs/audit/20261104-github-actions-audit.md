@@ -136,7 +136,7 @@ branch protection（main）：`Walking skeleton`、`PR body Gates`、`Agent tool
 
 ### C5 ubuntu 上的小项（收益低，可选）
 
-- Design check：setup-node 加 `cache: npm`；按 playwright 版本缓存 `~/.cache/ms-playwright`，apt 依赖仍用 `npx playwright install-deps chromium` 安装。省约 10–15 s，不在关键路径上。
+- Design check：setup-node 加 `cache: npm`（例外：setup-node 的 npm 缓存在每种事件上都会恢复和保存，包括 main 推送，不走上面“只在 main 保存、main 冷构建”的规则；它只缓存 npm 下载目录，`npm ci` 按 package-lock 的 integrity 校验每个包，缓存内容不对会直接失败，不会被带进构建）；按 playwright 版本缓存 `~/.cache/ms-playwright`，apt 依赖仍用 `npx playwright install-deps chromium` 安装。省约 10–15 s，不在关键路径上。
 
 ### 预期前后对比（每次 PR 推送，中位数）
 
@@ -179,3 +179,4 @@ branch protection（main）：`Walking skeleton`、`PR body Gates`、`Agent tool
 - 中 2（C3）：纯文档判定必须在 API 出错、文件列表为空或只解析了一部分、分页出问题、触到 GitHub 上限时一律判为原生；解析出的文件数要和事件的 `changed_files` 比对，不一致就全跑。
 - 低：提速数字是估算，要用之后 5 个 run（含一次冷构建的 main run）核实，并盯住 10 GB 缓存预算；§8 的 `codeInputs` 缺口另行修复（#474），这次不改 `ui-parity-pr-body-lint.mjs`。
 - 实现时比计划多做的一点：`Native inputs` job 从 base 提交 checkout 判定脚本再运行，PR 改不了评判自己的规则；base 里还没有这个脚本时（也就是引入它的那个 PR）一律判为原生。ledger 检查的 job 名是 `Ledger HTML check`。
+- 实现后两份盲审：gpt-auditor **CHANGES REQUIRED**（1 高、1 中），opus-auditor **PASS**（1 中、6 低）。第一轮修复：unsigned build 是原命令只加 hashing 参数，测试钉住整行（#479 的验收已澄清允许这一个参数）；App tests job 被取消、跳过或没有结果时 `Walking skeleton` 失败；判定脚本也从 base 运行，base 没有它时用更严的内联规则；gates-rows 只在分类器确实判了 native=false 时写 “no native input changed”；新增的 Ubuntu job 只读 token、不保留凭据；setup-node 的 npm 缓存是上面缓存规则的明确例外。
