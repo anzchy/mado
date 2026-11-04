@@ -36,4 +36,12 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or b"git command failed").decode(errors="replace").strip().splitlines()[0]
+        print(f"rebase-verify: {detail}", file=sys.stderr)
+        sys.exit(1)
+    except OSError as error:
+        print(f"rebase-verify: {error}", file=sys.stderr)
+        sys.exit(1)

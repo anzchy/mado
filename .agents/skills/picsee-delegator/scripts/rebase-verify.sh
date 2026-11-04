@@ -4,8 +4,7 @@
 # old-base..old-head with new-base..new-head. An audit or device-smoke verdict covers a patch, so it only carries
 # over when CODE is same. Exit 0: both same. 1: code differs (send the combination back for a quick audit check,
 # then rerun gates and smoke). 2: messages differ (fix them before pushing; wins over 1, both lines still print).
-# A clean cherry-pick with upstream changes within three context lines can still report CODE differ;
-# send that combination to both auditors for a quick check, then rerun gates and smoke.
+# A clean replay whose resulting tree matches is CODE same, including nearby upstream context edits.
 # 3: usage or invalid ref. 4: empty comparison (no evidence to carry forward).
 set -eu
 script_dir=${0:A:h}
@@ -16,9 +15,9 @@ repo_root=$(git rev-parse --show-toplevel)
 msgs() { git log --reverse --format='%s%n%b%n--' "$1..$2"; }
 # Blob IDs and hunk offsets may change on a clean rebase. Retain hunk lengths,
 # patch order, paths, modes, rename metadata, source/context lines, hunk suffix
-# context and binary payloads. Changed surrounding context conservatively differs.
+# context and binary payloads. Hashes describe the patches for diagnostics.
 # Normalized hunk bodies alone cannot distinguish repeated identical blocks;
-# also replay the old patch on new-base and compare its resulting tree to new-head.
+# replay the old patch on new-base and compare its resulting tree to new-head.
 code() {
   git -C "$repo_root" diff --binary --full-index --no-ext-diff --no-textconv --no-color -M -U3 \
     --src-prefix=a/ --dst-prefix=b/ "$1" "$2" -- . \
@@ -34,10 +33,14 @@ if [[ -z $old || -z $new ]]; then
 fi
 a=$(print -r -- "$old" | shasum | cut -d' ' -f1)
 b=$(print -r -- "$new" | shasum | cut -d' ' -f1)
-if [[ $a == $b ]] && python3 "$script_dir/rebase-verify-tree.py" "$repo_root" "$1" "$2" "$3" "$4"; then
-  echo "CODE same $a"
+if python3 "$script_dir/rebase-verify-tree.py" "$repo_root" "$1" "$2" "$3" "$4"; then
+  echo "CODE same $a (exact replayed tree match; candidate patch $b)"
 else
-  echo "CODE differ $a -> $b (patch or replayed tree differs)"
+  if [[ $a == $b ]]; then
+    echo "CODE differ $a (replayed tree differs or replay failed)"
+  else
+    echo "CODE differ $a -> $b (replayed tree differs or replay failed)"
+  fi
   if (( rc == 0 )); then rc=1; fi
 fi
 exit $rc
