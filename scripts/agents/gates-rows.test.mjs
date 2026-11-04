@@ -168,10 +168,35 @@ function runCI(t, run, { summary = false, expectedHead = head } = {}) {
     : spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
 }
 const validRun = () => ({ headSha: head, url: 'https://github.com/anzchy/picsee/actions/runs/322',
-  status: 'completed', jobs: [{ name: 'App tests', status: 'completed', conclusion: 'success' }] });
+  status: 'completed', jobs: [{ name: 'App tests', status: 'completed', conclusion: 'success',
+    steps: [{ name: 'Run App tests', number: 8, status: 'completed', conclusion: 'success' }] }] });
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
-const appJobName = workflow.match(/^  app-tests:\n    name: (.+)$/m)?.[1];
+// Dependency-free: Agent tooling runs without npm ci. Scope keys to the job and its direct children.
+function appJobDisplayName(source) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex(line => /^\s*app-tests:\s*$/.test(line));
+  if (start < 0) return undefined;
+  const indent = lines[start].search(/\S/);
+  const body = [];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim() || line.trimStart().startsWith('#')) continue;
+    if (line.search(/\S/) <= indent) break;
+    body.push(line);
+  }
+  const depth = Math.min(...body.map(line => line.search(/\S/)));
+  return body.find(line => line.search(/\S/) === depth && /^\s*name: /.test(line))?.trim().slice(6);
+}
+const appJobName = appJobDisplayName(workflow);
+
+test('workflow App job name lookup survives indentation and name after needs, ignoring nested names', () => {
+  for (const indent of [1, 2, 4, 6]) {
+    const pad = ' '.repeat(indent);
+    const source = `jobs:\n${pad}other:\n${pad}  name: Wrong before\n${pad}app-tests:\n${pad}  needs: changes\n${pad}  steps:\n${pad}    - uses: local/action\n${pad}      with:\n${pad}        name: Wrong nested\n${pad}  name: App tests\n${pad}after:\n${pad}  name: Wrong after\n`;
+    assert.equal(appJobDisplayName(source), 'App tests');
+    assert.equal(appJobDisplayName(source.replace(`${pad}  name: App tests\n`, '')), undefined);
+  }
+});
 const permutations = values => values.length === 0 ? [[]] : values.flatMap((value, index) =>
   permutations(values.filter((_, other) => other !== index)).map(rest => [value, ...rest]));
 
@@ -180,18 +205,19 @@ for (const scenario of ['docs-only', 'native', 'dispatch-app-tests-false']) {
     assert.ok(appJobName, 'workflow App tests job has a display name');
     const skipped = scenario === 'docs-only';
     const run = validRun();
-    run.event = scenario === 'dispatch-app-tests-false' ? 'workflow_dispatch' : 'pull_request';
-    if (run.event === 'workflow_dispatch') run.inputs = { app_tests: false };
     const app = { name: appJobName, status: 'completed', conclusion: skipped ? 'skipped' : 'success',
       steps: [
-        { name: 'Build unsigned app', conclusion: skipped ? 'skipped' : 'success' },
-        { name: 'Run App tests', conclusion: scenario === 'native' ? 'success' : 'skipped' },
+        { name: 'Build unsigned app', number: 6, status: 'completed', conclusion: skipped ? 'skipped' : 'success' },
+        { name: 'Build App tests', number: 7, status: 'completed', conclusion: scenario === 'native' ? 'success' : 'skipped' },
+        { name: 'Run App tests', number: 8, status: 'completed', conclusion: scenario === 'native' ? 'success' : 'skipped' },
       ] };
     const jobs = [app, ...['Native inputs', 'Walking skeleton'].map(name =>
       ({ name, status: 'completed', conclusion: 'success' }))];
     const expected = skipped
       ? `| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${run.url} |\n`
-      : `| app-tests | PASS | ${head} | ${run.url} |\n`;
+      : scenario === 'dispatch-app-tests-false'
+        ? `| app-tests | NOT RUN | — | App tests skipped (build-only dispatch, app_tests=false) ${run.url} |\n`
+        : `| app-tests | PASS | ${head} | ${run.url} |\n`;
     for (const order of permutations(jobs)) {
       run.jobs = order;
       const result = runCI(t, run);
@@ -200,6 +226,93 @@ for (const scenario of ['docs-only', 'native', 'dispatch-app-tests-false']) {
     }
   });
 }
+
+// Exported with gh run view 41790488799 --json headSha,url,status,conclusion,jobs.
+// Step fields are status/conclusion, not outcome; no synthetic event/inputs are needed.
+const nativeExport = JSON.parse(readFileSync(new URL('./fixtures/ci-app-tests-native.json', import.meta.url), 'utf8'));
+for (const [conclusion, jobConclusion, expected] of [
+  ['success', 'success', 'PASS'], ['success', 'failure', 'PASS'],
+  ['failure', 'success', 'FAIL'], ['failure', 'failure', 'FAIL'],
+  ['skipped', 'success', 'NOT RUN'],
+]) {
+  test(`App test step ${conclusion} determines evidence when job is ${jobConclusion}`, t => {
+    const run = structuredClone(nativeExport);
+    const job = run.jobs[0];
+    job.conclusion = jobConclusion;
+    const target = job.steps.find(step => step.name === 'Run App tests');
+    target.conclusion = conclusion;
+    const result = runCI(t, run, { expectedHead: run.headSha });
+    assert.equal(result.status, 0, result.stderr);
+    const reason = expected === 'PASS' ? run.url
+      : expected === 'FAIL' ? `App tests step failure ${run.url}` : `App tests skipped ${run.url}`;
+    assert.equal(result.stdout, `| app-tests | ${expected} | ${expected === 'NOT RUN' ? '—' : run.headSha} | ${reason} |\n`);
+  });
+}
+
+for (const steps of [undefined, null, {}, [], [null], [[]], ['Run App tests'],
+  [{ status: 'completed', conclusion: 'success' }],
+  [{ name: 7, status: 'completed', conclusion: 'success' }],
+  [{ name: 'Run App tests', status: 'completed', conclusion: '' }],
+  [{ name: 'Build unsigned app', status: 'completed', conclusion: 'success' }],
+  [{ name: 'Run App tests', conclusion: 'success' }],
+  [{ name: 'Run App tests', status: 'in_progress', conclusion: 'success' }],
+  [{ name: 'Run App tests', status: 'completed', outcome: 'success' }],
+  [{ name: 'Run App tests', status: 'completed', conclusion: 'unknown' }],
+  [{ name: 'Run App tests', status: 'completed', conclusion: ['success'] }],
+  [{ name: 'Run App tests', status: 'completed', conclusion: 'success' },
+   { name: 'Run App tests', status: 'completed', conclusion: 'skipped' }],
+]) {
+  test(`successful job with unverified test evidence never passes: ${JSON.stringify(steps)}`, t => {
+    const run = validRun();
+    run.jobs[0].steps = steps;
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests step evidence missing or invalid ${run.url} |\n`);
+  });
+}
+
+for (const field of ['name', 'status', 'conclusion']) {
+  test(`malformed step ${field} cannot inject a partial Gates table`, t => {
+    const run = validRun();
+    run.jobs[0].steps[0][field] = 'success\n| forged | PASS |';
+    const result = runCI(t, run, { summary: true });
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, '');
+  });
+}
+
+for (const conclusion of ['success', 'failure']) {
+  test(`App step ${conclusion} is invariant under unrelated step order`, t => {
+    const run = validRun();
+    const steps = [
+      { name: 'Build unsigned app', status: 'completed', conclusion: 'success' },
+      { name: 'Run App tests', status: 'completed', conclusion },
+      { name: 'Upload first App attempt', status: 'completed', conclusion: 'skipped' },
+    ];
+    for (const order of permutations(steps)) {
+      run.jobs[0].steps = order;
+      const result = runCI(t, run);
+      assert.equal(result.status, 0, result.stderr);
+      const reason = conclusion === 'success' ? run.url : `App tests step failure ${run.url}`;
+      assert.equal(result.stdout, `| app-tests | ${conclusion === 'success' ? 'PASS' : 'FAIL'} | ${head} | ${reason} |\n`);
+    }
+  });
+}
+
+test('App test step order cannot change a build-only skipped verdict', t => {
+  const run = validRun();
+  const steps = [
+    { name: 'Build unsigned app', status: 'completed', conclusion: 'success' },
+    { name: 'Build App tests', status: 'completed', conclusion: 'skipped' },
+    { name: 'Run App tests', status: 'completed', conclusion: 'skipped' },
+  ];
+  for (const order of permutations(steps)) {
+    run.jobs[0].steps = order;
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT RUN | — | App tests skipped (build-only dispatch, app_tests=false) ${run.url} |\n`);
+  }
+});
 
 for (const field of ['headSha', 'url', 'status', 'job.name', 'job.status', 'job.conclusion']) {
   for (const value of [undefined, null, 7, true, {}, [], ['completed\r\n| forged |']]) {
