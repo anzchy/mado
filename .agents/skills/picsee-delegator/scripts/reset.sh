@@ -18,7 +18,7 @@ for timer in PICSEE_RESET_CONTEXT_SECS PICSEE_RESET_POLL_SECS; do
     echo "FAIL reset $name: invalid $timer=$value"; exit 1
   fi
 done
-# Parse one screen only: the last boundary and bottom-most eligible footer win.
+# Parse one screen only: a leading title and the bottom-most eligible footer win.
 # A chooser is a boundary, but its footer still belongs to the pre-start UI.
 footer() {
   python3 -c '
@@ -27,11 +27,21 @@ proved = sys.argv[1] == "1"
 seen = started = proved
 clean = metadata = False
 ctx = fence = ""
+nonblank = 0
+leading_cwd = placeholder = False
+previous = ""
 # Exact welcome text only: arbitrary Tip: prose or prompt text is transcript.
-welcome = {"› Ask Codex to do anything", "? for shortcuts",
+welcome = {"? for shortcuts",
            "Tip: Use /help to see available commands."}
 for raw in sys.stdin:
     line = raw.strip()
+    title_position = nonblank == 0 or (nonblank == 1 and leading_cwd and previous == "cwd")
+    if line:
+        nonblank += 1
+    is_cwd = bool(re.fullmatch(r"(?:~/|/)[^\n]+", line))
+    if nonblank == 1 and line:
+        leading_cwd = is_cwd
+    previous = "cwd" if is_cwd else line
     if line.startswith(("```", "~~~")):
         mark = line[:3]
         fence = "" if fence == mark else fence or mark
@@ -40,7 +50,7 @@ for raw in sys.stdin:
         continue
     if fence:
         continue
-    if re.fullmatch(r">_ OpenAI Codex \(v[0-9][^)]*\)", line):
+    if title_position and re.fullmatch(r">_ OpenAI Codex \(v[0-9][^)]*\)", line):
         ctx = ""
         seen = started = clean = metadata = True
         continue
@@ -68,6 +78,15 @@ for raw in sys.stdin:
         metadata = False
         continue
     metadata = False
+    # The input placeholder is unique and the last nonblank line before the footer.
+    # Once it has appeared, even welcome-like output is transcript evidence.
+    if line == "› Ask Codex to do anything" and not placeholder:
+        placeholder = True
+        continue
+    if placeholder:
+        clean = False
+        seen = proved
+        continue
     if line in welcome or all(c.isspace() or "\u2500" <= c <= "\u259f" or "\u2800" <= c <= "\u28ff" for c in line):
         continue
     clean = False
