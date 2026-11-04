@@ -89,7 +89,7 @@ import PicseeCore
         #expect(!host.opens.contains { $0.lastPathComponent == "z.png" })
         #expect(router.route(.escape, from: .key, to: session))
         #expect(host.gridReturns == 1)
-        #expect(session.selection.selectedItemIDs == [ids[0]])
+        #expect(session.selection.selectedItemIDs == [ids[1]])
         // #492 / owner #345: cancelling folder entry preserves the last-viewed return destination.
         #expect(session.currentItemID == ids[1])
         #expect(session.scrollAnchor == ids[1])

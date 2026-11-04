@@ -152,11 +152,13 @@ func issue345WrapEscapeKeepsLatestCurrentAndSelection(reverse: Bool) {
     #expect(session.selection.selectedItemIDs == origin.selectedItemIDs)
     #expect(session.selection.anchorItemID == origin.anchorItemID)
     #expect(session.scrollAnchor == landed)
-    // A new preview has no wrap history and retains the established origin restoration.
+    // #492 owner 2026-11-04: ordinary multi paging also follows the last viewed image.
     let restored = session.selection
     issue345Route(.preview, session); issue345Route(.next, session); issue345Route(.escape, session)
-    #expect(session.selection == restored)
-    #expect(session.scrollAnchor == landed)
+    #expect(session.selection.selectedItemIDs == restored.selectedItemIDs)
+    #expect(session.selection.anchorItemID == restored.anchorItemID)
+    #expect(session.currentItemID == ids[4])
+    #expect(session.scrollAnchor == ids[4])
 }
 
 @Test(arguments: [false, true]) @MainActor
@@ -197,7 +199,6 @@ func issue345WrappedRemovalReturnsSurvivingCurrent(reverse: Bool) {
     let ids = sessionItems(3), host = Issue345Host(), session = ViewerSession(host: host)
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[0])
     session.select(reverse ? ids[0] : ids[2])
-    let selected = session.selection.selectedItemIDs, anchor = session.selection.anchorItemID
     session.setFolderLoopEnabled(true); issue345Route(.preview, session)
     issue345Route(reverse ? .previous : .next, session)
     let remaining = reverse ? Array(ids.prefix(2)) : Array(ids.suffix(2))
@@ -205,8 +206,8 @@ func issue345WrappedRemovalReturnsSurvivingCurrent(reverse: Bool) {
     #expect(session.currentItemID == ids[1])
     issue345Route(.escape, session)
     #expect(session.currentItemID == ids[1])
-    #expect(session.selection.selectedItemIDs == selected)
-    #expect(session.selection.anchorItemID == anchor)
+    #expect(session.selection.selectedItemIDs == [ids[1]])
+    #expect(session.selection.anchorItemID == ids[1])
     #expect(session.scrollAnchor == ids[1])
     session.beginBrowsing(items: ids, sourceVersion: .init(3), scrollAnchor: ids[0])
     session.select(ids[2]); issue345Route(.preview, session); issue345Route(.next, session)

@@ -31,7 +31,6 @@ import PicseeApplication
     for entryCommand: CommandID in [.preview, .enter] {
         session.beginBrowsing(items: ids, sourceVersion: .init(42), scrollAnchor: ids[1])
         session.select(ids[2])
-        let origin = session.selection
         #expect(router.route(entryCommand, from: .key, to: session))
         #expect(session.mode == .viewing)
         #expect(session.previewSet?.itemIDs == ids)
@@ -58,15 +57,17 @@ import PicseeApplication
         #expect(session.inspectorFocus.isVisible)
         #expect(router.route(.escape, from: .key, to: session))
         #expect(session.mode == .browsing)
-        // #492 / owner #345: paging returns to the last viewed current, preserving picked IDs and anchor.
-        #expect(session.selection.selectedItemIDs == origin.selectedItemIDs)
-        #expect(session.selection.anchorItemID == origin.anchorItemID)
+        // #492 owner 2026-11-04: a single pick transfers to the last viewed image.
+        #expect(session.selection.selectedItemIDs == [ids[0]])
+        #expect(session.selection.anchorItemID == ids[0])
         #expect(session.currentItemID == ids[0])
         #expect(session.scrollAnchor == ids[0])
         router.route(.inspector, from: .key, to: session)
     }
+    // Independent restore oracle: known scroll anchor ids[1] is removed while viewing.
+    session.beginBrowsing(items: ids, sourceVersion: .init(42), scrollAnchor: ids[1])
+    session.select(ids[2])
     session.select(ids[4], modifier: .command)
-    let multiPreviewScrollAnchor = session.scrollAnchor
     #expect(router.route(.preview, from: .key, to: session))
     #expect(session.previewSet?.itemIDs == [ids[2], ids[4]])
     #expect(session.currentItemID == ids[4])
@@ -78,8 +79,8 @@ import PicseeApplication
     #expect(session.selection.selectedItemIDs == [ids[2]])
     #expect(session.selection.currentItemID == nil)
     #expect(session.selection.anchorItemID == nil)
-    // The multi-preview restores its entry anchor, inherited from the preceding ordinary return (#492).
-    #expect(session.scrollAnchor == multiPreviewScrollAnchor)
+    // Actual Esc restores the reconciled origin, with the deleted scroll anchor cleared.
+    #expect(session.scrollAnchor == nil)
     session.select(ids[0], modifier: .command)
     session.select(ids[0], modifier: .command)
     router.route(.enter, from: .key, to: session)
