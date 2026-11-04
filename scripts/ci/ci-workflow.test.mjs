@@ -62,3 +62,35 @@ test('native jobs run only on the classifier saying so; Walking skeleton always 
   assert.match(skeleton, /^          NATIVE: \$\{\{ needs\.changes\.outputs\.native \}\}$/m);
   assert.doesNotMatch(workflow, /paths-ignore:|^\s+paths:/m, 'no workflow-level path filters: required checks must report');
 });
+
+test('build caches: restored on pull requests and dispatches (unless cold), saved only by a passing main push', () => {
+  const restores = [...workflow.matchAll(/^      - name: (Restore [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
+  const saves = [...workflow.matchAll(/^      - name: (Save [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
+  assert.deepEqual(restores.map(match => match[1]), ['Restore SwiftPM build', 'Restore SwiftPM build', 'Restore DerivedData']);
+  assert.deepEqual(saves.map(match => match[1]), ['Save SwiftPM build', 'Save DerivedData']);
+  for (const [, , body] of restores) {
+    assert.match(body, /^        if: github\.event_name != 'push' && !inputs\.cold$/m);
+    assert.match(body, /uses: actions\/cache\/restore@[0-9a-f]{40} # v/);
+    assert.match(body, /^          key: \$\{\{ steps\.(spm|dd)-key\.outputs\.key \}\}$/m);
+    assert.match(body, /^          restore-keys: \$\{\{ steps\.(spm|dd)-key\.outputs\.prefix \}\}$/m);
+  }
+  for (const [, , body] of saves) {
+    assert.match(body, /^        if: success\(\) && github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'$/m);
+    assert.match(body, /uses: actions\/cache\/save@[0-9a-f]{40} # v/);
+  }
+  assert.ok(jobBlock('package-tests').includes('Save SwiftPM build'), 'only the non-UI job saves the shared .build');
+  assert.ok(!jobBlock('package-macui-tests').includes('Save SwiftPM build'));
+  assert.equal([...workflow.matchAll(/run: node scripts\/ci\/cache-key\.mjs (spm|dd) "\$MANIFEST" "\$INPUTS"$/gm)].length, 3);
+  assert.doesNotMatch(workflow, /actions\/cache@/, 'no combined restore-and-save cache action in ci.yml');
+});
+
+test('every cached build uses incremental file hashing, with identical flags in both package jobs', () => {
+  const swift = [...workflow.matchAll(/^ {10}swift test --package-path Packages\/PicseeKit .*$/gm)].map(match => match[0]);
+  assert.equal(swift.length, 2);
+  for (const line of swift) assert.match(line, / -Xswiftc -enable-incremental-file-hashing$/);
+  const xcode = [...workflow.matchAll(/run: xcodebuild (build|build-for-testing) .*$/gm)].map(match => match[0]);
+  assert.equal(xcode.length, 2);
+  for (const line of xcode) {
+    assert.match(line, /-derivedDataPath \.build\/dd-ci 'OTHER_SWIFT_FLAGS=\$\(inherited\) -enable-incremental-file-hashing'$/);
+  }
+});
