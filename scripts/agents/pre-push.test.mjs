@@ -289,11 +289,13 @@ for (const checker of ['ledger', 'shortcut']) {
       env: { ...process.env, PICSEE_PR_BODY: suppliedBody ? f.body : '' } });
     const deferred = run();
     status(deferred, 0, new RegExp(`${checker}.*checker changed.*CI decides`, 'i'));
+    assert.match(deferred.stdout, /CI decides.*local check deferred.*PR body must carry Checker-Change: acknowledgement for independent review/);
     assert.doesNotMatch(deferred.stdout + deferred.stderr, /TOPIC CHECKER MUST NOT EXECUTE/);
     f.write(path, 'throw Error("TOPIC CHECKER MUST NOT EXECUTE");\n');
     f.git('add', path); f.git('commit', '-qm', 'sentinel topic checker');
     const sentinel = run();
     status(sentinel, 0, /checker changed.*CI decides/i);
+    assert.match(sentinel.stdout, /PR body must carry Checker-Change: acknowledgement for independent review/);
     assert.doesNotMatch(sentinel.stdout + sentinel.stderr, /TOPIC CHECKER MUST NOT EXECUTE/);
     writeFileSync(f.body, gates(f.base));
     status(run(true), 1, checker === 'shortcut' ? /UI files changed; PR body needs/ : /stale head/);

@@ -101,12 +101,12 @@ while read -r local_ref local_oid remote_ref remote_oid; do
   (
     cd "$snapshot/tree"
     if [ "$ledger_changed" = 1 ]; then
-      echo 'pre-push: ledger checker changed in topic relative to installed base — CI decides (local check deferred)'
+      echo 'pre-push: ledger checker changed in topic relative to installed base — CI decides (local check deferred); PR body must carry Checker-Change: acknowledgement for independent review'
     else
       node scripts/ledger/build.mjs --check
     fi
     if [ "$shortcut_changed" = 1 ]; then
-      echo 'pre-push: shortcut checker changed in topic relative to installed base — CI decides (local check deferred)'
+      echo 'pre-push: shortcut checker changed in topic relative to installed base — CI decides (local check deferred); PR body must carry Checker-Change: acknowledgement for independent review'
     else
       node scripts/design/shortcut-model.mjs
     fi
