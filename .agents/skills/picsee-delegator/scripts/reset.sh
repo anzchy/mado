@@ -4,10 +4,11 @@
 # Verified 2026-10-22 on Codex 0.163.0: `/new` opens a "Where should the new conversation run?"
 # chooser (option 1 = current worktree, preselected), so two Enters are needed, sent with
 # `herdr pane send-keys` (agent send-keys does not submit). Require a fresh Codex
-# title over an empty transcript above the footer in one expanded recent read, or a pane session id change.
-# Use the last unfenced title; ignore older scrollback. A nonleading title also needs cwd metadata
-# below it, so a bare title echoed by an old reply cannot re-prove freshness. Allow one placeholder
-# followed only by blanks or known footer hints before the bottom-most footer.
+# title or complete Codex welcome logo over an empty transcript in one recent read, or a pane session id change.
+# Use the last unfenced title; ignore older scrollback. Title-only proof after scrollback needs
+# cwd metadata below it, so a bare title echoed by an old reply cannot re-prove freshness. Allow one placeholder
+# followed only by blanks or known footer hints before the bottom-most footer. The logo fallback
+# also requires that placeholder; arbitrary box art and partial logos are not session boundaries.
 # herdr may retain the old id until the first turn; an unchanged id is not a veto.
 set -eu
 name=$1 pane=$2
@@ -38,13 +39,16 @@ def is_cwd(line):
 title = r">_ OpenAI Codex \(v[0-9][^)]*\)"
 lines = list(sys.stdin)
 last_title = None
+unfenced = set()
 for index, raw in enumerate(lines):
     line = raw.strip()
     if line.startswith(("```", "~~~")):
         mark = line[:3]
         fence = "" if fence == mark else fence or mark
-    elif not fence and re.fullmatch(title, line):
-        last_title = index
+    elif not fence:
+        unfenced.add(index)
+        if re.fullmatch(title, line):
+            last_title = index
 fence = ""
 title_proof = False
 if last_title is not None:
@@ -55,6 +59,24 @@ if last_title is not None:
     title_proof = (not prefix or
                    (len(prefix) == 1 and is_cwd(prefix[0])) or
                    bool(body and is_cwd(body[0])))
+# A short read can omit the title/cwd while retaining the full 17-row welcome
+# logo. Recognize its saved top/bottom signatures and contiguous braille rows,
+# never arbitrary decoration. A later title or dirty title metadata vetoes it.
+logo_proof = False
+for index in sorted(unfenced, reverse=True):
+    block = [line.strip() for line in lines[index:index + 17]]
+    if (len(block) == 17 and block[0] == "⣀⣤⣤⣤⣀⣀" and
+            block[-1] == "⠈⠙⠛⠿⠿⠿⠿⠛⠉" and
+            all(index + row in unfenced and re.fullmatch(r"[\s\u2800-\u28ff]+", line)
+                for row, line in enumerate(block)) and
+            (last_title is None or
+             (last_title < index and all(not line.strip() for line in lines[last_title + 1:index])))):
+        logo_proof = not title_proof
+        if logo_proof:
+            lines = lines[index:]
+            seen = started = clean = True
+        break
+if not logo_proof and last_title is not None:
     lines = lines[last_title:]
 placeholder = False
 footer_hints = {"? for shortcuts", "? for help", "? for commands"}
@@ -88,7 +110,7 @@ for raw in lines:
     if match:
         # Always replace ctx: a dirty transcript before the bottom-most footer
         # revokes the header even when an earlier clean footer was visible.
-        ctx = re.search(r"Context [0-9]+% used", line).group() if started and (proved or clean) else ""
+        ctx = re.search(r"Context [0-9]+% used", line).group() if started and (proved or clean) and (proved or not logo_proof or placeholder) else ""
         metadata = False
         continue
     if not line:
