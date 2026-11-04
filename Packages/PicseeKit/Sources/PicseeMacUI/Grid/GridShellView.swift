@@ -385,7 +385,11 @@ import PicseeCore
         if !viewer { updateKeyViewLoop() }
     }
     /// The widest the viewer's sidebar may be at this window width (the presentation keeps the pods' room).
-    public var viewerSidebarLimit = CGFloat.greatestFiniteMagnitude
+    /// #444: a new limit lays the sidebar out again even when the shell's frame is unchanged (restoring from the
+    /// minimum size gives the shell back the frame it had before).
+    public var viewerSidebarLimit = CGFloat.greatestFiniteMagnitude {
+        didSet { if viewerSidebarLimit != oldValue { needsLayout = true } }
+    }
     private var autoresizesWidth = false
     /// The grid surface: shown, and not the viewer's sidebar. Grid-only paths (search, footer status) test this.
     public var isGridSurface: Bool { !isHidden && mode == .grid }
@@ -403,7 +407,7 @@ import PicseeCore
     }
     public var mainFrame: NSRect {
         let preferred = liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)
-        let sidebarWidth = !sidebarLaidOut ? 0 : mode == .viewerSidebar ? min(preferred, viewerSidebarLimit) : preferred
+        let sidebarWidth = !sidebarLaidOut ? 0 : mode == .viewerSidebar ? max(0, min(preferred, viewerSidebarLimit)) : preferred
         // In the viewer there is no footer, so the sidebar runs the shell's full height.
         let footerHeight: CGFloat = mode == .viewerSidebar ? 0 : 40
         return NSRect(x: sidebarWidth, y: footerHeight, width: max(0, bounds.width - sidebarWidth),
