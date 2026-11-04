@@ -107,13 +107,14 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
-7. **Gardener** — first `node scripts/ledger/garden-gate.mjs <base> <head>` (re-push: add `--since <gardened head>
-   --verdict <V>`); SKIP/REUSE/RESOLVED → that line goes in the PR body, no gardener (rules:
-   `docs/agents/doc-gardening.md` §When it runs). On `RUN`: `picsee-doc-gardener` (Claude subagent on Haiku / Codex
-   custom agent), mode `pr`, `base..head`. UPDATED → commit its diff as `docs(ledger): garden <b>..<h>`; NEEDS-OWNER →
-   fix rows (限制/在哪 only) or `无用户可见变化：` lines, then the gate with `--verdict NEEDS-OWNER`; acceptance changes
-   only in a separate commit quoting the user. Schedule a weekly `full` run. Run it in a clean detached worktree
-   (`picsee-wt/owner-gates`), never in one an implementer is using; carry its diff to the branch as a patch (guide §5.7).
+7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」).
+   PRs carry `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`; don't run the gate or the
+   gardener on open or re-push. Once a day, in `picsee-wt/owner-gates` detached at `origin/main`, run
+   `node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`); on
+   `RUN`, `picsee-doc-gardener` (Claude subagent on Haiku / Codex custom agent), mode `pr`, that range. UPDATED /
+   NEEDS-OWNER → one small `docs(ledger): garden <b>..<h>` PR (限制/在哪 only; acceptance changes only in a separate
+   commit quoting the user); BLOCK → tell the user, open an issue. Record the swept head. Keep the weekly `full` run
+   (`docs/agents/doc-gardening.md` §When it runs).
 8. **PR & merge** — body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. Build Gates with
    `gh run view <id> --json headSha,url,status,conclusion,jobs > run.json`, then
    `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the seven owner-gates lanes (including `design-check`) and CI
@@ -127,7 +128,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    signed build of the PR head under the GUI lock; `FAIL` blocks, `NOT VERIFIED` needs a named blocker and the user's
    OK, App code changed since → redo. The smoke promotes no ledger row; full parity stays batched (step 9).
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
-   to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H, gardener not BLOCK,
+   to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
    another. **Right after the merge, remove that PR's worktree** (user 2026-10-30: 「已经提交并成功merge pr的对应的worktree要及时清除，这个要作为一个rule」):
    archive untracked `.claude/tdd-guardian/` to `~/.picsee/archive/tdd-guardian/<worktree>/`, then `git worktree remove`

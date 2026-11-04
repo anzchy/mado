@@ -175,11 +175,11 @@ Validated-by: <设备测试角色> run=20261105-143012-VIEW-02-03
 
 ### ⑥ 跑 doc gardener
 
-PR 之前（以及每次重新推送 PR head 之前），先跑 `node scripts/ledger/garden-gate.mjs …`，输出 RUN 才调用 gardener（规程「When it runs」）。
-调用时，在 Claude Code 用 `picsee-doc-gardener` subagent，或在 Codex 用同名 custom agent，提供这些参数：
+gardener 不再随 PR 运行（用户 2026-11-04：「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」）。验证记录 PR 的描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`；合入 main 后，delegator 每天的扫描会覆盖它（规程「When it runs」）。
+每日扫描时，先跑 `node scripts/ledger/garden-gate.mjs <上次扫到的 main> origin/main`，输出 RUN 才调用 gardener。在 Claude Code 用 `picsee-doc-gardener` subagent，或在 Codex 用同名 custom agent，提供这些参数：
 
 ```text
-用 picsee-doc-gardener 跑 pr 模式：worktree <路径>，base $(git merge-base main HEAD)，head <HEAD SHA>，分支 p0-03-canvas。
+用 picsee-doc-gardener 跑 pr 模式：worktree picsee-wt/owner-gates（detached 在 origin/main），base <上次扫到的 main>，head <origin/main SHA>。
 ```
 
 它读这次改动、对应到账簿行、检查证据，报告写到 `~/.picsee/gardening/<分支>-<head7>.md`，最后一行是 PR 用的结论行。
