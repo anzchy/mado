@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -102,3 +102,39 @@ test('invalid invocation, unknown refs, missing body and pre-Gates base fail cle
   status(f.run('--expect', f.head), 2, /body|ENOENT/i);
   assert.deepEqual(readdirSync(f.extract), []);
 });
+
+
+test('validator stdin is closed rather than inheriting pending Git ref records', t => {
+  const f = fixture(t, 'import { readFileSync } from "node:fs";\nexport function checkGates() {}\nconst input = readFileSync(0, "utf8"); console.log("stdin bytes=" + input.length); process.exitCode = input.length ? 1 : 0;\n');
+  const result = spawnSync(process.execPath, [cli, '--body-file', f.body, '--expect', f.head], {
+    cwd: f.repo, encoding: 'utf8', input: 'refs/heads/other deadbeef refs/heads/other deadbeef\n',
+  });
+  status(result, 0, /stdin bytes=0/);
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  test(`lint cleans snapshot and stops validator on ${signal}`, { timeout: 10000 }, async t => {
+    const f = fixture(t, 'export function checkGates() {}\nconsole.log("READY " + process.pid); setInterval(() => {}, 1000);\n');
+    const runner = spawn(process.execPath, [cli, '--body-file', f.body, '--expect', f.head], {
+      cwd: f.repo, env: { ...process.env, TMPDIR: f.extract }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let child;
+    t.after(() => { runner.kill('SIGKILL'); if (child) { try { process.kill(child, 'SIGKILL'); } catch {} } });
+    const exited = new Promise(resolve => runner.once('exit', (code, sig) => resolve({ code, sig })));
+    let output = '';
+    await new Promise((resolve, reject) => {
+      runner.stdout.on('data', chunk => {
+        output += chunk;
+        const match = output.match(/READY (\d+)/);
+        if (match) { child = Number(match[1]); resolve(); }
+      });
+      runner.once('error', reject);
+      runner.once('exit', () => { if (!child) reject(Error('runner exited before READY')); });
+    });
+    runner.kill(signal);
+    const result = await exited;
+    assert.notEqual(result.code, 0);
+    assert.deepEqual(readdirSync(f.extract), [], 'terminated lint must remove its snapshot');
+    assert.throws(() => process.kill(child, 0), { code: 'ESRCH' });
+  });
+}

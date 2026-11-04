@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ function fixture(t) {
   const paths = execFileSync('git', ['ls-files', '-z', 'App', 'Packages/PicseeKit/Sources'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
   for (const path of [...paths, 'docs/feature-ledger.md', 'docs/feature-ledger.html', 'scripts/ledger/build.mjs',
     'scripts/design/shortcut-model.mjs', 'design/prototypes/picsee-browser/states/shortcuts.html',
-    'scripts/agents/local-pr-lint.mjs', 'scripts/agents/ui-parity-pr-body-lint.mjs']) {
+    'scripts/git-hooks/pre-push', 'scripts/agents/local-pr-lint.mjs', 'scripts/agents/ui-parity-pr-body-lint.mjs']) {
     mkdirSync(join(repo, path, '..'), { recursive: true }); copyFileSync(join(root, path), join(repo, path));
   }
   git('init', '-q', '-b', 'topic'); git('config', 'core.hooksPath', '/dev/null');
@@ -142,4 +142,56 @@ test('all non-deletion refs are checked and deletion-only or empty input is a no
   f.write('docs/feature-ledger.html', 'still stale on disk');
   status(f.run({ oid: '0'.repeat(40) }), 0);
   status(f.run({ stdin: '' }), 0);
+});
+
+
+test('installed hook and runner survive topic replacement and still reject stale evidence', t => {
+  const f = fixture(t);
+  const install = spawnSync('sh', [hook, '--install', 'origin/main'], { cwd: f.repo, encoding: 'utf8' });
+  status(install, 0);
+  const installed = f.git('config', '--get', 'core.hooksPath');
+  assert.ok(existsSync(join(installed, 'pre-push')), 'installer must create a runnable hook snapshot');
+  assert.ok(installed.startsWith('/'), installed);
+  assert.ok(!installed.startsWith(f.repo + '/scripts/'), installed);
+  f.write('scripts/git-hooks/pre-push', '#!/bin/sh\nexit 0\n');
+  f.write('scripts/agents/local-pr-lint.mjs', 'process.exit(0);\n');
+  f.write('scripts/agents/ui-parity-pr-body-lint.mjs', 'process.exit(0);\n');
+  f.git('add', 'scripts'); f.git('commit', '-qm', 'weaken topic gates');
+  const head = f.git('rev-parse', 'HEAD');
+  writeFileSync(f.body, gates(f.base));
+  const run = () => {
+    const refs = join(f.repo, 'push-input');
+    writeFileSync(refs, `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`);
+    return spawnSync('git', ['hook', 'run', '--to-stdin=' + refs, 'pre-push', '--', 'origin', 'unused'], {
+      cwd: f.repo, encoding: 'utf8', env: { ...process.env, PICSEE_PR_BODY: f.body }, timeout: 15000,
+    });
+  };
+  status(run(), 1, /stale head/);
+  writeFileSync(f.body, gates(head));
+  status(run(), 0, /PR body: PASS/);
+  f.git('rm', 'scripts/git-hooks/pre-push'); f.git('commit', '-qm', 'delete topic hook');
+  writeFileSync(f.body, gates(f.base));
+  status(run(), 1, /stale head/);
+  f.write('docs/feature-ledger.html', 'stale');
+  f.write('scripts/ledger/build.mjs', 'process.exit(0);\n');
+  f.git('add', 'docs/feature-ledger.html', 'scripts/ledger/build.mjs'); f.git('commit', '-qm', 'weaken ledger');
+  const result = spawnSync(join(installed, 'pre-push'), ['origin', 'unused'], {
+    cwd: f.repo, input: `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`,
+    encoding: 'utf8', env: { ...process.env, PICSEE_PR_BODY: '' }, timeout: 15000,
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /ledger.*stale/i);
+});
+
+
+test('installation refuses missing runner without changing prior hooksPath', t => {
+  const f = fixture(t);
+  f.git('rm', 'scripts/agents/local-pr-lint.mjs'); f.git('commit', '-qm', 'incomplete base');
+  const before = f.git('config', '--get', 'core.hooksPath');
+  const result = spawnSync('sh', [hook, '--install', 'HEAD'], { cwd: f.repo, encoding: 'utf8' });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.equal(f.git('config', '--get', 'core.hooksPath'), before);
+  const missing = spawnSync('sh', [hook, '--install', 'missing-base'], { cwd: f.repo, encoding: 'utf8' });
+  assert.notEqual(missing.status, 0);
+  assert.equal(f.git('config', '--get', 'core.hooksPath'), before);
 });
