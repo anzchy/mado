@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 // Run CI's trusted PR-body validator locally, bound to the commit about to be pushed.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-let temporary;
+let temporary, validatorProcess, termination;
+const timers = new Set();
+const handlers = new Map(['SIGINT', 'SIGTERM'].map(signal => [signal, () => {
+  termination = signal;
+  if (validatorProcess) {
+    validatorProcess.kill(signal);
+    const timer = setTimeout(() => validatorProcess?.kill('SIGKILL'), 1000);
+    timers.add(timer);
+  }
+}]));
+for (const [signal, handler] of handlers) process.on(signal, handler);
 try {
   const options = { base: 'origin/main' };
   const args = process.argv.slice(2);
@@ -48,12 +58,21 @@ try {
   }
   if (git('rev-parse', '--verify', 'HEAD^{commit}') !== expected) throw Error('HEAD changed while preparing expected pushed commit');
   // Keep cwd in the topic worktree so the trusted CLI checks its diff and HEAD.
-  const result = spawnSync(process.execPath, [validator, '--base', base, '--body-file', body], { stdio: 'inherit' });
+  const result = await new Promise((resolve, reject) => {
+    validatorProcess = spawn(process.execPath, [validator, '--base', base, '--body-file', body], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    validatorProcess.once('error', reject);
+    validatorProcess.once('close', (status, signal) => resolve({ status, signal }));
+  });
   if (result.error || result.signal || result.status === null) throw Error(`trusted validator failed to run: ${result.error?.message ?? result.signal}`);
   process.exitCode = result.status;
 } catch (error) {
   console.error(`local-pr-lint: ${error.message}`);
   process.exitCode = 2;
 } finally {
+  for (const timer of timers) clearTimeout(timer);
+  for (const [signal, handler] of handlers) process.off(signal, handler);
+  if (termination) process.exitCode = termination === 'SIGINT' ? 130 : 143;
   if (temporary) rmSync(temporary, { recursive: true, force: true });
 }

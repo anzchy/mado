@@ -53,17 +53,30 @@ Optional mdpro interop tests use `PICSEE_MDPRO_SCRIPT` for mdpro’s `scripts/he
 Run the GUI script in its repository so its heavy-lock dependency is available; only an
 unset GUI variable skips, while a configured invalid script or dependency fails.
 
-Opt in to the light pre-push checks with `git config --local core.hooksPath scripts/git-hooks`.
-This repository-local setting applies to linked worktrees too and replaces any previous hooks
-path; inspect `git config --get core.hooksPath` before installing. Git invokes the hook during
-the push started by `push-guard.py`, after that guard has checked the role and destination.
-The hook checks generated ledger HTML and shortcut table sync without a browser. Set
-`PICSEE_PR_BODY=/absolute/path/to/body.md` to also lint the body with the trusted base validator
-against the exact local OID Git is pushing. It blocks a supplied body when the pushed commit
-is not HEAD. Deletion records skip body lint. No Swift, Xcode or browser design suite runs.
+Opt in to the light pre-push checks by extracting a trusted base hook and installing it:
+
+```sh
+hook_bootstrap=$(mktemp "${TMPDIR:-/tmp}/picsee-base-pre-push.XXXXXXXX")
+git show origin/main:scripts/git-hooks/pre-push > "$hook_bootstrap" &&
+  sh "$hook_bootstrap" --install origin/main
+rm -f "$hook_bootstrap"
+```
+
+Inspect `git config --get core.hooksPath` first: installation replaces the repository-local
+setting, which applies to linked worktrees too. The installer archives the base under the
+Git common directory and sets an absolute hooksPath into that snapshot. The hook, lint runner,
+and ledger/shortcut checkers run from that frozen base; pushed OIDs supply the checked data.
+Fetch and reinstall to adopt a newer base. Old snapshots remain available to concurrent pushes.
+A relative `core.hooksPath=scripts/git-hooks` executes topic code; a worktree whose branch
+predates `scripts/git-hooks/pre-push` runs no hook at all with that shared relative setting.
+
+Git invokes the hook during the push started by `push-guard.py`, after that guard checks role
+and destination. Set `PICSEE_PR_BODY=/absolute/path/to/body.md` to also lint the body against
+the exact local OID Git is pushing. It blocks a supplied body when the pushed commit is not
+HEAD. Deletion records skip body lint. No Swift, Xcode or browser design suite runs.
 
 For a direct lint run, use
-`node scripts/agents/local-pr-lint.mjs --body-file /path/to/body.md --expect <pushed-SHA>`
+`node "$(git config --get core.hooksPath)/../agents/local-pr-lint.mjs" --body-file /path/to/body.md --expect <pushed-SHA>`
 (optionally `--base origin/main`). Without `--expect`, HEAD must match the upstream branch's
 locally stored tip; fetch as appropriate, since this check does not contact the remote.
 The runner extracts a temporary base snapshot so the validator and its imports come from

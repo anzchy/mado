@@ -2,8 +2,30 @@
 # Opt-in, seconds-only local checks. Git supplies pushed local OIDs on stdin.
 # CI remains authoritative; Git's --no-verify bypasses this hook.
 set -eu
+# Installation must itself be launched from a trusted base copy (see README).
+# A relative topic-worktree hooksPath cannot protect its own entry point.
+if [ "${1:-}" = --install ]; then
+  base=$(git rev-parse --verify "${2:-origin/main}^{commit}")
+  common=$(git rev-parse --git-common-dir)
+  common=$(cd "$common" && pwd)
+  mkdir -p "$common/picsee-hook-snapshots"
+  snapshot=$(mktemp -d "$common/picsee-hook-snapshots/base.XXXXXXXX")
+  trap 'rm -rf "$snapshot"' 0
+  trap 'exit 1' HUP INT TERM
+  git archive --format=tar --output="$snapshot/input.tar" "$base"
+  mkdir "$snapshot/tree"
+  tar -xf "$snapshot/input.tar" -C "$snapshot/tree"
+  for required in scripts/git-hooks/pre-push scripts/agents/local-pr-lint.mjs scripts/agents/ui-parity-pr-body-lint.mjs scripts/ledger/build.mjs scripts/design/shortcut-model.mjs; do
+    [ -f "$snapshot/tree/$required" ] || { echo "pre-push: incomplete base: missing $required" >&2; exit 2; }
+  done
+  chmod +x "$snapshot/tree/scripts/git-hooks/pre-push"
+  git config --local core.hooksPath "$snapshot/tree/scripts/git-hooks"
+  trap - 0 HUP INT TERM
+  echo "pre-push: installed base $base at $snapshot/tree/scripts/git-hooks"
+  exit 0
+fi
+trusted=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$(git rev-parse --show-toplevel)"
-repo=$(pwd)
 snapshot=$(mktemp -d "${TMPDIR:-/tmp}/picsee-pre-push.XXXXXXXX")
 trap 'rm -rf "$snapshot"' 0
 trap 'exit 1' HUP INT TERM
@@ -23,6 +45,9 @@ while read -r local_ref local_oid remote_ref remote_oid; do
   git archive --format=tar --output="$snapshot/input.tar" "$local_oid"
   mkdir "$snapshot/tree"
   tar -xf "$snapshot/input.tar" -C "$snapshot/tree"
+  # Run base checkers with pushed data, even when topic scripts are weakened.
+  rm -rf "$snapshot/tree/scripts"
+  cp -R "$trusted/scripts" "$snapshot/tree/scripts"
   (
     cd "$snapshot/tree"
     node scripts/ledger/build.mjs --check
@@ -30,7 +55,7 @@ while read -r local_ref local_oid remote_ref remote_oid; do
   )
   rm -rf "$snapshot/tree"
   if [ -n "${PICSEE_PR_BODY:-}" ]; then
-    node "$repo/scripts/agents/local-pr-lint.mjs" --body-file "$PICSEE_PR_BODY" --expect "$local_oid"
+    node "$trusted/scripts/agents/local-pr-lint.mjs" --body-file "$PICSEE_PR_BODY" --expect "$local_oid"
   fi
 done
 if [ -n "${PICSEE_PR_BODY:-}" ] && [ "$saw_input" = 0 ]; then
