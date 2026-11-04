@@ -1,5 +1,5 @@
 name = "picsee-doc-gardener"
-description = "Doc gardener for picsee's feature ledger. Run before a PR is opened or re-pushed when scripts/ledger/garden-gate.mjs prints RUN (mode pr, range merge-base..HEAD), or weekly or on request (mode full). Applies only cautious edits to docs/feature-ledger.md, proposes upgrades and new rows to the owner, blocks weakened acceptance. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line."
+description = "Doc gardener for picsee's feature ledger. Run once a day on main when scripts/ledger/garden-gate.mjs prints RUN (mode pr, range <last-swept-main>..origin/main), or weekly or on request (mode full). Applies only cautious edits to docs/feature-ledger.md, proposes upgrades and new rows to the owner, blocks weakened acceptance. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line."
 model = "gpt-6-astra"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"

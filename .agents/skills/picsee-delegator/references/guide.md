@@ -23,15 +23,15 @@ The delegator itself:
 2. Writes the **brief** for an implementer, dispatches it and answers scope questions.
 3. Writes **audit requests** and dispatches the independent roster auditor with fresh context.
 4. Writes fix briefs and decides between a confirm round and Still open.
-5. Rebases, reruns the gates itself, runs the **doc gardener**, opens the PR and merges it with
-   `gh pr merge --rebase` once CI is green.
+5. Rebases, reruns the gates itself, opens the PR and merges it with
+   `gh pr merge --rebase` once CI is green. Runs the **doc gardener** once a day on main (§5.7).
 6. Runs **device validation** on the mini (the macos-device-test skill), writes the record in
    `docs/validation/P*.md`, gardens it and merges it.
 7. Keeps the user informed, asks for decisions only when they are genuinely the user's, and records every user
    decision verbatim (commit body, roster plan, handoff log).
 
-Merge authority, granted by the user: merge without asking when the active audit shows no blocking Critical/High, the
-gardener is not BLOCK, and CI is green.
+Merge authority, granted by the user: merge without asking when the active audit shows no blocking Critical/High and CI
+is green.
 
 ---
 
@@ -338,7 +338,7 @@ To create a **new implementer pane**:
 
 ```
 plan → issue → brief → dispatch → (scope questions / amendments) → handoff
-  → blind audit → verdict → fix round (± confirm) → rebase → gates → gardener
+  → blind audit → verdict → fix round (± confirm) → rebase → gates
   → UI parity capture + independent review (if UI changes) → PR → CI → merge
   → full feature validation → validation record PR → timeline / handoff log
 ```
@@ -545,26 +545,28 @@ keep branches short, integrate often, and never let two branches own one core mo
 
 ### 5.7 Doc gardener
 
-When it runs (and when the gate lets you skip, reuse or resolve): `docs/agents/doc-gardening.md` §When it runs. On `RUN`:
+**Once a day on main, not per PR** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」,
+choosing a daily sweep on main). Rules: `docs/agents/doc-gardening.md` §When it runs. PR bodies carry
+`Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`.
+
+Daily: in `picsee-wt/owner-gates`, `git switch --detach origin/main`, then
+`node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`). On `RUN`:
 - **Claude:** the `picsee-doc-gardener` subagent. It runs on Haiku (`model: haiku` in its agent file; user decision
   2026-10-25: 「picsee-doc-gardener will be powered by Haiku model, from now on」); do not override the model when
   dispatching it.
 - **Codex:** the custom agent of the same name.
 
-Pass it the mode `pr`, the worktree, `base..head`, a context paragraph and the handoff path. It edits only Part 3
-area-review rows and cautious fixes, and never commits.
-
-It edits files in whatever worktree it is given. **Never give it a worktree an implementer is using** (2026-10-26:
-it left uncommitted ledger edits in two active implementer worktrees). Use the clean detached worktree
-`picsee-wt/owner-gates`: `git switch --detach <head>`, run the gardener there, save `git diff` as a patch,
-`git restore` the worktree, then apply the patch on the branch and commit it there.
+Pass it the mode `pr`, the worktree, `<last-swept-main>..origin/main` and a context paragraph. It edits only Part 3
+area-review rows and cautious fixes, and never commits. **Never give it a worktree an implementer is using**
+(2026-10-26: it left uncommitted ledger edits in two active implementer worktrees). After the run, write the swept
+main head to `~/.picsee/gardening/last-daily-sweep`.
 
 | Verdict | Action |
 |---|---|
-| CLEAN | Put its `Ledger-Gardener:` line in the PR body. |
-| UPDATED | Review its diff, commit as `docs(ledger): garden <base7>..<head7>`, open the PR with its line. |
-| NEEDS-OWNER | Fix the named rows (only 限制/在哪), or write `无用户可见变化：<ID> <理由>` lines in the PR body for pre-existing problems. Commit, then run the gate with `--verdict NEEDS-OWNER`. |
-| BLOCK | Don't open the PR. Split acceptance changes into their own commit quoting the user, or add device evidence. |
+| SKIP / CLEAN | Record the swept head; nothing to commit. |
+| UPDATED | Save `git diff` as a patch, `git restore`, apply it on a `docs/garden-<date>` branch, commit as `docs(ledger): garden <base7>..<head7>`, open a small PR with its line. |
+| NEEDS-OWNER | Fix the named rows (only 限制/在哪) in that PR, or ask the user. Then run the gate with `--since <swept head> --verdict NEEDS-OWNER`. |
+| BLOCK | A merged commit weakened acceptance or upgraded a row without evidence. Tell the user, open an issue, fix it in the garden PR (acceptance changes only in their own commit quoting the user). |
 
 Typical NEEDS-OWNER causes:
 - a 怎么确认 cell over ~150 visible chars or 3 sentences;
@@ -584,7 +586,7 @@ PR body sections:
 - **Review**, both auditors' rounds plus a Still open list;
 - **Gates**, with numbers;
 - the `无用户可见变化` lines;
-- the exact `Ledger-Gardener:` line;
+- the `Ledger-Gardener: DAILY …` line (§5.7);
 - the `Device-Smoke:` line (below);
 - the attribution line.
 
@@ -815,8 +817,7 @@ Codex delegator doesn't see it, which is one reason this guide and the handoff l
 
 ## 11. Standing user decisions worth knowing
 
-- **Merge authority and policies:** the delegator merges when there is no blocking C/H, the gardener is not BLOCK
-  and CI is green. The Medium policy and C/H confirm rounds are as in §5.5.
+- **Merge authority and policies:** the delegator merges when there is no blocking C/H and CI is green. The Medium policy and C/H confirm rounds are as in §5.5.
 - **Implementers:** Codex implementers run with `-s danger-full-access` and use `$tdd-guardian-workflow` (from P1
   wave 3). Kimi is admitted; it always runs K3.1 Pro at effort high (2026-10-24).
 - **Auditors:** active override: all tiers use only opus-auditor, `/clear`ed before every audit and C/H confirm.

@@ -16,25 +16,21 @@ picsee 是一个 macOS 原生看图应用（Swift 6 + SwiftUI + AppKit，最低 
 - 不要因为浏览器原型或 mockup 里有某个功能，就认为 picsee 有它。
 - [`docs/feature-ledger.html`](docs/feature-ledger.html) 是它的渲染视图，由账簿生成，不要手改；改账簿后运行 `npm run ledger:build`，两者一起提交。`npm run ledger:html-check` 检查是否同步。
 
-## 每个 PR 都要先跑 doc gardener
+## doc gardener 每天跑一次
 
-打开 PR 之前，以及每次重新推送 PR head 之前，先跑判定脚本，只有它输出 `RUN` 才运行 **picsee-doc-gardener**，扫描这次改动让账簿里哪些行过时了。何时跳过、沿用或视为已解决，以规程 [`docs/agents/doc-gardening.md`](docs/agents/doc-gardening.md)「When it runs」为准。
+用户 2026-11-04：「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」，选择「每天在 main 上统一扫一次」。规程见 [`docs/agents/doc-gardening.md`](docs/agents/doc-gardening.md)「When it runs」。
 
-1. 在分支的 worktree 里运行判定：`node scripts/ledger/garden-gate.mjs $(git merge-base main HEAD) HEAD`；重新推送时加 `--since <上次 gardener 所判的 head> --verdict <上次结论>`。输出 `RUN` 时，对 `$(git merge-base main HEAD)..HEAD` 运行 gardener：
-   - Claude Code：`picsee-doc-gardener` subagent；
-   - Codex：custom agent `picsee-doc-gardener`。
+1. **每天一次**：delegator 在 `origin/main` 的干净 detached worktree 里，对 `<上次扫到的 main>..origin/main` 先跑 `node scripts/ledger/garden-gate.mjs`；输出 `RUN` 时运行 **picsee-doc-gardener**（Claude Code：subagent；Codex：custom agent），模式 `pr`。
 2. 按结果处理：
 
    | 结果 | 怎么做 |
    |---|---|
-   | `SKIP` / `REUSE` / `RESOLVED` | 判定脚本输出，不运行 gardener，不改账簿 |
-   | `UPDATED` | 检查 `git diff -- docs/feature-ledger.md docs/feature-ledger.html`，单独提交为 `docs(ledger): garden <base7>..<head7>` |
-   | `NEEDS-OWNER` | 改账簿里被点名的行，或在 PR 描述里逐条写 `无用户可见变化：<ID> <理由>`；然后用 `--since <该 head> --verdict NEEDS-OWNER` 重跑判定脚本，输出 `RUN` 才重跑 gardener |
-   | `BLOCK` | 不开 PR。把验收改动拆成单独提交，或补齐真机证据 |
+   | `SKIP` / `CLEAN` | 只记下这次扫到的 main head |
+   | `UPDATED` | 检查 `git diff -- docs/feature-ledger.md docs/feature-ledger.html`，提交为 `docs(ledger): garden <base7>..<head7>`，开一个小 PR |
+   | `NEEDS-OWNER` | 改账簿里被点名的行，或问用户；同一个小 PR |
+   | `BLOCK` | 已合入 main 的验收改动或无证据升级：告诉用户，开 issue，修正后再扫 |
 
-3. 把 gardener 或判定脚本输出的 `Ledger-Gardener: …` 那一行原样放进 PR 描述。
-
-没有这一行的 PR 不进入审查。
+3. **PR 不再等 gardener**：打开或重新推送 PR 时不运行 gardener，PR 描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`。改变用户可见行为的提交仍要同时改它的账簿行（见上一节），这条不变。
 
 ## 按需阅读
 

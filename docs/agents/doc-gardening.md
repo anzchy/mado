@@ -8,8 +8,8 @@ Change the procedure here, never in a wrapper.
 
 **Why it exists.** `docs/feature-ledger.md` is the system of record for what picsee can do. The rule is that
 the commit that changes a behaviour also rewrites its row. The ledger's own gate can't tell whether a
-sentence is still true, and authors forget. The gardener runs on every PR that can affect the ledger and
-catches the rows the change made stale. This follows two published practices:
+sentence is still true, and authors forget. The gardener runs once a day over everything merged to main since its last run and
+catches the rows those changes made stale. This follows two published practices:
 - OpenAI's harness-engineering team runs a recurring doc-gardening agent that scans for stale docs and
   opens fix-up PRs, because repository knowledge is the system of record;
 - Anthropic's long-running-agent harness lets an agent change a feature's status only after it has
@@ -17,15 +17,25 @@ catches the rows the change made stale. This follows two published practices:
 
 ## When it runs
 
-The caller runs the gate script first and starts the gardener only when it prints `RUN`:
+**Once a day, on main** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」, choosing
+a daily sweep on main). PRs no longer wait for a gardener run: opening or re-pushing a PR runs neither the gate
+nor the gardener, and the PR body carries `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`.
+The commit that changes a behaviour still rewrites its row; the daily sweep catches what it missed.
+
+The delegator runs the daily sweep in a clean worktree detached at `origin/main`. It runs the gate script first,
+over everything merged since the last sweep, and starts the gardener only when it prints `RUN`:
 
 ```sh
-node scripts/ledger/garden-gate.mjs <base> HEAD                                         # PR opens
-node scripts/ledger/garden-gate.mjs <base> HEAD --since <gardened-head> --verdict <V>   # re-push
+node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main
 ```
 
-`<base>` is `git merge-base main HEAD`; `<gardened-head>` is the head the last gardener verdict `<V>` was
-for. The script prints one line and its reason on stderr. Any other line goes into the PR body verbatim.
+`<last-swept-main>` is the main head the previous sweep covered, kept in `~/.picsee/gardening/last-daily-sweep`
+(machine-local). After the sweep, write the new main head there. An `UPDATED` or `NEEDS-OWNER` result lands as one
+small PR (`docs(ledger): garden <base7>..<head7>`). A `BLOCK` on main means a merged commit weakened acceptance or
+upgraded a row without evidence: tell the user, open an issue, and fix it in that PR.
+
+The table below is the gate's rule set. The `--since`/`--verdict` rows applied to PR re-pushes and are kept for a
+manual rerun of a sweep after its own fix-up commit.
 
 | Situation | Rule | Gate prints |
 |---|---|---|
@@ -48,11 +58,11 @@ The gate ignores branch names: it maps IDs only from commit messages, and paths 
 
 | Mode | Trigger | Range |
 |---|---|---|
-| `pr` | The gate printed `RUN` before a PR opens or a PR head is re-pushed. Whoever opens the PR runs both: the delegator under rule 70, or any session or person running `gh pr create` | `git merge-base main HEAD`..`HEAD` |
+| `pr` | The daily sweep's gate printed `RUN`. The delegator runs it once a day | `<last-swept-main>`..`origin/main` |
 | `full` | Once a week, scheduled by the delegator; when the user asks; or when an area in the ledger's Part 3 table is more than 30 days past its last review and code in it has changed | the whole ledger against the working tree |
 
-A PR is not opened without a `Ledger-Gardener:` line for its head, from the gardener or the gate. The PR body
-carries that line (see Output).
+A PR body carries the `Ledger-Gardener: DAILY …` line above. The daily sweep's own fix-up PR carries the
+gardener's or gate's line for its range (see Output).
 
 ## What you may change, and what you may only propose
 

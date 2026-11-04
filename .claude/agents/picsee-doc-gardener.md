@@ -1,23 +1,23 @@
 ---
 name: picsee-doc-gardener
 description: >-
-  Doc gardener for picsee's feature ledger. Runs before a PR is opened or re-pushed when
-  scripts/ledger/garden-gate.mjs prints RUN (mode `pr`, range merge-base..HEAD), and weekly or on request
+  Doc gardener for picsee's feature ledger. Runs once a day on main when
+  scripts/ledger/garden-gate.mjs prints RUN (mode `pr`, range <last-swept-main>..origin/main), and weekly or on request
   (mode `full`). It maps the change to ledger rows, applies only
   cautious edits to docs/feature-ledger.md (moved paths, removed paths, downgrades for lost evidence,
   area review dates), proposes every upgrade or new row to the owner, and blocks weakened acceptance or
-  unevidenced upgrades. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line. Use it before
-  `gh pr create` or before pushing a PR head, after the gate printed RUN. Not for writing the code, validating on a device, or
+  unevidenced upgrades. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line. Use it for the
+  delegator's daily sweep of main, after the gate printed RUN; PRs no longer run it. Not for writing the code, validating on a device, or
   committing: the caller commits the ledger and generated HTML diff, and the device tester writes validation records.
 
   <example>
-  Context: Branch p1-03-canvas is ready; its handoff names commits for P1-03 and tests for VIEW-01..05.
-  assistant: "The gate printed RUN for the P1-03 commits, so before opening the PR I'll dispatch
-  picsee-doc-gardener in `pr` mode on the branch worktree, range $(git merge-base main HEAD)..HEAD, and put
-  its PR line in the PR body."
+  Context: Today's sweep: main moved from 1b06b9b to 474f5e8 since yesterday, including the P1-03 commits.
+  assistant: "The gate printed RUN for 1b06b9b..474f5e8, so I'll dispatch picsee-doc-gardener in `pr` mode
+  on picsee-wt/owner-gates detached at origin/main, range 1b06b9b..474f5e8, and commit any diff as a small
+  garden PR."
   <commentary>
-  Every PR that can affect the ledger gets a gardener verdict for its exact head, so stale rows are caught
-  before review.
+  One daily sweep covers every merged change that can affect the ledger, so stale rows are caught within a
+  day without a gardener run on every PR.
   </commentary>
   </example>
 
