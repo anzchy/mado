@@ -686,7 +686,7 @@ class ResetTests(unittest.TestCase):
 
     def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2",
                   poll="0.01", prefix="", startup=">_ OpenAI Codex (v0.166.0)", timer_var=None, old_context="",
-                  ready_boundary=">_ OpenAI Codex (v0.166.0)", locale=None, session_before="", session_after="", session_delay=0):
+                  ready_boundary=">_ OpenAI Codex (v0.166.0)", locale=None, session_before="", session_after="", session_delay=0, pane_height=0):
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -731,6 +731,18 @@ case "$1 $2" in
     else
       n=$(cat "$RESET_STATE/reads")
       echo $((n + 1)) > "$RESET_STATE/reads"
+      # A recent snapshot defaults to the pane height unless --lines expands it.
+      limit=$RESET_PANE_HEIGHT
+      shift 3
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = --lines ]; then limit=$2; shift; fi
+        shift
+      done
+      if [ "$limit" -gt 0 ]; then
+        exec 3>&1
+        exec > "$RESET_STATE/screen"
+        trap 'tail -n "$limit" "$RESET_STATE/screen" >&3' EXIT
+      fi
       printf '%s\\n' "$RESET_PREFIX"
       if [ "$n" -lt "$RESET_DELAY" ] || [ -z "$RESET_CONTEXT" ]; then
         printf '%s\\n' "$RESET_STARTUP"
@@ -752,7 +764,7 @@ esac
                    "RESET_SESSION_BEFORE": session_before, "RESET_SESSION_AFTER": session_after,
                    "RESET_SESSION_DELAY": str(session_delay),
                    "RESET_STATE": str(root), "RESET_STATUS": status, "RESET_CHOOSER": str(int(chooser)),
-                   "RESET_DELAY": str(delay), "RESET_CONTEXT": context,
+                   "RESET_DELAY": str(delay), "RESET_CONTEXT": context, "RESET_PANE_HEIGHT": str(pane_height),
                    "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
                    "RESET_OLD_CONTEXT": old_context, "RESET_READY_BOUNDARY": ready_boundary,
                    "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": poll}
@@ -1082,12 +1094,12 @@ class ResetFreshScreenTests(unittest.TestCase):
     NO_BOUNDARY = ResetTests.NO_BOUNDARY
     SCREEN = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex.txt").read_text()
 
-    def assert_stale(self, screen):
+    def assert_stale(self, screen, expected=None):
         result, _ = self.run_reset(context=screen, ready_boundary="", startup="",
                                    deadline="0.1", locale="C",
                                    session_before="old-session", session_after="old-session")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+        self.assertEqual(result.stdout, expected or self.NO_BOUNDARY)
 
     def test_embedded_title_does_not_erase_transcript(self):
         self.assert_stale(self.SCREEN.replace("› Ask Codex to do anything",
@@ -1118,8 +1130,42 @@ class ResetFreshScreenTests(unittest.TestCase):
         result, _ = self.run_reset(context=screen, ready_boundary="", locale="C")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_title_after_transcript_cwd_is_not_fresh(self):
-        self.assert_stale("old transcript\n~/fixture-worktree\n" + self.SCREEN.lstrip())
+    def test_old_scrollback_above_complete_fresh_header_passes(self):
+        self.assert_fresh("old transcript\nContext 12% used\n" + self.SCREEN)
+
+    def assert_fresh(self, screen, **kwargs):
+        result, _ = self.run_reset(context=screen, ready_boundary="", locale="C",
+                                   session_before="old-session", session_after="old-session", deadline="0.1", **kwargs)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_new_echo_above_fresh_header_passes(self):
+        self.assert_fresh("› /new\n" + self.SCREEN)
+
+    def test_chooser_above_fresh_header_passes(self):
+        self.assert_fresh("Where should the new conversation run?\n1. Use current Git worktree\n" + self.SCREEN)
+
+    def test_footer_hints_between_placeholder_and_footer_pass(self):
+        for hint in ("? for shortcuts", "? for help", "? for commands"):
+            with self.subTest(hint=hint):
+                self.assert_fresh(self.SCREEN.replace("› Ask Codex to do anything",
+                                                     "› Ask Codex to do anything\n" + hint))
+
+    def test_twenty_five_row_pane_read_reaches_fresh_title(self):
+        self.assertGreater(len(self.SCREEN.splitlines()), 25)
+        self.assert_fresh(self.SCREEN, pane_height=25)
+
+    def test_last_title_with_dirty_body_revokes_earlier_fresh_screen(self):
+        self.assert_stale(self.SCREEN + "\n>_ OpenAI Codex (v0.166.0)\n~/fixture-worktree\n› old prompt\nContext 0% used")
+
+    def test_cwd_metadata_rejects_slash_commands_and_spaces(self):
+        for cwd in ("/new", "/help", "/tmp/old output", "~/old output"):
+            with self.subTest(cwd=cwd):
+                self.assert_stale(self.SCREEN.replace("~/fixture-worktree", cwd),
+                    expected="FAIL reset fixture-agent: no context line after 0.1s\n" if cwd == "/new" else None)
+
+    def test_cwd_metadata_accepts_absolute_path(self):
+        self.assert_fresh(self.SCREEN.replace("~/fixture-worktree", "/tmp/fixture-worktree"))
 
 
 if __name__ == "__main__":

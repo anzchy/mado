@@ -4,7 +4,10 @@
 # Verified 2026-10-22 on Codex 0.163.0: `/new` opens a "Where should the new conversation run?"
 # chooser (option 1 = current worktree, preselected), so two Enters are needed, sent with
 # `herdr pane send-keys` (agent send-keys does not submit). Require a fresh Codex
-# header over an empty transcript above the footer in the same read, or an optional pane session id change.
+# title over an empty transcript above the footer in one expanded recent read, or a pane session id change.
+# Use the last unfenced title; ignore older scrollback. A nonleading title also needs cwd metadata
+# below it, so a bare title echoed by an old reply cannot re-prove freshness. Allow one placeholder
+# followed only by blanks or known footer hints before the bottom-most footer.
 # herdr may retain the old id until the first turn; an unchanged id is not a veto.
 set -eu
 name=$1 pane=$2
@@ -18,7 +21,7 @@ for timer in PICSEE_RESET_CONTEXT_SECS PICSEE_RESET_POLL_SECS; do
     echo "FAIL reset $name: invalid $timer=$value"; exit 1
   fi
 done
-# Parse one screen only: a leading title and the bottom-most eligible footer win.
+# Parse one screen only: the last unfenced title and bottom-most eligible footer win.
 # A chooser is a boundary, but its footer still belongs to the pre-start UI.
 footer() {
   python3 -c '
@@ -27,21 +30,37 @@ proved = sys.argv[1] == "1"
 seen = started = proved
 clean = metadata = False
 ctx = fence = ""
-nonblank = 0
-leading_cwd = placeholder = False
-previous = ""
-# Exact welcome text only: arbitrary Tip: prose or prompt text is transcript.
-welcome = {"? for shortcuts",
-           "Tip: Use /help to see available commands."}
-for raw in sys.stdin:
+# Slash commands are single /words; cwd metadata must be an unspaced home path
+# or a multi-component absolute path, never arbitrary slash-prefixed prose.
+def is_cwd(line):
+    return bool(re.fullmatch(r"(?:~/\S+|/(?:[^/\s]+/)+[^/\s]*)", line))
+
+title = r">_ OpenAI Codex \(v[0-9][^)]*\)"
+lines = list(sys.stdin)
+last_title = None
+for index, raw in enumerate(lines):
     line = raw.strip()
-    title_position = nonblank == 0 or (nonblank == 1 and leading_cwd and previous == "cwd")
-    if line:
-        nonblank += 1
-    is_cwd = bool(re.fullmatch(r"(?:~/|/)[^\n]+", line))
-    if nonblank == 1 and line:
-        leading_cwd = is_cwd
-    previous = "cwd" if is_cwd else line
+    if line.startswith(("```", "~~~")):
+        mark = line[:3]
+        fence = "" if fence == mark else fence or mark
+    elif not fence and re.fullmatch(title, line):
+        last_title = index
+fence = ""
+title_proof = False
+if last_title is not None:
+    prefix = [line.strip() for line in lines[:last_title] if line.strip()]
+    body = [line.strip() for line in lines[last_title + 1:] if line.strip()]
+    # A fresh header after scrollback includes cwd metadata. Without it, an old
+    # reply ending in an exact title would erase transcript evidence (#434).
+    title_proof = (not prefix or
+                   (len(prefix) == 1 and is_cwd(prefix[0])) or
+                   bool(body and is_cwd(body[0])))
+    lines = lines[last_title:]
+placeholder = False
+footer_hints = {"? for shortcuts", "? for help", "? for commands"}
+welcome = footer_hints | {"Tip: Use /help to see available commands."}
+for raw in lines:
+    line = raw.strip()
     if line.startswith(("```", "~~~")):
         mark = line[:3]
         fence = "" if fence == mark else fence or mark
@@ -50,9 +69,10 @@ for raw in sys.stdin:
         continue
     if fence:
         continue
-    if title_position and re.fullmatch(r">_ OpenAI Codex \(v[0-9][^)]*\)", line):
+    if re.fullmatch(title, line):
         ctx = ""
-        seen = started = clean = metadata = True
+        seen = started = clean = proved or title_proof
+        metadata = True
         continue
     if line.startswith("Where should the new conversation run"):
         ctx = ""
@@ -74,16 +94,16 @@ for raw in sys.stdin:
     if not line:
         continue
     # The worktree line immediately under the saved title is header metadata.
-    if metadata and re.fullmatch(r"(?:~/|/)[^\n]+", line):
+    if metadata and is_cwd(line):
         metadata = False
         continue
     metadata = False
-    # The input placeholder is unique and the last nonblank line before the footer.
-    # Once it has appeared, even welcome-like output is transcript evidence.
+    # One input placeholder; only blanks and known footer hints may follow it.
+    # Tips, logo-like output, and duplicate placeholders remain transcript evidence.
     if line == "› Ask Codex to do anything" and not placeholder:
         placeholder = True
         continue
-    if placeholder:
+    if placeholder and line not in footer_hints:
         clean = False
         seen = proved
         continue
@@ -130,7 +150,7 @@ while true; do
   if [[ -n $old_pane_session && -n $current_session && $current_session != "$old_pane_session" ]]; then
     session_proof=1
   fi
-  parsed=$(herdr pane read $pane 2>&1 | footer $session_proof)
+  parsed=$(herdr pane read $pane --source recent-unwrapped --lines 2000 2>&1 | footer $session_proof)
   [[ ${parsed%%:*} == 1 ]] && boundary_seen=1
   ctx=${parsed#*:}
   [[ -n $ctx ]] && break
