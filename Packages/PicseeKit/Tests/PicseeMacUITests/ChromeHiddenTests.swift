@@ -14,6 +14,7 @@ import PicseeApplication
     let content = NSView(frame: NSRect(x: 0, y: 0, width: 960, height: 640))
     let canvas = CanvasView(frame: content.bounds, session: session)
     let overlay = ViewerChromeOverlay(frame: content.bounds, session: session)
+    overlay.installTestMenus()
     content.addSubview(canvas); content.addSubview(overlay)
     window.contentView = content
     defer { window.close() }

@@ -140,7 +140,8 @@ public final class ChromeToolView: NSView {
         case .command(let id): return session.isEnabled(id)
         case .intent(.returnToGrid): return session.canReturnToSource
         case .intent(.toggleSidebar): return session.canToggleViewerSidebar
-        case .more: return true
+        // 更多 is a control only while a menu can open: the App's provider and presenter (fix round 1).
+        case .more: return overlay?.moreMenuProvider != nil && overlay?.menuPresenter != nil
         }
     }
     public override var acceptsFirstResponder: Bool { !isHiddenOrHasHiddenAncestor && isEnabled }
@@ -248,9 +249,9 @@ public final class ViewerChromeOverlay: NSView {
     public private(set) var filename: String?
     public private(set) var position: String?
     /// #444: the zoom mode and 更多 menus pop up through this; nil leaves both menus closed.
-    public var menuPresenter: (any ChromeMenuPresenting)?
+    public var menuPresenter: (any ChromeMenuPresenting)? { didSet { refreshTools() } }
     /// #444: builds the 更多浏览操作 menu (the App's implemented items); nil leaves 更多 inert.
-    public var moreMenuProvider: (() -> NSMenu?)?
+    public var moreMenuProvider: (() -> NSMenu?)? { didSet { refreshTools() } }
     /// #444: key views after the tools in the viewer's loop (the folder sidebar when it is shown).
     public var trailingKeyViews: () -> [NSView] = { [] }
     private weak var nextTool: ChromeToolView?

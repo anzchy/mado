@@ -91,6 +91,7 @@ actor StatesPipeline: ImagePipeline {
         canvas = CanvasView(frame: frame, session: session)
         state = ViewerStateHost(frame: frame, session: session)
         chrome = ViewerChromeOverlay(frame: frame, session: session)
+        chrome.installTestMenus()
         host.canvas = canvas; host.window = window
         session.host = host; session.imageLoader.host = host
         let session = session
@@ -116,5 +117,13 @@ extension FirstLaunchView {
         reduceTransparencyOverride = reduceTransparency
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
         layoutSubtreeIfNeeded()
+    }
+}
+
+extension ViewerChromeOverlay {
+    /// The App installs a menu presenter and the 更多 provider; 更多 is a control only while both exist (#444).
+    func installTestMenus() {
+        menuPresenter = RecordingMenuPresenter()
+        moreMenuProvider = { NSMenu() }
     }
 }
