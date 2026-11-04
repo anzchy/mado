@@ -237,8 +237,10 @@ jobs:
           key: ${{ steps.dd-key.outputs.key }}
 
   # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the classifier and the ledger
-  # check must have succeeded, and then either both package suites and the unsigned build step succeeded, or the
-  # classifier found no native input and every native job skipped.
+  # check must have succeeded, and then either both package suites and the unsigned build step succeeded (and the App
+  # tests job ended in success or failure), or the classifier found no native input and every native job skipped.
+  # Like the classifier, the verdict comes from the base commit, so a pull request cannot loosen the rule that judges
+  # it. A base without the script gets a stricter inline rule: every job and the build step succeeded, no skip.
   walking-skeleton:
     name: Walking skeleton
     if: always()
@@ -246,8 +248,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      - name: Checkout trusted base
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: trusted
       - name: Require the ledger check, package tests and the unsigned build
         env:
           CHANGES: ${{ needs.changes.result }}
@@ -257,7 +262,23 @@ jobs:
           MACUI: ${{ needs.package-macui-tests.result }}
           APP_JOB: ${{ needs.app-tests.result }}
           UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}
-        run: node scripts/ci/walking-skeleton.mjs
+        run: |
+          if [ -f trusted/scripts/ci/walking-skeleton.mjs ]; then
+            node trusted/scripts/ci/walking-skeleton.mjs
+          else
+            echo "changes=$CHANGES native=$NATIVE ledger=$LEDGER package-tests=$PACKAGE package-macui-tests=$MACUI app-tests=$APP_JOB unsigned-build-step=${UNSIGNED_BUILD:-(none)}"
+            if [ "$NATIVE" != true ]; then
+              echo 'walking-skeleton: FAIL (strict fallback: base has no verdict script and native was not true)'
+              exit 1
+            fi
+            for result in "$CHANGES" "$LEDGER" "$PACKAGE" "$MACUI" "$APP_JOB" "$UNSIGNED_BUILD"; do
+              if [ "$result" != success ]; then
+                echo 'walking-skeleton: FAIL (strict fallback: base has no verdict script and a job or the build step did not succeed)'
+                exit 1
+              fi
+            done
+            echo 'walking-skeleton: PASS (strict fallback: every job and the unsigned build step succeeded)'
+          fi
 
   design-check:
     name: Design check

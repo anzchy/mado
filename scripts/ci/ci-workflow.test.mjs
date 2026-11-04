@@ -1,7 +1,11 @@
 // Structural checks on .github/workflows/ci.yml that keep the required checks and the main-branch guarantees intact.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 const BASELINE_BUILD = "xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci";
@@ -37,7 +41,63 @@ test('the App tests job keeps the exact unsigned build as its own step, and Walk
     assert.match(skeleton, new RegExp(`^    needs: \\[.*\\b${need}\\b.*\\]$`, 'm'), need);
   }
   assert.match(skeleton, /^          UNSIGNED_BUILD: \$\{\{ needs\.app-tests\.outputs\.unsigned_build \}\}$/m);
-  assert.match(skeleton, /^        run: node scripts\/ci\/walking-skeleton\.mjs$/m);
+});
+
+// The verdict step's shell script, as GitHub runs it.
+const verdictScript = () => {
+  const skeleton = jobBlock('walking-skeleton');
+  const match = skeleton.match(/^        run: \|\n((?:^          .*\n|^\n)+)/m);
+  assert.ok(match, 'the verdict step has a run block');
+  return match[1].replace(/^ {10}/gm, '');
+};
+const allSucceeded = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
+const runVerdict = (t, env, { trustedScript = false } = {}) => {
+  const directory = mkdtempSync(join(tmpdir(), 'picsee-walking-skeleton-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  if (trustedScript) {
+    mkdirSync(join(directory, 'trusted/scripts/ci'), { recursive: true });
+    copyFileSync(fileURLToPath(new URL('./walking-skeleton.mjs', import.meta.url)),
+      join(directory, 'trusted/scripts/ci/walking-skeleton.mjs'));
+  }
+  return spawnSync('bash', ['-e', '-c', verdictScript()],
+    { cwd: directory, env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' });
+};
+
+test('Walking skeleton runs the verdict from a checkout of the trusted base, never from the pull request head', () => {
+  const skeleton = jobBlock('walking-skeleton');
+  assert.match(skeleton, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}\n(?:          .*\n)*?          path: trusted\n/);
+  const script = verdictScript();
+  assert.match(script, /^if \[ -f trusted\/scripts\/ci\/walking-skeleton\.mjs \]; then\n  node trusted\/scripts\/ci\/walking-skeleton\.mjs\n/);
+  assert.doesNotMatch(script, /(^|[^/])scripts\/ci\/walking-skeleton\.mjs/m, 'no path outside trusted/');
+});
+
+test('with the trusted script, the step follows its verdict', t => {
+  const pass = runVerdict(t, { ...allSucceeded, APP_JOB: 'failure' }, { trustedScript: true });
+  assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  assert.match(pass.stdout, /walking-skeleton: PASS/);
+  const fail = runVerdict(t, { ...allSucceeded, APP_JOB: 'cancelled' }, { trustedScript: true });
+  assert.equal(fail.status, 1);
+});
+
+test('a base without the script falls back to requiring every job and the build step to succeed, with no skip', t => {
+  const pass = runVerdict(t, allSucceeded);
+  assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  assert.match(pass.stdout, /walking-skeleton: PASS \(strict fallback/);
+  for (const key of ['CHANGES', 'LEDGER', 'PACKAGE', 'MACUI', 'APP_JOB', 'UNSIGNED_BUILD']) {
+    for (const value of ['failure', 'cancelled', 'skipped', '']) {
+      const result = runVerdict(t, { ...allSucceeded, [key]: value });
+      assert.equal(result.status, 1, `${key}=${value}`);
+      assert.match(result.stdout, /walking-skeleton: FAIL \(strict fallback/, `${key}=${value}`);
+    }
+  }
+  for (const native of ['false', '', 'TRUE']) {
+    const result = runVerdict(t, { ...allSucceeded, NATIVE: native });
+    assert.equal(result.status, 1, `NATIVE=${native}`);
+  }
+  const docsOnly = runVerdict(t, { CHANGES: 'success', NATIVE: 'false', LEDGER: 'success', PACKAGE: 'skipped',
+    MACUI: 'skipped', APP_JOB: 'skipped', UNSIGNED_BUILD: '' });
+  assert.equal(docsOnly.status, 1, 'the fallback never accepts a docs-only skip');
 });
 
 test('the ledger check runs on Ubuntu', () => {
