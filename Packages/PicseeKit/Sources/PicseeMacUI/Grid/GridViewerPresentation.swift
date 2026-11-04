@@ -114,7 +114,11 @@ import PicseeCore
         canvas.isHidden = false
         chrome.isHidden = false
         setStateSurface(.viewer)
-        if shell != nil { layoutInspector(visible: inspectorVisible) }
+        // Hide or show the viewer's sidebar even before the window is laid out (no parent: no room, so hidden).
+        if let shell {
+            _ = applyViewerSidebarVisibility(shell, contentWidth: canvas.superview.map { $0.bounds.width } ?? 0)
+            layoutInspector(visible: inspectorVisible)
+        }
     }
     public func showGrid(reading: Bool) {
         if let shell, shell.mode == .viewerSidebar {
