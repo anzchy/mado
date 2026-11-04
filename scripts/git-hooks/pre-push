@@ -4,28 +4,71 @@
 set -eu
 # Installation must itself be launched from a trusted base copy (see README).
 # A relative topic-worktree hooksPath cannot protect its own entry point.
+if [ "${1:-}" = --install-capability ]; then
+  echo picsee-pre-push-installer-v1
+  exit 0
+fi
 if [ "${1:-}" = --install ]; then
   base=$(git rev-parse --verify "${2:-origin/main}^{commit}")
   common=$(git rev-parse --git-common-dir)
   common=$(cd "$common" && pwd)
   mkdir -p "$common/picsee-hook-snapshots"
+  previous=$(git config --local --get core.hooksPath || true)
   snapshot=$(mktemp -d "$common/picsee-hook-snapshots/base.XXXXXXXX")
   trap 'rm -rf "$snapshot"' 0
   trap 'exit 1' HUP INT TERM
   git archive --format=tar --output="$snapshot/input.tar" "$base"
   mkdir "$snapshot/tree"
   tar -xf "$snapshot/input.tar" -C "$snapshot/tree"
+  rm -f "$snapshot/input.tar"
+  printf '%s\n' "$base" > "$snapshot/base-oid"
   for required in scripts/git-hooks/pre-push scripts/agents/local-pr-lint.mjs scripts/agents/ui-parity-pr-body-lint.mjs scripts/ledger/build.mjs scripts/design/shortcut-model.mjs; do
     [ -f "$snapshot/tree/$required" ] || { echo "pre-push: incomplete base: missing $required" >&2; exit 2; }
   done
+  if [ "$(sh "$snapshot/tree/scripts/git-hooks/pre-push" --install-capability </dev/null)" != picsee-pre-push-installer-v1 ]; then
+    echo 'pre-push: base lacks installer support; update the trusted base before installing' >&2
+    exit 2
+  fi
   chmod +x "$snapshot/tree/scripts/git-hooks/pre-push"
   git config --local core.hooksPath "$snapshot/tree/scripts/git-hooks"
   trap - 0 HUP INT TERM
   echo "pre-push: installed base $base at $snapshot/tree/scripts/git-hooks"
+  # Keep the previous selection and recent snapshots for concurrent short pushes.
+  # Prune only our own aged snapshot directories, never symlink targets.
+  if ! node --input-type=module - "$common/picsee-hook-snapshots" "$snapshot" "$previous" <<'JS'
+import { readdirSync, statSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+const [directory, current, previous] = process.argv.slice(2);
+const keep = new Set([resolve(current), resolve(previous || '/', '../../..')]);
+const cutoff = Date.now() - 7 * 86400000;
+for (const entry of readdirSync(directory, { withFileTypes: true })) {
+  const path = join(directory, entry.name);
+  if (entry.isDirectory() && entry.name.startsWith('base.') && !keep.has(resolve(path)) && statSync(path).mtimeMs < cutoff) {
+    rmSync(path, { recursive: true });
+  }
+}
+JS
+  then
+    echo 'pre-push: installed successfully; old snapshot cleanup failed' >&2
+  fi
   exit 0
 fi
 trusted=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$(git rev-parse --show-toplevel)"
+if [ -f "$trusted/../base-oid" ]; then
+  base=$(cat "$trusted/../base-oid")
+else
+  base=origin/main
+fi
+checker_changed() {
+  if git diff --quiet "$base" "$local_oid" -- "$1"; then
+    return 1
+  else
+    result=$?
+    [ "$result" = 1 ] || exit "$result"
+    return 0
+  fi
+}
 snapshot=$(mktemp -d "${TMPDIR:-/tmp}/picsee-pre-push.XXXXXXXX")
 trap 'rm -rf "$snapshot"' 0
 trap 'exit 1' HUP INT TERM
@@ -39,19 +82,34 @@ while read -r local_ref local_oid remote_ref remote_oid; do
     *[!0]*) ;;
     *) continue ;;
   esac
+  base=$(git rev-parse --verify "$base^{commit}")
   # Archive each pushed commit, including non-HEAD refs. Separate archive/extract
   # commands fail closed without a pipeline masking git failures. Each ref gets a
   # fresh directory so files deleted by the next commit cannot leak across checks.
   git archive --format=tar --output="$snapshot/input.tar" "$local_oid"
   mkdir "$snapshot/tree"
   tar -xf "$snapshot/input.tar" -C "$snapshot/tree"
-  # Run base checkers with pushed data, even when topic scripts are weakened.
+  rm -f "$snapshot/input.tar"
+  ledger_changed=0
+  shortcut_changed=0
+  if checker_changed scripts/ledger; then ledger_changed=1; fi
+  if checker_changed scripts/design; then shortcut_changed=1; fi
+  # Run only base code. A changed checker needs CI's review/execution authority;
+  # do not run topic code or block legitimate changes using obsolete checker data.
   rm -rf "$snapshot/tree/scripts"
   cp -R "$trusted/scripts" "$snapshot/tree/scripts"
   (
     cd "$snapshot/tree"
-    node scripts/ledger/build.mjs --check
-    node scripts/design/shortcut-model.mjs
+    if [ "$ledger_changed" = 1 ]; then
+      echo 'pre-push: ledger checker changed in topic relative to installed base — CI decides (local check deferred)'
+    else
+      node scripts/ledger/build.mjs --check
+    fi
+    if [ "$shortcut_changed" = 1 ]; then
+      echo 'pre-push: shortcut checker changed in topic relative to installed base — CI decides (local check deferred)'
+    else
+      node scripts/design/shortcut-model.mjs
+    fi
   )
   rm -rf "$snapshot/tree"
   if [ -n "${PICSEE_PR_BODY:-}" ]; then
