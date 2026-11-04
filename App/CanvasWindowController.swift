@@ -1854,6 +1854,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         } else { inspector.select(itemID: nil, url: nil, access: nil) }
     }
     func applyFocus(_ focus: FocusContext) {
+        // #444 fix round 1: Tab past the last viewer control, or Shift-Tab from the canvas, gives the visible Inspector
+        // focus; its close button is its only key view.
+        if focus == .textInput, gridView.isHidden, inspectorVisible { focusInspectorCloseButton(); return }
         guard focus == .canvas else { return }
         _ = window?.makeFirstResponder(gridView.isHidden ? canvas : gridView.collectionView)
     }
@@ -2087,6 +2090,13 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             return true
         }
         guard !menuTracking(), inspectorVisible else { return false }
+        // #444 fix round 1: in the viewer the Inspector's close button leaves through the Session's ring (Tab to the
+        // canvas, Shift-Tab to the last viewer control); AppKit's own loop would be refused at the canvas.
+        if gridView.isHidden, isInspectorFocused, event.keyCode == 48,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
+            session.tab(reverse: event.modifierFlags.contains(.shift))
+            return true
+        }
         if !gridView.isHidden, event.keyCode == 48 {
             let reverse = event.modifierFlags.contains(.shift)
             if isInspectorFocused {
