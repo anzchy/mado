@@ -67,6 +67,7 @@ private actor HomeOpeningGate {
         canvas = CanvasView(frame: frame, session: session)
         state = ViewerStateHost(frame: frame, session: session)
         chrome = ViewerChromeOverlay(frame: frame, session: session, hidesOnHome: hidesOnHome)
+        chrome.installTestMenus()
         host.canvas = canvas; host.state = state; host.chrome = chrome
         session.host = host; session.imageLoader.host = host
         let session = session
@@ -133,6 +134,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     let content = NSView(frame: NSRect(x: 0, y: 0, width: 960, height: 640))
     let canvas = CanvasView(frame: content.bounds, session: session)
     let chrome = ViewerChromeOverlay(frame: content.bounds, session: session, hidesOnHome: hidesOnHome)
+    chrome.installTestMenus()
     content.addSubview(canvas); content.addSubview(chrome)
     window.contentView = content
     chrome.linkKeyViews(to: canvas)

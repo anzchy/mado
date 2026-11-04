@@ -92,6 +92,7 @@ enum Pods444Source: Sendable { case browsing, preview, single, files }
         host.overlay = overlay
         session.chromeHost = host
         overlay.menuPresenter = presenter
+        overlay.moreMenuProvider = { NSMenu() }
         overlay.refresh(filename: "a.png", position: "2 / 3")
     }
     func tool(_ id: String) -> ChromeToolView? { overlay.tools.first { $0.accessibilityIdentifier() == id } }
@@ -365,12 +366,21 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     scene.click(scene.more)
     #expect(scene.presenter.presented.count == 1)
     #expect(scene.presenter.presented.first?.menu === menu && scene.presenter.presented.first?.anchor === scene.more)
+    // Nothing can open without a provider or a presenter: 更多 is disabled, out of the key loop and AX-disabled.
+    func expectInert(_ label: String) {
+        #expect(!scene.more.isEnabled && !scene.more.acceptsFirstResponder && !scene.more.isAccessibilityEnabled(), "\(label)")
+        let locks = scene.session.chrome.locks
+        scene.click(scene.more)
+        #expect(!scene.more.accessibilityPerformPress(), "\(label)")
+        #expect(scene.presenter.presented.count == 1 && scene.session.chrome.locks == locks, "\(label)")
+    }
     scene.overlay.moreMenuProvider = nil
-    let locks = scene.session.chrome.locks
-    scene.more.activate()
-    #expect(scene.presenter.presented.count == 1)
-    #expect(scene.session.chrome.locks == locks)
-    #expect(scene.more.isEnabled)
+    expectInert("no provider")
+    scene.overlay.moreMenuProvider = { menu }
+    scene.overlay.menuPresenter = nil
+    expectInert("no presenter")
+    scene.overlay.menuPresenter = scene.presenter
+    #expect(scene.more.isEnabled && scene.more.acceptsFirstResponder)
 }
 
 @Test(arguments: [false, true], [false, true])
@@ -490,8 +500,9 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     scene.overlay.moreMenuProvider = { built += 1; return NSMenu() }
     let mode = scene.session.zoomMode
     scene.zoom.activate()
-    scene.more.activate()
-    #expect(built == 1, "更多 still builds its menu")
+    #expect(!scene.more.isEnabled, "nothing can open, so 更多 is disabled")
+    scene.click(scene.more)
+    #expect(built == 0, "a disabled 更多 builds nothing")
     #expect(scene.session.zoomMode == mode)
     #expect(!scene.session.isMenuTracking && !scene.session.chrome.locks.contains(.menu))
 }
