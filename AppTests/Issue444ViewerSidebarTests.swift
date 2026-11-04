@@ -436,3 +436,45 @@ func i444SidebarVisibilityInvariantAcrossSourceTransitions(step: String) async t
     #expect(scene.controller.session.mode == .browsing && scene.controller.session.previewSet == nil)
     #expect(shell.mode == .grid && !shell.isHidden)
 }
+
+@MainActor private func issue444TabKey(_ window: NSWindow, shift: Bool = false) throws {
+    window.sendEvent(try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: shift ? [.shift] : [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
+        characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)))
+}
+
+/// Fix round 1 (gpt H1): with the Inspector shown beside a viewer that shows its sidebar, real Tab keys walk
+/// canvas → tools → sidebar → Inspector → canvas, and Shift-Tab walks the same ring backwards; the Inspector is
+/// never skipped and native focus always matches the Session's focus.
+@Test(.timeLimit(.minutes(3))) @MainActor func i444TabReachesTheVisibleInspectorBothWays() async throws {
+    let scene = try Issue444Scene()
+    defer { scene.close() }
+    try await scene.openGrid()
+    try await scene.enterViewer()
+    try scene.showViewerSidebar()
+    _ = scene.controller.route(.inspector, from: .menu)
+    scene.layout()
+    #expect(scene.controller.inspectorVisible)
+    let shell = try #require(scene.shell), canvas = try #require(scene.canvas)
+    let close = try #require(issue444Find(scene.content) { $0.accessibilityIdentifier() == "inspector.close" })
+    let tools = (scene.overlay?.tools ?? []).filter(\.acceptsFirstResponder)
+    let ring: [NSView] = [canvas] + tools + shell.viewerSidebarKeyViews + [close]
+    func focused(_ label: String) -> NSResponder? {
+        scene.layout()
+        return scene.window.firstResponder
+    }
+    #expect(scene.window.makeFirstResponder(canvas))
+    scene.controller.session.updateFocus(.canvas)
+    for step in 1...ring.count {
+        try issue444TabKey(scene.window)
+        let expected = ring[step % ring.count]
+        #expect(focused("tab \(step)") === expected, "Tab \(step): \(String(describing: scene.window.firstResponder)) ≠ \(expected)")
+    }
+    #expect(scene.window.firstResponder === canvas && scene.controller.session.inspectorFocus.focus == .canvas)
+    for step in 1...ring.count {
+        try issue444TabKey(scene.window, shift: true)
+        let expected = ring[(ring.count - step) % ring.count]
+        #expect(focused("shift-tab \(step)") === expected, "Shift-Tab \(step): \(String(describing: scene.window.firstResponder)) ≠ \(expected)")
+    }
+    #expect(scene.window.firstResponder === canvas && scene.controller.session.inspectorFocus.focus == .canvas)
+}
