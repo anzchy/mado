@@ -15,8 +15,11 @@ on:
         type: boolean
         default: true
 
+# A pull request keeps one group per PR and cancels its older runs. Every push to main and every dispatch gets a group
+# of its own (the run id): a shared group would let GitHub replace an older pending main run, leaving that commit
+# without CI.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
