@@ -1177,13 +1177,12 @@ class ResetShortScreenTests(unittest.TestCase):
     NO_CONTEXT = "FAIL reset fixture-agent: no context line after 0.1s\n"
     RESIDUE = ("• Previous reply\n› /new\nWhere should the new conversation run?\n"
                "› 1. Use current Git worktree\n")
-    # Preserve the saved title, full 17-row logo and footer; remove blank/cwd rows
-    # to model a short read without header metadata, then add four residue rows.
-    COMPACT = "\n".join(line for line in LIVE_RESET_SCREEN.splitlines()
-                        if line.strip() and line.strip() != "~/fixture-worktree")
-    SCREEN = RESIDUE + COMPACT
-    TITLELESS = RESIDUE + "\n".join(COMPACT.splitlines()[1:])
-    LOGO = "\n".join(line for line in COMPACT.splitlines()
+    # Derived input, not a raw capture: the saved real fixture's last 25 rows,
+    # including every blank. Title and cwd are outside this contiguous short read.
+    SHORT_DERIVED = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex-short-derived.txt").read_text()
+    # Synthetic residue is a separate adversarial input, not captured pane history.
+    TITLELESS = RESIDUE + SHORT_DERIVED
+    LOGO = "\n".join(line for line in SHORT_DERIVED.splitlines()
                       if any("\u2800" <= c <= "\u28ff" for c in line))
 
     def replay(self, screen, **kwargs):
@@ -1195,16 +1194,57 @@ class ResetShortScreenTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(result.stdout, expected or self.NO_BOUNDARY)
 
-    def test_short_residue_screen_with_or_without_title_passes(self):
-        self.assertEqual(len(self.SCREEN.splitlines()), 25)
-        self.assertEqual(len(self.TITLELESS.splitlines()), 24)
-        for screen in (self.SCREEN, self.TITLELESS):
+    def test_derived_contiguous_short_read_with_or_without_synthetic_residue_passes(self):
+        self.assertEqual(len(self.SHORT_DERIVED.splitlines()), 25)
+        self.assertEqual(self.SHORT_DERIVED, "\n".join(LIVE_RESET_SCREEN.splitlines()[-25:]) + "\n")
+        for screen in (self.SHORT_DERIVED, self.TITLELESS):
             for identity in ("", "old-session"):
-                with self.subTest(title="OpenAI Codex" in screen, identity=identity):
+                with self.subTest(residue=screen == self.TITLELESS, identity=identity):
                     result, _ = self.run_reset(context=screen, ready_boundary="", startup="", deadline="0.1",
                                                locale="C", session_before=identity, session_after=identity)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_output_after_zero_footer_revokes_context_in_both_suffix_orders(self):
+        for screen in (self.SHORT_DERIVED, self.TITLELESS, LIVE_RESET_SCREEN):
+            for suffix in ("› hello", "• Previous reply", "› hello\n• Previous reply", "• Previous reply\n› hello"):
+                with self.subTest(residue=screen == self.TITLELESS, suffix=suffix):
+                    self.assert_rejected(screen + "\n" + suffix)
+
+    def test_dirty_suffix_after_footer_hints_cannot_restore_zero_footer(self):
+        for suffix in ("› hello", "• Previous reply", "╭──╮", "› Ask Codex to do anything", "```\nold reply\n```"):
+            with self.subTest(suffix=suffix):
+                self.assert_rejected(self.TITLELESS + "\n? for help\n\n" + suffix + "\nContext 0% used")
+
+    def test_disallowed_suffix_before_allowed_hints_still_revokes_context(self):
+        for suffix in ("› hello", "• Previous reply"):
+            with self.subTest(suffix=suffix):
+                self.assert_rejected(self.SHORT_DERIVED + "\n" + suffix + "\n? for help\n\n")
+
+    def test_allowed_hints_and_blanks_after_final_footer_stay_fresh(self):
+        result, _ = self.replay(self.SHORT_DERIVED + "\n? for help\n? for commands\n\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_older_header_separated_from_titleless_logo_is_scrollback(self):
+        old = LIVE_RESET_SCREEN.replace("Context 0%", "Context 12%")
+        for boundary in ("› /new\n", "Where should the new conversation run?\n1. Use current Git worktree\n", ""):
+            with self.subTest(boundary=boundary):
+                result, _ = self.replay(old + "\n" + boundary + self.SHORT_DERIVED)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_opus_trace_old_header_echo_chooser_new_logo_passes(self):
+        old_header = LIVE_RESET_SCREEN.split("› Ask Codex to do anything")[0]
+        result, _ = self.replay(old_header + self.RESIDUE + self.SHORT_DERIVED)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_later_title_or_dirty_earlier_header_still_vetoes_logo(self):
+        self.assert_rejected(self.SHORT_DERIVED + "\n>_ OpenAI Codex (v0.166.0)\n› pending\nContext 0% used")
+        for dirty in ("• Previous reply", "/help", "/tmp/old output"):
+            with self.subTest(dirty=dirty):
+                self.assert_rejected(">_ OpenAI Codex (v0.166.0)\n" + dirty + "\n› /new\n" + self.SHORT_DERIVED)
 
     def test_changed_identity_remains_independent_of_logo_placeholder(self):
         screen = self.TITLELESS.replace("› Ask Codex to do anything", "")
@@ -1221,7 +1261,7 @@ class ResetShortScreenTests(unittest.TestCase):
         self.assertEqual(result.stdout, self.SUCCESS)
 
     def test_logo_candidate_does_not_hide_dirty_suffix(self):
-        for screen in (self.SCREEN, self.TITLELESS):
+        for screen in (self.TITLELESS,):
             for transcript in ("› hello\n• Hello!\n› Ask Codex to do anything",
                                "› Ask Codex to do anything\n• Previous reply",
                                "› Ask Codex to do anything\n› Ask Codex to do anything"):
@@ -1229,7 +1269,7 @@ class ResetShortScreenTests(unittest.TestCase):
                     self.assert_rejected(screen.replace("› Ask Codex to do anything", transcript))
 
     def test_logo_fallback_requires_full_logo_and_one_placeholder(self):
-        for screen in (self.SCREEN, self.TITLELESS):
+        for screen in (self.TITLELESS,):
             for logo in ("╭──╮\n│  │\n╰──╯", "\n".join(self.LOGO.splitlines()[:-1]), ""):
                 with self.subTest(title="OpenAI Codex" in screen, logo=logo):
                     self.assert_rejected(screen.replace(self.LOGO, logo))
@@ -1237,7 +1277,7 @@ class ResetShortScreenTests(unittest.TestCase):
                 self.assert_rejected(screen.replace("› Ask Codex to do anything", ""), self.NO_CONTEXT)
 
     def test_quoted_or_fenced_logo_cannot_prove_freshness(self):
-        for screen in (self.SCREEN, self.TITLELESS):
+        for screen in (self.TITLELESS,):
             for quoted in ("\n".join("> " + line for line in screen.splitlines()),
                            "```\n" + screen + "\n```", "~~~\n" + screen + "\n~~~"):
                 with self.subTest(title="OpenAI Codex" in screen, quoted=quoted[:20]):
@@ -1246,18 +1286,18 @@ class ResetShortScreenTests(unittest.TestCase):
     def test_logo_cannot_erase_dirty_metadata_below_latest_title(self):
         for content in ("• Previous reply", "/help", "/tmp/old output", "~/old output"):
             with self.subTest(content=content):
-                screen = self.SCREEN.replace(self.LOGO, content + "\n" + self.LOGO)
+                screen = self.RESIDUE + ">_ OpenAI Codex (v0.166.0)\n" + content + "\n" + self.SHORT_DERIVED
                 self.assert_rejected(screen)
 
     def test_later_marker_revokes_logo_context(self):
-        for screen in (self.SCREEN, self.TITLELESS):
+        for screen in (self.TITLELESS,):
             for marker in ("Where should the new conversation run?", "Starting MCP servers (3/4)", "› /new"):
                 with self.subTest(title="OpenAI Codex" in screen, marker=marker):
                     self.assert_rejected(screen.replace("› Ask Codex to do anything",
                                                         "› Ask Codex to do anything\n" + marker), self.NO_CONTEXT)
 
     def test_logo_requires_bottommost_zero_footer(self):
-        for screen in (self.SCREEN, self.TITLELESS):
+        for screen in (self.TITLELESS,):
             footer = next(line for line in screen.splitlines() if "Context 0% used" in line)
             for suffix, expected in (("", self.NO_CONTEXT),
                                      (footer.replace("Context 0%", "Context 12%"),

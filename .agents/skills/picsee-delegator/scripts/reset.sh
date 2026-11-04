@@ -61,21 +61,39 @@ if last_title is not None:
                    bool(body and is_cwd(body[0])))
 # A short read can omit the title/cwd while retaining the full 17-row welcome
 # logo. Recognize its saved top/bottom signatures and contiguous braille rows,
-# never arbitrary decoration. A later title or dirty title metadata vetoes it.
-logo_proof = False
-for index in sorted(unfenced, reverse=True):
+# never arbitrary decoration. A later title vetoes it. An earlier title must have
+# clean header metadata before a reset boundary or its own complete older logo;
+# otherwise dirty content between that title and this logo still vetoes it.
+logos = []
+for index in sorted(unfenced):
     block = [line.strip() for line in lines[index:index + 17]]
     if (len(block) == 17 and block[0] == "⣀⣤⣤⣤⣀⣀" and
             block[-1] == "⠈⠙⠛⠿⠿⠿⠿⠛⠉" and
             all(index + row in unfenced and re.fullmatch(r"[\s\u2800-\u28ff]+", line)
-                for row, line in enumerate(block)) and
-            (last_title is None or
-             (last_title < index and all(not line.strip() for line in lines[last_title + 1:index])))):
-        logo_proof = not title_proof
-        if logo_proof:
-            lines = lines[index:]
-            seen = started = clean = True
-        break
+                for row, line in enumerate(block))):
+        logos.append(index)
+logo_proof = False
+for index in reversed(logos):
+    separated = False
+    if last_title is not None:
+        if last_title > index:
+            continue
+        header = [(row, lines[row].strip()) for row in range(last_title + 1, index) if lines[row].strip()]
+        clean_header = bool(header and is_cwd(header[0][1]))
+        if clean_header:
+            header = header[1:]
+        if header:
+            row, content = header[0]
+            separated = clean_header and (row in logos or
+                         bool(re.fullmatch(r"(?:(?:>|❯|›) )?/new", content)) or
+                         content.startswith("Where should the new conversation run"))
+            if not separated:
+                continue
+    logo_proof = separated or not title_proof
+    if logo_proof:
+        lines = lines[index:]
+        seen = started = clean = True
+    break
 if not logo_proof and last_title is not None:
     lines = lines[last_title:]
 placeholder = False
@@ -83,6 +101,14 @@ footer_hints = {"? for shortcuts", "? for help", "? for commands"}
 welcome = footer_hints | {"Tip: Use /help to see available commands."}
 for raw in lines:
     line = raw.strip()
+    match = re.fullmatch(r"Context [0-9]+% used", line) or re.fullmatch(
+        r"(?:GPT-|gpt-)\S+\s+[\w-]+\s+·\s+Context [0-9]+% used(?:\s+·.*)?", line)
+    # A later footer replaces the result; otherwise only hints and blanks may
+    # follow it. Revoke before processing dirty content, including fences/box art.
+    if ctx and line and line not in footer_hints and not match:
+        ctx = ""
+        clean = False
+        seen = proved
     if line.startswith(("```", "~~~")):
         mark = line[:3]
         fence = "" if fence == mark else fence or mark
@@ -105,12 +131,10 @@ for raw in lines:
         started = proved
         clean = metadata = False
         continue
-    match = re.fullmatch(r"Context [0-9]+% used", line) or re.fullmatch(
-        r"(?:GPT-|gpt-)\S+\s+[\w-]+\s+·\s+Context [0-9]+% used(?:\s+·.*)?", line)
     if match:
         # Always replace ctx: a dirty transcript before the bottom-most footer
         # revokes the header even when an earlier clean footer was visible.
-        ctx = re.search(r"Context [0-9]+% used", line).group() if started and (proved or clean) and (proved or not logo_proof or placeholder) else ""
+        ctx = re.search(r"Context [0-9]+% used", line).group() if started and (proved or (clean and (not logo_proof or placeholder))) else ""
         metadata = False
         continue
     if not line:
