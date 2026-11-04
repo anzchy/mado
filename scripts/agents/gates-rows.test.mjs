@@ -56,7 +56,7 @@ const ciCases = [
   {
     name: 'skipped job is NOT RUN',
     fixture: 'skipped',
-    row: '| app-tests | NOT RUN | — | App tests skipped (app_tests=false) https://github.com/anzchy/picsee/actions/runs/319000004 |',
+    row: '| app-tests | NOT RUN | — | App tests skipped (no native input changed) https://github.com/anzchy/picsee/actions/runs/319000004 |',
   },
   {
     name: 'failed job is FAIL',
