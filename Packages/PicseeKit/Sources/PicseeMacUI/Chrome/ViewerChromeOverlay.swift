@@ -256,6 +256,7 @@ public final class ViewerChromeOverlay: NSView {
     public var trailingKeyViews: () -> [NSView] = { [] }
     private weak var nextTool: ChromeToolView?
     private let fileLabel = NSTextField(labelWithString: "")
+    private var showsImagePosition = false
     let metadataSortNotice = GridSortNoticeLabel(labelWithString: String(localized: "Sort unfinished"))
     private var displayedMetadataSortState: MetadataSortState = .idle
     /// #331: the Home (status `.empty`, pinned page 21) shows only its centre. Opt-in, so only the App window hides.
@@ -333,7 +334,9 @@ public final class ViewerChromeOverlay: NSView {
         // Measure the actual label, then cap it for middle truncation. The side groups
         // keep their 30×28 command targets when compact windows require wrapping.
         // NSTextFieldCell includes its text drawing inset; raw NSString width does not.
-        let labelWidth = ceil(fileLabel.cell!.cellSize.width)
+        // Page14's filename/position label has 8 pt inline padding; NSTextFieldCell includes 4 pt per side.
+        let extraPadding: CGFloat = showsImagePosition ? 8 : 0
+        let labelWidth = ceil(fileLabel.cell!.cellSize.width) + extraPadding
         let width = min(260, max(74, min(bounds.width - 32, labelWidth + 74)))
         // The zoom pod keeps a 16 pt right inset; the side pods stay 8 pt apart from the centre pod or wrap.
         let rightX = bounds.width - 190
@@ -345,7 +348,8 @@ public final class ViewerChromeOverlay: NSView {
         let centerX = singleRow ? min(max(centeredX, 128), rightX - 8 - width) : centeredX
         groups[1].frame = NSRect(x: centerX, y: singleRow ? 14 : 60, width: width, height: 38)
         nextTool?.setFrameOrigin(NSPoint(x: width - 35, y: 5))
-        fileLabel.frame = NSRect(x: 37, y: 10, width: max(0, width - 74), height: 18)
+        fileLabel.frame = NSRect(x: 37 + extraPadding / 2, y: 10,
+            width: max(0, width - 74 - extraPadding), height: 18)
         metadataSortNotice.sizeToFit()
         metadataSortNotice.frame.origin = NSPoint(x: max(12, bounds.maxX - metadataSortNotice.frame.width - 20), y: 64)
         for group in groups {
@@ -479,9 +483,23 @@ public final class ViewerChromeOverlay: NSView {
     }
     public func refresh(filename: String? = nil, position: String? = nil) {
         self.filename = filename; self.position = position
-        fileLabel.stringValue = [filename, position].compactMap { $0 }.joined(separator: " · ")
+        showsImagePosition = false
+        if let filename, let position, position.range(of: #"^[0-9]+ / [0-9]+$"#, options: .regularExpression) != nil {
+            showsImagePosition = true
+            let font = DesignMetrics.font("uiSmall")
+            let text = NSMutableAttributedString(string: filename, attributes: [.font: font])
+            let spaces = ("  " as NSString).size(withAttributes: [.font: font]).width
+            // Keep the pin's two-space text contract while drawing its 12 pt flex gap.
+            text.append(NSAttributedString(string: "  ", attributes: [.font: font, .kern: (12 - spaces) / 2]))
+            text.append(NSAttributedString(string: position,
+                attributes: [.font: DesignMetrics.font("uiSmall", monospaced: true),
+                             .foregroundColor: DesignColor.textSecondary.nsColor]))
+            fileLabel.attributedStringValue = text
+        } else {
+            fileLabel.stringValue = [filename, position].compactMap { $0 }.joined(separator: " · ")
+        }
         arrangeGroups()
-        fileLabel.setAccessibilityValue(filename ?? "")
+        fileLabel.setAccessibilityValue(fileLabel.stringValue)
         for tool in tools { tool.refresh() }
         updateAccessibilityChildren(visible: shown)
         relinkKeyViews()
