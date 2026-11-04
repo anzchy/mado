@@ -493,7 +493,18 @@ public final class ViewerChromeOverlay: NSView {
             text.append(NSAttributedString(string: "  ", attributes: [.font: font, .kern: (12 - spaces) / 2]))
             text.append(NSAttributedString(string: position,
                 attributes: [.font: DesignMetrics.font("uiSmall", monospaced: true),
-                             .foregroundColor: DesignColor.textSecondary.nsColor]))
+                             .foregroundColor: DesignColor.textPrimary.nsColor]))
+            // Attributed text needs its own paragraph style; the cell's lineBreakMode
+            // alone clips the text before the trailing fraction at the 260 pt pod cap.
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingMiddle
+            let halo = NSShadow()
+            halo.shadowColor = DesignColor.popoverBackground.nsColor
+            halo.shadowOffset = .zero
+            halo.shadowBlurRadius = 1
+            text.addAttributes([.foregroundColor: DesignColor.textPrimary.nsColor,
+                                .shadow: halo, .paragraphStyle: paragraph],
+                               range: NSRange(location: 0, length: text.length))
             fileLabel.attributedStringValue = text
         } else {
             fileLabel.stringValue = [filename, position].compactMap { $0 }.joined(separator: " · ")
