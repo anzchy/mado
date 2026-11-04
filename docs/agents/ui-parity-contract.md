@@ -74,6 +74,26 @@ delegator 在 brief 中列出**本次新增或改变的所有可达状态和必�
 - 写好 PR 描述后，在本地运行 `node scripts/agents/ui-parity-pr-body-lint.mjs --base main --body-file /path/to/pr-body.md`。若 `main` 与 `HEAD` 间改动了 `App/` 或 `Packages/PicseeKit/Sources/PicseeMacUI/`，脚本要求描述有含数据行的 `## UI-Parity` Markdown 表格、每行合法且非 `FAIL` 的状态，以及有效的 `Device-Smoke` 结论或带理由的 `n/a`；其他 PR 若写了 `Device-Smoke` 行，也检查其格式与理由。它不替代独立审计。独立 `pr-body.yml` workflow 在 `pull_request` 的 opened、edited、synchronize、reopened 事件上运行同一检查，并拆成没有 `needs:` 依赖的两个 fresh-runner jobs：`agent-tests` 只在 PR head 上运行测试；`pr-body-gates` 不执行 PR 文件，只从可信 base revision 的 `trusted/` checkout 执行 lint，并在 PR-head checkout 中读取 diff 与 head。base lint 缺少 `checkGates` 时明确失败，不会回退到 PR 自带的旧 lint。**信任边界**：此检查防止诚实失误、过期或矛盾证据，不能防御恶意 PR 作者；`pull_request` 的 workflow 来自 merge ref，PR 可以修改 `pr-body.yml` 本身，因此触及 `.github/workflows/` 的 PR 必须由 delegator 在合入前人工审查 workflow diff。不得为此改用 `pull_request_target` 或增加 token 权限。
 - 已有真机证据显示的 `FAIL` 必须先修或经用户决定才能合入。`PENDING` 的规则同下文。
 
+### Checker 变更确认（#471，#449 N1）
+
+这条规则在包含它的 lint **合入 main 后**才约束 PR：`pr-body.yml` 从 `base.sha` 的 `trusted/` 执行检查，因此本规则自己的引入 PR 不会由旧 base lint 强制执行。
+
+lint 从 merge-base 到 PR head 的 diff（含新增、删除、文件类型变化及重命名前后路径）识别两类 checker，范围与 pre-push 的 `checker_changed` 一致：`ledger` 对应 `scripts/ledger` 本身及其子路径，`design` 对应 `scripts/design` 本身及其子路径。任一类变化时，PR body 必须有且只有一条独立的确认行，不能只放在 fenced code block 或 HTML 注释里。格式为：
+
+```text
+Checker-Change: <40-hex-head-SHA> families=<family-list> — <rationale> — audits: <ref>,<ref>
+```
+
+- SHA 必须是当前 PR head 的完整 40 位 hex（大小写均可），每次更新 head 后重写此行。
+- `family-list` 用逗号分隔小写 `ledger`、`design`，不得重复或写未知名称；必须覆盖所有发生变化的类别，顺序任意，允许多列另一个已知类别。例如 `families=ledger,design`。
+- `rationale` 是同一行内非空的修改理由；用两侧有空格的 `—` 分隔三个字段。
+- `audits` 至少列出两条不同、以逗号分隔的独立审计引用，因为 checker 变更仍须双独立 diff 审计。每条引用为无空白、无逗号的 HTTP(S) URL、以 `.md` 结尾的报告路径或文件名（可带 `#anchor`，路径可带 `~/`），或 `#<issue-number>`。不能用 `TBD`、`none` 或 `—` 占位。lint 只检查语法与不同引用；审查者负责确认报告存在、审计者独立且明确覆盖 checker 修改。
+
+缺失确认行、SHA 过期、类别不全、空理由、缺失或不完整的审计引用都会失败。没有 checker 变更的 PR 不要求此行；多余的确认行允许保留且不校验，避免无关 PR 因遗留说明被阻塞。`scripts/design-check.mjs`、`scripts/ledger-extra/` 等相邻名称不属于这两个范围。
+
+pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI decides (local check deferred)` 并明确提醒 PR body 必须携带 `Checker-Change:` 供独立审查。CI 执行 PR 自己的 ledger/design checker，因此绿色结果本身不能证明 checker 没有被削弱；本确认行把此事实和对应审计绑定到 head，不能替代两份独立审计或上文的 workflow diff 人工审查。
+
+
 ### 变更路径真机冒烟（每个用户可见改动的 PR 合入前，#175）
 
 - **范围**：diff 改变了用户能看到或触发的 App 行为（通常即触及 UI/交互区的账簿行）。只改文档、测试或无 App 接线的模型代码的 PR 免做，PR 描述写一行 `Device-Smoke: n/a — <理由>`。
