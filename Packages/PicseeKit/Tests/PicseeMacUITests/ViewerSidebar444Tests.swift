@@ -301,6 +301,38 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
+/// #444 fix round 3 (device smoke smoke444b-20261104-1234): restoring straight from the minimum size left the sidebar
+/// laid out at the minimum's negative room (238 − 318 = −80) while the canvas came back beside a 196 pt sidebar. The
+/// device hit it when a resize delivered two steps below the sidebar's room: the hidden shell is laid out at the second
+/// step with the first step's limit. Two steps (240×210, then 238×200) make that order deterministic here.
+@Test(arguments: [NSSize(width: 960, height: 640), NSSize(width: 640, height: 480), NSSize(width: 480, height: 400)],
+      [false, true])
+@MainActor func i444RestoringFromTheMinimumKeepsTheSidebarInsideTheWindow(target: NSSize, inspector: Bool) {
+    let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640), inspector: inspector)
+    defer { scene.close() }
+    scene.presentation.showGrid(reading: false)
+    scene.shell.autoresizingMask = [.width, .height]
+    scene.presentation.showViewer()
+    scene.presentation.layoutInspector(visible: inspector)
+    scene.content.layoutSubtreeIfNeeded()
+    for size in [NSSize(width: 240, height: 210), NSSize(width: 238, height: 200), target] {
+        scene.window.setContentSize(size)
+        scene.shell.layoutSubtreeIfNeeded()  // CanvasWindowController.windowDidResize, then its layoutInspector()
+        scene.presentation.layoutInspector(visible: inspector)
+        let label = "min → \(target), at \(size) inspector \(inspector)"
+        expectPodsClear(scene, preferred: 196, label)
+        let sidebar = scene.shell.sidebar.frame
+        #expect(sidebar.minX >= 0 && sidebar.width >= 0, "\(label): sidebar frame \(sidebar)")
+        #expect((scene.divider?.accessibilityValue() as? NSNumber).map { $0.doubleValue >= 0 } == true,
+                "\(label): splitter value \(String(describing: scene.divider?.accessibilityValue()))")
+        guard !scene.shell.isHidden else { continue }
+        let drawn = scene.shell.sidebar.convert(scene.shell.sidebar.bounds, to: scene.content)
+        #expect(drawn.minX == 0 && drawn.maxX == scene.canvas.frame.minX,
+                "\(label): sidebar drawn \(drawn), canvas \(scene.canvas.frame)")
+        #expect(scene.content.bounds.contains(drawn), "\(label): sidebar \(drawn) outside the window")
+    }
+}
+
 /// #444 fix round 2: a sidebar hidden only because the window is too narrow keeps the user's choice. The toggle still
 /// reads 隐藏侧栏 (value 1), and that is what comes back when the window grows. Pressing it there hides the sidebar for
 /// good, so the wider window shows no sidebar either.

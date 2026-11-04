@@ -42,7 +42,8 @@ import PicseeCore
     /// Shows the viewer's sidebar when the Session asks for it and the window leaves room beside the pods; returns its
     /// width (0 while hidden). A sidebar that hides while it holds keyboard focus hands focus to the canvas.
     private func applyViewerSidebarVisibility(_ shell: GridShellView, contentWidth: CGFloat) -> CGFloat {
-        shell.viewerSidebarLimit = contentWidth - Self.viewerPodClearance
+        // A window narrower than the pods' room leaves the sidebar none at all, never a negative width.
+        shell.viewerSidebarLimit = max(0, contentWidth - Self.viewerPodClearance)
         let width = shell.sidebarWidth
         let show = viewerSidebarAvailable && shell.session?.isViewerSidebarShown == true
             && width >= Self.minimumViewerSidebarWidth
