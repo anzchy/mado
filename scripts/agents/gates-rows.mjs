@@ -102,7 +102,16 @@ if (!valid) {
       } else {
         if (jobs[0].status !== 'completed') throw new Error('App tests job is not completed');
         if (jobs[0].conclusion === 'skipped') {
-          rows.push(`| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${url} |`);
+          // The run's jobs carry no outputs. A skipped App tests job means native=false only when the classifier
+          // succeeded and Walking skeleton passed: with native=true it needs a successful build step from App tests.
+          const succeeded = name => {
+            const named = run.jobs.filter(job => job.name === name);
+            return named.length === 1 && named[0].status === 'completed' && named[0].conclusion === 'success';
+          };
+          const decided = succeeded('Native inputs') && succeeded('Walking skeleton');
+          rows.push(decided
+            ? `| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${url} |`
+            : `| app-tests | NOT RUN | — | App tests skipped without a classifier decision ${url} |`);
         } else if (jobs[0].conclusion === 'success') {
           rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
         } else {

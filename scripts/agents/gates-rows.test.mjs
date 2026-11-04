@@ -54,9 +54,24 @@ const ciCases = [
     row: `| app-tests | NOT VERIFIED | ${head} | CI run in_progress https://github.com/anzchy/picsee/actions/runs/319000003 |`,
   },
   {
-    name: 'skipped job is NOT RUN',
+    name: 'skipped job without the classifier and Walking skeleton is NOT RUN without a decision',
     fixture: 'skipped',
-    row: '| app-tests | NOT RUN | — | App tests skipped (no native input changed) https://github.com/anzchy/picsee/actions/runs/319000004 |',
+    row: '| app-tests | NOT RUN | — | App tests skipped without a classifier decision https://github.com/anzchy/picsee/actions/runs/319000004 |',
+  },
+  {
+    name: 'skipped job on a docs-only run is NOT RUN because no native input changed',
+    fixture: 'skipped-docs-only',
+    row: '| app-tests | NOT RUN | — | App tests skipped (no native input changed) https://github.com/anzchy/picsee/actions/runs/319000011 |',
+  },
+  {
+    name: 'skipped job after a failed classifier is NOT RUN without a decision',
+    fixture: 'skipped-no-decision',
+    row: '| app-tests | NOT RUN | — | App tests skipped without a classifier decision https://github.com/anzchy/picsee/actions/runs/319000012 |',
+  },
+  {
+    name: 'skipped job with a failed Walking skeleton is NOT RUN without a decision',
+    fixture: 'skipped-skeleton-failed',
+    row: '| app-tests | NOT RUN | — | App tests skipped without a classifier decision https://github.com/anzchy/picsee/actions/runs/319000013 |',
   },
   {
     name: 'failed job is FAIL',
