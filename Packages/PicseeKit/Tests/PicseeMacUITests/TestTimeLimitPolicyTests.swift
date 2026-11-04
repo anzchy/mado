@@ -104,3 +104,44 @@ import Testing
         #expect(scanTimeLimits(in: source).contains(where: { $0.violatesPolicy }), "\(source)")
     }
 }
+
+/// #494 phase 1: reading the property is not a trait declaration.
+@Test func TestTimeLimitPolicy494PropertyReadIsNotADeclaration() {
+    let source = "@Test func sample() { _ = Test.current?.timeLimit }"
+    #expect(scanTimeLimits(in: source).isEmpty, "a property read declares no time limit")
+}
+
+/// Keep invalid declarations visible while a future fix distinguishes reads from calls.
+@Test func TestTimeLimitPolicy494InvalidDeclarationControlsRemainRejected() {
+    for source in [
+        ".timeLimit(limit)", ".timeLimit(.seconds(30))", ".timeLimit()",
+        ".timeLimit(.minutes(count))", ".timeLimit(.minutes(1 + 1))",
+        ".timeLimit(.minutes(999999999999999999999999999999))",
+        ".timeLimit(.minutes(1)",
+    ] {
+        let declarations = scanTimeLimits(in: source)
+        let violations = declarations.filter { $0.violatesPolicy }
+        #expect(declarations == [.unrecognised], "\(source)")
+        #expect(violations.count == 1, "\(source)")
+    }
+    for minutes in [0, 1] {
+        let declarations = scanTimeLimits(in: ".timeLimit(.minutes(\(minutes)))")
+        #expect(declarations == [.minutes(minutes)])
+        let violations = declarations.filter { $0.violatesPolicy }
+        #expect(violations.count == 1)
+    }
+}
+
+/// Adding a property read must not hide an invalid declaration or create another one.
+@Test func TestTimeLimitPolicy494PropertyReadPreservesInvalidDeclaration() {
+    for minutes in [0, 1] {
+        let declaration = "@Test(.timeLimit(.minutes(\(minutes)))) func invalid() {}"
+        for source in ["_ = Test.current?.timeLimit\n" + declaration,
+                       declaration + "\n_ = Test.current?.timeLimit"] {
+            let declarations = scanTimeLimits(in: source)
+            #expect(declarations == [.minutes(minutes)], "\(source)")
+            let violations = declarations.filter { $0.violatesPolicy }
+            #expect(violations.count == 1)
+        }
+    }
+}
