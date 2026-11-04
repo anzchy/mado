@@ -54,7 +54,7 @@ const gateInputs = {
   'package-tests': codeInputs,
   'package-macui-tests': codeInputs,
   'app-tests': codeInputs,
-  // These jobs also depend on the generated-ledger precheck in unsigned-build.
+  // These also depend on the generated-ledger check, which Walking skeleton requires (now its own Ledger HTML check job).
   'unsigned-build': [...codeInputs, ...ledgerInputs],
   'walking-skeleton': [...codeInputs, ...ledgerInputs],
   // Agent/perf tests read documents, templates and repository references too.
