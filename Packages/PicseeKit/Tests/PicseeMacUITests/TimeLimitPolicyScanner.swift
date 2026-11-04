@@ -18,8 +18,13 @@ func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
     let scan = timeLimitCodeTokens(source)
     let tokens = scan.tokens
     var declarations: [TimeLimitDeclaration] = []
+    var propertyReadCount = 0
     for index in tokens.indices where tokens[index] == "." {
         guard index + 1 < tokens.count, tokens[index + 1] == "timeLimit" else { continue }
+        guard index + 2 < tokens.count, tokens[index + 2] == "(" else {
+            propertyReadCount += 1
+            continue
+        }
         let arguments = Array(tokens.dropFirst(index + 2).prefix(7))
         if arguments.count == 7,
            arguments[0...3] == ["(", ".", "minutes", "("],
@@ -33,9 +38,9 @@ func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
         }
     }
     // Count independently of tokenisation, including backticked/nonmember names.
-    // Only positively delimited comments and strings may exclude occurrences.
+    // Account for member reads as well as positively delimited comments and strings.
     let rawCount = timeLimitIdentifierCount(source)
-    if rawCount != declarations.count + scan.ignoredCount || scan.lexicalFailure {
+    if rawCount != declarations.count + propertyReadCount + scan.ignoredCount || scan.lexicalFailure {
         declarations.append(.unrecognised)
     }
     return declarations
