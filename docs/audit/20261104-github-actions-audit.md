@@ -180,3 +180,5 @@ branch protection（main）：`Walking skeleton`、`PR body Gates`、`Agent tool
 - 低：提速数字是估算，要用之后 5 个 run（含一次冷构建的 main run）核实，并盯住 10 GB 缓存预算；§8 的 `codeInputs` 缺口另行修复（#474），这次不改 `ui-parity-pr-body-lint.mjs`。
 - 实现时比计划多做的一点：`Native inputs` job 从 base 提交 checkout 判定脚本再运行，PR 改不了评判自己的规则；base 里还没有这个脚本时（也就是引入它的那个 PR）一律判为原生。ledger 检查的 job 名是 `Ledger HTML check`。
 - 实现后两份盲审：gpt-auditor **CHANGES REQUIRED**（1 高、1 中），opus-auditor **PASS**（1 中、6 低）。第一轮修复：unsigned build 是原命令只加 hashing 参数，测试钉住整行（#479 的验收已澄清允许这一个参数）；App tests job 被取消、跳过或没有结果时 `Walking skeleton` 失败；判定脚本也从 base 运行，base 没有它时用更严的内联规则；gates-rows 只在分类器确实判了 native=false 时写 “no native input changed”；新增的 Ubuntu job 只读 token、不保留凭据；setup-node 的 npm 缓存是上面缓存规则的明确例外。
+
+<!-- CI probe (#483): docs-only skip proof. Not for merge. -->
