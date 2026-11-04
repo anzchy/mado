@@ -77,8 +77,16 @@ if (!valid) {
       if (typeof url !== 'string' || /[\r\n|]/.test(url) || !URL.canParse(url) || new URL(url).protocol !== 'https:') {
         throw new Error('CI run url must be an HTTPS URL without CR, LF or pipe');
       }
-      if (typeof status === 'string' && /[\r\n|]/.test(status)) {
-        throw new Error('CI run status cannot contain CR, LF or pipe');
+      if (typeof status !== 'string' || /[\r\n|]/.test(status)) {
+        throw new Error('CI run status must be a string without CR, LF or pipe');
+      }
+      // Validate all jobs before rendering, even for a stale or incomplete run.
+      for (const job of run.jobs) {
+        if (!job || typeof job !== 'object' || Array.isArray(job) ||
+            ['name', 'status', 'conclusion'].some(field =>
+              typeof job[field] !== 'string' || /[\r\n|]/.test(job[field]))) {
+          throw new Error('CI job name, status and conclusion must be strings without CR, LF or pipe');
+        }
       }
       const runHead = headSha.toLowerCase();
       const head = expectedHead?.toLowerCase();
@@ -92,9 +100,6 @@ if (!valid) {
       } else if (jobs.length > 1) {
         rows.push(`| app-tests | NOT VERIFIED | ${headSha} | CI run ambiguous: ${jobs.length} App tests jobs |`);
       } else {
-        if (typeof jobs[0].conclusion === 'string' && /[\r\n|]/.test(jobs[0].conclusion)) {
-          throw new Error('App tests conclusion cannot contain CR, LF or pipe');
-        }
         if (jobs[0].status !== 'completed') throw new Error('App tests job is not completed');
         if (jobs[0].conclusion === 'skipped') {
           rows.push(`| app-tests | NOT RUN | — | App tests skipped (app_tests=false) ${url} |`);

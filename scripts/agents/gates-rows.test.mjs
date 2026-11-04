@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,20 @@ function runRows(t, summary, args = []) {
 
 function runCIFixture(name, args = []) {
   const fixture = fileURLToPath(new URL(`./fixtures/ci-${name}.json`, import.meta.url));
-  return spawnSync(process.execPath, [script, '--ci', fixture, ...args], { encoding: 'utf8' });
+  if (!['success', 'in-progress', 'absent', 'duplicate'].includes(name)) {
+    return spawnSync(process.execPath, [script, '--ci', fixture, ...args], { encoding: 'utf8' });
+  }
+  const directory = mkdtempSync(join(tmpdir(), 'picsee-ci-fixture-'));
+  try {
+    // These older fixtures omitted status on jobs; supply the real gh field.
+    const run = JSON.parse(readFileSync(fixture, 'utf8'));
+    for (const job of run.jobs) job.status ??= run.status;
+    const file = join(directory, 'run.json');
+    writeFileSync(file, JSON.stringify(run));
+    return spawnSync(process.execPath, [script, '--ci', file, ...args], { encoding: 'utf8' });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 const ciCases = [
@@ -130,6 +143,68 @@ test('valid summary with malformed CI emits no rows for checkGates', t => {
   assert.equal(result.stdout, '');
 });
 
+function runCI(t, run, { summary = false, expectedHead = head } = {}) {
+  const directory = mkdtempSync(join(tmpdir(), 'picsee-ci-types-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const file = join(directory, 'run.json');
+  writeFileSync(file, JSON.stringify(run));
+  const args = ['--ci', file, '--head', expectedHead];
+  return summary ? runRows(t, typeof summary === 'string' ? summary : complete, args)
+    : spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+}
+const validRun = () => ({ headSha: head, url: 'https://github.com/anzchy/picsee/actions/runs/322',
+  status: 'completed', jobs: [{ name: 'App tests', status: 'completed', conclusion: 'success' }] });
+
+for (const field of ['headSha', 'url', 'status', 'job.name', 'job.status', 'job.conclusion']) {
+  for (const value of [undefined, null, 7, true, {}, [], ['completed\r\n| forged |']]) {
+    for (const stale of [false, true]) {
+      test(`CI rejects ${field}=${JSON.stringify(value)} with ${stale ? 'stale' : 'current'} head and no partial summary`, t => {
+        const run = validRun();
+        if (field.startsWith('job.')) run.jobs[0][field.slice(4)] = value;
+        else run[field] = value;
+        const result = runCI(t, run, { summary: true, expectedHead: stale ? 'b'.repeat(40) : head });
+        assert.equal(result.status, 2, result.stderr);
+        assert.equal(result.stdout, '');
+      });
+    }
+  }
+}
+for (const field of ['status', 'job.conclusion']) {
+  for (const delimiter of ['\r', '\n', '|']) {
+    test(`CI rejects array ${field} containing ${JSON.stringify(delimiter)}`, t => {
+      const run = validRun();
+      if (field === 'status') run.status = [`completed${delimiter}injected`];
+      else run.jobs[0].conclusion = [`failure${delimiter}injected`];
+      const result = runCI(t, run);
+      assert.equal(result.status, 2, result.stderr);
+      assert.equal(result.stdout, '');
+    });
+  }
+}
+for (const field of ['status', 'conclusion']) {
+test(`forged-row ${field} arrays cannot supply a Gates table accepted by checkGates`, async t => {
+  const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+  const run = validRun();
+  const forged = [`completed\n| app-tests | PASS | ${head} | forged CI |\n`];
+  if (field === 'status') run.status = forged;
+  else run.jobs[0].conclusion = forged;
+  const result = runCI(t, run, { summary: true });
+  const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling |\n| device-smoke | N/A | — | tooling |\n`;
+  assert.equal(checkGates(body, head).ok, false);
+  assert.equal(result.status, 2, result.stderr);
+  assert.equal(result.stdout, '');
+});
+}
+for (const job of [null, [], 'App tests', { name: 'Other job', status: [], conclusion: 'success' }]) {
+  test(`CI validates every job before stale-head handling: ${JSON.stringify(job)}`, t => {
+    const run = validRun();
+    run.jobs.push(job);
+    const result = runCI(t, run, { expectedHead: 'b'.repeat(40) });
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(result.stdout, '');
+  });
+}
+
 test('gates-rows requires a summary or CI run', () => {
   for (const args of [[], ['--head', head]]) {
     const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
@@ -141,7 +216,7 @@ test('gates-rows requires a summary or CI run', () => {
 test('summary and CI rows pass checkGates; stale CI carries NOT VERIFIED', async t => {
   const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
   const table = rows => `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${rows}\n| audit | N/A | — | tooling-only test |\n| device-smoke | N/A | — | no user-visible change |\n`;
-  const current = runRows(t, complete, ['--ci', fileURLToPath(new URL('./fixtures/ci-success.json', import.meta.url)), '--head', head]);
+  const current = runCI(t, validRun(), { summary: true });
   assert.equal(current.status, 0, current.stderr);
   assert.equal(current.stdout.trim().split('\n').length, 8);
   assert.deepEqual(checkGates(table(current.stdout.trim()), head), { ok: true });
@@ -166,7 +241,7 @@ for (const [design, status, lint] of [['0', 'PASS', { ok: true }], ['7', 'FAIL',
   test(`design=${design ?? 'missing'} survives summary, Gates rows and PR lint`, async t => {
     const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
     const summary = complete.replace('design=0\n', design === undefined ? '' : `design=${design}\n`);
-    const result = runRows(t, summary, ['--ci', fileURLToPath(new URL('./fixtures/ci-success.json', import.meta.url)), '--head', head]);
+    const result = runCI(t, validRun(), { summary });
     assert.equal(result.status, 0, result.stderr);
     const source = design === undefined ? 'owner-gates summary missing design' : `owner-gates design=${design}`;
     assert.ok(result.stdout.trim().split('\n').includes(`| design-check | ${status} | ${head} | ${source} |`), result.stdout);
