@@ -675,7 +675,7 @@ class ResolvePart3Tests(unittest.TestCase):
         self.assertIn('<<<<<<<', out)
 
 
-LIVE_RESET_SCREEN = '\n  >_ OpenAI Codex (v0.166.0)\n     ~/Documents/mac-app/picsee-wt/device-v001\n\n\n\n\n                                           ⣀⣤⣤⣤⣀⣀\n                                        ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀\n                                      ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄\n                                     ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧\n                                  ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇\n                                 ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷\n                                ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀\n                                ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄\n                                ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿\n                                ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇\n                                  ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿\n                                  ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃\n                                  ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁\n                                   ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁\n                                    ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟\n                                       ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏\n                                              ⠈⠙⠛⠿⠿⠿⠿⠛⠉\n\n\n\n\n› Ask Codex to do anything\n\n  GPT-6-Sol medium · Context 0% used · ~/Documents/mac-app/picsee-wt/device-v001\n  ? for shortcuts\n'
+LIVE_RESET_SCREEN = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex.txt").read_text()
 
 
 class ResetTests(unittest.TestCase):
@@ -882,7 +882,8 @@ esac
                 result, _ = self.run_reset(delay=delay, startup=startup, context=context,
                                            ready_boundary="", deadline="0.1")
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+                self.assertEqual(result.stdout, self.NO_BOUNDARY if delay == 0 else
+                                 "FAIL reset fixture-agent: no context line after 0.1s\n")
 
     def test_changed_id_does_not_accept_footer_under_chooser(self):
         result, _ = self.run_reset(session_before="old-session", session_after="new-session",
@@ -958,18 +959,18 @@ esac
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertEqual(result.stdout, self.SUCCESS)
 
-    def test_stale_zero_before_new_session_cannot_succeed_early(self):
+    def test_stale_zero_before_title_cannot_prove_fresh_screen(self):
         for marker in ("Where should the new conversation run?", "/new", "Starting MCP servers (3/4)"):
             with self.subTest(marker=marker):
-                result, _ = self.run_reset(delay=3, context="Context 12% used",
+                result, _ = self.run_reset(delay=3, context="Context 12% used", deadline="0.1",
                                            prefix=f"Context 0% used\n{marker}")
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(result.stdout, "FAIL reset fixture-agent: Context 12% used after /new\n")
+                self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
-    def test_old_nonzero_above_new_zero_succeeds(self):
-        result, _ = self.run_reset(prefix="Context 12% used\n/new")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, self.SUCCESS)
+    def test_old_nonzero_above_title_cannot_prove_fresh_screen(self):
+        result, _ = self.run_reset(prefix="Context 12% used\n/new", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
 
     def test_bottommost_new_footer_decides(self):
         result, _ = self.run_reset(context="Context 0% used\nContext 12% used")
