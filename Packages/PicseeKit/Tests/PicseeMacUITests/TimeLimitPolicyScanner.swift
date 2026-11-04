@@ -15,7 +15,8 @@ enum TimeLimitDeclaration: Equatable {
 /// Pure string seam for the repository's CI time-limit policy.
 /// Only literal integer minutes are supported; other forms fail closed.
 func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
-    let tokens = timeLimitCodeTokens(source)
+    let scan = timeLimitCodeTokens(source)
+    let tokens = scan.tokens
     var declarations: [TimeLimitDeclaration] = []
     for index in tokens.indices where tokens[index] == "." {
         guard index + 1 < tokens.count, tokens[index + 1] == "timeLimit" else { continue }
@@ -31,15 +32,29 @@ func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
             declarations.append(.unrecognised)
         }
     }
+    // Count independently of tokenisation, including backticked/nonmember names.
+    // Only positively delimited comments and strings may exclude occurrences.
+    let rawCount = timeLimitIdentifierCount(source)
+    if rawCount != declarations.count + scan.ignoredCount || scan.lexicalFailure {
+        declarations.append(.unrecognised)
+    }
     return declarations
+}
+
+private func timeLimitIdentifierCount(_ source: String) -> Int {
+    let pattern = #"(?<![\p{L}\p{N}_])timeLimit(?![\p{L}\p{N}_])"#
+    let expression = try! NSRegularExpression(pattern: pattern)
+    return expression.numberOfMatches(in: source, range: NSRange(location: 0, length: source.utf16.count))
 }
 
 /// A small lexer rather than a Swift parser: comments are trivia, strings are an
 /// opaque token, and every other identifier/punctuation remains available to the policy.
-private func timeLimitCodeTokens(_ source: String) -> [String] {
+private func timeLimitCodeTokens(_ source: String) -> (tokens: [String], ignoredCount: Int, lexicalFailure: Bool) {
     let characters = Array(source)
     var index = 0
     var tokens: [String] = []
+    var ignoredCount = 0
+    var lexicalFailure = false
 
     func matches(_ text: String, at start: Int) -> Bool {
         let candidate = Array(text)
@@ -48,12 +63,14 @@ private func timeLimitCodeTokens(_ source: String) -> [String] {
     }
 
     while index < characters.count {
+        let start = index
         if characters[index].isWhitespace {
             index += 1
         } else if matches("//", at: index) {
-            while index < characters.count && characters[index] != "\n" && characters[index] != "\r" {
+            while index < characters.count && !characters[index].isNewline {
                 index += 1
             }
+            ignoredCount += timeLimitIdentifierCount(String(characters[start..<index]))
         } else if matches("/*", at: index) {
             index += 2
             var depth = 1
@@ -68,7 +85,46 @@ private func timeLimitCodeTokens(_ source: String) -> [String] {
                     index += 1
                 }
             }
+            lexicalFailure = lexicalFailure || depth != 0
+            ignoredCount += timeLimitIdentifierCount(String(characters[start..<index]))
         } else {
+            // Extended regex is outside this bounded lexer: reject its opener
+            // before a quote in its body can be mistaken for a string.
+            var slash = index
+            while slash < characters.count && characters[slash] == "#" { slash += 1 }
+            if slash > index && slash < characters.count && characters[slash] == "/" {
+                lexicalFailure = true
+            }
+            let previous = tokens.last
+            let startsAfterSpace = index > 0 && characters[index - 1].isWhitespace
+                && index + 1 < characters.count && !characters[index + 1].isWhitespace
+            let expressionStart = previous == nil || (startsAfterSpace && !matches("/=", at: index))
+                || previous.map { ["=", "(", "[", ",", ":", "return", "{"].contains($0) } == true
+            if characters[index] == "/" && expressionStart {
+                // Bare regex literals cannot cross a newline. Respect escaped
+                // slashes and character classes so quotes stay regex content.
+                index += 1
+                var closed = false
+                var inClass = false
+                while index < characters.count && !characters[index].isNewline {
+                    let character = characters[index]
+                    if character == "\\" {
+                        index = min(characters.count, index + 2)
+                        continue
+                    }
+                    if character == "[" { inClass = true }
+                    if character == "]" { inClass = false }
+                    index += 1
+                    if character == "/" && !inClass {
+                        closed = true
+                        break
+                    }
+                }
+                lexicalFailure = lexicalFailure || !closed
+                ignoredCount += timeLimitIdentifierCount(String(characters[start..<index]))
+                tokens.append("<regex>")
+                continue
+            }
             var quote = index
             while quote < characters.count && characters[quote] == "#" { quote += 1 }
             if quote < characters.count && characters[quote] == "\"" {
@@ -77,9 +133,12 @@ private func timeLimitCodeTokens(_ source: String) -> [String] {
                 let end = delimiter + hashes
                 let escape = "\\" + hashes
                 index = quote + delimiter.count
+                var closed = false
                 while index < characters.count {
+                    if delimiter == "\"" && characters[index].isNewline { break }
                     if matches(end, at: index) {
                         index += end.count
+                        closed = true
                         break
                     } else if matches(escape, at: index) {
                         // Skip the escaped character, including an escaped quote.
@@ -88,6 +147,8 @@ private func timeLimitCodeTokens(_ source: String) -> [String] {
                         index += 1
                     }
                 }
+                lexicalFailure = lexicalFailure || !closed
+                ignoredCount += timeLimitIdentifierCount(String(characters[start..<index]))
                 tokens.append("<string>")
             } else if characters[index].isLetter || characters[index].isNumber || characters[index] == "_" {
                 let start = index
@@ -100,5 +161,5 @@ private func timeLimitCodeTokens(_ source: String) -> [String] {
             }
         }
     }
-    return tokens
+    return (tokens, ignoredCount, lexicalFailure)
 }

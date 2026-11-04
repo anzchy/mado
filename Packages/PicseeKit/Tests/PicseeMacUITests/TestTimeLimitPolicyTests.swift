@@ -88,3 +88,19 @@ import Testing
     }
     #expect(limits > 100, "found \(limits) time limits")
 }
+
+@Test func TestTimeLimitPolicyLexicalFailuresCannotHideLimits() {
+    let sources = [
+        #"let quote = #/"/#"# + "\n@Test(.timeLimit(.minutes(1))) func example() {}",
+        #"let quote = /"/"# + "\n@Test(.timeLimit(.minutes(1))) func example() {}",
+        "// comment\r\n@Test(.timeLimit(.minutes(1))) func example() {}",
+        ".`timeLimit`(.minutes(1))",
+        #"let unfinished = "never closed"#,
+        "/* never closed",
+        // A nonmember token must also be classified, never silently dropped.
+        "let timeLimit = unknown",
+    ]
+    for source in sources {
+        #expect(scanTimeLimits(in: source).contains(where: { $0.violatesPolicy }), "\(source)")
+    }
+}
