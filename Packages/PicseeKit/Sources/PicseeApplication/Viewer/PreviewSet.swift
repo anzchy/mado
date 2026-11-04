@@ -36,18 +36,13 @@ public struct PreviewSet: Equatable, Sendable {
         let next = index + (forward ? 1 : -1)
         if itemIDs.indices.contains(next) {
             self.currentItemID = itemIDs[next]
-            if !isSelectionPreview { followsCurrentOnReturn = true }
+            followsCurrentOnReturn = true
         }
         else if mayWrap, itemIDs.count > 1 {
             self.currentItemID = forward ? itemIDs.first : itemIDs.last
             followsCurrentOnReturn = true
         }
-        // Folder paging returns to the last viewed item; a selection preview keeps its origin until a wrap.
-        // A preview with no successful page retains its original scroll position. Focus preserves picked IDs and anchor.
-        if followsCurrentOnReturn, let current = self.currentItemID {
-            origin.selection.focus(current, in: itemIDs)
-            origin.scrollAnchor = current
-        }
+        updateReturnOrigin()
     }
     public mutating func reconcile(availableItemIDs: [ItemID]) {
         let available = Set(availableItemIDs)
@@ -58,9 +53,14 @@ public struct PreviewSet: Equatable, Sendable {
         itemIDs.removeAll { !available.contains($0) }
         origin.selection.reconcile(with: availableItemIDs)
         if let anchor = origin.scrollAnchor, !available.contains(anchor) { origin.scrollAnchor = nil }
-        if followsCurrentOnReturn, let currentItemID {
-            origin.selection.focus(currentItemID, in: itemIDs)
-            origin.scrollAnchor = currentItemID
-        }
+        updateReturnOrigin()
+    }
+    private mutating func updateReturnOrigin() {
+        // No successful page keeps the entry viewport. After paging, single picks transfer
+        // to the last viewed image; selection previews keep their surviving picks and anchor.
+        guard followsCurrentOnReturn, let currentItemID else { return }
+        if isSelectionPreview { origin.selection.focus(currentItemID, in: itemIDs) }
+        else { origin.selection.click(currentItemID, in: itemIDs) }
+        origin.scrollAnchor = currentItemID
     }
 }

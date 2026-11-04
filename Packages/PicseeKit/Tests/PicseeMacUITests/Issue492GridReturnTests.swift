@@ -61,7 +61,6 @@ func issue492ReturningFromViewerFollowsLastViewedImage(arrowCount: Int, returnVi
     host.session = session; session.host = host
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[0])
     session.select(ids[0])
-    let originalSelection = session.selection.selectedItemIDs
     presentation.showCompletedGrid(snapshot, selection: session.selection, currentItemID: ids[0], offset: nil)
     func status(in view: NSView) -> NSTextField? {
         if view.accessibilityIdentifier() == "grid.current-file-status" { return view as? NSTextField }
@@ -81,7 +80,8 @@ func issue492ReturningFromViewerFollowsLastViewedImage(arrowCount: Int, returnVi
     if returnViaButton { session.perform(intent: .returnToGrid) }
     else { try #require(router.route(.escape, from: .key, to: session)) }
     try #require(presentation.isGridVisible && session.mode == .browsing)
-    #expect(session.selection.selectedItemIDs == originalSelection)
+    #expect(session.selection.selectedItemIDs == [expected.itemID])
+    #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 1, section: 0)])
     let returnedName = grid.currentItemID.flatMap { grid.entry(for: $0) }?.url.lastPathComponent
     let returnedStatus = label.stringValue
     #expect(session.currentItemID == expected.itemID)

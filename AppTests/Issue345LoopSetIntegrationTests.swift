@@ -16,8 +16,13 @@ import PicseeMacUI
     return view.subviews.lazy.compactMap { issue345Grid($0) }.first
 }
 
-@Test(.timeLimit(.minutes(3)), arguments: [0, 1, 2], [true, false]) @MainActor
-func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, wraps: Bool) async throws {
+@Test(.timeLimit(.minutes(3)), arguments: [
+    (0, true, false), (1, true, true), (2, true, true),
+    (0, false, false), (1, false, false), (2, false, false),
+    (1, false, true), (2, false, true)
+]) @MainActor
+func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario: (Int, Bool, Bool)) async throws {
+    let (revealCase, wraps, multi) = scenario
     _ = NSApplication.shared
     let oldMenu = NSApp.mainMenu
     let base = FileManager.default.temporaryDirectory.appendingPathComponent("issue345-\(UUID().uuidString)")
@@ -58,7 +63,7 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, w
     let startIndex = revealCase == 0 ? 47 : (revealCase == 1 ? 25 : 12)
     let first = ids[landedIndex], last = ids[startIndex]
     controller.session.select(last)
-    if wraps && revealCase != 0 {
+    if multi {
         controller.session.select(first, modifier: .command)
         controller.session.focus(last)
     }
@@ -105,7 +110,7 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, w
         #expect(controller.route(revealCase == 2 ? .previous : .next, from: .key))
     } else {
         let direction: CommandID = landedIndex < startIndex ? .previous : .next
-        for _ in 0..<abs(landedIndex - startIndex) {
+        for _ in 0..<(multi ? 1 : abs(landedIndex - startIndex)) {
             #expect(controller.route(direction, from: .key))
         }
     }
@@ -119,7 +124,22 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, w
     #expect(controller.session.mode == .browsing)
     #expect(controller.session.currentItemID == first)
     #expect(grid.currentItemID == first)
-    #expect(controller.session.selection.selectedItemIDs == selected)
+    let expectedSelected: Set<ItemID> = selected.count > 1 ? selected : [first]
+    #expect(controller.session.selection.selectedItemIDs == expectedSelected)
+    let expectedPaths = Set(ids.enumerated().compactMap { expectedSelected.contains($0.element) ? IndexPath(item: $0.offset, section: 0) : nil })
+    #expect(grid.collectionView.selectionIndexPaths == expectedPaths)
+    for index in ids.indices {
+        if let cell = grid.collectionView.item(at: IndexPath(item: index, section: 0)) {
+            #expect(cell.isSelected == expectedSelected.contains(ids[index]))
+        }
+    }
+    func status(in view: NSView) -> NSTextField? {
+        if view.accessibilityIdentifier() == "grid.current-file-status" { return view as? NSTextField }
+        return view.subviews.lazy.compactMap { status(in: $0) }.first
+    }
+    let returnedContent = try #require(window.contentView)
+    let returnedStatus = try #require(status(in: returnedContent))
+    #expect(returnedStatus.stringValue == String(format: "%03d.png", landedIndex))
     #expect(menu.validateMenuItem(item)); #expect(item.state == (wraps ? .on : .off))
     #expect(item.title == String(localized: "Loop Through Images"))
     let visible = effectiveVisible()
@@ -130,4 +150,8 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, w
     } else {
         #expect(abs(grid.contentOffset.y - savedOffset.y - minimumShift) < 0.5, "offscreen reveal uses the least distance")
     }
+    #expect(controller.route(.preview, from: .key))
+    #expect(controller.session.currentItemID == first)
+    try await waitUntil { controller.session.imageLoader.phase == .settled }
+    #expect(controller.session.imageLoader.presented?.key.itemID == first)
 }
