@@ -186,9 +186,9 @@ jobs:
   # separate unsigned-build job duplicated that work and took a fourth macOS slot. The unsigned build runs in its own
   # step: the same command as before plus only the incremental-file-hashing flag, which changes how the compiler detects
   # changed files, not what it builds. Walking skeleton reads that step's outcome, not the App test result (App tests
-  # are not a required check). A dispatch with app_tests=false runs only the build and names the job after it.
+  # are not a required check). A dispatch with app_tests=false runs only the Build unsigned app step.
   app-tests:
-    name: ${{ (github.event_name == 'workflow_dispatch' && !inputs.app_tests) && 'Build unsigned app' || 'App tests' }}
+    name: App tests
     needs: changes
     if: needs.changes.outputs.native == 'true'
     runs-on: macos-26

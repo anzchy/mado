@@ -170,6 +170,37 @@ function runCI(t, run, { summary = false, expectedHead = head } = {}) {
 const validRun = () => ({ headSha: head, url: 'https://github.com/anzchy/picsee/actions/runs/322',
   status: 'completed', jobs: [{ name: 'App tests', status: 'completed', conclusion: 'success' }] });
 
+const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+const appJobName = workflow.match(/^  app-tests:\n    name: (.+)$/m)?.[1];
+const permutations = values => values.length === 0 ? [[]] : values.flatMap((value, index) =>
+  permutations(values.filter((_, other) => other !== index)).map(rest => [value, ...rest]));
+
+for (const scenario of ['docs-only', 'native', 'dispatch-app-tests-false']) {
+  test(`gates-rows finds the workflow-named App job on ${scenario} runs regardless of job order`, t => {
+    assert.ok(appJobName, 'workflow App tests job has a display name');
+    const skipped = scenario === 'docs-only';
+    const run = validRun();
+    run.event = scenario === 'dispatch-app-tests-false' ? 'workflow_dispatch' : 'pull_request';
+    if (run.event === 'workflow_dispatch') run.inputs = { app_tests: false };
+    const app = { name: appJobName, status: 'completed', conclusion: skipped ? 'skipped' : 'success',
+      steps: [
+        { name: 'Build unsigned app', conclusion: skipped ? 'skipped' : 'success' },
+        { name: 'Run App tests', conclusion: scenario === 'native' ? 'success' : 'skipped' },
+      ] };
+    const jobs = [app, ...['Native inputs', 'Walking skeleton'].map(name =>
+      ({ name, status: 'completed', conclusion: 'success' }))];
+    const expected = skipped
+      ? `| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${run.url} |\n`
+      : `| app-tests | PASS | ${head} | ${run.url} |\n`;
+    for (const order of permutations(jobs)) {
+      run.jobs = order;
+      const result = runCI(t, run);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, expected, `${scenario}: ${order.map(job => job.name).join(', ')}`);
+    }
+  });
+}
+
 for (const field of ['headSha', 'url', 'status', 'job.name', 'job.status', 'job.conclusion']) {
   for (const value of [undefined, null, 7, true, {}, [], ['completed\r\n| forged |']]) {
     for (const stale of [false, true]) {
