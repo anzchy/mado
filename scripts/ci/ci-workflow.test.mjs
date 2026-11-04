@@ -27,6 +27,16 @@ test('App tests has a static readable job name even when the job is skipped', ()
   assert.equal(name, 'App tests');
 });
 
+for (const name of ['Build App tests', 'Run App tests']) {
+  test(`App-test step ${name} retains the dispatch input condition`, () => {
+    const step = jobBlock('app-tests').split(/^      - name: /m)
+      .find(block => block.startsWith(`${name}\n`));
+    assert.ok(step, `${name} step exists`);
+    assert.match(step, /^        if: github\.event_name != 'workflow_dispatch' \|\| inputs\.app_tests$/m,
+      `${name} must respect dispatch app_tests=false`);
+  });
+}
+
 test('required checks retain their public names', () => {
   assert.match(jobBlock('walking-skeleton'), /^    name: Walking skeleton$/m);
   const prBody = readFileSync(new URL('../../.github/workflows/pr-body.yml', import.meta.url), 'utf8');
