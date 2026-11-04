@@ -19,3 +19,5 @@ public enum AccessBoundary {
         url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
     }
 }
+
+// CI probe (#483): warm-cache recompile proof. Not for merge.
