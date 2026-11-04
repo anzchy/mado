@@ -8,25 +8,43 @@ struct ConditionWaitError: Error, CustomStringConvertible {
 }
 
 /// Cancellation by the test's time limit is what normally ends a wait that never holds. The wall-clock default only
-/// bounds waits in untimed tests: it sits near the two-minute limits, far above CI's main-actor queueing (#277, most
-/// of a minute; #390 saw 35 s), so a loaded runner cannot fail a condition that does hold.
+/// bounds waits in untimed tests. Timed tests use only their owning test's cancellation, so a loaded runner
+/// cannot fail a condition early at a helper deadline (#400).
 let conditionWaitDefaultTimeout = Duration.seconds(100)
 
 /// Waits until `condition` holds, sleeping 5 ms between looks so a busy main actor still runs the work being waited
-/// for. `between` runs before each sleep. Throws `ConditionWaitError` when `timeout` passes on `clock` or the task is
-/// cancelled, naming the call site.
+/// for. `between` runs before each sleep. Throws `ConditionWaitError` on cancellation, naming the call site.
+/// Only untimed tests also stop when `timeout` passes on `clock`; timed tests have no helper cutoff.
 func waitUntil(
     _ comment: @autoclosure () -> String = "", timeout: Duration = conditionWaitDefaultTimeout,
     clock: some Clock<Duration> = ContinuousClock(), fileID: String = #fileID, line: Int = #line,
     isolation: isolated (any Actor)? = #isolation, between: () -> Void = {}, _ condition: () async throws -> Bool
 ) async throws {
-    let deadline = clock.now.advanced(by: timeout)
+    let deadline = Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true ? clock.now.advanced(by: timeout) : nil
     while try await !condition() {
         let site = comment().isEmpty ? "\(fileID):\(line)" : "\(fileID):\(line) (\(comment()))"
         if Task.isCancelled { throw ConditionWaitError(description: "wait cancelled at \(site)") }
-        if clock.now >= deadline { throw ConditionWaitError(description: "wait timed out after \(timeout) at \(site)") }
+        if let deadline, clock.now >= deadline { throw ConditionWaitError(description: "wait timed out after \(timeout) at \(site)") }
         between()
         try? await clock.sleep(until: clock.now.advanced(by: .milliseconds(5)), tolerance: nil)
+    }
+}
+
+/// Runs the main run loop until `condition` holds, for AppKit and SwiftUI work the run loop delivers. Bounded and
+/// cancelled the same way as `waitUntil`.
+@MainActor func runLoopUntil(
+    _ comment: @autoclosure () -> String = "", timeout: Duration = conditionWaitDefaultTimeout,
+    clock: some Clock<Duration> = ContinuousClock(),
+    fileID: String = #fileID, line: Int = #line, _ condition: () -> Bool
+) throws {
+    let deadline = Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true ? clock.now.advanced(by: timeout) : nil
+    while !condition() {
+        let site = comment().isEmpty ? "\(fileID):\(line)" : "\(fileID):\(line) (\(comment()))"
+        if Task.isCancelled { throw ConditionWaitError(description: "run loop wait cancelled at \(site)") }
+        if let deadline, clock.now >= deadline {
+            throw ConditionWaitError(description: "run loop wait timed out after \(timeout) at \(site)")
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
     }
 }
 

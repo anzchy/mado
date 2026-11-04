@@ -18,6 +18,7 @@ private struct StepClock: Clock {
     private let state = State()
     var now: Instant { state.lock.withLock { state.now } }
     var sleeps: Int { state.lock.withLock { state.sleeps } }
+    func advance(by duration: Duration) { state.lock.withLock { state.now = state.now.advanced(by: duration) } }
     var minimumResolution: Duration { .zero }
     func sleep(until deadline: Instant, tolerance: Duration?) async throws {
         state.lock.withLock { state.sleeps += 1; state.now = max(state.now, deadline) }
@@ -25,20 +26,142 @@ private struct StepClock: Clock {
     }
 }
 
-/// #392: a wait that never holds throws at its bound, naming the call site, and the default bound is 100 s.
+/// #400: fake time passes the former deadline while the condition is still false.
 @Test(.timeLimit(.minutes(2))) func i392WaitThrowsAtTheDefaultBoundOnTheInjectedClock() async throws {
+    #expect(Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) == true)
     let clock = StepClock()
     var looks = 0
-    do {
-        try await waitUntil("never", clock: clock, fileID: "Picsee/Site.swift", line: 7) { looks += 1; return false }
-        Issue.record("a wait that never holds returned")
-    } catch let error as ConditionWaitError {
-        #expect(error.description == "wait timed out after 100.0 seconds at Picsee/Site.swift:7 (never)")
+    try await waitUntil("late success", clock: clock) {
+        looks += 1
+        clock.advance(by: .seconds(10))
+        return looks == 12
     }
-    // 5 ms looks across 100 s: the bound is reached on the clock, not by a loop count.
-    #expect(clock.sleeps == 20_000)
-    #expect(looks == 20_001)
-    #expect(clock.now.offset == .seconds(100))
+    #expect(looks == 12)
+    #expect(clock.now.offset > .seconds(100))
+}
+
+@Test(.timeLimit(.minutes(2))) func i400TimedExplicitWaitHasNoCutoff() async throws {
+    let clock = StepClock()
+    var looks = 0
+    try await waitUntil(timeout: .seconds(1), clock: clock) {
+        looks += 1
+        clock.advance(by: .seconds(10))
+        return looks == 12
+    }
+    #expect(looks == 12)
+    #expect(clock.now.offset > .seconds(100))
+}
+
+@Test func i400UntimedWaitKeepsItsBounds() async throws {
+    #expect(Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true)
+    for timeout in [conditionWaitDefaultTimeout, .seconds(1)] {
+        let clock = StepClock()
+        var errors = 0, returned = false
+        do {
+            if timeout == conditionWaitDefaultTimeout {
+                try await waitUntil("never", clock: clock, fileID: "Site", line: 7) { false }
+            } else {
+                try await waitUntil("never", timeout: timeout, clock: clock, fileID: "Site", line: 7) { false }
+            }
+            returned = true
+        } catch let error as ConditionWaitError {
+            errors += 1
+            #expect(error.description == "wait timed out after \(timeout) at Site:7 (never)")
+        }
+        #expect(errors == 1 && !returned)
+        #expect(clock.now.offset == timeout)
+        #expect(clock.sleeps == (timeout == .seconds(1) ? 200 : 20_000))
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func i400TimedWaitCancellationAfterFormerDeadlineThrowsOnce() async throws {
+    let clock = StepClock()
+    let result = try await Task {
+        var looks = 0, errors = 0, returned = false
+        do {
+            try await waitUntil("held condition", clock: clock, fileID: "Site", line: 9) {
+                looks += 1
+                clock.advance(by: .seconds(10))
+                if looks == 12 { withUnsafeCurrentTask { $0?.cancel() } }
+                return false
+            }
+            returned = true
+        } catch let error as ConditionWaitError {
+            errors += 1
+            #expect(error.description == "wait cancelled at Site:9 (held condition)")
+        }
+        return (looks, errors, returned)
+    }.value
+    #expect(result.0 == 12 && result.1 == 1 && !result.2)
+    #expect(clock.now.offset > .seconds(100))
+    let sleeps = clock.sleeps
+    await Task.yield()
+    #expect(clock.sleeps == sleeps)
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func i400TimedRunLoopHasNoCutoff() throws {
+    #expect(Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) == true)
+    for explicit in [false, true] {
+        let clock = StepClock()
+        var looks = 0
+        func condition() -> Bool {
+            looks += 1
+            clock.advance(by: .seconds(10))
+            return looks == 12
+        }
+        if explicit { try runLoopUntil(timeout: .seconds(1), clock: clock, condition) }
+        else { try runLoopUntil(clock: clock, condition) }
+        #expect(looks == 12 && clock.now.offset > .seconds(100))
+    }
+    let delivered = OSAllocatedUnfairLock(initialState: false)
+    let timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: false) { _ in delivered.withLock { $0 = true } }
+    defer { timer.invalidate() }
+    try runLoopUntil { delivered.withLock { $0 } }
+    #expect(delivered.withLock { $0 })
+}
+
+@MainActor @Test func i400UntimedRunLoopKeepsItsBounds() throws {
+    #expect(Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true)
+    for timeout in [conditionWaitDefaultTimeout, .seconds(1)] {
+        let clock = StepClock()
+        var errors = 0, returned = false
+        func condition() -> Bool { clock.advance(by: .seconds(1)); return false }
+        do {
+            if timeout == conditionWaitDefaultTimeout {
+                try runLoopUntil("never", clock: clock, fileID: "Site", line: 8, condition)
+            } else {
+                try runLoopUntil("never", timeout: timeout, clock: clock, fileID: "Site", line: 8, condition)
+            }
+            returned = true
+        } catch let error as ConditionWaitError {
+            errors += 1
+            #expect(error.description == "run loop wait timed out after \(timeout) at Site:8 (never)")
+        }
+        #expect(errors == 1 && !returned)
+        #expect(clock.now.offset == timeout)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func i400TimedRunLoopCancellationThrowsOnce() async throws {
+    let clock = StepClock()
+    let result = try await Task { @MainActor in
+        var looks = 0, errors = 0, returned = false
+        do {
+            try runLoopUntil("held condition", clock: clock, fileID: "Site", line: 10) {
+                looks += 1
+                clock.advance(by: .seconds(10))
+                if looks == 12 { withUnsafeCurrentTask { $0?.cancel() } }
+                return false
+            }
+            returned = true
+        } catch let error as ConditionWaitError {
+            errors += 1
+            #expect(error.description == "run loop wait cancelled at Site:10 (held condition)")
+        }
+        return (looks, errors, returned)
+    }.value
+    #expect(result.0 == 12 && result.1 == 1 && !result.2)
+    #expect(clock.now.offset > .seconds(100))
 }
 
 @Test(.timeLimit(.minutes(2))) func i392WaitReturnsOnceTheConditionHoldsAndRunsBetweenBeforeEachSleep() async throws {
