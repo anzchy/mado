@@ -14,6 +14,10 @@ on:
         description: Also build and run the App test bundle
         type: boolean
         default: true
+      cold:
+        description: Build from scratch, without restoring the SwiftPM or DerivedData cache
+        type: boolean
+        default: false
 
 # A pull request keeps one group per PR and cancels its older runs. Every push to main and every dispatch gets a group
 # of its own (the run id): a shared group would let GitHub replace an older pending main run, leaving that commit
@@ -79,13 +83,26 @@ jobs:
         run: node --test scripts/ci/*.test.mjs
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: SwiftPM cache key
+        id: spm-key
+        env:
+          MANIFEST: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'Packages/PicseeKit/Sources/**', 'Packages/PicseeKit/Tests/**') }}
+        run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
+      - name: Restore SwiftPM build
+        if: github.event_name != 'push' && !inputs.cold
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Packages/PicseeKit/.build
+          key: ${{ steps.spm-key.outputs.key }}
+          restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Swift Testing (Core, Application, Infrastructure)
         env:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/PicseeKit --skip 'PicseeMacUITests\.'
+          swift test --package-path Packages/PicseeKit --skip 'PicseeMacUITests\.' -Xswiftc -enable-incremental-file-hashing
           --xunit-output ci-logs/package-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Upload test logs
         if: always()
@@ -94,6 +111,13 @@ jobs:
           name: package-tests-logs
           path: ci-logs/package-tests
           if-no-files-found: warn
+      # Only a passing main build seeds the cache; pull requests restore it and never save.
+      - name: Save SwiftPM build
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Packages/PicseeKit/.build
+          key: ${{ steps.spm-key.outputs.key }}
 
   package-macui-tests:
     name: Package tests (MacUI)
@@ -108,13 +132,26 @@ jobs:
         run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: SwiftPM cache key
+        id: spm-key
+        env:
+          MANIFEST: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'Packages/PicseeKit/Sources/**', 'Packages/PicseeKit/Tests/**') }}
+        run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
+      - name: Restore SwiftPM build
+        if: github.event_name != 'push' && !inputs.cold
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Packages/PicseeKit/.build
+          key: ${{ steps.spm-key.outputs.key }}
+          restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Swift Testing (MacUI, serial)
         env:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-macui-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/PicseeKit --no-parallel
+          swift test --package-path Packages/PicseeKit --no-parallel -Xswiftc -enable-incremental-file-hashing
           --skip '(PicseeCoreTests|PicseeApplicationTests|PicseeInfrastructureTests)\.'
           --xunit-output ci-logs/package-macui-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Upload test logs
@@ -157,12 +194,25 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: DerivedData cache key
+        id: dd-key
+        env:
+          MANIFEST: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'App/**', 'AppTests/**', 'Packages/PicseeKit/Sources/**') }}
+        run: node scripts/ci/cache-key.mjs dd "$MANIFEST" "$INPUTS"
+      - name: Restore DerivedData
+        if: github.event_name != 'push' && !inputs.cold
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .build/dd-ci
+          key: ${{ steps.dd-key.outputs.key }}
+          restore-keys: ${{ steps.dd-key.outputs.prefix }}
       - name: Build unsigned app
         id: unsigned-build
-        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
       - name: Build App tests
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
-        run: xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+        run: xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
       - name: Run App tests
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         # The runner is the only job on its machine, so the local heavy lock is not needed.
@@ -178,6 +228,12 @@ jobs:
           path: .build/app-lane-attempt1.log
           include-hidden-files: true
           if-no-files-found: ignore
+      - name: Save DerivedData
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .build/dd-ci
+          key: ${{ steps.dd-key.outputs.key }}
 
   # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the classifier and the ledger
   # check must have succeeded, and then either both package suites and the unsigned build step succeeded, or the
