@@ -166,3 +166,14 @@ test('every cached build uses incremental file hashing, with identical flags in 
     `run: ${BASELINE_BUILD.replace('xcodebuild build ', 'xcodebuild build-for-testing ')} ${HASHING_SETTING}`,
   ]);
 });
+
+test('the Ubuntu jobs added for the speed-up read the repo only and keep no token in their checkouts', () => {
+  for (const id of ['changes', 'ledger-check', 'walking-skeleton']) {
+    const job = jobBlock(id);
+    assert.match(job, /^    permissions:\n      contents: read\n/m, id);
+    assert.doesNotMatch(job, /^      [a-z-]+: write$/m, id);
+    const checkouts = job.split(/^      - name: /m).filter(step => step.includes('uses: actions/checkout@'));
+    assert.ok(checkouts.length > 0, id);
+    for (const step of checkouts) assert.match(step, /^          persist-credentials: false$/m, id);
+  }
+});
