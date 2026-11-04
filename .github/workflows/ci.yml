@@ -86,48 +86,44 @@ jobs:
           path: ci-logs/package-macui-tests
           if-no-files-found: warn
 
-  unsigned-build:
-    name: Build unsigned app
-    runs-on: macos-26
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Check generated feature ledger HTML
-        run: node scripts/ledger/build.mjs --check
-      - name: Set up Xcode
-        uses: ./.github/actions/xcode-setup
-      - name: Build unsigned app
-        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
-
-  # The required check on main keeps its name: it passes only when the three jobs above all succeeded.
-  walking-skeleton:
-    name: Walking skeleton
-    if: always()
-    needs: [package-tests, package-macui-tests, unsigned-build]
+  # The generated-ledger check is plain Node, so it runs on Ubuntu; Walking skeleton requires it on every event.
+  ledger-check:
+    name: Ledger HTML check
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require package tests and the unsigned build
-        env:
-          RESULTS: ${{ needs.package-tests.result }} ${{ needs.package-macui-tests.result }} ${{ needs.unsigned-build.result }}
-        run: |
-          echo "package-tests package-macui-tests unsigned-build: $RESULTS"
-          test "$RESULTS" = 'success success success'
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Check generated feature ledger HTML
+        run: node scripts/ledger/build.mjs --check
 
+  # One macOS job builds the unsigned app and then the App tests: build-for-testing builds PicseeApp as well, so a
+  # separate unsigned-build job duplicated that work and took a fourth macOS slot. The unsigned build keeps its exact
+  # command in its own step; Walking skeleton reads that step's outcome, not the App test result (App tests are not a
+  # required check). A dispatch with app_tests=false runs only the build and names the job after it.
   app-tests:
-    name: App tests
-    if: github.event_name != 'workflow_dispatch' || inputs.app_tests
+    name: ${{ (github.event_name == 'workflow_dispatch' && !inputs.app_tests) && 'Build unsigned app' || 'App tests' }}
     runs-on: macos-26
     timeout-minutes: 45
+    outputs:
+      unsigned_build: ${{ steps.unsigned-build.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: Build unsigned app
+        id: unsigned-build
+        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
       - name: Build App tests
+        if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         run: xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
       - name: Run App tests
+        if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         # The runner is the only job on its machine, so the local heavy lock is not needed.
         env:
           PICSEE_HEAVY_LOCK_HELD: '1'
@@ -141,6 +137,26 @@ jobs:
           path: .build/app-lane-attempt1.log
           include-hidden-files: true
           if-no-files-found: ignore
+
+  # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the ledger check, both package
+  # suites and the unsigned build step must all have succeeded.
+  walking-skeleton:
+    name: Walking skeleton
+    if: always()
+    needs: [ledger-check, package-tests, package-macui-tests, app-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Require the ledger check, package tests and the unsigned build
+        env:
+          LEDGER: ${{ needs.ledger-check.result }}
+          PACKAGE: ${{ needs.package-tests.result }}
+          MACUI: ${{ needs.package-macui-tests.result }}
+          APP_JOB: ${{ needs.app-tests.result }}
+          UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}
+        run: node scripts/ci/walking-skeleton.mjs
 
   design-check:
     name: Design check
