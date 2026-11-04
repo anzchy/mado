@@ -56,9 +56,6 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
             }
         }
         let reading = String(localized: "Reading…")
-        func images(_ count: Int) -> String {
-            String(format: String(localized: "Images: %lld"), Int64(count))
-        }
         expectText("")
         await Task.yield()
         let task = started.track(c.begin(folder: folder, rootID: root))
@@ -68,9 +65,10 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         expectText(reading)
         await scanner.finish(0)
         try await task.value
+        await scene.open(folder.appendingPathComponent("a.png"), pipeline: StatesPipeline(), leases: StatesLeases())?.value
         for (extensions, count) in [(nil as Set<String>?, 3), (["png"], 2), (["gif"], 0), (nil, 3)] {
             c.setConditions(.init(selectedExtensions: extensions))
-            expectText(images(count))
+            expectText(count == 0 ? "a.png" : "a.png  1 / \(count)")
             #expect(c.completedImageCount == count)
             await Task.yield()
         }
@@ -80,20 +78,20 @@ private func i142ChromeStarted(_ scanner: I142ChromeScanner, _ index: Int) async
         let replacement = started.track(c.begin(folder: folder.deletingLastPathComponent().appendingPathComponent("B"),
             rootID: root))
         try #require(await i142ChromeStarted(scanner, 1), "Scan phase 1 did not reach its held gate")
-        expectText(reading)
+        expectText("a.png · " + reading)
         #expect(scene.session.cancelFolderEntry() == .grid)
-        expectText(images(2))
+        expectText("a.png  1 / 2")
         await scanner.finish(1)
         try await replacement.value
-        expectText(images(2))
+        expectText("a.png  1 / 2")
         await Task.yield()
         let failing = started.track(c.begin(folder: folder, rootID: root))
         try #require(await i142ChromeStarted(scanner, 2), "Scan phase 2 did not reach its held gate")
-        expectText(reading)
+        expectText("a.png · " + reading)
         await scanner.finish(2, failed: true)
         await #expect(throws: CocoaError.self) { try await failing.value }
         #expect(c.completedImageCount == nil && c.failure != nil)
-        expectText("")
+        expectText("a.png")
     } teardown: {
         // Release the held scans, then wait for every scan task this test started (#392 item 4).
         c.end(); started.cancelAll()

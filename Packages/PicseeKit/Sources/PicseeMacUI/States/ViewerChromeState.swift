@@ -4,10 +4,15 @@ import PicseeApplication
 extension ViewerChromeOverlay {
     /// Refresh the label from the load identity, which is retired on cancellation.
     public func refresh(session: ViewerSession) {
-        let position = session.folderScan?.isScanning == true ? String(localized: "Reading…")
-            : session.folderScan?.completedImageCount.map {
-            String(format: String(localized: "Images: %lld"), Int64($0))
+        let file = session.imageLoader.fileURL
+        let position: String?
+        if session.folderScan?.isScanning == true {
+            position = String(localized: "Reading…")
+        } else if let file, let member = session.folderScan?.navigationPosition(for: file) {
+            position = "\(member.index) / \(member.count)"
+        } else {
+            position = nil
         }
-        refresh(filename: session.imageLoader.fileURL?.lastPathComponent, position: position)
+        refresh(filename: file?.lastPathComponent, position: position)
     }
 }

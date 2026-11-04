@@ -79,7 +79,7 @@ import Darwin
     #expect(controller.session.imageLoader.presented?.fileURL.lastPathComponent == renamed.lastPathComponent)
     #expect(window.title == renamed.lastPathComponent)
     #expect(chrome.filename == renamed.lastPathComponent)
-    #expect(chrome.position == "Images: 1")
+    #expect(chrome.position == "1 / 1")
 }
 
 @Test(.timeLimit(.minutes(3))) @MainActor func issue140SmokeWatchedAtomicReplacementReloadsPresentedRevision() async throws {
@@ -124,14 +124,14 @@ import Darwin
     try fm.copyItem(at: smokeFixture("portrait-2x3.png"), to: neighbour)
     let (controller, services, window, chrome) = try await smokeViewer(in: base, image: shown)
     defer { window.close() }
-    #expect(chrome.position == "Images: 2")
+    #expect(chrome.position == "1 / 2")
     try fm.removeItem(at: shown)
     services.watch.reconcileAll()
     try await waitUntil { controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 1 }
-    try await waitUntil { chrome.position == "Images: 1" }
+    try await waitUntil { chrome.position == "1 / 1" }
     #expect(controller.session.folderScan?.sourceSnapshot?.navigationEntries.count == 1)
     #expect(controller.session.folderScan?.currentURL?.lastPathComponent == neighbour.lastPathComponent)
-    #expect(chrome.position == "Images: 1")
+    #expect(chrome.position == "1 / 1")
 }
 
 @Test(.timeLimit(.minutes(3))) @MainActor func issue140InspectorFollowsWatchedRenameReplacementAndDeletion() async throws {

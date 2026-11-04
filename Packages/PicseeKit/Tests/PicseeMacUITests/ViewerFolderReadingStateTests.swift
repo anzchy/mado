@@ -151,8 +151,9 @@ private struct FolderNoMatchesScanner: FolderScanning {
     scene.chrome.refresh(session: scene.session)
     #expect(scene.chrome.position == nil)
     try await coordinator.begin(folder: folder, rootID: AccessRootID(), input: folder.appendingPathComponent("a.jpg")).value
+    await scene.open(folder.appendingPathComponent("a.jpg"), pipeline: StatesPipeline(), leases: StatesLeases())?.value
     scene.chrome.refresh(session: scene.session)
-    #expect(scene.chrome.position == "Images: 1")
+    #expect(scene.chrome.position == "1 / 1")
 }
 
 @Test @MainActor func viewerImageFirstRescanShowsUnknownTotalAsReading() async throws {

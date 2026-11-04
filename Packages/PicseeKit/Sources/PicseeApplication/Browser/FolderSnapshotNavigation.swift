@@ -18,6 +18,15 @@ extension FolderScanHost {
 }
 
 extension FolderScanCoordinator {
+    /// Displayed preview navigation can differ from the scanner's remembered Current Item.
+    /// Only a member of the completed, filtered navigation snapshot has an authoritative position.
+    public func navigationPosition(for url: URL) -> (index: Int, count: Int)? {
+        guard !isScanning, failure == nil, let snapshot, snapshot.isComplete,
+              let index = snapshot.navigationEntries.firstIndex(where: {
+                  $0.url.standardizedFileURL == url.standardizedFileURL
+              }) else { return nil }
+        return (index + 1, snapshot.navigationEntries.count)
+    }
     /// Nil lets a nonmember use the existing native grant/navigation path.
     public func canMove(_ direction: NavigationDirection, currentURL: URL? = nil, mayWrap: Bool = false) -> Bool? {
         if hasNoMatches { return false }
