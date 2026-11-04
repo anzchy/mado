@@ -266,6 +266,41 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
+/// #444 fix round 2 (device smoke smoke444-20261104-1053): the limit shrinks or grows between live resizes, and the
+/// shell must draw its sidebar at the width the canvas was laid out beside. Single sizes never caught the stale width.
+@Test(arguments: [false, true])
+@MainActor func i444ResizeSequenceKeepsDrawnSidebarAtTheCanvasEdge(inspector: Bool) {
+    let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640), inspector: inspector)
+    defer { scene.close() }
+    // The App's shell stretches with the window (the viewer drops only the width), and windowDidResize lays the shell
+    // out before the presentation re-lays out the viewer.
+    scene.presentation.showGrid(reading: false)
+    scene.shell.autoresizingMask = [.width, .height]
+    scene.presentation.showViewer()
+    scene.presentation.layoutInspector(visible: inspector)
+    scene.content.layoutSubtreeIfNeeded()
+    for size in [NSSize(width: 640, height: 480), NSSize(width: 480, height: 400), NSSize(width: 640, height: 480),
+                 NSSize(width: 960, height: 640), NSSize(width: 480, height: 400), NSSize(width: 960, height: 640)] {
+        scene.window.setContentSize(size)
+        scene.shell.layoutSubtreeIfNeeded()  // CanvasWindowController.windowDidResize, then its layoutInspector()
+        scene.presentation.layoutInspector(visible: inspector)
+        let label = "resize \(size) inspector \(inspector)"
+        expectPodsClear(scene, preferred: 196, label)
+        guard !scene.shell.isHidden else { continue }
+        let drawn = scene.shell.sidebar.convert(scene.shell.sidebar.bounds, to: scene.content)
+        #expect(drawn.minX == scene.canvas.frame.minX - scene.shell.frame.width && drawn.maxX == scene.canvas.frame.minX,
+                "\(label): sidebar drawn \(drawn), canvas \(scene.canvas.frame)")
+        #expect(!drawn.intersects(scene.canvas.frame), "\(label): the sidebar covers the canvas")
+        if let divider = scene.divider {
+            let edge = divider.convert(divider.bounds, to: scene.content)
+            #expect(edge.maxX <= scene.canvas.frame.minX + 0.5, "\(label): divider \(edge) past the canvas edge")
+        }
+        for group in scene.chrome.groups where !group.isHidden {
+            #expect(!group.convert(group.bounds, to: scene.content).intersects(drawn), "\(label): a pod over the drawn sidebar")
+        }
+    }
+}
+
 /// The shell does not stretch with the window in the viewer: until the presentation lays it out again it keeps its
 /// width, so the folder tree is never laid out at the parent's width.
 @Test @MainActor func i444ViewerSidebarShellDoesNotAutoresizeItsWidth() {

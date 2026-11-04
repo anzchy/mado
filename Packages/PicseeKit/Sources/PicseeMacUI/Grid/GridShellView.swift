@@ -548,6 +548,9 @@ import PicseeCore
         if lastMainFrame != main {
             lastMainFrame = main
             onMainFrameChange?(main)
+            // #444: the viewer re-lays out beside the new main frame and may move the sidebar's limit (a narrower
+            // window). AppKit drops a layout request made inside layout(), so lay out again at the new edge.
+            if mainFrame != main { layout(); return }
         }
         onMainContentLayout?()
     }
