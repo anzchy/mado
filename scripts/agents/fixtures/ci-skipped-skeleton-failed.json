@@ -1,0 +1,11 @@
+{
+  "headSha": "3de39c6012345678901234567890123456789012",
+  "url": "https://github.com/anzchy/picsee/actions/runs/319000013",
+  "status": "completed",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "Native inputs", "status": "completed", "conclusion": "success" },
+    { "name": "App tests", "status": "completed", "conclusion": "skipped" },
+    { "name": "Walking skeleton", "status": "completed", "conclusion": "failure" }
+  ]
+}
