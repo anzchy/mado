@@ -233,3 +233,27 @@ trailer 只是声明，真正的保证仍是流程：验收一定在新会话里
 - gardener 规程：[`docs/agents/doc-gardening.md`](../agents/doc-gardening.md)
 - 开发计划与验收门槛：[`docs/PICSEE_DEVELOPMENT_PLAN.md`](../PICSEE_DEVELOPMENT_PLAN.md)
 - 术语：[`GLOSSARY.md`](../../GLOSSARY.md)
+
+## #499 首页按钮的可选原生渲染检查
+
+`Issue499PrimaryFrameTests.issue499RealHomePrimaryFrame` 会激活真实原生窗口，因此普通
+`swift test` 明确跳过它，不获取共享 GUI 锁；桌面被 picsee 或 mdpro 占用也不会导致这项测试失败。
+现有 `gui-lock.sh` 只支持 acquire/release，没有随测试进程退出释放的租约，本测试选择仅借用调用者
+已持有的租约，不自行获取或释放，避免 routine 测试被 kill、崩溃或挂起后留下它自己的锁。
+
+由已持锁的调用者传入当前 picsee owner 中的 acquisition_id：
+
+```sh
+PICSEE_I499_GUI_ACQUISITION='<当前调用者的 acquisition_id>' \
+  ~/.picsee/device/ram/with-ram.sh i499-render scripts/heavy-lock.sh \
+  swift test --package-path Packages/PicseeKit --filter issue499RealHomePrimaryFrame
+```
+
+调用者须在测试进程结束、窗口关闭后按原规程释放自己的锁；不要传入其他运行的 token。
+显式 token 无效、owner 读不到或不匹配时，测试在创建窗口前报环境错误，不退回自行获取。
+测试覆盖普通、按下、键盘焦点三态及浅色→深色→浅色的自动外观传播、原生辅助功能标题和尺寸。
+首页按钮仅在隐藏并拆除时禁用（`ViewerStateHost.swift`），没有可见禁用态。
+
+默认不写 PNG。需要调试图像时，在上述调用增加 `PICSEE_I499_EVIDENCE=1`，输出写入系统临时目录
+下唯一的 `i499-evidence-*` 子目录，测试日志打印实际路径；文件名标明外观与按钮状态。
+这些 cacheDisplay 渲染断言不是签名真机验收记录。
