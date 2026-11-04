@@ -40,7 +40,10 @@ private let lostAccessPinnedPageSHA256 = "9f7f345bec6a5ac12548ea0c419acc9d939cc4
 private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     let manifest = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     let entries = manifest?["states"] as? [[String: Any]]
-    guard let entry = entries?.first(where: { $0["name"] as? String == "permission-denied" }) else {
+    let pageEntries = entries?.filter {
+        $0["name"] as? String == "permission-denied" || $0["file"] as? String == "permission-denied.html"
+    } ?? []
+    guard pageEntries.count == 1, let entry = pageEntries.first else {
         return false
     }
     let expected: [String: Any] = [
@@ -82,6 +85,23 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
         changed[field] = value
         #expect(try !lostAccessManifestEntryRemainsExact(manifest([unrelated, changed])))
     }
+    var changedDuplicate = page
+    changedDuplicate["sha256"] = "changed-hash"
+    var fileAlias = page
+    fileAlias["name"] = "another-page"
+    for duplicate in [page, changedDuplicate, fileAlias] {
+        for entries in [[page, duplicate], [duplicate, page]] {
+            #expect(try !lostAccessManifestEntryRemainsExact(manifest(entries)))
+        }
+    }
+    var extraKey = page
+    extraKey["unexpected"] = "extra-value"
+    #expect(try !lostAccessManifestEntryRemainsExact(manifest([extraKey])))
+    for field in page.keys {
+        var missingKey = page
+        missingKey.removeValue(forKey: field)
+        #expect(try !lostAccessManifestEntryRemainsExact(manifest([missingKey])))
+    }
     #expect(try !lostAccessManifestEntryRemainsExact(manifest([])))
     #expect(try !lostAccessManifestEntryRemainsExact(manifest([unrelated])))
 }
@@ -91,7 +111,7 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
         .appendingPathComponent("../../../..").standardizedFileURL
     let directory = root.appendingPathComponent("design/prototypes/picsee-browser/states")
     let page = try Data(contentsOf: directory.appendingPathComponent("permission-denied.html"))
-    #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == "9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62")
+    #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == lostAccessPinnedPageSHA256)
     let manifest = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
     #expect(try lostAccessManifestEntryRemainsExact(manifest))
 }
