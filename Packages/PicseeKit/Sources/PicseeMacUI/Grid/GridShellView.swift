@@ -390,6 +390,7 @@ import PicseeCore
     public var viewerSidebarLimit = CGFloat.greatestFiniteMagnitude {
         didSet { if viewerSidebarLimit != oldValue { needsLayout = true } }
     }
+    private var isRelayingOut = false
     private var autoresizesWidth = false
     /// The grid surface: shown, and not the viewer's sidebar. Grid-only paths (search, footer status) test this.
     public var isGridSurface: Bool { !isHidden && mode == .grid }
@@ -553,8 +554,14 @@ import PicseeCore
             lastMainFrame = main
             onMainFrameChange?(main)
             // #444: the viewer re-lays out beside the new main frame and may move the sidebar's limit (a narrower
-            // window). AppKit drops a layout request made inside layout(), so lay out again at the new edge.
-            if mainFrame != main { layout(); return }
+            // window). AppKit drops a layout request made inside layout(), so lay out again at the new edge, once: the
+            // second pass ends there even if its callback moves the limit again.
+            if mainFrame != main, !isRelayingOut {
+                isRelayingOut = true
+                layout()
+                isRelayingOut = false
+                return
+            }
         }
         onMainContentLayout?()
     }
