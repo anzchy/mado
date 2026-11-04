@@ -1,10 +1,78 @@
 import Foundation
 import Testing
 
-/// #277: the macOS CI runner can queue the main actor for most of a minute, and Swift Testing counts that queue time
-/// against `.timeLimit`, so a one-minute limit fails on CI for work that takes milliseconds locally (#331's four async
-/// tests did, on PR #340). Every package test limit leaves room for that queueing: two minutes or more.
-@Test func i331CIPackageTestTimeLimitsAllowForMainActorQueueing() throws {
+@Test func TestTimeLimitPolicyMinuteSpellingsAndBoundary() {
+    let oneMinuteSources = [
+        ".timeLimit(.minutes(1))",
+        ".timeLimit( .minutes( 1 ) )",
+        ".timeLimit(.minutes(\n1))",
+    ]
+    for source in oneMinuteSources {
+        let result = scanTimeLimits(in: source)
+        #expect(result == [.minutes(1)], "\(source)")
+        #expect(result.filter(\.violatesPolicy).count == 1)
+    }
+    for minutes in [0, 2, 15] {
+        let result = scanTimeLimits(in: ".timeLimit(.minutes(\(minutes)))")
+        #expect(result == [.minutes(minutes)])
+        #expect(result.filter(\.violatesPolicy).count == (minutes == 0 ? 1 : 0))
+    }
+    #expect(scanTimeLimits(in: "").isEmpty)
+}
+
+@Test func TestTimeLimitPolicyUnknownFormsFailClosed() {
+    for source in [
+        ".timeLimit(limit)", ".timeLimit(.seconds(30))", ".timeLimit()",
+        ".timeLimit(.minutes(count))", ".timeLimit(.minutes(1 + 1))",
+        ".timeLimit(.minutes(999999999999999999999999999999))",
+        ".timeLimit(.minutes(1)",
+    ] {
+        let result = scanTimeLimits(in: source)
+        #expect(result == [.unrecognised], "\(source)")
+        #expect(result.filter(\.violatesPolicy).count == 1)
+    }
+    let source = ".timeLimit(.minutes(2)) .timeLimit(limit) .timeLimit(.minutes(3))"
+    #expect(scanTimeLimits(in: source) == [.minutes(2), .unrecognised, .minutes(3)])
+}
+
+@Test func TestTimeLimitPolicyIgnoresCommentsAndStringLiteralsThenResumes() {
+    let ignoredSources = [
+        "// .timeLimit(.minutes(1)) .timeLimit(limit)\n",
+        "/* .timeLimit(.minutes(1)) /* .timeLimit(limit) */ still comment */",
+        #"let s = "escaped \" .timeLimit(.minutes(1)) .timeLimit(limit)""#,
+        ##"let s = #".timeLimit(.minutes(1)) " .timeLimit(limit)"#"##,
+        "let s = \"\"\"\n.timeLimit(.minutes(1)) .timeLimit(limit)\n\"\"\"",
+        "let s = #\"\"\"\n.timeLimit(.minutes(1)) .timeLimit(limit)\n\"\"\"#",
+        ".timeLimitExtra(.minutes(1))",
+    ]
+    for ignored in ignoredSources {
+        #expect(scanTimeLimits(in: ignored).isEmpty, "\(ignored)")
+        #expect(scanTimeLimits(in: ignored + "\n.timeLimit(.minutes(2))") == [.minutes(2)])
+        #expect(scanTimeLimits(in: ".timeLimit(.minutes(3))\n" + ignored + "\n.timeLimit(.minutes(2))")
+            == [.minutes(3), .minutes(2)])
+    }
+}
+
+@Test func TestTimeLimitPolicyWhitespacePreservesDeclaration() {
+    let whitespace = ["", " ", "\t", "\n"]
+    for a in whitespace {
+        for b in whitespace {
+            for c in whitespace {
+                for d in whitespace {
+                    for minutes in [1, 2] {
+                        let source = ".\(a)timeLimit\(b)(\(c).\(a)minutes\(b)(\(d)\(minutes)\(c))\(d))"
+                        let result = scanTimeLimits(in: source)
+                        #expect(result == [.minutes(minutes)], "\(source)")
+                        #expect(result.filter(\.violatesPolicy).count == (minutes == 1 ? 1 : 0))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// #277: Swift Testing counts CI main-actor queue time against time limits (#331).
+@Test func TestTimeLimitPolicyCIPackageLimitsAllowForMainActorQueueing() throws {
     let tests = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let files = try #require(FileManager.default.enumerator(at: tests, includingPropertiesForKeys: nil))
         .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
@@ -12,9 +80,10 @@ import Testing
     var limits = 0
     for file in files {
         let source = try String(contentsOf: file, encoding: .utf8)
-        for match in source.matches(of: /\.timeLimit\(\.minutes\((\d+)\)\)/) {
+        for declaration in scanTimeLimits(in: source) {
             limits += 1
-            #expect(Int(match.1)! >= 2, "\(file.lastPathComponent): \(match.0) is shorter than CI's main-actor queueing")
+            #expect(!declaration.violatesPolicy,
+                    "\(file.lastPathComponent): \(declaration) must be recognised literal minutes >= 2 for CI queueing")
         }
     }
     #expect(limits > 100, "found \(limits) time limits")
