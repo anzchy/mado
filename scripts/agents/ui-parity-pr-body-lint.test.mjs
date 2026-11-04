@@ -498,6 +498,20 @@ test('CLI accepts a garden-only ancestor and resolves short SHA evidence', t => 
   assertCLIStale(run('unsigned-build', base), 'unsigned-build');
 });
 
+for (const lane of [...codeGateLanes, 'package-coverage']) {
+  test(`CLI invalidates ${lane} evidence after only THIRD_PARTY_NOTICES.md changes`, t => {
+    const { git, base, change, run } = gatesGitFixture(t);
+    assertCLIPass(run(lane, base));
+    const sha = change('THIRD_PARTY_NOTICES.md');
+    assert.equal(git('diff', '--name-only', base, sha), 'THIRD_PARTY_NOTICES.md');
+    assertCLIStale(run(lane, base), lane);
+    const marked = run(lane, base, `CODE same ${codeSame}`);
+    assertCLIStale(marked, lane);
+    assert.ok(marked.stderr.includes(`inputs changed since ${base}`), marked.stderr);
+    assertCLIPass(run(lane, sha));
+  });
+}
+
 test('CLI guards every mandatory input for every declared code lane', t => {
   const { git, base, change, run } = gatesGitFixture(t);
   const mandatoryFiles = ['App/Changed.swift', 'AppTests/Changed.swift', 'Packages/Changed.swift', 'UITests/Changed.swift', 'project.yml'];

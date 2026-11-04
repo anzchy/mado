@@ -44,7 +44,7 @@ const gateLanes = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-b
 const gateStatuses = new Set(['PASS', 'FAIL', 'NOT RUN', 'N/A', 'NOT VERIFIED']);
 
 const codeInputs = ['App/', 'AppTests/', 'Packages/', 'UITests/', 'project.yml',
-  'TestAssets/', 'design/', 'scripts/perf/fixtures/',
+  'TestAssets/', 'design/', 'scripts/perf/fixtures/', 'THIRD_PARTY_NOTICES.md',
   '.github/workflows/ci.yml', '.github/actions/', 'scripts/ci/', 'scripts/tdd/', 'scripts/heavy-lock.sh'];
 const ledgerInputs = ['docs/feature-ledger.md', 'docs/feature-ledger.html', 'scripts/ledger/',
   'package.json', '.github/workflows/ci.yml'];
