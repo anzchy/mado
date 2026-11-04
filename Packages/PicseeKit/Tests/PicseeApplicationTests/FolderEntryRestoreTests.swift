@@ -90,9 +90,11 @@ import PicseeCore
         #expect(router.route(.escape, from: .key, to: session))
         #expect(host.gridReturns == 1)
         #expect(session.selection.selectedItemIDs == [ids[0]])
-        #expect(session.scrollAnchor == ids[2])
+        // #492 / owner #345: cancelling folder entry preserves the last-viewed return destination.
+        #expect(session.currentItemID == ids[1])
+        #expect(session.scrollAnchor == ids[1])
         #expect(router.route(.preview, from: .key, to: session))
-        #expect(host.presented.last == ids[0])
+        #expect(host.presented.last == ids[1])
     }
 
     // (b) Grid → Cancel keeps the folder source, conditions, loop and navigation identity; no rescan.

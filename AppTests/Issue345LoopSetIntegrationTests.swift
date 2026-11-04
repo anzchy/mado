@@ -16,8 +16,8 @@ import PicseeMacUI
     return view.subviews.lazy.compactMap { issue345Grid($0) }.first
 }
 
-@Test(.timeLimit(.minutes(3)), arguments: [0, 1, 2]) @MainActor
-func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int) async throws {
+@Test(.timeLimit(.minutes(3)), arguments: [0, 1, 2], [true, false]) @MainActor
+func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int, wraps: Bool) async throws {
     _ = NSApplication.shared
     let oldMenu = NSApp.mainMenu
     let base = FileManager.default.temporaryDirectory.appendingPathComponent("issue345-\(UUID().uuidString)")
@@ -53,12 +53,12 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int) a
     let scrollView = try #require(grid.collectionView.enclosingScrollView)
     let ids = grid.displayedItemIDs
     try #require(ids.count == 48)
-    // Original whole-set wrap above the viewport, visible selected wrap, and reverse wrap below it.
+    // #345 wraps and #492 ordinary folder paging: above viewport, already visible, and below viewport.
     let landedIndex = revealCase == 0 ? 0 : (revealCase == 1 ? 24 : 36)
     let startIndex = revealCase == 0 ? 47 : (revealCase == 1 ? 25 : 12)
     let first = ids[landedIndex], last = ids[startIndex]
     controller.session.select(last)
-    if revealCase != 0 {
+    if wraps && revealCase != 0 {
         controller.session.select(first, modifier: .command)
         controller.session.focus(last)
     }
@@ -99,9 +99,16 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int) a
     let item = try #require(view.items.first { $0.accessibilityIdentifier() == "folder.loop.menu" })
     #expect(item.title == String(localized: "Loop Through Images"))
     #expect(menu.validateMenuItem(item)); #expect(item.state == .off)
-    #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
-    #expect(menu.validateMenuItem(item)); #expect(item.state == .on)
-    #expect(controller.route(revealCase == 2 ? .previous : .next, from: .key))
+    if wraps {
+        #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
+        #expect(menu.validateMenuItem(item)); #expect(item.state == .on)
+        #expect(controller.route(revealCase == 2 ? .previous : .next, from: .key))
+    } else {
+        let direction: CommandID = landedIndex < startIndex ? .previous : .next
+        for _ in 0..<abs(landedIndex - startIndex) {
+            #expect(controller.route(direction, from: .key))
+        }
+    }
     // Fail immediately on the pre-fix target instead of waiting forever for an impossible decode.
     try #require(controller.session.currentItemID == first)
     try await waitUntil { controller.session.imageLoader.phase == .settled }
@@ -113,13 +120,13 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(revealCase: Int) a
     #expect(controller.session.currentItemID == first)
     #expect(grid.currentItemID == first)
     #expect(controller.session.selection.selectedItemIDs == selected)
-    #expect(menu.validateMenuItem(item)); #expect(item.state == .on)
+    #expect(menu.validateMenuItem(item)); #expect(item.state == (wraps ? .on : .off))
     #expect(item.title == String(localized: "Loop Through Images"))
     let visible = effectiveVisible()
-    #expect(visible.contains(grid.collectionView.frameForItem(at: landedIndex)), "wrapped current tile fully visible after Esc")
+    #expect(visible.contains(grid.collectionView.frameForItem(at: landedIndex)), "last viewed current tile fully visible after Esc")
     #expect(grid.contentOffset.x == savedOffset.x)
     if revealCase == 1 {
-        #expect(grid.contentOffset == savedOffset, "already-visible wrapped landing must preserve saved viewport")
+        #expect(grid.contentOffset == savedOffset, "already-visible landing must preserve saved viewport")
     } else {
         #expect(abs(grid.contentOffset.y - savedOffset.y - minimumShift) < 0.5, "offscreen reveal uses the least distance")
     }

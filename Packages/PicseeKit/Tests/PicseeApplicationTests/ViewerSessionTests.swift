@@ -58,12 +58,15 @@ import PicseeApplication
         #expect(session.inspectorFocus.isVisible)
         #expect(router.route(.escape, from: .key, to: session))
         #expect(session.mode == .browsing)
-        #expect(session.selection == origin)
-        #expect(session.currentItemID == ids[2])
-        #expect(session.scrollAnchor == ids[1])
+        // #492 / owner #345: paging returns to the last viewed current, preserving picked IDs and anchor.
+        #expect(session.selection.selectedItemIDs == origin.selectedItemIDs)
+        #expect(session.selection.anchorItemID == origin.anchorItemID)
+        #expect(session.currentItemID == ids[0])
+        #expect(session.scrollAnchor == ids[0])
         router.route(.inspector, from: .key, to: session)
     }
     session.select(ids[4], modifier: .command)
+    let multiPreviewScrollAnchor = session.scrollAnchor
     #expect(router.route(.preview, from: .key, to: session))
     #expect(session.previewSet?.itemIDs == [ids[2], ids[4]])
     #expect(session.currentItemID == ids[4])
@@ -75,7 +78,8 @@ import PicseeApplication
     #expect(session.selection.selectedItemIDs == [ids[2]])
     #expect(session.selection.currentItemID == nil)
     #expect(session.selection.anchorItemID == nil)
-    #expect(session.scrollAnchor == nil)
+    // The multi-preview restores its entry anchor, inherited from the preceding ordinary return (#492).
+    #expect(session.scrollAnchor == multiPreviewScrollAnchor)
     session.select(ids[0], modifier: .command)
     session.select(ids[0], modifier: .command)
     router.route(.enter, from: .key, to: session)

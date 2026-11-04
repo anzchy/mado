@@ -21,25 +21,30 @@ public struct PreviewSet: Equatable, Sendable {
     public private(set) var itemIDs: [ItemID] = []
     public private(set) var currentItemID: ItemID?
     public private(set) var origin: PreviewOrigin
-    private var hasWrapped = false
+    private let isSelectionPreview: Bool
+    private var followsCurrentOnReturn = false
     public init(items: [ItemID], sourceVersion: PreviewSourceVersion, origin: PreviewOrigin) {
         self.sourceVersion = sourceVersion
         self.origin = origin
-        itemIDs = origin.selection.selectedItemIDs.count > 1
+        isSelectionPreview = origin.selection.selectedItemIDs.count > 1
+        itemIDs = isSelectionPreview
             ? items.filter { origin.selection.selectedItemIDs.contains($0) } : items
         currentItemID = origin.selection.currentItemID.flatMap { itemIDs.contains($0) ? $0 : nil } ?? itemIDs.first
     }
     public mutating func move(forward: Bool, mayWrap: Bool = false) {
         guard let currentItemID, let index = itemIDs.firstIndex(of: currentItemID) else { return }
         let next = index + (forward ? 1 : -1)
-        if itemIDs.indices.contains(next) { self.currentItemID = itemIDs[next] }
+        if itemIDs.indices.contains(next) {
+            self.currentItemID = itemIDs[next]
+            if !isSelectionPreview { followsCurrentOnReturn = true }
+        }
         else if mayWrap, itemIDs.count > 1 {
             self.currentItemID = forward ? itemIDs.first : itemIDs.last
-            hasWrapped = true
+            followsCurrentOnReturn = true
         }
-        // Once a wrap changes the return destination, later paging keeps it at the latest viewed item.
-        // Focus preserves the original picked set and selection anchor.
-        if hasWrapped, let current = self.currentItemID {
+        // Folder paging returns to the last viewed item; a selection preview keeps its origin until a wrap.
+        // A preview with no successful page retains its original scroll position. Focus preserves picked IDs and anchor.
+        if followsCurrentOnReturn, let current = self.currentItemID {
             origin.selection.focus(current, in: itemIDs)
             origin.scrollAnchor = current
         }
@@ -53,7 +58,7 @@ public struct PreviewSet: Equatable, Sendable {
         itemIDs.removeAll { !available.contains($0) }
         origin.selection.reconcile(with: availableItemIDs)
         if let anchor = origin.scrollAnchor, !available.contains(anchor) { origin.scrollAnchor = nil }
-        if hasWrapped, let currentItemID {
+        if followsCurrentOnReturn, let currentItemID {
             origin.selection.focus(currentItemID, in: itemIDs)
             origin.scrollAnchor = currentItemID
         }

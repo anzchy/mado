@@ -26,7 +26,8 @@ import PicseeApplication
     #expect(preview.currentItemID == ids[2])
     preview.reconcile(availableItemIDs: [ids[1]])
     #expect(preview.currentItemID == ids[1])
-    #expect(preview.origin.selection.currentItemID == nil)
+    // #492 / owner #345: after paging, a removed current follows the surviving viewed successor.
+    #expect(preview.origin.selection.currentItemID == ids[1])
     #expect(preview.origin.selection.selectedItemIDs.isEmpty)
     #expect(preview.origin.scrollAnchor == ids[1])
     preview.reconcile(availableItemIDs: [])
