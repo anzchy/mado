@@ -36,11 +36,13 @@ import PicseeCore
     let session: ViewerSession
     let host = Pods444Host()
     var inspectorVisible = false
+    /// `visible` shows the viewer's own sidebar after entry (it starts hidden); `gridVisible` is the grid's preference.
     init(size: NSSize = NSSize(width: 1280, height: 800), sidebarWidth: Double = 196, visible: Bool = true,
-         available: Bool = true, inspector inspectorVisible: Bool = false, canvas: ((ViewerSession) -> NSView)? = nil) {
+         gridVisible: Bool = true, available: Bool = true, inspector inspectorVisible: Bool = false,
+         canvas: ((ViewerSession) -> NSView)? = nil) {
         _ = NSApplication.shared
         store.value.gridSidebarWidth = sidebarWidth
-        store.value.gridSidebarVisible = visible
+        store.value.gridSidebarVisible = gridVisible
         host.store = store; host.available = available
         session = ViewerSession(preferencesStore: store, host: host)
         let items = (0..<3).map { _ in ItemID.ephemeral(UUID()) }
@@ -74,6 +76,7 @@ import PicseeCore
         presentation.layoutInspector(visible: false)
         presentation.viewerSidebarAvailable = available
         presentation.showViewer()
+        if visible { session.perform(intent: .toggleSidebar) }
         self.inspectorVisible = inspectorVisible
         inspector.isHidden = !inspectorVisible
         presentation.layoutInspector(visible: inspectorVisible)
@@ -86,9 +89,10 @@ import PicseeCore
         inspectorVisible && !InspectorPanelLayout.overlaysContent(at: width)
             ? min(InspectorPanelLayout.width(for: width), width) : 0
     }
+    /// 显示侧栏 / ⌃⌘S in the viewer: the Session flips its own state; the window re-lays out (as the App does).
     func toggle() {
-        shell.toggleSidebar()
-        presentation.refreshViewerSidebar()
+        session.perform(intent: .toggleSidebar)
+        presentation.layoutInspector(visible: inspectorVisible)
         content.layoutSubtreeIfNeeded()
     }
     var divider: NSView? { firstDescendant(of: shell) { $0.accessibilityIdentifier() == "grid.sidebar.resize" } }
@@ -166,13 +170,14 @@ import PicseeCore
     var firstHidden: [String]?
     for round in 1...3 {
         scene.toggle()
-        #expect(scene.shell.isHidden && !scene.store.value.gridSidebarVisible, "round \(round)")
+        #expect(scene.shell.isHidden && !scene.session.isViewerSidebarShown, "round \(round)")
+        #expect(scene.store.value.gridSidebarVisible, "the grid's preference never changes (round \(round))")
         let full = NSRect(x: 0, y: 0, width: scene.width - scene.panel, height: scene.content.bounds.height)
         #expect(scene.canvas.frame == full && scene.chrome.frame == full && scene.state.frame == full, "round \(round)")
         if let firstHidden { #expect(snapshot() == firstHidden, "round \(round)") } else { firstHidden = snapshot() }
         scene.toggle()
         #expect(snapshot() == shown, "round \(round)")
-        #expect(scene.store.value.gridSidebarVisible, "round \(round)")
+        #expect(scene.session.isViewerSidebarShown && scene.store.value.gridSidebarVisible, "round \(round)")
     }
 }
 
@@ -421,7 +426,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
     let row = try #require(scene.shell.viewerSidebarKeyViews.last)
     #expect(scene.window.makeFirstResponder(row))
     scene.presentation.viewerSidebarAvailable = false
-    scene.presentation.refreshViewerSidebar()
+    scene.presentation.layoutInspector(visible: false)
     #expect(scene.shell.isHidden)
     #expect(scene.window.firstResponder === scene.canvas)
     #expect(scene.session.inspectorFocus.focus == .canvas)
@@ -437,4 +442,31 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
     scene.presentation.layoutInspector(visible: false)
     #expect(scene.state.frame == scene.content.bounds)
     #expect(scene.canvas.frame == scene.content.bounds)
+}
+
+/// Owner decision 2026-11-04 (#444): the viewer's sidebar is independent of the grid's and starts hidden on entry;
+/// toggling it in the viewer never changes the grid's, and returning to the grid shows the grid's sidebar as it was.
+@Test(arguments: [true, false])
+@MainActor func i444ViewerSidebarStartsHiddenAndLeavesTheGridsAlone(gridVisible: Bool) {
+    let scene = Sidebar444Scene(visible: false, gridVisible: gridVisible)
+    defer { scene.close() }
+    let prefs = scene.store.value
+    #expect(scene.shell.isHidden && scene.canvas.frame == scene.content.bounds, "entry from the grid starts hidden")
+    scene.toggle()
+    #expect(!scene.shell.isHidden && scene.canvas.frame.minX == 196, "显示侧栏 shows it beside the image")
+    #expect(scene.store.value == prefs, "the grid's sidebar preference is untouched")
+    scene.toggle()
+    #expect(scene.shell.isHidden && scene.store.value == prefs)
+    scene.toggle()
+    scene.session.perform(intent: .returnToGrid)
+    scene.presentation.showGrid(reading: false)
+    scene.presentation.layoutInspector(visible: false)
+    scene.content.layoutSubtreeIfNeeded()
+    #expect(scene.shell.mode == .grid && !scene.shell.isHidden)
+    #expect(scene.shell.mainFrame.minX == (gridVisible ? 196 : 0), "the grid's sidebar is exactly as it was")
+    CommandRouter().route(.preview, from: .key, to: scene.session)  // the grid keeps the origin's selection
+    #expect(scene.session.mode == .viewing)
+    scene.presentation.showViewer()
+    scene.presentation.layoutInspector(visible: false)
+    #expect(scene.shell.isHidden && scene.canvas.frame == scene.content.bounds, "the next entry starts hidden again")
 }

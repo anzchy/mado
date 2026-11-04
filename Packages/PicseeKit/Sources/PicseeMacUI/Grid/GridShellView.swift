@@ -382,22 +382,20 @@ import PicseeCore
     }
     /// The grid surface: shown, and not the viewer's sidebar. Grid-only paths (search, footer status) test this.
     public var isGridSurface: Bool { !isHidden && mode == .grid }
-    /// Called when the viewer's sidebar is about to hide while it holds keyboard focus.
-    public var onViewerSidebarFocusLoss: (() -> Void)?
     /// Called when the viewer's sidebar replaced its rows; the viewer's key loop links them (ViewerStateFocus).
     public var onViewerSidebarKeyViewsChange: (() -> Void)?
-    /// One visibility for the grid and the viewer (#444 owner acceptance).
-    public var sidebarVisible: Bool { preferencesStore.value.gridSidebarVisible }
+    /// The viewer shows its sidebar by showing or hiding this whole shell (owner decision 2026-11-04: independent of
+    /// the grid's preference), so in the viewer the sidebar is always laid out.
+    private var sidebarLaidOut: Bool { mode == .viewerSidebar || preferencesStore.value.gridSidebarVisible }
     /// The sidebar's width, a live divider drag included; 0 while it is hidden.
     public var sidebarWidth: CGFloat { mainFrame.minX }
     /// The viewer's sidebar stops in its key loop after the tools: the resize divider, then the folder rows.
     public var viewerSidebarKeyViews: [NSView] {
-        guard mode == .viewerSidebar, !isHidden, sidebarVisible else { return [] }
+        guard mode == .viewerSidebar, !isHidden else { return [] }
         return [divider] + folderTree.rows
     }
     public var mainFrame: NSRect {
-        let visible = preferencesStore.value.gridSidebarVisible
-        let sidebarWidth = visible ? (liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)) : 0
+        let sidebarWidth = sidebarLaidOut ? (liveSidebarWidth ?? CGFloat(preferencesStore.value.gridSidebarWidth)) : 0
         // In the viewer there is no footer, so the sidebar runs the shell's full height.
         let footerHeight: CGFloat = mode == .viewerSidebar ? 0 : 40
         return NSRect(x: sidebarWidth, y: footerHeight, width: max(0, bounds.width - sidebarWidth),
@@ -411,7 +409,7 @@ import PicseeCore
     public override func layout() {
         super.layout()
         let main = mainFrame
-        sidebar.isHidden = !preferencesStore.value.gridSidebarVisible
+        sidebar.isHidden = !sidebarLaidOut
         sidebar.frame = NSRect(x: 0, y: main.minY, width: main.minX, height: main.height)
         // The viewer's sidebar mode keeps the hidden grid area (and its collection view) at its last grid size:
         // a zero-width grid would ask AppKit for a zero item size.
@@ -552,13 +550,8 @@ import PicseeCore
     @objc private func toggleFromButton() { toggleSidebar() }
     public func toggleSidebar() {
         var value = preferencesStore.value
-        // In the viewer the presentation hands focus to the canvas (the footer toggle is hidden there), before the
-        // sidebar hides under it.
-        if mode == .grid, value.gridSidebarVisible, window?.firstResponder === divider { window?.makeFirstResponder(toggleButton) }
-        if mode == .viewerSidebar, value.gridSidebarVisible, let focused = window?.firstResponder as? NSView,
-           focused.isDescendant(of: sidebar) {
-            onViewerSidebarFocusLoss?()
-        }
+        // The grid's sidebar only: the viewer's has its own state in the Session (owner decision 2026-11-04).
+        if value.gridSidebarVisible, window?.firstResponder === divider { window?.makeFirstResponder(toggleButton) }
         value.gridSidebarVisible.toggle()
         preferencesStore.value = value
         refreshToggleLabel()

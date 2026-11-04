@@ -13,7 +13,6 @@ import PicseeCore
         // The viewer's sidebar has no shell state surface; a divider drag re-lays out the viewer beside it.
         // The shell never holds the chrome, so the chrome may keep it.
         if let shell { (chrome as? ViewerChromeOverlay)?.trailingKeyViews = { shell.viewerSidebarKeyViews } }
-        shell?.onViewerSidebarFocusLoss = { [weak self] in self?.focusCanvas() }
         shell?.onViewerSidebarKeyViewsChange = { [weak canvas, weak chrome, weak state] in
             guard let canvas, let chrome = chrome as? ViewerChromeOverlay, let state = state as? ViewerStateHost else { return }
             state.linkKeyViews(to: canvas, chrome: chrome)
@@ -32,18 +31,13 @@ import PicseeCore
     /// #444: the window can show the folder sidebar beside the viewer (a preview entered from a folder grid).
     public var viewerSidebarAvailable = false
     private var inspectorVisible = false
-    /// Re-reads the shared sidebar visibility in the viewer (⌃⌘S, 显示侧栏) and lays the viewer out beside it.
-    public func refreshViewerSidebar() {
-        guard let shell, shell.mode == .viewerSidebar else { return }
-        layoutInspector(visible: inspectorVisible)
-    }
     private func focusCanvas() {
         canvas.window?.makeFirstResponder(canvas)
         shell?.session?.updateFocus(.canvas)
     }
     /// A sidebar that hides while it holds keyboard focus hands focus to the canvas.
     private func applyViewerSidebarVisibility(_ shell: GridShellView) {
-        let show = viewerSidebarAvailable && shell.sidebarVisible
+        let show = viewerSidebarAvailable && shell.session?.isViewerSidebarShown == true
         if !show, let responder = canvas.window?.firstResponder as? NSView, responder.isDescendant(of: shell) {
             focusCanvas()
         }

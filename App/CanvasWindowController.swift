@@ -152,6 +152,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var gridShellVisible: Bool { gridShell != nil && gridShell.isGridSurface }
     /// ⌃⌘S: the grid's sidebar, or the viewer's sidebar beside a preview entered from the grid (one shared visibility).
     var sidebarToggleAvailable: Bool { gridShellVisible || session.canToggleViewerSidebar }
+    /// The viewer's own sidebar state for the View menu item; nil elsewhere (the menu reads the grid's preference).
+    var viewerSidebarMenuState: Bool? { session.canToggleViewerSidebar ? session.isViewerSidebarShown : nil }
     func toggleGridSidebar() {
         if gridShellVisible { gridShell.toggleSidebar() }
         else { session.perform(intent: .toggleSidebar) }
@@ -2163,8 +2165,9 @@ extension CanvasWindowController: ViewerChromeHost {
     /// A viewer preview opened from the folder grid can show that grid's sidebar (#444).
     var viewerSidebarAvailable: Bool { gridFolderRoot != nil }
     func performChromeIntent(_ intent: ViewerChromeIntent) {
+        // The Session flipped the viewer's own sidebar state; the grid's preference is untouched (owner decision
+        // 2026-11-04), so the presentation re-reads the Session when it lays the viewer out.
         guard intent == .toggleSidebar else { return }
-        gridShell.toggleSidebar()
         layoutInspector()
         chromeOverlay.refresh(session: session)
         stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
