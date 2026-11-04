@@ -73,6 +73,26 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
     func count() throws -> String {
         try #require(footer506Find("grid.folder-count", window.contentView) as? NSTextField).stringValue
     }
+    func expectRestoredSidebar() throws {
+        let row = try #require(footer506Find("grid.sidebar.folder.tree", window.contentView) as? GridSidebarFolderButton)
+        #expect(row.current)
+        #expect(row.folderURL.standardizedFileURL.path == tree.standardizedFileURL.path)
+        #expect(row.countLabel.stringValue == String(previousCount))
+        #expect(!row.countLabel.isHiddenOrHasHiddenAncestor)
+    }
+    func waitForRestoredSidebar() async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+        while true {
+            if let row = footer506Find("grid.sidebar.folder.tree", window.contentView) as? GridSidebarFolderButton,
+               row.current, row.folderURL.standardizedFileURL.path == tree.standardizedFileURL.path,
+               row.countLabel.stringValue == String(previousCount), !row.countLabel.isHiddenOrHasHiddenAncestor { return }
+            if ContinuousClock.now >= deadline {
+                throw ConditionWaitError(description: "restored sidebar count did not settle within 8 seconds")
+            }
+            window.update()
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
     controller.openGrantedFolder(tree)
     try await wait { controller.session.folderScan?.sourceSnapshot?.isComplete == true
         && controller.session.folderScan?.isScanning == false && (try? count()) == "\(previousCount) images" }
@@ -99,6 +119,8 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
     #expect(scan.sourceSnapshot == previous)
     #expect(try count() == "\(previousCount) images")
     #expect(controller.session.mode == .browsing)
+    try await waitForRestoredSidebar()
+    try expectRestoredSidebar()
     // Insert a queued old presentation callback after rollback, then release the cancelled scanner's last batch.
     controller.applyObservedGridSnapshot(abandoned)
     #expect(scan.sourceSnapshot == previous)
@@ -113,6 +135,56 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
     #expect(scan.sourceSnapshot == previous)
     #expect(try count() == "\(previousCount) images")
     #expect(scan.isReadingFolder == false)
+    try await waitForRestoredSidebar()
+    try expectRestoredSidebar()
+}
+
+/// The snapshot identity and entry admission must agree even when lexical parent removal crosses a symlink.
+@Test @MainActor func issue506SymlinkParentFolderCompletesNormally() async throws {
+    _ = NSApplication.shared
+    let fm = FileManager.default
+    let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("symlink506-\(UUID())")
+    defer { try? fm.removeItem(at: base) }
+    let actual = base.appendingPathComponent("actual")
+    let target = base.appendingPathComponent("target")
+    let deep = target.appendingPathComponent("deep")
+    try fm.createDirectory(at: actual, withIntermediateDirectories: true)
+    try fm.createDirectory(at: deep, withIntermediateDirectories: true)
+    let canonical = target.appendingPathComponent("actual")
+    try fm.createDirectory(at: canonical, withIntermediateDirectories: true)
+    try fm.createSymbolicLink(at: base.appendingPathComponent("link"), withDestinationURL: deep)
+    let spelling = URL(fileURLWithPath: base.path + "/link/../actual/", isDirectory: true)
+    let expected = spelling.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+    #expect(expected.path == canonical.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path)
+    let asset = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("TestAssets/synthetic/landscape-3x2.png")
+    try Data(contentsOf: asset).write(to: canonical.appendingPathComponent("one.png"))
+    let adapter = Footer506Bookmarks()
+    let access = try FileAccess(scope: adapter, bookmarks: adapter,
+        store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue506-symlink")
+    let services = AccessServices(files: access, recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")),
+        browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+        accessServices: Task { services }, motionPolicy: MotionPolicy(source: Footer506Motion()))
+    controller.folderScanningOverride = Footer506Scanner()
+    let window = try #require(controller.window)
+    defer { window.close() }
+    controller.openGrantedFolder(spelling)
+    let clock = ContinuousClock(), deadline = ContinuousClock.now.advanced(by: .seconds(8))
+    while controller.session.folderScan?.sourceSnapshot?.isComplete != true
+        || controller.session.folderScan?.isScanning != false {
+        if clock.now >= deadline {
+            throw ConditionWaitError(description: "#507: symlink entry did not produce a completed source within 8 seconds")
+        }
+        window.update()
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let source = try #require(controller.session.folderScan?.snapshot)
+    controller.applyObservedGridSnapshot(source)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(source.version.folder == expected)
+    #expect(try #require(footer506Find("grid.folder-count", window.contentView) as? NSTextField).stringValue == "1 images")
+    #expect(controller.gridSearchAvailable)
 }
 
 /// Equivalent non-alias spellings must not leave the new entry stuck in Reading.
