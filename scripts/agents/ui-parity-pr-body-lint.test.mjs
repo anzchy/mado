@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -610,4 +611,126 @@ test('CLI explains changed ancestor inputs even when Source contains CODE same',
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.ok(result.stderr.includes(`inputs changed since ${base}`), result.stderr);
   assert.doesNotMatch(result.stderr, /without CODE same/);
+});
+
+const checkerAck = (sha, families = 'ledger,design', rationale = 'Update checker rules', audits = 'i471-gpt.md,i471-opus.md') =>
+  `Checker-Change: ${sha} families=${families} — ${rationale} — audits: ${audits}`;
+
+function checkerGitFixture(t) {
+  const f = gatesGitFixture(t);
+  const run = acknowledgement => {
+    const sha = f.git('rev-parse', 'HEAD');
+    const body = join(f.repo, 'body.md');
+    writeFileSync(body, completeGates(sha) + '\n' + acknowledgement + '\n');
+    const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
+    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body], { cwd: f.repo, encoding: 'utf8' });
+  };
+  return { ...f, run };
+}
+
+for (const [label, acknowledgement, reason] of [
+  ['missing', () => '', /Checker-Change.*required/i],
+  ['stale SHA', () => checkerAck(oldHead), /Checker-Change.*head SHA/i],
+  ['short SHA', sha => checkerAck(sha.slice(0, 8)), /Checker-Change.*format/i],
+  ['missing family', sha => checkerAck(sha, 'ledger'), /Checker-Change.*design/i],
+  ['missing ledger family', sha => checkerAck(sha, 'design'), /Checker-Change.*ledger/i],
+  ['missing audits field', sha => checkerAck(sha).split(' — audits:')[0], /Checker-Change.*format/i],
+  ['tilde fenced example', sha => '~~~text\n' + checkerAck(sha) + '\n~~~', /Checker-Change.*required/i],
+  ['empty rationale', sha => checkerAck(sha, 'ledger,design', ' '), /Checker-Change.*rationale/i],
+  ['no audits', sha => checkerAck(sha, 'ledger,design', 'Update rules', ''), /Checker-Change.*audit/i],
+  ['one audit', sha => checkerAck(sha, 'ledger,design', 'Update rules', 'gpt.md'), /Checker-Change.*audit/i],
+  ['duplicate audits', sha => checkerAck(sha, 'ledger,design', 'Update rules', 'gpt.md,gpt.md'), /Checker-Change.*audit/i],
+  ['placeholder audits', sha => checkerAck(sha, 'ledger,design', 'Update rules', 'TBD,none'), /Checker-Change.*audit/i],
+  ['unknown family', sha => checkerAck(sha, 'ledger,design,other'), /Checker-Change.*famil/i],
+  ['duplicate family', sha => checkerAck(sha, 'ledger,design,ledger'), /Checker-Change.*famil/i],
+  ['duplicate lines', sha => checkerAck(sha) + '\n' + checkerAck(sha), /Checker-Change.*one|unique/i],
+  ['fenced example', sha => '```text\n' + checkerAck(sha) + '\n```', /Checker-Change.*required/i],
+  ['commented example', sha => '<!--\n' + checkerAck(sha) + '\n-->', /Checker-Change.*required/i],
+]) {
+  test(`checker-change CLI rejects ${label} acknowledgement`, t => {
+    const f = checkerGitFixture(t);
+    f.change('scripts/ledger/nested/rules.mjs');
+    const sha = f.change('scripts/design/model.mjs');
+    const result = f.run(acknowledgement(sha));
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, reason);
+  });
+}
+
+test('checker-change CLI covers every changed family and allows either order and extra known family', t => {
+  const f = checkerGitFixture(t);
+  let sha = f.change('scripts/ledger/rules.mjs');
+  assertCLIPass(f.run(checkerAck(sha, 'ledger')));
+  assertCLIPass(f.run(checkerAck(sha, 'design,ledger')));
+  sha = f.change('scripts/design/model.mjs');
+  assertCLIPass(f.run(checkerAck(sha, 'design,ledger')));
+  const missing = f.run(checkerAck(sha, 'ledger'));
+  assert.equal(missing.status, 1, missing.stdout + missing.stderr);
+  assert.match(missing.stderr, /Checker-Change.*design/);
+  assertCLIPass(f.run(checkerAck(sha.toUpperCase(), 'ledger,design', 'Document changed rules', 'https://example.invalid/gpt,~/reports/opus.md')));
+});
+
+test('non-checker CLI needs no acknowledgement and permits a stray acknowledgement', t => {
+  const f = checkerGitFixture(t);
+  for (const file of ['docs/notes.md', 'scripts/ledger-extra/tool.mjs', 'scripts/design-check.mjs']) {
+    f.change(file);
+    assertCLIPass(f.run(''));
+    assertCLIPass(f.run('Checker-Change: old note'));
+  }
+});
+
+test('checker-change CLI includes deletions and renames across family boundaries', t => {
+  const f = checkerGitFixture(t);
+  f.change('scripts/ledger/rules.mjs');
+  f.git('branch', '-f', 'base', 'HEAD');
+  f.git('rm', 'scripts/ledger/rules.mjs');
+  f.git('commit', '-qm', 'delete checker');
+  assert.equal(f.run('').status, 1);
+  assertCLIPass(f.run(checkerAck(f.git('rev-parse', 'HEAD'), 'ledger')));
+  f.git('checkout', '-q', '--detach', 'base');
+  mkdirSync(join(f.repo, 'scripts/design'), { recursive: true });
+  f.git('mv', 'scripts/ledger/rules.mjs', 'scripts/design/rules.mjs');
+  f.git('commit', '-qm', 'move checker');
+  const sha = f.git('rev-parse', 'HEAD');
+  assert.equal(f.run(checkerAck(sha, 'design')).status, 1);
+  assertCLIPass(f.run(checkerAck(sha)));
+});
+
+for (const family of ['ledger', 'design']) {
+  test(`checker-change CLI matches exact ${family} path and head transitions`, t => {
+    const f = checkerGitFixture(t);
+    let sha = f.change(`scripts/${family}`);
+    assert.equal(f.run('').status, 1);
+    assertCLIPass(f.run(checkerAck(sha, family)));
+    const previous = sha;
+    sha = f.change('docs/later.md');
+    assert.equal(f.run(checkerAck(previous, family)).status, 1);
+    assertCLIPass(f.run(checkerAck(sha, family)));
+  });
+}
+
+for (const file of ['scripts/ledger/é.mjs', 'scripts/design/line\nbreak.mjs']) {
+  test(`checker-change CLI detects Git-quoted path ${JSON.stringify(file)}`, t => {
+    const f = checkerGitFixture(t);
+    const sha = f.change(file);
+    const result = f.run('');
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /Checker-Change.*required/);
+    assertCLIPass(f.run(checkerAck(sha)));
+  });
+}
+
+test('checker-change CLI detects file-to-symlink type changes', t => {
+  const f = checkerGitFixture(t);
+  const file = 'scripts/ledger/rules.mjs';
+  f.change(file);
+  f.git('branch', '-f', 'base', 'HEAD');
+  unlinkSync(join(f.repo, file));
+  symlinkSync('../replacement.mjs', join(f.repo, file));
+  f.git('add', file);
+  f.git('commit', '-qm', 'replace checker with symlink');
+  const result = f.run('');
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /Checker-Change.*required/);
+  assertCLIPass(f.run(checkerAck(f.git('rev-parse', 'HEAD'), 'ledger')));
 });
