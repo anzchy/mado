@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { posix } from 'node:path';
 
 const isUIFile = file => file.startsWith('App/') ||
   file.startsWith('Packages/PicseeKit/Sources/PicseeMacUI/');
@@ -100,18 +101,31 @@ function stripFencedCodeBlocks(body) {
 // its execution/dependency boundary rather than just its deferral messages.
 const checkerPaths = { ledger: 'scripts/ledger', design: 'scripts/design' };
 
+// Syntax/identity checks catch mistaken citations; reviewers establish existence,
+// independence and coverage. Fragments never make one report into two reports.
+function auditReferenceIdentity(ref) {
+  if (/^https:\/\/github\.com\/anzchy\/picsee\/pull\/[1-9]\d*#(?:pullrequestreview|issuecomment)-[1-9]\d*$/.test(ref)) return ref;
+  if (!ref.startsWith('~/.picsee/herdr/') || /\s/.test(ref)) return undefined;
+  const [path, fragment, ...extra] = ref.split('#');
+  if (extra.length || (fragment !== undefined && !/^[\w-]+$/.test(fragment))) return undefined;
+  const normalized = posix.normalize(path);
+  if (/(?:^|[./_-])(?:tbd|none|todo|x|n[/-]a)(?=$|[./_-])/i.test(normalized)) return undefined;
+  if (!/^~\/\.picsee\/herdr\/[a-z0-9]+(?:-[a-z0-9]+)*-auditor\/[A-Za-z0-9][A-Za-z0-9._-]*-(?:audit|confirm)[A-Za-z0-9._-]*\.md$/.test(normalized)) return undefined;
+  return normalized;
+}
+
 function checkCheckerChange(body, files, head) {
   const changed = Object.entries(checkerPaths)
     .filter(([, path]) => files.some(file => file === path || file.startsWith(path + '/')))
     .map(([family]) => family);
   // A stray acknowledgement is harmless on a PR outside these checker families.
   if (changed.length === 0) return { ok: true };
-  const lines = stripFencedCodeBlocks(body.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))
+  const lines = stripFencedCodeBlocks(body).replace(/<!--[\s\S]*?(?:-->|$)/g, '')
     .split(/\r?\n/).filter(line => /^Checker-Change:/.test(line));
   const fail = reason => ({ ok: false, reason: `Checker-Change: ${reason}` });
   if (lines.length === 0) return fail(`required for changed checker families: ${changed.join(',')}`);
   if (lines.length !== 1) return fail('exactly one acknowledgement line is required');
-  const match = lines[0].match(/^Checker-Change:[ \t]+([0-9a-f]{40})[ \t]+families=([a-z,]+)[ \t]+—[ \t]*([^\r\n]*?)[ \t]*—[ \t]*audits:[ \t]*([^\r\n]*)$/i);
+  const match = lines[0].match(/^Checker-Change:[ \t]+([0-9a-f]{40})[ \t]+families=([a-z,]+)[ \t]+—[ \t]+([^\r\n]*?)[ \t]+—[ \t]+audits:[ \t]*([^\r\n]*)$/i);
   if (!match) return fail('invalid format; expected <40-hex head SHA> families=ledger,design — <rationale> — audits: <ref>,<ref>');
   const [, sha, listed, rationale, audits] = match;
   if (sha.toLowerCase() !== head.toLowerCase()) return fail('head SHA must equal the full current PR head SHA');
@@ -120,11 +134,10 @@ function checkCheckerChange(body, files, head) {
     return fail('families must be unique known names: ledger,design');
   const missing = changed.filter(family => !families.includes(family));
   if (missing.length) return fail(`missing changed checker families: ${missing.join(',')}`);
-  if (!rationale.trim()) return fail('a nonempty rationale is required');
-  const refs = audits.split(',').map(ref => ref.trim());
-  const validRef = ref => /^(?:https?:\/\/[^\s,]+|(?:~\/)?[\w./-]+\.md(?:#[\w-]+)?|#\d+)$/.test(ref);
-  if (refs.length < 2 || new Set(refs).size !== refs.length || !refs.every(validRef))
-    return fail('audits need at least two distinct references (HTTP(S) URL, .md report path, or #issue); reviewers verify independence and coverage');
+  if (!rationale.replace(/[\s—–-]/g, '')) return fail('a nonempty rationale beyond separators is required');
+  const refs = audits.split(',').map(ref => auditReferenceIdentity(ref.trim()));
+  if (refs.length < 2 || refs.some(ref => ref === undefined) || new Set(refs).size !== refs.length)
+    return fail('audits need at least two distinct normalized herdr auditor report paths or anzchy/picsee PR review/comment URLs; no placeholders; reviewers verify independence and coverage');
   return { ok: true };
 }
 

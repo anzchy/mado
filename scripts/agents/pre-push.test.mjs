@@ -290,6 +290,9 @@ for (const checker of ['ledger', 'shortcut']) {
     const deferred = run();
     status(deferred, 0, new RegExp(`${checker}.*checker changed.*CI decides`, 'i'));
     assert.match(deferred.stdout, /CI decides.*local check deferred.*PR body must carry Checker-Change: acknowledgement for independent review/);
+    const family = checker === 'shortcut' ? 'design' : 'ledger';
+    assert.match(deferred.stdout, new RegExp(`families=${family}\\b`));
+    if (checker === 'shortcut') assert.match(deferred.stdout, /design \(shortcut\) checker/);
     assert.doesNotMatch(deferred.stdout + deferred.stderr, /TOPIC CHECKER MUST NOT EXECUTE/);
     f.write(path, 'throw Error("TOPIC CHECKER MUST NOT EXECUTE");\n');
     f.git('add', path); f.git('commit', '-qm', 'sentinel topic checker');
