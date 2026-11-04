@@ -2354,10 +2354,11 @@ extension CanvasWindowController: FolderScanHost {
             chromeOverlay.setMetadataSortState(scan.metadataSortState)
             if let snapshot = scan.snapshot { applyObservedGridSnapshot(snapshot) }
             updateEmptyFolderState()
+            // Sort/filter and metadata projection can change position without changing source version or image.
+            chromeOverlay.refresh(session: session)
             if let source = scan.sourceSnapshot, source.isComplete,
                viewedRefreshVersion != source.version {
                 viewedRefreshVersion = source.version
-                chromeOverlay.refresh(session: session)
                 if session.mode == .viewing, session.filePreviewSet == nil,
                    let current = session.previewSet?.currentItemID ?? scan.currentItemID,
                    let entry = source.navigationEntries.first(where: { $0.itemID == current }) {
