@@ -203,6 +203,10 @@ import os
             openButton.bezelColor = DesignColor.primaryFill.nsColor
             openButton.contentTintColor = DesignColor.onPrimary.nsColor
             openButton.font = .systemFont(ofSize: 13, weight: .semibold)
+            openButton.attributedTitle = NSAttributedString(string: openButton.title, attributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: DesignColor.onPrimary.nsColor,
+            ])
             shortcutKey.textColor = DesignColor.textSecondary.nsColor
             shortcutKey.layer?.cornerRadius = 4
             shortcutKey.layer?.borderWidth = 1
