@@ -41,3 +41,24 @@ test('the ledger check runs on Ubuntu', () => {
   assert.match(ledger, /^        run: node scripts\/ledger\/build\.mjs --check$/m);
   assert.doesNotMatch(ledger, /^    if:/m);
 });
+
+test('native jobs run only on the classifier saying so; Walking skeleton always reports and reads the classifier', () => {
+  const changes = jobBlock('changes');
+  assert.match(changes, /^    runs-on: ubuntu-latest$/m);
+  assert.doesNotMatch(changes, /^    if:/m, 'the classifier runs on every event');
+  assert.match(changes, /^      native: \$\{\{ steps\.classify\.outputs\.native \}\}$/m);
+  assert.match(changes, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}\n          path: trusted/);
+  assert.match(changes, /^            node trusted\/scripts\/ci\/native-inputs\.mjs$/m);
+  assert.match(changes, /^            echo 'native=true' >> "\$GITHUB_OUTPUT"$/m, 'a base without the classifier runs native jobs');
+  assert.match(changes, /^      pull-requests: read$/m);
+  for (const id of ['package-tests', 'package-macui-tests', 'app-tests']) {
+    const job = jobBlock(id);
+    assert.match(job, /^    needs: changes$/m, id);
+    assert.match(job, /^    if: needs\.changes\.outputs\.native == 'true'$/m, id);
+  }
+  const skeleton = jobBlock('walking-skeleton');
+  assert.match(skeleton, /^    needs: \[changes, /m);
+  assert.match(skeleton, /^          CHANGES: \$\{\{ needs\.changes\.result \}\}$/m);
+  assert.match(skeleton, /^          NATIVE: \$\{\{ needs\.changes\.outputs\.native \}\}$/m);
+  assert.doesNotMatch(workflow, /paths-ignore:|^\s+paths:/m, 'no workflow-level path filters: required checks must report');
+});

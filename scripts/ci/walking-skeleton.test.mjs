@@ -4,10 +4,13 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { verdict } from './walking-skeleton.mjs';
 
-const nativeRun = { LEDGER: 'success', PACKAGE: 'success', MACUI: 'success', APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
+const nativeRun = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
+const skippedRun = { CHANGES: 'success', NATIVE: 'false', LEDGER: 'success', PACKAGE: 'skipped', MACUI: 'skipped',
+  APP_JOB: 'skipped', UNSIGNED_BUILD: '' };
 const ok = env => verdict(env).ok;
 
-test('passes when both suites, the ledger check and the unsigned build step succeed', () => {
+test('native run passes when both suites and the unsigned build step succeed', () => {
   assert.equal(ok(nativeRun), true);
 });
 
@@ -16,11 +19,11 @@ test('App test failure after a successful unsigned build does not fail the requi
   assert.equal(ok({ ...nativeRun, APP_JOB: 'cancelled' }), true);
 });
 
-test('app_tests=false dispatch: the job ran only the build, which is what is required', () => {
+test('app_tests=false dispatch: job ran only the build, which is what is required', () => {
   assert.equal(ok({ ...nativeRun, APP_JOB: 'success', UNSIGNED_BUILD: 'success' }), true);
 });
 
-test('unsigned build failure, or a missing or skipped build step, fails', () => {
+test('unsigned build failure, missing or skipped build step fails', () => {
   for (const build of ['failure', 'cancelled', 'skipped', '', undefined]) {
     assert.equal(ok({ ...nativeRun, APP_JOB: 'failure', UNSIGNED_BUILD: build }), false, String(build));
   }
@@ -28,15 +31,35 @@ test('unsigned build failure, or a missing or skipped build step, fails', () => 
 
 test('either package suite not succeeding fails', () => {
   for (const key of ['PACKAGE', 'MACUI']) {
-    for (const result of ['failure', 'cancelled', 'skipped', '']) {
+    for (const result of ['failure', 'cancelled', 'skipped']) {
       assert.equal(ok({ ...nativeRun, [key]: result }), false, `${key}=${result}`);
     }
   }
 });
 
-test('ledger check not succeeding fails', () => {
-  for (const result of ['failure', 'cancelled', 'skipped', '']) {
-    assert.equal(ok({ ...nativeRun, LEDGER: result }), false, `ledger=${result}`);
+test('ledger check or classifier not succeeding fails, native or not', () => {
+  for (const base of [nativeRun, skippedRun]) {
+    for (const result of ['failure', 'cancelled', 'skipped']) {
+      assert.equal(ok({ ...base, LEDGER: result }), false, `ledger=${result}`);
+      assert.equal(ok({ ...base, CHANGES: result }), false, `changes=${result}`);
+    }
+  }
+});
+
+test('docs-only run passes only when every native job skipped', () => {
+  assert.equal(ok(skippedRun), true);
+  for (const key of ['PACKAGE', 'MACUI', 'APP_JOB']) {
+    for (const result of ['success', 'failure', 'cancelled']) {
+      assert.equal(ok({ ...skippedRun, [key]: result }), false, `${key}=${result}`);
+    }
+  }
+  assert.equal(ok({ ...skippedRun, UNSIGNED_BUILD: 'success' }), false);
+});
+
+test('a missing or unexpected classifier output fails', () => {
+  for (const native of ['', undefined, 'TRUE', 'yes']) {
+    assert.equal(ok({ ...nativeRun, NATIVE: native }), false, String(native));
+    assert.equal(ok({ ...skippedRun, NATIVE: native }), false, String(native));
   }
 });
 

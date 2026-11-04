@@ -102,7 +102,7 @@ if (!valid) {
       } else {
         if (jobs[0].status !== 'completed') throw new Error('App tests job is not completed');
         if (jobs[0].conclusion === 'skipped') {
-          rows.push(`| app-tests | NOT RUN | — | App tests skipped (app_tests=false) ${url} |`);
+          rows.push(`| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${url} |`);
         } else if (jobs[0].conclusion === 'success') {
           rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
         } else {

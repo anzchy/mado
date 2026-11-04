@@ -23,6 +23,41 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether the native (macOS) jobs run. Only a pull request whose complete changed-file list is inside the
+  # reviewed documentation/agent allowlist in scripts/ci/native-inputs.mjs skips them; any doubt, and every push or
+  # dispatch, runs everything. Walking skeleton still reports on every run.
+  changes:
+    name: Native inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      native: ${{ steps.classify.outputs.native }}
+    steps:
+      # The classifier comes from the base commit, so a pull request cannot loosen the rule that judges it.
+      - name: Checkout trusted base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: trusted
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Classify changed files
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f trusted/scripts/ci/native-inputs.mjs ]; then
+            node trusted/scripts/ci/native-inputs.mjs
+          else
+            echo 'native-inputs: base has no classifier; running native jobs'
+            echo 'native=true' >> "$GITHUB_OUTPUT"
+          fi
+
   # The package suite runs as two processes (#391): the non-UI targets, and PicseeMacUITests one test at a time,
   # because its window tests saturate the runner's main actor when Swift Testing runs them in parallel. Each run is
   # wrapped in scripts/ci/test-watchdog.mjs and the logs, xunit results and stacks are uploaded even when the job fails.
@@ -31,6 +66,8 @@ jobs:
   # `spindump`, each call cut off at what is left), 15 s TERM grace, KILL, and about 130 s for the upload.
   package-tests:
     name: Package tests (non-UI)
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -60,6 +97,8 @@ jobs:
 
   package-macui-tests:
     name: Package tests (MacUI)
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -107,6 +146,8 @@ jobs:
   # required check). A dispatch with app_tests=false runs only the build and names the job after it.
   app-tests:
     name: ${{ (github.event_name == 'workflow_dispatch' && !inputs.app_tests) && 'Build unsigned app' || 'App tests' }}
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-26
     timeout-minutes: 45
     outputs:
@@ -138,12 +179,13 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
 
-  # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the ledger check, both package
-  # suites and the unsigned build step must all have succeeded.
+  # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the classifier and the ledger
+  # check must have succeeded, and then either both package suites and the unsigned build step succeeded, or the
+  # classifier found no native input and every native job skipped.
   walking-skeleton:
     name: Walking skeleton
     if: always()
-    needs: [ledger-check, package-tests, package-macui-tests, app-tests]
+    needs: [changes, ledger-check, package-tests, package-macui-tests, app-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -151,6 +193,8 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Require the ledger check, package tests and the unsigned build
         env:
+          CHANGES: ${{ needs.changes.result }}
+          NATIVE: ${{ needs.changes.outputs.native }}
           LEDGER: ${{ needs.ledger-check.result }}
           PACKAGE: ${{ needs.package-tests.result }}
           MACUI: ${{ needs.package-macui-tests.result }}
