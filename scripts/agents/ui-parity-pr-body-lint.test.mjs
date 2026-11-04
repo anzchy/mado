@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
-import { symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -613,7 +612,7 @@ test('CLI explains changed ancestor inputs even when Source contains CODE same',
   assert.doesNotMatch(result.stderr, /without CODE same/);
 });
 
-const checkerAck = (sha, families = 'ledger,design', rationale = 'Update checker rules', audits = 'i471-gpt.md,i471-opus.md') =>
+const checkerAck = (sha, families = 'ledger,design', rationale = 'Update checker rules', audits = '~/.picsee/herdr/gpt-auditor/i471-audit.md,~/.picsee/herdr/opus-auditor/i471-confirm.md') =>
   `Checker-Change: ${sha} families=${families} — ${rationale} — audits: ${audits}`;
 
 function checkerGitFixture(t) {
@@ -667,8 +666,74 @@ test('checker-change CLI covers every changed family and allows either order and
   const missing = f.run(checkerAck(sha, 'ledger'));
   assert.equal(missing.status, 1, missing.stdout + missing.stderr);
   assert.match(missing.stderr, /Checker-Change.*design/);
-  assertCLIPass(f.run(checkerAck(sha.toUpperCase(), 'ledger,design', 'Document changed rules', 'https://example.invalid/gpt,~/reports/opus.md')));
+  assertCLIPass(f.run(checkerAck(sha.toUpperCase(), 'ledger,design', 'Document changed rules', 'https://github.com/anzchy/picsee/pull/472#pullrequestreview-123,https://github.com/anzchy/picsee/pull/472#issuecomment-456')));
 });
+
+for (const refs of [
+  '#471,#449', 'TBD.md,none.md', 'http://x,http://y',
+  'a.md#r1,a.md#r2', 'a.md,./a.md', 'a.md,b.md',
+  'https://github.com/anzchy/picsee/pull/0#issuecomment-1,https://github.com/anzchy/picsee/pull/472#issuecomment-0',
+  '~/.picsee/herdr/x-auditor/i471-audit.md,~/.picsee/herdr/opus-auditor/i471-audit.md',
+  'https://example.com/review/1,https://example.com/review/2',
+  'https://github.com/anzchy/other/pull/472#issuecomment-1,https://github.com/anzchy/picsee/pull/472#issuecomment-2',
+  'https://github.com/anzchy/picsee/pull/472,https://github.com/anzchy/picsee/issues/471',
+  '~/.picsee/herdr/gpt-auditor/i471-audit.md#r1,~/.picsee/herdr/gpt-auditor/i471-audit.md#r2',
+  '~/.picsee/herdr/gpt-auditor/i471-audit.md,~/.picsee/herdr/gpt-auditor/./i471-audit.md',
+  ...['TBD', 'none', 'n/a', 'n-a', 'todo', 'x'].map(token =>
+    `~/.picsee/herdr/gpt-auditor/${token}-audit.md,~/.picsee/herdr/opus-auditor/i471-audit.md`),
+]) {
+  test(`checker-change CLI rejects non-report or duplicate audit references ${refs}`, t => {
+    const f = checkerGitFixture(t);
+    const sha = f.change('scripts/ledger/rules.mjs');
+    const result = f.run(checkerAck(sha, 'ledger', 'Update rules', refs));
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /Checker-Change.*audit/i);
+  });
+}
+
+test('checker-change CLI accepts normalized report paths and mixed report/review references', t => {
+  const f = checkerGitFixture(t);
+  const sha = f.change('scripts/ledger/rules.mjs');
+  assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
+    '~/.picsee/herdr/gpt-auditor/./i471-audit2.md#r1,~/.picsee/herdr/opus-auditor/i471-confirm-fix1.md')));
+  assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
+    '~/.picsee/herdr/gpt-auditor/i471-audit.md,https://github.com/anzchy/picsee/pull/472#pullrequestreview-123')));
+});
+
+test('checker-change CLI ignores fenced unclosed comments before a real acknowledgement', t => {
+  const f = checkerGitFixture(t);
+  const sha = f.change('scripts/ledger/rules.mjs');
+  const ack = checkerAck(sha, 'ledger');
+  assertCLIPass(f.run(ack));
+  for (const fence of ['```', '~~~']) {
+    assertCLIPass(f.run(`${fence}html\n<!--\n${fence}\n${ack}`));
+    const hidden = f.run(`${fence}text\n${ack}\n${fence}`);
+    assert.equal(hidden.status, 1, hidden.stdout + hidden.stderr);
+    assert.match(hidden.stderr, /Checker-Change.*required/i);
+  }
+  for (const end of ['', '\n-->']) {
+    const hidden = f.run(`<!--\n${ack}${end}`);
+    assert.equal(hidden.status, 1, hidden.stdout + hidden.stderr);
+    assert.match(hidden.stderr, /Checker-Change.*required/i);
+  }
+});
+
+for (const [label, change, reason] of [
+  ['separator-only rationale', sha => checkerAck(sha, 'ledger', '— — —'), /rationale/i],
+  ['mixed separator rationale', sha => checkerAck(sha, 'ledger', '- – —'), /rationale/i],
+  ['no space after first delimiter', sha => checkerAck(sha, 'ledger').replace('— Update', '—Update'), /format/i],
+  ['no space before first delimiter', sha => checkerAck(sha, 'ledger').replace('ledger —', 'ledger—'), /format/i],
+  ['no space before second delimiter', sha => checkerAck(sha, 'ledger').replace('rules —', 'rules—'), /format/i],
+  ['no space after second delimiter', sha => checkerAck(sha, 'ledger').replace('— audits:', '—audits:'), /format/i],
+]) {
+  test(`checker-change CLI rejects ${label}`, t => {
+    const f = checkerGitFixture(t);
+    const sha = f.change('scripts/ledger/rules.mjs');
+    const result = f.run(change(sha));
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, reason);
+  });
+}
 
 test('non-checker CLI needs no acknowledgement and permits a stray acknowledgement', t => {
   const f = checkerGitFixture(t);

@@ -86,13 +86,15 @@ Checker-Change: <40-hex-head-SHA> families=<family-list> — <rationale> — aud
 
 - SHA 必须是当前 PR head 的完整 40 位 hex（大小写均可），每次更新 head 后重写此行。
 - `family-list` 用逗号分隔小写 `ledger`、`design`，不得重复或写未知名称；必须覆盖所有发生变化的类别，顺序任意，允许多列另一个已知类别。例如 `families=ledger,design`。
-- `rationale` 是同一行内非空的修改理由；用两侧有空格的 `—` 分隔三个字段。
-- `audits` 至少列出两条不同、以逗号分隔的独立审计引用，因为 checker 变更仍须双独立 diff 审计。每条引用为无空白、无逗号的 HTTP(S) URL、以 `.md` 结尾的报告路径或文件名（可带 `#anchor`，路径可带 `~/`），或 `#<issue-number>`。不能用 `TBD`、`none` 或 `—` 占位。lint 只检查语法与不同引用；审查者负责确认报告存在、审计者独立且明确覆盖 checker 修改。
+- `rationale` 是同一行内的修改理由，去除空白及 `-`、`–`、`—` 分隔符后必须非空；用两侧各有至少一个空格或 tab 的 `—` 分隔三个字段，缺少任一侧空白都会失败。
+- `audits` 至少列出两条规范化后不同、以逗号分隔的独立审计引用，因为 checker 变更仍须双独立 diff 审计。只接受以下两类（引用内部无空白）：
+  - herdr 报告：`~/.picsee/herdr/<auditor>-auditor/<id>-audit<suffix>.md` 或同目录的 `<id>-confirm<suffix>.md`，使用这个与仓库路径无关的写法。`auditor` 为小写字母/数字组，以单个 `-` 连接；`id` 以字母或数字开头，余下及可为空的 `suffix` 只含字母、数字、`.`、`_`、`-`。可加由字母、数字、`_`、`-` 组成的非空 `#anchor`。先按 POSIX 规则折叠路径中的 `.`、`..` 和重复 `/`，再验证格式并去掉 anchor 比较身份；同一报告的不同段落不算两份报告。
+  - 本仓库 PR review/comment：`https://github.com/anzchy/picsee/pull/<number>#pullrequestreview-<number>` 或 `https://github.com/anzchy/picsee/pull/<number>#issuecomment-<number>`；number 均为无前导零的正整数，URL 按完整字符串比较，不能附加 query 或其他路径。
+- 不接受 issue 编号、普通网页 URL、任意 Markdown 文件名，或占位引用。报告路径中以 `. / _ -` 为边界的 `TBD`、`none`、`todo`、`x`、`n/a`、`n-a`（不区分大小写）均视为占位符。例如 `TBD.md,none.md`、`http://x,http://y`、同报告的 `#r1,#r2` 均失败。lint 用于拦截诚实误填；不访问网络或读取本地报告来证明真实性，审查者仍负责确认报告存在、审计者独立且明确覆盖 checker 修改。
 
 缺失确认行、SHA 过期、类别不全、空理由、缺失或不完整的审计引用都会失败。没有 checker 变更的 PR 不要求此行；多余的确认行允许保留且不校验，避免无关 PR 因遗留说明被阻塞。`scripts/design-check.mjs`、`scripts/ledger-extra/` 等相邻名称不属于这两个范围。
 
-pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI decides (local check deferred)` 并明确提醒 PR body 必须携带 `Checker-Change:` 供独立审查。CI 执行 PR 自己的 ledger/design checker，因此绿色结果本身不能证明 checker 没有被削弱；本确认行把此事实和对应审计绑定到 head，不能替代两份独立审计或上文的 workflow diff 人工审查。
-
+pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI decides (local check deferred)` 并明确提醒 PR body 必须携带 `Checker-Change:` 供独立审查；消息直接给出 `families=ledger` 或 `design (shortcut)` 对应的 `families=design`。pre-push 比较 installed base 与 topic 的完整树，lint 比较 merge-base 到 PR head；陈旧 topic 可能只在本地触发 deferral，这是两种比较基线的预期差异。CI 执行 PR 自己的 ledger/design checker，因此绿色结果本身不能证明 checker 没有被削弱；本确认行把此事实和对应审计绑定到 head，不能替代两份独立审计或上文的 workflow diff 人工审查。
 
 ### 变更路径真机冒烟（每个用户可见改动的 PR 合入前，#175）
 
