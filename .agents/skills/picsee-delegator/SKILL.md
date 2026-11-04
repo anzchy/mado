@@ -98,12 +98,13 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    once per auditor.
 6. **Rebase** — `$SK/scripts/rebase-ledger.sh` in the PR worktree (never pipe `git rebase`; it keeps `#` body
    lines), then `$SK/scripts/rebase-verify.sh <old-base> <audited-head> <new-base> <new-head>`. A verdict covers a
-   patch: compare the full patch except `docs/feature-ledger.md` and `docs/feature-ledger.html` (regenerated and
-   checked by the ledger gate), preserving paths, renames, deletions, modes and binary content while normalizing
-   blob IDs and hunk line offsets, then replaying the audited patch in an isolated index on the new base and
-   comparing the resulting tree to the new head to verify edit locations. `CODE same` keeps audits and smoke;
-   `CODE differ` → quick combination check by both auditors before gates. A clean cherry-pick can still report
-   `CODE differ` when upstream changes the three context lines around an edit; use the same combination check.
+   patch: replay the audited full-index patch with `git apply --cached --3way` in an isolated index on the new
+   base, then require an exact tree match with the new head. Only `docs/feature-ledger.md` and
+   `docs/feature-ledger.html` are excluded (regenerated and checked by the ledger gate); paths, renames,
+   deletions, modes, binary content, tests, docs, design and dependencies remain in scope.
+   `CODE same` means that clean replay exactly matches the candidate tree, including when nearby upstream
+   context changed; it keeps audits and smoke. Patch hashes are diagnostics, not the equality decision.
+   `CODE differ` → quick combination check by both auditors before gates.
    `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).

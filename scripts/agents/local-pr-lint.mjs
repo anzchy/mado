@@ -65,7 +65,7 @@ try {
     validatorProcess.once('error', reject);
     validatorProcess.once('close', (status, signal) => resolve({ status, signal }));
   });
-  if (result.error || result.signal || result.status === null) throw Error(`trusted validator failed to run: ${result.error?.message ?? result.signal}`);
+  if (result.signal || result.status === null) throw Error(`trusted validator failed to run: ${result.signal ?? "missing exit status"}`);
   process.exitCode = result.status;
 } catch (error) {
   console.error(`local-pr-lint: ${error.message}`);

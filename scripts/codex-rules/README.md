@@ -53,22 +53,46 @@ Optional mdpro interop tests use `PICSEE_MDPRO_SCRIPT` for mdpro’s `scripts/he
 Run the GUI script in its repository so its heavy-lock dependency is available; only an
 unset GUI variable skips, while a configured invalid script or dependency fails.
 
-Opt in to the light pre-push checks by extracting a trusted base hook and installing it:
+Opt in to the light pre-push checks using a trusted base containing the #449 installer protocol.
+An older base is rejected explicitly; fetch and wait for #449 to land before installing:
 
 ```sh
-hook_bootstrap=$(mktemp "${TMPDIR:-/tmp}/picsee-base-pre-push.XXXXXXXX")
-git show origin/main:scripts/git-hooks/pre-push > "$hook_bootstrap" &&
-  sh "$hook_bootstrap" --install origin/main
-rm -f "$hook_bootstrap"
+(
+  set -eu
+  hook_bootstrap=$(mktemp "${TMPDIR:-/tmp}/picsee-base-pre-push.XXXXXXXX")
+  trap 'rm -f "$hook_bootstrap"' 0
+  git show origin/main:scripts/git-hooks/pre-push > "$hook_bootstrap"
+  if [ "$(sh "$hook_bootstrap" --install-capability </dev/null)" != picsee-pre-push-installer-v1 ]; then
+    echo 'pre-push: base lacks installer support; fetch a base containing #449 before installing' >&2
+    exit 2
+  fi
+  sh "$hook_bootstrap" --install origin/main </dev/null
+  installed=$(git config --local --get core.hooksPath)
+  case "$installed" in
+    /*) ;;
+    *) echo 'pre-push: installer did not set an absolute core.hooksPath' >&2; exit 2 ;;
+  esac
+  [ -x "$installed/pre-push" ] || { echo 'pre-push: installed hook is missing or not executable' >&2; exit 2; }
+)
 ```
 
 Inspect `git config --get core.hooksPath` first: installation replaces the repository-local
 setting, which applies to linked worktrees too. The installer archives the base under the
 Git common directory and sets an absolute hooksPath into that snapshot. The hook, lint runner,
-and ledger/shortcut checkers run from that frozen base; pushed OIDs supply the checked data.
-Fetch and reinstall to adopt a newer base. Old snapshots remain available to concurrent pushes.
+and checker code run from that frozen base; pushed OIDs supply the checked data. When a pushed
+commit changes `scripts/ledger/` or `scripts/design/` relative to that installed base, the hook
+prints “checker changed in topic — CI decides” and defers only that checker to CI. This allows
+checker data and renderer updates in the same PR without executing topic checker code locally.
+The unchanged checker and the trusted PR-body validator still run. A local deferred result is
+not a CI pass; require the relevant CI checks before landing. Fetch and reinstall to adopt a
+newer base. Installation removes its archive; it retains the current and previous selections
+and snapshots from the last seven days, then prunes older snapshots. Recent snapshots remain
+available for concurrent short pushes.
 A relative `core.hooksPath=scripts/git-hooks` executes topic code; a worktree whose branch
 predates `scripts/git-hooks/pre-push` runs no hook at all with that shared relative setting.
+An absolute hooksPath also silently runs no hook if its snapshot is deleted or the repository
+moves. After moving the repository, reinstall from the trusted base; preserve the configured
+snapshot and verify `test -x "$(git config --get core.hooksPath)/pre-push"` before relying on it.
 
 Git invokes the hook during the push started by `push-guard.py`, after that guard checks role
 and destination. Set `PICSEE_PR_BODY=/absolute/path/to/body.md` to also lint the body against

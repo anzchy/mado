@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -179,8 +179,7 @@ test('installed hook and runner survive topic replacement and still reject stale
     cwd: f.repo, input: `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`,
     encoding: 'utf8', env: { ...process.env, PICSEE_PR_BODY: '' }, timeout: 15000,
   });
-  assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /ledger.*stale/i);
+  status(result, 0, /ledger.*checker changed.*CI decides/i);
 });
 
 
@@ -195,3 +194,117 @@ test('installation refuses missing runner without changing prior hooksPath', t =
   assert.notEqual(missing.status, 0);
   assert.equal(f.git('config', '--get', 'core.hooksPath'), before);
 });
+
+function documentedBootstrap() {
+  const readme = readFileSync(join(root, 'scripts/codex-rules/README.md'), 'utf8');
+  const snippet = readme.match(/Opt in to the light pre-push checks[\s\S]*?```sh\n([\s\S]*?)\n```/)?.[1];
+  assert.ok(snippet, 'missing documented hook bootstrap');
+  return snippet;
+}
+function bootstrap(f) {
+  return spawnSync('sh', ['-c', documentedBootstrap()], { cwd: f.repo, encoding: 'utf8', timeout: 15000,
+    env: { ...process.env, PICSEE_PR_BODY: '' } });
+}
+function baseAtHead(f) {
+  f.git('add', 'scripts'); f.git('commit', '-qm', 'test installation base');
+  f.git('update-ref', 'refs/remotes/origin/main', f.git('rev-parse', 'HEAD'));
+}
+test('documented bootstrap rejects a pre-install base loudly and preserves hooksPath', t => {
+  const f = fixture(t);
+  const old = execFileSync('git', ['show', 'e000f1dc:scripts/git-hooks/pre-push'], { cwd: root, encoding: 'utf8' });
+  f.write('scripts/git-hooks/pre-push', old);
+  baseAtHead(f);
+  const result = bootstrap(f);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /base.*(install|support)|install.*base/i);
+  assert.equal(f.git('config', '--get', 'core.hooksPath'), '/dev/null');
+  const direct = spawnSync('sh', [hook, '--install', 'origin/main'], { cwd: f.repo, encoding: 'utf8' });
+  assert.notEqual(direct.status, 0, direct.stdout + direct.stderr);
+  assert.match(direct.stderr, /base.*installer/i);
+  assert.equal(f.git('config', '--get', 'core.hooksPath'), '/dev/null');
+});
+test('documented bootstrap installs an absolute runnable hook from a capable base', t => {
+  const f = fixture(t);
+  status(bootstrap(f), 0, /installed base/);
+  const installed = f.git('config', '--get', 'core.hooksPath');
+  assert.ok(installed.startsWith('/'));
+  assert.ok(existsSync(join(installed, 'pre-push')));
+});
+for (const mode of ['show-failure', 'installer-failure', 'false-success', 'relative-path']) {
+  test(`documented bootstrap propagates ${mode}`, t => {
+    const f = fixture(t);
+    if (mode === 'relative-path') f.git('config', 'core.hooksPath', 'scripts/git-hooks');
+    if (mode === 'show-failure') f.git('update-ref', '-d', 'refs/remotes/origin/main');
+    else {
+      f.write('scripts/git-hooks/pre-push', `#!/bin/sh\nif [ "$1" = --install-capability ]; then echo picsee-pre-push-installer-v1; exit 0; fi\n${mode === 'installer-failure' ? 'exit 23' : 'exit 0'}\n`);
+      baseAtHead(f);
+    }
+    const result = bootstrap(f);
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    if (mode === 'installer-failure') assert.equal(result.status, 23);
+    assert.equal(f.git('config', '--get', 'core.hooksPath'), mode === 'relative-path' ? 'scripts/git-hooks' : '/dev/null');
+  });
+}
+
+test('reinstall removes archive and prunes aged snapshots while retaining current and previous hooks', t => {
+  const f = fixture(t);
+  const install = () => {
+    status(spawnSync('sh', [hook, '--install', 'origin/main'], { cwd: f.repo, encoding: 'utf8' }), 0);
+    return f.git('config', '--get', 'core.hooksPath');
+  };
+  const first = install();
+  const snapshot = join(first, '../../..');
+  assert.equal(existsSync(join(snapshot, 'input.tar')), false);
+  const old = new Date(Date.now() - 10 * 86400000);
+  utimesSync(snapshot, old, old);
+  const second = install();
+  assert.ok(existsSync(first), 'retain previously configured hook for concurrent pushes');
+  assert.ok(existsSync(second));
+  const third = install();
+  assert.equal(existsSync(first), false, 'prune aged, no longer selected snapshot');
+  assert.ok(existsSync(second), 'retain previous snapshot');
+  assert.ok(existsSync(third), 'retain installed snapshot');
+});
+
+for (const checker of ['ledger', 'shortcut']) {
+  test(`changed ${checker} checker defers only its own check to CI without executing topic code`, t => {
+    const f = fixture(t);
+    status(spawnSync('sh', [hook, '--install', 'origin/main'], { cwd: f.repo, encoding: 'utf8' }), 0);
+    const installed = f.git('config', '--get', 'core.hooksPath');
+    const path = checker === 'ledger' ? 'scripts/ledger/build.mjs' : 'scripts/design/shortcut-model.mjs';
+    const original = readFileSync(join(f.repo, path), 'utf8');
+    if (checker === 'ledger') {
+      f.write(path, original.replace('<!doctype html>', '<!-- topic renderer -->\n<!doctype html>'));
+      execFileSync(process.execPath, [path], { cwd: f.repo });
+      execFileSync(process.execPath, [path, '--check'], { cwd: f.repo });
+    } else {
+      f.write('App/NewKeys.swift', 'func keyDown(event: Event) { if event.keyCode == 99 {} }\n');
+      f.write(path, original.replace('export const KEY_SITES = {',
+        "export const KEY_SITES = { 'App/NewKeys.swift': { 99: { excluded: 'fixture control activation' } },"));
+      execFileSync(process.execPath, [path], { cwd: f.repo });
+    }
+    f.git('add', 'scripts', 'App', 'docs/feature-ledger.html'); f.git('commit', '-qm', 'teach checker');
+    const run = (suppliedBody = false) => spawnSync(join(installed, 'pre-push'), ['origin', 'unused'], { cwd: f.repo,
+      input: `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`, encoding: 'utf8', timeout: 15000,
+      env: { ...process.env, PICSEE_PR_BODY: suppliedBody ? f.body : '' } });
+    const deferred = run();
+    status(deferred, 0, new RegExp(`${checker}.*checker changed.*CI decides`, 'i'));
+    assert.doesNotMatch(deferred.stdout + deferred.stderr, /TOPIC CHECKER MUST NOT EXECUTE/);
+    f.write(path, 'throw Error("TOPIC CHECKER MUST NOT EXECUTE");\n');
+    f.git('add', path); f.git('commit', '-qm', 'sentinel topic checker');
+    const sentinel = run();
+    status(sentinel, 0, /checker changed.*CI decides/i);
+    assert.doesNotMatch(sentinel.stdout + sentinel.stderr, /TOPIC CHECKER MUST NOT EXECUTE/);
+    writeFileSync(f.body, gates(f.base));
+    status(run(true), 1, checker === 'shortcut' ? /UI files changed; PR body needs/ : /stale head/);
+    // The unchanged checker still rejects drift, even when the other is deferred.
+    if (checker === 'ledger') {
+      const page = 'design/prototypes/picsee-browser/states/shortcuts.html';
+      f.write(page, readFileSync(join(f.repo, page), 'utf8').replace('menu:Quit Picsee', 'menu:Unknown command'));
+    } else f.write('docs/feature-ledger.html', 'stale');
+    f.git('add', 'docs', 'design'); f.git('commit', '-qm', 'other checker drift');
+    const failed = run();
+    assert.notEqual(failed.status, 0, failed.stdout + failed.stderr);
+    assert.match(failed.stdout + failed.stderr, checker === 'ledger' ? /shortcut-model FAIL/ : /ledger.*stale/);
+  });
+}
