@@ -272,6 +272,10 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
 
     public nonisolated var supportsMemoryReuse: Bool { true }
 
+    public nonisolated func memoryGenerationIsCurrent(_ ticket: ThumbnailCacheTicket) -> Bool {
+        ticket.generation == CacheIndexLocks.shared.generation(for: directory)
+    }
+
     public func revalidateMemory(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
         try ticket.request.accessPermit?.check()
         let validated = try await loadPayload(ticket, reusing: image)
