@@ -35,6 +35,57 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
     #expect(abs(rgb.blueComponent - expected.blue) < 0.01)
 }
 
+private let lostAccessPinnedPageSHA256 = "9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62"
+
+private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
+    let manifest = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let entries = manifest?["states"] as? [[String: Any]]
+    guard let entry = entries?.first(where: { $0["name"] as? String == "permission-denied" }) else {
+        return false
+    }
+    let expected: [String: Any] = [
+        "name": "permission-denied", "title": "26 目录权限失效",
+        "file": "permission-denied.html", "sha256": lostAccessPinnedPageSHA256,
+        "viewport": ["width": 1280, "height": 800],
+        "kind": "static-mockup", "origin": "local-C-adaptation"
+    ]
+    return NSDictionary(dictionary: entry).isEqual(to: expected)
+}
+
+@Test private func t320LostAccessManifestEntryFixtures() throws {
+    let page: [String: Any] = [
+        "name": "permission-denied", "title": "26 目录权限失效",
+        "file": "permission-denied.html", "sha256": lostAccessPinnedPageSHA256,
+        "viewport": ["width": 1280, "height": 800],
+        "kind": "static-mockup", "origin": "local-C-adaptation"
+    ]
+    let unrelated = ["name": "grid-light", "file": "grid-light.html", "sha256": "old-hash"]
+    let repinned = ["name": "grid-light", "file": "repinned-grid.html", "sha256": "new-hash"]
+    func manifest(_ entries: [[String: Any]]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["states": entries])
+    }
+    let baseline = try lostAccessManifestEntryRemainsExact(manifest([unrelated, page]))
+    #expect(baseline)
+    for entries in [[repinned, page], [page, repinned], [page]] {
+        let accepted = try lostAccessManifestEntryRemainsExact(manifest(entries))
+        #expect(accepted)
+        #expect(accepted == baseline)
+    }
+    let mutations: [(String, Any)] = [
+        ("name", "another-page"), ("file", "another-page.html"), ("sha256", "changed-hash"),
+        ("title", "Changed title"), ("kind", "interactive"), ("origin", "changed-origin"),
+        ("viewport", ["width": 1279, "height": 800]),
+        ("viewport", ["width": 1280, "height": 799])
+    ]
+    for (field, value) in mutations {
+        var changed = page
+        changed[field] = value
+        #expect(try !lostAccessManifestEntryRemainsExact(manifest([unrelated, changed])))
+    }
+    #expect(try !lostAccessManifestEntryRemainsExact(manifest([])))
+    #expect(try !lostAccessManifestEntryRemainsExact(manifest([unrelated])))
+}
+
 @Test @MainActor private func t229LostAccessPinnedSourceRemainsExact() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .appendingPathComponent("../../../..").standardizedFileURL
@@ -42,7 +93,7 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
     let page = try Data(contentsOf: directory.appendingPathComponent("permission-denied.html"))
     #expect(SHA256.hash(data: page).map { String(format: "%02x", $0) }.joined() == "9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62")
     let manifest = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
-    #expect(SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined() == "7c58ae1d9f4ee3ba6c1e61b29d60c82bad7c5a1662a88ee7c7af3e37c3c77f19")
+    #expect(try lostAccessManifestEntryRemainsExact(manifest))
 }
 
 @Test(arguments: LostAccessCase.all) @MainActor private func t229LostAccessPinnedNativeComposition(_ sample: LostAccessCase) throws {
