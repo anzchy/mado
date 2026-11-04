@@ -10,6 +10,11 @@ public actor AccessImageSource {
     private var display: AccessLease?
     private var pending = 0
     private var closed = false
+    private struct LeasedImage: Sendable {
+        let request: ImageDecodeRequest
+        let image: DecodedImage
+        let memoryTicket: ThumbnailCacheTicket?
+    }
     public static func open(_ request: AccessRequest, access: any AccessLeasing,
                             pipeline: any ImagePipeline, accessPermit: AccessWorkPermit? = nil) async throws -> AccessImageSource {
         try accessPermit?.check()
@@ -44,90 +49,117 @@ public actor AccessImageSource {
                        prepare: @escaping @Sendable (any ImagePipeline, URL, ItemIdentityRoot?) async throws -> ImageDecodeRequest)
         async throws -> (ImageDecodeRequest, DecodedImage) {
         guard !closed else { throw FileAccessError.startFailed }
-        pending += 1
         let pipeline = pipeline
         let accessPermit = accessPermit
         let cacheProvider = pipeline as? any ThumbnailCacheProviding
         let thumbnailCache = cacheProvider?.thumbnailCache
-        do {
-            try accessPermit?.check()
-            let result = try await access.withLease(request) { lease in
-                let file: URL
-                switch request {
-                case .fileGrant(let original): file = lease.resolvedFileURL ?? original
-                case .root(_, let url): file = url
-                }
-                let root = lease.rootID.map { ItemIdentityRoot(id: $0, url: lease.url) }
-                let prepared = try await prepare(pipeline, file, root)
-                let maximumPixelSize = prepared.maximumPixelSize
-                try Task.checkCancellation()
+        // A late invalidated memory result gets one fresh lease/attempt with memory disabled.
+        // Balance each attempt before its final synchronous delivery gate; errors cannot decrement twice.
+        var allowingMemory = true
+        while true {
+            let useMemory = allowingMemory
+            pending += 1
+            let result: LeasedImage
+            do {
                 try accessPermit?.check()
-                let request = ImageDecodeRequest(fileURL: file, maximumPixelSize: maximumPixelSize,
-                                                 renderKey: prepared.renderKey, priority: priority,
-                                                 isPreview: isPreview, identityRoot: root, accessPermit: accessPermit)
-                var ticket: ThumbnailCacheTicket?
-                if let thumbnailCache {
-                    do { ticket = try await thumbnailCache.prepare(request) }
-                    catch is CancellationError { throw CancellationError() }
-                    catch where AccessReadFailure.isPermissionDenied(error) { throw error }
-                    catch { ticket = nil } // Re-creatable cache failure cannot block source decoding.
-                    if let ticket {
-                        do {
-                            if let cached = try await cacheProvider?.cachedImage(for: ticket),
-                               let key = request.renderKey,
-                               cached.itemID == key.itemID, cached.revision == key.revision,
-                               cached.image.width > 0, cached.image.height > 0,
-                               cached.image.width <= maximumPixelSize,
-                               cached.image.height <= maximumPixelSize,
-                               cached.sourcePixelSize.width > 0, cached.sourcePixelSize.height > 0,
-                               cached.sourcePixelSize.width.isFinite, cached.sourcePixelSize.height.isFinite {
-                                try Task.checkCancellation()
-                                try accessPermit?.check()
-                                await cacheProvider?.retainThumbnail(cached, for: ticket)
-                                try Task.checkCancellation()
-                                try accessPermit?.check()
-                                return (request, Self.tagged(cached, with: accessPermit))
-                            }
-                        } catch is CancellationError { throw CancellationError() }
-                        catch where AccessReadFailure.isPermissionDenied(error) { throw error }
-                        catch { /* Source decoding remains authoritative on cache failure. */ }
+                result = try await access.withLease(request) { lease in
+                    let file: URL
+                    switch request {
+                    case .fileGrant(let original): file = lease.resolvedFileURL ?? original
+                    case .root(_, let url): file = url
                     }
-                }
-                try Task.checkCancellation()
-                try accessPermit?.check()
-                // A durable miss proves current source bytes, but a session-keyed memory hit
-                // or shared in-flight decode has no proof that its pixels came from those bytes.
-                let image: DecodedImage
-                if let cacheProvider, ticket != nil {
-                    image = try await cacheProvider.imageFresh(for: request)
-                } else {
-                    image = try await pipeline.image(for: request)
-                }
-                try Task.checkCancellation()
-                try accessPermit?.check()
-                if let thumbnailCache, let ticket {
-                    do {
-                        if try await thumbnailCache.storeForMemory(image, for: ticket) {
-                            await cacheProvider?.retainThumbnail(image, for: ticket)
+                    let root = lease.rootID.map { ItemIdentityRoot(id: $0, url: lease.url) }
+                    let prepared = try await prepare(pipeline, file, root)
+                    let maximumPixelSize = prepared.maximumPixelSize
+                    try Task.checkCancellation()
+                    try accessPermit?.check()
+                    let request = ImageDecodeRequest(fileURL: file, maximumPixelSize: maximumPixelSize,
+                                                     renderKey: prepared.renderKey, priority: priority,
+                                                     isPreview: isPreview, identityRoot: root, accessPermit: accessPermit)
+                    var ticket: ThumbnailCacheTicket?
+                    if let thumbnailCache {
+                        do { ticket = try await thumbnailCache.prepare(request) }
+                        catch is CancellationError { throw CancellationError() }
+                        catch where AccessReadFailure.isPermissionDenied(error) { throw error }
+                        catch { ticket = nil } // Re-creatable cache failure cannot block source decoding.
+                        if let ticket {
+                            do {
+                                if let cachedResult = try await cacheProvider?.cachedThumbnail(for: ticket, allowingMemory: useMemory),
+                                   useMemory || !cachedResult.fromMemory {
+                                    let cached = cachedResult.image
+                                    if let key = request.renderKey,
+                                       cached.itemID == key.itemID, cached.revision == key.revision,
+                                       cached.image.width > 0, cached.image.height > 0,
+                                       cached.image.width <= maximumPixelSize,
+                                       cached.image.height <= maximumPixelSize,
+                                       cached.sourcePixelSize.width > 0, cached.sourcePixelSize.height > 0,
+                                       cached.sourcePixelSize.width.isFinite, cached.sourcePixelSize.height.isFinite {
+                                        try Task.checkCancellation()
+                                        try accessPermit?.check()
+                                        // Pipeline already renewed native memory; disk results still need warming here.
+                                        if !cachedResult.fromMemory { await cacheProvider?.retainThumbnail(cached, for: ticket) }
+                                        try Task.checkCancellation()
+                                        try accessPermit?.check()
+                                        return LeasedImage(request: request, image: Self.tagged(cached, with: accessPermit),
+                                                           memoryTicket: cachedResult.fromMemory ? ticket : nil)
+                                    }
+                                }
+                            } catch is CancellationError { throw CancellationError() }
+                            catch where AccessReadFailure.isPermissionDenied(error) { throw error }
+                            catch { /* Source decoding remains authoritative on cache failure. */ }
                         }
                     }
-                    catch is CancellationError { throw CancellationError() }
-                    catch where AccessReadFailure.isPermissionDenied(error) { throw error }
-                    catch let error as ImageLoadError where error.kind == .sourceChanged { throw error }
-                    catch { /* The decoded source remains deliverable. */ }
+                    try Task.checkCancellation()
+                    try accessPermit?.check()
+                    // A durable miss proves current source bytes, but a session-keyed memory hit
+                    // or shared in-flight decode has no proof that its pixels came from those bytes.
+                    let image: DecodedImage
+                    if let cacheProvider, ticket != nil {
+                        image = try await cacheProvider.imageFresh(for: request)
+                    } else {
+                        image = try await pipeline.image(for: request)
+                    }
+                    try Task.checkCancellation()
+                    try accessPermit?.check()
+                    if let thumbnailCache, let ticket {
+                        do {
+                            if try await thumbnailCache.storeForMemory(image, for: ticket) {
+                                await cacheProvider?.retainThumbnail(image, for: ticket)
+                            }
+                        }
+                        catch is CancellationError { throw CancellationError() }
+                        catch where AccessReadFailure.isPermissionDenied(error) { throw error }
+                        catch let error as ImageLoadError where error.kind == .sourceChanged { throw error }
+                        catch { /* The decoded source remains deliverable. */ }
+                    }
+                    try Task.checkCancellation()
+                    try accessPermit?.check()
+                    return LeasedImage(request: request, image: Self.tagged(image, with: accessPermit), memoryTicket: nil)
                 }
-                try Task.checkCancellation()
                 try accessPermit?.check()
-                return (request, Self.tagged(image, with: accessPermit))
+            } catch {
+                pending -= 1; closed = true
+                await releaseIfClosed()
+                throw error
             }
-            try accessPermit?.check()
             pending -= 1
             await releaseIfClosed()
-            return result
-        } catch {
-            pending -= 1; closed = true
-            await releaseIfClosed()
-            throw error
+            if let memoryTicket = result.memoryTicket {
+                do {
+                    try Task.checkCancellation()
+                    try accessPermit?.check()
+                    // withLease and display cleanup both await. No await follows this native delivery gate.
+                    if thumbnailCache?.memoryGenerationIsCurrent(memoryTicket) != true {
+                        allowingMemory = false
+                        continue
+                    }
+                } catch {
+                    closed = true
+                    await releaseIfClosed()
+                    throw error
+                }
+            }
+            return (result.request, result.image)
         }
     }
     private static func tagged(_ image: DecodedImage, with permit: AccessWorkPermit?) -> DecodedImage {

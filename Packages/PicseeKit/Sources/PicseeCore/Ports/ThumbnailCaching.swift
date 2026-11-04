@@ -23,6 +23,8 @@ public protocol ThumbnailCaching: Sendable {
     /// Revalidates a proven resident buffer without allocating another pixel buffer.
     /// Source, payload, generation, and current authority must all remain valid.
     func revalidateMemory(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws -> DecodedImage?
+    /// Synchronous final native-memory delivery gate, callable after the last awaited handoff.
+    func memoryGenerationIsCurrent(_ ticket: ThumbnailCacheTicket) -> Bool
 }
 
 public extension ThumbnailCaching {
@@ -32,6 +34,16 @@ public extension ThumbnailCaching {
         return false
     }
     func revalidateMemory(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? { nil }
+    func memoryGenerationIsCurrent(_ ticket: ThumbnailCacheTicket) -> Bool { false }
+}
+
+/// Keep native-memory provenance through the lease-release handoff without changing the disk-read contract.
+package struct CachedThumbnailResult: Sendable {
+    package let image: DecodedImage
+    package let fromMemory: Bool
+    package init(image: DecodedImage, fromMemory: Bool = false) {
+        self.image = image; self.fromMemory = fromMemory
+    }
 }
 
 /// Configuration bridge: the public image methods on a provider never consult this cache.
@@ -41,6 +53,7 @@ package protocol ThumbnailCacheProviding: ImagePipeline {
     func imageFresh(for request: ImageDecodeRequest) async throws -> DecodedImage
     /// Loads a durable hit; a pipeline with a shared memory budget reserves room for the payload decode first.
     func cachedImage(for ticket: ThumbnailCacheTicket) async throws -> DecodedImage?
+    func cachedThumbnail(for ticket: ThumbnailCacheTicket, allowingMemory: Bool) async throws -> CachedThumbnailResult?
     /// Called only under the source lease after positive durable correspondence evidence.
     func retainThumbnail(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async
 }
@@ -48,6 +61,9 @@ package protocol ThumbnailCacheProviding: ImagePipeline {
 package extension ThumbnailCacheProviding {
     func cachedImage(for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
         try await thumbnailCache?.load(ticket)
+    }
+    func cachedThumbnail(for ticket: ThumbnailCacheTicket, allowingMemory: Bool) async throws -> CachedThumbnailResult? {
+        try await cachedImage(for: ticket).map { CachedThumbnailResult(image: $0) }
     }
     func retainThumbnail(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async {}
 }

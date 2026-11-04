@@ -431,8 +431,8 @@ private func traitSets(_ view: some View) -> [String] {
     #expect(host.fittingSize.width >= 300 && value(model, "memory.hits") == "7")
 }
 
-/// Every request the disk cache can hold (grid thumbnails and viewer images up to 1024 px under a folder grant)
-/// loads through it and decodes a durable miss fresh, so only the rest reach the memory lookup.
+/// Eligible folder-granted thumbnails reuse resident pixels after validation, then fall back to disk.
+/// Other requests use the ordinary memory lookup.
 private let memoryLookupNote = "Hits and misses count memory lookups. Eligible folder-granted thumbnails first check resident pixels and count a hit only after current content, access and cache-generation validation. Memory misses fall back to Thumbnail Disk Cache. Larger images, single-file opens without a folder grant, and images not prepared by the disk cache use the ordinary memory path; pinned pixels still show in Entries and Size."
 private let diskLookupNote = "Counts disk-cache fallback loads for eligible grid thumbnails and viewer images up to 1024 px from folders you granted. Validated resident memory hits count under Memory Cache."
 

@@ -198,13 +198,23 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
     /// A durable hit decodes its payload inside the shared budget: it reserves the square bound for its edge
     /// (the payload's real ratio is unknown until it is read), capped at the budget.
     package func cachedImage(for ticket: ThumbnailCacheTicket) async throws -> DecodedImage? {
+        guard let result = try await cachedThumbnail(for: ticket, allowingMemory: true) else { return nil }
+        if result.fromMemory {
+            try Task.checkCancellation()
+            try ticket.request.accessPermit?.check()
+            guard thumbnailCache?.memoryGenerationIsCurrent(ticket) == true else { return nil }
+        }
+        return result.image
+    }
+    package func cachedThumbnail(for ticket: ThumbnailCacheTicket, allowingMemory: Bool) async throws -> CachedThumbnailResult? {
         guard let thumbnailCache, let key = ticket.request.renderKey else { return nil }
         try Task.checkCancellation()
         try ticket.request.accessPermit?.check()
         let memoryPermitted: Bool
-        if thumbnailCache.supportsMemoryReuse { memoryPermitted = await cache.permits(ticket.request.priority) }
+        if allowingMemory && thumbnailCache.supportsMemoryReuse { memoryPermitted = await cache.permits(ticket.request.priority) }
         else { memoryPermitted = false }
         let context = await snapshotContext()
+        var resolvedMemoryHit = false
         if memoryPermitted, let resident = await cache.holdThumbnail(ticket, context: context) {
             let validated: DecodedImage?
             do {
@@ -220,21 +230,31 @@ public final class ImageIOPipeline: ImagePipeline, CoverageRequesting, ImagePres
                 await unpin(key)
                 try Task.checkCancellation()
                 try ticket.request.accessPermit?.check()
-                await cache.thumbnailLookup(ticket, hit: true, context: context)
-                return validated
+                if thumbnailCache.memoryGenerationIsCurrent(ticket) {
+                    await cache.thumbnailLookup(ticket, hit: true, context: context)
+                    resolvedMemoryHit = true
+                    // Lookup tracing can suspend this handoff; nothing may await after this final gate.
+                    try Task.checkCancellation()
+                    try ticket.request.accessPermit?.check()
+                    if thumbnailCache.memoryGenerationIsCurrent(ticket) {
+                        return CachedThumbnailResult(image: validated, fromMemory: true)
+                    }
+                }
+            } else {
+                await unpin(key)
             }
-            await unpin(key)
         }
-        if memoryPermitted { await cache.thumbnailLookup(ticket, hit: false, context: context) }
+        if memoryPermitted && !resolvedMemoryHit { await cache.thumbnailLookup(ticket, hit: false, context: context) }
         let edge = ticket.request.maximumPixelSize
         let cost = (try? DecodeBudget.outputCost(width: edge, height: edge, maximumPixelSize: edge, bytesPerPixel: 4,
             budget: configuration.budget)) ?? configuration.budget
-        return try await admission.staged(ticket.request, key: key, cost: cost, priority: ticket.request.priority) { [cacheTrace] in
+        let image = try await admission.staged(ticket.request, key: key, cost: cost, priority: ticket.request.priority) { [cacheTrace] in
             // Counted when the load returned, as the disk cache counts it; a throw is neither a hit nor a miss.
             let image = try await thumbnailCache.load(ticket)
             cacheTrace?.diskLookup(hit: image != nil)
             return image
         }
+        return image.map { CachedThumbnailResult(image: $0) }
     }
     package func retainThumbnail(_ image: DecodedImage, for ticket: ThumbnailCacheTicket) async {
         guard thumbnailCache?.supportsMemoryReuse == true else { return }
