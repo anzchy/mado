@@ -16,7 +16,13 @@ test('native run passes when both suites and the unsigned build step succeed', (
 
 test('App test failure after a successful unsigned build does not fail the required check', () => {
   assert.equal(ok({ ...nativeRun, APP_JOB: 'failure' }), true);
-  assert.equal(ok({ ...nativeRun, APP_JOB: 'cancelled' }), true);
+});
+
+test('an App tests job that was cancelled, skipped or gave no result fails, whatever the build step reported', () => {
+  for (const result of ['cancelled', 'skipped', '', undefined, 'neutral']) {
+    assert.equal(ok({ ...nativeRun, APP_JOB: result }), false, String(result));
+    assert.equal(ok({ ...nativeRun, APP_JOB: result, UNSIGNED_BUILD: 'success' }), false, String(result));
+  }
 });
 
 test('app_tests=false dispatch: job ran only the build, which is what is required', () => {
