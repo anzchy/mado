@@ -2384,6 +2384,11 @@ extension CanvasWindowController: FolderScanHost {
     }
     func applyObservedGridSnapshot(_ snapshot: FolderSnapshot) {
         guard waitingAccessPosition == nil, scanReadContext?.permit.isCurrent != false else { return }
+        // A queued callback from the previous folder must not complete a new entry while it awaits admission:
+        // doing so discards Cancel Reading's restore point before the new scanner even starts (#506).
+        if folderEntryRestore != nil, snapshot.version.folder.resolvingSymlinksInPath().standardizedFileURL != gridFolderURL?.resolvingSymlinksInPath().standardizedFileURL { return }
+        // Cancellation restores an older source. Deliveries from the abandoned generation cannot repaint it.
+        if let scan = session.folderScan, scan.snapshot != snapshot { return }
         let previous = gridProjection.snapshot
         let movedFolder = previous?.version.rootID == snapshot.version.rootID &&
             previous?.version.folder != snapshot.version.folder
