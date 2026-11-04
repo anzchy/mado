@@ -105,31 +105,48 @@ import PicseeMacUI
         NSApp.sendAction(try #require(item.action), to: item.target, from: item)
         layout()
     }
+    /// The viewer's sidebar starts hidden (owner decision 2026-11-04); ⌃⌘S shows it for this viewing.
+    func showViewerSidebar() throws {
+        try #require(!controller.session.isViewerSidebarShown)
+        try fireSidebarItem()
+        try #require(controller.session.isViewerSidebarShown && shell?.isHidden == false)
+    }
 }
 
-@Test(.timeLimit(.minutes(3))) @MainActor func i444CtrlCmdSTogglesSidebarAcrossViewerAndGrid() async throws {
+/// Owner decision 2026-11-04 (#444): 进入大图时侧栏默认隐藏；在大图里点「显示侧栏」后，在这次查看中保持，返回网格时网格侧栏照旧。
+/// ⌃⌘S toggles the viewer's own sidebar; it never changes the grid's, and each entry starts hidden.
+@Test(.timeLimit(.minutes(3))) @MainActor func i444CtrlCmdSTogglesTheViewersOwnSidebar() async throws {
     let scene = try Issue444Scene()
     defer { scene.close() }
     try await scene.openGrid()
-    try await scene.enterViewer()
     let item = try #require(scene.sidebarItem)
-    let canvas = try #require(scene.canvas), shell = try #require(scene.shell)
+    let shell = try #require(scene.shell)
     let width = CGFloat(scene.store.value.gridSidebarWidth)
+    #expect(scene.store.value.gridSidebarVisible && !shell.sidebar.isHidden, "the grid shows its sidebar")
+    try await scene.enterViewer()
+    let canvas = try #require(scene.canvas)
+    #expect(shell.isHidden && canvas.frame.minX == 0, "entry from a grid with its sidebar shown starts hidden")
+    #expect(scene.menu.validateMenuItem(item) && item.title == "Show sidebar")
+    try scene.fireSidebarItem()
+    #expect(!shell.isHidden && canvas.frame.minX == width, "⌃⌘S shows it beside the image")
     #expect(scene.menu.validateMenuItem(item) && item.title == "Hide sidebar")
-    #expect(canvas.frame.minX == width && !shell.isHidden, "viewer opens with the grid's shown sidebar")
+    #expect(scene.store.value.gridSidebarVisible, "the grid's preference is untouched")
     try scene.fireSidebarItem()
-    #expect(!scene.store.value.gridSidebarVisible && scene.menu.validateMenuItem(item) && item.title == "Show sidebar")
-    #expect(canvas.frame.minX == 0 && canvas.frame.width == scene.content.bounds.width && shell.isHidden)
-    try scene.fireSidebarItem()
-    #expect(scene.store.value.gridSidebarVisible && canvas.frame.minX == width)
+    #expect(shell.isHidden && canvas.frame.width == scene.content.bounds.width && scene.store.value.gridSidebarVisible)
     try scene.fireSidebarItem()
     _ = scene.controller.route(.escape, from: .key)
     try await scene.waitUntil { scene.gridVisible }
-    #expect(shell.isGridSurface && shell.sidebar.isHidden == !scene.store.value.gridSidebarVisible)
+    #expect(shell.isGridSurface && !shell.sidebar.isHidden && scene.store.value.gridSidebarVisible,
+            "returning shows the grid's sidebar as it was")
     try scene.fireSidebarItem()
-    #expect(scene.store.value.gridSidebarVisible && !shell.sidebar.isHidden)
+    #expect(!scene.store.value.gridSidebarVisible && shell.sidebar.isHidden, "in the grid ⌃⌘S is the grid's own")
     try await scene.enterViewer(at: 1)
-    #expect(canvas.frame.minX == width && !shell.isHidden)
+    #expect(shell.isHidden && canvas.frame.minX == 0, "the next entry starts hidden again")
+    try scene.fireSidebarItem()
+    #expect(!shell.isHidden && !scene.store.value.gridSidebarVisible, "showing it in the viewer leaves the grid's hidden")
+    _ = scene.controller.route(.escape, from: .key)
+    try await scene.waitUntil { scene.gridVisible }
+    #expect(shell.isGridSurface && shell.sidebar.isHidden && !scene.store.value.gridSidebarVisible)
 }
 
 @Test(.timeLimit(.minutes(3))) @MainActor func i444SidebarMenuItemValidationTable() async throws {
@@ -138,9 +155,9 @@ import PicseeMacUI
         defer { scene.close() }
         scene.store.value.gridSidebarVisible = visible
         let item = try #require(scene.sidebarItem)
-        func check(_ surface: String, _ expected: Bool) {
+        func check(_ surface: String, _ expected: Bool, shown: Bool? = nil) {
             #expect(scene.menu.validateMenuItem(item) == expected, "\(surface) visible \(visible)")
-            #expect(item.title == (visible ? "Hide sidebar" : "Show sidebar"), "\(surface)")
+            #expect(item.title == ((shown ?? visible) ? "Hide sidebar" : "Show sidebar"), "\(surface)")
             if surface != "grid", surface != "home" {
                 #expect(scene.tool("chrome.sidebar.button")?.isEnabled == expected, "\(surface) tool")
             }
@@ -149,7 +166,7 @@ import PicseeMacUI
         try await scene.openGrid()
         check("grid", true)
         try await scene.enterViewer()
-        check("viewer from grid", true)
+        check("viewer from grid", true, shown: false)  // the viewer's own sidebar starts hidden
         scene.controller.open(scene.folder.appendingPathComponent("004.png"))
         try await scene.waitUntil { scene.controller.session.imageLoader.fileURL?.lastPathComponent == "004.png" }
         check("single image", false)
@@ -267,7 +284,7 @@ func i444ReturnToGridToolMatchesEscapeOnTwinControllers(index: Int) async throws
     try await scene.openGrid()
     try await scene.enterViewer(at: 1)
     let shell = try #require(scene.shell), canvas = try #require(scene.canvas)
-    #expect(!shell.isHidden)
+    try scene.showViewerSidebar()
     let before = scene.controller.session.currentItemID
     _ = scene.controller.route(.next, from: .key)
     #expect(scene.controller.session.currentItemID != before)
@@ -322,6 +339,7 @@ func i444ReturnToGridToolMatchesEscapeOnTwinControllers(index: Int) async throws
     defer { scene.close() }
     try await scene.openGrid()
     try await scene.enterViewer()
+    try scene.showViewerSidebar()
     let shell = try #require(scene.shell), canvas = try #require(scene.canvas)
     let frame = canvas.frame
     #expect(!shell.isHidden && !shell.isGridSurface && shell.footer.isHidden)
@@ -353,7 +371,9 @@ func i444SidebarVisibilityInvariantAcrossSourceTransitions(step: String) async t
         #expect(scene.tool("chrome.returnToGrid.button")?.isEnabled == session.canReturnToSource, "\(label)")
     }
     try check("viewer from grid")
-    #expect(scene.controller.session.isViewerSidebarShown)
+    #expect(!scene.controller.session.isViewerSidebarShown, "it starts hidden")
+    try scene.showViewerSidebar()
+    try check("viewer with its sidebar shown")
     if step == "single" {
         scene.controller.open(scene.folder.appendingPathComponent("005.png"))
         try await scene.waitUntil { scene.controller.session.imageLoader.fileURL?.lastPathComponent == "005.png" }
@@ -365,7 +385,7 @@ func i444SidebarVisibilityInvariantAcrossSourceTransitions(step: String) async t
         try check("grid")
         try await scene.enterViewer(at: 4)
         try check("viewer again")
-        #expect(scene.shell?.isHidden == false)
+        #expect(scene.shell?.isHidden == true, "the next viewing starts hidden")
     }
 }
 
@@ -404,6 +424,7 @@ func i444SidebarVisibilityInvariantAcrossSourceTransitions(step: String) async t
     try FileManager.default.copyItem(at: scene.folder.appendingPathComponent("000.png"), to: sub.appendingPathComponent("a.png"))
     try await scene.openGrid()
     try await scene.enterViewer()
+    try scene.showViewerSidebar()
     let shell = try #require(scene.shell)
     #expect(!shell.isHidden && shell.mode == .viewerSidebar)
     func subRow() -> GridSidebarFolderButton? {

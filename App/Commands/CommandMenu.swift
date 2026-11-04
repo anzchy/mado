@@ -399,7 +399,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
             return true
         }
         if item.identifier?.rawValue == "grid.sidebar.toggle.menu" {
-            item.title = String(localized: preferencesStore.value.gridSidebarVisible ? "Hide sidebar" : "Show sidebar")
+            let shown = windowController()?.viewerSidebarMenuState ?? preferencesStore.value.gridSidebarVisible
+            item.title = String(localized: shown ? "Hide sidebar" : "Show sidebar")
             return windowController()?.sidebarToggleAvailable == true
         }
         if item.action == #selector(focusGridSearch(_:)) {

@@ -25,7 +25,6 @@ import PicseeCore
     var viewerSidebarAvailable: Bool { available }
     func performChromeIntent(_ intent: ViewerChromeIntent) {
         intents.append(intent)
-        if intent == .toggleSidebar { store.value.gridSidebarVisible.toggle() }
     }
 }
 
@@ -156,7 +155,11 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
         f.store.value.gridSidebarVisible = visible
         let oracle = source == .preview && available
         #expect(f.session.canToggleViewerSidebar == oracle, "\(source) available \(available)")
-        #expect(f.session.isViewerSidebarShown == (oracle && visible), "\(source) available \(available) visible \(visible)")
+        // Owner decision 2026-11-04: the viewer's sidebar is its own state and starts hidden, whatever the grid shows.
+        #expect(!f.session.isViewerSidebarShown, "\(source) available \(available) grid visible \(visible)")
+        f.session.perform(intent: .toggleSidebar)
+        #expect(f.session.isViewerSidebarShown == oracle, "\(source) available \(available) grid visible \(visible)")
+        #expect(f.store.value.gridSidebarVisible == visible, "the grid's visibility is untouched")
     }
     let legacy = LegacyChromeHost()
     let session = ViewerSession(host: legacy)
@@ -180,10 +183,44 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     off.session.perform(intent: .toggleSidebar)
     #expect(off.host.intents.isEmpty && off.store.value.gridSidebarVisible && !off.session.isViewerSidebarShown)
     let on = Intent444Fixture(.preview, available: true)
-    #expect(on.session.isViewerSidebarShown)
+    let prefs = on.store.value
+    #expect(!on.session.isViewerSidebarShown)
     on.session.perform(intent: .toggleSidebar)
     #expect(on.host.intents == [.toggleSidebar])
-    #expect(on.store.value.gridSidebarVisible == false && on.session.isViewerSidebarShown == false)
+    #expect(on.session.isViewerSidebarShown && on.session.viewerSidebarVisible)
     on.session.perform(intent: .toggleSidebar)
-    #expect(on.store.value.gridSidebarVisible && on.session.isViewerSidebarShown)
+    #expect(on.host.intents == [.toggleSidebar, .toggleSidebar])
+    #expect(!on.session.isViewerSidebarShown && !on.session.viewerSidebarVisible)
+    #expect(on.store.value == prefs, "toggling in the viewer never writes the grid's preferences")
+}
+
+/// Owner decision 2026-11-04 (#444): 进入大图时侧栏默认隐藏；在大图里点「显示侧栏」后，在这次查看中保持，返回网格时网格侧栏照旧。
+/// "This viewing" is one folder preview: it lasts across ←/→ and ends when the preview ends (返回网格, Esc, or the
+/// folder being replaced); the next entry starts hidden again.
+@Test(arguments: [true, false])
+@MainActor func i444ViewerSidebarIsIndependentAndStartsHiddenEachViewing(gridVisible: Bool) {
+    let f = Intent444Fixture(.browsing, available: true)
+    f.store.value.gridSidebarVisible = gridVisible
+    let prefs = f.store.value
+    func enter() { f.session.select(f.items[1]); CommandRouter().route(.preview, from: .key, to: f.session) }
+    enter()
+    #expect(f.session.mode == .viewing && !f.session.isViewerSidebarShown, "entry starts hidden")
+    f.session.perform(intent: .toggleSidebar)
+    #expect(f.session.isViewerSidebarShown)
+    CommandRouter().route(.next, from: .key, to: f.session)
+    #expect(f.session.isViewerSidebarShown, "the choice holds across ←/→ in this viewing")
+    f.session.perform(intent: .returnToGrid)
+    #expect(f.session.mode == .browsing && !f.session.viewerSidebarVisible)
+    #expect(f.store.value == prefs, "the grid's sidebar is exactly as it was")
+    enter()
+    #expect(!f.session.isViewerSidebarShown, "the second entry starts hidden again")
+    f.session.perform(intent: .toggleSidebar)
+    CommandRouter().route(.escape, from: .key, to: f.session)
+    #expect(f.session.mode == .browsing)
+    enter()
+    #expect(!f.session.isViewerSidebarShown, "Esc's return ends the viewing too")
+    f.session.perform(intent: .toggleSidebar)
+    f.session.beginBrowsing(items: f.items.reversed(), sourceVersion: .init(2), scrollAnchor: nil)
+    #expect(!f.session.viewerSidebarVisible, "another folder replacing the preview ends the viewing")
+    #expect(f.store.value == prefs)
 }

@@ -37,7 +37,6 @@ import PicseeCore
     var viewerSidebarAvailable: Bool { available }
     func performChromeIntent(_ intent: ViewerChromeIntent) {
         intents.append(intent)
-        if intent == .toggleSidebar { store?.value.gridSidebarVisible.toggle() }
     }
 }
 

@@ -28,7 +28,11 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public private(set) var displayPreferences: DisplayPreferences
     public private(set) var selection = BrowserSelection()
     public private(set) var previewSet: PreviewSet? {
-        didSet { if oldValue != nil && previewSet == nil { applyPreferredFolderSort() } }
+        didSet {
+            if oldValue != nil && previewSet == nil { applyPreferredFolderSort() }
+            // #444: a folder preview starting or ending starts or ends one viewing; its sidebar starts hidden.
+            if (oldValue == nil) != (previewSet == nil) { viewerSidebarVisible = false }
+        }
     }
     /// While a viewed set is open, its reconciler owns deletion successors.
     public var allowsFolderScanPresentation: Bool { previewSet == nil && filePreviewSet == nil }
@@ -287,8 +291,10 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public var canToggleViewerSidebar: Bool {
         mode == .viewing && filePreviewSet == nil && previewSet?.origin != nil && chromeHost?.viewerSidebarAvailable == true
     }
-    /// The grid and the viewer share one sidebar visibility (#444 owner acceptance).
-    public var isViewerSidebarShown: Bool { canToggleViewerSidebar && displayPreferences.gridSidebarVisible }
+    /// Owner decision 2026-11-04: the viewer's sidebar is independent of the grid's and starts hidden on every
+    /// viewing; 显示侧栏 and ⌃⌘S keep it for this viewing (one folder preview, across ←/→).
+    public private(set) var viewerSidebarVisible = false
+    public var isViewerSidebarShown: Bool { canToggleViewerSidebar && viewerSidebarVisible }
     public func perform(intent: ViewerChromeIntent) {
         switch intent {
         case .returnToGrid:
@@ -303,6 +309,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         case .toggleSidebar:
             guard canToggleViewerSidebar else { return }
             activity()
+            viewerSidebarVisible.toggle()
             chromeHost?.performChromeIntent(.toggleSidebar)
         }
     }
