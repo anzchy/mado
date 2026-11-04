@@ -301,6 +301,31 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
+/// #444 fix round 2: a sidebar hidden only because the window is too narrow keeps the user's choice. The toggle still
+/// reads 隐藏侧栏 (value 1), and that is what comes back when the window grows. Pressing it there hides the sidebar for
+/// good, so the wider window shows no sidebar either.
+@Test @MainActor func i444TooNarrowSidebarToggleKeepsTheUsersChoice() throws {
+    let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640))
+    defer { scene.close() }
+    let toggle = try #require(scene.chrome.tools.first { $0.kind == .intent(.toggleSidebar) })
+    func resize(_ width: CGFloat, _ height: CGFloat) {
+        scene.window.setContentSize(NSSize(width: width, height: height))
+        scene.shell.layoutSubtreeIfNeeded()
+        scene.presentation.layoutInspector(visible: false)
+        scene.content.layoutSubtreeIfNeeded()
+    }
+    resize(238, 200)
+    #expect(scene.shell.isHidden, "no room for the sidebar at the minimum")
+    #expect(toggle.accessibilityValue() as? NSNumber == 1 && toggle.label == String(localized: "Hide sidebar"))
+    resize(960, 640)
+    #expect(!scene.shell.isHidden && scene.shell.frame.width == 196 && scene.canvas.frame.minX == 196)
+    resize(238, 200)
+    scene.toggle()
+    #expect(toggle.accessibilityValue() as? NSNumber == 0 && toggle.label == String(localized: "Show sidebar"))
+    resize(960, 640)
+    #expect(scene.shell.isHidden && scene.canvas.frame.minX == 0, "hidden at the minimum stays hidden when the window grows")
+}
+
 /// The shell does not stretch with the window in the viewer: until the presentation lays it out again it keeps its
 /// width, so the folder tree is never laid out at the parent's width.
 @Test @MainActor func i444ViewerSidebarShellDoesNotAutoresizeItsWidth() {
