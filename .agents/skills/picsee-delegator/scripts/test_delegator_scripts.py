@@ -272,6 +272,16 @@ class RebaseVerifyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("MESSAGES same", result.stdout)
         self.assertIn("CODE differ", result.stdout)
+        self.assertIn("replayed tree differs", result.stdout)
+        self.assertNotRegex(result.stdout, r"CODE differ ([0-9a-f]+) -> \1")
+
+    def test_helper_git_failure_is_concise(self):
+        result = subprocess.run(["python3", str(Path(__file__).with_name("rebase-verify-tree.py")),
+                                 str(self.repo), "invalid-ref", self.old_head, self.new_base, self.head()],
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rebase-verify:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_repeated_context_locations_survive_distant_upstream_shifts(self):
         initial_base = self.old_base
@@ -330,7 +340,7 @@ class RebaseVerifyTests(unittest.TestCase):
         self.assertIn("MESSAGES same", result.stdout)
         self.assertIn("CODE differ", result.stdout)
 
-    def test_nearby_upstream_context_conservatively_differs(self):
+    def test_nearby_upstream_context_exact_replay_passes(self):
         git(self.repo, "switch", "--detach", "-q", self.old_base, env=self.env)
         base = "".join(f"line {i}\n" for i in range(1, 31))
         self.commit("base", **{"App/a.swift": base})
@@ -342,8 +352,14 @@ class RebaseVerifyTests(unittest.TestCase):
         self.new_base = self.head()
         git(self.repo, "cherry-pick", self.old_head, env=self.env)
         result = self.verify()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("MESSAGES same", result.stdout)
+        self.assertIn("CODE same", result.stdout)
+
+        # #449 expressly changes only the honest cherry-pick expectation above.
+        self.commit("altered candidate", **{"App/a.swift": base.replace("line 8\n", "upstream 8\n").replace("line 10\n", "wrong 10\n")})
+        result = self.verify()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("CODE differ", result.stdout)
 
     def test_replacing_first_or_second_identical_line_differs(self):
@@ -439,6 +455,19 @@ class OwnerGatesRefusalTests(unittest.TestCase):
             result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")), worktree, sha, "t"],
                                     capture_output=True, text=True, env={**os.environ, "PICSEE_GATES_OUT": out})
             return result.returncode, (Path(out) / "t-summary.txt").read_text()
+
+    def test_unwritable_summary_refuses_before_running_lanes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "t-summary.txt").mkdir()
+            result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")),
+                                     str(Path(__file__).resolve().parent), "HEAD", "t", "HEAD"],
+                                    env={**os.environ, "PICSEE_GATES_OUT": str(out)},
+                                    capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cannot write summary", result.stderr)
+            self.assertNotIn("DONE", result.stdout)
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ["t-summary.txt"])
 
     def test_head_mismatch_writes_no_gate_results(self):
         rc, summary = self.run_gates(str(Path(__file__).resolve().parent), "0" * 40)
@@ -548,6 +577,14 @@ exit 0
             executable(first / "git", f'''[ "$FAIL_LANE" = diffcheck ] && [ "$1" = diff ] && exit 7
 exec "{real_git}" "$@"
 ''')
+            # All child lanes pass, but summary creation must still fail closed.
+            blocked = out / "blocked-summary.txt"
+            blocked.mkdir()
+            result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "blocked", "HEAD"],
+                                    env={**env, "FAIL_LANE": ""}, capture_output=True, text=True, timeout=20)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("cannot write summary", result.stderr)
+            self.assertEqual(list(out.iterdir()), [blocked])
             lanes = ("swift", "lcov", "xcodegen", "xcodebuild", "node", "ledger", "diffcheck", "design")
             for fail in ("", *lanes, "lcov-total", "missing", ""):
                 with self.subTest(fail=fail):
