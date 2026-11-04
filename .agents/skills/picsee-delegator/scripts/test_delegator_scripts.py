@@ -1073,5 +1073,53 @@ esac
         self.assertEqual(result.stdout, "FAIL reset fixture-agent: chooser never appeared\n")
 
 
+class ResetFreshScreenTests(unittest.TestCase):
+    """#434: welcome-like transcript must not re-prove a stale screen."""
+
+    run_reset = ResetTests.run_reset
+    SUCCESS = ResetTests.SUCCESS
+    NO_BOUNDARY = ResetTests.NO_BOUNDARY
+    SCREEN = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex.txt").read_text()
+
+    def assert_stale(self, screen):
+        result, _ = self.run_reset(context=screen, ready_boundary="", startup="",
+                                   deadline="0.1", locale="C",
+                                   session_before="old-session", session_after="old-session")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+
+    def test_embedded_title_does_not_erase_transcript(self):
+        self.assert_stale(self.SCREEN.replace("› Ask Codex to do anything",
+            "› hello\n• Hello!\n>_ OpenAI Codex (v0.166.0)\n› Ask Codex to do anything"))
+
+    def test_old_placeholder_only_transcript_is_not_fresh(self):
+        self.assert_stale(self.SCREEN.replace("› Ask Codex to do anything",
+            "› Ask Codex to do anything\n› Ask Codex to do anything"))
+
+    def test_old_welcome_tip_only_transcript_is_not_fresh(self):
+        self.assert_stale(self.SCREEN.replace("› Ask Codex to do anything",
+            "› Ask Codex to do anything\nTip: Use /help to see available commands."))
+
+    def test_old_box_art_only_transcript_is_not_fresh(self):
+        self.assert_stale(self.SCREEN.replace("› Ask Codex to do anything",
+            "› Ask Codex to do anything\n╭──╮\n│  │\n╰──╯"))
+
+    def test_saved_real_fresh_screen_passes(self):
+        for screen in (self.SCREEN, self.SCREEN.replace("\n", "\r\n")):
+            with self.subTest(crlf="\r" in screen):
+                result, _ = self.run_reset(context=screen, ready_boundary="", locale="C",
+                                           session_before="old-session", session_after="old-session")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_title_directly_after_leading_cwd_metadata_passes(self):
+        screen = "\n~/fixture-worktree\n" + self.SCREEN.lstrip()
+        result, _ = self.run_reset(context=screen, ready_boundary="", locale="C")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_title_after_transcript_cwd_is_not_fresh(self):
+        self.assert_stale("old transcript\n~/fixture-worktree\n" + self.SCREEN.lstrip())
+
+
 if __name__ == "__main__":
     unittest.main()
