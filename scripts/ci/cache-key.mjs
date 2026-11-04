@@ -5,8 +5,8 @@
 //
 // key    = <family>-v<FORMAT>-<os>-<arch>-xcode<build>-swift<toolchain>-<manifest-hash>-<inputs-hash>
 // prefix = the key without <inputs-hash>
-// The manifest hash covers what decides the package graph (Package.swift, any Package.resolved, project.yml); the
-// inputs hash covers every source and resource the build reads. A restore by prefix therefore only ever starts from a
+// The manifest hash covers what decides the package graph: Package.swift and any Package.resolved for `spm`, plus
+// project.yml and the xcode-setup action for `dd`. The inputs hash covers every source and resource the build reads. A restore by prefix therefore only ever starts from a
 // build of the same toolchain and package graph; the compiler's incremental file hashing rebuilds what differs.
 // Bump FORMAT to discard every existing entry.
 import { execFileSync } from 'node:child_process';
