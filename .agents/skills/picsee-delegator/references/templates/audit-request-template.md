@@ -14,7 +14,11 @@ Inputs:
 - the brief: ~/.picsee/herdr/<implementer>/<brief>.md; scope amendments: <files>;
 - the handoff, a claim to test: ~/.picsee/herdr/<implementer>/<item>-handoff.md; evidence in <dir>;
 - receipts (Codex implementers): `node ~/.claude/plugins/cache/xiaolai/tdd-guardian/0.10.2/scripts/tdd-guardian/receipt.js show`
-  from the implementer worktree. (Kimi: no receipts — judge the pasted RED/GREEN in the handoff.)
+  from the implementer worktree. Compare every implementation commit's `Red-Receipt:` lines with the matching
+  `{schemaVersion, worktree, receipt}` envelope in `~/.picsee/archive/tdd-guardian/receipts/<ID>.json` or
+  `<ID>.<worktree>.json`: ID, lane, red.kind, test_files key count (`spec-files=N`), verified_at and terminal verdict.
+  Before the post-merge archive exists, inspect the named local receipt; the delegator archives it before cleanup.
+  Missing or mismatched evidence is a finding, not proof of test-first work. (Kimi: no receipts — judge the pasted RED/GREEN in the handoff.)
 
 UI review when this range changes visible UI (otherwise state `无 UI 变化`):
 - Read [`docs/agents/ui-parity-contract.md`](../../../../../docs/agents/ui-parity-contract.md), the exact manifest/HTML, `design/DESIGN.md`, native mapping, plan §1.3, ledger rows, and the implementer brief's pinned design hashes. Check source SHA drift and any new native exception against its design authority.

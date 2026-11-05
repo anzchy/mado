@@ -90,7 +90,9 @@ pre-granting, no container/store edits, no system settings; list root IDs you le
 
 ## Commits
 `<type>(<scope>): <summary>`; body names #<n>, <WP>, ledger IDs; trailer `Implemented-by: <implementer>`; one WI per
-commit; stage named paths only. No push, PR, branch switch/deletion, `rm -r`, other worktrees.
+commit. Generate this commit's receipt trailer with `node scripts/tdd/red-receipt-trailer.mjs --id <receipt-ID>`
+and paste each generated `Red-Receipt:` line into the implementation commit (repeat for each relied-on ID).
+The script refuses unverified receipts; verify first. Stage named paths only. No push, PR, branch switch/deletion, `rm -r`, other worktrees.
 
 ## Handoff
 `~/.picsee/herdr/<implementer>/<item>-handoff.md`: design; AC table (AC → proving test); RED/GREEN or receipts;
