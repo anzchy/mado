@@ -1,0 +1,32 @@
+PROBE_XCTEST_OTHER
+PROBE_XCTEST_KEEP
+PROBE_XCTEST_SIBLING
+PROBE_SWIFT_KEEP
+PROBE_SWIFT_SIBLING
+
+Test Suite 'Selected tests' started at 2026-11-04 22:47:57.654.
+Test Suite 'Probe.xctest' started at 2026-11-04 22:47:57.654.
+Test Suite 'OtherProbeTests' started at 2026-11-04 22:47:57.654.
+Test Case '-[Probe.OtherProbeTests testSkip]' started.
+Test Case '-[Probe.OtherProbeTests testSkip]' passed (0.000 seconds).
+Test Suite 'OtherProbeTests' passed at 2026-11-04 22:47:57.655.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'ProbeTests' started at 2026-11-04 22:47:57.655.
+Test Case '-[Probe.ProbeTests testKeep]' started.
+Test Case '-[Probe.ProbeTests testKeep]' passed (0.000 seconds).
+Test Case '-[Probe.ProbeTests testSkipSibling]' started.
+Test Case '-[Probe.ProbeTests testSkipSibling]' passed (0.000 seconds).
+Test Suite 'ProbeTests' passed at 2026-11-04 22:47:57.655.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Probe.xctest' passed at 2026-11-04 22:47:57.655.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'Selected tests' passed at 2026-11-04 22:47:57.655.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test swiftKeep() started.
+✔ Test swiftKeep() passed after 0.001 seconds.
+◇ Test swiftSkipSibling() started.
+✔ Test swiftSkipSibling() passed after 0.001 seconds.
+✔ Test run with 2 tests in 0 suites passed after 0.001 seconds.

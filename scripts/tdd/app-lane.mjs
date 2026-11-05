@@ -2,7 +2,8 @@
 /** Run the compiled App test bundle. Set PICSEE_APP_LANE_NO_RETRY=1 for RED receipts. */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 
@@ -18,11 +19,12 @@ const crashRecords = [
 const testName = label => label.endsWith('()') ? label.slice(0, -2) : label;
 
 /** Shared completeness and failure parser. Importing this module never launches native tests. */
-export function parseAppResult(run) {
+export function parseAppResult(run, selection = null) {
   const stdout = run.stdout ?? "", stderr = run.stderr ?? "";
   const output = `${stdout}\n${stderr}`;
   const clean = output.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r/g, '');
-  const rootDone = /Test Suite 'All tests' (?:passed|failed) at /.test(clean) &&
+  const rootDone = (/Test Suite 'All tests' (?:passed|failed) at /.test(clean) ||
+    (selection !== null && /Test Suite 'Selected tests' (?:passed|failed) at /.test(clean))) &&
     /Executed \d+ tests?, with \d+ failures? \(\d+ unexpected\)/.test(clean);
   const rootFailures = [...clean.matchAll(/Executed \d+ tests?, with (\d+) failures? \((\d+) unexpected\)/g)]
     .some(match => Number(match[1]) || Number(match[2]));
@@ -40,26 +42,200 @@ export function parseAppResult(run) {
   const unattributedIssues = issueRecords.length !== issues.length || issues.some(issue => !failureNames.includes(issue.name)) ||
     (summaries.length === 1 && Number(summaries[0][3] ?? 0) !== issues.length);
   const crash = clean.split('\n').some(line => crashRecords.some(record => record.test(line)));
-  const reliable = !(run.error || run.signal || crash || rootFailures || !rootDone || starts.length !== 1 || summaries.length !== 1 || !count ||
+  let reliable = !(run.error || run.signal || crash || rootFailures || !rootDone || starts.length !== 1 || summaries.length !== 1 || !count ||
     passed + failed + skipped !== count || (summaries[0]?.[2] === "failed") !== (failed > 0) ||
     ![0, 1].includes(run.status) || (run.status === 0) !== (failed === 0));
+  if (selection !== null && !selectionComplete(clean, selection)) reliable = false;
   return { reliable, status: reliable ? run.status : 70, output, count, passed, failed, skipped, failureNames, issues, unattributedIssues };
 }
 
-function nativeSpawn(env, spawnSync) {
-  return spawnSync(lock, ["xcrun", "xctest", bundle], {
-    encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
-    env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" },
+const quarantineFile = fileURLToPath(new URL("./app-quarantine.json", import.meta.url));
+const swiftID = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+(?:\/[A-Za-z_]\w*)*\((?:[A-Za-z_]\w*:)*\)$/;
+const xctID = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\/[A-Za-z_]\w*$/;
+const shortXCTestID = id => id.slice(id.lastIndexOf('.') + 1);
+const swiftLabel = id => id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id.slice(id.indexOf('.') + 1);
+const terminalLabel = label => label.replace(/ with \d+ test cases?$/, '');
+
+function loadQuarantine(filename) {
+  const list = JSON.parse(readFileSync(filename, 'utf8'));
+  if (!Array.isArray(list)) throw new Error('quarantine must be an array');
+  const ids = new Set();
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+        typeof entry.id !== 'string' || !(swiftID.test(entry.id) || xctID.test(entry.id)))
+      throw new Error('quarantine id must be an exact supported XCTest Class/method or Swift Testing Module.func() identifier');
+    if (!Number.isSafeInteger(entry.issue) || entry.issue <= 0) throw new Error('quarantine issue must be a positive integer');
+    if (typeof entry.reason !== 'string' || !entry.reason.trim()) throw new Error('quarantine reason must be nonblank');
+    if (ids.has(entry.id)) throw new Error(`quarantine duplicate id ${entry.id}`);
+    ids.add(entry.id);
+  }
+  return list;
+}
+
+// Discovery uses the frameworks' complete runtime trees, without running test bodies.
+// Keep this helper here: it is tooling compiled into a temporary directory, never App code.
+const inventorySource = `
+import Foundation
+import XCTest
+import Testing
+import Darwin
+@main struct AppLaneInventory {
+ static func main() async {
+  guard CommandLine.arguments.count == 2,
+    dlopen(CommandLine.arguments[1], RTLD_NOW | RTLD_GLOBAL) != nil else {
+    fputs("app-lane inventory: bundle load failed\\n", stderr); exit(70)
+  }
+  print("APP_LANE_INVENTORY_BEGIN")
+  func walk(_ node: XCTest) {
+   if let suite = node as? XCTestSuite { for child in suite.tests { walk(child) } }
+   else { print("XCT_ID=" + node.name) }
+  }
+  walk(XCTestSuite.default)
+  var args = __CommandLineArguments_v0()
+  args.listTests = true
+  let status: CInt = await __swiftPMEntryPoint(passing: args)
+  guard status == 0 else { exit(70) }
+  print("APP_LANE_INVENTORY_END")
+ }
+}
+`;
+
+function inventoryRows(output) {
+  const lines = output.trim().split('\n').map(line => line.replace(/\r$/, ''));
+  if (lines.shift() !== 'APP_LANE_INVENTORY_BEGIN' || lines.pop() !== 'APP_LANE_INVENTORY_END')
+    throw new Error('inventory is incomplete or unframed');
+  const rows = lines.map(line => {
+    const xct = /^XCT_ID=-\[([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*) ([A-Za-z_]\w*)\]$/.exec(line);
+    if (xct) return { kind: 'xctest', id: `${xct[1]}/${xct[2]}`, label: shortXCTestID(`${xct[1]}/${xct[2]}`) };
+    if (swiftID.test(line)) return { kind: 'swift', id: line, label: swiftLabel(line) };
+    throw new Error(`inventory unsupported identifier ${line}`);
   });
+  if (!rows.length || new Set(rows.map(row => row.id)).size !== rows.length ||
+      new Set(rows.map(row => `${row.kind}:${row.label}`)).size !== rows.length)
+    throw new Error('inventory is empty, duplicated or ambiguous');
+  return rows;
+}
+
+function discoverInventory(spawn, env, bundlePath) {
+  const checked = (args, options = {}) => {
+    const run = spawn(lock, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 120000, env, ...options });
+    if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
+    return run.stdout ?? '';
+  };
+  const platform = checked(['xcrun', '--show-sdk-platform-path']).trim();
+  if (!path.isAbsolute(platform) || platform.includes('\n')) throw new Error('inventory invalid SDK platform path');
+  const frameworks = path.join(platform, 'Developer/Library/Frameworks');
+  const privateFrameworks = path.join(platform, 'Developer/Library/PrivateFrameworks');
+  const libraries = path.join(platform, 'Developer/usr/lib');
+  const directory = mkdtempSync(path.join(tmpdir(), 'picsee-app-inventory-'));
+  try {
+    const source = path.join(directory, 'Inventory.swift'), executable = path.join(directory, 'inventory');
+    writeFileSync(source, inventorySource);
+    checked(['xcrun', 'swiftc', '-parse-as-library', '-F', frameworks, '-L', libraries, '-lXCTestSwiftSupport',
+      ...[frameworks, privateFrameworks, libraries].flatMap(p => ['-Xlinker', '-rpath', '-Xlinker', p]), source, '-o', executable]);
+    const binary = path.join(path.resolve(bundlePath), 'Contents/MacOS', path.basename(bundlePath, '.xctest'));
+    return inventoryRows(checked([executable, binary]));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
+
+function selectionComplete(clean, selection) {
+  const { inventory, retained } = selection;
+  const known = new Map(inventory.map(row => [`${row.kind}:${row.label}`, row.id]));
+  const expected = new Set(retained.map(row => row.id));
+  const started = new Set(), finished = new Set();
+  const suites = [];
+  let pendingSuite = null, roots = 0, invalid = false;
+  const resolve = (kind, label) => known.get(`${kind}:${kind === 'xctest' ? shortXCTestID(label) : terminalLabel(label)}`);
+  const begin = (kind, label) => {
+    const id = resolve(kind, label);
+    if (!id || !expected.has(id) || started.has(id)) invalid = true;
+    started.add(id);
+  };
+  const finish = (kind, label, skipped) => {
+    const id = resolve(kind, label);
+    if (!id || !expected.has(id) || finished.has(id) || (!skipped && !started.has(id))) invalid = true;
+    finished.add(id);
+    if (kind === 'xctest') for (const suite of suites) {
+      suite.count++;
+      if (skipped) suite.skipped++;
+    }
+  };
+  for (const line of clean.split('\n')) {
+    const suiteStart = /^Test Suite '(.+)' started at /.exec(line);
+    const suiteEnd = /^Test Suite '(.+)' (?:passed|failed) at /.exec(line);
+    const summary = /^\s*Executed (\d+) tests?, with (?:(\d+) tests? skipped and )?(\d+) failures? \((\d+) unexpected\)/.exec(line);
+    if (suiteStart) {
+      if (pendingSuite) invalid = true;
+      if (!suites.length) {
+        if (!['All tests', 'Selected tests'].includes(suiteStart[1])) invalid = true;
+        roots++;
+      }
+      suites.push({ name: suiteStart[1], count: 0, skipped: 0 });
+    } else if (suiteEnd) {
+      if (pendingSuite) invalid = true;
+      pendingSuite = suites.pop();
+      if (pendingSuite?.name !== suiteEnd[1]) invalid = true;
+    } else if (summary) {
+      if (!pendingSuite || Number(summary[1]) !== pendingSuite.count ||
+          Number(summary[2] ?? 0) !== pendingSuite.skipped || Number(summary[3]) !== 0 || Number(summary[4]) !== 0) invalid = true;
+      pendingSuite = null;
+    }
+    const xct = /^Test Case '-\[([^\]\r\n]+) ([A-Za-z_]\w*)\]' (started\.|(passed|failed|skipped) \()/.exec(line);
+    if (xct) {
+      if (!suites.length || pendingSuite) invalid = true;
+      const label = `${xct[1]}/${xct[2]}`;
+      if (xct[4] === 'failed') invalid = true;
+      if (xct[3] === 'started.') begin('xctest', label);
+      else finish('xctest', label, xct[4] === 'skipped');
+    }
+    const swiftStart = /^◇ Test (?!run started\.|case passing )(.+) started\.$/.exec(line);
+    const swiftCase = /^◇ Test case passing .+ to (.+) started\.$/.exec(line);
+    if (swiftCase) {
+      const id = resolve('swift', swiftCase[1]);
+      if (!id || !expected.has(id) || !started.has(id) || finished.has(id)) invalid = true;
+    }
+    const swiftEnd = /^[✔✘] Test (?!run with )(.+) (?:passed|failed) after /.exec(line);
+    const swiftSkip = /^➜ Test (.+?) skipped(?::| after |\.)/.exec(line);
+    if (swiftStart) begin('swift', swiftStart[1]);
+    if (swiftEnd) finish('swift', swiftEnd[1], false);
+    if (swiftSkip) finish('swift', swiftSkip[1], true);
+  }
+  return !invalid && roots === 1 && !suites.length && !pendingSuite &&
+    finished.size === expected.size && [...started].every(id => finished.has(id));
+}
+
+function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
+  const options = { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
+    env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" } };
+  if (inclusion !== null) return spawnSync(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
+  if (bundlePath !== bundle) return spawnSync(lock, ["xcrun", "xctest", bundlePath], options);
+  return spawnSync(lock, ["xcrun", "xctest", bundle], options);
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
 export function runAppLane({ spawn = spawnSync, env = process.env,
-  evidencePath = '.build/app-lane-attempt1.log', stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
+  evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile, bundlePath = bundle, stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
+  let quarantine, selection = null;
+  try {
+    quarantine = loadQuarantine(quarantinePath);
+    if (quarantine.length) {
+      const inventory = discoverInventory(spawn, env, bundlePath);
+      for (const entry of quarantine) if (!inventory.some(row => row.id === entry.id)) {
+        stderr(`app-lane quarantine warning: missing inventory id=${entry.id} issue=#${entry.issue}\n`);
+        throw new Error(`inventory does not contain quarantined id ${entry.id}`);
+      }
+      const retained = inventory.filter(row => !quarantine.some(entry => entry.id === row.id));
+      if (!retained.some(row => row.kind === 'swift')) throw new Error('inventory selection has no remaining Swift Testing tests');
+      selection = { inventory, retained };
+      for (const entry of quarantine) stdout(`app-lane quarantine skip=${entry.id} issue=#${entry.issue}\n`);
+    } else stdout('app-lane quarantine none\n');
+  } catch (error) {
+    stderr(`app-lane quarantine: ${error.message}\n`); return 70;
+  }
   const execute = () => {
-    const run = nativeSpawn(env, spawn);
+    const run = nativeSpawn(env, spawn, selection?.retained.map(row => row.id) ?? null, bundlePath);
     stdout(run.stdout ?? ''); stderr(run.stderr ?? '');
-    return { run, parsed: parseAppResult(run) };
+    return { run, parsed: parseAppResult(run, selection) };
   };
   let attempt = execute();
   if (attempt.parsed.failed) stdout(`\napp-lane: first-attempt failures: ${attempt.parsed.failureNames.join(', ')}\n`);
@@ -71,7 +247,12 @@ export function runAppLane({ spawn = spawnSync, env = process.env,
       stderr(`app-lane: cannot preserve first-attempt evidence ${evidencePath}: ${error.message}\n`);
       return 70;
     }
-    const gate = classifyFlaky(attempt.run);
+    // Classification still uses its strict default parser. Normalize only an already
+    // verified selected result; raw evidence above remains byte-for-byte unchanged.
+    const forGate = selection && attempt.parsed.reliable ? { ...attempt.run,
+      stdout: (attempt.run.stdout ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'"),
+      stderr: (attempt.run.stderr ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'") } : attempt.run;
+    const gate = selection && !attempt.parsed.reliable ? { decision: 'fail' } : classifyFlaky(forGate);
     if (env.PICSEE_APP_LANE_NO_RETRY !== '1' && gate.decision === 'retry-eligible') {
       stdout(`app-lane: known flaky ${gate.names.join(', ')} (${gate.issues.map(issue => `#${issue}`).join(', ')}); retrying once\n`);
       attempt = execute();
