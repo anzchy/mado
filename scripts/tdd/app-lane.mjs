@@ -125,21 +125,107 @@ function discoverInventory(spawn, env, bundlePath) {
   // Start the execution deadline only after heavy-lock admits the command.
   // The parent has no spawn timeout, so queue wait uses heavy-lock's own budget.
   const boundedCommand = `
-const { spawnSync } = require('node:child_process');
-const run = spawnSync(process.argv[2], process.argv.slice(3), {
-  stdio: 'inherit', timeout: Number(process.argv[1])
-});
-if (run.error || run.signal || run.status === null) {
-  process.stderr.write('app-lane inventory command failed: ' + (run.error?.message ?? run.signal ?? 'no exit status') + '\\n');
-  process.exit(70);
+const admitted = Date.now();
+const { spawn, spawnSync } = require('node:child_process');
+let child, exited = false, closed = false, status = 70, stopping = false, finished = false;
+let deadline, poll, escalation, drain;
+const snapshot = () => {
+  const probe = spawnSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,stat='], {
+    encoding: 'utf8', timeout: 100, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024
+  });
+  if (probe.error || probe.status !== 0) throw new Error('cannot inspect discovery process group');
+  return { probe: probe.pid, rows: probe.stdout.trim().split('\\n').map(line => {
+    const [pid, parent, group, state] = line.trim().split(/\\s+/);
+    return { pid: Number(pid), parent: Number(parent), group: Number(group), state };
+  }) };
+};
+const initial = snapshot(), group = initial.rows.find(row => row.pid === process.pid)?.group;
+if (!group) throw new Error('cannot identify discovery process group');
+// Preserve the existing heavy-lock group, including when its inherited fast
+// path is used. Protect this supervisor and its caller/ancestor chain only.
+const protectedPids = new Set([process.pid]);
+for (let pid = process.ppid; pid && !protectedPids.has(pid);) {
+  protectedPids.add(pid); pid = initial.rows.find(row => row.pid === pid)?.parent;
 }
-process.exit(run.status);
+const members = () => {
+  let current;
+  try { current = snapshot(); } catch { return null; }
+  return current.rows.filter(row => row.group === group && !protectedPids.has(row.pid) &&
+    row.pid !== current.probe && !row.state?.startsWith('Z'));
+};
+const groupAlive = () => {
+  if (!stopping && (!exited || !closed)) return true;
+  const active = members();
+  return active === null || active.length > 0;
+};
+const signalGroup = signal => {
+  // If inspection fails, retain failure state and at least stop the known
+  // child; the manager still owns every member of this unchanged group.
+  const active = members() ?? (child?.pid ? [{ pid: child.pid }] : []);
+  for (const member of active) try { process.kill(member.pid, signal); }
+  catch (error) { if (error.code !== 'ESRCH') process.stderr.write('app-lane inventory signal failed: ' + error.message + '\\n'); }
+};
+const finish = code => {
+  if (finished) return;
+  finished = true;
+  clearTimeout(deadline); clearInterval(poll); clearTimeout(escalation); clearTimeout(drain);
+  // Native descendants own only these private pipes, never the outer capture.
+  // Destroy them at the finite drain bound even if an OS task resists KILL.
+  child?.stdout?.destroy(); child?.stderr?.destroy(); child?.unref();
+  process.exitCode = code;
+};
+const check = () => {
+  if (finished || groupAlive()) return;
+  if (stopping) finish(70);
+  else if (exited && closed) finish(status);
+};
+const stop = reason => {
+  if (finished || stopping) return;
+  stopping = true;
+  process.stderr.write('app-lane inventory command failed: ' + reason + '\\n');
+  signalGroup('SIGTERM');
+  escalation = setTimeout(() => { signalGroup('SIGKILL'); check(); }, 250);
+  drain = setTimeout(() => {
+    if (groupAlive()) process.stderr.write('app-lane inventory group survived KILL; closing capture\\n');
+    finish(70);
+  }, 750);
+  check();
+};
+process.on('SIGTERM', () => stop('cancelled by SIGTERM'));
+process.on('SIGINT', () => stop('cancelled by SIGINT'));
+// A hard-killed caller closes its capture reader. Cleanup must survive EPIPE.
+process.stdout.on('error', () => stop('capture receiver closed'));
+process.stderr.on('error', () => stop('capture receiver closed'));
+poll = setInterval(check, 10);
+if (process.argv[2] === '--cleanup') {
+  exited = closed = true; stop('cleanup after supervisor failure');
+} else {
+  child = spawn(process.argv[2], process.argv.slice(3), { stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.on('data', data => process.stdout.write(data));
+  child.stderr.on('data', data => process.stderr.write(data));
+  child.on('error', error => stop(error.message));
+  child.on('exit', (code, signal) => {
+    exited = true; status = signal || code === null ? 70 : code;
+    if (signal) stop('command exited with ' + signal);
+    check();
+  });
+  child.on('close', () => { closed = true; check(); });
+  deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(process.argv[1]) - (Date.now() - admitted)));
+}
 `;
   const checked = (args, locked = true) => {
     const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
     const run = locked
-      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], options)
+      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options,
+        env: { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25' } })
       : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
+    if (locked && env.PICSEE_HEAVY_LOCK_HELD === '1' && (run.error || run.signal || run.status !== 0)) {
+      // The inherited-lock path has no local manager. Rejoin the same group
+      // and clean its remaining native members while protecting this caller.
+      spawnSync(process.execPath, ['-e', boundedCommand, '0', '--cleanup'], {
+        ...options, timeout: 1500, killSignal: 'SIGKILL'
+      });
+    }
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
     return run.stdout ?? '';
   };
