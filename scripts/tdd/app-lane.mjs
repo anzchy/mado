@@ -122,12 +122,28 @@ function inventoryRows(output) {
 }
 
 function discoverInventory(spawn, env, bundlePath) {
-  const checked = (args, options = {}) => {
-    const run = spawn(lock, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 120000, env, ...options });
+  // Start the execution deadline only after heavy-lock admits the command.
+  // The parent has no spawn timeout, so queue wait uses heavy-lock's own budget.
+  const boundedCommand = `
+const { spawnSync } = require('node:child_process');
+const run = spawnSync(process.argv[2], process.argv.slice(3), {
+  stdio: 'inherit', timeout: Number(process.argv[1])
+});
+if (run.error || run.signal || run.status === null) {
+  process.stderr.write('app-lane inventory command failed: ' + (run.error?.message ?? run.signal ?? 'no exit status') + '\\n');
+  process.exit(70);
+}
+process.exit(run.status);
+`;
+  const checked = (args, locked = true) => {
+    const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
+    const run = locked
+      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], options)
+      : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
     return run.stdout ?? '';
   };
-  const platform = checked(['xcrun', '--show-sdk-platform-path']).trim();
+  const platform = checked(['xcrun', '--show-sdk-platform-path'], false).trim();
   if (!path.isAbsolute(platform) || platform.includes('\n')) throw new Error('inventory invalid SDK platform path');
   const frameworks = path.join(platform, 'Developer/Library/Frameworks');
   const privateFrameworks = path.join(platform, 'Developer/Library/PrivateFrameworks');
