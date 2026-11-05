@@ -131,7 +131,7 @@ let child, exited = false, closed = false, status = 70, stopping = false, finish
 let deadline, poll, escalation, drain;
 const snapshot = () => {
   const probe = spawnSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,stat='], {
-    encoding: 'utf8', timeout: 100, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024
+    encoding: 'utf8', timeout: 250, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024
   });
   if (probe.error || probe.status !== 0) throw new Error('cannot inspect discovery process group');
   return { probe: probe.pid, rows: probe.stdout.trim().split('\\n').map(line => {
@@ -139,8 +139,14 @@ const snapshot = () => {
     return { pid: Number(pid), parent: Number(parent), group: Number(group), state };
   }) };
 };
-const initial = snapshot(), group = initial.rows.find(row => row.pid === process.pid)?.group;
-if (!group) throw new Error('cannot identify discovery process group');
+let initial, group;
+try {
+  initial = snapshot(); group = initial.rows.find(row => row.pid === process.pid)?.group;
+  if (!group) throw new Error('cannot identify discovery process group');
+} catch (error) {
+  process.stderr.write('app-lane inventory startup failed: ' + error.message + '\\n');
+  process.exit(70);
+}
 // The local heavy-lock manager gives discovery its own worker group. Protect
 // this supervisor and its ancestor chain while inspecting native members.
 const protectedPids = new Set([process.pid]);

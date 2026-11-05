@@ -506,3 +506,21 @@ writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=sta
   if(nativeExit===0)assert.match(stdout,/Tests run: 5, Failures: 0/);
  } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
 });
+
+// Startup metadata failures are environment results; the native command must
+// never start after either a failed ps invocation or unusable process identity.
+for(const fault of ['snapshot timeout','missing supervisor identity'])
+test(`discovery startup ${fault} returns 70 before native launch`,()=>{
+ const h=harness(quarantine),marker=path.join(h.dir,'native-started');
+ const code=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
+ const setup=fault==='snapshot timeout'
+  ? "require('node:child_process').spawnSync=()=>({status:null,error:Object.assign(new Error('forced ps timeout'),{code:'ETIMEDOUT'}),stdout:'',stderr:''});\n"
+  : "require('node:child_process').spawnSync=()=>({status:0,stdout:'',stderr:''});\n";
+ const native=`require('node:fs').writeFileSync(${JSON.stringify(marker)},'started');`;
+ const run=spawnSync(process.execPath,['-e',setup+code,'1000',process.execPath,'-e',native],{
+  encoding:'utf8',timeout:5000,detached:true,
+ });
+ assert.equal(run.status,70,run.stderr);assert.equal(run.signal,null);
+ assert.match(run.stderr,/app-lane inventory.*cannot (inspect|identify) discovery process group/);
+ assert.equal(existsSync(marker),false,'failed startup metadata must prevent native launch');
+});
