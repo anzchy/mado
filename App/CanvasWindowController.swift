@@ -352,7 +352,17 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self.session.updateFocus(self.focusContext)
         }
         window.consumeKey = { [weak self] event in self?.consumePanelKey(event) ?? false }
-        window.observeMouseDown = { [weak self] event in self?.gridShell?.dismissDisplayPanel(forMouseDown: event) }
+        window.observeMouseDown = { [weak self, weak window] event in
+            guard let self else { return }
+            // AppKit asks to focus the hit view before delivering mouseDown. Release the
+            // Session's tool/panel focus guard only for a primary press that hits the canvas.
+            if event.type == .leftMouseDown, let content = window?.contentView,
+               let parent = content.superview,
+               content.hitTest(parent.convert(event.locationInWindow, from: nil)) === self.canvas {
+                self.session.updateFocus(.canvas)
+            }
+            self.gridShell?.dismissDisplayPanel(forMouseDown: event)
+        }
         canvas.pointerIsOverPanel = { [weak self] in
             guard let self, !self.inspectorHost.isHidden, let window = self.window else { return false }
             return self.inspectorHost.bounds.contains(
