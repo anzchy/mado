@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 
@@ -141,8 +141,8 @@ const snapshot = () => {
 };
 const initial = snapshot(), group = initial.rows.find(row => row.pid === process.pid)?.group;
 if (!group) throw new Error('cannot identify discovery process group');
-// Preserve the existing heavy-lock group, including when its inherited fast
-// path is used. Protect this supervisor and its caller/ancestor chain only.
+// The local heavy-lock manager gives discovery its own worker group. Protect
+// this supervisor and its ancestor chain while inspecting native members.
 const protectedPids = new Set([process.pid]);
 for (let pid = process.ppid; pid && !protectedPids.has(pid);) {
   protectedPids.add(pid); pid = initial.rows.find(row => row.pid === pid)?.parent;
@@ -197,35 +197,34 @@ process.on('SIGINT', () => stop('cancelled by SIGINT'));
 process.stdout.on('error', () => stop('capture receiver closed'));
 process.stderr.on('error', () => stop('capture receiver closed'));
 poll = setInterval(check, 10);
-if (process.argv[2] === '--cleanup') {
-  exited = closed = true; stop('cleanup after supervisor failure');
-} else {
-  child = spawn(process.argv[2], process.argv.slice(3), { stdio: ['ignore', 'pipe', 'pipe'] });
-  child.stdout.on('data', data => process.stdout.write(data));
-  child.stderr.on('data', data => process.stderr.write(data));
-  child.on('error', error => stop(error.message));
-  child.on('exit', (code, signal) => {
-    exited = true; status = signal || code === null ? 70 : code;
-    if (signal) stop('command exited with ' + signal);
-    check();
-  });
-  child.on('close', () => { closed = true; check(); });
-  deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(process.argv[1]) - (Date.now() - admitted)));
-}
+child = spawn(process.argv[2], process.argv.slice(3), { stdio: ['ignore', 'pipe', 'pipe'] });
+child.stdout.on('data', data => process.stdout.write(data));
+child.stderr.on('data', data => process.stderr.write(data));
+child.on('error', error => stop(error.message));
+child.on('exit', (code, signal) => {
+  exited = true; status = signal || code === null ? 70 : code;
+  if (signal) stop('command exited with ' + signal);
+  check();
+});
+child.on('close', () => { closed = true; check(); });
+deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(process.argv[1]) - (Date.now() - admitted)));
 `;
   const checked = (args, locked = true) => {
     const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
-    const run = locked
-      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options,
-        env: { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25' } })
-      : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
-    if (locked && env.PICSEE_HEAVY_LOCK_HELD === '1' && (run.error || run.signal || run.status !== 0)) {
-      // The inherited-lock path has no local manager. Rejoin the same group
-      // and clean its remaining native members while protecting this caller.
-      spawnSync(process.execPath, ['-e', boundedCommand, '0', '--cleanup'], {
-        ...options, timeout: 1500, killSignal: 'SIGKILL'
-      });
+    const workerEnv = { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25' };
+    if (env.PICSEE_HEAVY_LOCK_HELD === '1') {
+      // Keep the manager in the outer job's group, but let it create a private
+      // worker group. Reuse neither the outer flock nor its shared mdpro lock.
+      delete workerEnv.PICSEE_HEAVY_LOCK_HELD;
+      delete workerEnv.MDPRO_HEAVY_LOCK_HELD;
+      workerEnv.PICSEE_HEAVY_LOCK = env.PICSEE_HEAVY_LOCK
+        ? `${env.PICSEE_HEAVY_LOCK}.app-discovery`
+        : path.join(homedir(), '.picsee/locks/app-discovery.lock');
+      workerEnv.PICSEE_MDPRO_LOCK = 'off';
     }
+    const run = locked
+      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv })
+      : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
     return run.stdout ?? '';
   };

@@ -455,3 +455,54 @@ test('empty-list XCTest thrown failure retains the original environment-failure 
  assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
  assert.ok(h.stdout.startsWith('app-lane quarantine none\n'));assert.doesNotMatch(h.stdout,/Tests run:/);
 });
+
+// Real inherited-lock jobs must preserve processes discovery did not start.
+const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
+for(const shape of ['pipeline','background']) for(const nativeExit of [0,3])
+test(`inherited discovery preserves ${shape} sibling on native exit ${nativeExit}`,async()=>{
+ const h=harness(),lane=path.join(h.dir,'lane.mjs'),shell=path.join(h.dir,'job.sh');
+ const laneStatus=path.join(h.dir,'lane-status'),siblingState=path.join(h.dir,'sibling-state');
+ const siblingPid=path.join(h.dir,'sibling-pid'),siblingSignal=path.join(h.dir,'sibling-signaled');
+ const supervisors=path.join(h.dir,'supervisors'),nativePids=path.join(h.dir,'native-pids');
+ writeFileSync(h.quarantinePath,JSON.stringify(quarantine));
+ const nativePrefix=`require('node:fs').appendFileSync(${JSON.stringify(nativePids)},String(process.pid)+'\\n');`;
+ writeFileSync(lane,`
+import {spawnSync} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
+let stage=0;
+const status=runAppLane({env:process.env,quarantinePath:${JSON.stringify(h.quarantinePath)},evidencePath:${JSON.stringify(path.join(h.dir,'evidence.log'))},spawn:(cmd,args,opts)=>{
+ if(cmd==='xcrun')return {status:0,stdout:'/platform\\n',stderr:''};
+ if(args[0]===process.execPath){
+  const prefix="require('node:fs').appendFileSync("+${JSON.stringify(JSON.stringify(supervisors))}+",String(process.pid)+'\\\\n');\\n";
+  const native=++stage===1?${JSON.stringify(nativePrefix+`process.exit(${nativeExit});`)}:${JSON.stringify(nativePrefix+`process.stdout.write(${JSON.stringify(inventory)});`)};
+  return spawnSync(cmd,[args[0],'-e',prefix+args[2],'500',process.execPath,'-e',native],opts);
+ }
+ return {status:0,stdout:${JSON.stringify(selected)},stderr:'',signal:null};
+}});
+writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=status;
+`);
+ const sibling=path.join(h.dir,'sibling.cjs');
+ writeFileSync(sibling,`process.on('SIGTERM',()=>{require('node:fs').writeFileSync(${JSON.stringify(siblingSignal)},'TERM');process.exit(19);});require('node:fs').writeFileSync(${JSON.stringify(siblingPid)},String(process.pid));setInterval(()=>{},1000);`);
+ const node=shellQuote(process.execPath),quotedLane=shellQuote(lane);
+ writeFileSync(shell,shape==='pipeline'
+  ? `${node} ${quotedLane} | /bin/cat\nstatus=$?\nprintf '%s' "$status" > ${shellQuote(siblingState)}\nexit "$status"\n`
+  : `${node} ${shellQuote(sibling)} >/dev/null 2>&1 &\nsibling=$!\nwhile [ ! -s ${shellQuote(siblingPid)} ]; do sleep 0.01; done\n${node} ${quotedLane}\nif kill -0 "$sibling" 2>/dev/null; then printf alive; else printf dead; fi > ${shellQuote(siblingState)}\nkill -KILL "$sibling" 2>/dev/null\nwait "$sibling" 2>/dev/null\nexit 0\n`);
+ const env={...process.env,PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
+ delete env.PICSEE_HEAVY_LOCK_HELD;delete env.MDPRO_HEAVY_LOCK_HELD;delete env.NODE_TEST_CONTEXT;
+ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ const runner=spawn(lock,['/bin/sh',shell],{env,detached:true,stdio:['ignore','pipe','pipe']});
+ let stdout='',stderr='',capped=false;runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
+ const owned=()=>[supervisors,nativePids,siblingPid].filter(existsSync).flatMap(p=>readFileSync(p,'utf8').trim().split(/\s+/).filter(Boolean).map(Number));
+ const cleanup=()=>{for(const pid of [...owned(),runner.pid])for(const target of [-pid,pid])try{process.kill(target,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}};
+ const start=Date.now(),cap=setTimeout(()=>{capped=true;cleanup();},5000);
+ try {
+  const outcome=await new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
+  assert.equal(capped,false,stderr);assert.equal(outcome.status,0,stderr);assert.equal(outcome.signal,null);
+  assert.equal(readFileSync(laneStatus,'utf8'),nativeExit===0?'0':'70',stderr);
+  assert.equal(readFileSync(siblingState,'utf8'),shape==='pipeline'?'0':'alive','unrelated sibling must survive discovery');
+  assert.equal(existsSync(siblingSignal),false,'discovery must not signal its background sibling');
+  assert.ok(Date.now()-start<3500,'discovery must not wait for unrelated siblings');
+  if(nativeExit===0)assert.match(stdout,/Tests run: 5, Failures: 0/);
+ } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
+});
