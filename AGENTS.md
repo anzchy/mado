@@ -99,7 +99,7 @@ node --test scripts/tdd/*.test.mjs
 
 也可直接用 `node scripts/tdd/swift-lane.mjs itemIDSurvivesJSONRoundTrip` 跑单测。所有已启动框架均须完成根运行；编译失败、零测试、崩溃或不完整输出退出 70，不输出计数。正常断言失败退出 1；计数前打印 `swift-lane filter=<f>` 供输出 tail 审计，verify 仍须传相同过滤器。
 
-App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"PicseeAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；空清单保持原运行参数和解析规则。
+App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"PicseeAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。选定运行的完整一致输出中，测试失败退出 1；环境失败或输出不完整、不一致退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；空清单保持原运行参数和解析规则。
 升级 Xcode 后，重跑混合 XCTest + Swift Testing probe，确认枚举 ABI 与控制台标签仍兼容。
 
 新 API 按此流程先写可编译桩，桩在 record 时是未提交的实现改动，Swift receipt 总会带 `implementation-already-present` MEDIUM；审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。

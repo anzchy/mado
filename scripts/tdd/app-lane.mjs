@@ -286,21 +286,29 @@ function selectionComplete(clean, selection) {
         if (!['All tests', 'Selected tests'].includes(suiteStart[1])) invalid = true;
         roots++;
       }
-      suites.push({ name: suiteStart[1], count: 0, skipped: 0, failed: 0, directFailed: 0, childFailures: 0 });
+      suites.push({ name: suiteStart[1], count: 0, skipped: 0, failed: 0, directFailed: 0, childFailures: 0, childUnexpected: 0 });
     } else if (suiteEnd) {
       if (pendingSuite) invalid = true;
       pendingSuite = suites.pop();
       if (pendingSuite?.name !== suiteEnd[1]) invalid = true;
       if ((suiteEnd[2] === 'failed') !== ((pendingSuite?.failed ?? 0) > 0)) invalid = true;
     } else if (summary) {
-      const assertionFailures = Number(summary[3]);
+      const assertionFailures = Number(summary[3]), unexpected = Number(summary[4]);
       if (!pendingSuite || Number(summary[1]) !== pendingSuite.count ||
-          Number(summary[2] ?? 0) !== pendingSuite.skipped || Number(summary[4]) !== 0 ||
+          Number(summary[2] ?? 0) !== pendingSuite.skipped || unexpected > assertionFailures ||
           // XCTest counts failed assertions, which can exceed failed test cases.
           assertionFailures < pendingSuite.failed || (assertionFailures === 0) !== (pendingSuite.failed === 0) ||
           (pendingSuite.directFailed === 0 ? assertionFailures !== pendingSuite.childFailures :
-            assertionFailures < pendingSuite.childFailures + pendingSuite.directFailed)) invalid = true;
-      if (suites.length) suites.at(-1).childFailures += assertionFailures;
+            assertionFailures < pendingSuite.childFailures + pendingSuite.directFailed) ||
+          // Thrown XCTest errors are unexpected failures, still attributed to
+          // failed cases. Preserve the subset and enclosing-suite totals.
+          (pendingSuite.directFailed === 0 ? unexpected !== pendingSuite.childUnexpected :
+            unexpected < pendingSuite.childUnexpected ||
+              unexpected - pendingSuite.childUnexpected > assertionFailures - pendingSuite.childFailures)) invalid = true;
+      if (suites.length) {
+        suites.at(-1).childFailures += assertionFailures;
+        suites.at(-1).childUnexpected += unexpected;
+      }
       pendingSuite = null;
     }
     const xct = /^Test Case '-\[([^\]\r\n]+) ([A-Za-z_]\w*)\]' (started\.|(passed|failed|skipped) \()/.exec(line);
