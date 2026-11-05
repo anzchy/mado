@@ -40,10 +40,13 @@ test('unverified receipts refuse the entire output without paths', () => {
     assert.doesNotMatch(r.stderr, /\/private|\/secret|receipt-trailer-/);
   }
 });
-test('selector scopes historical evidence and broken verdict stays broken', () => {
+test('selector scopes historical evidence but refuses a broken receipt', () => {
   const f = fixture(); f.put([receipt('old', { verdict: null }), receipt('408-WI-1', { verdict: 'SEPARATION-BROKEN' })]);
-  const r = f.run('--id', '408-WI-1'); assert.equal(r.status, 0);
-  assert.equal(r.stdout, line('408-WI-1', 'SEPARATION-BROKEN'));
+  const r = f.run('--id', '408-WI-1'); assert.notEqual(r.status, 0);
+  assert.equal(r.stdout, ''); assert.match(r.stderr, /BROKEN/);
+  assert.doesNotMatch(r.stderr, /\/private|\/secret|receipt-trailer-/);
+  f.put([receipt('old', { verdict: null }), receipt()]);
+  assert.equal(f.run('--id', '408-WI-1').stdout, line('408-WI-1'));
   const absent = f.run('--id', 'absent'); assert.notEqual(absent.status, 0); assert.equal(absent.stdout, '');
 });
 test('opaque evidence is labeled honestly and empty store prints no trailers', () => {
@@ -66,4 +69,11 @@ test('missing, malformed, duplicate and unsafe input refuses without leaking pat
   }
   f.put([]);
   for (const args of [['--id'], ['--wat'], ['--id', 'a', '--id', 'b']]) assert.notEqual(f.run(...args).status, 0);
+});
+test('BROKEN in a mixed batch refuses all stdout and preserves source', () => {
+  const f = fixture(); f.put([receipt('a'), receipt('z', { verdict: 'SEPARATION-BROKEN' })]);
+  const before = readFileSync(f.source, 'utf8'); const r = f.run();
+  assert.notEqual(r.status, 0); assert.equal(r.stdout, ''); assert.match(r.stderr, /BROKEN/);
+  assert.doesNotMatch(r.stderr, /\/private|\/secret|receipt-trailer-/);
+  assert.equal(readFileSync(f.source, 'utf8'), before);
 });

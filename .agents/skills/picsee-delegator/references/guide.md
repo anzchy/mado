@@ -739,11 +739,15 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 - Never kill a process this run didn't start; that includes the user's Picsee.
 - Ask before `rm -r`, `git reset --hard`, deleting branches or worktrees, or any force push other than
   `--force-with-lease` on your own PR branches. Exception: remove a merged PR's worktree right after the merge
-  (user 2026-10-30); its branch stays. Before removing it, when `.claude/tdd-guardian/receipts.json` exists, run
-  `node scripts/tdd/archive-receipts.mjs <worktree>` from that worktree. This writes immutable per-ID envelopes to
-  `~/.picsee/archive/tdd-guardian/receipts/` (override that directory with `PICSEE_RECEIPT_ARCHIVE_ROOT`), uses
-  `<ID>.<worktree>.json` on another worktree's collision and reports identical reruns as no-op. Stop cleanup on
-  an archive error; preserve other untracked `.claude/tdd-guardian/` evidence in the existing worktree archive.
+  (user 2026-10-30); its branch stays. After every merge, archive from the merged item's implementer worktree,
+  pane homes included: when `.claude/tdd-guardian/receipts.json` exists, run
+  `node scripts/tdd/archive-receipts.mjs <worktree>` there, before any removal decision. This writes immutable
+  per-ID envelopes for structurally valid, terminal verified receipts to `~/.picsee/archive/tdd-guardian/receipts/`,
+  lists invalid/unverified entries as skipped, uses `<ID>.<worktree>.json` on another worktree's collision and reports
+  identical reruns as no-op. `PICSEE_RECEIPT_ARCHIVE_ROOT` is a test override: it must be absolute and resolve
+  outside every Git worktree, including through symlink ancestors. Stop post-merge cleanup on an archive error.
+  Keep pane home and `prototype/*` worktrees; remove only eligible PR worktrees, preserving other untracked
+  `.claude/tdd-guardian/` evidence in the existing worktree archive before removal.
 - Stage named paths only; never `git add -A`, `.` or `-u`.
 - Heavy lock: put only the heavy job itself under `scripts/heavy-lock.sh`, one command per call. Never a bare shell,
   REPL, `sleep`, or a persistent session. Never delete the lock files.
