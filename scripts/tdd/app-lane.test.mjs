@@ -1,5 +1,5 @@
 import test, { afterEach, after } from 'node:test';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -245,7 +245,7 @@ test('discovery timeout runner executes real success, failure, spawn error and t
  const wrapped=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh') && c.args[0]===process.execPath);
  assert.ok(wrapped,'discovery must retain a bounded native execution runner');
  const code=wrapped.args[2];
- const run=(budget,args)=>spawnSync(process.execPath,['-e',code,String(budget),...args],{encoding:'utf8',timeout:10000});
+ const run=(budget,args)=>spawnSync(process.execPath,['-e',code,String(budget),...args],{encoding:'utf8',timeout:10000,detached:true});
  const ok=run(2000,[process.execPath,'-e',"process.stdout.write('runner-ok')"]);
  assert.equal(ok.status,0,ok.stderr);assert.equal(ok.stdout,'runner-ok');
  assert.equal(run(2000,[process.execPath,'-e','process.exit(9)']).status,9);
@@ -292,4 +292,115 @@ test('harness removes its directories after a failing assertion in a real test p
  });
  assert.equal(child.status,1,child.stderr);assert.match(child.stdout,/intentional assertion failure/);
  const owned=readFileSync(marker,'utf8');assert.equal(existsSync(owned),false,'child test directory must be removed despite assertion failure');
+});
+
+// Audit regression: safely cap the caller, then inspect live processes before
+// fallback teardown. RED must not leak a TERM-ignoring process into later tests.
+const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
+const processExists = pid => {
+ try {process.kill(pid,0);return true;} catch(error) {if(error.code==='ESRCH')return false;throw error;}
+};
+async function discoveryProcessCase(kind, cancellation = null) {
+ const h=harness(quarantine),marker=path.join(h.dir,'native-pids.json');
+ const code=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
+ const childCode=`process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`;
+ const command=kind.startsWith('descendant')
+  ? `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:${JSON.stringify(kind==='descendant-no-pipes'?'ignore':'inherit')}});require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid,child.pid]));process.exit(0);`
+  : `process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid]));setInterval(()=>{},1000);`;
+ const runner=spawn(process.execPath,['-e',code,cancellation?'10000':'350',process.execPath,'-e',command],{
+  detached:true,stdio:['ignore','pipe','pipe'],
+ });
+ let stdout='',stderr='',capped=false;
+ runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
+ const pids=()=>existsSync(marker)?JSON.parse(readFileSync(marker,'utf8')):[];
+ const killOwned=()=>{
+  for(const pid of [...pids(),runner.pid]) {
+   try {process.kill(-pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+   try {process.kill(pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+  }
+ };
+ const started=Date.now();
+ const safety=setTimeout(()=>{capped=true;killOwned();},2500);
+ const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
+ try {
+  if(cancellation) {
+   while(!existsSync(marker)&&Date.now()-started<1500) await pause(10);
+   assert.ok(existsSync(marker),'native command must start before cancellation');
+   process.kill(runner.pid,cancellation);
+  }
+  const outcome=await completion;
+  assert.equal(capped,false,'caller safety cap must not supply discovery termination');
+  assert.equal(outcome.status,70,stderr);assert.equal(outcome.signal,null);
+  assert.ok(Date.now()-started<1800,'admitted discovery must finish within its budget plus grace/drain');
+  const owned=pids();assert.ok(owned.length>0,'native PID evidence must exist');
+  for(let retry=0;retry<50&&owned.some(processExists);retry++) await pause(10);
+  assert.deepEqual(owned.filter(processExists),[],'completed discovery must leave no live owned process');
+  for(const pid of owned) {
+   let groupExists=false;try {process.kill(-pid,0);groupExists=true;} catch(error) {if(error.code!=='ESRCH')throw error;}
+   assert.equal(groupExists,false,`native process group ${pid} must be gone`);
+  }
+  assert.match(stderr,/inventory|timeout|cancel/i);
+  return stdout;
+ } finally {
+  clearTimeout(safety);killOwned();runner.stdout.destroy();runner.stderr.destroy();
+ }
+}
+test('discovery timeout escalates for a real TERM-ignoring command and leaves no live group',async()=>{
+ await discoveryProcessCase('direct');
+});
+test('discovery bounds a successful child with a TERM-ignoring descendant holding output pipes',async()=>{
+ await discoveryProcessCase('descendant');
+});
+for(const signal of ['SIGTERM','SIGINT']) test(`discovery ${signal} cancellation terminates its native process group`,async()=>{
+ await discoveryProcessCase('direct',signal);
+});
+test('discovery does not accept successful root exit while a pipe-less descendant remains alive',async()=>{
+ await discoveryProcessCase('descendant-no-pipes');
+});
+
+for(const mode of ['managed-wrapper','nested-wrapper','managed-caller']) test(`actual checked discovery preserves native ownership after hard death (${mode})`,async()=>{
+ const nested=mode==='nested-wrapper',callerDeath=mode==='managed-caller';
+ const h=harness(),script=path.join(h.dir,'checked.mjs'),supervisorFile=path.join(h.dir,'supervisor-pid'),nativeFile=path.join(h.dir,'native-pid'),callerFile=path.join(h.dir,'caller-pid');
+ writeFileSync(h.quarantinePath,JSON.stringify(quarantine));
+ const nativeCode=`process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(nativeFile)},String(process.pid));setInterval(()=>{},1000);`;
+ writeFileSync(script,`
+import {spawnSync} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
+writeFileSync(${JSON.stringify(callerFile)},String(process.pid));
+const status=runAppLane({quarantinePath:${JSON.stringify(h.quarantinePath)},env:process.env,spawn:(cmd,args,opts)=>{
+ if(cmd==='xcrun') return {status:0,stdout:'/platform\\n',stderr:''};
+ const source="require('node:fs').writeFileSync("+${JSON.stringify(JSON.stringify(supervisorFile))}+",String(process.pid));\\n"+args[2];
+ return spawnSync(cmd,[args[0],'-e',source,${JSON.stringify(callerDeath?'350':'10000')},process.execPath,'-e',${JSON.stringify(nativeCode)}],opts);
+}});
+process.exitCode=status;
+`);
+ const lockEnv={...process.env,PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
+ if(nested) lockEnv.PICSEE_HEAVY_LOCK_HELD='1';else delete lockEnv.PICSEE_HEAVY_LOCK_HELD;
+ delete lockEnv.MDPRO_HEAVY_LOCK_HELD;delete lockEnv.NODE_TEST_CONTEXT;
+ const realLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ const runner=spawn(callerDeath?realLock:process.execPath,callerDeath?[process.execPath,script]:[script],{env:lockEnv,detached:true,stdio:['ignore','pipe','pipe']});
+ let stderr='';runner.stdout.resume();runner.stderr.on('data',s=>stderr+=s);
+ const known=()=>[supervisorFile,nativeFile,callerFile].filter(existsSync).map(p=>Number(readFileSync(p,'utf8')));
+ const cleanup=()=>{for(const pid of [...known(),runner.pid])for(const target of [-pid,pid])try{process.kill(target,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}};
+ let capped=false;const cap=setTimeout(()=>{capped=true;cleanup();},5000);
+ const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
+ try {
+  const start=Date.now();while(!existsSync(nativeFile)&&Date.now()-start<2000)await pause(10);
+  assert.ok(existsSync(nativeFile),stderr);const [supervisor,native]=known();
+  process.kill(callerDeath?Number(readFileSync(callerFile,'utf8')):supervisor,'SIGKILL');
+  let competitor;
+  if(!nested) {
+   const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+   competitor=spawn(lock,[process.execPath,'-e',`let live=true;try{process.kill(${native},0);}catch(e){if(e.code==='ESRCH')live=false;else throw e;}console.log(JSON.stringify({live}));`],{env:lockEnv,stdio:['ignore','pipe','pipe']});
+  }
+  const competitorResult=competitor?new Promise((resolve,reject)=>{let out='',err='';competitor.stdout.on('data',s=>out+=s);competitor.stderr.on('data',s=>err+=s);competitor.once('error',reject);competitor.once('close',status=>resolve({status,out,err}));}):null;
+  const outcome=await completion;assert.equal(capped,false,stderr);
+  if(callerDeath)assert.notEqual(outcome.status,0,stderr);else assert.equal(outcome.status,70,stderr);
+  assert.equal(outcome.signal,null);
+  if(competitorResult) {const acquired=await competitorResult;assert.equal(acquired.status,0,acquired.err);assert.equal(JSON.parse(acquired.out).live,false,'heavy-lock must retain ownership until native tasks are gone');}
+  for(let retry=0;retry<50&&processExists(native);retry++)await pause(10);
+  assert.equal(processExists(native),false,'checked discovery must clean native task after supervisor hard death');
+  assert.ok(Date.now()-start<3500,'hard-death cleanup must use bounded discovery drain');
+ } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
 });
