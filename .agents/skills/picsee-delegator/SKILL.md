@@ -132,7 +132,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
    another. **Right after the merge, remove that PR's worktree** (user 2026-10-30: 「已经提交并成功merge pr的对应的worktree要及时清除，这个要作为一个rule」):
-   archive untracked `.claude/tdd-guardian/` to `~/.picsee/archive/tdd-guardian/<worktree>/`, then `git worktree remove`
+   when `.claude/tdd-guardian/receipts.json` exists, from that worktree run
+   `node scripts/tdd/archive-receipts.mjs <worktree>` first (one immutable envelope per ID in
+   `~/.picsee/archive/tdd-guardian/receipts/`; collisions use `<ID>.<worktree>.json`; identical reruns report no-op).
+   Stop cleanup on an archive error. Preserve the other untracked `.claude/tdd-guardian/` evidence in
+   `~/.picsee/archive/tdd-guardian/<worktree>/`, then `git worktree remove`
    (`--force` only when the rest is `.tokenize/` or `.claude/mind.mv2*` caches; report any other dirt). Keep the
    branch, pane home worktrees and `prototype/*` worktrees. **After every merge**, `git fetch` and run `$SK/scripts/overlap-check.py trial`: `OVERLAP` or `CODE` →
    rebase that branch now while it is small, then the rebase-verify and combination-check path of step 6; `LEDGER` can

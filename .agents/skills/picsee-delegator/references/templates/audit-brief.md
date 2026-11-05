@@ -40,6 +40,16 @@ with `/clear`), so the request file is your only memory: it names everything you
   `~/.picsee/herdr/opus-auditor/<item>-r<round>.md` (or the path the request names), and ends with the VERDICT block.
 - Never paste certificate e-mail lines or personal paths beyond the repo into the report summary.
 
+## RED receipt evidence
+
+For each implementation commit, compare each `Red-Receipt:` trailer against its receipt in
+`~/.picsee/archive/tdd-guardian/receipts/<ID>.json` (or `<ID>.<worktree>.json` on a collision).
+The archive envelope records `worktree` and the complete `receipt`. Match ID, lane, `red.kind`,
+`spec-files=N` against the `test_files` key count, a present `verified_at`, and terminal verdict.
+`spec-files` counts specification files, not tests; preserve any `SEPARATION-BROKEN` verdict as a finding.
+Before post-merge archival, use the request's named local receipts; identify unavailable or mismatched
+archive evidence explicitly. Generated trailers come from `node scripts/tdd/red-receipt-trailer.mjs --id <ID>`.
+
 ## Scratch reproductions must not write into any worktree (added 2026-10-23)
 
 When you reproduce a RED by copying old scripts into a scratch directory, make sure nothing they run resolves paths

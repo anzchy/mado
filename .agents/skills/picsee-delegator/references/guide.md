@@ -739,7 +739,11 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 - Never kill a process this run didn't start; that includes the user's Picsee.
 - Ask before `rm -r`, `git reset --hard`, deleting branches or worktrees, or any force push other than
   `--force-with-lease` on your own PR branches. Exception: remove a merged PR's worktree right after the merge
-  (user 2026-10-30); its branch stays.
+  (user 2026-10-30); its branch stays. Before removing it, when `.claude/tdd-guardian/receipts.json` exists, run
+  `node scripts/tdd/archive-receipts.mjs <worktree>` from that worktree. This writes immutable per-ID envelopes to
+  `~/.picsee/archive/tdd-guardian/receipts/` (override that directory with `PICSEE_RECEIPT_ARCHIVE_ROOT`), uses
+  `<ID>.<worktree>.json` on another worktree's collision and reports identical reruns as no-op. Stop cleanup on
+  an archive error; preserve other untracked `.claude/tdd-guardian/` evidence in the existing worktree archive.
 - Stage named paths only; never `git add -A`, `.` or `-u`.
 - Heavy lock: put only the heavy job itself under `scripts/heavy-lock.sh`, one command per call. Never a bare shell,
   REPL, `sleep`, or a persistent session. Never delete the lock files.
