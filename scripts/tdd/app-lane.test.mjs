@@ -1,9 +1,10 @@
-import test from 'node:test';
+import test, { afterEach, after } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runAppLane, parseAppResult } from './app-lane.mjs';
 
 const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.meta.url), 'utf8');
@@ -12,8 +13,18 @@ const ids = ['OtherProbeTests/testSkip', 'ProbeTests/testKeep', 'ProbeTests/test
 const inventory = 'APP_LANE_INVENTORY_BEGIN\n' + ids.map(id => id.includes('(') ? id : `XCT_ID=-[${id.replace('/', ' ')}]`).join('\n') + '\nAPP_LANE_INVENTORY_END\n';
 const quarantine = [{id:'ProbeTests/testSkip',issue:411,reason:'test failure'}, {id:'Probe.swiftSkip()',issue:425,reason:'test failure'}];
 const result = stdout => ({status:0,stdout,stderr:'',signal:null});
+const temporaryDirectories = new Set();
+afterEach(()=>{
+ for(const dir of temporaryDirectories) {
+  rmSync(dir,{recursive:true,force:true});
+  assert.equal(existsSync(dir),false,`temporary directory remains: ${dir}`);
+ }
+ temporaryDirectories.clear();
+});
+after(()=>assert.equal(temporaryDirectories.size,0,'all test-owned temporary directories cleaned'));
 function harness(entries = [], options = {}) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'i411-node-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'i524-node-'));
+  temporaryDirectories.add(dir);
   const quarantinePath = options.quarantinePath ?? path.join(dir, 'quarantine.json');
   if (!options.quarantinePath) writeFileSync(quarantinePath, typeof entries === 'string' ? entries : JSON.stringify(entries));
   let stdout='',stderr='';const calls=[];
@@ -248,4 +259,37 @@ for(const [label,sdk] of [
  ['relative',result('relative/platform')],['multiline',result('/platform\n/other')],
 ]) test(`SDK ${label} fails before test execution`,()=>{
  const h=harness(quarantine,{sdk});assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/inventory|quarantine/);
+});
+
+// #524 WI-3: explicit support boundary and resource cleanup.
+for(const [label,excluded] of [
+ ['all Swift tests',ids.filter(id=>id.includes('('))],['every test',ids],
+]) test(`quarantine of ${label} explains the retained Swift requirement`,()=>{
+ const entries=excluded.map(id=>({id,issue:524,reason:'limit test'}));
+ const h=harness(entries);assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);
+ assert.match(h.stderr,/unsupported.*retain at least one Swift Testing test/i);
+ assert.doesNotMatch(h.stdout,/quarantine skip=|Tests run:/);
+});
+test('one retained Swift Testing test is supported',()=>{
+ const entries=[...quarantine,{id:'Probe.swiftSkipSibling()',issue:524,reason:'boundary'}];
+ const output=selected.replace(/^.*swiftSkipSibling\(\).*\n/gm,'').replace('2 tests in 0 suites','1 test in 0 suites');
+ const h=harness(entries,{run:()=>result(output)});assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 4, Failures: 0/);
+});
+test('empty quarantine custom bundle keeps native arguments and completes',()=>{
+ const h=harness([],{bundlePath:'/tmp/custom-probe.xctest'});assert.equal(h.status,0,h.stderr);
+ assert.deepEqual(h.calls[0].args,['xcrun','xctest','/tmp/custom-probe.xctest']);assert.ok(h.stdout.startsWith('app-lane quarantine none\n'));
+});
+if(process.env.PICSEE_I524_CLEANUP_PROBE) test('cleanup failure sentinel',()=>{
+ const h=harness();writeFileSync(process.env.PICSEE_I524_CLEANUP_PROBE,h.dir);
+ assert.fail('intentional assertion failure to exercise teardown');
+});
+test('harness removes its directories after a failing assertion in a real test process',()=>{
+ const h=harness();const marker=path.join(h.dir,'child-directory.txt');
+ const childEnv={...process.env,PICSEE_I524_CLEANUP_PROBE:marker};
+ delete childEnv.NODE_TEST_CONTEXT; // The subprocess is a new runner, not a recursive worker.
+ const child=spawnSync(process.execPath,['--test','--test-name-pattern=cleanup failure sentinel',fileURLToPath(import.meta.url)],{
+  encoding:'utf8',timeout:10000,env:childEnv,
+ });
+ assert.equal(child.status,1,child.stderr);assert.match(child.stdout,/intentional assertion failure/);
+ const owned=readFileSync(marker,'utf8');assert.equal(existsSync(owned),false,'child test directory must be removed despite assertion failure');
 });
