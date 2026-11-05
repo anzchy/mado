@@ -183,9 +183,15 @@ test('selected XCTest skipped summary count must agree with observed skipped ter
 });
 
 // #524 synthetic assertion-failure transcript derived from the recorded mixed run.
+// Preserve real XCTest failure-line text from the recorded assertion fixture;
+// only its synthetic file and test identity are remapped for the mixed fixture.
+const assertionFailureLine=readFileSync(new URL('./fixtures/xctest-two-assertions.txt',import.meta.url),'utf8')
+ .split('\n').find(line=>line.includes('XCTAssertEqual failed:'))
+ .replace('/SCRATCH/LaneFixtures/Tests/LaneTests/FixtureTests.swift','/FIXTURE/Probe.swift')
+ .replace('-[LaneTests.FixtureTests testTwoFailures]','-[Probe.ProbeTests testKeep]');
 function withFailedXCTest(output) {
  return output
-  .replace("Test Case '-[Probe.ProbeTests testKeep]' passed (","Test Case '-[Probe.ProbeTests testKeep]' failed (")
+  .replace("Test Case '-[Probe.ProbeTests testKeep]' passed (",assertionFailureLine+"\nTest Case '-[Probe.ProbeTests testKeep]' failed (")
   .replace(/Test Suite '(ProbeTests|Probe\.xctest|Selected tests)' passed/g,"Test Suite '$1' failed")
   .replace('Executed 2 tests, with 0 failures (0 unexpected)','Executed 2 tests, with 1 failure (0 unexpected)')
   .replaceAll('Executed 3 tests, with 0 failures (0 unexpected)','Executed 3 tests, with 1 failure (0 unexpected)');
@@ -403,4 +409,49 @@ process.exitCode=status;
   assert.equal(processExists(native),false,'checked discovery must clean native task after supervisor hard death');
   assert.ok(Date.now()-start<3500,'hard-death cleanup must use bounded discovery drain');
  } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
+});
+
+// Fix round1: thrown errors are XCTest test failures (unexpected is a subset
+// of failures), provided the selected test and all suite totals reconcile.
+function withThrownXCTest(output) {
+ return withFailedXCTest(output)
+  .replace(assertionFailureLine,'<EXPR>:0: error: -[Probe.ProbeTests testKeep] : threw error "FixtureError.failed"')
+  .replaceAll('with 1 failure (0 unexpected)','with 1 failure (1 unexpected)');
+}
+test('selected complete thrown XCTest error returns one, preserves evidence and cannot retry',()=>{
+ const output=withThrownXCTest(selected);
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.match(h.stdout,/Tests run: 5, Failures: 1, Errors: 0, Skipped: 0/);
+ assert.equal(nativeCalls(h).length,1);assert.doesNotMatch(h.stdout+h.stderr,/retrying once|environment failure/);
+ assert.equal(readFileSync(path.join(h.dir,'evidence.log'),'utf8'),output+'\n');
+});
+test('selected thrown error with a skipped XCTest sibling remains a completed test failure',()=>{
+ const output=withSkippedXCTest(selected,true,1);
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.match(h.stdout,/Tests run: 5, Failures: 1, Errors: 0, Skipped: 1/);
+ assert.equal(nativeCalls(h).length,1);assert.doesNotMatch(h.stdout,/retrying once/);
+});
+test('selected assertion and thrown error counts can share one failed XCTest case',()=>{
+ const output=withThrownXCTest(selected).replaceAll('with 1 failure (1 unexpected)','with 2 failures (1 unexpected)');
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.match(h.stdout,/Tests run: 5, Failures: 1/);assert.equal(nativeCalls(h).length,1);
+});
+for(const [label,mutate,runOptions] of [
+ ['unexpected exceeds total failures',s=>s.replaceAll('(1 unexpected)','(2 unexpected)'),{}],
+ ['parent unexpected count mismatch',s=>s.replace(/(Test Suite 'Selected tests' failed[^\n]*\n\s*Executed [^\n]*\()1 unexpected/,'$10 unexpected'),{}],
+ ['child unexpected count mismatch',s=>s.replace(/(Test Suite 'ProbeTests' failed[^\n]*\n\s*Executed [^\n]*\()1 unexpected/,'$10 unexpected'),{}],
+ ['missing failed terminal',s=>s.replace(/^Test Case .*testKeep\]' failed.*\n/gm,''),{}],
+ ['passed failed-case terminal',s=>s.replace("testKeep]' failed (","testKeep]' passed ("),{}],
+ ['zero exit',s=>s,{status:0}],
+ ['native signal',s=>s,{signal:'SIGTERM'}],
+]) test(`selected thrown XCTest error ${label} still fails closed`,()=>{
+ const h=harness(quarantine,{env:{},run:()=>({...result(mutate(withThrownXCTest(selected))),status:1,...runOptions})});
+ assert.equal(h.status,70);assert.equal(nativeCalls(h).length,1);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
+});
+test('empty-list XCTest thrown failure retains the original environment-failure limit and invocation',()=>{
+ const output=withThrownXCTest(selected).replaceAll("'Selected tests'","'All tests'");
+ const h=harness([],{run:()=>({...result(output),status:1})});
+ assert.equal(h.status,70);assert.equal(h.calls.length,1);
+ assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.ok(h.stdout.startsWith('app-lane quarantine none\n'));assert.doesNotMatch(h.stdout,/Tests run:/);
 });
