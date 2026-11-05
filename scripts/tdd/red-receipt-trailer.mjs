@@ -11,13 +11,14 @@ export const isObject = value => value !== null && typeof value === 'object' && 
 export function safeComponent(value) {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
 }
-export function readReceipts() {
+export function readReceipts({ rawEntries = false } = {}) {
   let store;
   try { store = JSON.parse(readFileSync('.claude/tdd-guardian/receipts.json', 'utf8')); }
   catch { throw new Error('Cannot read local receipts: missing file or invalid JSON.'); }
   if (!isObject(store) || store.schemaVersion !== 2 || !Array.isArray(store.receipts)) {
     throw new Error('Invalid receipt store: expected schemaVersion 2 and receipts array.');
   }
+  if (rawEntries) return store.receipts;
   const ids = new Set();
   for (const receipt of store.receipts) {
     if (!isObject(receipt) || !safeComponent(receipt.id) || ids.has(receipt.id)) {
@@ -29,6 +30,9 @@ export function readReceipts() {
 }
 export function trailerLines(receipts) {
   return receipts.map(receipt => {
+    if (receipt.verdict === 'SEPARATION-BROKEN') {
+      throw new Error(`Receipt ${receipt.id} is SEPARATION-BROKEN; re-record under a new ID, never commit it.`);
+    }
     if (typeof receipt.verified_at !== 'string' || !receipt.verified_at ||
         !Number.isFinite(Date.parse(receipt.verified_at)) ||
         !['SEPARATION-HELD', 'SEPARATION-BROKEN'].includes(receipt.verdict)) {

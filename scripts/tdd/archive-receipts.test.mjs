@@ -8,7 +8,8 @@ import { spawnSync, spawn } from 'node:child_process';
 
 const script = fileURLToPath(new URL('./archive-receipts.mjs', import.meta.url));
 const receipt = (id = '408-WI-1', head_sha = 'a') => ({ id, lane: 'release-node', head_sha,
-  red: { red: true, kind: 'assertion-failure' }, test_files: {}, verified_at: null, verdict: null });
+  red: { red: true, kind: 'assertion-failure' }, test_files: { 'test.mjs': { state: 'ok', lines: ['abc'], sha: '123' } },
+  verified_at: '2026-11-05T00:00:00Z', verdict: 'SEPARATION-HELD' });
 function fixture(root) {
   const cwd = mkdtempSync(join(tmpdir(), 'receipt-archive-'));
   mkdirSync(join(cwd, '.claude/tdd-guardian'), { recursive: true });
@@ -82,7 +83,10 @@ test('invalid batch, unsafe names, missing source/arguments and unusable destina
   const f = fixture(); assert.notEqual(f.run('wt').status, 0);
   for (const invalid of ['../escape', '/tmp/escape', 'a/b', 'a\ninjected', '']) {
     f.put([receipt()]); assert.notEqual(f.run(invalid).status, 0);
-    f.put([receipt(), receipt(invalid)]); assert.notEqual(f.run('wt').status, 0);
+    const invalidEntry = fixture(); invalidEntry.put([receipt(), receipt(invalid)]);
+    const skipped = invalidEntry.run('wt'); assert.equal(skipped.status, 0, skipped.stderr);
+    assert.match(skipped.stdout, /Skipped: entry 2/);
+    assert.deepEqual(readdirSync(invalidEntry.root), ['408-WI-1.json']);
   }
   for (const value of ['{', '{}', JSON.stringify({ schemaVersion: 2, receipts: [receipt(), receipt()] })]) {
     writeFileSync(f.source, value); const r = f.run('wt'); assert.notEqual(r.status, 0); assert.ok(r.stderr.trim());
@@ -118,4 +122,97 @@ test('default archive root is the current home receipts directory', () => {
   const r = spawnSync(process.execPath, [script, 'wt'], { ...f.options, env });
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(readFileSync(join(f.cwd, '.picsee/archive/tdd-guardian/receipts/408-WI-1.json'))), envelope('wt', receipt()));
+});
+test('relative roots and roots in git worktrees, including symlinked ancestors, are refused', async () => {
+  const { symlinkSync, existsSync } = await import('node:fs');
+  const f = fixture(); f.put([receipt()]);
+  const repository = join(f.cwd, 'repository'); mkdirSync(repository);
+  const init = spawnSync('git', ['init', '--quiet', repository], { encoding: 'utf8' });
+  assert.equal(init.status, 0, init.stderr);
+  const alias = join(f.cwd, 'alias'); symlinkSync(repository, alias);
+  for (const root of ['relative', repository, join(repository, 'new/deep'), alias, join(alias, 'new/deep')]) {
+    const r = spawnSync(process.execPath, [script, 'wt'], {
+      ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: root },
+    });
+    assert.notEqual(r.status, 0, `must reject root ${root}`);
+    assert.match(r.stderr, /absolute|worktree/i); assert.equal(r.stdout, '');
+    assert.doesNotMatch(r.stderr, /receipt-archive-/);
+  }
+  assert.equal(existsSync(join(repository, '408-WI-1.json')), false);
+  assert.equal(existsSync(join(repository, 'new')), false);
+  assert.equal(existsSync(join(f.cwd, 'relative')), false);
+  // A symlink into an external directory remains a usable override.
+  mkdirSync(f.root); const external = join(f.cwd, 'external'); symlinkSync(f.root, external);
+  const r = spawnSync(process.execPath, [script, 'wt'], {
+    ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: join(external, 'new') },
+  });
+  assert.equal(r.status, 0, r.stderr); assert.equal(existsSync(join(f.root, 'new/408-WI-1.json')), true);
+});
+test('archive skips malformed and unverified entries and reports them without paths', () => {
+  const f = fixture();
+  const invalid = [
+    { ...receipt('empty-spec'), test_files: {} },
+    { ...receipt('bad-fingerprint'), test_files: { '/private/secret': { state: 'ok', lines: 'bad' } } },
+    { ...receipt('bad-state'), test_files: { '/private/secret': { lines: [] } } },
+    { ...receipt('unverified'), verified_at: null, verdict: null },
+    { ...receipt('pending'), verdict: 'PENDING' },
+    { ...receipt('bad-time'), verified_at: 'invalid' },
+    { ...receipt('bad-red'), red: {} },
+    { ...receipt('bad-lane'), lane: '' },
+    { ...receipt('null-fingerprint'), test_files: { '/private/secret': null } },
+    null,
+  ];
+  f.put([receipt(), ...invalid]); const before = readFileSync(f.source, 'utf8');
+  const r = f.run('wt'); assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(readdirSync(f.root), ['408-WI-1.json']);
+  for (const item of invalid.filter(Boolean)) assert.match(r.stdout, new RegExp(`Skipped: ${item.id}`));
+  assert.match(r.stdout, /Skipped: entry 11/);
+  assert.doesNotMatch(r.stdout + r.stderr, /\/private|secret|receipt-archive-/);
+  assert.equal(readFileSync(f.source, 'utf8'), before);
+  f.put([invalid[0], invalid[3]]); const retry = f.run('wt'); assert.equal(retry.status, 0);
+  assert.match(retry.stdout, /Skipped: empty-spec/); assert.match(retry.stdout, /Skipped: unverified/);
+});
+test('a partial temporary write failure leaves no temporary archive file', () => {
+  const f = fixture(); f.put([receipt()]);
+  const preload = join(f.cwd, 'fail-write.mjs');
+  writeFileSync(preload, `import fs from 'node:fs';\nimport { syncBuiltinESMExports } from 'node:module';\nconst original = fs.writeFileSync;\nfs.writeFileSync = function(target, data, options) {\n  if (typeof target === 'number' || String(target).endsWith('.tmp')) {\n    original(target, 'partial', options);\n    throw Object.assign(new Error('injected partial write failure'), {code:'ENOSPC'});\n  }\n  return original(target, data, options);\n};\nsyncBuiltinESMExports();\n`);
+  const r = spawnSync(process.execPath, ['--import', preload, script, 'wt'], f.options);
+  assert.notEqual(r.status, 0); assert.match(r.stderr, /Cannot write/);
+  assert.deepEqual(readdirSync(f.root), []);
+});
+test('verified terminal historical verdicts and pinned non-ok fingerprints remain intact', () => {
+  const f = fixture();
+  const broken = { ...receipt('broken'), verdict: 'SEPARATION-BROKEN' };
+  const nonOK = { ...receipt('non-ok'), test_files: { 'test.mjs': { state: 'missing' } } };
+  const unverified = [
+    { ...receipt('missing-time'), verified_at: null },
+    { ...receipt('missing-verdict'), verdict: null },
+    { ...receipt('unknown-verdict'), verdict: 'unknown' },
+  ];
+  f.put([broken, nonOK, ...unverified]); const r = f.run('wt'); assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(readdirSync(f.root).sort(), ['broken.json', 'non-ok.json']);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.root, 'broken.json'))), envelope('wt', broken));
+  assert.deepEqual(JSON.parse(readFileSync(join(f.root, 'non-ok.json'))), envelope('wt', nonOK));
+});
+test('worktree source cwd can archive externally and Git environment cannot conceal destination', () => {
+  const f = fixture(); f.put([receipt()]);
+  assert.equal(spawnSync('git', ['init', '--quiet', f.cwd]).status, 0);
+  const external = mkdtempSync(join(tmpdir(), 'receipt-external-'));
+  const allowed = spawnSync(process.execPath, [script, 'wt'], {
+    ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: external },
+  });
+  assert.equal(allowed.status, 0, allowed.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(external, '408-WI-1.json'))), envelope('wt', receipt()));
+  const hidden = spawnSync(process.execPath, [script, 'wt'], {
+    ...f.options, env: { ...f.options.env, GIT_DIR: '/nonexistent', GIT_CEILING_DIRECTORIES: f.cwd },
+  });
+  assert.notEqual(hidden.status, 0); assert.match(hidden.stderr, /worktree/i);
+});
+test('archive refuses when Git cannot establish destination safety', () => {
+  const f = fixture(); f.put([receipt()]);
+  const r = spawnSync(process.execPath, [script, 'wt'], {
+    ...f.options, env: { ...f.options.env, PATH: '' },
+  });
+  assert.notEqual(r.status, 0); assert.match(r.stderr, /Cannot establish.*outside Git worktrees/);
+  assert.equal(readdirSync(f.cwd).includes('archive'), false);
 });

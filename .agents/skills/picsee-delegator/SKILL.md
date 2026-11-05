@@ -131,12 +131,13 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
    to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
-   another. **Right after the merge, remove that PR's worktree** (user 2026-10-30: 「已经提交并成功merge pr的对应的worktree要及时清除，这个要作为一个rule」):
-   when `.claude/tdd-guardian/receipts.json` exists, from that worktree run
-   `node scripts/tdd/archive-receipts.mjs <worktree>` first (one immutable envelope per ID in
-   `~/.picsee/archive/tdd-guardian/receipts/`; collisions use `<ID>.<worktree>.json`; identical reruns report no-op).
-   Stop cleanup on an archive error. Preserve the other untracked `.claude/tdd-guardian/` evidence in
-   `~/.picsee/archive/tdd-guardian/<worktree>/`, then `git worktree remove`
+   another. **After every merge, archive the merged item's receipts from its implementer worktree, pane homes included**:
+   when `.claude/tdd-guardian/receipts.json` exists, run `node scripts/tdd/archive-receipts.mjs <worktree>` there
+   (one immutable envelope per verified, structurally valid ID in `~/.picsee/archive/tdd-guardian/receipts/`;
+   invalid/unverified entries are listed as skipped; collisions use `<ID>.<worktree>.json`; identical reruns report no-op).
+   Stop post-merge cleanup on an archive error. **Then remove eligible PR worktrees right after the merge**
+   (user 2026-10-30: 「已经提交并成功merge pr的对应的worktree要及时清除，这个要作为一个rule」): before `git worktree remove`,
+   preserve the other untracked `.claude/tdd-guardian/` evidence in `~/.picsee/archive/tdd-guardian/<worktree>/`
    (`--force` only when the rest is `.tokenize/` or `.claude/mind.mv2*` caches; report any other dirt). Keep the
    branch, pane home worktrees and `prototype/*` worktrees. **After every merge**, `git fetch` and run `$SK/scripts/overlap-check.py trial`: `OVERLAP` or `CODE` →
    rebase that branch now while it is small, then the rebase-verify and combination-check path of step 6; `LEDGER` can
