@@ -5,5 +5,13 @@
         <link>https://github.com/anzchy/picsee/releases</link>
         <description>picsee updates</description>
         <language>en</language>
+        <item>
+            <title>picsee 0.0.1 (1598)</title>
+            <pubDate>Thu, 05 Nov 2026 08:11:53 +0000</pubDate>
+            <sparkle:version>1598</sparkle:version>
+            <sparkle:shortVersionString>0.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/anzchy/picsee/releases/download/v0.0.1-rc.3/Picsee-0.0.1.dmg" length="5315411" type="application/octet-stream" sparkle:edSignature="6AxVsNQWxrxqre+XLChPWIwC8riKU5OCye0pudlnBvMXJcF7ohzKyBvh8pI9Sv7D2u1YeYw1efePGsM093gwBw=="/>
+        </item>
     </channel>
 </rss>
