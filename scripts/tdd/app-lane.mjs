@@ -244,8 +244,7 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
   const options = { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
     env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" } };
   if (inclusion !== null) return spawnSync(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
-  if (bundlePath !== bundle) return spawnSync(lock, ["xcrun", "xctest", bundlePath], options);
-  return spawnSync(lock, ["xcrun", "xctest", bundle], options);
+  return spawnSync(lock, ["xcrun", "xctest", bundlePath], options);
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
@@ -261,7 +260,7 @@ export function runAppLane({ spawn = spawnSync, env = process.env,
         throw new Error(`inventory does not contain quarantined id ${entry.id}`);
       }
       const retained = inventory.filter(row => !quarantine.some(entry => entry.id === row.id));
-      if (!retained.some(row => row.kind === 'swift')) throw new Error('inventory selection has no remaining Swift Testing tests');
+      if (!retained.some(row => row.kind === 'swift')) throw new Error('unsupported quarantine: no remaining Swift Testing tests; retain at least one Swift Testing test');
       selection = { inventory, retained };
       for (const entry of quarantine) stdout(`app-lane quarantine skip=${entry.id} issue=#${entry.issue}\n`);
     } else stdout('app-lane quarantine none\n');
