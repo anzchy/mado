@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +19,13 @@ function harness(entries = [], options = {}) {
   let stdout='',stderr='';const calls=[];
   const spawn = (cmd,args,opts) => {
     calls.push({cmd,args,opts});
+    if (options.queued && cmd.endsWith('heavy-lock.sh') && opts.timeout && opts.timeout <= 120000) return {...result(''),status:null,error:new Error('simulated lock queue exceeded outer timeout')};
+    // Normalize only the process protocol; return values still exercise the real lane.
+    if (cmd === process.execPath || args[0] === process.execPath) {
+      const wrapper = cmd === process.execPath ? args : args.slice(1);
+      args = wrapper.slice(3);
+    }
+    if(cmd==='xcrun' && args[0]==='--show-sdk-platform-path') return options.sdk ?? result('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n');
     if(args[0]==='xcrun' && args[1]==='--show-sdk-platform-path') return result('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n');
     if(args.includes('swiftc')) return result('');
     if(args[0]==='xcrun' && args[1]==='xctest') return options.run?.(calls) ?? result(entries.length ? selected : baseline);
@@ -208,4 +216,36 @@ for(const [label,mutate,runOptions] of [
  const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1,...runOptions})});
  assert.equal(h.status,70);assert.equal(nativeCalls(h).length,1);
  assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
+});
+
+// #524 WI-2: the lock queue and the native execution budget are separate.
+test('discovery queued beyond 120 seconds still completes within its own execution budget',()=>{
+ const h=harness(quarantine,{queued:true});
+ assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 5, Failures: 0/);
+ const sdk=h.calls.find(c=>c.cmd==='xcrun');
+ assert.ok(sdk,'SDK lookup must bypass the heavy lock');
+ assert.deepEqual(sdk.args,['--show-sdk-platform-path']);assert.equal(sdk.opts.timeout,120000);
+ const discovery=h.calls.filter(c=>c.cmd.endsWith('heavy-lock.sh') && c.args[0]===process.execPath);
+ assert.equal(discovery.length,2);
+ for(const call of discovery) {assert.equal(call.opts.timeout,undefined);assert.equal(call.args[3],'120000');}
+});
+test('discovery timeout runner executes real success, failure, spawn error and timeout commands',()=>{
+ const h=harness(quarantine);assert.equal(h.status,0,h.stderr);
+ const wrapped=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh') && c.args[0]===process.execPath);
+ assert.ok(wrapped,'discovery must retain a bounded native execution runner');
+ const code=wrapped.args[2];
+ const run=(budget,args)=>spawnSync(process.execPath,['-e',code,String(budget),...args],{encoding:'utf8',timeout:10000});
+ const ok=run(2000,[process.execPath,'-e',"process.stdout.write('runner-ok')"]);
+ assert.equal(ok.status,0,ok.stderr);assert.equal(ok.stdout,'runner-ok');
+ assert.equal(run(2000,[process.execPath,'-e','process.exit(9)']).status,9);
+ const missing=run(2000,['/i524-missing-executable']);assert.equal(missing.status,70);assert.match(missing.stderr,/inventory|ENOENT/);
+ const slow=run(30,[process.execPath,'-e','setTimeout(()=>{},5000)']);assert.equal(slow.status,70);assert.match(slow.stderr,/inventory|ETIMEDOUT|timeout/i);
+});
+for(const [label,sdk] of [
+ ['nonzero',{...result(''),status:1,stderr:'SDK unavailable'}],
+ ['signal',{...result(''),status:null,signal:'SIGTERM'}],
+ ['spawn error',{...result(''),status:null,error:new Error('SDK process error')}],
+ ['relative',result('relative/platform')],['multiline',result('/platform\n/other')],
+]) test(`SDK ${label} fails before test execution`,()=>{
+ const h=harness(quarantine,{sdk});assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/inventory|quarantine/);
 });
