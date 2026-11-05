@@ -38,11 +38,11 @@ test('default parser and empty lane reject recorded Selected tests even with com
  assert.equal(parseAppResult(result(baseline)).status,0);assert.equal(parseAppResult(result(selected)).status,70);
  const h=harness([],{run:()=>result(selected)});assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:/);
 });
-test('two entries select inventory minus both exact IDs; recorded Swift count is two rather than three',()=>{
+test('two entries select inventory minus both exact IDs; combined selected count includes both frameworks',()=>{
  const h=harness(quarantine);assert.equal(h.status,0,h.stderr);
  const native=nativeCalls(h);assert.equal(native.length,1);assert.deepEqual(native[0].args,['xcrun','xctest','-XCTest','OtherProbeTests/testSkip,ProbeTests/testKeep,ProbeTests/testSkipSibling,Probe.swiftKeep(),Probe.swiftSkipSibling()','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
  assert.ok(h.stdout.startsWith('app-lane quarantine skip=ProbeTests/testSkip issue=#411\napp-lane quarantine skip=Probe.swiftSkip() issue=#425\n'));
- assert.match(h.stdout,/Tests run: 2, Failures: 0/);
+ assert.match(h.stdout,/Tests run: 5, Failures: 0/);
 });
 for(const [label,entries] of [
  ['missing issue',[{id:'Probe.swiftSkip()',reason:'failure'}]],['invalid issue',[{id:'Probe.swiftSkip()',issue:0,reason:'failure'}]],
@@ -129,6 +129,7 @@ test('framed inventory with an unsupported identity fails before xctest',()=>{
 // clean sibling XCTest summary that made the old generic parser look complete.
 function withSkippedXCTest(output, failed = false, unexpected = 0) {
  return output
+  .replace(/Test Suite '(ProbeTests|Probe\.xctest|Selected tests)' passed/g, `Test Suite '$1' ${failed ? 'failed' : 'passed'}`)
   .replace("Test Case '-[Probe.ProbeTests testKeep]' passed (",`Test Case '-[Probe.ProbeTests testKeep]' ${failed ? 'failed' : 'passed'} (`)
   .replace("Test Case '-[Probe.ProbeTests testSkipSibling]' passed (","Test Case '-[Probe.ProbeTests testSkipSibling]' skipped (")
   .replace('Executed 2 tests, with 0 failures (0 unexpected)',`Executed 2 tests, with 1 test skipped and ${failed ? 1 : 0} failures (${unexpected} unexpected)`)
@@ -141,11 +142,12 @@ test('selected failed and skipped XCTest cannot authorize retry of a known Swift
   .replace(`✔ Test ${name}() passed after 0.001 seconds.`,`✘ Test ${name}() recorded an issue at LostAccessRecoveryTests.swift:1315:13: Time limit was exceeded: 180.000 seconds\n✘ Test ${name}() failed after 180.045 seconds with 1 issue.`)
   .replace('✔ Test run with 2 tests in 0 suites passed after 0.001 seconds.','✘ Test run with 2 tests in 0 suites failed after 180.045 seconds with 1 issue.');
  const h=harness(quarantine,{env:{},discovery,run:()=>({...result(output),status:1})});
- assert.equal(h.status,70);assert.equal(nativeCalls(h).length,1);assert.doesNotMatch(h.stdout,/retrying once|Tests run:/);
+ assert.equal(h.status,1,h.stderr);assert.equal(nativeCalls(h).length,1);assert.doesNotMatch(h.stdout,/retrying once/);
+ assert.match(h.stdout,/Tests run: 5, Failures: 2, Errors: 0, Skipped: 1/);
 });
 test('selected successful XCTest skip retains the exact complete survivor set',()=>{
  const h=harness(quarantine,{run:()=>result(withSkippedXCTest(selected))});
- assert.equal(h.status,0,h.stderr);assert.equal(nativeCalls(h).length,1);assert.match(h.stdout,/Tests run: 2, Failures: 0/);
+ assert.equal(h.status,0,h.stderr);assert.equal(nativeCalls(h).length,1);assert.match(h.stdout,/Tests run: 5, Failures: 0, Errors: 0, Skipped: 1/);
 });
 test('selected skipped XCTest summary with unexpected failure fails closed',()=>{
  const h=harness(quarantine,{run:()=>result(withSkippedXCTest(selected,false,1))});
@@ -159,4 +161,51 @@ test('selected XCTest failed terminal cannot hide behind zero-failure summaries'
 test('selected XCTest skipped summary count must agree with observed skipped terminals',()=>{
  const output=withSkippedXCTest(selected).replaceAll('with 1 test skipped and','with 2 tests skipped and');
  const h=harness(quarantine,{run:()=>result(output)});assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:/);
+});
+
+// #524 synthetic assertion-failure transcript derived from the recorded mixed run.
+function withFailedXCTest(output) {
+ return output
+  .replace("Test Case '-[Probe.ProbeTests testKeep]' passed (","Test Case '-[Probe.ProbeTests testKeep]' failed (")
+  .replace(/Test Suite '(ProbeTests|Probe\.xctest|Selected tests)' passed/g,"Test Suite '$1' failed")
+  .replace('Executed 2 tests, with 0 failures (0 unexpected)','Executed 2 tests, with 1 failure (0 unexpected)')
+  .replaceAll('Executed 3 tests, with 0 failures (0 unexpected)','Executed 3 tests, with 1 failure (0 unexpected)');
+}
+test('selected genuine XCTest assertion failure returns one with combined counts and evidence',()=>{
+ const output=withFailedXCTest(selected);
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.equal(nativeCalls(h).length,1);
+ assert.match(h.stdout,/Tests run: 5, Failures: 1, Errors: 0, Skipped: 0/);
+ assert.match(h.stdout,/first-attempt failures: ProbeTests\/testKeep/);
+ assert.doesNotMatch(h.stdout+h.stderr,/retrying once|environment failure/);
+ assert.equal(readFileSync(path.join(h.dir,'evidence.log'),'utf8'),output+'\n');
+});
+test('selected XCTest assertion failure with skip is reliable and never retried',()=>{
+ const h=harness(quarantine,{env:{},run:()=>({...result(withSkippedXCTest(selected,true)),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.equal(nativeCalls(h).length,1);
+ assert.match(h.stdout,/Tests run: 5, Failures: 1, Errors: 0, Skipped: 1/);
+ assert.doesNotMatch(h.stdout+h.stderr,/retrying once|environment failure/);
+});
+test('selected XCTest with multiple assertion failures counts one failed test and reconciles suite totals',()=>{
+ const output=withFailedXCTest(selected).replaceAll('with 1 failure (0 unexpected)','with 2 failures (0 unexpected)');
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.equal(nativeCalls(h).length,1);
+ assert.match(h.stdout,/Tests run: 5, Failures: 1, Errors: 0, Skipped: 0/);
+ assert.doesNotMatch(h.stdout,/retrying once/);
+});
+for(const [label,mutate,runOptions] of [
+ ['zero exit',s=>s,{status:0}],
+ ['signal',s=>s,{signal:'SIGTERM'}],
+ ['missing failed terminal',s=>s.replace(/^Test Case .*testKeep\]' failed.*\n/gm,''),{}],
+ ['suite failure count mismatch',s=>s.replace('Executed 2 tests, with 1 failure','Executed 2 tests, with 0 failures'),{}],
+ ['root failure count mismatch',s=>s.replace(/(Test Suite 'Selected tests' failed[^\n]*\n\s*Executed 3 tests, with )1 failure/,'$12 failures'),{}],
+ ['passed suite with failed test',s=>s.replace("Test Suite 'ProbeTests' failed","Test Suite 'ProbeTests' passed"),{}],
+ ['missing root summary',s=>s.replace(/(Test Suite 'Selected tests' failed[^\n]*\n)\s*Executed [^\n]*\n/,'$1'),{}],
+ ['unexpected failure',s=>s.replace('(0 unexpected)','(1 unexpected)'),{}],
+ ['duplicate failed terminal',s=>s.replace(/^(Test Case .*testKeep\]' failed.*)$/m,'$1\n$1'),{}],
+]) test(`selected XCTest failure ${label} remains an environment failure`,()=>{
+ const output=mutate(withFailedXCTest(selected));
+ const h=harness(quarantine,{env:{},run:()=>({...result(output),status:1,...runOptions})});
+ assert.equal(h.status,70);assert.equal(nativeCalls(h).length,1);
+ assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
 });

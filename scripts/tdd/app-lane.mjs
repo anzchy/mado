@@ -42,11 +42,16 @@ export function parseAppResult(run, selection = null) {
   const unattributedIssues = issueRecords.length !== issues.length || issues.some(issue => !failureNames.includes(issue.name)) ||
     (summaries.length === 1 && Number(summaries[0][3] ?? 0) !== issues.length);
   const crash = clean.split('\n').some(line => crashRecords.some(record => record.test(line)));
-  let reliable = !(run.error || run.signal || crash || rootFailures || !rootDone || starts.length !== 1 || summaries.length !== 1 || !count ||
+  const selected = selection === null ? null : selectionComplete(clean, selection);
+  const xctFailed = selected?.failed ?? 0;
+  let reliable = !(run.error || run.signal || crash || (selection === null && rootFailures) ||
+    (selection === null ? !rootDone : !selected.complete) || starts.length !== 1 || summaries.length !== 1 || !count ||
     passed + failed + skipped !== count || (summaries[0]?.[2] === "failed") !== (failed > 0) ||
-    ![0, 1].includes(run.status) || (run.status === 0) !== (failed === 0));
-  if (selection !== null && !selectionComplete(clean, selection)) reliable = false;
-  return { reliable, status: reliable ? run.status : 70, output, count, passed, failed, skipped, failureNames, issues, unattributedIssues };
+    ![0, 1].includes(run.status) || (run.status === 0) !== (failed + xctFailed === 0));
+  return { reliable, status: reliable ? run.status : 70, output,
+    count: count + (selected?.count ?? 0), passed: passed + (selected?.passed ?? 0),
+    failed: failed + xctFailed, skipped: skipped + (selected?.skipped ?? 0), xctFailed,
+    failureNames: [...failureNames, ...(selected?.failureNames ?? [])], issues, unattributedIssues };
 }
 
 const quarantineFile = fileURLToPath(new URL("./app-quarantine.json", import.meta.url));
@@ -143,6 +148,7 @@ function selectionComplete(clean, selection) {
   const known = new Map(inventory.map(row => [`${row.kind}:${row.label}`, row.id]));
   const expected = new Set(retained.map(row => row.id));
   const started = new Set(), finished = new Set();
+  const totals = { count: 0, passed: 0, failed: 0, skipped: 0, failureNames: [] };
   const suites = [];
   let pendingSuite = null, roots = 0, invalid = false;
   const resolve = (kind, label) => known.get(`${kind}:${kind === 'xctest' ? shortXCTestID(label) : terminalLabel(label)}`);
@@ -151,18 +157,26 @@ function selectionComplete(clean, selection) {
     if (!id || !expected.has(id) || started.has(id)) invalid = true;
     started.add(id);
   };
-  const finish = (kind, label, skipped) => {
+  const finish = (kind, label, state) => {
+    const skipped = state === 'skipped';
     const id = resolve(kind, label);
     if (!id || !expected.has(id) || finished.has(id) || (!skipped && !started.has(id))) invalid = true;
     finished.add(id);
-    if (kind === 'xctest') for (const suite of suites) {
-      suite.count++;
-      if (skipped) suite.skipped++;
+    if (kind === 'xctest') {
+      totals.count++;
+      totals[state]++;
+      if (state === 'failed') totals.failureNames.push(shortXCTestID(label));
+      for (const suite of suites) {
+        suite.count++;
+        if (skipped) suite.skipped++;
+        if (state === 'failed') suite.failed++;
+      }
+      if (state === 'failed' && suites.length) suites.at(-1).directFailed++;
     }
   };
   for (const line of clean.split('\n')) {
     const suiteStart = /^Test Suite '(.+)' started at /.exec(line);
-    const suiteEnd = /^Test Suite '(.+)' (?:passed|failed) at /.exec(line);
+    const suiteEnd = /^Test Suite '(.+)' (passed|failed) at /.exec(line);
     const summary = /^\s*Executed (\d+) tests?, with (?:(\d+) tests? skipped and )?(\d+) failures? \((\d+) unexpected\)/.exec(line);
     if (suiteStart) {
       if (pendingSuite) invalid = true;
@@ -170,23 +184,29 @@ function selectionComplete(clean, selection) {
         if (!['All tests', 'Selected tests'].includes(suiteStart[1])) invalid = true;
         roots++;
       }
-      suites.push({ name: suiteStart[1], count: 0, skipped: 0 });
+      suites.push({ name: suiteStart[1], count: 0, skipped: 0, failed: 0, directFailed: 0, childFailures: 0 });
     } else if (suiteEnd) {
       if (pendingSuite) invalid = true;
       pendingSuite = suites.pop();
       if (pendingSuite?.name !== suiteEnd[1]) invalid = true;
+      if ((suiteEnd[2] === 'failed') !== ((pendingSuite?.failed ?? 0) > 0)) invalid = true;
     } else if (summary) {
+      const assertionFailures = Number(summary[3]);
       if (!pendingSuite || Number(summary[1]) !== pendingSuite.count ||
-          Number(summary[2] ?? 0) !== pendingSuite.skipped || Number(summary[3]) !== 0 || Number(summary[4]) !== 0) invalid = true;
+          Number(summary[2] ?? 0) !== pendingSuite.skipped || Number(summary[4]) !== 0 ||
+          // XCTest counts failed assertions, which can exceed failed test cases.
+          assertionFailures < pendingSuite.failed || (assertionFailures === 0) !== (pendingSuite.failed === 0) ||
+          (pendingSuite.directFailed === 0 ? assertionFailures !== pendingSuite.childFailures :
+            assertionFailures < pendingSuite.childFailures + pendingSuite.directFailed)) invalid = true;
+      if (suites.length) suites.at(-1).childFailures += assertionFailures;
       pendingSuite = null;
     }
     const xct = /^Test Case '-\[([^\]\r\n]+) ([A-Za-z_]\w*)\]' (started\.|(passed|failed|skipped) \()/.exec(line);
     if (xct) {
       if (!suites.length || pendingSuite) invalid = true;
       const label = `${xct[1]}/${xct[2]}`;
-      if (xct[4] === 'failed') invalid = true;
       if (xct[3] === 'started.') begin('xctest', label);
-      else finish('xctest', label, xct[4] === 'skipped');
+      else finish('xctest', label, xct[4]);
     }
     const swiftStart = /^◇ Test (?!run started\.|case passing )(.+) started\.$/.exec(line);
     const swiftCase = /^◇ Test case passing .+ to (.+) started\.$/.exec(line);
@@ -197,11 +217,11 @@ function selectionComplete(clean, selection) {
     const swiftEnd = /^[✔✘] Test (?!run with )(.+) (?:passed|failed) after /.exec(line);
     const swiftSkip = /^➜ Test (.+?) skipped(?::| after |\.)/.exec(line);
     if (swiftStart) begin('swift', swiftStart[1]);
-    if (swiftEnd) finish('swift', swiftEnd[1], false);
-    if (swiftSkip) finish('swift', swiftSkip[1], true);
+    if (swiftEnd) finish('swift', swiftEnd[1], 'passed');
+    if (swiftSkip) finish('swift', swiftSkip[1], 'skipped');
   }
-  return !invalid && roots === 1 && !suites.length && !pendingSuite &&
-    finished.size === expected.size && [...started].every(id => finished.has(id));
+  return { ...totals, complete: !invalid && roots === 1 && !suites.length && !pendingSuite &&
+    finished.size === expected.size && [...started].every(id => finished.has(id)) };
 }
 
 function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
@@ -252,7 +272,7 @@ export function runAppLane({ spawn = spawnSync, env = process.env,
     const forGate = selection && attempt.parsed.reliable ? { ...attempt.run,
       stdout: (attempt.run.stdout ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'"),
       stderr: (attempt.run.stderr ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'") } : attempt.run;
-    const gate = selection && !attempt.parsed.reliable ? { decision: 'fail' } : classifyFlaky(forGate);
+    const gate = selection && (!attempt.parsed.reliable || attempt.parsed.xctFailed > 0) ? { decision: 'fail' } : classifyFlaky(forGate);
     if (env.PICSEE_APP_LANE_NO_RETRY !== '1' && gate.decision === 'retry-eligible') {
       stdout(`app-lane: known flaky ${gate.names.join(', ')} (${gate.issues.map(issue => `#${issue}`).join(', ')}); retrying once\n`);
       attempt = execute();
