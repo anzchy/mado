@@ -561,7 +561,8 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     #expect(shell.toggleButton.isEnabled)
     for width in [CGFloat(1280), 1084] {
         shell.toggleSidebar()
-        #expect(scene.page.frame == shell.mainContent.bounds && shell.mainContent.bounds.width == width)
+        #expect(scene.page.frame == NSRect(x: 0, y: 30, width: shell.mainContent.bounds.width,
+                                          height: shell.mainContent.bounds.height - 16 - 30) && shell.mainContent.bounds.width == width)
         #expect(shell.emptyFolderVisible)
     }
     try await scene.refresh(["a.png"])

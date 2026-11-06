@@ -26,9 +26,10 @@ import PicseeCore
     public let titleFont = NSFont.systemFont(ofSize: 13)
     public var titleWidth: CGFloat { ceil(attributedTitle.size().width) }
     private var borderWidth: CGFloat { style == .secondary ? 1 : 0 }
+    // Pinned 13pt button text has a 19pt normal line box.
     var actionSize: NSSize {
         NSSize(width: titleWidth + padding.left + padding.right + 2 * borderWidth,
-               height: lineHeight(titleFont) + padding.top + padding.bottom + 2 * borderWidth)
+               height: 19 + padding.top + padding.bottom + 2 * borderWidth)
     }
     func configure(_ style: Style, title: String) {
         setUp()
@@ -111,10 +112,10 @@ import PicseeCore
     }
     required init?(coder: NSCoder) { nil }
     /// .recent-folder: padding 9/12, gap 10; .recent-folder+.recent-folder border-top 1.
-    var height: CGFloat { 18 + lineHeight(nameLabel.font!) + (separator.isHidden ? 0 : 1) }
+    var height: CGFloat { 18 + 19 + (separator.isHidden ? 0 : 1) }
     public override func layout() {
         super.layout()
-        let nameHeight = lineHeight(nameLabel.font!), whenHeight = lineHeight(whenLabel.font!)
+        let nameHeight: CGFloat = 19, whenHeight: CGFloat = 17
         let whenWidth = ceil(whenLabel.intrinsicContentSize.width)
         separator.frame = NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
         icon.frame = NSRect(x: 12, y: 9 + (nameHeight - 16) / 2, width: 16, height: 16)
@@ -158,11 +159,26 @@ public struct EmptyFolderPage: Equatable, Sendable {
     public var onIncludeSubfolders: (() -> Void)?
     public var onChooseFolder: (() -> Void)?
     public var onDropFolders: (([URL]) -> Void)?
+    // The shell's stack padding surrounds this view. The recovery-scroll drop
+    // destination and outline still cover that padding; viewer hosts use zero.
+    var surroundingContentInsets = NSEdgeInsets() { didSet { needsLayout = true } }
+    private var dropAreaBounds: NSRect {
+        NSRect(x: bounds.minX - surroundingContentInsets.left,
+               y: bounds.minY - surroundingContentInsets.bottom,
+               width: bounds.width + surroundingContentInsets.left + surroundingContentInsets.right,
+               height: bounds.height + surroundingContentInsets.top + surroundingContentInsets.bottom)
+    }
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHiddenOrHasHiddenAncestor else { return nil }
+        if let control = super.hitTest(point) { return control }
+        return dropAreaBounds.contains(convert(point, from: superview)) ? self : nil
+    }
     private let document = FlippedView()
     private var displayedRequest: EmptyFolderPage?
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        clipsToBounds = false
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true; scrollView.autohidesScrollers = true; scrollView.scrollerStyle = .overlay
         scrollView.documentView = document
@@ -282,23 +298,33 @@ public struct EmptyFolderPage: Equatable, Sendable {
         }
     }
 
-    private func measuredHeight(_ field: NSTextField, width: CGFloat) -> CGFloat {
-        let text = field.attributedStringValue.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]).height
-        return ceil(max(text, field.sizeThatFits(NSSize(width: width, height: .greatestFiniteMagnitude)).height))
+    /// Pinned normal h2 line box is 23pt; p is explicitly 13 × 1.7 = 22.1pt.
+    /// Measure wrapping with that line box rather than rounding AppKit's ink height.
+    private func measuredHeight(_ field: NSTextField, width: CGFloat, lineHeight: CGFloat) -> CGFloat {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.minimumLineHeight = lineHeight; paragraph.maximumLineHeight = lineHeight
+        let text = NSMutableAttributedString(attributedString: field.attributedStringValue)
+        text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+        return ceil(max(lineHeight, text.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]).height))
     }
     /// empty-folder.html: .empty-state padding 24 (.recovery-state padding-bottom 48), centred column;
     /// h2 margin-top 18, p margin-top 9 and max-width 460, tiles/recents margin-top 22, actions margin-top 18 gap 16.
     public override func layout() {
         super.layout()
         scrollView.frame = bounds
-        dropOutline.frame = bounds.insetBy(dx: 18, dy: 18)
+        dropOutline.frame = dropAreaBounds.insetBy(dx: 18, dy: 18)
         dropBorder.frame = dropOutline.bounds
         dropBorder.path = CGPath(roundedRect: dropOutline.bounds.insetBy(dx: 0.75, dy: 0.75), cornerWidth: 13.25,
                                  cornerHeight: 13.25, transform: nil)
-        let viewport = scrollView.contentSize, width = viewport.width
+        let viewport = scrollView.contentSize
+        // The flex item's automatic minimum includes the 380pt recent list and
+        // .empty-state's two 24pt sides. Preserve it when the main area is narrow.
+        let width = recentsGroup.isHidden ? viewport.width : max(viewport.width, 380 + 48)
         let textWidth = max(0, min(460, width - 48))
-        let headingHeight = measuredHeight(heading, width: textWidth), detailHeight = measuredHeight(detail, width: textWidth)
+        let headingHeight = measuredHeight(heading, width: textWidth, lineHeight: 23)
+        let detailHeight = measuredHeight(detail, width: textWidth, lineHeight: 22.1)
         let tileRows = (tiles.count + 2) / 3, tileHeight = EmptyFolderTile.height
         let groupHeight = layoutRecents()
         let middle: CGFloat = !tiles.isEmpty ? 22 + CGFloat(tileRows) * (tileHeight + 14) - 14
@@ -331,7 +357,8 @@ public struct EmptyFolderPage: Equatable, Sendable {
     }
     /// .recent-folders: 380 wide, 1px border; .recent-heading padding 8/12 above a 1px rule.
     private func layoutRecents() -> CGFloat {
-        let headingHeight = lineHeight(recentsHeading.font!), boxHeight = 17 + headingHeight
+        // Browser normal line boxes: 12pt recent heading → 17pt; 13pt rows → 19pt.
+        let headingHeight: CGFloat = 17, boxHeight = 17 + headingHeight
         let total = 2 + boxHeight + recentRows.map(\.height).reduce(0, +)
         recentsHeadingBox.frame = NSRect(x: 1, y: total - 1 - boxHeight, width: 378, height: boxHeight)
         recentsHeadingRule.frame = NSRect(x: 0, y: 0, width: 378, height: 1)
