@@ -131,7 +131,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "447e72eb584e194da639ab6d860d9e8bd56c4c7968eb5a9ebd72e7fd5d6417a5"
+      "sha256": "47125c72a590f5df37d904605a4fedb6919ea005c72fcbb79590a3439d657378"
     },
     {
       "name": "permission-denied",
