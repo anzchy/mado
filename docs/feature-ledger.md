@@ -333,21 +333,21 @@ picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬�
 
 | 区域 | 最近审查 | 审查人 | 备注 |
 |---|---|---|---|
-| 打开与输入 | 2026-11-04 | doc-gardener | e19bbbe..d6f783d |
-| 查看与画布 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| C 沉浸界面 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| 外观与显示偏好 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| 文件夹浏览 | 2026-11-04 | doc-gardener | e19bbbe..d6f783d |
+| 打开与输入 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 查看与画布 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| C 沉浸界面 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 外观与显示偏好 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 文件夹浏览 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
-| 网格、选择与菜单 | 2026-11-03 | doc-gardener | 59fe006..96e1c8b |
-| 信息与元数据 | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
-| 授权与文件访问 | 2026-11-04 | doc-gardener | e19bbbe..9d2fea0 |
-| 缓存与资源 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
-| 命令与键盘 | 2026-11-03 | doc-gardener | f8cce19..dce67c9 |
+| 网格、选择与菜单 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 信息与元数据 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 授权与文件访问 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 缓存与资源 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 命令与键盘 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
-| 可访问性与本地化 | 2026-11-04 | doc-gardener | e19bbbe..d6f783d |
+| 可访问性与本地化 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 分发 | 2026-11-02 | doc-gardener | d069b65..c202172 |
 | 增强 | 2026-10-21 | 建账 | 历史复核见 git log -p -- docs/feature-ledger.md |
 
