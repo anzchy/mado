@@ -2,8 +2,6 @@ import AppKit
 import PicseeApplication
 import PicseeCore
 
-@MainActor private func lineHeight(_ font: NSFont) -> CGFloat { ceil(NSLayoutManager().defaultLineHeight(for: font)) }
-
 /// Layer-drawn page-22 control; keyboard focus follows the sidebar's controls.
 @MainActor public class EmptyFolderControl: NSButton {
     public override var isFlipped: Bool { false }
@@ -76,15 +74,14 @@ import PicseeCore
     }
     required init?(coder: NSCoder) { nil }
     /// .subfolder-tile: padding 14/12, gap 8, 16pt icon.
-    static var height: CGFloat {
-        60 + lineHeight(.systemFont(ofSize: 13, weight: .semibold)) + lineHeight(.systemFont(ofSize: 12))
-    }
+    // Pinned normal browser line boxes: name 19pt, metadata 17pt.
+    static var height: CGFloat { 60 + 19 + 17 + 2 }
     public override func layout() {
         super.layout()
-        let width = max(0, bounds.width - 24), nameHeight = lineHeight(nameLabel.font!)
-        icon.frame = NSRect(x: 12, y: bounds.height - 30, width: 16, height: 16)
-        nameLabel.frame = NSRect(x: 12, y: icon.frame.minY - 8 - nameHeight, width: width, height: nameHeight)
-        metaLabel.frame = NSRect(x: 12, y: 14, width: width, height: lineHeight(metaLabel.font!))
+        let width = max(0, bounds.width - 26), nameHeight: CGFloat = 19
+        icon.frame = NSRect(x: 13, y: bounds.height - 31, width: 16, height: 16)
+        nameLabel.frame = NSRect(x: 13, y: icon.frame.minY - 8 - nameHeight, width: width, height: nameHeight)
+        metaLabel.frame = NSRect(x: 13, y: 15, width: width, height: 17)
     }
 }
 
@@ -159,26 +156,14 @@ public struct EmptyFolderPage: Equatable, Sendable {
     public var onIncludeSubfolders: (() -> Void)?
     public var onChooseFolder: (() -> Void)?
     public var onDropFolders: (([URL]) -> Void)?
-    // The shell's stack padding surrounds this view. The recovery-scroll drop
-    // destination and outline still cover that padding; viewer hosts use zero.
-    var surroundingContentInsets = NSEdgeInsets() { didSet { needsLayout = true } }
-    private var dropAreaBounds: NSRect {
-        NSRect(x: bounds.minX - surroundingContentInsets.left,
-               y: bounds.minY - surroundingContentInsets.bottom,
-               width: bounds.width + surroundingContentInsets.left + surroundingContentInsets.right,
-               height: bounds.height + surroundingContentInsets.top + surroundingContentInsets.bottom)
-    }
-    public override func hitTest(_ point: NSPoint) -> NSView? {
-        guard !isHiddenOrHasHiddenAncestor else { return nil }
-        if let control = super.hitTest(point) { return control }
-        return dropAreaBounds.contains(convert(point, from: superview)) ? self : nil
-    }
+    // Stack padding belongs inside the full-frame scroll/drop destination.
+    // Grid supplies CSS grid-scroll padding; the viewer uses zero insets.
+    var contentInsets = NSEdgeInsets() { didSet { needsLayout = true } }
     private let document = FlippedView()
     private var displayedRequest: EmptyFolderPage?
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        clipsToBounds = false
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true; scrollView.autohidesScrollers = true; scrollView.scrollerStyle = .overlay
         scrollView.documentView = document
@@ -314,7 +299,7 @@ public struct EmptyFolderPage: Equatable, Sendable {
     public override func layout() {
         super.layout()
         scrollView.frame = bounds
-        dropOutline.frame = dropAreaBounds.insetBy(dx: 18, dy: 18)
+        dropOutline.frame = bounds.insetBy(dx: 18, dy: 18)
         dropBorder.frame = dropOutline.bounds
         dropBorder.path = CGPath(roundedRect: dropOutline.bounds.insetBy(dx: 0.75, dy: 0.75), cornerWidth: 13.25,
                                  cornerHeight: 13.25, transform: nil)
@@ -332,8 +317,10 @@ public struct EmptyFolderPage: Equatable, Sendable {
         let actions = [primaryButton, chooseButton].filter { !$0.isHidden }
         let actionHeight = actions.reduce(0) { max($0, $1.actionSize.height) }
         let content = 32 + 18 + headingHeight + 9 + detailHeight + middle + 18 + actionHeight
-        document.frame = NSRect(x: 0, y: 0, width: width, height: max(viewport.height, content + 72))
-        var top = 24 + max(0, (viewport.height - 72 - content) / 2)
+        let verticalInsets = contentInsets.top + contentInsets.bottom
+        document.frame = NSRect(x: 0, y: 0, width: width,
+                                height: max(viewport.height, content + 72 + verticalInsets))
+        var top = contentInsets.top + 24 + max(0, (viewport.height - verticalInsets - 72 - content) / 2)
         icon.frame = NSRect(x: width / 2 - 16, y: top, width: 32, height: 32)
         top += 50
         heading.frame = NSRect(x: (width - textWidth) / 2, y: top, width: textWidth, height: headingHeight)

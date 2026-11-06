@@ -112,7 +112,11 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
                     #expect(abs(actions.midX - page.bounds.midX) < 0.5, "\(label): action centred")
                 }
                 let bottom = try light.length(".recovery-state", "padding-bottom", viewport: width)
-                let expectedMid = bottom + (Double(page.bounds.height) - padding.top - bottom) / 2
+                let outerTop = try light.length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: width)
+                let outerBottom = try light.length(".grid-scroll", "padding-bottom", viewport: width)
+                    - light.length(".grid-bottom-bar", "height", viewport: width)
+                let expectedMid = outerBottom + bottom
+                    + (Double(page.bounds.height) - outerTop - outerBottom - padding.top - bottom) / 2
                 #expect(abs(Double(icon.maxY + actions.minY) / 2 - expectedMid) < 0.5, "\(label): group centred")
                 #expect(abs(icon.midX - page.bounds.midX) < 0.5 && abs(detail.midX - page.bounds.midX) < 0.5,
                         "\(label): horizontally centred")
@@ -151,14 +155,15 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
                 - (try light.length(".subfolder-tiles", "margin-top", viewport: width))) < 0.5, "\(label): margin-top")
             let padding = try light.edges(".subfolder-tile", "padding", viewport: width)
             let innerGap = try light.length(".subfolder-tile", "gap", viewport: width)
+            let tileBorder = try firstLength(light, ".subfolder-tile", "border", width)
             let tile = page.tiles[0]
             let icon = rect(tile.icon, in: tile), nameFrame = rect(tile.nameLabel, in: tile), meta = rect(tile.metaLabel, in: tile)
             let box = tile.bounds
-            #expect(abs(Double(box.maxY - icon.maxY) - padding.top) < 0.5, "\(label): padding-top")
-            #expect(abs(Double(icon.minX - box.minX) - padding.left) < 0.5 && abs(Double(nameFrame.minX) - padding.left) < 0.5,
+            #expect(abs(Double(box.maxY - icon.maxY) - padding.top - tileBorder) < 0.5, "\(label): padding-top")
+            #expect(abs(Double(icon.minX - box.minX) - padding.left - tileBorder) < 0.5 && abs(Double(nameFrame.minX) - padding.left - tileBorder) < 0.5,
                     "\(label): padding-left")
-            #expect(abs(Double(meta.minY - box.minY) - padding.bottom) < 0.5, "\(label): padding-bottom")
-            #expect(abs(Double(box.maxX - nameFrame.maxX) - padding.right) < 0.5, "\(label): padding-right")
+            #expect(abs(Double(meta.minY - box.minY) - padding.bottom - tileBorder) < 0.5, "\(label): padding-bottom")
+            #expect(abs(Double(box.maxX - nameFrame.maxX) - padding.right - tileBorder) < 0.5, "\(label): padding-right")
             #expect(abs(Double(icon.minY - nameFrame.maxY) - innerGap) < 0.5 && abs(Double(nameFrame.minY - meta.maxY) - innerGap) < 0.5,
                     "\(label): tile gap")
             let layer = try #require(tile.layer)
@@ -287,12 +292,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
             #expect(board.writeObjects([URL(fileURLWithPath: "/photos/Trip", isDirectory: true) as NSURL]))
             #expect(page.draggingEntered(Page22DesignDropInfo(board)) == .copy)
             let inset = try light.lengthValue(light.raw(".drop-outline", "inset", viewport: width), viewport: width)
-            #expect(page.dropOutline.frame == (try {
-                let top = try light.length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: width)
-                let bottom = try light.length(".grid-scroll", "padding-bottom", viewport: width) - 40
-                return NSRect(x: 0, y: -bottom, width: page.bounds.width,
-                              height: page.bounds.height + top + bottom).insetBy(dx: inset, dy: inset)
-            }()), "\(label): inset")
+            #expect(page.dropOutline.frame == page.bounds.insetBy(dx: inset, dy: inset), "\(label): inset")
             let layer = try #require(page.dropOutline.layer)
             #expect(abs(Double(layer.cornerRadius) - (try light.length(".drop-outline", "border-radius", viewport: width))) < 0.01)
             #expect(abs(Double(page.dropBorder.lineWidth) - (try firstLength(light, ".drop-outline", "border", width))) < 0.01)
@@ -390,14 +390,20 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
         for children in [["2024 冲绳", "手机备份", "扫描件"], []] {
             let shell = try page22Shell(page22Sizes[0], name, children: children, recents: page22Recents())
             let grid = shell.emptyFolderView
-            let host = ViewerStateHost(frame: grid.bounds)
+            // Compare equal stack viewports: Grid pads its full drop frame internally,
+            // while the viewer intentionally supplies no outer scroll padding.
+            let top = try PinnedDesign.page("empty-folder").length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: page22Sizes[0].width)
+            let bottom = try PinnedDesign.page("empty-folder").length(".grid-scroll", "padding-bottom", viewport: page22Sizes[0].width)
+                - PinnedDesign.page("empty-folder").length(".grid-bottom-bar", "height", viewport: page22Sizes[0].width)
+            let host = ViewerStateHost(frame: NSRect(x: 0, y: 0, width: grid.bounds.width,
+                                                    height: grid.bounds.height - top - bottom))
             host.appearance = try #require(NSAppearance(named: name))
             shell.mirrorEmptyFolderPage(to: host)
             host.display(.emptyFolder)
             let viewer = host.emptyFolderView
             viewer.layoutSubtreeIfNeeded()
             let label = "\(name.rawValue) \(children.isEmpty ? "recents" : "subfolders")"
-            #expect(viewer.frame.size == grid.bounds.size, "\(label): size")
+            #expect(viewer.frame.size == host.bounds.size, "\(label): size")
             #expect(viewer.tiles.count == grid.tiles.count && viewer.recentRows.count == grid.recentRows.count, "\(label)")
             #expect(viewer.heading.stringValue == grid.heading.stringValue, "\(label): heading")
             #expect(viewer.detail.stringValue == grid.detail.stringValue, "\(label): detail")
@@ -408,7 +414,9 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
                 + zip(grid.recentRows, viewer.recentRows).map { ($0 as NSView, $1 as NSView) }
             for (index, (expected, actual)) in pairs.enumerated() {
                 let item = "\(label) #\(index) \(type(of: expected))"
-                #expect(rect(actual, in: viewer) == rect(expected, in: grid), "\(item): frame")
+                if !expected.isHidden {
+                    #expect(rect(actual, in: viewer) == rect(expected, in: grid).offsetBy(dx: 0, dy: -bottom), "\(item): frame")
+                }
                 #expect(actual.isHidden == expected.isHidden, "\(item): hidden")
                 #expect(cgColor(actual.layer?.backgroundColor)?.usingColorSpace(.sRGB)
                     == cgColor(expected.layer?.backgroundColor)?.usingColorSpace(.sRGB), "\(item): fill")

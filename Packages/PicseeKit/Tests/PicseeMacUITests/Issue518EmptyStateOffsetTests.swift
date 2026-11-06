@@ -4,15 +4,27 @@ import PicseeCore
 import PicseeApplication
 @testable import PicseeMacUI
 
-/// Page 22 `empty-folder.html?case=no-subfolders`, SHA checked by PinnedDesign.
-/// Compare in window coordinates with the pin's 38pt titlebar. Native titlebar
-/// height is a platform exception; giving both the same below-titlebar area
-/// isolates the content layout. Chromium's normal line boxes for the pinned
-/// SF Pro Text/Avenir stack are h2=23, recent header=17, row/button=19pt.
-/// These are design measurements, never read from the native views under test.
+/// Read the App's current titlebar constant from its shell construction, so the
+/// package fixture cannot silently normalize to the HTML's different titlebar.
+func issue518NativeTitlebarHeight() throws -> CGFloat {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    let source = try String(contentsOf: root.appendingPathComponent("App/CanvasWindowController.swift"), encoding: .utf8)
+    let expression = try NSRegularExpression(pattern: #"height: content\.bounds\.height - ([0-9]+)\), preferencesStore: preferencesStore"#)
+    let match = try #require(expression.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)))
+    let range = try #require(Range(match.range(at: 1), in: source))
+    return try #require(Double(source[range]))
+}
+
+/// #518 fix1: compare content coordinates below the native system titlebar.
+/// CSS is evaluated at the same real shell height, not normalized to 800-38.
+/// Normal browser line boxes: h2=23, recent header=17, row/button=19pt.
 @Test @MainActor func issue518EmptyFolderRenderedTopsMatchPinnedCSS() throws {
     _ = NSApplication.shared
     let design = try PinnedDesign.page("empty-folder")
+    let nativeTitlebar = try issue518NativeTitlebarHeight()
+    #expect(nativeTitlebar == 28)
     let now = Date(timeIntervalSince1970: 1_615_809_600)
     let recents = [("日本 · 山海之间", 1), ("2024 家庭", 3), ("壁纸", 8)].map { name, days in
         RecentFolder(rootID: AccessRootID(), url: URL(fileURLWithPath: "/recent/\(name)"),
@@ -22,7 +34,7 @@ import PicseeApplication
     // only change horizontal layout. Check both sides and the boundary itself.
     let widths: [Double] = [1280] + [480, 600, 720, 800, 850, 1050, 1100, 1600].flatMap { [$0 - 1, $0, $0 + 1] }
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 762),
+        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800 - nativeTitlebar),
                                   preferencesStore: InMemoryDisplayPreferencesStore())
         shell.appearance = NSAppearance(named: appearance)
         shell.showFolderTree(current: GridSidebarFolder(url: URL(fileURLWithPath: "/design/待整理")),
@@ -30,8 +42,8 @@ import PicseeApplication
         shell.setEmptyFolderState(true, recents: recents, now: now)
         var original: [NSRect]?
         for width in widths + [1280] {
-            let titlebar = try design.length(":root", "--title-bar-height", viewport: width)
-            shell.frame.size = NSSize(width: width, height: 800 - titlebar)
+            shell.frame.size = NSSize(width: width, height: 800 - nativeTitlebar)
+            #expect(shell.bounds.height == 772)
             shell.needsLayout = true
             let page = shell.emptyFolderView
             // SwiftPM does not carry the App string catalog. Use the pin's zh-Hans
@@ -45,7 +57,6 @@ import PicseeApplication
             #expect(page.tiles.isEmpty)
             let frames = [page.icon, page.heading, page.recentsGroup].map { shell.convert($0.bounds, from: $0) }
             if width == 1280 {
-                print("i518 metrics \(appearance.rawValue) frames=\(frames) detailHeight=\(page.detail.frame.height) recentHeight=\(page.recentsGroup.frame.height) actionHeight=\(page.chooseButton.frame.height)")
                 if let original { #expect(frames == original, "Resize-return restores rendered frames") }
                 else { original = frames }
             }
@@ -53,7 +64,6 @@ import PicseeApplication
             page.layoutSubtreeIfNeeded()
             #expect(frames == [page.icon, page.heading, page.recentsGroup].map { shell.convert($0.bounds, from: $0) },
                     "Repeated layout is idempotent")
-
 
             let outerTop = try design.length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: width)
             let outerBottom = try design.length(".grid-scroll", "padding-bottom", viewport: width)
@@ -72,8 +82,8 @@ import PicseeApplication
             let actionHeight = actionPadding.top + 19 + actionPadding.bottom + 2
             let stackHeight = 32 + titleGap + 23 + detailGap + detailHeight
                 + recentGap + recentHeight + actionGap + actionHeight
-            let areaHeight = 800 - titlebar - outerTop - outerBottom
-            let iconTop = titlebar + outerTop + padding.top
+            let areaHeight = shell.bounds.height - outerTop - outerBottom
+            let iconTop = outerTop + padding.top
                 + (areaHeight - padding.top - bottom - stackHeight) / 2
             let headingTop = iconTop + 32 + titleGap
             let recentTop = headingTop + 23 + detailGap + detailHeight + recentGap
@@ -81,8 +91,7 @@ import PicseeApplication
                                            ("heading", page.heading as NSView, headingTop),
                                            ("recents", page.recentsGroup, recentTop)] {
                 let frame = shell.convert(view.bounds, from: view)
-                let actual = titlebar + shell.bounds.height - frame.maxY
-                print("i518 \(appearance.rawValue) width=\(width) \(name) actual=\(actual) pin=\(expected) delta=\(actual - expected)")
+                let actual = shell.bounds.height - frame.maxY
                 #expect(abs(actual - expected) <= 1,
                         "\(appearance.rawValue) \(width) \(name): top \(actual), pinned CSS \(expected)")
             }
@@ -97,7 +106,6 @@ import PicseeApplication
         let two = [page.icon, page.heading, page.recentsGroup].map { shell.convert($0.bounds, from: $0) }
         for index in three.indices {
             let shift = three[index].maxY - two[index].maxY
-            print("i518 fixture \(appearance.rawValue) element=\(index) two-minus-three top=\(shift) CSS=19pt")
             // Added CSS row = 9 + 19 + 9 + 1 border = 38, half = 19.
             #expect(abs(shift - 19) <= 1, "One recent row changes centered stack top by half its height")
         }

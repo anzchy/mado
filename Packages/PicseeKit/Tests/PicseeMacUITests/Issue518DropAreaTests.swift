@@ -11,7 +11,7 @@ import PicseeApplication
     let pageDesign = try PinnedDesign.page("empty-folder")
     let inset = try pageDesign.length(".drop-outline", "inset", viewport: 1280)
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 762),
+        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800 - (try issue518NativeTitlebarHeight())),
                                   preferencesStore: InMemoryDisplayPreferencesStore())
         shell.wantsLayer = true
         let window = NSWindow(contentRect: shell.frame, styleMask: .borderless, backing: .buffered, defer: false)
@@ -24,6 +24,7 @@ import PicseeApplication
         shell.setEmptyFolderState(true, recents: [], now: Date(timeIntervalSince1970: 1_615_809_600))
         shell.layoutSubtreeIfNeeded()
         let page = shell.emptyFolderView
+        #expect(page.frame == shell.mainContent.bounds, "The drop target owns the full recovery-scroll frame")
         page.layoutSubtreeIfNeeded()
         let expected = shell.convert(shell.mainContent.bounds.insetBy(dx: inset, dy: inset), from: shell.mainContent)
         let actual = shell.convert(page.dropOutline.bounds, from: page.dropOutline)
@@ -31,7 +32,12 @@ import PicseeApplication
         // Render the native backing-layer tree so the portion of the real
         // outline below the inset page must survive ancestor clipping.
         shell.mainContent.wantsLayer = true
+        page.wantsLayer = true
+        window.displayIfNeeded()
         page.dropOutline.isHidden = false
+        // Isolate fill clipping from the dashed stroke: a border dash may
+        // cross the fixed edge sample after the viewport height changes.
+        page.dropBorder.isHidden = true
         page.dropOutline.layer?.backgroundColor = NSColor.magenta.cgColor
         shell.mainContent.displayIfNeeded()
         window.displayIfNeeded()
@@ -47,11 +53,27 @@ import PicseeApplication
             #expect(color.redComponent > 0.9 && color.blueComponent > 0.9 && color.greenComponent < 0.1,
                     "Drop highlight is composited through the padding outside the page frame")
         }
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let folder = URL(fileURLWithPath: "/photos/Trip", isDirectory: true)
+        #expect(pasteboard.writeObjects([folder as NSURL]))
+        var received: [[URL]] = []
+        page.onDropFolders = { received.append($0) }
         for y in [CGFloat(5), shell.mainContent.bounds.height - 5] {
             let point = shell.convert(NSPoint(x: shell.mainContent.bounds.midX, y: y), from: shell.mainContent)
             let hit = shell.hitTest(point)
             #expect(hit === page || hit?.isDescendant(of: page) == true,
                     "Empty-folder padding remains part of the folder drop destination")
+            // Full target frame covers the padding: no out-of-frame hitTest
+            // extension is needed to reach NSDraggingDestination callbacks.
+            let local = page.convert(point, from: shell)
+            #expect(page.bounds.contains(local))
+            let drag = Issue518PaddingDragInfo(pasteboard, at: page.convert(local, to: nil), window: window)
+            #expect(page.draggingEntered(drag) == .copy)
+            #expect(page.prepareForDragOperation(drag))
+            #expect(page.performDragOperation(drag))
+            #expect(received.last == [folder])
+            #expect(!page.isDragOver)
         }
         for point in [NSPoint(x: 40, y: 60), NSPoint(x: 640, y: 20)] {
             let hit = shell.hitTest(point)
@@ -65,4 +87,27 @@ import PicseeApplication
         let hiddenHit = shell.hitTest(shell.convert(NSPoint(x: shell.mainContent.bounds.midX, y: 5), from: shell.mainContent))
         #expect(hiddenHit !== page && hiddenHit?.isDescendant(of: page) != true, "Hidden empty page cannot receive drops")
     }
+}
+
+@MainActor private final class Issue518PaddingDragInfo: NSObject, NSDraggingInfo {
+    let draggingPasteboard: NSPasteboard
+    let draggingLocation: NSPoint
+    let draggingDestinationWindow: NSWindow?
+    init(_ pasteboard: NSPasteboard, at point: NSPoint, window: NSWindow) {
+        draggingPasteboard = pasteboard; draggingLocation = point; draggingDestinationWindow = window
+    }
+    var draggingSourceOperationMask: NSDragOperation { .copy }
+    var draggedImageLocation: NSPoint { .zero }
+    nonisolated var draggedImage: NSImage? { nil }
+    var draggingSource: Any? { nil }
+    var draggingSequenceNumber: Int { 1 }
+    var draggingFormation: NSDraggingFormation = .none
+    var animatesToDestination = false
+    var numberOfValidItemsForDrop = 0
+    var springLoadingHighlight: NSSpringLoadingHighlight { .none }
+    func slideDraggedImage(to screenPoint: NSPoint) { }
+    func enumerateDraggingItems(options enumOpts: NSDraggingItemEnumerationOptions, for view: NSView?,
+        classes classArray: [AnyClass], searchOptions: [NSPasteboard.ReadingOptionKey: Any],
+        using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) { }
+    func resetSpringLoading() { }
 }
