@@ -176,8 +176,9 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
                     #expect(columns <= previous, "\(label) non-increasing at \(size)")
                     if columns > 1 { #expect(fixture.layout.itemSize.width >= CGFloat(size) - 0.01, "\(label) cell ≥ \(size)") }
                     let height = try #require(try fixture.item(0).tileLayer).frame.height
-                    if let tileHeight { #expect(height == tileHeight, "\(label) tile height constant at \(size)") }
-                    tileHeight = height
+                    // #349 / pinned #347 variants supersede #114's fixed-height assumption above720pt.
+                    if let tileHeight { #expect(abs(height / CGFloat(size) - tileHeight) < 0.0001, "\(label) height scales at \(size)") }
+                    tileHeight = height / CGFloat(size)
                     previous = columns
                     ascending[size] = fixture.layout.itemSize
                     await Task.yield()
@@ -301,8 +302,9 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         let tile = try #require(try fixture.item(0).tileLayer).frame
         let scale = fixture.window.backingScaleFactor
         #expect(try !fixture.item(0).isNameVisible, "names hidden")
-        #expect(abs(fixture.layout.itemSize.height - 196.16) < 0.01, "item height without the name row")
-        #expect(abs(tile.height - 188.16) < 0.01, "tile \(tile)")
+        // #349: size140 scales the pinned default188.16pt tile height by140/220.
+        #expect(abs(fixture.layout.itemSize.height - (188.16 * 140 / 220 + 8)) < 0.01, "item height without the name row")
+        #expect(abs(tile.height - 188.16 * 140 / 220) < 0.01, "tile \(tile)")
         #expect(abs(coverage.width - tile.width * scale) < 0.01, "coverage \(coverage) tile \(tile)")
         #expect(abs(coverage.height - tile.height * scale) < 0.01, "coverage \(coverage) tile \(tile)")
     }

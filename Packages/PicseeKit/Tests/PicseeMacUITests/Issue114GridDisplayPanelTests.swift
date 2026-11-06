@@ -254,7 +254,8 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         f.write(size: 150, names: false, fit: .fit)
         f.settle()
         #expect(f.columns == 7)
-        #expect(abs(f.layout.itemSize.height - 196.16) < 0.01)
+        // #349: pinned size variants scale tile height above720pt; hidden names keep only8pt padding.
+        #expect(abs(f.layout.itemSize.height - (188.16 * 150 / 220 + 8)) < 0.01)
         #expect(!f.visiblePhotoItems.isEmpty && f.visiblePhotoItems.allSatisfy { $0.tileLayer?.contentsGravity == .resizeAspect })
         #expect(!f.shell.isDisplayPanelOpen)
         #expect(f.counter.values.count == 3)
@@ -268,7 +269,8 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         let f = try Issue114PanelFixture(preferences: stored)
         defer { f.close() }
         #expect(f.columns == 4)
-        #expect(abs(f.layout.itemSize.height - 196.16) < 0.01)
+        // #349: stored260pt size scales the default220pt tile height too.
+        #expect(abs(f.layout.itemSize.height - (188.16 * 260 / 220 + 8)) < 0.01)
         #expect(!f.visiblePhotoItems.isEmpty && f.visiblePhotoItems.allSatisfy { $0.tileLayer?.contentsGravity == .resizeAspect })
         #expect(f.counter.values.isEmpty, "applying stored options writes nothing")
     }
