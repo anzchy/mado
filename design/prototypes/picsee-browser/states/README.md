@@ -102,3 +102,17 @@ Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计
 以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
 
 `.stitch/` 仅为本地捕获/生成/迁移工作目录，整体忽略。当前机器可保留 `.stitch/deliverables` 指向本目录的兼容链接；仓库和预览均不依赖这个链接。截图与运行检查输出属于 `evidence/`，无需复制到每份稿旁边。
+
+## #540 · Viewer Tools 不透明度变体（#351 固定输入）
+
+14 `viewer-controls.html`、16 `viewer-inspector.html`、33 `viewer-filmstrip.html` 支持组合 `?theme=light|dark&tool-opacity=30|50|100`。省略或无效 opacity 回退 50%；默认外观仍为 dark。只改变外层工具材质比例，内衬保持现有 50%。100% 外层为实色 panel，blur 仍保留但被实色遮住。
+
+| Selector | #351 应断言的属性和值 |
+| --- | --- |
+| `.viewer-floating-controls > [data-viewer-controls]` | 14/16 为 `leading/navigation/zoom`，33 为 `leading/zoom`；`background-color: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`；token 随 URL 为 `30%/50%/100%`，computed alpha 为 `0.3/0.5/1` |
+| 同上 | `backdrop-filter` / `-webkit-backdrop-filter: blur(20px) saturate(1.6)`；`border-radius: 6px`；`box-shadow: var(--shadow-soft)` |
+| 同上，light | panel `#ffffff`；shadow `0 0 0 0.5px` 文字色 `#1a1a1a` 的 12%，加 `0 8px 24px` 同文字色的 8% |
+| 同上，dark | panel `#141821`；shadow `0 0 0 0.5px` 文字色 `#e5e7eb` 的 16%，加 `0 8px 24px` 黑色的 45% |
+| `[data-viewer-controls]::before` | 内衬继续 `inset: 2px`、radius `4px`、panel 50%；不随 URL 改变 |
+
+16 `.inspector` 与 33 `.c-filmstrip` 的 HTML、computed styles（含后代）保持基线 fba1348e 不变。`scripts/design/i540-frosted-tools.test.mjs` 在 Chromium 检查三页 × 两种外观 × 三档及默认/无效回退，并与固定基线比较信息面板和胶片条。既有 glyph/text halo 与 50% 对比度检查继续有效；截图属于浏览器设计证据，不是 App 真机验收。
