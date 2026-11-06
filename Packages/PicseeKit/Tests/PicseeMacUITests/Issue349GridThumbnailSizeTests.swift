@@ -39,6 +39,11 @@ import PicseeInfrastructure
             index.isMultiple(of: 2) ? "\(index)-这是一个用于确认单行文件名正确截断的非常长的中文照片名称.jpg"
                 : "\(index)-An-extremely-long-English-photo-filename-that-must-truncate-at-every-size.jpg"
         }
+        .map { name in
+            name.replacingOccurrences(of: ".jpg", with: String(repeating:
+                name.contains("这是") ? "-用于确认所有宽度下截断" : "-long-filename-pressure",
+                count: name.contains("这是") ? 3 : 6) + ".jpg")
+        }
         snapshot = FolderSnapshot(version: .init(rootID: root.id, folder: folder, generation: 1),
             entries: filenames.map { FolderEntry(url: folder.appendingPathComponent($0), root: root) }, isComplete: true)
         grid.display(snapshot, selectedItemID: nil)
@@ -145,6 +150,17 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
                     #expect(abs(tile.frame.width - (cell.view.bounds.width - 8)) < 0.02)
                     let first = try scene.cellFrame(0), secondRow = try scene.cellFrame(columns)
                     #expect(abs(secondRow.minY - first.minY - (expectedHeight + 36 + gaps.top)) < 0.02)
+                    for index in [0, 1] {
+                        let photo = try scene.item(index)
+                        let label = try #require(photo.view.subviews.compactMap { $0 as? NSTextField }
+                            .first { $0.stringValue == photo.filename })
+                        #expect(label.maximumNumberOfLines == 1 && label.lineBreakMode == .byTruncatingTail)
+                        #expect(photo.view.bounds.contains(label.frame))
+                        let ideal = (label.stringValue as NSString).size(withAttributes: [
+                            .font: label.font ?? NSFont.systemFont(ofSize: 13)])
+                        #expect(ideal.width > label.frame.width, "long name pressure at \(width)/\(size)/\(page)")
+                        #expect(photo.filename.lengthOfBytes(using: .utf8) <= 255, "realistic filename length")
+                    }
                 }
             }
         }
@@ -180,6 +196,16 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
                 for width: CGFloat in [1280, 1050, 721] {
                     let scene = try Issue349GridScene(width: width, size: 280, count: count, scroller: style)
                     defer { scene.close() }
+                    scene.scroll.autohidesScrollers = true
+                    scene.scroll.hasVerticalScroller = true
+                    scene.scroll.tile()
+                    scene.settle()
+                    scene.scroll.reflectScrolledClipView(scene.scroll.contentView)
+                    let scroller = try #require(scene.scroll.verticalScroller)
+                    #expect(scroller.isHidden == (count == 2), "actual scrollbar visibility")
+                    let lastCell = try scene.cellFrame(count - 1)
+                    #expect(count == 48 ? lastCell.maxY > scene.scroll.contentSize.height
+                        : lastCell.maxY < scene.scroll.contentSize.height, "actual overflow/short content pressure")
                     let tile = try #require(try scene.item(0).tileLayer)
                     let expectedHeight = try issue349PinnedHeight(design, width: width, size: 280)
                     #expect(abs(tile.frame.height - expectedHeight) < 0.02)
