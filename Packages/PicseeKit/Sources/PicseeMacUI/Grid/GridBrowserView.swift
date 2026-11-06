@@ -229,9 +229,13 @@ private struct GridGeometry: Equatable {
         // Leave one representable step of slack so flow layout does not wrap an exact-fit row.
         let cellWidth = max(0, ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown)
         if width <= 720 { tileHeight = 150 }
-        else if width <= 1050 { tileHeight = 165 }
-        else if wide { tileHeight = 200 }
-        else { tileHeight = min(225, max(135, width * 0.147)) }
+        else {
+            let baseline: CGFloat
+            if narrow { baseline = 165 }
+            else if wide { baseline = 200 }
+            else { baseline = min(225, max(135, width * 0.147)) }
+            tileHeight = baseline * CGFloat(options.thumbnailSize) / 220
+        }
         // Cell padding 4+4; name margin 7, padded line 21, bottom padding 4. Without names only the padding stays.
         itemSize = NSSize(width: cellWidth, height: tileHeight + (options.showFileNames ? 36 : 8))
     }
@@ -340,7 +344,12 @@ private enum GridPageMove {
         didSet {
             guard displayOptions != oldValue else { return }
             updateGeometry()
+            collectionView.layoutSubtreeIfNeeded()
             for case let item as GridPhotoItem in collectionView.visibleItems() { item.apply(displayOptions) }
+            if displayOptions.thumbnailSize != oldValue.thumbnailSize,
+               let currentItemID, let index = indices[currentItemID] {
+                scrollIntoView(index, aligningToBackingPixels: true)
+            }
             reconcileThumbnails()
         }
     }
@@ -721,7 +730,7 @@ private enum GridPageMove {
     }
     /// Finder-style: scroll the least distance that shows the whole tile, none when it is already visible.
     /// Exact, not `scrollToVisible`: that rounds to whole points and leaves fractional-height rows clipped.
-    private func scrollIntoView(_ index: Int) {
+    private func scrollIntoView(_ index: Int, aligningToBackingPixels: Bool = false) {
         let tile = collectionView.frameForItem(at: index)
         // The clip includes area under content insets (a bar over the grid); the tile must clear it.
         let insets = scrollView.contentInsets
@@ -729,9 +738,16 @@ private enum GridPageMove {
         visible.origin.y += insets.top
         visible.size.height -= insets.top + insets.bottom
         var origin = scrollView.contentView.bounds.origin
-        if tile.minY < visible.minY { origin.y += tile.minY - visible.minY }
+        let movingUp = tile.minY < visible.minY
+        if movingUp { origin.y += tile.minY - visible.minY }
         else if tile.maxY > visible.maxY { origin.y += tile.maxY - visible.maxY }
         else { return }
+        // A titled window's clip view aligns its origin to backing pixels. During a size change,
+        // rounding toward the hidden edge can leave a fractional sliver under the Bottom Bar.
+        if aligningToBackingPixels {
+            let scale = window?.backingScaleFactor ?? 1
+            origin.y = (movingUp ? floor(origin.y * scale) : ceil(origin.y * scale)) / scale
+        }
         restoreContentOffset(origin)
     }
     private func drawCurrent() {
