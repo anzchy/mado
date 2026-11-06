@@ -357,6 +357,32 @@ public final class ViewerStateHost: NSView {
         setAccessibilityChildren([text as NSView] + buttons)
     }
 
+    /// Page25 image-error.html:32px/viewBox24, stroke1.3, no fill. SF photo
+    /// keeps solid mountains at every weight, so use the pinned template outline (#530).
+    private static let imageErrorOutline: NSImage = {
+        let image = NSImage(size: NSSize(width: 32, height: 32), flipped: true) { rect in
+            let scale = rect.width / 24
+            let outline = NSBezierPath(roundedRect: NSRect(x: 3, y: 3, width: 18, height: 18),
+                                       xRadius: 2, yRadius: 2)
+            outline.appendOval(in: NSRect(x: 7, y: 7, width: 4, height: 4))
+            outline.move(to: NSPoint(x: 21, y: 15))
+            outline.line(to: NSPoint(x: 18, y: 12))
+            // SVG a2 2 0 0 0 -3 0: the small upper radius2 arc to(15,12).
+            let rise = sqrt(CGFloat(1.75))
+            let angle = atan2(-rise, 1.5) * 180 / .pi
+            outline.appendArc(withCenter: NSPoint(x: 16.5, y: 12 + rise), radius: 2,
+                              startAngle: angle, endAngle: -180 - angle, clockwise: true)
+            outline.line(to: NSPoint(x: 6, y: 21))
+            outline.transform(using: AffineTransform(scale: scale))
+            outline.lineWidth = 1.3 * scale
+            NSColor.black.setStroke()
+            outline.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
+
     private func composeState(_ status: ViewerImageStatus, actions: [(String, String)]) {
         composedState = status
         let imageFailure: Bool
@@ -367,10 +393,10 @@ public final class ViewerStateHost: NSView {
         default: failure = false
         }
         let iconLabel = Self.stateIconLabel(failure: failure)
-        let image = NSImageView(image: NSImage(systemSymbolName: imageFailure ? "photo" : failure
+        let image = NSImageView(image: imageFailure ? Self.imageErrorOutline : NSImage(systemSymbolName: failure
             ? "exclamationmark.triangle" : DesignSymbol.folder.name,
             accessibilityDescription: iconLabel)!)
-        image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: imageFailure ? 32 : 28, weight: .regular)
+        if !imageFailure { image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 28, weight: .regular) }
         image.imageScaling = imageFailure ? .scaleProportionallyUpOrDown : .scaleProportionallyDown
         if imageFailure { image.contentTintColor = DesignColor.textSecondary.nsColor }
         image.setAccessibilityIdentifier("state.icon")
