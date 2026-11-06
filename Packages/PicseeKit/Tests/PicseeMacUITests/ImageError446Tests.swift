@@ -55,8 +55,10 @@ import PicseeApplication
     #expect(icon.frame.size == NSSize(width: 32, height: 32))
     for view in [icon as NSView, heading, message] { #expect(abs(view.frame.midX - 640) <= 1) }
     #expect(abs(retry.frame.union(next.frame).midX - 640) <= 1)
-    let photo = try #require(NSImage(systemSymbolName: "photo", accessibilityDescription: "Unreadable image"))
-    #expect(icon.image?.tiffRepresentation == photo.tiffRepresentation)
+    // #530 amendment3: the pinned SVG is outline-only; SF photo has filled mountains.
+    // The canonical shape is verified from actual pixels in ImageError530Tests.
+    #expect(icon.image?.isTemplate == true)
+    #expect(icon.image?.size == NSSize(width: 32, height: 32))
     #expect(icon.accessibilityLabel() == "Unreadable image")
     #expect(message.stringValue == "DSC_0342.jpg · The file may be damaged or its format unreadable.")
     #expect(imageError446Node("state.reason", scene.state) == nil)
@@ -174,6 +176,7 @@ import PicseeApplication
             #expect(scene.state.readFailedView?.detailLabel.textColor == DesignColor.textSecondary.nsColor)
         } else {
             #expect(image?.image?.tiffRepresentation == NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Unreadable image")?.tiffRepresentation)
+            #expect(image?.symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 28, weight: .regular))
             #expect((imageError446Node("state.reason", scene.state) as? NSTextField)?.textColor == DesignColor.errorText.nsColor)
         }
         scene.state.display(.failed(.corruptImage, "x.jpg"), nextEnabled: true)
