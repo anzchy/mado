@@ -1747,7 +1747,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         if let close = findClose(in: inspectorHost) { _ = window?.makeFirstResponder(close) }
     }
     @discardableResult
-    func route(_ command: CommandID, from entry: CommandEntry) -> Bool {
+    func route(_ command: CommandID, from entry: CommandEntry, commandModified: Bool = false) -> Bool {
         if command == .search, gridSearchAvailable { gridShell.focusSearch(); return true }
         if !gridView.isHidden && (command == .preview || command == .enter) {
             gridPreviewScrollOffset = gridView.contentOffset
@@ -1761,7 +1761,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         if command == .previous || command == .next, window?.currentEvent?.type == .keyDown {
             return canvas.preservingKeyboardFocusRing { router.route(command, from: entry, to: session) }
         }
-        return router.route(command, from: entry, to: session)
+        return router.route(command, from: entry, to: session, commandModified: commandModified)
     }
     private func returnToFolder(of file: URL) {
         let operation = accessIntent.navigation()

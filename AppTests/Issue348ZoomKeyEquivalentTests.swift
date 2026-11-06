@@ -223,7 +223,12 @@ private let issue348ZoomIDs: [CommandID] = [.fit, .actualPixels, .zoomIn, .zoomO
     scene.controller.session.beginBrowsing(items: [item], sourceVersion: .init(1), scrollAnchor: item)
     scene.controller.showGrid()
     let before = scene.controller.session.zoomMode
-    for item in items { #expect(!scene.menu.validateMenuItem(item), "Grid \(item.keyEquivalent)") }
+    // #349 supersedes #348's blanket Grid disablement: only command-modified size actions become available.
+    for item in items {
+        let enabled = item.keyEquivalentModifierMask.contains(.command)
+            && item.representedObject as? String != CommandID.fit.rawValue
+        #expect(scene.menu.validateMenuItem(item) == enabled, "Grid \(item.keyEquivalent)")
+    }
     // AppKit consumes a disabled item's key equivalent without running it; what matters is that nothing zooms.
     _ = try scene.command("0", 29)
     #expect(scene.controller.session.zoomMode == before)
