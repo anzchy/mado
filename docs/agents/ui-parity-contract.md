@@ -119,3 +119,17 @@ pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI 
 - 证据目录留在 `~/.picsee/`，公开 PR 只写非敏感的 ID、哈希和结论。
 
 CI 可检查构建、单元/渲染断言、manifest 和账簿同步；它不能单独证明签名 App 在所有窗口、显示倍率和交互状态下与设计一致。因此视觉通过只来自批次真机证据和独立审计，CI 绿灯与 `AUTO-PASS` 都不是视觉通过。
+
+## #540 · Viewer Tools 不透明度变体（#351 固定输入）
+
+14 `viewer-controls.html`、16 `viewer-inspector.html`、33 `viewer-filmstrip.html` 支持组合 `?theme=light|dark&tool-opacity=30|50|100`。省略或无效 opacity 回退 50%；默认外观仍为 dark。只改变外层工具材质比例，内衬保持现有 50%。100% 外层为实色 panel，blur 仍保留但被实色遮住。
+
+| Selector | #351 应断言的属性和值 |
+| --- | --- |
+| `.viewer-floating-controls > [data-viewer-controls]` | 14/16 为 `leading/navigation/zoom`，33 为 `leading/zoom`；`background-color: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`；token 随 URL 为 `30%/50%/100%`，computed alpha 为 `0.3/0.5/1` |
+| 同上 | `backdrop-filter` / `-webkit-backdrop-filter: blur(20px) saturate(1.6)`；`border-radius: 6px`；`box-shadow: var(--shadow-soft)` |
+| 同上，light | panel `#ffffff`；shadow `0 0 0 0.5px` 文字色 `#1a1a1a` 的 12%，加 `0 8px 24px` 同文字色的 8% |
+| 同上，dark | panel `#141821`；shadow `0 0 0 0.5px` 文字色 `#e5e7eb` 的 16%，加 `0 8px 24px` 黑色的 45% |
+| `[data-viewer-controls]::before` | 内衬继续 `inset: 2px`、radius `4px`、panel 50%；不随 URL 改变 |
+
+16 `.inspector` 与 33 `.c-filmstrip` 的 HTML、computed styles（含后代）保持基线 fba1348e 不变。`scripts/design/i540-frosted-tools.test.mjs` 在 Chromium 检查三页 × 两种外观 × 三档及默认/无效回退，并与固定基线比较信息面板和胶片条。既有 glyph/text halo 与 50% 对比度检查继续有效；截图属于浏览器设计证据，不是 App 真机验收。

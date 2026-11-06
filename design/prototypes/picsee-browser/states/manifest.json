@@ -47,7 +47,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "8577ac87f024fd2d8923d003de44b2b5a4ae410215b1a9cf9d170d5fc86551c1"
+      "sha256": "c6be27be66db345c02798114af97f03da848fc47e06534e16a94b1c342df626a"
     },
     {
       "name": "grid-display",
@@ -71,7 +71,7 @@
       },
       "kind": "static-mockup",
       "origin": "accepted-C-snapshot",
-      "sha256": "18ccde89fe43e8514f42d26af03a45b92de18f5f3faf322fed1709bb97723d75"
+      "sha256": "f16dd19d49392681ba4f5b48e89c0a6d735d359108d225201527597c36ffd47a"
     },
     {
       "name": "first-launch",
@@ -227,7 +227,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "5e29ff116c256162441366a9a78d1dadc3454384d30e23e8b42463c2fadeb83c"
+      "sha256": "301e37dd8ee37d1bf8d3656bbc3b49c723523abf36e0a61af24305c15b0ad204"
     },
     {
       "name": "viewer-inspector-light",

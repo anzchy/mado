@@ -39,7 +39,7 @@
 }
 </style>
 <style data-viewer-tools>/* #347: authoring source only; pinned viewer pages inline these rules and canonical tokens. */
-/* Keep the existing pod geometry, corner radius and shadow. The outer material stays at 50%. */
+/* Keep the existing pod geometry, corner radius and shadow. The outer material defaults to 50%; #540 exposes opacity variants. */
 .prototype-shell .viewer-floating-controls > [data-viewer-controls] {
   background: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent);
   -webkit-backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation));
@@ -66,11 +66,18 @@
 .viewer-floating-controls > [data-viewer-controls] svg {
   filter: drop-shadow(var(--tool-glyph-ink)) drop-shadow(var(--tool-foreground-halo));
 }
+
+/* #540: percentage variants affect only the outer Viewer Tools material. */
+:root[data-tool-opacity="30"] { --tool-background-opacity: 30%; }
+:root[data-tool-opacity="50"] { --tool-background-opacity: 50%; }
+:root[data-tool-opacity="100"] { --tool-background-opacity: 100%; }
 </style>
 <script>
 // Static appearance variant; the bare URL keeps the accepted dark appearance.
 (() => {
   const q = new URLSearchParams(location.search), theme = q.get('theme');
+  const opacity = q.get('tool-opacity');
+  document.documentElement.dataset.toolOpacity = ['30', '50', '100'].includes(opacity) ? opacity : '50';
   if (theme === 'light' || theme === 'dark') {
     document.documentElement.classList.remove('theme-light', 'theme-dark');
     document.documentElement.classList.add('theme-' + theme);
