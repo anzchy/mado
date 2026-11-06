@@ -134,7 +134,7 @@ import PicseeCore
         sidebar.addSubview(recentsButton)
         mainContent.addSubview(emptyState)
         mainContent.addSubview(emptyFolderView)
-        emptyFolderView.surroundingContentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 30, right: 0)
+        emptyFolderView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 30, right: 0)
         emptyFolderView.isHidden = true
         emptyFolderView.onSelectSubfolder = { [weak self] in self?.onSelectFolder?($0) }
         emptyFolderView.onOpenRecent = { [weak self] in self?.onOpenRecent?($0) }
@@ -420,12 +420,8 @@ import PicseeCore
         return NSRect(x: bounds.minX, y: bounds.minY - footer.bounds.height, width: bounds.width,
             height: max(0, bounds.height - topInset + footer.bounds.height))
     }
-    /// empty-folder.html: grid-scroll top16 / bottom70. mainContent already
-    /// excludes the 40pt bottom bar, leaving 30pt of bottom padding here.
-    private var emptyFolderFrame: NSRect {
-        NSRect(x: 0, y: 30, width: mainContent.bounds.width,
-               height: max(0, mainContent.bounds.height - 16 - 30))
-    }
+    /// The page owns the whole recovery-scroll drop target; stack padding is internal.
+    private var emptyFolderFrame: NSRect { mainContent.bounds }
     public override func layout() {
         super.layout()
         let main = mainFrame
