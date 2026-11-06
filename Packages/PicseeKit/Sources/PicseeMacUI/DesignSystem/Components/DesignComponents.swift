@@ -135,6 +135,18 @@ public struct SearchFilterField: View {
     }
 }
 public struct ScaleIndicator: View {
+    /// Own the complete label appearance so disabled ink is dimmed exactly once.
+    private struct LabelStyle: ButtonStyle {
+        let state: ComponentState
+        let fill: DesignColor?
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .background(fill?.color ?? .clear, in: RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!))
+                .overlay(RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!)
+                    .strokeBorder(state.contains(.keyboardFocused) ? DesignColor.focusRing.color : .clear, lineWidth: 2))
+                .opacity(state.contains(.disabled) ? 0.4 : 1)
+        }
+    }
     public init(actualPixels: Bool, customZoom: Double? = nil, state: ComponentState = [], theme: DesignTheme = .light, input: ComponentInput = .live, action: @escaping () -> Void) {
         self.actualPixels = actualPixels; self.customZoom = customZoom; self.state = state; self.theme = theme; self.input = input; self.action = action
     }
@@ -164,11 +176,7 @@ public struct ScaleIndicator: View {
                 .padding(5)
                 .frame(minWidth: 100)
         }
-        .buttonStyle(.plain)
-        .background(fill?.color ?? .clear, in: RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!))
-        .overlay(RoundedRectangle(cornerRadius: DesignMetrics.radii["inner"]!)
-            .strokeBorder(current.contains(.keyboardFocused) ? DesignColor.focusRing.color : .clear, lineWidth: 2))
-        .opacity(current.contains(.disabled) ? 0.4 : 1)
+        .buttonStyle(LabelStyle(state: current, fill: fill))
         .disabled(state.contains(.disabled))
         .focusable(input == .live)
         .focused($focused)
