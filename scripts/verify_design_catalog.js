@@ -37,7 +37,7 @@ const SHORTCUT_CARDS=[['files','文件与窗口','任何时候'],['grid','网格
 const GRID_BAR_PAGES=['grid-light','grid-dark','grid-display','empty-folder','search-empty','folder-loading','permission-denied','compact-grid','components','grid-context-menu','grid-multiselect'];
 const GRID_BAR_CASES=[...GRID_BAR_PAGES.map(n=>n+'.html'),'empty-folder.html?theme=dark','empty-folder.html?drag=over','permission-denied.html?theme=dark','folder-loading.html?case=failed','folder-loading.html?case=failed&theme=dark',
  'grid-light.html?scroll=behind','grid-dark.html?scroll=behind','grid-light.html?transparency=reduced','grid-dark.html?transparency=reduced'];
-// #317 retained prior viewer bytes; #347 updates 14/16/33, #447 adds light variants to 13/25/27.
+// #317 retained prior viewer bytes; #347 updates 14/16/33, #540 pins their opacity variants; #447 adds light variants to 13/25/27.
 // Retained solid dark tools on the other viewer pages are not #351 tool-fill oracles.
 const VIEWER_BAR_SHA256={'viewer-quiet':'c0d243a55d7d4e07ed13c0897ac0befcd2d056703e6341f13a8676d162723f1b','viewer-controls':'c6be27be66db345c02798114af97f03da848fc47e06534e16a94b1c342df626a','viewer-inspector':'f16dd19d49392681ba4f5b48e89c0a6d735d359108d225201527597c36ffd47a','image-error':'21fd41003e027cf119769588fd83b28ba362176f980040ed8eb6aa1a22d945c7','original-size':'d31194981b4f7ebcd4c80754aaf3d92f3acb9f4cb82fb5ccfff399f1f289374c','keyboard-focus':'4651f48a5895f120efb3ff79abe72941ca7019aecb0f2d31e761e5ce0c48909f','viewer-filmstrip':'301e37dd8ee37d1bf8d3656bbc3b49c723523abf36e0a61af24305c15b0ad204','viewer-inspector-light':'a2e2331cef71140452d0d8070a814f0a875f1d5bcf0f697d87758f75a0c9d01e'};
 module.exports=async(page,{design,states,screenshot})=>{

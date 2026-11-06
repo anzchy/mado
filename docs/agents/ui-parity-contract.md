@@ -127,9 +127,9 @@ CI 可检查构建、单元/渲染断言、manifest 和账簿同步；它不能�
 | Selector | #351 应断言的属性和值 |
 | --- | --- |
 | `.viewer-floating-controls > [data-viewer-controls]` | 14/16 为 `leading/navigation/zoom`，33 为 `leading/zoom`；`background-color: color-mix(in srgb, var(--color-panel) var(--tool-background-opacity), transparent)`；token 随 URL 为 `30%/50%/100%`，computed alpha 为 `0.3/0.5/1` |
-| 同上 | `backdrop-filter` / `-webkit-backdrop-filter: blur(20px) saturate(1.6)`；`border-radius: 6px`；`box-shadow: var(--shadow-soft)` |
+| 同上 | computed `backdrop-filter: blur(20px) saturate(1.6)`（作者源也声明 `-webkit-backdrop-filter`，Chromium computed 值为空，不断言它）；`border-radius: 6px`；`box-shadow: var(--shadow-soft)` |
 | 同上，light | panel `#ffffff`；shadow `0 0 0 0.5px` 文字色 `#1a1a1a` 的 12%，加 `0 8px 24px` 同文字色的 8% |
 | 同上，dark | panel `#141821`；shadow `0 0 0 0.5px` 文字色 `#e5e7eb` 的 16%，加 `0 8px 24px` 黑色的 45% |
 | `[data-viewer-controls]::before` | 内衬继续 `inset: 2px`、radius `4px`、panel 50%；不随 URL 改变 |
 
-16 `.inspector` 与 33 `.c-filmstrip` 的 HTML、computed styles（含后代）保持基线 fba1348e 不变。`scripts/design/i540-frosted-tools.test.mjs` 在 Chromium 检查三页 × 两种外观 × 三档及默认/无效回退，并与固定基线比较信息面板和胶片条。既有 glyph/text halo 与 50% 对比度检查继续有效；截图属于浏览器设计证据，不是 App 真机验收。
+16 `.inspector` 与 33 `.c-filmstrip` 的 HTML、computed styles（含后代）在同一页的不同不透明度下保持一致。`scripts/design/i540-frosted-tools.test.mjs` 在 Chromium 检查三页 × 两种外观 × 三档及默认/无效回退，并与同页默认渲染比较信息面板、胶片条和工具前景的所有非 custom computed 属性；每档都直接断言内衬 2px / 4px / panel 50%。检查无需 git 历史，也不固定旧页面以阻止后续合法设计改动。既有 glyph/text halo 与 50% 对比度检查继续有效；截图属于浏览器设计证据，不是 App 真机验收。
