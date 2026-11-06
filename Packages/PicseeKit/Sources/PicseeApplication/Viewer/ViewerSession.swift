@@ -251,8 +251,12 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     }
     public func activity() { chrome.activity(at: clock.now); synchronizeChrome() }
     public func advanceChrome() { chrome.advance(to: clock.now); synchronizeChrome() }
-    public func isEnabled(_ command: CommandID) -> Bool {
-        switch command {
+    /// The binding modifier matters in Grid: the same zoom IDs also have bare viewer alternates.
+    public func isEnabled(_ command: CommandID, commandModified: Bool = false) -> Bool {
+        if mode == .browsing, command.commandKey != nil {
+            return commandModified && command != .fit && inspectorFocus.focus != .textInput
+        }
+        return switch command {
         case .fit, .actualPixels, .zoomIn, .zoomOut: imageCommandsAvailable
         case .escape: inspectorFocus.focus != .canvas || canReturnToSource
         case .open: true
@@ -319,7 +323,15 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     }
     func perform(_ command: CommandID, from entry: CommandEntry) {
         activity()
-        if command == .open {
+        if mode == .browsing, command == .zoomIn || command == .zoomOut || command == .actualPixels {
+            var preferences = preferencesStore.value
+            switch command {
+            case .zoomIn: preferences.thumbnailSize += 20
+            case .zoomOut: preferences.thumbnailSize -= 20
+            default: preferences.thumbnailSize = 220
+            }
+            preferencesStore.value = preferences
+        } else if command == .open {
             host?.requestOpen()
         } else if command == .inspector {
             setInspectorVisible(!inspectorFocus.isVisible)

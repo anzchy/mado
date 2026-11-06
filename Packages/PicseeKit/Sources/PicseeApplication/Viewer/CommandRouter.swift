@@ -8,8 +8,10 @@ public struct CommandRouter {
         self.implementedCommands = implementedCommands
     }
     @discardableResult
-    public func route(_ command: CommandID, from entry: CommandEntry, to session: ViewerSession) -> Bool {
-        guard implementedCommands.contains(command), session.isEnabled(command) else { return false }
+    public func route(_ command: CommandID, from entry: CommandEntry, to session: ViewerSession,
+                      commandModified: Bool = false) -> Bool {
+        guard implementedCommands.contains(command),
+              session.isEnabled(command, commandModified: commandModified) else { return false }
         if entry == .key {
             guard !session.isMenuTracking else { return false }
             if session.inspectorFocus.focus == .textInput && !command.usesCommand && command != .escape { return false }

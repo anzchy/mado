@@ -322,7 +322,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         guard let raw = item.representedObject as? String, let id = CommandID(rawValue: raw) else { return }
         if let target = windowController() {
             let searchEditor = id == .inspector ? target.captureGridSearchEditor() : nil
-            let handled = target.route(id, from: .menu)
+            let handled = target.route(id, from: .menu,
+                commandModified: item.keyEquivalentModifierMask.contains(.command))
             if handled, let searchEditor { target.restoreGridSearchEditor(searchEditor) }
         } else if id == .open { openWithoutWindow() }
     }
@@ -415,7 +416,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
                 ? String(localized: visible ? "Hide image information" : "Show image information")
                 : String(localized: visible ? "Hide Inspector" : "Show Inspector")
         }
-        return target?.session.isEnabled(id) ?? (id == .open)
+        return target?.session.isEnabled(id,
+            commandModified: item.keyEquivalentModifierMask.contains(.command)) ?? (id == .open)
     }
     func menuNeedsUpdate(_ menu: NSMenu) {
         guard menu === extensionMenu else { return }
