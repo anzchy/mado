@@ -231,7 +231,28 @@ enum SettingsSection: String, CaseIterable {
     private func buildDisplay() {
         let pane = panes[.display]!
         rowLabel(String(localized: "Thumbnail Size"), y: 397, in: pane)
-        displaySize = NSSlider(value: 220, minValue: 140, maxValue: 280, target: self, action: #selector(changeThumbnailSize(_:)))
+        final class ThumbnailSizeSlider: NSSlider {
+            override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+            override var canBecomeKeyView: Bool { acceptsFirstResponder }
+            // Expose one live slider at this control, without duplicate elements from its hosted children.
+            override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
+            override func accessibilityChildren() -> [Any]? { [] }
+            override func accessibilityRole() -> NSAccessibility.Role? { .slider }
+            override func accessibilityValue() -> Any? { NSNumber(value: doubleValue) }
+            override func accessibilityMinValue() -> Any? { NSNumber(value: minValue) }
+            override func accessibilityMaxValue() -> Any? { NSNumber(value: maxValue) }
+            override func accessibilityPerformIncrement() -> Bool { changeValue(by: 10) }
+            override func accessibilityPerformDecrement() -> Bool { changeValue(by: -10) }
+            private func changeValue(by delta: Double) -> Bool {
+                guard isEnabled, !isHiddenOrHasHiddenAncestor else { return false }
+                let next = min(maxValue, max(minValue, doubleValue + delta))
+                guard next != doubleValue else { return false }
+                doubleValue = next
+                return sendAction(action, to: target)
+            }
+        }
+        displaySize = ThumbnailSizeSlider(value: 220, minValue: 140, maxValue: 280,
+            target: self, action: #selector(changeThumbnailSize(_:)))
         displaySize.numberOfTickMarks = 15
         displaySize.allowsTickMarkValuesOnly = true
         displaySize.frame = NSRect(x: 162, y: 397, width: 220, height: 24)
