@@ -287,7 +287,12 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
             #expect(board.writeObjects([URL(fileURLWithPath: "/photos/Trip", isDirectory: true) as NSURL]))
             #expect(page.draggingEntered(Page22DesignDropInfo(board)) == .copy)
             let inset = try light.lengthValue(light.raw(".drop-outline", "inset", viewport: width), viewport: width)
-            #expect(page.dropOutline.frame == page.bounds.insetBy(dx: inset, dy: inset), "\(label): inset")
+            #expect(page.dropOutline.frame == (try {
+                let top = try light.length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: width)
+                let bottom = try light.length(".grid-scroll", "padding-bottom", viewport: width) - 40
+                return NSRect(x: 0, y: -bottom, width: page.bounds.width,
+                              height: page.bounds.height + top + bottom).insetBy(dx: inset, dy: inset)
+            }()), "\(label): inset")
             let layer = try #require(page.dropOutline.layer)
             #expect(abs(Double(layer.cornerRadius) - (try light.length(".drop-outline", "border-radius", viewport: width))) < 0.01)
             #expect(abs(Double(page.dropBorder.lineWidth) - (try firstLength(light, ".drop-outline", "border", width))) < 0.01)
