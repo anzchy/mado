@@ -21,7 +21,10 @@ private actor Footer506Scanner: FolderScanning {
     func releaseLateBatch() { release?.resume(); release = nil }
     func scan(in folder: URL, root: ItemIdentityRoot, options: FolderScanOptions,
               emit: @Sendable ([FolderEntry]) async throws -> Void) async throws {
-        let entries = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+        // The coordinator holds the root lease, as it does for FolderBrowser's
+        // equivalent canonical-directory enumeration.
+        let scanFolder = folder.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+        let entries = try FileManager.default.contentsOfDirectory(at: scanFolder, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "png" }.sorted { $0.path < $1.path }
             .map { FolderEntry(url: $0, root: root) }
         guard folder.lastPathComponent == "large" else { try await emit(entries); return }

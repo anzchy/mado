@@ -1433,7 +1433,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func openGrantedFolder(_ folder: URL) {
+    func openGrantedFolder(_ folder: URL, deliveredSelection: Bool = false) {
         inputIntent.invalidate()
         let operation = accessIntent.begin()
         showWindow(nil)
@@ -1442,7 +1442,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         navigationTask = Task { [self] in
             do {
                 let services = try await operation.wait { try await accessServices.value }
-                let id = try await operation.wait { try await services.grant(folder) }
+                let id = try await operation.wait { try await services.grant(folder, deliveredSelection: deliveredSelection) }
                 refreshRecents()
                 try operation.check()
                 openFolder(folder, rootID: id)
@@ -2313,6 +2313,11 @@ extension CanvasWindowController: ViewerInputHost {
             guard let self else { return }
             do {
                 let services = try await operation.wait { try await accessServices.value }
+                if urls.count == 1, let folder = urls.first, services.isDeliveredFolder(folder) {
+                    try operation.check()
+                    openGrantedFolder(folder, deliveredSelection: true)
+                    return
+                }
                 let scale = window?.backingScaleFactor ?? 1
                 let maximum = max(1, Int(ceil(max(canvas.bounds.width, canvas.bounds.height) * scale)))
                 let admission = ViewerInputAdmission(access: services.files, pipeline: pipeline,
@@ -2414,11 +2419,17 @@ extension CanvasWindowController: FolderScanHost {
                 gridProjection.setScrollAnchor(previousAnchor)
             }
             if gridFolderURL != snapshot.version.folder {
+                // The first scan canonicalizes its folder identity. Keep the name
+                // the user selected when that spelling still names this directory.
+                let presentationFolder = gridFolderURL.flatMap { selected in
+                    selected.resolvingSymlinksInPath().standardizedFileURL.pathComponents ==
+                        snapshot.version.folder.resolvingSymlinksInPath().standardizedFileURL.pathComponents ? selected : nil
+                } ?? snapshot.version.folder
                 gridFolderURL = snapshot.version.folder
                 followRecoveryPosition(to: snapshot.version.folder, rootID: snapshot.version.rootID)
                 loadSidebarTree(snapshot.version.folder, rootID: snapshot.version.rootID, count: nil)
                 if session.mode == .browsing, let window {
-                    GridWindowIdentity.showFolder(snapshot.version.folder, in: window)
+                    GridWindowIdentity.showFolder(presentationFolder, in: window)
                 }
             }
             else if previous?.version != snapshot.version {
@@ -2470,7 +2481,14 @@ extension CanvasWindowController: FolderScanHost {
         guard authority.isCurrent else { throw CancellationError() }
         try await operation.wait {
             let root = await services.files.rootURL(rootID)
-            try await services.recent.add(RecentFolder(rootID: rootID, url: folder, displayName: folder.lastPathComponent, recordedRoot: root))
+            guard authority.isCurrent else { throw CancellationError() }
+            // Completed snapshots already canonicalized the directory under the
+            // coordinator's existing lease; remembering must not acquire another.
+            let remembered: URL
+            if let source = session.folderScan?.sourceSnapshot, source.isComplete, source.version.rootID == rootID {
+                remembered = source.version.folder
+            } else { remembered = folder }
+            try await services.recent.add(RecentFolder(rootID: rootID, url: remembered, displayName: remembered.lastPathComponent, recordedRoot: root))
         }
         guard authority.isCurrent else { throw CancellationError() }
         refreshRecents()
