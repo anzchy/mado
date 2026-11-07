@@ -5,13 +5,13 @@ import PicseeApplication
 import PicseeInfrastructure
 import PicseeMacUI
 
-private struct Footer506Bookmarks: SecurityScope, BookmarkCoding {
+struct Footer506Bookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }
     func stop(_ url: URL) {}
     func isReadable(_ url: URL) -> Bool { FileManager.default.isReadableFile(atPath: url.path) }
     func create(for url: URL) throws -> Data { Data(url.path.utf8) }
     func resolve(_ data: Data) throws -> ResolvedBookmark {
-        ResolvedBookmark(url: URL(fileURLWithPath: String(decoding: data, as: UTF8.self)), stale: false)
+        ResolvedBookmark(url: URL(fileURLWithPath: String(decoding: data, as: UTF8.self), isDirectory: true), stale: false)
     }
 }
 private actor Footer506Scanner: FolderScanning {
