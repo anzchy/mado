@@ -28,9 +28,9 @@ test('cleanup refuses executable outside recorded bundle',async()=>{
  try{await new Promise(r=>setTimeout(r,100));const run=path.join(scratch,'cleanup-wrong');record(run,child.pid,path.join(scratch,'Wrong.app'));const r=call('cleanup',[run]);assert.equal(r.status,1,r.error?.message);assert.match(r.stdout,/FAIL cleanup.*outside recorded bundle/);assert.doesNotThrow(()=>process.kill(child.pid,0));}finally{child.kill();}
 });
 const checks=['build-sha','bundle-id','signature-team','signature-valid','sandbox','process-bundle','fresh-sources','single-instance','window','launch-log','machine','fixtures'];
-function fixture(){return {expectedSHA:'abc1234',sha:'abc1234',bundleID:'io.github.anzchy.picsee',team:'GRT84NAK4T',signatureValid:true,sandbox:true,processMatches:true,fresh:true,alone:true,windows:[{title:'Picsee'}],fixtureNames:['orientation-1.tiff','nested/alpha-gradient.png'],log:'Picsee launch git=abc1234',machineMatches:true,fixturesIntact:true};}
+function fixture(){return {expectedSHA:'abc1234',sha:'abc1234',bundleID:'io.github.anzchy.mado',team:'GRT84NAK4T',signatureValid:true,sandbox:true,processMatches:true,fresh:true,alone:true,windows:[{title:'Mado'}],fixtureNames:['orientation-1.tiff','nested/alpha-gradient.png'],log:'Mado launch git=abc1234',machineMatches:true,fixturesIntact:true};}
 function doctor(input,name){const file=path.join(scratch,name+'.json');fs.writeFileSync(file,JSON.stringify(input));return call('doctor',['--fixture',file]);}
-test('doctor emits exactly one PASS line per check and identifies the empty window title',()=>{const r=doctor(fixture(),'pass');assert.equal(r.status,0,r.error?.message);assert.deepEqual(r.stdout.trim().split('\n'),checks.map(c=>c==='window'?'PASS window — title=Picsee':'PASS '+c));});
+test('doctor emits exactly one PASS line per check and identifies the empty window title',()=>{const r=doctor(fixture(),'pass');assert.equal(r.status,0,r.error?.message);assert.deepEqual(r.stdout.trim().split('\n'),checks.map(c=>c==='window'?'PASS window — title=Mado':'PASS '+c));});
 test('doctor accepts exactly one window titled as a fixture file and identifies it',()=>{
  const f=fixture();f.windows=[{title:'alpha-gradient.png'}];const r=doctor(f,'fixture-window');
  assert.equal(r.status,0,r.stdout+r.stderr);
@@ -38,7 +38,7 @@ test('doctor accepts exactly one window titled as a fixture file and identifies 
 });
 test('doctor rejects an unrecorded file title and keeps zero windows distinct',()=>{
  const unknown=fixture();unknown.windows=[{title:'personal-photo.jpg'}];const unknownResult=doctor(unknown,'unknown-window');
- assert.equal(unknownResult.status,1);assert.match(unknownResult.stdout,/^FAIL window — expected one window titled Picsee or a recorded fixture file$/m);
+ assert.equal(unknownResult.status,1);assert.match(unknownResult.stdout,/^FAIL window — expected one window titled Mado or a recorded fixture file$/m);
  const zero=fixture();zero.windows=[];zero.errors={window:'0 windows'};const zeroResult=doctor(zero,'zero-window');
  assert.equal(zeroResult.status,1);assert.match(zeroResult.stdout,/^FAIL window — 0 windows$/m);
 });
@@ -48,7 +48,7 @@ test('doctor emits one result per check and fails on each individual defect',()=
  }
 });
 test('window lookup uses PID even with identical or misleading owner names',()=>{
- const helper=require('../winid.js');const windows=[{kCGWindowOwnerPID:11,kCGWindowOwnerName:'Picsee',kCGWindowLayer:0,kCGWindowNumber:1},{kCGWindowOwnerPID:22,kCGWindowOwnerName:'Other',kCGWindowLayer:0,kCGWindowNumber:2},{kCGWindowOwnerPID:22,kCGWindowOwnerName:'Picsee',kCGWindowLayer:3,kCGWindowNumber:3}];
+ const helper=require('../winid.js');const windows=[{kCGWindowOwnerPID:11,kCGWindowOwnerName:'Mado',kCGWindowLayer:0,kCGWindowNumber:1},{kCGWindowOwnerPID:22,kCGWindowOwnerName:'Other',kCGWindowLayer:0,kCGWindowNumber:2},{kCGWindowOwnerPID:22,kCGWindowOwnerName:'Mado',kCGWindowLayer:3,kCGWindowNumber:3}];
  assert.deepEqual(helper.selectWindows(windows,22).map(w=>w.kCGWindowNumber),[2]);
  assert.deepEqual(helper.selectWindows(windows,33),[]);
 });

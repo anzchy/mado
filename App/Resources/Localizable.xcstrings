@@ -5,11 +5,11 @@
     "Unable to Access “%@”": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Unable to Access “%@”"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法访问“%@”"}}}},
     "Not Found":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Not Found"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"找不到"}}}},
     "Choose at New Location…":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Choose at New Location…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在新位置选择…"}}}},
-    "picsee can’t find “%@”. Choose its location, or choose another folder to continue.":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"它可能已被删除、放进了废纸篓，或不在原来的磁盘上。\n如果它在别处，在新位置重新选择它即可继续。"}}}},
+    "Mado can’t find “%@”. Choose its location, or choose another folder to continue.":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"它可能已被删除、放进了废纸篓，或不在原来的磁盘上。\n如果它在别处，在新位置重新选择它即可继续。"}}}},
     "Updated to %@":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Updated to %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已更新到 %@"}}}},
     "Dismiss Location Update":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Dismiss Location Update"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"关闭位置更新提示"}}}},
     "Access Has Expired": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Access Has Expired"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"授权失效"}}}},
-    "Access has expired. Choose this folder again to restore access; picsee will return to where you left off.": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Access has expired. Choose this folder again to restore access; picsee will return to where you left off."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"访问权限已失效。重新选择这个文件夹即可恢复，picsee 会回到你刚才的位置。"}}}},
+    "Access has expired. Choose this folder again to restore access; Mado will return to where you left off.": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Access has expired. Choose this folder again to restore access; Mado will return to where you left off."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"访问权限已失效。重新选择这个文件夹即可恢复，Mado 会回到你刚才的位置。"}}}},
     "Coming Soon": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Coming Soon"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "即将推出"}}}},
     "Personal Favorites": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Personal Favorites"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "个人收藏"}}}},
     "Recently Viewed": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Recently Viewed"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "最近查看"}}}},
@@ -20,7 +20,7 @@
     "Report a Problem…": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Report a Problem…"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "报告问题…"}}}},
     "Keyboard Shortcuts": {"extractionState": "manual","localizations": {"en": {"stringUnit": {"state": "translated","value": "Keyboard Shortcuts"}},"zh-Hans": {"stringUnit": {"state": "translated","value": "键盘快捷键"}}}},
     "%@ (build %@)": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "%@ (build %@)"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "%@（构建 %@）"}}}},
-    "A macOS image viewer for files on your disk. picsee collects no data and uploads no images; the sandbox reads only folders you authorize.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "A macOS image viewer for files on your disk. picsee collects no data and uploads no images; the sandbox reads only folders you authorize."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "一个直接浏览磁盘上图片的 macOS 看图应用。picsee 不收集数据，不上传图片；沙盒开启，只读取你授权的文件夹。"}}}},
+    "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "一个直接浏览磁盘上图片的 macOS 看图应用。Mado 不收集数据，不上传图片；沙盒开启，只读取你授权的文件夹。"}}}},
     "About": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "About"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "关于"}}}},
     "Always Show Image Tools": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Always Show Image Tools"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "始终显示大图工具"}}}},
     "Cache": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Cache"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "缓存"}}}},
@@ -34,27 +34,27 @@
     "Fill and Crop": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Fill and Crop"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "填充裁剪"}}}},
     "Fit Entire Image": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Fit Entire Image"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "完整显示"}}}},
     "Follow System": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Follow System"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "跟随系统"}}}},
-    "Follows the system language (Chinese / English). Set a language for picsee in System Settings → General → Language & Region.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Follows the system language (Chinese / English). Set a language for picsee in System Settings → General → Language & Region."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "跟随系统语言（中文 / English）。可在“系统设置 → 通用 → 语言与地区”为 picsee 单独设置。"}}}},
+    "Follows the system language (Chinese / English). Set a language for Mado in System Settings → General → Language & Region.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Follows the system language (Chinese / English). Set a language for Mado in System Settings → General → Language & Region."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "跟随系统语言（中文 / English）。可在“系统设置 → 通用 → 语言与地区”为 Mado 单独设置。"}}}},
     "General": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "General"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "通用"}}}},
     "Image Tools": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Image Tools"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "大图工具"}}}},
     "Language": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Language"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "语言"}}}},
     "Last checked: %@": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Last checked: %@"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "上次检查：%@"}}}},
     "Last checked: Unknown": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Last checked: Unknown"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "上次检查：未知"}}}},
-    "Only thumbnails created by picsee are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Only thumbnails created by picsee are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "只删除 picsee 生成的缩略图，不会动你的图片。清理前先确认；清理后浏览时重新生成。"}}}},
+    "Only thumbnails created by Mado are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Only thumbnails created by Mado are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "只删除 Mado 生成的缩略图，不会动你的图片。清理前先确认；清理后浏览时重新生成。"}}}},
     "Privacy Note": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Privacy Note"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "隐私说明"}}}},
     "Show File Names": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Show File Names"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "显示文件名"}}}},
     "Show names below thumbnails": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Show names below thumbnails"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "在缩略图下显示文件名"}}}},
     "Source Code": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Source Code"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "源代码"}}}},
     "These are the same preferences as the grid footer Display panel; changes will sync immediately.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "These are the same preferences as the grid footer Display panel; changes will sync immediately."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "与网格底栏“显示”面板是同一组设置，任一处修改立即同步。"}}}},
-    "This deletes picsee thumbnails only. Your images are untouched.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "This deletes picsee thumbnails only. Your images are untouched."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "只删除 picsee 生成的缩略图，不会动你的图片。"}}}},
+    "This deletes Mado thumbnails only. Your images are untouched.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "This deletes Mado thumbnails only. Your images are untouched."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "只删除 Mado 生成的缩略图，不会动你的图片。"}}}},
     "Thumbnail Size": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Thumbnail Size"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "缩略图大小"}}}},
     "Tool Background Opacity": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Tool Background Opacity"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "工具背景不透明度"}}}},
     "Thumbnails": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Thumbnails"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "缩略图"}}}},
     "Updates": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Updates"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "更新"}}}},
     "Version": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Version"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "版本"}}}},
     "When off, tools hide after inactivity. Move the pointer to an edge or press Tab to show them.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "When off, tools hide after inactivity. Move the pointer to an edge or press Tab to show them."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "关闭时工具在不操作后自动隐藏，鼠标移到边缘或按 Tab 唤回。"}}}},
-    "picsee contacts GitHub only to check for updates and sends no system information.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "picsee contacts GitHub only to check for updates and sends no system information."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "picsee 只在检查更新时访问 GitHub，不发送系统信息。"}}}},
-    "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License).": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "picsee 以 MIT 许可发布\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）"}}}},
+    "Mado contacts GitHub only to check for updates and sends no system information.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Mado contacts GitHub only to check for updates and sends no system information."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "Mado 只在检查更新时访问 GitHub，不发送系统信息。"}}}},
+    "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License).": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "Mado 以 MIT 许可发布\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）"}}}},
     "External Disk Is Not Connected": {
       "extractionState": "manual",
       "localizations": {
@@ -157,36 +157,36 @@
         }
       }
     },
-    "picsee can’t read “%@” right now. Choose this folder again, or choose another folder to continue.": {
+    "Mado can’t read “%@” right now. Choose this folder again, or choose another folder to continue.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "picsee can’t read “%@” right now. Choose this folder again, or choose another folder to continue."
+            "value": "Mado can’t read “%@” right now. Choose this folder again, or choose another folder to continue."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "picsee 现在读不到“%@”。重新选择这个文件夹，或换一个文件夹继续。"
+            "value": "Mado 现在读不到“%@”。重新选择这个文件夹，或换一个文件夹继续。"
           }
         }
       }
     },
-    "“%@” is on an external disk.\nConnect the disk and picsee will verify access before restoring your place.": {
+    "“%@” is on an external disk.\nConnect the disk and Mado will verify access before restoring your place.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "“%@” is on an external disk.\nConnect the disk and picsee will verify access before restoring your place."
+            "value": "“%@” is on an external disk.\nConnect the disk and Mado will verify access before restoring your place."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "“%@”在外接磁盘上。\n连接磁盘后，picsee 会重新确认访问权限，然后自动恢复。"
+            "value": "“%@”在外接磁盘上。\n连接磁盘后，Mado 会重新确认访问权限，然后自动恢复。"
           }
         }
       }
@@ -1693,36 +1693,36 @@
         }
       }
     },
-    "About Picsee": {
+    "About Mado": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About Picsee"
+            "value": "About Mado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关于 Picsee"
+            "value": "关于 Mado"
           }
         }
       }
     },
-    "Hide Picsee": {
+    "Hide Mado": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hide Picsee"
+            "value": "Hide Mado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "隐藏 Picsee"
+            "value": "隐藏 Mado"
           }
         }
       }
@@ -1761,19 +1761,19 @@
         }
       }
     },
-    "Quit Picsee": {
+    "Quit Mado": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quit Picsee"
+            "value": "Quit Mado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "退出 Picsee"
+            "value": "退出 Mado"
           }
         }
       }

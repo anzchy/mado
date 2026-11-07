@@ -58,12 +58,12 @@ actor StatesPipeline: ImagePipeline {
     var failures = 0
     var opens = 0
     var hasImage: Bool { canvas?.hasImage == true }
-    func beginImageOpening() { canvas?.beginOpening(); window?.title = "Picsee" }
+    func beginImageOpening() { canvas?.beginOpening(); window?.title = "Mado" }
     func installImage(_ image: DecodedImage, fileURL: URL) {
         installs += 1; canvas?.install(image); window?.title = fileURL.lastPathComponent
     }
     func imageLoadFailed(_ error: any Error) {
-        failures += 1; canvas?.showFailure(); window?.title = "Picsee"
+        failures += 1; canvas?.showFailure(); window?.title = "Mado"
     }
     func performCanvas(_ command: CommandID, from entry: CommandEntry) { _ = canvas?.apply(command, from: entry) }
     func performCanvasZoom(_ command: CommandID, from entry: CommandEntry) -> Double? { canvas?.apply(command, from: entry) }

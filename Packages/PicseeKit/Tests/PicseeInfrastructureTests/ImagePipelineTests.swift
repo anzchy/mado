@@ -11,7 +11,7 @@ private struct ThreadProbeDecoder: ImageDecoding {
     func decode(_ request: ImageDecodeRequest) throws -> DecodedImage {
         if Thread.isMainThread { throw Failure.ranOnMainThread }
         guard let queue = OperationQueue.current,
-              queue.name == "io.github.anzchy.picsee.first-image-decode",
+              queue.name == "io.github.anzchy.mado.first-image-decode",
               queue.maxConcurrentOperationCount == 1 else { throw Failure.wrongExecutor }
         return try ImageIODecoder().decode(request)
     }

@@ -39,7 +39,7 @@ private final class RecentFolderStorage: @unchecked Sendable {
             return sessionRecent ?? []
         } catch {
             storeCorrupt = true
-            Logger(subsystem: "io.github.anzchy.picsee", category: "access").error("RecentStore kind=storeCorrupt")
+            Logger(subsystem: "io.github.anzchy.mado", category: "access").error("RecentStore kind=storeCorrupt")
             return (try? read(url.appendingPathExtension("recovered"))) ?? sessionRecent ?? []
         }
     }

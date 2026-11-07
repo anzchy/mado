@@ -1,5 +1,5 @@
 {
-  "expectedName": "Picsee",
+  "expectedName": "Mado",
   "knownNames": ["Picsee", "Mado"],
   "bundleIdTemplate": "io.github.anzchy.{slug}",
   "feedURLs": {

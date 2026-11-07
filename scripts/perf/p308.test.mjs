@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { cacheDirectory, launch, moveCacheAside, parseArgs, planCacheAside, quit } from './p308.mjs';
 
-const run = ['run', '--app', '/A/Picsee.app', '--fixture', '/F', '--tier', 'S2', '--cache-state', 'cold-app',
+const run = ['run', '--app', '/A/Mado.app', '--fixture', '/F', '--tier', 'S2', '--cache-state', 'cold-app',
   '--samples', '30', '--driver', 'drive.sh', '--out', '/R'];
 
 test('arguments: a complete run parses', () => {
@@ -35,13 +35,13 @@ test('arguments: refuses missing inputs, bad states and fewer than 30 samples', 
 });
 
 test('cache directory is the container thumbnail cache for the bundle', () => {
-  assert.equal(cacheDirectory('io.github.anzchy.picsee', '/Users/u'),
-    '/Users/u/Library/Containers/io.github.anzchy.picsee/Data/Library/Caches/Picsee/Thumbnails');
+  assert.equal(cacheDirectory('io.github.anzchy.mado', '/Users/u'),
+    '/Users/u/Library/Containers/io.github.anzchy.mado/Data/Library/Caches/Mado/Thumbnails');
   assert.throws(() => cacheDirectory('../evil', '/Users/u'));
 });
 
 test('cache aside: moves only the exact plain directory into a new target, never deletes', () => {
-  const cache = cacheDirectory('io.github.anzchy.picsee', '/Users/u');
+  const cache = cacheDirectory('io.github.anzchy.mado', '/Users/u');
   const fs = (kind, targetExists = false) => ({
     existsSync: () => targetExists,
     lstatSync: (p) => {
@@ -51,7 +51,7 @@ test('cache aside: moves only the exact plain directory into a new target, never
     },
     realpathSync: (p) => p,
   });
-  const options = (kind, exists) => ({ bundleID: 'io.github.anzchy.picsee', home: '/Users/u', fs: fs(kind, exists) });
+  const options = (kind, exists) => ({ bundleID: 'io.github.anzchy.mado', home: '/Users/u', fs: fs(kind, exists) });
   assert.deepEqual(planCacheAside(cache, '/R', 7, options('dir')), { action: 'move', from: cache, to: '/R/cache-aside/007' });
   assert.equal(planCacheAside(cache, '/R', 7, options('missing')).action, 'none');
   assert.equal(planCacheAside(cache, '/R', 7, options('link')).action, 'refuse');
@@ -63,7 +63,7 @@ test('cache aside: moves only the exact plain directory into a new target, never
 
 // ---- fix round 1: real filesystem trees and real child processes (#146 H1–H3, M1) ----
 
-const BUNDLE = 'io.github.anzchy.picsee';
+const BUNDLE = 'io.github.anzchy.mado';
 function tree() {
   const home = mkdtempSync(path.join(tmpdir(), 'p308-home-'));
   const cache = cacheDirectory(BUNDLE, home);
@@ -90,7 +90,7 @@ test('cache aside (real tree): a symlinked ancestor anywhere below the container
     const plan = planCacheAside(t.cache, t.out, 1, { bundleID: BUNDLE, home: t.home });
     assert.equal(plan.action, 'refuse');
     assert.match(plan.reason, /symlink/);
-    assert.match(plan.reason, /Caches\/Picsee/);
+    assert.match(plan.reason, /Caches\/Mado/);
     const run = { cache: t.cache, bundleID: BUNDLE, cacheMoves: [] };
     assert.throws(() => moveCacheAside(t.out, run, 1, { home: t.home }), /cold cache refused: .*symlink/);
     assert.equal(readFileSync(path.join(foreign, 'Thumbnails', 'keep'), 'utf8'), 'not picsee', 'the foreign directory stays put');
@@ -167,15 +167,15 @@ test('cache aside: refuses when the resolved cache leaves the real container', (
 /** A fake bundle whose executable is a shell loop that exits on SIGTERM (or at once, for `exits`). */
 function fakeApp(kind = 'stays') {
   const root = mkdtempSync(path.join(tmpdir(), 'p308-app-'));
-  const app = path.join(root, 'Picsee.app');
-  const bin = path.join(app, 'Contents/MacOS/Picsee');
+  const app = path.join(root, 'Mado.app');
+  const bin = path.join(app, 'Contents/MacOS/Mado');
   mkdirSync(path.dirname(bin), { recursive: true });
   writeFileSync(bin, kind === 'exits' ? '#!/bin/sh\nexit 3\n' : "#!/bin/sh\ntrap 'exit 0' TERM\nwhile :; do sleep 0.05; done\n", { mode: 0o755 });
   return { app, root };
 }
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
-test('launch: owns exactly the child it spawned, even when another Picsee appears meanwhile', async () => {
+test('launch: owns exactly the child it spawned, even when another Mado appears meanwhile', async () => {
   const { app, root } = fakeApp();
   const run = { owned: [] };
   let calls = 0;
@@ -193,12 +193,12 @@ test('launch: owns exactly the child it spawned, even when another Picsee appear
   } finally { if (alive(record.pid)) process.kill(record.pid, 'SIGKILL'); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('launch: refuses while another Picsee runs and spawns nothing', async () => {
+test('launch: refuses while another Mado runs and spawns nothing', async () => {
   const { app, root } = fakeApp();
   let spawned = false;
   const run = { owned: [] };
   try {
-    await assert.rejects(launch(app, run, { picseePIDs: () => [4242], spawn: () => { spawned = true; }, sleep: async () => {}, readyMs: 0 }), /another Picsee is running \(pid 4242\)/);
+    await assert.rejects(launch(app, run, { picseePIDs: () => [4242], spawn: () => { spawned = true; }, sleep: async () => {}, readyMs: 0 }), /another Mado is running \(pid 4242\)/);
     assert.equal(spawned, false);
     assert.deepEqual(run.owned, []);
   } finally { rmSync(root, { recursive: true, force: true }); }

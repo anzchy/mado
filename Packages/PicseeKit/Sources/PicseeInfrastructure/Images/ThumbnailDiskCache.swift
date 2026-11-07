@@ -71,10 +71,10 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
     /// The last aggregate, reused for `indexScanInterval` so a visible panel doesn't scan the index every second.
     private var lastIndexScan: (at: TimeInterval, entries: Int, bytes: Int64)?
     static let indexScanInterval: TimeInterval = 10
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "thumbnail-cache")
+    private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "thumbnail-cache")
 
     public init(directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Picsee/Thumbnails", isDirectory: true)) {
+        .appendingPathComponent("Mado/Thumbnails", isDirectory: true)) {
         self.directory = directory
         self.highWaterBytes = Self.defaultHighWaterBytes
         self.lowWaterBytes = Self.defaultLowWaterBytes
@@ -853,7 +853,7 @@ private final class PayloadLeaseRegistry: @unchecked Sendable {
     private var pendingDeletion = Set<String>()
     private var failedDeletions: [String: String] = [:]
     private var drainWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "thumbnail-cache")
+    private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "thumbnail-cache")
 
     func acquire(_ path: String) -> Bool {
         lock.lock()

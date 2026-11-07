@@ -94,7 +94,7 @@ actor InputPipeline: ImagePipeline {
     var notices: [ViewerInputNotice] = []
     var folders: [URL] = []
     var openings = 0
-    var title = "Picsee"
+    var title = "Mado"
     var retry: ViewerRetryIntent?
     var hasImage = false
     var forward = true
@@ -118,10 +118,10 @@ actor InputPipeline: ImagePipeline {
     }
     func showInputNotice(_ notice: ViewerInputNotice) { notices.append(notice) }
     func promptForInputFolder(_ folder: URL) { folders.append(folder) }
-    func beginImageOpening() { openings += 1; hasImage = false; title = "Picsee" }
+    func beginImageOpening() { openings += 1; hasImage = false; title = "Mado" }
     func installImage(_ image: DecodedImage, fileURL: URL) { hasImage = true; title = fileURL.lastPathComponent }
     func imageLoadFailed(_ error: any Error) {
-        hasImage = false; title = "Picsee"
+        hasImage = false; title = "Mado"
         _ = session.dismissCancelledImageFailure(error)
     }
     func performCanvas(_ command: CommandID, from entry: CommandEntry) { }

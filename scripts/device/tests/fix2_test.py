@@ -25,10 +25,10 @@ class RoundTwo(unittest.TestCase):
         self.run.mkdir()
 
     def test_enospc_prints_all_verdicts_before_write_and_retires_old_report(self):
-        data = dict(expectedSHA='abcdefg', sha='abcdefg', bundleID='io.github.anzchy.picsee',
+        data = dict(expectedSHA='abcdefg', sha='abcdefg', bundleID='io.github.anzchy.mado',
                     team='GRT84NAK4T', signatureValid=True, sandbox=True, processMatches=True,
-                    fresh=True, alone=True, windows=[dict(title='Picsee')],
-                    log='Picsee launch git=abcdefg', machineMatches=True, fixturesIntact=True)
+                    fresh=True, alone=True, windows=[dict(title='Mado')],
+                    log='Mado launch git=abcdefg', machineMatches=True, fixturesIntact=True)
         old = self.run / 'doctor.txt'
         old.write_text('PASS stale previous report\n')
         observed_line_counts = []
@@ -41,7 +41,7 @@ class RoundTwo(unittest.TestCase):
         lines = output.getvalue().splitlines()
         self.assertEqual(result, 1)
         expected = ['PASS ' + check for check in d.CHECKS]
-        expected[d.CHECKS.index('window')] = 'PASS window — title=Picsee'
+        expected[d.CHECKS.index('window')] = 'PASS window — title=Mado'
         self.assertEqual(lines[:12], expected)
         self.assertEqual(len(lines), 13)
         self.assertEqual(observed_line_counts, [12])
@@ -55,7 +55,7 @@ class RoundTwo(unittest.TestCase):
             with self.subTest(mode=mode):
                 run = self.run / mode
                 run.mkdir()
-                app = self.root / '.build' / ('device-' + run.name) / 'Build/Products/Debug/Picsee.app'
+                app = self.root / '.build' / ('device-' + run.name) / 'Build/Products/Debug/Mado.app'
                 plist = app / 'Contents/Info.plist'
                 calls = []
                 def fake_build(argv, **kwargs):
@@ -104,7 +104,7 @@ class RoundTwo(unittest.TestCase):
     def test_launch_preserves_original_start_on_reused_run(self):
         (self.run/'start.txt').write_text('original timestamp')
         (self.run/'retired').write_text('retired')
-        (self.run/'bundle.path').write_text(str(self.root/'Picsee.app'))
+        (self.run/'bundle.path').write_text(str(self.root/'Mado.app'))
         (self.run/'build.json').write_text('{"sha":"abcdefg"}')
         with patch.object(d,'running',return_value=[]), patch.object(d,'checked') as checked:
             with self.assertRaisesRegex(RuntimeError, 'ownership record'):

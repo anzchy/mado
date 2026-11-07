@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return Task.detached { try AccessServices(buildSHA: sha) }
         #endif
     }()
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "lifecycle")
+    private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "lifecycle")
 
     #if DEBUG
     private let probeHooks: AppDelegateProbeHooks?
@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let sha = Bundle.main.object(forInfoDictionaryKey: "PicseeGitSHA") as? String ?? "unknown"
-        logger.notice("Picsee launch git=\(sha, privacy: .public)")
+        logger.notice("Mado launch git=\(sha, privacy: .public)")
         #if DEBUG
         if let probeHooks {
             if AccessProbeRunner.runIfRequested(

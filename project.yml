@@ -1,4 +1,4 @@
-name: Picsee
+name: Mado
 options:
   deploymentTarget:
     macOS: "14.0"
@@ -23,7 +23,7 @@ targets:
     sources:
       - path: App
         excludes:
-          - Resources/Picsee.entitlements
+          - Resources/Mado.entitlements
     dependencies:
       - package: PicseeKit
         product: PicseeCore
@@ -36,13 +36,13 @@ targets:
       - package: Sparkle
     settings:
       base:
-        PRODUCT_NAME: Picsee
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.picsee
+        PRODUCT_NAME: Mado
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado
         MARKETING_VERSION: 0.0.1
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: App/Info.plist
-        CODE_SIGN_ENTITLEMENTS: App/Resources/Picsee.entitlements
+        CODE_SIGN_ENTITLEMENTS: App/Resources/Mado.entitlements
         # Git metadata lives outside a linked worktree; only this target's build script is unsandboxed.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -71,7 +71,6 @@ targets:
       - path: App
         excludes:
           - PicseeApp.swift
-          - Updates/SparkleUpdatePort.swift
           - Info.plist
           - Resources
       - path: AppTests
@@ -84,10 +83,11 @@ targets:
         product: PicseeInfrastructure
       - package: PicseeKit
         product: PicseeMacUI
+      - package: Sparkle
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.picsee.tests
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
         CODE_SIGNING_ALLOWED: NO
   PicseeUITests:
     type: bundle.ui-testing
@@ -105,10 +105,10 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.picsee.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.uitests
         TEST_TARGET_NAME: PicseeApp
 schemes:
-  Picsee:
+  Mado:
     build:
       targets:
         PicseeApp: all
@@ -117,7 +117,7 @@ schemes:
         - PicseeAppTests
     run:
       config: Debug
-  PicseeFixtureUI:
+  MadoFixtureUI:
     build:
       targets:
         PicseeApp: all

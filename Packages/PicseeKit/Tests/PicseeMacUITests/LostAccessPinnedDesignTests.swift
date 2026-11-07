@@ -19,11 +19,11 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
     var text: LostAccessStateText {
         if chinese {
             return .init(title: disk ? "外接磁盘“T7”未连接" : "无法访问此文件夹",
-                detail: disk ? "“待整理的旅行照片”在外接磁盘上。\n连接磁盘后，picsee 会重新确认访问权限，然后自动恢复。" : "picsee 现在读不到“待整理的旅行照片”。重新选择这个文件夹，或换一个文件夹继续。",
+                detail: disk ? "“待整理的旅行照片”在外接磁盘上。\n连接磁盘后，Mado 会重新确认访问权限，然后自动恢复。" : "Mado 现在读不到“待整理的旅行照片”。重新选择这个文件夹，或换一个文件夹继续。",
                 waiting: "等待磁盘连接…", reselect: "重新选择文件夹…", chooseOther: "选择其他文件夹…")
         }
         return .init(title: disk ? "External Disk “T7” Is Not Connected" : "Unable to Access This Folder",
-            detail: disk ? "“Travel photos to organize” is on an external disk.\nConnect the disk and picsee will verify access before restoring your place." : "picsee can’t read “Travel photos to organize” right now. Choose this folder again, or choose another folder to continue.",
+            detail: disk ? "“Travel photos to organize” is on an external disk.\nConnect the disk and Mado will verify access before restoring your place." : "Mado can’t read “Travel photos to organize” right now. Choose this folder again, or choose another folder to continue.",
             waiting: "Waiting for the disk…", reselect: "Choose Folder Again…", chooseOther: "Choose Another Folder…")
     }
 }

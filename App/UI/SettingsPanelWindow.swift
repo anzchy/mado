@@ -208,7 +208,7 @@ enum SettingsSection: String, CaseIterable {
         hint.frame = NSRect(x: 162, y: 310, width: 390, height: 36)
         pane.addSubview(hint)
         rowLabel(String(localized: "Language"), y: 275, in: pane)
-        let language = label(String(localized: "Follows the system language (Chinese / English). Set a language for picsee in System Settings → General → Language & Region."), role: "uiSmall", muted: true)
+        let language = label(String(localized: "Follows the system language (Chinese / English). Set a language for Mado in System Settings → General → Language & Region."), role: "uiSmall", muted: true)
         language.frame = NSRect(x: 162, y: 232, width: 390, height: 67)
         language.setAccessibilityIdentifier("settings.language-note")
         pane.addSubview(language)
@@ -326,7 +326,7 @@ enum SettingsSection: String, CaseIterable {
         cacheClear.frame = NSRect(x: 162, y: 353, width: cacheClear.intrinsicContentSize.width, height: 26)
         cacheClear.setAccessibilityIdentifier("settings.cache.clear")
         pane.addSubview(cacheClear)
-        let hint = label(String(localized: "Only thumbnails created by picsee are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing."), role: "uiSmall", muted: true)
+        let hint = label(String(localized: "Only thumbnails created by Mado are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing."), role: "uiSmall", muted: true)
         hint.frame = NSRect(x: 162, y: 302, width: 390, height: 45)
         pane.addSubview(hint)
         cacheDiagnostic = label("", role: "uiSmall", muted: true)
@@ -362,7 +362,7 @@ enum SettingsSection: String, CaseIterable {
         updateAutomatic.frame = NSRect(x: 162, y: 352, width: updateAutomatic.intrinsicContentSize.width, height: 24)
         configure(updateAutomatic, entry: .settingsUpdatesAutomaticCheck, id: "settings.update.automatic", title: updateAutomatic.title)
         pane.addSubview(updateAutomatic)
-        let privacy = label(String(localized: "picsee contacts GitHub only to check for updates and sends no system information."), role: "uiSmall", muted: true)
+        let privacy = label(String(localized: "Mado contacts GitHub only to check for updates and sends no system information."), role: "uiSmall", muted: true)
         privacy.frame = NSRect(x: 162, y: 310, width: 390, height: 36)
         pane.addSubview(privacy)
         updateCheck = NSButton(title: String(localized: "Check Now"), target: self, action: #selector(checkForUpdates(_:)))
@@ -409,7 +409,7 @@ enum SettingsSection: String, CaseIterable {
         let icon = NSImageView(frame: NSRect(x: 26, y: 362, width: 64, height: 64))
         icon.image = NSImage(named: NSImage.applicationIconName)
         pane.addSubview(icon)
-        let name = label("picsee", role: "title", bold: true)
+        let name = label("Mado", role: "title", bold: true)
         name.frame = NSRect(x: 108, y: 406, width: 380, height: 20)
         pane.addSubview(name)
         let info = aboutInfoDictionary ?? Bundle.main.infoDictionary ?? [:]
@@ -418,7 +418,7 @@ enum SettingsSection: String, CaseIterable {
         version.textColor = DesignColor.textSecondary.nsColor
         version.frame = NSRect(x: 108, y: 383, width: 390, height: 20)
         pane.addSubview(version)
-        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. picsee collects no data and uploads no images; the sandbox reads only folders you authorize."), role: "uiSmall", muted: true)
+        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."), role: "uiSmall", muted: true)
         privacy.textColor = DesignColor.textSecondary.nsColor
         privacy.frame = NSRect(x: 108, y: 319, width: 446, height: 54)
         pane.addSubview(privacy)
@@ -443,7 +443,7 @@ enum SettingsSection: String, CaseIterable {
             pane.addSubview(button)
             linkX += width + 14
         }
-        let licences = label(aboutLocalizedString("picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."), role: "uiSmall", muted: true)
+        let licences = label(aboutLocalizedString("Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."), role: "uiSmall", muted: true)
         licences.textColor = DesignColor.textSecondary.nsColor
         licences.frame = NSRect(x: 108, y: 219, width: 446, height: 52)
         pane.addSubview(licences)
@@ -474,7 +474,7 @@ enum SettingsSection: String, CaseIterable {
     private static func presentClearConfirmation(window: NSWindow, completion: @escaping (Bool) -> Void) {
         let alert = NSAlert()
         alert.messageText = String(localized: "Clear Thumbnail Cache?")
-        alert.informativeText = String(localized: "This deletes picsee thumbnails only. Your images are untouched.")
+        alert.informativeText = String(localized: "This deletes Mado thumbnails only. Your images are untouched.")
         alert.addButton(withTitle: String(localized: "Clear Cache"))
         alert.addButton(withTitle: String(localized: "Cancel"))
         alert.beginSheetModal(for: window) { response in completion(response == .alertFirstButtonReturn) }

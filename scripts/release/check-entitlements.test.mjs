@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { checkEntitlements, parsePlistXml } from "./check-entitlements.mjs";
 
-const bundleId = "io.github.anzchy.picsee";
+const bundleId = "io.github.anzchy.mado";
 
 function entitlementsXml({ extra = "", sandbox = "<true/>", omit = [], mach = [`${bundleId}-spks`, `${bundleId}-spki`] } = {}) {
   const flags = {

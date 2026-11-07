@@ -16,11 +16,11 @@ private struct ExpiredDesignSample: Sendable {
     var text: LostAccessStateText {
         if chinese {
             return .init(title: expired ? "授权失效" : "无法访问此文件夹",
-                detail: expired ? "访问权限已失效。重新选择这个文件夹即可恢复，picsee 会回到你刚才的位置。" : "picsee 现在读不到“待整理的旅行照片”。重新选择这个文件夹，或换一个文件夹继续。",
+                detail: expired ? "访问权限已失效。重新选择这个文件夹即可恢复，Mado 会回到你刚才的位置。" : "Mado 现在读不到“待整理的旅行照片”。重新选择这个文件夹，或换一个文件夹继续。",
                 waiting: "等待磁盘连接…", reselect: "重新选择文件夹…", chooseOther: "选择其他文件夹…")
         }
         return .init(title: expired ? "Access Has Expired" : "Unable to Access This Folder",
-            detail: expired ? "Access has expired. Choose this folder again to restore access; picsee will return to where you left off." : "picsee can’t read “Travel photos to organize” right now. Choose this folder again, or choose another folder to continue.",
+            detail: expired ? "Access has expired. Choose this folder again to restore access; Mado will return to where you left off." : "Mado can’t read “Travel photos to organize” right now. Choose this folder again, or choose another folder to continue.",
             waiting: "Waiting for the disk…", reselect: "Choose Folder Again…", chooseOther: "Choose Another Folder…")
     }
 }

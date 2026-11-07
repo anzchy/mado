@@ -19,7 +19,7 @@ import PicseeMacUI
         let row = try labelFrame(text)
         #expect(near(row.minX, 26) && near(row.width, 120) && near(row.minY, y), "\(text) \(row)")
     }
-    let hint = try labelFrame(String(localized: "picsee contacts GitHub only to check for updates and sends no system information."))
+    let hint = try labelFrame(String(localized: "Mado contacts GitHub only to check for updates and sends no system information."))
     #expect(near(hint.minX, 162) && near(hint.minY, 310) && near(hint.width, 390), "hint \(hint)")
     let pinned: [(String, CGFloat)] = [
         ("settings.update.version", 397), ("settings.update.automatic", 352),
@@ -66,7 +66,7 @@ import PicseeMacUI
             let text = try value(key, language)
             #expect(height(text, role: "ui", width: 120) <= 24, "\(language) row label \(key)")
         }
-        let hint = try value("picsee contacts GitHub only to check for updates and sends no system information.", language)
+        let hint = try value("Mado contacts GitHub only to check for updates and sends no system information.", language)
         #expect(height(hint, role: "uiSmall", width: 390) <= 36 + 2, "\(language) privacy hint")
         let last = String(format: try value("Last checked: %@", language), sample(locale))
         #expect(height(last, role: "uiSmall", width: 390) <= 24 + 2, "\(language) \(last)")
@@ -87,7 +87,7 @@ import PicseeMacUI
     let last = try #require(issue220View("settings.update.last-checked", in: panel) as? NSTextField)
     let pane = try #require(issue220View("settings.pane.update", in: panel))
     let hint = try #require(pane.subviews.compactMap { $0 as? NSTextField }.first {
-        $0.stringValue == String(localized: "picsee contacts GitHub only to check for updates and sends no system information.")
+        $0.stringValue == String(localized: "Mado contacts GitHub only to check for updates and sends no system information.")
     })
     #expect(version.textColor == .labelColor)
     #expect(last.textColor == .secondaryLabelColor)

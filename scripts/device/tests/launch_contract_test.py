@@ -23,10 +23,10 @@ class LaunchContractTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.run = Path(self.temp.name)
-        self.app = (self.run / 'Picsee.app').resolve()
+        self.app = (self.run / 'Mado.app').resolve()
         (self.run / 'bundle.path').write_text(str(self.app) + '\n')
         (self.run / 'build.json').write_text('{"sha":"abcdefg"}\n')
-        self.record = dict(pid=4242, executable=str(self.app / 'Contents/MacOS/Picsee'), birth=BIRTH)
+        self.record = dict(pid=4242, executable=str(self.app / 'Contents/MacOS/Mado'), birth=BIRTH)
 
     def launch_mocks(self, runs, snapshots):
         def fake_open(argv, **_):
@@ -35,8 +35,8 @@ class LaunchContractTests(unittest.TestCase):
         return (patch.object(d, 'running', side_effect=runs),
                 patch.object(d, 'process_snapshot', side_effect=snapshots),
                 patch.object(d, 'checked', return_value='12345'),
-                patch.object(d, 'windows', return_value=[{'title': 'Picsee'}]),
-                patch.object(d, 'logs', return_value='Picsee launch git=abcdefg'),
+                patch.object(d, 'windows', return_value=[{'title': 'Mado'}]),
+                patch.object(d, 'logs', return_value='Mado launch git=abcdefg'),
                 patch.object(d.subprocess, 'Popen', side_effect=fake_open))
 
     def test_records_new_launchservices_pid_executable_and_birth(self):
@@ -52,7 +52,7 @@ class LaunchContractTests(unittest.TestCase):
         with patch.object(d, 'running', return_value=[3000]), \
                 patch.object(d.subprocess, 'Popen') as opened, patch.object(d.os, 'kill') as kill, \
                 patch.object(d.time, 'sleep', side_effect=AssertionError('must not wait')):
-            with self.assertRaisesRegex(RuntimeError, 'another Picsee'):
+            with self.assertRaisesRegex(RuntimeError, 'another Mado'):
                 d.launch(self.run)
         self.assertFalse((self.run / 'process.json').exists())
         opened.assert_not_called()
@@ -138,8 +138,8 @@ class LaunchContractTests(unittest.TestCase):
                 patch.object(d, 'process_snapshot', return_value=self.record), \
                 patch.object(d, 'executable', return_value=Path(self.record['executable'])), \
                 patch.object(d, 'checked', return_value='12345'), \
-                patch.object(d, 'windows', return_value=[{'title': 'Picsee'}]), \
-                patch.object(d, 'logs', return_value='Picsee launch git=abcdefg'), \
+                patch.object(d, 'windows', return_value=[{'title': 'Mado'}]), \
+                patch.object(d, 'logs', return_value='Mado launch git=abcdefg'), \
                 patch.object(d.subprocess, 'Popen', side_effect=fake_open), \
                 patch.object(d.time, 'time', return_value=1793073600.0):
             d.launch(self.run)

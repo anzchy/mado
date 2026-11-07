@@ -63,15 +63,14 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     }
 }
 
-// SparkleUpdatePort is excluded from this bundle (it needs the Sparkle framework), so this source guard pins
-// the two links the fake cannot: the controller is built stopped, and start() goes through startUpdater(), which
-// keeps Sparkle's own start-failure alert.
+// The compiled adapter tests cover feed availability. This supplemental source guard pins native forwarding:
+// the controller is built stopped, and its start operation uses startUpdater() to preserve Sparkle's alert.
 @Test func issue359SparklePortIsBuiltStoppedAndStartsThroughStartUpdater() throws {
     let source = try String(contentsOf: repository.appendingPathComponent("App/Updates/SparkleUpdatePort.swift"),
                             encoding: .utf8)
     #expect(source.contains("startingUpdater: false"))
     #expect(!source.contains("startingUpdater: true"))
-    let start = try #require(source.range(of: "func start()"))
+    let start = try #require(source.range(of: "func startUpdater() {"))
     let next = try #require(source.range(of: "func ", range: start.upperBound..<source.endIndex))
     let body = source[start.upperBound..<next.lowerBound]
     #expect(body.contains("controller.startUpdater()"))

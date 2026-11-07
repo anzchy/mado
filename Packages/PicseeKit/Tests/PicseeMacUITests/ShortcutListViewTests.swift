@@ -296,8 +296,8 @@ private struct Issue219PaintedText {
             let menu = issue219Menu()
             if language == .simplifiedChinese {
                 let titles = [
-                    "Settings…": "设置…", "Hide Picsee": "隐藏 Picsee", "Hide Others": "隐藏其他",
-                    "Quit Picsee": "退出 Picsee", "Open…": "打开…", "Close": "关闭",
+                    "Settings…": "设置…", "Hide Mado": "隐藏 Mado", "Hide Others": "隐藏其他",
+                    "Quit Mado": "退出 Mado", "Open…": "打开…", "Close": "关闭",
                     "Search current folder": "搜索当前文件夹", "Hide sidebar": "隐藏侧栏",
                     "Enter Full Screen": "进入全屏", "Minimize": "最小化",
                 ]

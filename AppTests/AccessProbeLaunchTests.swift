@@ -7,16 +7,16 @@ import Testing
 struct AccessProbeLaunchTests {
     @Test func runsOnlyWithExplicitLaunchArgument() {
         var runCount = 0
-        let normal = AccessProbeRunner.runIfRequested(arguments: ["Picsee"], runProbe: {
+        let normal = AccessProbeRunner.runIfRequested(arguments: ["Mado"], runProbe: {
             runCount += 1
         }, terminate: {})
         let similar = AccessProbeRunner.runIfRequested(
-            arguments: ["Picsee", "-PicseeAccessProbeExtra"],
+            arguments: ["Mado", "-PicseeAccessProbeExtra"],
             runProbe: { runCount += 1 },
             terminate: {}
         )
         let requested = AccessProbeRunner.runIfRequested(
-            arguments: ["Picsee", "-PicseeAccessProbe"],
+            arguments: ["Mado", "-PicseeAccessProbe"],
             runProbe: { runCount += 1 },
             terminate: {}
         )
@@ -33,7 +33,7 @@ struct AccessProbeLaunchTests {
         var accessServicesConstructionCount = 0
         var events: [AppDelegateProbeHooks.ProductEvent] = []
         let delegate = AppDelegate(probeHooks: AppDelegateProbeHooks(
-            arguments: ["Picsee", "-PicseeAccessProbe"],
+            arguments: ["Mado", "-PicseeAccessProbe"],
             runProbe: { probeRunCount += 1 },
             terminate: { terminationCount += 1 },
             makeAccessServices: {

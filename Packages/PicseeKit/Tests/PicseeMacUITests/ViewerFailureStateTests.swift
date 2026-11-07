@@ -33,7 +33,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     #expect(scene.session.imageStatus == .failed(.corruptImage, "B.jpg"))
     #expect(scene.session.imageLoader.presented == nil)
     #expect(!scene.canvas.hasImage)
-    #expect(scene.window.title == "Picsee")
+    #expect(scene.window.title == "Mado")
     for enabled in [false, true, false] {
         scene.host.canNavigate = enabled
         scene.state.refresh()
