@@ -502,5 +502,21 @@
       "content"
     ],
     "reason": "#554: the anzchy/picsee repository name stays approved beside anzchy/mado until the GitHub rename; remove this exception after the rename."
+  },
+  {
+    "path": "scripts/release/appcast.test.mjs",
+    "pattern": "(?<=/)Picsee(?=\\|picsee/)|(?<=Picsee\\|)picsee(?=/)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Frozen appcast isolation oracle rejects historical names in the empty Mado feed; no live application identity is exempt."
+  },
+  {
+    "path": "scripts/release/workflow-steps.test.mjs",
+    "pattern": "(?<=/)Picsee(?=-0/)|(?<=preceding )Picsee(?= history)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Frozen historical release isolation and retained build-history oracles name the old DMG and preceding release explicitly; no production identity is exempt."
   }
 ]

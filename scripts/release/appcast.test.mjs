@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { emptyAppcast, updateAppcast } from "./appcast.mjs";
 
 const fixture = readFileSync(new URL("./fixtures/appcast-one-item.xml", import.meta.url), "utf8");
@@ -8,7 +9,7 @@ const signature = Buffer.alloc(64, 7).toString("base64");
 const item = {
   version: "312",
   shortVersion: "0.0.1",
-  url: "https://github.com/anzchy/picsee/releases/download/v0.0.1-rc.2/Picsee-0.0.1.dmg",
+  url: "https://github.com/anzchy/mado/releases/download/mado-v0.0.1-rc.2/Mado-0.0.1.dmg",
   length: 9123456,
   edSignature: signature,
   minimumSystemVersion: "14.0",
@@ -22,7 +23,7 @@ test("the empty appcast is a Sparkle RSS channel with no items", () => {
   const xml = emptyAppcast();
   assert.match(xml, /^<\?xml version="1\.0" encoding="utf-8"\?>/);
   assert.match(xml, /xmlns:sparkle="http:\/\/www\.andymatuschak\.org\/xml-namespaces\/sparkle"/);
-  assert.match(xml, /<channel>[\s\S]*<title>picsee<\/title>[\s\S]*<\/channel>/);
+  assert.match(xml, /<channel>[\s\S]*<title>Mado<\/title>[\s\S]*<\/channel>/);
   assert.deepEqual(items(xml), []);
 });
 
@@ -30,7 +31,7 @@ test("an item is added with every Sparkle field the update needs", () => {
   const xml = updateAppcast(emptyAppcast(), item);
   assert.deepEqual(versions(xml), ["312"]);
   const [entry] = items(xml);
-  assert.match(entry, /<title>picsee 0\.0\.1 \(312\)<\/title>/);
+  assert.match(entry, /<title>Mado 0\.0\.1 \(312\)<\/title>/);
   assert.match(entry, /<pubDate>Fri, 30 Oct 2026 12:34:56 \+0000<\/pubDate>/);
   assert.match(entry, /<sparkle:shortVersionString>0\.0\.1<\/sparkle:shortVersionString>/);
   assert.match(entry, /<sparkle:minimumSystemVersion>14\.0<\/sparkle:minimumSystemVersion>/);
@@ -86,4 +87,15 @@ test("malformed input is refused rather than written", () => {
     assert.throws(() => updateAppcast(fixture, { ...item, ...patch }), pattern, JSON.stringify(patch));
   }
   assert.throws(() => updateAppcast("<rss></rss>", item), /channel/);
+});
+
+test("the historical appcast stays byte-identical and Mado starts with its own empty feed", () => {
+  const root = new URL("../../", import.meta.url);
+  const frozen = readFileSync(new URL("appcast.xml", root));
+  assert.equal(createHash("sha256").update(frozen).digest("hex"), "d729a9f2e51cbb91901a26369c3cebce95d38bbd0a8abaaa1b7557a2324343fc");
+  const path = new URL("appcast-mado.xml", root);
+  assert.ok(existsSync(path), "Mado feed must exist independently");
+  const mado = readFileSync(path, "utf8");
+  assert.equal(mado, emptyAppcast()); assert.deepEqual(items(mado), []);
+  assert.match(mado, /<title>Mado<\/title>/); assert.doesNotMatch(mado, /Picsee|picsee/);
 });

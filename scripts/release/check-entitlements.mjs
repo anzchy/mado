@@ -2,7 +2,7 @@
 /**
  * Check a signed Mado.app's entitlements against ADR-015's decided set.
  *
- *   node scripts/release/check-entitlements.mjs <Mado.app> --configuration release|debug
+ *   node scripts/release/check-entitlements.mjs <Mado.app> --configuration release|debug [--expect-bundle-id ID]
  *
  * Release: exactly sandbox, user-selected read-only, app-scope bookmarks, network.client (all true) and
  * Sparkle's mach-lookup exception with exactly `<bundle id>-spks` and `<bundle id>-spki`.
@@ -77,12 +77,13 @@ export function parsePlistXml(xml) {
 }
 
 /** Returns one message per violation; an empty list means the entitlements are exactly the decided set. */
-export function checkEntitlements(entitlements, { bundleId, configuration }) {
+export function checkEntitlements(entitlements, { bundleId, configuration, expectedBundleId }) {
   if (configuration !== "release" && configuration !== "debug") {
     throw new Error(`configuration must be release or debug, not ${configuration}`);
   }
   if (!bundleId) throw new Error("bundle identifier is required");
   const problems = [];
+  if (expectedBundleId && bundleId !== expectedBundleId) problems.push(`bundle identifier must be ${expectedBundleId}, found ${bundleId}`);
   const allowed = new Set([...FLAGS, MACH]);
   if (configuration === "debug" && GET_TASK_ALLOW in entitlements) {
     allowed.add(GET_TASK_ALLOW);
@@ -110,8 +111,10 @@ function main(argv) {
   const app = argv[0];
   const flag = argv.indexOf("--configuration");
   const configuration = flag >= 0 ? argv[flag + 1] : undefined;
-  if (!app || app.startsWith("--") || !configuration) {
-    process.stderr.write("usage: check-entitlements.mjs <Mado.app> --configuration release|debug\n");
+  const expectedFlag = argv.indexOf("--expect-bundle-id");
+  const expectedBundleId = expectedFlag >= 0 ? argv[expectedFlag + 1] : undefined;
+  if (!app || app.startsWith("--") || !configuration || (expectedFlag >= 0 && (!expectedBundleId || expectedBundleId.startsWith("--")))) {
+    process.stderr.write("usage: check-entitlements.mjs <Mado.app> --configuration release|debug [--expect-bundle-id ID]\n");
     return 2;
   }
   const xml = execFileSync("/usr/bin/codesign", ["-d", "--entitlements", "-", "--xml", app],
@@ -122,7 +125,7 @@ function main(argv) {
   for (const key of Object.keys(entitlements).sort()) {
     process.stdout.write(`${key} = ${JSON.stringify(entitlements[key])}\n`);
   }
-  const problems = checkEntitlements(entitlements, { bundleId, configuration });
+  const problems = checkEntitlements(entitlements, { bundleId, configuration, expectedBundleId });
   for (const problem of problems) process.stderr.write(`FAIL ${problem}\n`);
   if (problems.length) return 1;
   process.stdout.write(`PASS ${configuration} entitlements for ${bundleId}\n`);

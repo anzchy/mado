@@ -4,7 +4,7 @@
   "bundleIdTemplate": "io.github.anzchy.{slug}",
   "feedURLs": {
     "Picsee": "https://raw.githubusercontent.com/anzchy/picsee/main/appcast.xml",
-    "Mado": null
+    "Mado": "https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml"
   },
   "machSuffixes": ["-spks", "-spki"]
 }

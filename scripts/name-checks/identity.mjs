@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 // The templates are transcribed from project.yml, App/Info.plist and the app entitlements.
-// Per-name feed URLs preserve the frozen feed; null remains undecided until #552.
+// Per-name feed URLs keep the frozen historical feed separate from Mado updates.
 const source = JSON.parse(readFileSync(new URL('./identity.json', import.meta.url), 'utf8'));
 
 export function identityFor(expectedName = source.expectedName) {
@@ -41,7 +41,7 @@ export function forbiddenMatches(text, expectedName) {
   return matches.sort((a, b) => a.index - b.index);
 }
 
-/** Feed remains a decision for #552; observations never choose it. */
+/** Configured feeds are exact identity data; observations never choose them. */
 export function checkFeed(info, expectedName, { release = false, notes = [] } = {}) {
   const expected = identityFor(expectedName);
   const value = expected.info.SUFeedURL;

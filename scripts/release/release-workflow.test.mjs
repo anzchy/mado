@@ -23,9 +23,9 @@ const step = (pattern) => {
 };
 const index = (pattern) => steps().findIndex((entry) => pattern.test(entry.name));
 
-test("only the two v0.0.1 tag patterns trigger a release", () => {
+test("only the mado-v* tag pattern triggers a release", () => {
   const on = workflow.slice(workflow.indexOf("\non:\n") + 1, workflow.indexOf("\npermissions:"));
-  assert.match(on, /^on:\n  push:\n    tags:\n      - 'v0\.0\.1-rc\.\*'\n      - 'v0\.0\.1'\n$/);
+  assert.match(on, /^on:\n  push:\n    tags:\n      - 'mado-v\*'\n$/);
 });
 
 test("permissions are only contents and pull-requests write", () => {
@@ -118,7 +118,7 @@ test("entitlement and package checks run on the signed app before notarisation",
   const notarise = index(/notarise the app/i);
   assert.ok(index(/re-sign/i) < index(/entitlements/i) && index(/entitlements/i) < notarise);
   assert.ok(index(/re-sign/i) < index(/package contents/i) && index(/package contents/i) < notarise);
-  assert.match(step(/entitlements/i).text, /node scripts\/release\/check-entitlements\.mjs "\$APP" --configuration release/);
+  assert.match(step(/entitlements/i).text, /node scripts\/release\/check-entitlements\.mjs "\$APP" --configuration release --expect-bundle-id io\.github\.anzchy\.mado/);
   assert.match(step(/package contents/i).text,
     /node scripts\/release\/check-package\.mjs "\$APP" --require-sparkle-licence --expect-version "\$VERSION" --expect-build "\$BUILD"/);
 });
@@ -126,6 +126,11 @@ test("entitlement and package checks run on the signed app before notarisation",
 test("the DMG holds the stapled app and an Applications link, and is signed", () => {
   assert.ok(index(/notarise the app/i) < index(/dmg/i));
   const dmg = step(/build and sign the dmg/i).text;
+  assert.match(step(/build release/i).text, /-scheme Mado/);
+  assert.match(step(/build release/i).text, /Release\/Mado\.app/);
+  assert.match(dmg, /DMG="\$PWD\/\.build\/release\/Mado-\$VERSION\.dmg"/);
+  assert.match(dmg, /ditto "\$APP" "\$STAGE\/Mado\.app"/);
+  assert.match(dmg, /-volname "Mado \$VERSION"/);
   assert.match(dmg, /ln -s \/Applications/);
   assert.match(dmg, /hdiutil create /);
   assert.match(dmg, /codesign --force --sign "\$IDENTITY" --timestamp/);
@@ -189,4 +194,10 @@ test("the runbook counts the passwords in argv and names where each secret is un
     assert.ok(unsetLine.includes(`\`${name}\``), `${name} missing from: ${unsetLine}`);
     assert.match(workflow, new RegExp(`^\\s+unset( \\w+)* ${name}( |$)`, "m"), `the workflow never unsets ${name}`);
   }
+});
+
+test("the workflow never names the frozen appcast as a write or signing target", () => {
+  assert.doesNotMatch(workflow, /(?<![-\w])appcast\.xml/);
+  assert.match(step(/appcast/i).text, /node scripts\/release\/appcast\.mjs appcast-mado\.xml/);
+  assert.match(step(/appcast/i).text, /git add appcast-mado\.xml/);
 });

@@ -39,6 +39,8 @@
 	<true/>
 	<key>SUEnableSystemProfiling</key>
 	<false/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=</string>
 </dict>
