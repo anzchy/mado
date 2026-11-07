@@ -40,3 +40,24 @@ test('release package layout accepts only the Mado executable and refuses an und
  assert.equal(classifyPath('Contents/MacOS/Mado'),null); assert.notEqual(classifyPath('Contents/MacOS/Picsee'),null);
  assert.ok(checkInfo({}).some(p=>p.includes('SUFeedURL')&&p.includes('#552')));
 });
+
+test('ordinary checks reject frozen-feed scheme/slash variants and Mado Pages forms',()=>{
+ const frozen=identityFor('Picsee').info.SUFeedURL;
+ const forbidden=[frozen, frozen+'/', frozen.replace('https:', 'http:'), frozen.replace('https:', 'http:')+'/',
+  'http://anzchy.github.io/mado','https://anzchy.github.io/mado/',
+  'https://ANZCHY.github.io/mado/appcast.xml','https://anzchy.github.io/mado/nested/feed.xml'];
+ for(const feed of forbidden){
+  for(const release of [false,true]){
+   const notes=[];
+   const errors=checkBuiltProduct(input(feed),'Mado',{release,notes});
+   assert.ok(errors.some(error=>error.includes('forbidden')&&error.includes('SUFeedURL')&&error.includes('#552')),`${release} ${feed}: ${errors}`);
+   assert.deepEqual(notes,[]);
+  }
+ }
+ for(const feed of ['https://anzchy.github.io/mado-other/feed.xml','https://example.com/mado/feed.xml','https://anzchy.github.io/other/feed.xml']){
+  const notes=[];
+  assert.deepEqual(checkBuiltProduct(input(feed),'Mado',{notes}),[]);
+  assert.deepEqual(notes,[undecided]);
+  assert.deepEqual(checkBuiltProduct(input(feed),'Mado',{release:true}),[undecided]);
+ }
+});
