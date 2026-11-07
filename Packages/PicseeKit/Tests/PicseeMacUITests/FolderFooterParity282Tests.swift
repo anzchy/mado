@@ -13,7 +13,7 @@ import PicseeInfrastructure
     return nil
 }
 
-@Test @MainActor func issue282ReadingFooterShowsReadingStatusAndPreservesRealSidebarCount() throws {
+@Test @MainActor func issue282ReadingFooterShowsReadingStatusAndMasksRealSidebarCount() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -57,7 +57,9 @@ import PicseeInfrastructure
     let hint = try #require(issue282FooterView("grid.keyboard-hint", in: shell))
     #expect(hint.isHidden)
     let row = try #require(shell.folderTree.rows.first)
-    #expect(row.countLabel.stringValue == "20000")
+    #expect(row.countLabel.stringValue.isEmpty)
+    #expect(row.countLabel.isHidden)
+    #expect(row.accessibilityLabel() == folder.lastPathComponent)
 
     // Cancel Reading back to the grid restores the current name and the image count.
     presentation.showGrid(reading: false)
@@ -104,14 +106,14 @@ import PicseeInfrastructure
     try expectCount(nil)
     await Task.yield()
 
-    // A real count (including completed zero) survives reading toggles and tree rebuilds.
+    // Page 24 masks even a real count while Reading; terminal display retains the latest value.
     for count in [12, 0] {
         shell.updateFolderCount(count, for: folder)
         try expectCount(count)
         presentation.showGrid(reading: true)
-        try expectCount(count)
+        try expectCount(nil)
         shell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
-        try expectCount(count)
+        try expectCount(nil)
         presentation.showGrid(reading: false)
         try expectCount(count)
         await Task.yield()

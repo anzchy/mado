@@ -211,6 +211,17 @@ public struct GridSidebarFolder: Sendable, Equatable {
     private let addFolderBorder = CAShapeLayer()
     public private(set) var parent: GridSidebarFolder?
     private var currentFolder: GridSidebarFolder?
+    public var currentFolderURL: URL? { currentFolder?.url }
+    /// Page 24 masks the main-read owner even when another sidebar row is selected.
+    public var readingFolderURL: URL? {
+        didSet {
+            guard oldValue != readingFolderURL else { return }
+            // show() appends parent, current, then children in this same order.
+            for (folder, row) in zip([parent, currentFolder].compactMap { $0 } + children, rows) {
+                applyCount(folder.count, to: row)
+            }
+        }
+    }
     public var currentAccessLossCause: AccessLossCause? { currentFolder?.accessLossCause }
     public private(set) var children: [GridSidebarFolder] = []
     public override init(frame frameRect: NSRect) {
@@ -285,7 +296,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
         guide.isHidden = true
         needsLayout = true
     }
-    /// folder-loading.html: the folder being read shows `0` until its count is known.
+    /// Legacy presentation option; the Reading State keeps unknown counts absent.
     public var showsZeroForUnknownCurrent = false {
         didSet {
             guard let currentFolder, let row = rows.first(where: { $0.current }) else { return }
@@ -297,14 +308,17 @@ public struct GridSidebarFolder: Sendable, Equatable {
         didSet { if let row = rows.first(where: { $0.current }) { applyCount(currentFolder?.count, to: row) } }
     }
     private func applyCount(_ count: Int?, to row: GridSidebarFolderButton) {
-        if row.current && showsDashForCurrent { row.setUnreadCount() } else { row.setCount(shownCount(count, current: row.current)) }
+        if row.current && showsDashForCurrent { row.setUnreadCount() }
+        else { row.setCount(shownCount(count, for: row.folderURL, current: row.current)) }
+        row.needsLayout = true
     }
-    private func shownCount(_ count: Int?, current: Bool) -> Int? {
-        count ?? (current && showsZeroForUnknownCurrent ? 0 : nil)
+    private func shownCount(_ count: Int?, for folder: URL, current: Bool) -> Int? {
+        if folder.standardizedFileURL.path == readingFolderURL?.standardizedFileURL.path { return nil }
+        return count ?? (current && showsZeroForUnknownCurrent ? 0 : nil)
     }
     private func append(_ folder: GridSidebarFolder, depth: Int, current: Bool) {
         let row = GridSidebarFolderButton(folder: GridSidebarFolder(url: folder.url,
-            count: shownCount(folder.count, current: current), accessLossCause: folder.accessLossCause),
+            count: shownCount(folder.count, for: folder.url, current: current), accessLossCause: folder.accessLossCause),
             depth: depth, current: current)
         if depth > 0 && !current { row.countLabel.alphaValue = 0.8 }
         if current && showsDashForCurrent { row.setUnreadCount() }
