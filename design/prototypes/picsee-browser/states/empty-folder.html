@@ -25,6 +25,10 @@
    spacing before bounding the rows. Only the rows, not their header/action, scroll. */
 .recovery-state.has-recents{min-height:0;--compact-padding-top:8px;--compact-padding-bottom:16px;--compact-title-gap:10px;--compact-detail-gap:6px;--compact-recent-gap:12px;--compact-action-gap:12px}
 .recovery-scroll.has-recent-list{overflow:hidden}
+/* Owner #518: "scroll (Recommended)" also applies below the one-row minimum.
+   Reuse the page scroller when a compact header and one row cannot fit. */
+.recovery-scroll.has-recent-list.full-page-recents{overflow:auto;scroll-padding-bottom:40px}
+.full-page-recents .has-recents .recent-list{overflow:visible;flex:none}
 .has-recents>svg,.has-recents>h2,.has-recents>p,.has-recents>.mock-actions{flex:none}
 .has-recents .recent-folders{display:flex;flex-direction:column;flex:none;min-height:0}
 .has-recents .recent-folders[hidden]{display:none}
@@ -54,6 +58,7 @@
     function fitRecents() {
       const count = rows.children.length;
       recentBox.hidden = !count;
+      state.style.height = '';
       state.style.paddingTop = ''; state.style.paddingBottom = '';
       title.style.marginTop = ''; detail.style.marginTop = '';
       recentBox.style.marginTop = ''; actions.style.marginTop = '';
@@ -70,16 +75,25 @@
       const groupHeight = count ? 2 + recentBox.querySelector('.recent-heading').getBoundingClientRect().height + rowHeight : 0;
       const fixed = state.querySelector(':scope > svg').getBoundingClientRect().height
         + title.getBoundingClientRect().height + detail.getBoundingClientRect().height + actions.getBoundingClientRect().height;
+      const parent = state.parentElement, parentCss = getComputedStyle(parent);
+      const available = parent.getBoundingClientRect().height
+        - parseFloat(parentCss.paddingTop) - parseFloat(parentCss.paddingBottom);
+      const minimumGroup = count ? 2 + recentBox.querySelector('.recent-heading').getBoundingClientRect().height
+        + rows.children[0].getBoundingClientRect().height : 0;
+      const fullPage = available < fixed + compact.reduce((sum, n) => sum + n, 0) + minimumGroup;
+      parent.classList.toggle('full-page-recents', fullPage);
       const space = normal.reduce((sum, n) => sum + n, 0);
       const saving = space - compact.reduce((sum, n) => sum + n, 0);
-      const excess = Math.max(0, fixed + groupHeight + space - state.clientHeight);
+      const excess = Math.max(0, fixed + groupHeight + space - available);
       const compression = Math.min(1, excess / saving);
-      const gaps = normal.map((n, i) => n - compression * (n - compact[i]));
+      const gaps = fullPage ? compact : normal.map((n, i) => n - compression * (n - compact[i]));
       [state.style.paddingTop, state.style.paddingBottom] = gaps.slice(0, 2).map(n => n + 'px');
       title.style.marginTop = gaps[2] + 'px'; detail.style.marginTop = gaps[3] + 'px';
       recentBox.style.marginTop = gaps[4] + 'px'; actions.style.marginTop = gaps[5] + 'px';
-      if (count) recentBox.style.height = Math.min(groupHeight,
-        Math.max(0, state.clientHeight - fixed - gaps.reduce((sum, n) => sum + n, 0))) + 'px';
+      if (fullPage) state.style.height = (fixed + groupHeight + gaps.reduce((sum, n) => sum + n, 0)) + 'px';
+      if (count) recentBox.style.height = (fullPage ? groupHeight : Math.min(groupHeight,
+        Math.max(0, available - fixed - gaps.reduce((sum, n) => sum + n, 0)))) + 'px';
+      if (!fullPage) parent.scrollTop = 0;
     }
     let pending = false;
     const schedule = () => {

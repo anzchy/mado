@@ -56,6 +56,14 @@ async function geometry(page) {
       rows: rows.map(rect), scrollHeight: list.scrollHeight, clientHeight: list.clientHeight,
       overflowY: getComputedStyle(list).overflowY,
       buttonInsideList: list.contains(button), ancestors,
+      page: rect(document.querySelector('#content')),
+      pageScrollTop: document.querySelector('#content').scrollTop,
+      pageScrollHeight: document.querySelector('#content').scrollHeight,
+      pageClientHeight: document.querySelector('#content').clientHeight,
+      pageOverflowY: getComputedStyle(document.querySelector('#content')).overflowY,
+      available: document.querySelector('#content').clientHeight
+        - parseFloat(getComputedStyle(document.querySelector('#content')).paddingTop)
+        - parseFloat(getComputedStyle(document.querySelector('#content')).paddingBottom),
     };
   });
 }
@@ -65,6 +73,15 @@ function visibleButton(value, label) {
     `${label}: choose action inside viewport ${JSON.stringify(value.button)}`);
   assert.ok(value.button.bottom <= value.footer.top + 1, `${label}: choose action above footer`);
   assert.equal(value.buttonInsideList, false, `${label}: action outside row scroller`);
+}
+
+// Independent pin dimensions: border/header36, first row37, following rows38.
+const naturalGroupHeight = count => count ? 36 + 37 + (count - 1) * 38 : 0;
+const compactMinimum = count => 32 + 23 + 22.1 + 35 + (count ? 64 + 36 + 37 : 52);
+function insideUsablePage(value, rect, label) {
+  const top = Math.max(value.page.top, 0), bottom = Math.min(value.page.bottom, value.footer.top);
+  assert.ok(rect.top >= top - 1 && rect.bottom <= bottom + 1,
+    `${label}: fully above footer in page ${JSON.stringify({ rect, top, bottom })}`);
 }
 
 test('#518 recent rows scroll within their box and preserve the external action', async t => {
@@ -108,6 +125,14 @@ test('#518 recent rows scroll within their box and preserve the external action'
             }
             assert.deepEqual(before.ancestors, [], 'no nested active vertical scrolling ancestor');
             const overflowing = before.scrollHeight > before.clientHeight + 1;
+            if (size.width === 1280 && size.height === 800 && [1, 5].includes(count)) {
+              // These counts fit by the pin arithmetic, independent of measured overflow.
+              assert.ok(32 + 23 + 22.1 + 35 + 64 + naturalGroupHeight(count) <= before.available,
+                'independent pin arithmetic proves this count fits');
+              assert.ok(before.scrollHeight <= before.clientHeight + 1, 'fitting count must not scroll');
+              assert.ok(Math.abs(before.group.height - naturalGroupHeight(count)) <= 1,
+                `fitting count retains natural group height ${naturalGroupHeight(count)}`);
+            }
             assert.ok(!overflowing || /^(auto|scroll)$/.test(before.overflowY), 'overflow must have a real scroll mechanism');
             const complete = before.rows.filter(row => row.top >= before.list.top - 1 && row.bottom <= before.list.bottom + 1).length;
             if (size.height === 640) assert.ok(complete >= Math.min(count, 3), `at least three complete rows, got ${complete}`);
@@ -163,6 +188,85 @@ test('#518 recent rows scroll within their box and preserve the external action'
         assert.ok(value.titleGap < 18 && value.titleGap >= 10 - 0.1, 'first deficit reduces optional title gap');
         assert.ok(value.scrollHeight <= value.clientHeight + 1, 'spacing reduction precedes list clipping');
       });
+      const contentHeight = async height => {
+        await page.locator('.prototype-shell').evaluate((shell, height) => {
+          shell.style.height = `${height + 38}px`;
+        }, height);
+        await settle(page);
+        const actual = await geometry(page);
+        assert.ok(Math.abs(actual.shell.height - 38 - height) <= 0.1, 'exact content height after titlebar38');
+        return actual;
+      };
+      const checkScopeAndReachability = async (count, fallback) => {
+        const before = await geometry(page);
+        if (fallback) {
+          assert.match(before.pageOverflowY, /^(auto|scroll)$/, 'short page has real scroll mechanism');
+          assert.ok(before.pageScrollHeight > before.pageClientHeight, 'short page has a scroll range');
+          assert.ok(before.scrollHeight <= before.clientHeight + 1, 'full page has no nested row range');
+          assert.ok(Math.abs(before.group.height - naturalGroupHeight(count)) <= 1,
+            'full page retains natural recent header and rows');
+        } else {
+          assert.ok(before.pageScrollHeight <= before.pageClientHeight + 1, 'bounded-list page stays fixed');
+          insideUsablePage(before, before.button, 'bounded-list action');
+          if (count) insideUsablePage(before, before.rows[0], 'one complete row at compact threshold');
+        }
+        assert.equal(before.rows.length, count);
+        for (let index = 0; index < count; index++) {
+          await page.locator(`.recent-folder[data-row="${index}"]`).evaluate(row => row.scrollIntoView({ block: 'nearest' }));
+          await settle(page);
+          const value = await geometry(page);
+          insideUsablePage(value, value.rows[index], `short row ${index}`);
+        }
+        await page.locator('.mock-actions button').evaluate(button => button.scrollIntoView({ block: 'nearest' }));
+        await settle(page);
+        const action = await geometry(page);
+        insideUsablePage(action, action.button, 'short action');
+        if (count) {
+          await page.locator('.recent-folder').last().focus(); await settle(page);
+          const focused = await geometry(page);
+          insideUsablePage(focused, focused.rows.at(-1), 'short focused last row');
+        }
+      };
+      for (const height of [300, 200]) {
+        for (const count of [0, 1, 5, 10]) {
+          await t.test(`${theme} short content${height} rows${count}`, async () => {
+            await visit({ width: 960, height: 800 }, theme, count);
+            const value = await contentHeight(height);
+            assert.ok(Math.abs(value.available - (height - 86)) <= 1, 'outer16/70 includes footer40');
+            await checkScopeAndReachability(count, value.available < compactMinimum(count));
+          });
+        }
+      }
+      for (const count of [0, 1, 10]) {
+        for (const delta of [-1, 0, 1]) {
+          await t.test(`${theme} compact boundary rows${count} delta${delta}`, async () => {
+            await visit({ width: 960, height: 800 }, theme, count);
+            // Exact shell height brackets fractional paragraph22.1 independently.
+            await contentHeight(compactMinimum(count) + 86 + delta);
+            await checkScopeAndReachability(count, delta < 0);
+          });
+        }
+      }
+      for (const count of [0, 10]) {
+        await t.test(`${theme} full-page resize round trip rows${count}`, async () => {
+          await visit({ width: 1280, height: 800 }, theme, count);
+          const before = await geometry(page);
+          const names = await page.locator('.recent-folder .row-text').allTextContents();
+          await contentHeight(200);
+          await checkScopeAndReachability(count, true);
+          await contentHeight(800 - 38);
+          const restored = await geometry(page);
+          for (const key of ['icon', 'heading', 'group', 'button'])
+            assert.deepEqual(restored[key], before[key], `${key} full-page resize restoration`);
+          assert.deepEqual(await page.locator('.recent-folder .row-text').allTextContents(), names, 'row identities conserved');
+          await settle(page);
+          const repeated = await geometry(page);
+          for (const key of ['icon', 'heading', 'group', 'button'])
+            assert.deepEqual(repeated[key], restored[key], `${key} repeated layout idempotent`);
+          await contentHeight(200);
+          await checkScopeAndReachability(count, true);
+        });
+      }
     }
   } finally {
     await browser?.close();
