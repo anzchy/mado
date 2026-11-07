@@ -433,6 +433,12 @@ import PicseeCore
         footer.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 40)
         for content in mainContent.subviews where mode == .grid {
             if let grid = content as? GridBrowserView {
+                grid.onThumbnailSizeChange = { [weak self] size in
+                    guard let self, self.isGridSurface else { return }
+                    var preferences = self.preferencesStore.value
+                    preferences.thumbnailSize = size
+                    self.preferencesStore.value = preferences
+                }
                 if !optionedGrids.contains(grid) {
                     optionedGrids.add(grid)
                     grid.displayOptions = gridDisplayOptions
