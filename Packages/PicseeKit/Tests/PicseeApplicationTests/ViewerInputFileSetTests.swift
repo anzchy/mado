@@ -15,7 +15,7 @@ import PicseeCore
     var navigation: [NavigationDirection] = []
     var hasImage = false
     var canNavigate = true
-    var title = "Picsee"
+    var title = "Mado"
     var retry: ViewerRetryIntent?
     var appliedFocus: [FocusContext] = []
     init(pipeline: any ImagePipeline = InputPipeline()) {
@@ -30,9 +30,9 @@ import PicseeCore
     }
     func showInputNotice(_ notice: ViewerInputNotice) { notices.append(notice) }
     func promptForInputFolder(_ folder: URL) { folders.append(folder) }
-    func beginImageOpening() { hasImage = false; title = "Picsee" }
+    func beginImageOpening() { hasImage = false; title = "Mado" }
     func installImage(_ image: DecodedImage, fileURL: URL) { hasImage = true; title = fileURL.lastPathComponent }
-    func imageLoadFailed(_ error: any Error) { hasImage = false; title = "Picsee"; _ = session.dismissCancelledImageFailure(error) }
+    func imageLoadFailed(_ error: any Error) { hasImage = false; title = "Mado"; _ = session.dismissCancelledImageFailure(error) }
     func navigate(_ direction: NavigationDirection) { navigation.append(direction) }
     func performCanvas(_ command: CommandID, from entry: CommandEntry) { }
     func performCanvasZoom(_ command: CommandID, from entry: CommandEntry) -> Double? { nil }

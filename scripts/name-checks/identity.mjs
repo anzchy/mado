@@ -40,3 +40,24 @@ export function forbiddenMatches(text, expectedName) {
   }
   return matches.sort((a, b) => a.index - b.index);
 }
+
+/** Feed remains a decision for #552; observations never choose it. */
+export function checkFeed(info, expectedName, { release = false, notes = [] } = {}) {
+  const expected = identityFor(expectedName);
+  const value = expected.info.SUFeedURL;
+  if (value !== null) return info?.SUFeedURL === value ? []
+    : [`Info.plist:SUFeedURL: expected ${JSON.stringify(value)}, found ${JSON.stringify(info?.SUFeedURL)}`];
+  const undecided = `Info.plist:SUFeedURL undecided for ${expected.name} (decided in #552)`;
+  const observed = info?.SUFeedURL;
+  let inferred = false;
+  try {
+    const url = new URL(observed);
+    inferred = /^(?:\/repos)?\/anzchy\/mado(?:\/|$)/i.test(url.pathname);
+  } catch { /* An absent feed is permitted only outside release mode. */ }
+  if (observed === identityFor('Picsee').info.SUFeedURL || inferred) {
+    return [`Info.plist:SUFeedURL forbidden while Mado's feed is undecided (#552): ${JSON.stringify(observed)}`];
+  }
+  if (release) return [undecided];
+  notes.push(undecided);
+  return [];
+}

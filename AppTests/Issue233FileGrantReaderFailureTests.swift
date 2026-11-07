@@ -139,7 +139,7 @@ private actor ReaderMetadata: InspectorMetadataReading {
     #expect(!controller.hasImage)
     #expect(controller.session.imageLoader.fileURL == nil)
     #expect(controller.session.imageLoader.presented == nil)
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
     #expect(controller.inspector.name == nil)
     #expect(controller.inspector.value == .unknown)
@@ -457,7 +457,7 @@ private final class ReaderMoveAfterIdentity: FileIdentityResourceReading, @unche
             #expect(!viewer.hasImage)
             #expect(viewer.session.imageLoader.fileURL == nil)
             #expect(window.representedURL == nil)
-            #expect(window.title == "Picsee")
+            #expect(window.title == "Mado")
         } else {
             let moved = try #require(moving.moved)
             try await r2Wait {

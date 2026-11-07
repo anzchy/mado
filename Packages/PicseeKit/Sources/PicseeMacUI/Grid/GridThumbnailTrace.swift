@@ -24,7 +24,7 @@ enum GridFirstThumbnailsMessage {
 
 /// The default sink: one os_signpost interval per folder open (two calls), so formatting costs nothing that matters.
 @MainActor public final class SignpostGridThumbnailTrace: GridThumbnailTracing {
-    private let log = OSLog(subsystem: "io.github.anzchy.picsee", category: "grid")
+    private let log = OSLog(subsystem: "io.github.anzchy.mado", category: "grid")
     private var ids: [UInt64: OSSignpostID] = [:]
     public init() { }
     public func firstThumbnailsBegin(generation: UInt64, items: Int) {

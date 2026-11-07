@@ -93,13 +93,13 @@ jobs:
         run: |
           set -euo pipefail
           # Stripping removes the build machine's paths from the binary (check-package fails on them).
-          xcodebuild build -scheme Picsee -configuration Release -destination 'generic/platform=macOS' \
+          xcodebuild build -scheme Mado -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath .build/dd-release \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN --timestamp" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             ENABLE_HARDENED_RUNTIME=YES DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES \
             CURRENT_PROJECT_VERSION="$BUILD"
-          APP="$PWD/.build/dd-release/Build/Products/Release/Picsee.app"
+          APP="$PWD/.build/dd-release/Build/Products/Release/Mado.app"
           test -d "$APP"
           echo "APP=$APP" >> "$GITHUB_ENV"
 
@@ -129,6 +129,9 @@ jobs:
       - name: Check entitlements of the signed app
         run: node scripts/release/check-entitlements.mjs "$APP" --configuration release
 
+      - name: Check product identity for release
+        run: node scripts/name-checks/built-product.mjs "$APP" --release
+
       - name: Check package contents
         run: node scripts/release/check-package.mjs "$APP" --require-sparkle-licence --expect-version "$VERSION" --expect-build "$BUILD"
 
@@ -152,7 +155,7 @@ jobs:
           DMG="$PWD/.build/release/Picsee-$VERSION.dmg"
           STAGE="$RUNNER_TEMP/dmg"
           mkdir -p "$(dirname "$DMG")" "$STAGE"
-          ditto "$APP" "$STAGE/Picsee.app"
+          ditto "$APP" "$STAGE/Mado.app"
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname "picsee $VERSION" -srcfolder "$STAGE" -fs APFS -format ULFO -ov "$DMG"
           codesign --force --sign "$IDENTITY" --timestamp --keychain "$KEYCHAIN" "$DMG"

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
-const BASELINE_BUILD = "xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci";
+const BASELINE_BUILD = "xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci";
 const HASHING_SETTING = "'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'";
 const jobBlock = id => {
   const match = workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:\\n|(?![\\s\\S]))`, 'm'));
@@ -52,12 +52,12 @@ test('the App tests job keeps the exact unsigned build as its own step, and Walk
   const build = steps.find(step => step.startsWith('Build unsigned app\n'));
   assert.ok(build, 'Build unsigned app step exists');
   assert.match(build, /^        id: unsigned-build$/m);
-  // The baseline command (`xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+  // The baseline command (`xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
   // -derivedDataPath .build/dd-ci`) plus exactly one argument, the hashing flag (#479 acceptance criteria).
   const run = build.match(/^        run: \|\n((?:          .*\n)+)/m)?.[1].trimEnd().split('\n');
   assert.deepEqual(run, [
     `          ${BASELINE_BUILD} ${HASHING_SETTING}`,
-    '          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Picsee.app --entitlements App/Resources/Picsee.entitlements',
+    '          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Mado.app --entitlements App/Resources/Mado.entitlements',
   ]);
   assert.doesNotMatch(build, /^        if:/m, 'the unsigned build runs on every event');
   assert.match(app, /^      unsigned_build: \$\{\{ steps\.unsigned-build\.outcome \}\}$/m);

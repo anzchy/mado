@@ -15,7 +15,7 @@ import Testing
     #expect(window.representedURL == first)
 
     WindowImageTitle.apply(to: window, imageURL: nil)
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
 
     WindowImageTitle.apply(to: window, imageURL: replacement)
@@ -23,6 +23,6 @@ import Testing
     #expect(window.representedURL == replacement)
 
     WindowImageTitle.apply(to: window, imageURL: nil)
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
 }

@@ -49,11 +49,11 @@ private struct Issue221AboutViews {
     pane.layoutSubtreeIfNeeded()
     let fields = pane.subviews.compactMap { $0 as? NSTextField }
     let icon = try #require(pane.subviews.compactMap { $0 as? NSImageView }.first)
-    let name = try #require(fields.first { $0.stringValue == "picsee" })
+    let name = try #require(fields.first { $0.stringValue == "Mado" })
     let version = try #require(fields.first { $0.stringValue.hasPrefix(localized("Version") + " ") })
-    let privacyKey = "A macOS image viewer for files on your disk. picsee collects no data and uploads no images; the sandbox reads only folders you authorize."
+    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."
     let privacy = try #require(fields.first { $0.stringValue == localized(privacyKey) })
-    let licenceKey = "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
+    let licenceKey = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
     let licences = try #require(fields.first { $0.stringValue == localized(licenceKey) })
     let links = try (0...2).map { try #require(issue221View("settings.about.link.\($0)", in: pane) as? NSButton) }
     return Issue221AboutViews(pane: pane, icon: icon, name: name, version: version,
@@ -105,9 +105,9 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue221AboutLicenceTextMatchesPinnedEnglishAndChinese() throws {
-    let key = "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
-    let english = "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
-    let chinese = "picsee 以 MIT 许可发布\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）"
+    let key = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
+    let english = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
+    let chinese = "Mado 以 MIT 许可发布\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）"
     #expect(try issue221CatalogValue(key, "en") == english)
     #expect(try issue221CatalogValue(key, "zh-Hans") == chinese)
     let panel = issue221Panel()
@@ -177,8 +177,8 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue221LocalizedAboutControlsFitPaneInEnglishChineseLightAndDark() throws {
-    let privacyKey = "A macOS image viewer for files on your disk. picsee collects no data and uploads no images; the sandbox reads only folders you authorize."
-    let licenceKey = "picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
+    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."
+    let licenceKey = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
     for language in ["en", "zh-Hans"] {
         let localized: (String) -> String = { key in
             (try? issue221CatalogValue(key, language)) ?? key
@@ -192,7 +192,7 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
             panel.window.appearance = NSAppearance(named: appearance)
             views.pane.layoutSubtreeIfNeeded()
             let versionFormat = String(format: localized("%@ (build %@)"), "9.8.7", "654")
-            #expect(views.name.stringValue == "picsee", "\(language) app name")
+            #expect(views.name.stringValue == "Mado", "\(language) app name")
             #expect(views.version.stringValue == localized("Version") + " " + versionFormat, "\(language) version")
             #expect(views.privacy.stringValue == localized(privacyKey), "\(language) privacy")
             #expect(views.licences.stringValue == localized(licenceKey), "\(language) licences")

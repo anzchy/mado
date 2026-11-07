@@ -6,7 +6,7 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const rules = '.codex/rules/picsee.rules';
-const app = 'Picsee.app';
+const app = 'Mado.app';
 const file = 'Picsee.entitlements';
 const key = 'com.apple.security.app-sandbox';
 // A literal dot in plutil keypaths must reach execpolicy as backslash + dot.
@@ -26,11 +26,11 @@ function decision(argv, restricted = false) {
 
 const forbidden = [
   ['tccutil', 'reset', 'All'],
-  ['tccutil', 'reset', 'All', 'io.github.anzchy.picsee'],
+  ['tccutil', 'reset', 'All', 'io.github.anzchy.mado'],
   ['tccutil', 'reset', 'SystemPolicyAllFiles'],
   ['codesign', '--remove-signature', app],
   ['/usr/bin/tccutil', 'reset', 'All'],
-  ['/usr/bin/tccutil', 'reset', 'All', 'io.github.anzchy.picsee'],
+  ['/usr/bin/tccutil', 'reset', 'All', 'io.github.anzchy.mado'],
   ['/usr/bin/tccutil', 'reset', 'SystemPolicyAllFiles'],
   ['/usr/bin/codesign', '--remove-signature', app],
 ];

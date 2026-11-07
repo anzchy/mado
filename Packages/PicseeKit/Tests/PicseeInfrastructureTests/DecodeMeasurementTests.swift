@@ -70,7 +70,7 @@ func measureRealPhotoDecodesAndConcurrency() async throws {
         inputs.append((label, file, edge))
         print("DERIVED label=\(label) from=5B_JPEG_SDR.jpg source=8256x5504 output=\(image.width)x\(image.height) jpegQuality=0.9")
     }
-    print("CONDITIONS Release; no picsee cache; OS page cache uncontrolled/warm from derivation; 30 repetitions; decode requests use source longest edge; requestMs includes header+admission+decode+delivery; decodeMs is the synchronous ImageIODecoder call; footprint sampled every 1ms (observed peak, may miss shorter peaks)")
+    print("CONDITIONS Release; no Mado cache; OS page cache uncontrolled/warm from derivation; 30 repetitions; decode requests use source longest edge; requestMs includes header+admission+decode+delivery; decodeMs is the synchronous ImageIODecoder call; footprint sampled every 1ms (observed peak, may miss shorter peaks)")
     for (label, file, edge) in inputs {
         let decoder = MeasuredDecoder()
         let pipeline = ImageIOPipeline(decoder: decoder)

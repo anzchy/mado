@@ -143,10 +143,10 @@ test('invalid exception rules, identities, git enumeration and tracked read fail
 
 test('CLI exposes success, invalid options and malformed exception files with useful statuses', () => {
   const root = repo();
-  file(root, 'live.swift', 'import PicseeKit');
+  file(root, 'live.swift', 'import MadoKit');
   const pass = cli(root);
   assert.equal(pass.status, 0, pass.stderr);
-  assert.match(pass.stdout, /PASS.*Picsee/);
+  assert.match(pass.stdout, /PASS.*Mado/);
   for (const args of [['--expected-name', 'Other'], ['--wat'], ['--root']]) {
     const result = cli(root, args);
     assert.notEqual(result.status, 0);

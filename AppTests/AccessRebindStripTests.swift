@@ -13,7 +13,7 @@ func t231NotFoundUsesPage26TwoButtonRenderedFrames(_ size: NSSize) throws {
         defer { window.close() }
         let view = LostAccessStateView(frame: NSRect(origin: .zero, size: size))
         window.contentView = view; view.appearance = NSAppearance(named: appearance)
-        view.display(cause: .notFound, text: .init(title: "找不到", detail: "picsee 无法找到此文件夹。请在新位置选择，或选择其他文件夹。", waiting: "", reselect: "在新位置选择…", chooseOther: "选择其他文件夹…"))
+        view.display(cause: .notFound, text: .init(title: "找不到", detail: "Mado 无法找到此文件夹。请在新位置选择，或选择其他文件夹。", waiting: "", reselect: "在新位置选择…", chooseOther: "选择其他文件夹…"))
         view.layoutSubtreeIfNeeded()
         #expect(view.iconView.frame.size == NSSize(width: 32, height: 32))
         #expect(view.iconView.frame.minY - view.titleLabel.frame.maxY == 18)

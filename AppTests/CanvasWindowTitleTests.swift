@@ -31,15 +31,15 @@ import PicseeMacUI
     controller.clearFolderImageForNoMatches()
     #expect(!controller.hasImage)
     #expect(controller.session.imageLoader.fileURL == nil)
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
 
     controller.beginImageOpening()
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
     controller.installImage(image, fileURL: imageURL)
     controller.imageLoadFailed(CancellationError())
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
 }
 

@@ -32,7 +32,7 @@ import os
     var appFrontmost: @MainActor () -> Bool = FirstLaunchDrift.appIsFrontmost
     var driftClock: () -> CFTimeInterval = CACurrentMediaTime
     private static let driftKey = "first-launch.wall.drift"
-    private static let driftLog = OSLog(subsystem: "io.github.anzchy.picsee", category: "home")
+    private static let driftLog = OSLog(subsystem: "io.github.anzchy.mado", category: "home")
     private var driftElapsed: CFTimeInterval = 0
     private var driftRunningSince: CFTimeInterval?
     private var tilesRest = CGPoint.zero

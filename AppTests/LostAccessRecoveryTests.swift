@@ -697,7 +697,7 @@ private final class RecoveryDiagnosticTrace: @unchecked Sendable {
     try await recoveryWait { recoveryPage(controller) != nil }
     #expect(f.services.monitor.state.snapshot(for: f.rootA)?.availability == .lost(.accessExpired))
     #expect(!controller.hasImage && controller.session.mode == .browsing)
-    #expect(controller.window?.representedURL == nil && controller.window?.title == "Picsee")
+    #expect(controller.window?.representedURL == nil && controller.window?.title == "Mado")
     #expect(controller.inspector.name == nil && controller.inspector.value == .unknown)
 }
 
@@ -798,7 +798,7 @@ func t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_ kind: Strin
     let strings = try #require(catalog["strings"] as? [String: Any])
     for (key, chinese) in [
         ("Access Has Expired", "授权失效"),
-        ("Access has expired. Choose this folder again to restore access; picsee will return to where you left off.", "访问权限已失效。重新选择这个文件夹即可恢复，picsee 会回到你刚才的位置。")
+        ("Access has expired. Choose this folder again to restore access; Mado will return to where you left off.", "访问权限已失效。重新选择这个文件夹即可恢复，Mado 会回到你刚才的位置。")
     ] {
         let entry = try #require(strings[key] as? [String: Any])
         let localizations = try #require(entry["localizations"] as? [String: Any])
@@ -1235,7 +1235,7 @@ func t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect: Bool) async t
                 c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
                 let page = try #require(recoveryPage(c))
                 page.display(cause: .notFound, text: .init(title: chinese ? "找不到" : "Not Found",
-                    detail: chinese ? "picsee 找不到“RootA”。请在新位置选择，或选择其他文件夹以继续。" : "picsee can’t find “RootA”. Choose its location, or choose another folder to continue.", waiting: "",
+                    detail: chinese ? "Mado 找不到“RootA”。请在新位置选择，或选择其他文件夹以继续。" : "Mado can’t find “RootA”. Choose its location, or choose another folder to continue.", waiting: "",
                     reselect: chinese ? "在新位置选择…" : "Choose at New Location…", chooseOther: chinese ? "选择其他文件夹…" : "Choose Another Folder…"))
                 page.layoutSubtreeIfNeeded()
                 let shell = try recoveryShell(c)
