@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 const self = fileURLToPath(import.meta.url);
+process.chdir(execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 const tracked = () => git('ls-files', '-z').split('\0').filter(Boolean);
 const modules = text => text.replaceAll('PicseeKit', 'MadoKit')
@@ -34,7 +35,7 @@ for (const path of tracked()) {
   }
 }
 // Keep explicit future-ticket contracts and historical identity fixtures intact.
-const protectedSpans = /picsee-(?:ui-system|browser)\b|io\.github\.anzchy\.picsee(?=['"]\s*,\s*SUBSYSTEM)|Rows cut from a real `log show --signpost --style ndjson` of a Picsee build|PICSEE_[A-Z0-9_]+|(?:anzchy|anzchy\\)\/picsee|\.picsee\b|picsee-wt\b|picsee-(?:delegator|doc-gardener)\b|picsee\.pid\b|design\/[^\s"'`<>)]*|picsee\.native-design-spec\/v1/g;
+const protectedSpans = /project=picsee\b|picsee-(?:ui-system|browser)\b|io\.github\.anzchy\.picsee(?=['"]\s*,\s*SUBSYSTEM)|Rows cut from a real `log show --signpost --style ndjson` of a Picsee build|PICSEE_[A-Z0-9_]+|(?:anzchy|anzchy\\)\/picsee|\.picsee\b|picsee-wt\b|picsee-(?:delegator|doc-gardener)\b|picsee\.pid\b|design\/[^\s"'`<>)]*|picsee\.native-design-spec\/v1/g;
 function rename(text, { lower = false } = {}) {
   const saved = [];
   let value = text.replace(protectedSpans, match => `__I551_KEEP_${saved.push(match) - 1}__`);
@@ -49,7 +50,7 @@ for (const path of tracked()) {
   if (buffer.includes(0) || !isUtf8(buffer)) continue;
   const before = buffer.toString('utf8');
   let after = before;
-  if (path === 'docs/feature-ledger.md') {
+  if (path === 'docs/feature-ledger.md' || path === 'scripts/ledger/fixtures/garden-gate-ledger.md') {
     after = before.split('\n').map(line => {
       if (!line.startsWith('|')) return line;
       const cells = line.split('|');
@@ -79,6 +80,9 @@ for (const path of tracked()) {
     // Existing owner gates must actually build the renamed scheme.
     if (path.endsWith('/owner-gates.sh')) after = after.replaceAll('-scheme Picsee', '-scheme Mado');
   }
+  if (path.endsWith('/Issue499PrimaryFrameTests.swift')) after = after.replaceAll('project=mado', 'project=picsee');
+  if (path === 'AppTests/Issue220UpdateConfigurationTests.swift') after = after.replaceAll('never use Mado’s frozen feed', 'never use the frozen legacy feed');
+  if (path === '.agents/skills/picsee-delegator/scripts/prefs.py') after = after.replaceAll('io.github.anzchy.picsee', 'io.github.anzchy.mado');
   if (after !== before) { writeFileSync(path, after); changed++; }
 }
 console.log(`Mado module replay: ${changed} tracked text files rewritten`);
