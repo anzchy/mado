@@ -323,6 +323,20 @@ func issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt() async th
     try await rig.expectNothingGranted("unreadable")
 }
 
+/// smoke507-20261107: in the sandbox a cold Finder drop of a raw link is neither readable nor startable,
+/// yet it must reach the folder prompt on its canonical target.
+@Test @MainActor
+func issue507UnreadableDroppedLinkPromptsForItsTarget() async throws {
+    let rig = try Delivered507Rig(unreadable: true)
+    defer { rig.remove() }
+    #expect(!rig.symlink.hasDirectoryPath)
+    rig.controller.openInput([rig.symlink])
+    #expect(try await rig.within2s { !rig.prompts.folders.isEmpty }, "the folder panel prompt must appear")
+    #expect(rig.prompts.folders.map(\.pathComponents) == [rig.target])
+    #expect(rig.window.attachedSheet == nil, "no unsupported-image sheet")
+    try await rig.expectNothingGranted("unreadable link")
+}
+
 @Test(arguments: ["image", "link and image", "stale link"]) @MainActor
 func issue507NonFolderInputNeverPromptsForAFolder(input: String) async throws {
     let rig = try Delivered507Rig()

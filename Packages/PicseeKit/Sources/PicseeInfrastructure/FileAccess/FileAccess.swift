@@ -806,16 +806,12 @@ public actor FileAccess: AccessLeasing {
         return nil
     }
     /// The directory a single drop or open event names, as its canonical target;
-    /// nil when it is not a readable directory. Reads metadata only: a delivered
+    /// nil when it is not a directory. Reads metadata only: a delivered
     /// folder still becomes an Access Root through the system open panel alone.
     public func deliveredFolder(_ url: URL) -> URL? {
         guard url.isFileURL else { return nil }
-        // Take the selection's scope only when the sandbox doesn't already permit reading it.
-        let readable = scope.isReadable(url)
-        let started = !readable && scope.start(url)
-        defer { if started { scope.stop(url) } }
-        guard readable || started else { return nil }
-        // FileManager follows a directory symlink even when the URL lacks a trailing slash.
+        // No scope (#233): the sandbox lets a dropped link's target be stat'ed though the link is neither
+        // readable nor startable (smoke507-20261107). FileManager follows the link without a trailing slash.
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
         return URL(fileURLWithPath: canonical(url).path, isDirectory: true)
