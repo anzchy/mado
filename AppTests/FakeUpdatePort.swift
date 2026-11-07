@@ -3,6 +3,7 @@ import PicseeApplication
 
 /// In-memory stand-in for the Sparkle updater; the real path is device-verified (#223).
 @MainActor final class FakeUpdatePort: AppUpdatePort {
+    var isAvailable: Bool { true }
     var versionInfo: AppVersionInfo
     var automaticallyChecksForUpdates: Bool
     var lastUpdateCheckDate: Date?

@@ -58,6 +58,7 @@ import Sparkle
         controller = makeController()
     }
     var versionInfo: AppVersionInfo { AppVersionInfo(infoDictionary: Bundle.main.infoDictionary ?? [:]) }
+    var isAvailable: Bool { controller != nil }
     var automaticallyChecksForUpdates: Bool {
         get { controller?.automaticallyChecksForUpdates ?? false }
         set { controller?.automaticallyChecksForUpdates = newValue }
