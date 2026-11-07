@@ -185,14 +185,6 @@
     "reason": "Historical release/feed fixtures are independent evidence of Picsee 0.0.1; retain original names and resource layout."
   },
   {
-    "pathRegex": "^(?:\\.github/workflows/release\\.yml|scripts/release/.*\\.test\\.mjs|scripts/release/appcast\\.mjs)$",
-    "pattern": "\\b(?:Picsee|picsee)\\b",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#552: historical feed assertions and deferred release artifact identity remain paired; module/resource bundle identifiers are still scanned and renamed by #551."
-  },
-  {
     "path": "docs/feature-ledger.html",
     "reason": "#553: generated ledger retains its prose identity; #551 regenerates path changes only."
   },
@@ -203,14 +195,6 @@
   {
     "path": ".agents/skills/picsee-delegator/agents/openai.yaml",
     "reason": "#556: roster agent descriptor follows the deferred role name."
-  },
-  {
-    "pathRegex": "^\\.agents/skills/(?:apple-developer-setup/scripts/setup-secrets-wizard\\.sh|picsee-delegator/scripts/(?:gui-lock\\.sh|listen-notify\\.py|panel-choose\\.sh|prefs\\.py|rebase-verify-tree\\.py|reset\\.sh|test_delegator_scripts\\.py|test_gui_lock\\.py|test_listen_notify\\.py|fixtures/.*))$",
-    "pattern": "picsee|Picsee(?=[:' .])",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#556: existing roster/GUI lock, preference inspector, listener and credential keychain tooling contracts stay unchanged; module/target names remain checked."
   },
   {
     "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -239,14 +223,6 @@
       "content"
     ],
     "reason": "#556: temporary design-tool output directory names."
-  },
-  {
-    "pathRegex": "^scripts/ledger/(?:build(?:\\.test)?|garden-gate(?:\\.test)?)\\.mjs$",
-    "pattern": "picsee",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#553/#556: ledger HTML prose/theme-storage key and gardener scratch identities follow docs/tooling; build/module identifiers remain checked."
   },
   {
     "path": "scripts/perf/fixtures/log-show-schema.ndjson",
@@ -330,5 +306,153 @@
       "content"
     ],
     "reason": "Deterministic malformed corpus bytes and their independent assertions must remain unchanged."
+  },
+  {
+    "pathRegex": "^scripts/name-checks/module-name\\.test\\.mjs$",
+    "pattern": "Picsee(?:Kit|Core|MacUI)|Picsee\\.entitlements|project=picsee|io\\.github\\.anzchy\\.picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Independent replay fixtures exercise legacy module/fixture/container input and the deferred #556 lease token; live production files remain checked."
+  },
+  {
+    "pathRegex": "^Packages/MadoKit/Tests/MadoMacUITests/Issue499PrimaryFrameTests\\.swift$",
+    "pattern": "project=picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: the borrowed GUI-lease verifier must match the unchanged gui-lock.sh owner project token until both ends migrate."
+  },
+  {
+    "pathRegex": "^\\.github/workflows/release\\.yml$",
+    "pattern": "Picsee\\-\\$VERSION\\.dmg|Picsee\\-notarize\\.zip|picsee\\-release\\.keychain\\-db|picsee\\ \\$VERSION|(?<=packages )picsee(?=,)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552: only the existing DMG, notarization ZIP, temporary keychain and release-title/prose tokens are deferred; schemes/app bundles/bundle IDs stay checked."
+  },
+  {
+    "pathRegex": "^scripts/release/appcast\\.mjs$",
+    "pattern": "picsee(?='s Sparkle appcast)|(?<=<title>)picsee(?=<| \\$\\{escape\\(item\\.shortVersion\\)\\})|(?<=<description>)picsee(?= updates)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552: existing frozen-feed prose/XML titles remain the historical feed identity; live build identifiers stay checked."
+  },
+  {
+    "pathRegex": "^scripts/release/.*\\.test\\.mjs$",
+    "pattern": "Picsee\\-0\\.0\\.1\\.dmg|Picsee\\-0\\\\\\.0\\\\\\.1\\\\\\.dmg|Picsee\\-0\\\\\\\\\\.0\\\\\\\\\\.1\\\\\\\\\\.dmg|picsee\\ 0\\.0\\.1|picsee\\ 0\\\\\\.0\\\\\\.1|picsee\\-release\\.keychain\\-db|picsee\\-release\\\\\\.keychain\\-db|picsee\\-step\\-|picsee\\-tag\\-|picsee\\-appcast\\-|picsee\\-notary\\-|picsee\\-env\\-|picsee\\-kc\\-|picsee\\-notarize\\-|Picsee\\.zip|picsee\\-package\\-|picsee\\-no\\-such\\-app\\.app|/Users/jack/Documents/mac\\-app/picsee/App/Access/|/Users/runner/work/picsee/picsee/\\.build/x|<title>picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552/#556: specifically enumerated historical release artifact/version/feed fixtures, negative build-path fixtures and temporary test prefixes; only the labelled historical Info fixture and layout adapter may contain old bundle data."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/gui-lock\\.sh$",
+    "pattern": "project=picsee|(?<=values\\[\"project\"\\] != \")picsee(?=\")|20261027-desktop-gui-lock-agreement-with-picsee\\.md",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: exact desktop GUI-lease owner token/comparison and historical coordination-document filename; no app bundle or subsystem exception."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/apple-developer-setup/scripts/setup-secrets-wizard\\.sh$",
+    "pattern": "picsee-secrets\\.|picsee(?= release signing secrets)|picsee(?= notarisation)|(?<=account ')picsee(?=')|(?<=--account )picsee\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552/#556: release-signing wizard title, temp prefix and existing Apple/Sparkle credential labels/account; no scheme, app bundle or bundle-ID exemption."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/listen-notify\\.py$",
+    "pattern": "picsee_poll_report|\\[picsee-listener event|(?<=shipped )picsee(?= roster poller)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: explicit poller module, listener event prefix and roster description remain coordinated tooling identity."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/panel-choose\\.sh$",
+    "pattern": "(?<=run's )Picsee(?=:)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: existing helper comment phrase remains tooling prose; executable app identities are not exempt."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/rebase-verify-tree\\.py$",
+    "pattern": "picsee-rebase-verify-",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: existing rebase-check temporary directory prefix."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/reset\\.sh$",
+    "pattern": "picsee fresh-context rule",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: named roster reset rule in helper comment."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_delegator_scripts\\.py$",
+    "pattern": "nonexistent-picsee-worktree|picsee_missing_tool_423",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: two explicit negative tooling fixtures, not live build identities."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_gui_lock\\.py$",
+    "pattern": "project=picsee|(?<=project=\")picsee(?=\")|(?<=values\\[\"project\"\\], \")picsee(?=\")|picsee_id|picsee-heavy\\.lock|test_mdpro_lock_is_busy_for_picsee_and_not_releasable|test_picsee_lock_is_busy_for_mdpro_and_not_releasable|picsee(?=\\x27s owner)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: named GUI-lock project-value assertions, interop test/variable names and isolated lock fixture."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_listen_notify\\.py$",
+    "pattern": "picsee-timeline|picsee(?= git:)|/tmp/picsee|real-picsee|alias-picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: named listener screen/CWD fixtures; no app scheme, app bundle or bundle ID."
+  },
+  {
+    "prefix": ".agents/skills/picsee-delegator/scripts/fixtures/",
+    "reason": "Historical non-executable terminal captures retain their original roster display names."
+  },
+  {
+    "pathRegex": "^scripts/ledger/build(?:\\.test)?\\.mjs$",
+    "pattern": "picsee-ledger-theme|(?<=\u529f\u80fd\u8d26\u7c3f \u00b7 )picsee(?=</title>)|picsee(?= \u00b7 \u529f\u80fd\u8d26\u7c3f</span>)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553/#556: exact persisted theme key and existing HTML title/header prose, not executable identifiers."
+  },
+  {
+    "pathRegex": "^scripts/ledger/garden-gate(?:\\.test)?\\.mjs$",
+    "pattern": "picsee-garden-gate-",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: existing gardener temporary directory prefix only."
+  },
+  {
+    "path": "scripts/ledger/build.test.mjs",
+    "pattern": "Part 1 \u2014 picsee \u73b0\u5728\u6709\u4ec0\u4e48|picsee-ledger-",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553/#556: exact historical ledger heading fixture and isolated temporary test prefix; live bundle/scheme identifiers stay checked."
+  },
+  {
+    "path": "scripts/release/check-package.test.mjs",
+    "pattern": "(?<=CFBundleIdentifier: \")io\\.github\\.anzchy\\.picsee(?=\")|(?<=expectedName: \")Picsee(?=\")|(?<=\\.replaceAll\\(\")MacOS/Picsee(?=\", \"MacOS/Mado\"\\))",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552: only this named historical Info fixture may assign the frozen identity or select expectedName Picsee; its layout adapter explicitly rewrites the legacy executable name."
   }
 ]
