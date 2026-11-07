@@ -163,10 +163,11 @@ jobs:
           path: ci-logs/package-macui-tests
           if-no-files-found: warn
 
-  # The generated-ledger check is plain Node, so it runs on Ubuntu; Walking skeleton requires it on every event.
+  # Ledger and identity checks, plus release regressions, run on every event and are required by Walking skeleton.
+  # Release regressions exercise the macOS workflow shell (Bash 3.2 and BSD tools), so this job uses macOS too.
   ledger-check:
     name: Ledger HTML check
-    runs-on: ubuntu-latest
+    runs-on: macos-26
     timeout-minutes: 5
     permissions:
       contents: read
@@ -174,6 +175,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          fetch-depth: 1
           persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -181,6 +183,8 @@ jobs:
           node-version: 22
       - name: Test identity checks
         run: node --test scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs
+      - name: Test release regressions
+        run: node --test scripts/release/*.test.mjs
       - name: Check tracked code identity
         run: node scripts/name-checks/code-name.mjs
       - name: Check generated feature ledger HTML
