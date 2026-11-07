@@ -1,5 +1,7 @@
 # Releasing Mado
 
+> Pending #552: the Mado tag (`mado-v*`), DMG (`Mado-<version>.dmg`) and separate-feed instructions below become operational only when #552 lands. The executable notes template stays owned by #552.
+
 A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
 
 ## Before the first release
