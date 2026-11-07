@@ -1,12 +1,11 @@
 name: Release
-# Pushing v0.0.1-rc.N or v0.0.1 builds, signs, notarises and packages picsee, then opens a draft
+# Pushing mado-v<version> or mado-v<version>-rc.N builds, signs, notarises and packages Mado, then opens a draft
 # release and an appcast pull request. Nothing is published or merged here: the owner does both
 # (spec #212, #222). The runbook is docs/release/README.md.
 on:
   push:
     tags:
-      - 'v0.0.1-rc.*'
-      - 'v0.0.1'
+      - 'mado-v*'
 
 permissions:
   contents: write
@@ -34,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="$GITHUB_REF_NAME"
-          [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-rc\.[1-9][0-9]*)?$ ]] || { echo "::error::unexpected tag $TAG"; exit 1; }
+          [[ "$TAG" =~ ^mado-v([0-9]+\.[0-9]+\.[0-9]+)(-rc\.[1-9][0-9]*)?$ ]] || { echo "::error::unexpected tag $TAG"; exit 1; }
           VERSION="${BASH_REMATCH[1]}"
           MARKETING=$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | head -1)
           [[ "$VERSION" == "$MARKETING" ]] || { echo "::error::tag $TAG does not match MARKETING_VERSION $MARKETING"; exit 1; }
@@ -42,7 +41,7 @@ jobs:
           BUILD=$(git rev-list --count "$GITHUB_SHA")
           [[ -n "$DEVELOPMENT_TEAM" ]] || { echo "::error::repository variable DEVELOPMENT_TEAM is not set"; exit 1; }
           { echo "TAG=$TAG"; echo "VERSION=$VERSION"; echo "BUILD=$BUILD"; } >> "$GITHUB_ENV"
-          echo "Releasing picsee $VERSION ($BUILD) from $TAG"
+          echo "Releasing Mado $VERSION ($BUILD) from $TAG"
 
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
@@ -69,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          KEYCHAIN="$RUNNER_TEMP/picsee-release.keychain-db"
+          KEYCHAIN="$RUNNER_TEMP/mado-release.keychain-db"
           P12="$RUNNER_TEMP/developer-id.p12"
           echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
@@ -127,7 +126,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Check entitlements of the signed app
-        run: node scripts/release/check-entitlements.mjs "$APP" --configuration release
+        run: node scripts/release/check-entitlements.mjs "$APP" --configuration release --expect-bundle-id io.github.anzchy.mado
 
       - name: Check product identity for release
         run: node scripts/name-checks/built-product.mjs "$APP" --release
@@ -143,8 +142,8 @@ jobs:
           set -euo pipefail
           umask 077
           # Stapling the app itself means a copy dragged out of the DMG passes Gatekeeper offline.
-          ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/Picsee-notarize.zip"
-          scripts/release/notarize.sh "$RUNNER_TEMP/Picsee-notarize.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/Mado-notarize.zip"
+          scripts/release/notarize.sh "$RUNNER_TEMP/Mado-notarize.zip"
           unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD
           xcrun stapler staple "$APP"
           xcrun stapler validate "$APP"
@@ -152,12 +151,12 @@ jobs:
       - name: Build and sign the DMG
         run: |
           set -euo pipefail
-          DMG="$PWD/.build/release/Picsee-$VERSION.dmg"
+          DMG="$PWD/.build/release/Mado-$VERSION.dmg"
           STAGE="$RUNNER_TEMP/dmg"
           mkdir -p "$(dirname "$DMG")" "$STAGE"
           ditto "$APP" "$STAGE/Mado.app"
           ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "picsee $VERSION" -srcfolder "$STAGE" -fs APFS -format ULFO -ov "$DMG"
+          hdiutil create -volname "Mado $VERSION" -srcfolder "$STAGE" -fs APFS -format ULFO -ov "$DMG"
           codesign --force --sign "$IDENTITY" --timestamp --keychain "$KEYCHAIN" "$DMG"
           echo "DMG=$DMG" >> "$GITHUB_ENV"
 
@@ -188,10 +187,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{BUILD}}/$BUILD/g" -e "s/{{SHA256}}/$SHA256/g" \
+          TEMPLATE_NAME=$(head -n 1 docs/release/notes-template.md | cut -d ' ' -f 1)
+          TEMPLATE_TITLE=$(printf '%s' "$TEMPLATE_NAME" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+          sed -e "s/$TEMPLATE_NAME/Mado/g" -e "s/$TEMPLATE_TITLE/Mado/g" -e "s/{{VERSION}}/$VERSION/g" -e "s/{{BUILD}}/$BUILD/g" -e "s/{{SHA256}}/$SHA256/g" \
             docs/release/notes-template.md > "$RUNNER_TEMP/notes.md"
+          printf '\nMado installs as a new app: settings, recent folders and folder grants do not carry over from the former app.\n' >> "$RUNNER_TEMP/notes.md"
           # A complete, non-empty argument list: Bash 3.2 treats "${empty[@]}" as unbound under set -u.
-          args=(release create "$TAG" "$DMG" "$DMG.sha256" --draft --verify-tag --title "picsee $VERSION (${TAG#v})"
+          args=(release create "$TAG" "$DMG" "$DMG.sha256" --draft --verify-tag --title "Mado $VERSION (${TAG#mado-v})"
             --notes-file "$RUNNER_TEMP/notes.md")
           if [[ "$TAG" == *-rc.* ]]; then args+=(--prerelease); fi
           gh "${args[@]}"
@@ -206,15 +208,15 @@ jobs:
           unset SPARKLE_ED_PRIVATE_KEY
           LENGTH=$(stat -f %z "$DMG")
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$(basename "$DMG")"
-          BRANCH="appcast/$TAG"
+          BRANCH="appcast-mado/$TAG"
           git fetch origin main
           git switch -C "$BRANCH" origin/main
-          node scripts/release/appcast.mjs appcast.xml --version "$BUILD" --short-version "$VERSION" --url "$URL" \
+          node scripts/release/appcast.mjs appcast-mado.xml --version "$BUILD" --short-version "$VERSION" --url "$URL" \
             --length "$LENGTH" --signature "$SIGNATURE" --minimum-system-version 14.0
-          git add appcast.xml
+          git add appcast-mado.xml
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "release(appcast): picsee $VERSION ($BUILD) for $TAG"
-          # A rerun of this tag rebuilds appcast/<tag> from main and replaces that branch only, leased to the
+            commit -m "release(appcast): mado $VERSION ($BUILD) for $TAG"
+          # A rerun of this tag rebuilds appcast-mado/<tag> from main and replaces that branch only, leased to the
           # commit just read, so nothing pushed there in between is lost silently.
           REMOTE=$(git ls-remote --heads origin "refs/heads/$BRANCH" | cut -f 1)
           if [[ -n "$REMOTE" ]]; then
@@ -227,8 +229,8 @@ jobs:
             echo "appcast PR #$OPEN already open for $BRANCH; its branch now carries this run's item"
             exit 0
           fi
-          gh pr create --base main --head "$BRANCH" --title "release(appcast): picsee $VERSION ($BUILD) for $TAG" \
-            --body "Adds $TAG to appcast.xml. Merging this offers picsee $VERSION ($BUILD) to every installed copy that has update checks on, as soon as it lands on main; GitHub's pre-release flag does not filter the feed. For a release candidate, close this PR unless you mean a general rollout. Merge only after publishing the draft release $TAG: the enclosure URL works once the release is public."
+          gh pr create --base main --head "$BRANCH" --title "release(appcast): mado $VERSION ($BUILD) for $TAG" \
+            --body "Adds $TAG to appcast-mado.xml. Merging this offers Mado $VERSION ($BUILD) to every installed copy that has update checks on, as soon as it lands on main; GitHub's pre-release flag does not filter the feed. For a release candidate, close this PR unless you mean a general rollout. Merge only after publishing the draft release $TAG: the enclosure URL works once the release is public."
 
       - name: Delete the temporary keychain
         if: always()
@@ -237,5 +239,5 @@ jobs:
           if [[ -n "${KEYCHAIN:-}" && -e "$KEYCHAIN" ]]; then
             security delete-keychain "$KEYCHAIN" || { echo "::error::could not delete the temporary keychain $KEYCHAIN"; status=1; }
           fi
-          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/Picsee-notarize.zip" || { echo "::error::could not remove temporary signing files"; status=1; }
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/Mado-notarize.zip" || { echo "::error::could not remove temporary signing files"; status=1; }
           exit "$status"

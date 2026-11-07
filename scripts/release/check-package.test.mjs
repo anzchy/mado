@@ -255,7 +255,7 @@ function cli(edit = () => {}) {
 test("the release CLI refuses the old feed even in an otherwise clean fixture", () => {
   const result = cli();
   assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /SUFeedURL.*#552/);
+  assert.match(result.stderr, /SUFeedURL: expected/);
 });
 
 test("the CLI fails closed on each auditor regression and names the path", () => {

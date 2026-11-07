@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Insert or update one release in picsee's Sparkle appcast (appcast.xml at the repository root, the
+ * Insert or update one release in Mado's Sparkle appcast (appcast-mado.xml at the repository root, the
  * SUFeedURL in App/Info.plist).
  *
- *   node scripts/release/appcast.mjs appcast.xml --version 312 --short-version 0.0.1 \
- *     --url https://github.com/anzchy/picsee/releases/download/v0.0.1/Mado-0.0.1.dmg \
+ *   node scripts/release/appcast.mjs appcast-mado.xml --version 312 --short-version 0.0.1 \
+ *     --url https://github.com/anzchy/mado/releases/download/mado-v0.0.1/Mado-0.0.1.dmg \
  *     --length 9123456 --signature <sign_update -p output> [--minimum-system-version 14.0] [--pub-date ISO-8601]
  *
  * The same build number replaces its item; items stay newest first; earlier items are kept as written.
@@ -18,9 +18,9 @@ export function emptyAppcast() {
   return `<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="${SPARKLE_NS}">
     <channel>
-        <title>picsee</title>
-        <link>https://github.com/anzchy/picsee/releases</link>
-        <description>picsee updates</description>
+        <title>Mado</title>
+        <link>https://github.com/anzchy/mado/releases</link>
+        <description>Mado updates</description>
         <language>en</language>
     </channel>
 </rss>
@@ -49,7 +49,7 @@ function validate({ version, shortVersion, url, length, edSignature, minimumSyst
 
 function render(item) {
   return `<item>
-            <title>picsee ${escape(item.shortVersion)} (${escape(item.version)})</title>
+            <title>Mado ${escape(item.shortVersion)} (${escape(item.version)})</title>
             <pubDate>${rfc822(item.pubDate)}</pubDate>
             <sparkle:version>${escape(item.version)}</sparkle:version>
             <sparkle:shortVersionString>${escape(item.shortVersion)}</sparkle:shortVersionString>
@@ -82,7 +82,7 @@ function main(argv) {
   const [file] = argv;
   const option = (name) => { const index = argv.indexOf(name); return index >= 0 ? argv[index + 1] : undefined; };
   if (!file || file.startsWith("--")) {
-    process.stderr.write("usage: appcast.mjs <appcast.xml> --version N --short-version x.y.z --url URL --length BYTES --signature SIG [--minimum-system-version 14.0] [--pub-date ISO]\n");
+    process.stderr.write("usage: appcast.mjs <appcast-mado.xml> --version N --short-version x.y.z --url URL --length BYTES --signature SIG [--minimum-system-version 14.0] [--pub-date ISO]\n");
     return 2;
   }
   const xml = existsSync(file) ? readFileSync(file, "utf8") : emptyAppcast();

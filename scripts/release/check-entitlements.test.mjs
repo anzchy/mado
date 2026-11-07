@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { checkEntitlements, parsePlistXml } from "./check-entitlements.mjs";
 
 const bundleId = "io.github.anzchy.mado";
@@ -115,4 +116,29 @@ test("mach-lookup names must be exactly the two resolved names", () => {
 test("an unknown configuration is rejected", () => {
   assert.throws(() => checkEntitlements({}, { bundleId, configuration: "profile" }), /configuration/);
   assert.throws(() => checkEntitlements({}, { bundleId: "", configuration: "release" }), /bundle/);
+});
+
+test("release identity cannot be replaced with a different app's matching Sparkle pair", () => {
+  const other = "com.example.other";
+  const entitlements = parsePlistXml(entitlementsXml({ mach: [`${other}-spks`, `${other}-spki`] }));
+  assert.ok(checkEntitlements(entitlements, { bundleId: other, expectedBundleId: "io.github.anzchy.mado", configuration: "release" }).some(p => p.includes("bundle identifier")));
+  assert.deepEqual(checkEntitlements(parsePlistXml(entitlementsXml()), { bundleId, expectedBundleId: "io.github.anzchy.mado", configuration: "release" }), []);
+});
+
+// Keep the configured release-node receipt lane tied to the workflow's actual effects.
+// A nested node --test must not inherit the parent test runner control protocol.
+test("release workflow and feed integration contracts pass", () => {
+  const run = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...["release-workflow.test.mjs", "workflow-steps.test.mjs", "appcast.test.mjs"].map(name => new URL(name, import.meta.url).pathname)], { env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")), encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  assert.ok(Number(/^# tests (\d+)$/m.exec(run.stdout)?.[1]) > 0, run.stdout + run.stderr);
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+});
+
+test("the entitlement CLI refuses an explicit bundle-ID option without its value", () => {
+  const script = new URL("./check-entitlements.mjs", import.meta.url).pathname;
+  for (const args of [["Mado.app", "--configuration", "release", "--expect-bundle-id"],
+    ["Mado.app", "--expect-bundle-id", "--configuration", "release"]]) {
+    const run = spawnSync(process.execPath, [script, ...args], { encoding: "utf8" });
+    assert.equal(run.status, 2, run.stderr);
+    assert.match(run.stderr, /usage:.*--expect-bundle-id/);
+  }
 });

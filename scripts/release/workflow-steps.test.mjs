@@ -45,21 +45,23 @@ test("/bin/bash is the 3.2 shell the macos-26 runner has", () => {
   assert.match(execFileSync("/bin/bash", ["--version"], { encoding: "utf8" }), /version 3\.2\./);
 });
 
-for (const [tag, prerelease] of [["v0.0.1-rc.1", true], ["v0.0.1", false]]) {
+for (const [tag, prerelease] of [["mado-v0.0.1-rc.1", true], ["mado-v0.0.1", false]]) {
   test(`the draft-release step calls gh with the full argument list for ${tag}`, () => {
     const step = runStep("Create the draft release", {
-      env: { TAG: tag, VERSION: "0.0.1", BUILD: "312", SHA256: "ab".repeat(32), DMG: "/build/Picsee-0.0.1.dmg", GH_TOKEN: "token" },
+      env: { TAG: tag, VERSION: "0.0.1", BUILD: "312", SHA256: "ab".repeat(32), DMG: "/build/Mado-0.0.1.dmg", GH_TOKEN: "token" },
       fakes: { gh: 'printf "%s\\n" "$@" > "$RUNNER_TEMP/gh-argv"\n' },
     });
     try {
       assert.equal(step.status, 0, step.stderr);
       const argv = readFileSync(join(step.dir, "gh-argv"), "utf8").trimEnd().split("\n");
-      assert.deepEqual(argv, ["release", "create", tag, "/build/Picsee-0.0.1.dmg", "/build/Picsee-0.0.1.dmg.sha256",
-        "--draft", "--verify-tag", "--title", `picsee 0.0.1 (${tag.slice(1)})`, "--notes-file", join(step.dir, "notes.md"),
+      assert.deepEqual(argv, ["release", "create", tag, "/build/Mado-0.0.1.dmg", "/build/Mado-0.0.1.dmg.sha256",
+        "--draft", "--verify-tag", "--title", `Mado 0.0.1 (${tag.slice("mado-v".length)})`, "--notes-file", join(step.dir, "notes.md"),
         ...(prerelease ? ["--prerelease"] : [])]);
       const notes = readFileSync(join(step.dir, "notes.md"), "utf8");
-      assert.match(notes, new RegExp(`${"ab".repeat(32)}  Picsee-0\\.0\\.1\\.dmg`));
+      assert.match(notes, new RegExp(`${"ab".repeat(32)}  Mado-0\\.0\\.1\\.dmg`));
       assert.match(notes, /build 312/);
+      assert.match(notes, /settings, recent folders and folder grants do not carry over/);
+      assert.doesNotMatch(notes, /Picsee-0/);
       assert.doesNotMatch(notes, /\{\{/);
     } finally { step.cleanup(); }
   });
@@ -86,7 +88,7 @@ function repository() {
 test("the version step accepts a tag on main whose version matches and exports the build", () => {
   const repo = repository();
   try {
-    for (const [tag, sha, build] of [["v0.0.1", repo.second, "2"], ["v0.0.1-rc.3", repo.first, "1"]]) {
+    for (const [tag, sha, build] of [["mado-v0.0.1", repo.second, "2"], ["mado-v0.0.1-rc.3", repo.first, "1"]]) {
       const env = join(repo.dir, `env-${tag}`);
       writeFileSync(env, "");
       const step = runStep("Check the tag against the project version", { cwd: repo.dir,
@@ -103,12 +105,14 @@ test("the version step fails on a mismatched or malformed tag, a commit off main
   const repo = repository();
   try {
     const cases = [
-      ["v0.0.2", repo.second, "GRT84NAK4T", /does not match MARKETING_VERSION/],
-      ["v0.0.1", repo.side, "GRT84NAK4T", /is not on main/],
-      ["v0.0.1-rc.0", repo.second, "GRT84NAK4T", /unexpected tag/],
-      ["v0.0.1-beta", repo.second, "GRT84NAK4T", /unexpected tag/],
+      ["mado-v0.0.2", repo.second, "GRT84NAK4T", /does not match MARKETING_VERSION/],
+      ["mado-v0.0.1", repo.side, "GRT84NAK4T", /is not on main/],
+      ["mado-v0.0.1-rc.0", repo.second, "GRT84NAK4T", /unexpected tag/],
+      ["mado-v0.0.1-beta", repo.second, "GRT84NAK4T", /unexpected tag/],
+      ["v0.0.1", repo.second, "GRT84NAK4T", /unexpected tag/],
+      ["v0.0.1-rc.1", repo.second, "GRT84NAK4T", /unexpected tag/],
       ["0.0.1", repo.second, "GRT84NAK4T", /unexpected tag/],
-      ["v0.0.1", repo.second, "", /DEVELOPMENT_TEAM is not set/],
+      ["mado-v0.0.1", repo.second, "", /DEVELOPMENT_TEAM is not set/],
     ];
     for (const [tag, sha, team, message] of cases) {
       const env = join(repo.dir, "env");
@@ -134,7 +138,8 @@ function appcastWorld() {
   git(dir, "init", "-q", "-b", "main", seed);
   mkdirSync(join(seed, "scripts/release"), { recursive: true });
   writeFileSync(join(seed, "scripts/release/appcast.mjs"), readFileSync(join(root, "scripts/release/appcast.mjs")));
-  writeFileSync(join(seed, "appcast.xml"), emptyAppcast());
+  writeFileSync(join(seed, "appcast.xml"), readFileSync(join(root, "appcast.xml")));
+  writeFileSync(join(seed, "appcast-mado.xml"), emptyAppcast());
   git(seed, "add", "."); git(seed, "commit", "-q", "-m", "main");
   git(seed, "remote", "add", "origin", origin); git(seed, "push", "-q", "origin", "main");
   git(dir, "clone", "-q", origin, work);
@@ -143,7 +148,7 @@ function appcastWorld() {
   const signature = Buffer.alloc(64, 5).toString("base64");
   writeFileSync(join(tools, "bin/sign_update"), `#!/bin/bash\nprintf '%s\\n' "$@" > "${dir}/sign-argv"\ncat > "${dir}/sign-stdin"\nprintf '%s\\n' '${signature}'\n`);
   chmodSync(join(tools, "bin/sign_update"), 0o755);
-  const dmg = join(dir, "Picsee-0.0.1.dmg");
+  const dmg = join(dir, "Mado-0.0.1.dmg");
   writeFileSync(dmg, Buffer.alloc(4321, 1));
   return { dir, origin, work, tools, dmg, signature, git };
 }
@@ -159,8 +164,8 @@ function runAppcast(world, { openPR = "" } = {}) {
   const guard = refuseSecrets("SPARKLE_ED_PRIVATE_KEY");
   return runStep("Sign the update and open the appcast PR", {
     cwd: world.work,
-    env: { TAG: "v0.0.1", VERSION: "0.0.1", BUILD: "312", DMG: world.dmg, SPARKLE_TOOLS: world.tools,
-      GITHUB_REPOSITORY: "anzchy/picsee", GH_TOKEN: "token", SPARKLE_ED_PRIVATE_KEY: "private-key-material",
+    env: { TAG: "mado-v0.0.1", VERSION: "0.0.1", BUILD: "312", DMG: world.dmg, SPARKLE_TOOLS: world.tools,
+      GITHUB_REPOSITORY: "anzchy/mado", GH_TOKEN: "token", SPARKLE_ED_PRIVATE_KEY: "private-key-material",
       GIT_CONFIG_GLOBAL: "/dev/null" },
     // Everything after sign_update runs without the Sparkle key in its environment.
     fakes: {
@@ -171,7 +176,13 @@ function runAppcast(world, { openPR = "" } = {}) {
   });
 }
 const ghCalls = (world) => { try { return readFileSync(join(world.dir, "gh-calls"), "utf8").trim().split("\n"); } catch { return []; } };
-const remoteFeed = (world) => world.git(world.origin, "show", "appcast/v0.0.1:appcast.xml");
+function assertFrozenFeed(world) {
+  const branch = "appcast-mado/mado-v0.0.1";
+  assert.equal(world.git(world.origin, "rev-parse", `${branch}:appcast.xml`), world.git(world.origin, "rev-parse", "main:appcast.xml"));
+  assert.equal(world.git(world.origin, "diff", "--name-only", "main", branch), "appcast-mado.xml");
+  assert.match(world.git(world.origin, "log", "-1", "--format=%s", branch), /release\(appcast\): mado /);
+}
+const remoteFeed = (world) => world.git(world.origin, "show", "appcast-mado/mado-v0.0.1:appcast-mado.xml");
 
 test("the appcast step signs from stdin, pushes appcast/<tag> and opens one PR", () => {
   const world = appcastWorld();
@@ -180,13 +191,15 @@ test("the appcast step signs from stdin, pushes appcast/<tag> and opens one PR",
     try { assert.equal(step.status, 0, step.stderr); } finally { step.cleanup(); }
     assert.equal(readFileSync(join(world.dir, "sign-stdin"), "utf8"), "private-key-material");
     assert.doesNotMatch(readFileSync(join(world.dir, "sign-argv"), "utf8"), /private-key-material/);
+    assertFrozenFeed(world);
+    assert.equal(readFileSync(join(world.dir, "sign-argv"), "utf8").trim().split("\n").at(-1), world.dmg);
     const feed = remoteFeed(world);
-    assert.match(feed, /url="https:\/\/github\.com\/anzchy\/picsee\/releases\/download\/v0\.0\.1\/Picsee-0\.0\.1\.dmg" length="4321"/);
+    assert.match(feed, /url="https:\/\/github\.com\/anzchy\/mado\/releases\/download\/mado-v0\.0\.1\/Mado-0\.0\.1\.dmg" length="4321"/);
     assert.ok(feed.includes(`sparkle:edSignature="${world.signature}"`));
-    assert.equal(world.git(world.origin, "rev-parse", "main"), world.git(world.origin, "rev-parse", "appcast/v0.0.1~1"));
+    assert.equal(world.git(world.origin, "rev-parse", "main"), world.git(world.origin, "rev-parse", "appcast-mado/mado-v0.0.1~1"));
     const calls = ghCalls(world);
     assert.equal(calls.filter((c) => c.startsWith("pr create")).length, 1, calls.join("\n"));
-    assert.match(calls.find((c) => c.startsWith("pr create")), /--base main --head appcast\/v0\.0\.1/);
+    assert.match(calls.find((c) => c.startsWith("pr create")), /--base main --head appcast-mado\/mado-v0\.0\.1/);
   } finally { rmSync(world.dir, { recursive: true, force: true }); }
 });
 
@@ -195,14 +208,15 @@ test("a rerun of the same tag replaces its appcast branch and reuses the open PR
   try {
     const first = runAppcast(world); first.cleanup();
     assert.equal(first.status, 0, first.stderr);
-    const before = world.git(world.origin, "rev-parse", "appcast/v0.0.1");
+    const before = world.git(world.origin, "rev-parse", "appcast-mado/mado-v0.0.1");
     // A fresh runner: a new clone, while the branch and its PR already exist.
     rmSync(world.work, { recursive: true, force: true });
     world.git(world.dir, "clone", "-q", world.origin, world.work);
     writeFileSync(world.dmg, Buffer.alloc(5000, 2));
     const again = runAppcast(world, { openPR: "17" });
     try { assert.equal(again.status, 0, again.stderr); } finally { again.cleanup(); }
-    assert.notEqual(world.git(world.origin, "rev-parse", "appcast/v0.0.1"), before);
+    assert.notEqual(world.git(world.origin, "rev-parse", "appcast-mado/mado-v0.0.1"), before);
+    assertFrozenFeed(world);
     assert.match(remoteFeed(world), /length="5000"/);
     assert.equal((remoteFeed(world).match(/<item>/g) ?? []).length, 1);
     assert.equal(ghCalls(world).filter((c) => c.startsWith("pr create")).length, 1, "no second PR");
@@ -227,10 +241,13 @@ test("the appcast PR body says that merging offers the build to every installed 
   try {
     const step = runAppcast(world);
     try { assert.equal(step.status, 0, step.stderr); } finally { step.cleanup(); }
+    assertFrozenFeed(world);
     const create = ghCalls(world).find((c) => c.startsWith("pr create"));
-    assert.match(create, /offers picsee 0\.0\.1 \(312\) to every installed copy that has update checks on/);
+    assert.match(create, /--title release\(appcast\): mado/);
+    assert.match(create, /Adds mado-v0\.0\.1 to appcast-mado\.xml/);
+    assert.match(create, /offers Mado 0\.0\.1 \(312\) to every installed copy that has update checks on/);
     assert.match(create, /release candidate, close this PR unless you mean a general rollout/);
-    assert.match(create, /Merge only after publishing the draft release v0\.0\.1/);
+    assert.match(create, /Merge only after publishing the draft release mado-v0\.0\.1/);
   } finally { rmSync(world.dir, { recursive: true, force: true }); }
 });
 
@@ -287,7 +304,7 @@ test("the certificate step keeps the .p12 private and short-lived and exports th
     assert.doesNotMatch(calls, new RegExp(p12.replace(/[+/=]/g, "\\$&")), "the base64 secret never reaches argv");
     assert.equal(spawnSync("/bin/test", ["-e", join(step.dir, "developer-id.p12")]).status, 1, "the .p12 is removed");
     const exported = readFileSync(env, "utf8");
-    assert.match(exported, /^KEYCHAIN=.*picsee-release\.keychain-db$/m);
+    assert.match(exported, /^KEYCHAIN=.*mado-release\.keychain-db$/m);
     assert.match(exported, /^IDENTITY=0123456789ABCDEF0123456789ABCDEF01234567$/m);
   } finally { step.cleanup(); rmSync(dirname(env), { recursive: true, force: true }); }
 });
@@ -309,7 +326,7 @@ test("the certificate step fails when no Developer ID identity belongs to the te
 
 test("keychain clean-up reports a failed deletion instead of swallowing it", () => {
   for (const [exit, expected] of [[0, 0], [1, 1]]) {
-    const keychain = join(mkdtempSync(join(tmpdir(), "picsee-kc-")), "picsee-release.keychain-db");
+    const keychain = join(mkdtempSync(join(tmpdir(), "picsee-kc-")), "mado-release.keychain-db");
     writeFileSync(keychain, "");
     const step = runStep("Delete the temporary keychain", { env: { KEYCHAIN: keychain },
       fakes: { security: `printf '%s\\n' "$*" >> "$RUNNER_TEMP/security-calls"\nexit ${exit}\n` } });
@@ -321,4 +338,28 @@ test("keychain clean-up reports a failed deletion instead of swallowing it", () 
   }
   const none = runStep("Delete the temporary keychain", { fakes: { security: "exit 1\n" } });
   try { assert.equal(none.status, 0, none.stderr); } finally { none.cleanup(); }
+});
+
+// A marketing restart must not restart CFBundleVersion: retain the old app's history.
+test("Mado build numbers increase from the preceding Picsee history", () => {
+  const repo = repository();
+  const git = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { cwd: repo.dir, encoding: "utf8" }).trim();
+  try {
+    git("tag", "v0.0.1", repo.first);
+    const old = Number(git("rev-list", "--count", "v0.0.1"));
+    let previous = old;
+    for (const tag of ["mado-v0.0.1-rc.1", "mado-v0.0.1"]) {
+      const sha = git("rev-parse", "HEAD");
+      const count = Number(git("rev-list", "--count", sha));
+      const env = join(repo.dir, "build-env"); writeFileSync(env, "");
+      const run = runStep("Check the tag against the project version", { cwd: repo.dir, env: {GITHUB_REF_NAME: tag, GITHUB_SHA: sha, GITHUB_ENV: env, DEVELOPMENT_TEAM: "GRT84NAK4T"} });
+      try {
+        assert.equal(run.status, 0, run.stderr);
+        const build = Number(/^BUILD=(.*)$/m.exec(readFileSync(env, "utf8"))?.[1]);
+        assert.equal(build, count); assert.ok(build > previous); previous = build;
+      } finally { run.cleanup(); }
+      git("commit", "-q", "--allow-empty", "-m", "next Mado build");
+      git("update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD"));
+    }
+  } finally { rmSync(repo.dir, { recursive: true, force: true }); }
 });

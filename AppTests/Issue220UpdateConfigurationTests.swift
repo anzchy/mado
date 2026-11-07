@@ -38,7 +38,7 @@ private func isFalse(_ value: Any?) -> Bool {
 
 @Test func issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() throws {
     let info = try plist("App/Info.plist")
-    #expect(info["SUFeedURL"] == nil, "Mado feed awaits #552; never use the frozen legacy feed")
+    #expect(info["SUFeedURL"] as? String == "https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml")
     let key = try #require(info["SUPublicEDKey"] as? String)
     #expect(Data(base64Encoded: key)?.count == 32)
     #expect(key == "XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=")

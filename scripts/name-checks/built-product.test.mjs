@@ -74,13 +74,12 @@ test('all en/zh nested variants, each occurrence and source fallback are scanned
   assert.ok(failures.every(message => !message.includes('Mado key only') && !message.includes('/fr/')));
 });
 
-test('identity swap preserves diagnostic locality while the Mado feed remains undecided', () => {
+test('identity swap preserves diagnostic locality with each configured feed', () => {
   const first = fixture();
   const second = JSON.parse(JSON.stringify(first).replaceAll('Picsee', 'Mado').replaceAll('picsee', 'mado'));
+  second.info.SUFeedURL = 'https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml';
   for (const [artifact, own, other] of [[first, 'Picsee', 'Mado'], [second, 'Mado', 'Picsee']]) {
-    // #552 must decide Mado's feed, so own-name success is intentionally asymmetric.
-    assert.deepEqual(checkBuiltProduct(artifact, own), own === 'Picsee' ? []
-      : [`Info.plist:SUFeedURL forbidden while Mado's feed is undecided (#552): ${JSON.stringify(artifact.info.SUFeedURL)}`]);
+    assert.deepEqual(checkBuiltProduct(artifact, own), []);
     assert.equal(checkBuiltProduct(artifact, other).length, 7);
     const before = checkBuiltProduct(artifact, other);
     artifact.catalogs[0].data.strings.extra = { localizations: { en: unit(`Open ${own}`) } };
@@ -145,7 +144,7 @@ test('public CLI reads built metadata and explicit unsigned template with honest
   assert.match(pass.stdout, /unsigned.*template/i);
   const fail = run(f, ['--expected-name', 'Mado']);
   assert.equal(fail.status, 1, fail.stderr);
-  assert.match(fail.stderr, /SUFeedURL forbidden.*#552/);
+  assert.match(fail.stderr, /SUFeedURL: expected/);
   for (const field of [...Object.keys(info), mach, '/localizations/en/', '/localizations/zh-Hans/']) {
     assert.ok(fail.stderr.includes(field), field);
   }
@@ -196,16 +195,16 @@ test('unsigned CLI missing Sparkle key still lists all identity failures without
 });
 
 
-test('release rejects an undecided Mado feed independently of observed feed values', () => {
+test('release rejects every Mado feed other than its configured URL', () => {
   for (const value of ['https://example.com/new-feed.xml', '', null, undefined]) {
     const input = { info: { CFBundleName: 'Mado', CFBundleDisplayName: 'Mado',
       CFBundleIdentifier: 'io.github.anzchy.mado', SUFeedURL: value },
       entitlements: { [mach]: ['io.github.anzchy.mado-spks', 'io.github.anzchy.mado-spki'] }, catalogs: [catalog({})] };
     assert.deepEqual(checkBuiltProduct(input, 'Mado', { release: true }),
-      ['Info.plist:SUFeedURL undecided for Mado (decided in #552)']);
+      [`Info.plist:SUFeedURL: expected \"https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml\", found ${JSON.stringify(value)}`]);
     delete input.info.SUFeedURL;
     assert.deepEqual(checkBuiltProduct(input, 'Mado', { release: true }),
-      ['Info.plist:SUFeedURL undecided for Mado (decided in #552)']);
+      ['Info.plist:SUFeedURL: expected \"https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml\", found undefined']);
   }
   assert.deepEqual(checkBuiltProduct(fixture(), 'Picsee'), []);
 });
