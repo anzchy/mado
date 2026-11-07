@@ -48,6 +48,7 @@ private final class Issue363ContourReference: NSView {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 480, height: 240),
                                       session: ViewerSession())
+    overlay.setToolBackgroundOpacity(100)
     overlay.refresh(filename: "a.png")
     for name in [NSAppearance.Name.aqua, .darkAqua] {
         let appearance = try #require(NSAppearance(named: name))

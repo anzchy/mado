@@ -6,6 +6,7 @@ import PicseeApplication
 @Test @MainActor func chromeGroupLayersResolveLightDarkAndBack() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 640, height: 680), session: ViewerSession())
+    overlay.setToolBackgroundOpacity(100)
     let cases: [(NSAppearance.Name, [CGFloat])] = [(.aqua, [1, 1, 1, 1]), (.darkAqua, [20/255, 24/255, 33/255, 1]), (.aqua, [1, 1, 1, 1])]
     for (name, expected) in cases {
         overlay.appearance = try #require(NSAppearance(named: name))
@@ -25,6 +26,7 @@ import PicseeApplication
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 1280, height: 800),
         session: ViewerSession())
+    overlay.setToolBackgroundOpacity(100)
     overlay.refresh(filename: "a.png")
     let initialWidth = overlay.groups[1].frame.width
 
