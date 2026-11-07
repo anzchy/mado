@@ -24,7 +24,7 @@ import MadoApplication
     #expect(EntryPoint.settingsUpdatesAutomaticCheck.rawValue == "settingsUpdatesAutomaticCheck")
     #expect(EntryPoint.settingsUpdatesCheckNow.rawValue == "settingsUpdatesCheckNow")
     #expect(Set(EntryPoint.allCases.map(\.rawValue)).count == EntryPoint.allCases.count)
-    #expect(EntryPoint.reportIssueURL.absoluteString == "https://github.com/anzchy/picsee/issues/new?template=bug_report.yml")
+    #expect(EntryPoint.reportIssueURL.absoluteString == "https://github.com/anzchy/mado/issues/new?template=bug_report.yml")
 
     for entry in EntryPoint.allCases {
         #expect(EntryPointState.allCases.contains(entry.state))

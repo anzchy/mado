@@ -26,7 +26,7 @@ import MadoInfrastructure
     #expect(window.items.contains { $0.identifier?.rawValue == "diagnostics.menu" } == false)
 
     let report = help.items[0]
-    #expect(EntryPoint.reportIssueURL.absoluteString == "https://github.com/anzchy/picsee/issues/new?template=bug_report.yml")
+    #expect(EntryPoint.reportIssueURL.absoluteString == "https://github.com/anzchy/mado/issues/new?template=bug_report.yml")
     #expect(menu.validateMenuItem(report))
     #expect(NSApp.sendAction(try #require(report.action), to: report.target, from: report))
     #expect(openedURLs == [EntryPoint.reportIssueURL])
