@@ -290,25 +290,25 @@ enum SettingsSection: String, CaseIterable {
         let note = label(String(localized: "These are the same preferences as the grid footer Display panel; changes will sync immediately."), role: "uiSmall", muted: true)
         note.frame = NSRect(x: 162, y: 260, width: 390, height: 40)
         pane.addSubview(note)
-        // Viewer-only preference, below the grid-preference note. Both localized titles fit on one line.
+        // Keep the Display columns; the English title wraps within the shared label column.
         let opacityTitle = label(String(localized: "Tool Background Opacity"))
         opacityTitle.alignment = .right
-        opacityTitle.maximumNumberOfLines = 1
-        opacityTitle.frame = NSRect(x: 26, y: 211, width: 230, height: 24)
+        opacityTitle.maximumNumberOfLines = 2
+        opacityTitle.frame = NSRect(x: 26, y: 201, width: 120, height: 44)
         opacityTitle.setAccessibilityIdentifier("settings.display.tool-opacity.label")
         pane.addSubview(opacityTitle)
         toolOpacity = ToolBackgroundOpacitySlider(value: 50, minValue: 30, maxValue: 100,
             target: self, action: #selector(changeToolBackgroundOpacity(_:)))
         toolOpacity.isContinuous = true
         toolOpacity.font = DesignMetrics.font("ui")
-        toolOpacity.frame = NSRect(x: 280, y: 211, width: 210, height: 24)
+        toolOpacity.frame = NSRect(x: 162, y: 211, width: 220, height: 24)
         toolOpacity.setAccessibilityIdentifier("settings.display.tool-opacity")
         toolOpacity.setAccessibilityLabel(String(localized: "Tool Background Opacity"))
         pane.addSubview(toolOpacity)
         toolOpacityValue = label("50%")
         toolOpacityValue.font = DesignMetrics.font("ui", monospaced: true)
         toolOpacityValue.alignment = .right
-        toolOpacityValue.frame = NSRect(x: 500, y: 211, width: 54, height: 24)
+        toolOpacityValue.frame = NSRect(x: 392, y: 211, width: 54, height: 24)
         toolOpacityValue.setAccessibilityIdentifier("settings.display.tool-opacity.value")
         pane.addSubview(toolOpacityValue)
     }

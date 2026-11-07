@@ -220,6 +220,104 @@ import PicseeMacUI
     expectValue(63.5, text: "63.5%")
 }
 
+/// Lay out the full actual field content with its native cell's wrapping and line cap.
+/// Checking glyph coverage and truncation separately prevents an ellipsis from looking like a fit.
+@MainActor private func issue351ExpectFullTextFits(_ field: NSTextField) throws {
+    let cell = try #require(field.cell as? NSTextFieldCell)
+    let font = try #require(field.font)
+    let drawing = cell.drawingRect(forBounds: field.bounds)
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = field.alignment
+    paragraph.lineBreakMode = field.lineBreakMode
+    let text = NSTextStorage(string: field.stringValue, attributes: [.font: font, .paragraphStyle: paragraph])
+    let layout = NSLayoutManager()
+    let container = NSTextContainer(size: drawing.size)
+    container.lineFragmentPadding = 0
+    container.maximumNumberOfLines = cell.usesSingleLineMode ? 1 : field.maximumNumberOfLines
+    container.lineBreakMode = field.lineBreakMode
+    text.addLayoutManager(layout)
+    layout.addTextContainer(container)
+    layout.ensureLayout(for: container)
+    let glyphs = layout.glyphRange(for: container)
+    #expect(!field.stringValue.isEmpty)
+    #expect(glyphs.location == 0 && glyphs.length == layout.numberOfGlyphs,
+            "All characters must fit the actual native text frame")
+    var truncated = false
+    layout.enumerateLineFragments(forGlyphRange: glyphs) { _, _, _, lineGlyphs, _ in
+        if layout.truncatedGlyphRange(inLineFragmentForGlyphAt: lineGlyphs.location).location != NSNotFound {
+            truncated = true
+        }
+    }
+    #expect(!truncated, "No truncation token may replace full localized text")
+    let used = layout.usedRect(for: container)
+    #expect(used.width <= drawing.width + 1 && used.height <= drawing.height + 1)
+}
+
+@MainActor private func issue351CatalogStrings() throws -> [String: Any] {
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("App/Resources/Localizable.xcstrings")
+    let catalog = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    return try #require(catalog["strings"] as? [String: Any])
+}
+
+@MainActor private func issue351Translation(_ key: String, locale: String, strings: [String: Any]) throws -> String {
+    let entry = try #require(strings[key] as? [String: Any])
+    let localizations = try #require(entry["localizations"] as? [String: Any])
+    let localization = try #require(localizations[locale] as? [String: Any])
+    let unit = try #require(localization["stringUnit"] as? [String: Any])
+    return try #require(unit["value"] as? String)
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor func issue351SettingsDisplayRowsKeepColumnsAndFullLocalizedLabels() async throws {
+    let context = try await Issue351AppContext()
+    defer { context.close() }
+    let panel = context.panel()
+    let pane = try issue351Control("settings.pane.display", in: panel.window.contentView, as: NSView.self)
+    let keysAndControls = [("Thumbnail Size", "settings.display.size"),
+                           ("Show File Names", "settings.display.names"),
+                           ("Thumbnails", "settings.display.fit.0"),
+                           ("Tool Background Opacity", "settings.display.tool-opacity")]
+    let rows = try keysAndControls.map { key, id -> (String, NSTextField, NSControl) in
+        let matching = pane.subviews.compactMap { $0 as? NSTextField }
+            .filter { $0.stringValue == String(localized: String.LocalizationValue(key)) }
+        #expect(matching.count == 1, "Each Display row has exactly one full label")
+        return (key, try #require(matching.first), try issue351Control(id, in: pane, as: NSControl.self))
+    }
+    #expect(rows.count == 4)
+    let strings = try issue351CatalogStrings()
+    let originalAXLabel = rows[3].2.accessibilityLabel()
+    #expect(originalAXLabel == String(localized: "Tool Background Opacity"))
+    for locale in ["en", "zh-Hans"] {
+        // Exercise the supported catalog text on real native fields without altering layout configuration.
+        // This is native text/layout coverage, not a separate localized-process launch.
+        for (key, label, _) in rows { label.stringValue = try issue351Translation(key, locale: locale, strings: strings) }
+        for activation in 0..<2 {
+            if activation == 1 { panel.select(.general); panel.select(.display) }
+            panel.window.contentView?.layoutSubtreeIfNeeded()
+            let sizeLabel = rows[0].1.convert(rows[0].1.bounds, to: nil)
+            let sizeControl = rows[0].2.convert(rows[0].2.bounds, to: nil)
+            for (key, label, control) in rows {
+                #expect(!label.isHiddenOrHasHiddenAncestor && !control.isHiddenOrHasHiddenAncestor)
+                #expect(label.stringValue == (try issue351Translation(key, locale: locale, strings: strings)))
+                let labelFrame = label.convert(label.bounds, to: nil)
+                let controlFrame = control.convert(control.bounds, to: nil)
+                #expect(abs(labelFrame.minX - sizeLabel.minX) <= 1)
+                #expect(abs(labelFrame.maxX - sizeLabel.maxX) <= 1,
+                        "Every right-aligned label must end at the shared label column")
+                #expect(abs(controlFrame.minX - sizeControl.minX) <= 1,
+                        "Every Display row's first control must start at the Thumbnail Size column")
+                try issue351ExpectFullTextFits(label)
+                #expect(pane.bounds.contains(label.frame) && pane.bounds.contains(control.frame))
+                #expect(!label.frame.intersects(control.frame))
+                for sibling in pane.subviews where sibling !== label && sibling !== control {
+                    #expect(!sibling.frame.intersects(label.frame), "A full row label must not overlap another view")
+                }
+            }
+            #expect(rows[3].2.accessibilityLabel() == originalAXLabel)
+        }
+    }
+}
+
 @Test(.timeLimit(.minutes(3))) @MainActor func issue351SettingsEnglishAndChineseOpacityLabelsFitRealFrames() async throws {
     let context = try await Issue351AppContext()
     defer { context.close() }
@@ -233,15 +331,15 @@ import PicseeMacUI
     let strings = try #require(catalog["strings"] as? [String: Any])
     let entry = try #require(strings["Tool Background Opacity"] as? [String: Any])
     let translations = try #require(entry["localizations"] as? [String: Any])
-    let font = try #require(label.font)
+    let originalLabel = label.stringValue
+    defer { label.stringValue = originalLabel }
     #expect(label.stringValue == String(localized: "Tool Background Opacity"))
     for (locale, expected) in [("en", "Tool Background Opacity"), ("zh-Hans", "工具背景不透明度")] {
         let localization = try #require(translations[locale] as? [String: Any])
         let unit = try #require(localization["stringUnit"] as? [String: Any])
         #expect(unit["value"] as? String == expected)
-        let measured = (expected as NSString).size(withAttributes: [.font: font])
-        #expect(ceil(measured.width) + 4 <= label.frame.width)
-        #expect(ceil(measured.height) <= label.frame.height)
+        label.stringValue = expected
+        try issue351ExpectFullTextFits(label)
     }
     let pane = try #require(label.superview)
     #expect(pane.bounds.contains(label.frame) && pane.bounds.contains(slider.frame) && pane.bounds.contains(value.frame))
