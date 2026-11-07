@@ -12,11 +12,11 @@ A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflo
 
 ```sh
 git switch main && git pull
-git tag -a v0.0.1-rc.1 -m "Mado 0.0.1 rc.1"
-git push origin v0.0.1-rc.1
+git tag -a mado-v0.0.1-rc.1 -m "Mado 0.0.1 rc.1"
+git push origin mado-v0.0.1-rc.1
 ```
 
-Only `v0.0.1-rc.N` and `v0.0.1` start the workflow. The run fails before building if:
+Mado releases use `mado-v0.0.1-rc.N` and `mado-v0.0.1` (#547, ADR-0017). The release tooling transition belongs to #552; use this runbook for a release only after that ticket lands. The run fails before building if:
 - the tag isn't on `main`;
 - the tag's version differs from `MARKETING_VERSION`;
 - `DEVELOPMENT_TEAM` is unset.
@@ -56,13 +56,13 @@ Other measures:
    - The DMG holds the stapled app and an Applications link (`hdiutil`, APFS, lzfse).
    - It is signed, notarised, stapled and validated.
    - `spctl` assesses both the DMG and the app.
-7. **Draft release** `v0.0.1-rc.N`:
+7. **Draft release** `mado-v0.0.1-rc.N`:
    - Assets: `Mado-0.0.1.dmg` and `Mado-0.0.1.dmg.sha256`.
    - Notes from [`notes-template.md`](notes-template.md): checksum, privacy statement, a placeholder for what's new.
    - rc tags are marked pre-release.
 8. **Appcast PR:**
    - The DMG is signed with Sparkle's EdDSA key, which reaches `sign_update` only on standard input.
-   - `scripts/release/appcast.mjs` adds the item to `appcast.xml` on a new branch `appcast/<tag>`.
+   - `scripts/release/appcast.mjs` adds the item to Mado’s separate appcast on a new branch `appcast/<tag>`.
    - A PR to `main` is opened.
 
 To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
@@ -81,10 +81,10 @@ node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Mado
    - Open the DMG, drag Mado into Applications and launch it. Gatekeeper must not warn.
    - Edit the notes' "What is in this version".
 2. **Publish the draft.** The appcast's enclosure URL only works once the release is public.
-3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, as soon as `appcast.xml` lands on `main` (the feed in `SUFeedURL`). There is one feed, and GitHub's pre-release flag does not filter it. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
-4. **Promote to final:** when an rc is good, tag `v0.0.1` on the same or a later `main` commit and repeat.
+3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, as soon as Mado’s appcast lands on `main` at the feed selected by `SUFeedURL`. The separate Mado feed path is selected in #552; never add Mado entries to the frozen former-app `appcast.xml`. GitHub's pre-release flag does not filter updates. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
+4. **Promote to final:** when an rc is good, tag `mado-v0.0.1` on the same or a later `main` commit and repeat.
 
-The appcast PR is opened with the workflow's token, so GitHub does not run CI on it. It changes only `appcast.xml`.
+The appcast PR is opened with the workflow's token, so GitHub does not run CI on it. It changes only Mado’s appcast. The former app’s `appcast.xml` and v0.0.1 release remain frozen history (#547).
 
 ## When a run fails
 
@@ -121,6 +121,6 @@ Apple keeps the notarisation submissions; they need no clean-up.
    ```
 3. `appcast/<tag>` and its PR may stay; the new run replaces the branch and reuses the PR. To remove them instead: `gh pr close <number>`, then `git push --delete origin appcast/<tag>`.
 
-**Or skip the tag:** cut `rc.N+1`, then close the old appcast PR and delete its branch. This is the safest choice for a release candidate. For the one final `v0.0.1` tag, use the same-tag path.
+**Or skip the tag:** cut `rc.N+1`, then close the old appcast PR and delete its branch. This is the safest choice for a release candidate. For the one final `mado-v0.0.1` tag, use the same-tag path.
 
 Never edit or delete a **published** release's DMG: Sparkle verifies the EdDSA signature in the appcast against it. A bad published build is replaced by a newer one.

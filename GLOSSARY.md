@@ -4,6 +4,9 @@ Mado is a macOS image viewer that browses images where they already are on disk,
 
 ## Language
 
+**Mado**:
+The app name for this sandboxed macOS image viewer; former name: Picsee (#547, ADR-0017).
+
 ### Access
 
 **Access Root**（授权根）:
