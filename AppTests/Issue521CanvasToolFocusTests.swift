@@ -5,19 +5,19 @@ import PicseeApplication
 import PicseeInfrastructure
 import PicseeMacUI
 
-@MainActor private final class Issue521Motion: ReduceMotionSource {
+@MainActor final class Issue521Motion: ReduceMotionSource {
     var reduceMotion = true
     var onChange: (@MainActor () -> Void)?
 }
 
-@MainActor private func issue521Find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {
+@MainActor func issue521Find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {
     guard let view else { return nil }
     if let found = view as? T { return found }
     return view.subviews.lazy.compactMap { issue521Find(type, in: $0) }.first
 }
 
 /// Read the rendered image marker, rather than reflecting CanvasView's private transform.
-@MainActor private func issue521Marker(_ canvas: CanvasView) throws -> CGPoint {
+@MainActor func issue521Marker(_ canvas: CanvasView) throws -> CGPoint {
     let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil,
         pixelsWide: Int(canvas.bounds.width), pixelsHigh: Int(canvas.bounds.height),
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,

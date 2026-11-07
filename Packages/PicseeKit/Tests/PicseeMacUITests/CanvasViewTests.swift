@@ -381,3 +381,112 @@ import PicseeApplication
     #expect(aSession.zoomMode == mode)
     #expect(try canvasBitmap(a).tiffRepresentation == pixels)
 }
+
+/// #527: a small landmark within an oversized source makes pan visible without reading private geometry.
+@MainActor private func issue527CanvasMarkerImage() throws -> DecodedImage {
+    let context = try #require(CGContext(data: nil, width: 160, height: 80, bitsPerComponent: 8,
+        bytesPerRow: 640, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
+    context.fill(CGRect(x: 0, y: 0, width: 160, height: 80))
+    context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+    context.fill(CGRect(x: 76, y: 36, width: 8, height: 8))
+    return DecodedImage(image: try #require(context.makeImage()),
+        sourcePixelSize: CGSize(width: 1600, height: 800))
+}
+
+/// The content and canvas have different coordinate origins, exercising window-to-parent hit conversion.
+@MainActor private func issue527CanvasSurround(_ canvas: CanvasView, _ window: NSWindow) throws -> (NSView, NSButton) {
+    canvas.removeFromSuperview()
+    window.setContentSize(NSSize(width: 500, height: 300))
+    let content = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+    window.contentView = content
+    canvas.frame = NSRect(x: 24, y: 20, width: 432, height: 232)
+    content.addSubview(canvas)
+    let tool = NSButton(frame: NSRect(x: 8, y: 264, width: 100, height: 24))
+    tool.title = "Focus sentinel"
+    content.addSubview(tool)
+    try #require(window.makeFirstResponder(tool))
+    try #require(window.firstResponder === tool)
+    return (content, tool)
+}
+
+@Test(arguments: [false, true]) @MainActor
+func issue527CanvasRejectsForwardedPressWithoutFocusOrPan(staleDrag: Bool) throws {
+    let (canvas, window, host) = canvasHost()
+    defer { window.close(); withExtendedLifetime(host) {} }
+    let (content, tool) = try issue527CanvasSurround(canvas, window)
+    canvas.install(try issue527CanvasMarkerImage())
+    try #require(CommandRouter().route(.actualPixels, from: .key, to: canvas.session))
+    var focusCalls = 0
+    canvas.onCanvasFocus = { focusCalls += 1; canvas.session.updateFocus(.canvas) }
+    defer { canvas.onCanvasFocus = nil }
+    let centre = CGPoint(x: canvas.bounds.midX, y: canvas.bounds.midY)
+    if staleDrag {
+        // Leave an accepted gesture unfinished: rejecting a new down must clear its old dragPoint.
+        canvas.mouseDown(with: try canvasMouse(canvas, .leftMouseDown, centre))
+        canvas.mouseDragged(with: try canvasMouse(canvas, .leftMouseDragged,
+            CGPoint(x: centre.x + 10, y: centre.y + 6)))
+        try #require(focusCalls == 1 && window.firstResponder === canvas)
+    }
+    let overlay = NSView(frame: canvas.convert(
+        CGRect(x: centre.x - 60, y: centre.y - 50, width: 120, height: 100), to: content))
+    content.addSubview(overlay, positioned: .above, relativeTo: canvas)
+    try #require(window.makeFirstResponder(tool))
+    canvas.session.updateFocus(.tools)
+    let before = try canvasRedBounds(canvas)
+    try #require(before.width > 0 && before.height > 0, "the pan oracle must contain a visible marker")
+    let callsBefore = focusCalls
+    let down = try canvasMouse(canvas, .leftMouseDown, centre)
+    let parent = try #require(content.superview)
+    try #require(content.hitTest(parent.convert(down.locationInWindow, from: nil)) === overlay,
+        "the forwarded down really belongs to the topmost overlay")
+    // Model AppKit forwarding an unhandled overlay event to the shared canvas receiver.
+    canvas.mouseDown(with: down)
+    #expect(focusCalls == callsBefore, "a forwarded down must not request canvas focus")
+    #expect(window.firstResponder === tool)
+    #expect(canvas.session.inspectorFocus.focus == .tools)
+    #expect(try canvasRedBounds(canvas) == before)
+    let end = CGPoint(x: centre.x + 20, y: centre.y + 10)
+    canvas.mouseDragged(with: try canvasMouse(canvas, .leftMouseDragged, end))
+    #expect(try canvasRedBounds(canvas) == before, "rejected down must not start or retain a drag")
+    canvas.mouseUp(with: try canvasMouse(canvas, .leftMouseUp, end))
+    canvas.mouseDragged(with: try canvasMouse(canvas, .leftMouseDragged,
+        CGPoint(x: end.x + 10, y: end.y + 10)))
+    #expect(try canvasRedBounds(canvas) == before)
+    #expect(focusCalls == callsBefore)
+    #expect(window.firstResponder === tool)
+    #expect(canvas.session.inspectorFocus.focus == .tools)
+}
+
+@Test @MainActor func issue527CanvasDirectHitStillFocusesAndPans() throws {
+    let (canvas, window, host) = canvasHost()
+    defer { window.close(); withExtendedLifetime(host) {} }
+    let (content, tool) = try issue527CanvasSurround(canvas, window)
+    canvas.install(try issue527CanvasMarkerImage())
+    try #require(CommandRouter().route(.actualPixels, from: .key, to: canvas.session))
+    canvas.session.updateFocus(.tools)
+    try #require(window.firstResponder === tool)
+    var focusCalls = 0
+    canvas.onCanvasFocus = { focusCalls += 1; canvas.session.updateFocus(.canvas) }
+    defer { canvas.onCanvasFocus = nil }
+    let initial = try canvasRedBounds(canvas)
+    try #require(initial.width > 0 && initial.height > 0)
+    let centre = CGPoint(x: canvas.bounds.midX, y: canvas.bounds.midY)
+    for delta in [CGPoint(x: 20, y: 10), CGPoint(x: -20, y: -10)] {
+        let down = try canvasMouse(canvas, .leftMouseDown, centre)
+        let parent = try #require(content.superview)
+        try #require(content.hitTest(parent.convert(down.locationInWindow, from: nil)) === canvas)
+        let before = try canvasRedBounds(canvas)
+        canvas.mouseDown(with: down)
+        #expect(window.firstResponder === canvas)
+        #expect(canvas.session.inspectorFocus.focus == .canvas)
+        let end = CGPoint(x: centre.x + delta.x, y: centre.y + delta.y)
+        canvas.mouseDragged(with: try canvasMouse(canvas, .leftMouseDragged, end))
+        canvas.mouseUp(with: try canvasMouse(canvas, .leftMouseUp, end))
+        #expect(try canvasRedBounds(canvas) == before.offsetBy(dx: delta.x, dy: delta.y),
+            "a direct hit must move the rendered marker by exactly the gesture delta")
+    }
+    #expect(focusCalls == 2)
+    #expect(try canvasRedBounds(canvas) == initial, "opposite direct drags restore image placement")
+}
