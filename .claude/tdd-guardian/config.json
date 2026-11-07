@@ -98,6 +98,16 @@
       "coverage": "none",
       "timeoutMs": 120000,
       "description": "Manual lightweight documentation RED receipts and current-identity/export contracts; node --version discovery needs no native heavy lock."
+    },
+    {
+      "name": "ci-cache-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/cache-key.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
