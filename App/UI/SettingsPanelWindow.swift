@@ -362,7 +362,10 @@ enum SettingsSection: String, CaseIterable {
         updateAutomatic.frame = NSRect(x: 162, y: 352, width: updateAutomatic.intrinsicContentSize.width, height: 24)
         configure(updateAutomatic, entry: .settingsUpdatesAutomaticCheck, id: "settings.update.automatic", title: updateAutomatic.title)
         pane.addSubview(updateAutomatic)
-        let privacy = label(String(localized: "Mado contacts GitHub only to check for updates and sends no system information."), role: "uiSmall", muted: true)
+        let explanation = updates?.isAvailable == true
+            ? String(localized: "Mado contacts GitHub only to check for updates and sends no system information.")
+            : String(localized: "Updates are not available in this build.")
+        let privacy = label(explanation, role: "uiSmall", muted: true)
         privacy.frame = NSRect(x: 162, y: 310, width: 390, height: 36)
         pane.addSubview(privacy)
         updateCheck = NSButton(title: String(localized: "Check Now"), target: self, action: #selector(checkForUpdates(_:)))
@@ -374,8 +377,8 @@ enum SettingsSection: String, CaseIterable {
         updateLastChecked.frame = NSRect(x: 162, y: 247, width: 390, height: 24)
         updateLastChecked.setAccessibilityIdentifier("settings.update.last-checked")
         pane.addSubview(updateLastChecked)
-        if updates == nil {
-            // No updater (UI-fixture builds): the controls stay visible but inert, without a Coming Soon marker.
+        if updates?.isAvailable != true {
+            // No updater (including builds without a feed): controls stay visible but inert.
             updateAutomatic.isEnabled = false
             updateCheck.isEnabled = false
         }
@@ -388,7 +391,8 @@ enum SettingsSection: String, CaseIterable {
         updateVersion.stringValue = String(format: String(localized: "%@ (build %@)"),
                                            updates.versionInfo.version ?? unknown, updates.versionInfo.build ?? unknown)
         updateAutomatic.state = updates.automaticallyChecksForUpdates ? .on : .off
-        updateCheck.isEnabled = updates.canCheckForUpdates
+        updateAutomatic.isEnabled = updates.isAvailable
+        updateCheck.isEnabled = updates.isAvailable && updates.canCheckForUpdates
         updateLastChecked.stringValue = updates.lastUpdateCheckDate.map {
             String(format: String(localized: "Last checked: %@"), $0.formatted(date: .abbreviated, time: .shortened))
         } ?? String(localized: "Last checked: Unknown")
