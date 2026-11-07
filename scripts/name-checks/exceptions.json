@@ -478,5 +478,29 @@
   {
     "path": "scripts/agents/fixtures/pre-installer-hook.sh.txt",
     "reason": "Historical negative test fixture captured verbatim from e000f1dc; preserves pre-installer hook tooling identity without historical Git objects."
+  },
+  {
+    "path": "scripts/agents/ui-parity-pr-body-lint.mjs",
+    "pattern": "(?<=anzchy\\\\/\\(\\?:)picsee(?=\\|mado\\))",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#554: the anzchy/picsee repository name stays approved beside anzchy/mado until the GitHub rename; remove this exception after the rename."
+  },
+  {
+    "path": "scripts/codex-rules/push-guard.py",
+    "pattern": "(?<=for repo in \\(')picsee(?=', 'mado'\\))",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#554: the anzchy/picsee repository name stays approved beside anzchy/mado until the GitHub rename; remove this exception after the rename."
+  },
+  {
+    "path": "scripts/codex-rules/test_push_guard.py",
+    "pattern": "(?<=def test_accepts_exactly_one_)picsee(?=_or_mado_push_url\\b)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#554: the anzchy/picsee repository name stays approved beside anzchy/mado until the GitHub rename; remove this exception after the rename."
   }
 ]
