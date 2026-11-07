@@ -104,7 +104,9 @@ const checkerPaths = { ledger: 'scripts/ledger', design: 'scripts/design' };
 // Syntax/identity checks catch mistaken citations; reviewers establish existence,
 // independence and coverage. Fragments never make one report into two reports.
 function auditReferenceIdentity(ref) {
-  if (/^https:\/\/github\.com\/anzchy\/picsee\/pull\/[1-9]\d*#(?:pullrequestreview|issuecomment)-[1-9]\d*$/.test(ref)) return ref;
+  // After the anzchy/picsee -> anzchy/mado rename (#554) both spellings name one report.
+  const review = /^https:\/\/github\.com\/anzchy\/(?:picsee|mado)(\/pull\/[1-9]\d*#(?:pullrequestreview|issuecomment)-[1-9]\d*)$/.exec(ref);
+  if (review) return `https://github.com/anzchy/mado${review[1]}`;
   if (!ref.startsWith('~/.picsee/herdr/') || /\s/.test(ref)) return undefined;
   const [path, fragment, ...extra] = ref.split('#');
   if (extra.length || (fragment !== undefined && !/^[\w-]+$/.test(fragment))) return undefined;
@@ -137,7 +139,7 @@ function checkCheckerChange(body, files, head) {
   if (!rationale.replace(/[\s—–-]/g, '')) return fail('a nonempty rationale beyond separators is required');
   const refs = audits.split(',').map(ref => auditReferenceIdentity(ref.trim()));
   if (refs.length < 2 || refs.some(ref => ref === undefined) || new Set(refs).size !== refs.length)
-    return fail('audits need at least two distinct normalized herdr auditor report paths or anzchy/picsee PR review/comment URLs; no placeholders; reviewers verify independence and coverage');
+    return fail('audits need at least two distinct normalized herdr auditor report paths or anzchy/picsee or anzchy/mado PR review/comment URLs; no placeholders; reviewers verify independence and coverage');
   return { ok: true };
 }
 
