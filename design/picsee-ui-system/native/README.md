@@ -15,6 +15,12 @@
 
 变更路径：先修改主规范和 token 源，再更新本目录，最后实施原生组件。生成清单使用 `python3 scripts/export_native_design_tokens.py`；它只导出规格，不生成 Swift 或原生资源文件。
 
+## #502 · 系统焦点环的原生边界
+
+Owner 于 2026-11-04 选择「Native exception (Recommended)」：原生控件默认采用 macOS 系统焦点环；第 24 页读取状态、24F 读取失败状态和第 26 页访问恢复状态明确遵守这一边界。App 保留系统环，不照搬 HTML 的 2 pt 方形强调色环或主按钮双环。
+
+Parity 审查不因系统环与 HTML 的环样式不同而记为 FAIL；焦点位置仍须验收，包括初始焦点是否落在规定动作、Tab / Shift-Tab 的移动目标、当前焦点是否可见。此边界只豁免环样式，不豁免焦点落错控件、焦点丢失或键盘不可达。对应规程见 [UI 对照契约](../../../docs/agents/ui-parity-contract.md)。这是既有原生行为的记录，未改变 App。
+
 ## #347 · Viewer Tools / Thumbnail Size（owner「A A C」，2026-11-03）
 
 canonical 来源：[`../tokens/viewer-grid.css`](../tokens/viewer-grid.css)。状态稿内联相同 token 和规则，使 `PinnedDesign` 与浏览器读取同一份 SHA 固定的 HTML。

@@ -8,6 +8,12 @@
 - 20 个正式状态的唯一目录是 [`states/manifest.json`](../../design/prototypes/picsee-browser/states/manifest.json)。开发计划 [§1.3](../PICSEE_DEVELOPMENT_PLAN.md) 决定每页归属的工作包；[功能账簿](../feature-ledger.md)决定当前实现状态及「怎么确认」。`viewer-v2.html` 只提供已写出的交互参考。HTML 中的按钮、示例文件名或静态蓝框不证明原生功能、权限或可访问性已实现。
 - 原生系统标题栏、菜单、字体栅格化、真实文件内容等按原生映射处理。每个与 HTML 不同的选择都在 brief 的「原生例外」列写具体元素、依据和预期结果；原生映射没有规定的差异，应先修设计或实现，不把它事后称为系统例外。
 
+## #502 · 原生系统焦点环边界
+
+Owner 于 2026-11-04 选择「Native exception (Recommended)」：App 的原生控件默认使用 macOS 系统焦点环，第 24 页读取、24F 读取失败和第 26 页访问恢复均保留系统环。HTML 的 2 pt 方形强调色环及主按钮双环属于网页表现，不要求 App 复制；对应映射见 [原生设计规范](../../design/picsee-ui-system/native/README.md#502--系统焦点环的原生边界)。
+
+审查时，环的样式差异不计为 FAIL；焦点位置仍按具体状态验收。初始焦点必须落在规定动作，Tab / Shift-Tab 必须移到正确控件，焦点必须可见且键盘可达。不能用这一原生边界豁免错误的焦点位置、焦点丢失或导航问题。
+
 ## 实现 brief 必填
 
 ### P2-05 原生例外：元数据排序状态
