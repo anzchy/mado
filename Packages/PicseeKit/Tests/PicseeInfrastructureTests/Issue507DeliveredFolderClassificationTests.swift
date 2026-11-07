@@ -5,11 +5,13 @@ import PicseeInfrastructure
 
 private final class Delivered507Scopes: @unchecked Sendable {
     private let lock = NSLock()
-    private var started: [String] = [], stopped: [String] = []
+    private var started: [String] = [], stopped: [String] = [], attempted: [String] = []
+    func attempt(_ url: URL) { lock.withLock { attempted.append(url.path) } }
     func start(_ url: URL) { lock.withLock { started.append(url.path) } }
     func stop(_ url: URL) { lock.withLock { stopped.append(url.path) } }
     var starts: [String] { lock.withLock { started } }
     var stops: [String] { lock.withLock { stopped } }
+    var attempts: [String] { lock.withLock { attempted } }
 }
 
 /// Real scope and bookmarks; a case may force the selection's start result or its readability.
@@ -20,6 +22,7 @@ private struct Delivered507Scope: SecurityScope, BookmarkCoding {
     let system = SystemSecurityScope()
     var requiresEmbeddedIdentity: Bool { system.requiresEmbeddedIdentity }
     func start(_ url: URL) -> Bool {
+        scopes.attempt(url)
         guard startable, system.start(url) else { return false }
         scopes.start(url); return true
     }
@@ -89,30 +92,40 @@ func issue507DeliveredNonFolderIsNotAFolder(input: String) async throws {
     let files = try f.files(scope)
     #expect(await files.deliveredFolder(url) == nil)
     #expect(scope.scopes.starts.count == scope.scopes.stops.count)
-    if input == "non-file URL" { #expect(scope.scopes.starts.isEmpty) }
+    #expect(scope.scopes.attempts.isEmpty)
 }
 
-@Test(arguments: [true, false])
-func issue507UnstartableSelectionNeedsProcessReadability(readable: Bool) async throws {
+/// The sandbox fact behind smoke507-20261107 (probe, 2026-11-07): a dropped link is neither readable nor
+/// startable, yet its target's metadata is. Classification must use that metadata and start no scope.
+@Test(arguments: [(false, false), (true, false), (false, true)])
+func issue507SandboxedSelectionIsClassifiedByMetadata(readable: Bool, startable: Bool) async throws {
     let f = try Delivered507Fixture()
     defer { f.remove() }
+    let fm = FileManager.default
+    let relative = f.base.appendingPathComponent("relative")
+    try fm.createSymbolicLink(atPath: relative.path, withDestinationPath: "actual")
+    let chained = f.base.appendingPathComponent("chained")
+    try fm.createSymbolicLink(at: chained, withDestinationURL: f.link)
+    let parentLink = f.base.appendingPathComponent("parent-link")
+    try fm.createSymbolicLink(at: parentLink, withDestinationURL: f.base)
+    let throughParent = URL(fileURLWithPath: parentLink.appendingPathComponent("actual").path, isDirectory: false)
+    let fileLink = f.base.appendingPathComponent("file-link")
+    try fm.createSymbolicLink(at: fileLink, withDestinationURL: f.image)
+    let dangling = f.base.appendingPathComponent("dangling")
+    try fm.createSymbolicLink(at: dangling, withDestinationURL: f.base.appendingPathComponent("absent"))
     var scope = Delivered507Scope()
-    scope.startable = false
     scope.readable = readable
+    scope.startable = startable
     let files = try f.files(scope)
-    let target = await files.deliveredFolder(f.link)
-    if readable { #expect(target?.pathComponents == f.canonicalActual) }
-    else { #expect(target == nil) }
-    #expect(scope.scopes.stops.isEmpty, "A failed start is never stopped")
-}
-
-@Test func issue507UnreadableStartableSelectionTakesItsScopeOnce() async throws {
-    let f = try Delivered507Fixture()
-    defer { f.remove() }
-    var scope = Delivered507Scope()
-    scope.readable = false
-    let files = try f.files(scope)
-    #expect(await files.deliveredFolder(f.link)?.pathComponents == f.canonicalActual)
-    #expect(scope.scopes.starts == [f.link.path])
-    #expect(scope.scopes.stops == [f.link.path])
+    let folders = [f.link, URL(fileURLWithPath: f.actual.path, isDirectory: false), relative, chained, throughParent]
+    for url in folders {
+        let target = await files.deliveredFolder(url)
+        #expect(target?.pathComponents == f.canonicalActual, "\(url.lastPathComponent) must name the canonical folder")
+        #expect(target?.hasDirectoryPath == true)
+    }
+    let others = [fileLink, f.image, dangling, try #require(URL(string: "https://example.com/folder/"))]
+    for url in others { #expect(await files.deliveredFolder(url) == nil, "\(url.lastPathComponent) is not a folder") }
+    #expect(scope.scopes.attempts.isEmpty, "A metadata read needs no scope (#233)")
+    #expect(await files.records().isEmpty)
+    #expect(!fm.fileExists(atPath: f.base.appendingPathComponent("roots.json").path))
 }

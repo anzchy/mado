@@ -10,7 +10,7 @@ The native input route had two additional problems: classification relied on `ha
 
 Owner decision, 2026-11-07, verbatim choice 「Same as a plain folder (Recommended)」: a folder reached through a symlink is handled exactly like a plain folder. Only the system open panel creates an Access Root (ADR-006, ADR-008, GLOSSARY).
 
-- **Drop / Open With / `open -a`:** a single input is classified on `FileAccess` (off the MainActor) by its real directory metadata, not by `hasDirectoryPath`. A directory, plain or linked, becomes its canonical target and goes through `ViewerSession.openInput` to the existing folder prompt: "Browsing Needs Folder Access", then NSOpenPanel opened on that target. Nothing is granted, bookmarked or remembered before the panel answers; cancelling leaves nothing. When the selection can't be read, the input keeps its original URL and classification.
+- **Drop / Open With / `open -a`:** a single input is classified on `FileAccess` (off the MainActor) by its real directory metadata, not by `hasDirectoryPath`. A directory, plain or linked, becomes its canonical target and goes through `ViewerSession.openInput` to the existing folder prompt: "Browsing Needs Folder Access", then NSOpenPanel opened on that target. Nothing is granted, bookmarked or remembered before the panel answers; cancelling leaves nothing. Classification reads metadata only and starts no scope: a sandboxed drop of a link is neither readable nor startable, but its target can be stat'ed (smoke507-20261107). A file link, a file, a dangling link or a non-file URL keeps its original classification.
 - **Panel:** `FileAccess.grant` bookmarks the canonical target while the selection's scope is held, which fixes the Cocoa error 256 for a raw symlink URL. Recents record the canonical target name (amendment 1). The first window title is the name the panel returned.
 
 Round 1's delivered-folder admission (a root saved straight from a drop or open event) was removed in round 2.
@@ -22,9 +22,9 @@ The existing coordinator lease owns scan admission and failure handling. Real Fo
 - `Issue507AliasFolderScanTests.swift`:
   - The panel entry (`openGrantedFolder`) with a direct path, a raw or hinted symlink, and a chooser-resolved alias, through real and legacy scanners: the exact three-image set, no sheet, the title and the canonical recent name, each within its own two-second deadline.
   - Drop and `open -a` of a link or a plain folder: one prompt with the canonical target, and nothing persisted before the answer. After the simulated grant, the grid completes within two seconds with no second sheet.
-  - Also covered: cancel, an unreadable hinted folder, a lone image, a link plus an image, and a stale link drop replaced by an image.
+  - Also covered: cancel, an unreadable hinted folder, an unreadable unstartable raw link drop (the smoke507 failure), a lone image, a link plus an image, and a stale link drop replaced by an image.
   - Real bookmark tests cover both grant orders and missing targets.
-- Package `Issue507DeliveredFolderClassificationTests.swift`: `FileAccess.deliveredFolder` for a raw link, an unhinted plain folder, files, file links, dangling links, non-file URLs, and unstartable selections (readable or not). Scope starts and stops balance, and no record is created.
+- Package `Issue507DeliveredFolderClassificationTests.swift`: `FileAccess.deliveredFolder` for a raw link, an unhinted plain folder, files, file links, dangling links, non-file URLs, relative, chained and parent-linked folders, across readable/startable combinations. No scope is attempted, and no record is created.
 - `Issue507FooterBookmarkRoundTripTests.swift`: directory URL hints survive whether the directory is present or absent, and the original symlink-parent spelling passes real FileAccess verification and leased reads. The directory-only #506 double now reconstructs with `isDirectory: true`.
 
 The prompt seam `folderGrantPromptOverride` replaces only the alert and panel. The selection closure it receives is the production one.
