@@ -23,3 +23,5 @@ date: 2026-10-22
 - 缓存放在 sandbox 容器的 `Library/Caches`：它可被系统清理，缓存本来就可删除重建（用户决定（2026-10-22））。
 - Access Root bookmark、Library Folder、收藏与 Recent Item **单独存储**在 `Application Support`，与缩略图缓存的 SQLite 分开；「清除缓存」只动缓存，绝不丢失授权或用户数据（用户决定（2026-10-22）；P2-01、P3-14、P3-15）。
 - 重评条件：真实规模（S2 及以上、P3-08 记录）需要额外索引能力，或单一存储执行器成为可测瓶颈时。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

@@ -4,7 +4,7 @@
 
 ## 1. 迁移规则
 
-1. 原生只引入 picsee 实际需要的语义角色；名称表达用途，不把 `color-editor-bg`、底部编辑器 tabs 或 Tauri clearance 变成产品需求。
+1. 原生只引入 Mado 实际需要的语义角色；名称表达用途，不把 `color-editor-bg`、底部编辑器 tabs 或 Tauri clearance 变成产品需求。
 2. 同一角色只有一个原生入口，SwiftUI 与 AppKit 从同一资源/解析器取色。不把每个页面各自截取的颜色表拷进代码。
 3. 当前 JSON 是 P0 的可核对输入；正式实施后原生资源与 CSS 各有适配层，修改需校验角色和值的一致性。未经校验不能宣称两个渲染器像素完全相同。
 4. 颜色使用 sRGB 数值和显式 alpha；照片仍按自己的色彩管理管线处理，不能套 UI 调色板。
@@ -73,7 +73,7 @@ P0-08（#12）：手写 sRGB 与 alpha 由动态 NSColor 提供，SwiftUI 从同
 | `--shadow-soft` 不导出 | Web 阴影配方不是 NSShadow；系统浮层由系统管理 |
 | 不使用 38px 标题条 | AppKit 管理原生标题栏、窗口按钮与安全区域 |
 | 菜单使用 NSMenu；搜索使用 roundedBorder TextField，系统输入 chrome | 保留系统输入与菜单语义，不手绘网页菜单或输入边界 |
-| 九个可复用组件均在 PicseeMacUI/DesignSystem/Components；App 只组合预览页面 | ImageRenderer 覆盖两主题视觉；事件处理方法直接测试激活/禁用。原生事件派发仍需设备检查，不能由包覆盖率推断 |
+| 九个可复用组件均在 MadoMacUI/DesignSystem/Components；App 只组合预览页面 | ImageRenderer 覆盖两主题视觉；事件处理方法直接测试激活/禁用。原生事件派发仍需设备检查，不能由包覆盖率推断 |
 | 强制状态样例只取显式 state，禁用命中、原生焦点及实时 hover/press 合并；独立 live 行才接收输入 | 保证 Default 等样例不会因 Tab、悬停或点击改变展示；live 控件保留系统行为 |
 | IconCommandButton 默认图标保留 textPrimary，Web primitive 默认为 textSecondary；hover/pressed 的文字也为 textPrimary | 原生紧凑 16pt 符号保持主要命令的清晰度；这是组件角色替代，未修改源 token。对比度表按实际 textPrimary 测量 |
 | IconCommandButton pressed/selected 底色保留 selectionFill，Web primitive 的 aria-pressed 为 hoverBackground | 与显式 selected 状态共用较清晰的按下反馈；未修改源 token，对比度表按实际 selectionFill 测量 |

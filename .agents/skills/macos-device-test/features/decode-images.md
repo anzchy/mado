@@ -1,6 +1,6 @@
 # Decode real images
 
-Picsee shows ordinary formats with correct colour, orientation and transparency, keeps the window responsive
+Mado shows ordinary formats with correct colour, orientation and transparency, keeps the window responsive
 while a large image decodes, and shows a recoverable error for a broken file instead of the previous image.
 
 ## Sub-features
@@ -42,8 +42,8 @@ Preconditions:
 
 ## Native P0 handles and fixtures (P0-05/06)
 
-- Window: title `Picsee`; use the PID/birth/window handle recorded by `scripts/device/launch.sh` in
-  `RUN_DIR/process.json`, never another running Picsee. The canvas accessibility role is `AXImage`
+- Window: title `Mado`; use the PID/birth/window handle recorded by `scripts/device/launch.sh` in
+  `RUN_DIR/process.json`, never another running Mado. The canvas accessibility role is `AXImage`
   with localized label `Image` / `图片`; loading/failure text is localized.
 - Tier ① paths: `TestAssets/synthetic/orientation-1.tiff` through `orientation-8.tiff`,
   `alpha-gradient.png`, `corrupt.png`, `truncated.png`, `oversize-header.png` in the same directory.
@@ -52,11 +52,11 @@ Preconditions:
   The 50-photo S1 corpus is incomplete. The noise PNG is allocation stress, never a timing source.
 - P0-05 pipeline default: N=3 including the reserved current opportunity, visible≤2, heavy≤1 (>12MP),
   source RGBA8 reservation ≤min(512MiB, 8% RAM). Initial preview≤512px, then viewport detail.
-  Logs use subsystem `io.github.anzchy.picsee`, category `decode`, private filenames and actual pixel bytes.
+  Logs use subsystem `io.github.anzchy.mado`, category `decode`, private filenames and actual pixel bytes.
 
 For implementor smoke, set the brief's Xcode environment and use a new absolute run directory under
 `~/.picsee/device-runs/`. Build with `scripts/heavy-lock.sh scripts/device/build.sh "$RUN_DIR"`;
-if codesigning fails, retain `build.log` and skip launch. If another Picsee is running, its owner must exit it.
+if codesigning fails, retain `build.log` and skip launch. If another Mado is running, its owner must exit it.
 Then run `scripts/device/launch.sh "$RUN_DIR"` and `scripts/device/doctor.sh "$RUN_DIR" --expected-sha <SHA>`.
 Open fixtures with `open -a "$(cat "$RUN_DIR/bundle.path")" <absolute-fixture-path>`.
 Immediately capture `scripts/device/shot.sh "$RUN_DIR" VIEW-08-during-load`, resize with

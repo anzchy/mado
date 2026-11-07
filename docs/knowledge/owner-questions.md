@@ -1,6 +1,6 @@
 # Owner questions: why, how, what
 
-This file records the questions the owner asked about how picsee is built and run, with the answer the owner accepted. Each entry explains what the thing is, why it works that way, and how it is used. Progress questions such as "what landed today" are not recorded: issues, PRs and the ledger answer those.
+This file records the questions the owner asked about how Mado is built and run, with the answer the owner accepted. Each entry explains what the thing is, why it works that way, and how it is used. Progress questions such as "what landed today" are not recorded: issues, PRs and the ledger answer those.
 
 Newest entries first. Each entry quotes the question, gives the answer in three parts, and links the decision that came out of it.
 
@@ -13,7 +13,7 @@ Newest entries first. Each entry quotes the question, gives the answer in three 
 **What.**
 - **A milestone** is a GitHub feature. It groups issues under one name, with an optional due date, a progress bar (closed / total) and its own page, and an issue can be in at most one milestone.
 - **GitHub has no built-in "backlog".** In agile, a backlog is the list of unscheduled work. On GitHub it's usually a status column on a Projects board, or a label.
-- **In picsee, `Backlog` is simply a milestone with that name.** It lives in GitHub Issues, with each item a normal issue (search `milestone:Backlog`), not in a separate md file.
+- **In Mado, `Backlog` is simply a milestone with that name.** It lives in GitHub Issues, with each item a normal issue (search `milestone:Backlog`), not in a separate md file.
 
 | | `v0.0.1` / `v0.0.2` | `Backlog` |
 |---|---|---|
@@ -75,8 +75,8 @@ Decision: the owner chose 「Yes, list first, then apply」, 「Rescope #130 as 
 
 **What.**
 - **Apps by location:** an App in `/Applications` is visible to every user. One in your own `~/Applications` is visible only to you.
-- **Data by user:** each macOS user gets their own picsee sandbox container (saved folders, favourites, preferences). A new user always starts at first launch (page 21).
-- **The quit question:** it means the Picsee Mac app, not the Claude session.
+- **Data by user:** each macOS user gets their own Mado sandbox container (saved folders, favourites, preferences). A new user always starts at first launch (page 21).
+- **The quit question:** it means the Mado Mac app, not the Claude session.
 
 **Why automation stops at the user boundary.**
 - The agents' tools run in your account's terminal, and their Accessibility and Screen Recording permissions are per user.
@@ -84,11 +84,11 @@ Decision: the owner chose 「Yes, list first, then apply」, 「Rescope #130 as 
 - Granting those permissions inside the test user would change privacy settings, which only you may do.
 
 Why your own account can't show a first launch:
-- The release build uses the same bundle ID as your installed Picsee, so it shares your container, which already has saved folders.
-- Moving that container aside needs your explicit approval, and every Picsee process must be closed first.
+- The release build uses the same bundle ID as your installed Mado, so it shares your container, which already has saved folders.
+- Moving that container aside needs your explicit approval, and every Mado process must be closed first.
 
 **How (owner's choice: option 3).** For the J1 record:
-1. You quit the Picsee Mac app and approve once.
+1. You quit the Mado Mac app and approve once.
 2. The delegator backs up the container and moves it aside.
 3. J1 runs automatically from a real first launch.
 4. The original container is moved back, and your folders and favourites are checked.

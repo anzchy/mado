@@ -1,4 +1,4 @@
-# picsee design/
+# Mado design/
 
 当前设计采用 **C · Quiet Image Canvas**。从 [DESIGN.md](DESIGN.md) 开始；它是主设计规范，不再引用 mdpro 的产品规则或旧 mock。
 
@@ -7,7 +7,7 @@
 | 主设计规范 | [DESIGN.md](DESIGN.md) | C 布局、组件、主题、键盘、可访问性和验收边界 |
 | 可复用样式与组件 | [picsee-ui-system/](picsee-ui-system/README.md) | Token 源文件、React primitives 与编译产物 |
 | 原生实施规范 | [组件与原生映射](picsee-ui-system/native/README.md) | Token清单、组件契约及SwiftUI/AppKit交接 |
-| 交互原型 | [picsee-browser](prototypes/picsee-browser/README.md) | 当前 `viewer-v2.html`；初版/revisions 仅用于 picsee 演进追溯 |
+| 交互原型 | [picsee-browser](prototypes/picsee-browser/README.md) | 当前 `viewer-v2.html`；初版/revisions 仅用于 Mado 演进追溯 |
 | 20页状态稿 | [设计交接](../docs/design/STITCH_HANDOFF.md) | 本地索引、云端状态与静态/行为边界 |
 | FastStone 调研 | [competence-report/](competence-report/README.md) | 本地看图产品研究与截图证据，保留 |
 | 视觉来源 | [IMPORT.md](IMPORT.md) | 原始导入来源与清理说明 |

@@ -1,14 +1,14 @@
-# picsee app icon — shared brief for the three option designers
+# Mado app icon — shared brief for the three option designers
 
 Historical design brief: option 2 “Lens” was chosen on 2026-10-23.
 
 Review artefacts only: nothing here goes into the App bundle or a commit until the user picks an option.
 
 ## The product
-picsee is a native macOS image viewer (Swift + SwiftUI + AppKit, macOS 14+, sandboxed). Design direction
+Mado is a native macOS image viewer (Swift + SwiftUI + AppKit, macOS 14+, sandboxed). Design direction
 "C · Quiet Image Canvas": the photo is the content; the app is calm, neutral, with one blue accent, thin dividers,
 flat rows, restrained shadows. No marketing gloss, no decorative gradients for their own sake, no glass side bars.
-Name is always lowercase **picsee** (pic + see). Read `design/DESIGN.md` §2–4 for tone; do not read other repo files.
+Name is always lowercase **Mado** (pic + see). Read `design/DESIGN.md` §2–4 for tone; do not read other repo files.
 
 ## Palette (use these; derive tints with oklch from them, don't invent new hues)
 | role | light | dark |
@@ -49,7 +49,7 @@ Blue is an accent, not a flood: neutrals dominate; at most one blue element/regi
    - a Dock mock (rounded translucent bar, ~6 neighbour icons drawn as simple neutral rounded squares labelled by a
      tooltip-like caption — do NOT reproduce Apple's real icons) and a Finder-list row mock at 16/32 px;
    - design notes (≤ 150 words): metaphor, grid/keylines, layers, which best practices you applied, risks.
-   Respect light/dark: the page itself uses `prefers-color-scheme`. Lowercase "picsee" everywhere.
+   Respect light/dark: the page itself uses `prefers-color-scheme`. Lowercase "Mado" everywhere.
 3. Verify before you finish: render screenshots with headless Chrome
    (`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1400,2400 --screenshot=<your folder>/preview.png "file://<abs path>/index.html"`)
    and also rasterise the default SVG at 32 and 16 px the same way (a tiny HTML wrapper is fine). Look at the PNGs

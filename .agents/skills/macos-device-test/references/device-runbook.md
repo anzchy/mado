@@ -1,6 +1,6 @@
-# macOS Device Test (computer use) — picsee
+# macOS Device Test (computer use) — Mado
 
-This runbook supplies the exact helper contracts and proof standards for a real Picsee device run.
+This runbook supplies the exact helper contracts and proof standards for a real Mado device run.
 The device tester must be independent of the implementer: the doc gardener flags self-certified
 `Shipped` rows.
 
@@ -61,15 +61,15 @@ The MacBook procedure, first passed on 2026-11-01 (#131: doctor 12 PASS, scale 2
   `PICSEE_XCODE=/Applications/Xcode-26.6.app`. Pass `--expected-sha` the 8-character short SHA that `build.sh` prints
   (for example `235e94ef`), not 7 characters.
 - **First launch.** Sparkle's "Check for updates automatically?" window can sit behind the main window. Until it is
-  answered for the bundle ID, `launch.sh`, `doctor.sh` and `shot.sh` fail with "missing visible Picsee window" (#355).
-  The answer is the owner's, because it also applies to their installed Picsee.
-- **Limits.** One device run at a time on the MacBook; never quit or kill a Picsee the run didn't start. The MacBook is
+  answered for the bundle ID, `launch.sh`, `doctor.sh` and `shot.sh` fail with "missing visible Mado window" (#355).
+  The answer is the owner's, because it also applies to their installed Mado.
+- **Limits.** One device run at a time on the MacBook; never quit or kill a Mado the run didn't start. The MacBook is
   not the performance baseline. Until this session and those permissions are available, record every @2x criterion
   as NOT VERIFIED.
 
 ## 3. Isolation: one instance per machine
 
-Two Picsee instances must not be driven side by side on one machine. They share the bundle identifier, so
+Two Mado instances must not be driven side by side on one machine. They share the bundle identifier, so
 they share the sandbox container, preferences and bookmarks. Plain `open` may route to an existing instance;
 `open -n` can create another, so isolation is checked before launch and the recorded PID identifies this run.
 So:
@@ -85,14 +85,14 @@ So:
   relaunches, and release it after cleanup, also on aborted runs, with
   `gui-lock.sh release <run-id> --acquisition-id <uuid>`.
   Exit 75 means mdpro holds it: drive nothing and wait, or tell the user. Never remove another project's lock.
-- **The user's own Picsee is off limits.** If a Picsee is running that this run didn't start (an installed
+- **The user's own Mado is off limits.** If a Mado is running that this run didn't start (an installed
   copy, a dev build from Xcode), stop and ask the user to quit it. Don't kill it.
 
 ## 4. Build a bundle — never test a bare executable
 
 Computer-use grants are keyed by **bundle identifier**, and so is the sandbox container. Only a built `.app`
 with `Contents/Info.plist` has one. A command-line target or `swift run` gives you a window computer use can't
-see and a process the sandbox doesn't treat as Picsee.
+see and a process the sandbox doesn't treat as Mado.
 
 Quit the previous run's instance first (§11 cleanup kills it by its recorded PID), then build:
 
@@ -108,7 +108,7 @@ The helper generates the project, then makes a signed **Debug** build in
 `.build/device-<run-id>/` inside this worktree. It rejects modified, missing or untracked build inputs (including resources, plist, entitlements,
 package files, test assets and project configuration), while allowing agent metadata in `.codex/`,
 `.claude/` and `docs/`. It verifies the full input inventory against HEAD before and after the build,
-refuses a running Picsee, records input hashes, the short/full SHA and machine facts in `build.json`, and
+refuses a running Mado, records input hashes, the short/full SHA and machine facts in `build.json`, and
 saves build output in
 `build.log`. Generated package caches are excluded from build inputs. If the inherited Xcode stamp marks allowed
 metadata edits dirty, the helper normalizes the verified build SHA and re-signs the bundle, preserving
@@ -118,9 +118,9 @@ Release baseline. A Release performance run needs its own explicit build and rec
 The locked Xcode is **26.6, build 17F113** (decided 2026-10-22, following the Mac mini). The helper uses the
 first of `/Applications/Xcode-26.6.app` and `/Applications/Xcode.app` whose `xcodebuild -version` reports that
 build. `PICSEE_XCODE` explicitly overrides this search but is checked against the same build. On the MacBook,
-Xcode 26.6 sits beside Xcode 27.1; Picsee is never built with 27.1.
-Confirm `xcodebuild -version` prints `Build version 17F113` before building. Product and scheme `Picsee`, bundle identifier
-`io.github.anzchy.picsee` (decided 2026-10-21; P0-01 creates them). Run long builds in the background and monitor `build.log`. If you test a Debug build, say so in the record: it's a different binary, and
+Xcode 26.6 sits beside Xcode 27.1; Mado is never built with 27.1.
+Confirm `xcodebuild -version` prints `Build version 17F113` before building. Product and scheme `Mado`, bundle identifier
+`io.github.anzchy.mado` (decided 2026-10-21; P0-01 creates them). Run long builds in the background and monitor `build.log`. If you test a Debug build, say so in the record: it's a different binary, and
 its performance numbers don't count.
 
 **Signing matters for the sandbox.** The sandbox and security-scoped bookmarks only work in a signed app.
@@ -141,7 +141,7 @@ scripts/device/launch.sh "$RUN_DIR"
 The helper calls `open -n -W` with the absolute bundle path (`-W` lets it notice an immediate App exit), finds exactly one new PID by its exact
 executable path and a birth time after launch began, then records the PID, executable path and process start time (`ps -o lstart=`) in `process.json` before checking
 readiness. Old, missing, ambiguous or retired ownership records are refused; use a fresh run directory. It never picks a PID by owner name or newest
-name match. A pre-existing Picsee blocks launch and is never recorded or stopped; cleanup signals only the recorded PID while its birth identity still matches. The P0 skeleton run opens no fixture; it has one empty window.
+name match. A pre-existing Mado blocks launch and is never recorded or stopped; cleanup signals only the recorded PID while its birth identity still matches. The P0 skeleton run opens no fixture; it has one empty window.
 
 To run the App in a given UI language without touching system settings, write a language tag to `$RUN_DIR/app-lang.txt` before launching (for example `zh-Hans` to match the Chinese pinned pages). The helper then passes `-AppleLanguages (<tag>)` to that launch only, and the file stays in the run folder as evidence. Anything that isn't a plain language tag is refused before launch.
 
@@ -150,7 +150,7 @@ Opening a file this way is a **File Grant**: the sandboxed app can read that fil
 must become an **Access Root** through the powerbox (`NSOpenPanel`), driven with computer use. Never work
 around the powerbox: no Full Disk Access, no entitlement change, no copying files into the container.
 
-**Ready means usable, not just "a process exists":** exactly one accessibility window titled `Picsee`
+**Ready means usable, not just "a process exists":** exactly one accessibility window titled `Mado`
 or the verified fixture basename is present, its PID has an on-screen layer-0 CGWindow, and the public
 launch log with the expected build SHA has appeared. The P0 skeleton is an empty window; future recipes also confirm their fixture is displayed.
 Time out after 30 s and report what was missing. An Automation/Accessibility failure stops immediately;
@@ -181,16 +181,16 @@ additional `FAIL report-write` line names the failure, the exit is non-zero, and
 
 | Check | Pass when |
 |---|---|
-| `build-sha` | `Info.plist`'s `PicseeGitSHA` equals the expected short SHA (defaults to this worktree's HEAD) |
-| `bundle-id` | `CFBundleIdentifier` is `io.github.anzchy.picsee` |
+| `build-sha` | `Info.plist`'s `MadoGitSHA` equals the expected short SHA (defaults to this worktree's HEAD) |
+| `bundle-id` | `CFBundleIdentifier` is `io.github.anzchy.mado` |
 | `signature-team` | codesign reports `TeamIdentifier=GRT84NAK4T` |
 | `signature-valid` | `codesign --verify --deep --strict` succeeds |
 | `sandbox` | the signed `com.apple.security.app-sandbox` entitlement is true (explicit XML from `codesign -d --entitlements :-`) |
 | `process-bundle` | recorded PID, executable and process birth all match the live process; the record is active |
 | `fresh-sources` | every build input matches the committed inventory and recorded hashes; none is newer than the bundle Info.plist |
-| `single-instance` | the recorded PID is the only running process named Picsee |
-| `window` | one snapshot of `properties of every window`, addressed by PID, contains exactly one window titled `Picsee` or the basename of a file recorded in `fixtures.sha256.json`; untitled windows become empty titles, and `0 windows` is distinct from an AX error |
-| `launch-log` | this PID's unified log since `start.txt` contains `Picsee launch git=<expected SHA>`, unredacted |
+| `single-instance` | the recorded PID is the only running process named Mado |
+| `window` | one snapshot of `properties of every window`, addressed by PID, contains exactly one window titled `Mado` or the basename of a file recorded in `fixtures.sha256.json`; untitled windows become empty titles, and `0 windows` is distinct from an AX error |
+| `launch-log` | this PID's unified log since `start.txt` contains `Mado launch git=<expected SHA>`, unredacted |
 | `machine` | model, chip, memory, macOS and main-display backing scale match `build.json`; check these against the brief too |
 | `fixtures` | no fixtures for a skeleton run, or all fixture files match the run's `fixtures.sha256.json` |
 
@@ -260,7 +260,7 @@ A criterion passes only with evidence that meets all of these:
 ### Logs: unified logging, read by time window
 
 ```bash
-log show --start "$START" --style compact --predicate 'subsystem == "io.github.anzchy.picsee"' \
+log show --start "$START" --style compact --predicate 'subsystem == "io.github.anzchy.mado"' \
   > "$RUN_DIR/app.log"
 ```
 
@@ -270,7 +270,7 @@ logging defect to report, not a reason to guess.
 
 ### Screenshots
 
-Capture the window, not a screen rectangle: a terminal can cover Picsee while a rectangle capture silently
+Capture the window, not a screen rectangle: a terminal can cover Mado while a rectangle capture silently
 records the terminal. The helper selects the on-screen layer-0 window by this run's PID and calls
 `screencapture -l<CGWindowID> -o`, preserving native backing pixels without the shadow.
 
@@ -287,7 +287,7 @@ artifacts are never overwritten. The @2x MacBook proof is 960×672 pt → 1920×
 
 ## 11. Cleanup
 
-Kill what this run started, by its recorded PID. Never by process name: `pkill -x Picsee` would also kill the
+Kill what this run started, by its recorded PID. Never by process name: `pkill -x Mado` would also kill the
 user's own copy.
 
 ```bash
@@ -332,13 +332,13 @@ Every run produces one row per criterion and entry point, keyed by ledger row ID
   The shell-only P0 helper proof uses existing terminal Automation/Accessibility and Screen Recording
   grants; it does not manufacture a `request_access` call on a provider that has no such API.
 - If an interactive permission prompt blocks a step, stop and report the question. Do not change privacy
-  settings or click “Always allow” for anything other than Picsee.
+  settings or click “Always allow” for anything other than Mado.
 - Take the minimum screenshots needed. Never save one into the repo.
 - **Never change system, privacy or security settings** to unblock a test, and never click a web link.
 - **Menu-bar utilities** may own menu-bar coordinates and block clicks there. Don't request access to them;
   use the keyboard shortcut for the command, or record NOT VERIFIED.
 - **Escape and other keys:** in mdpro (a WebView) the computer-use `key escape` arrived only as a key-up.
-  In Picsee, native Esc sent through `kc.sh "$RUN_DIR" 53` worked in the P1-08 device run (rows 5 and 9).
+  In Mado, native Esc sent through `kc.sh "$RUN_DIR" 53` worked in the P1-08 device run (rows 5 and 9).
   Keep the direct computer-use `key escape` path distinct and unverified; use the proven key-code helper.
 - **Input method:** switch to ABC before key checks; an IME can swallow keys. Never switch it from a script:
   on 2026-10-25 a Chinese IME (Doubao Pinyin) turned a typed open-panel path into
@@ -441,7 +441,7 @@ inside `.build/device-<run-id>/`. Heavy jobs use `scripts/heavy-lock.sh`: picsee
 ```
 [ ] The criteria genuinely need a real window, pixels, input or the sandbox (§1)
 [ ] Machine chosen; use the local mini except that @2x rows go over SSH to the MacBook or are NOT VERIFIED (§2)
-[ ] No other Picsee running; no other driver on this desktop (§3)
+[ ] No other Mado running; no other driver on this desktop (§3)
 [ ] Built the .app with the locked Xcode, signed by GRT84NAK4T (§4)
 [ ] Launched by absolute path with -n; PID recorded; window ready (§5)
 [ ] Doctor passed, every line (§6)

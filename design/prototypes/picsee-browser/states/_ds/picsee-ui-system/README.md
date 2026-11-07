@@ -1,4 +1,4 @@
-# picsee — Quiet Image Canvas primitives
+# Mado — Quiet Image Canvas primitives
 
 Binding visual guide: `design/DESIGN.md` (relative to the project root). This system serves the accepted C layout for a native macOS local image viewer; browser prototypes are design aids, not native implementation.
 
@@ -17,4 +17,4 @@ Native work must first read the source documents below (paths relative to the pr
 - `design/picsee-ui-system/native/COMPONENT_CONTRACTS.md`: proposed native component inputs, states, responsibility and acceptance.
 - `design/picsee-ui-system/native/NATIVE_MAPPING.md`: SwiftUI/AppKit ownership, appearance/focus/backing conversion and P0-08 handoff.
 
-Web prototypes continue to use the compiled React primitives. Native implementation consumes these contracts and native resource adapters, not the React bundle. PicseeDesignKit is a logical grouping inside existing UI targets, not another production target. UI primitives do not own decoder/cache/file permissions, selection reducers or hide timers. Native APIs and accessibility behavior require SDK compilation and Mac verification before being claimed complete.
+Web prototypes continue to use the compiled React primitives. Native implementation consumes these contracts and native resource adapters, not the React bundle. MadoDesignKit is a logical grouping inside existing UI targets, not another production target. UI primitives do not own decoder/cache/file permissions, selection reducers or hide timers. Native APIs and accessibility behavior require SDK compilation and Mac verification before being claimed complete.

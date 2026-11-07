@@ -1,4 +1,4 @@
-# picsee 设计实施资料
+# Mado 设计实施资料
 
 - 产品主规范：[DESIGN.md](../../design/DESIGN.md)。
 - 共享视觉与原生映射：[picsee-ui-system/native](../../design/picsee-ui-system/native/README.md)。

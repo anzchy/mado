@@ -1,9 +1,9 @@
 ---
 name: macos-device-test
-description: Verify picsee features in a signed macOS app on a real desktop, capture device evidence, and write a ledger-linked validation record. Use when acceptance depends on real windows, input, pixels, relaunch, or sandbox grants that automated tests cannot establish.
+description: Verify Mado features in a signed macOS app on a real desktop, capture device evidence, and write a ledger-linked validation record. Use when acceptance depends on real windows, input, pixels, relaunch, or sandbox grants that automated tests cannot establish.
 ---
 
-# picsee macOS device test
+# Mado macOS device test
 
 Use this skill for an independent device acceptance run. Start with the relevant rows in `docs/feature-ledger.md` and the work package in `docs/PICSEE_DEVELOPMENT_PLAN.md`. The row's 「怎么确认」 is the acceptance criterion. Read [features/README.md](features/README.md) and the matching recipe before driving the app; write a missing recipe before claiming device validation. Read [references/device-runbook.md](references/device-runbook.md) for build, doctor, input, evidence, cleanup, and record details needed for the run.
 
@@ -11,7 +11,7 @@ Use this skill for an independent device acceptance run. Start with the relevant
 
 - The device tester must differ from the feature implementer. A validation record written by the implementer cannot establish `真机` or `Shipped`.
 - Before any desktop action, run `.agents/skills/picsee-delegator/scripts/gui-lock.sh status`. Acquire the shared GUI lock for the run before launching, activating, clicking, typing, or capturing, and keep the `acquisition_id` it prints. Hold it through relaunches and release it after cleanup, including failed runs, with `gui-lock.sh release <run-id> --acquisition-id <uuid>`. If another project holds it, drive no GUI.
-- Check for an existing Picsee process before launch. Never drive or terminate an instance the run did not start, including the user's installed copy. Keep the sandbox enabled; use normal powerbox grants. Do not alter privacy settings, pregrant folders, or edit the container without the user's approval.
+- Check for an existing Mado process before launch. Never drive or terminate an instance the run did not start, including the user's installed copy. Keep the sandbox enabled; use normal powerbox grants. Do not alter privacy settings, pregrant folders, or edit the container without the user's approval.
 - Keep screenshots, logs, fixtures, and briefs under `~/.picsee/`, outside the repository. Use the recorded PID and build SHA to tie evidence to this run.
 
 ## Sequence

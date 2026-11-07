@@ -425,7 +425,7 @@
   },
   {
     "pathRegex": "^scripts/ledger/build(?:\\.test)?\\.mjs$",
-    "pattern": "picsee-ledger-theme|(?<=\u529f\u80fd\u8d26\u7c3f \u00b7 )picsee(?=</title>)|picsee(?= \u00b7 \u529f\u80fd\u8d26\u7c3f</span>)",
+    "pattern": "picsee-ledger-theme|(?<=功能账簿 · )picsee(?=</title>)|picsee(?= · 功能账簿</span>)",
     "scopes": [
       "content"
     ],
@@ -441,7 +441,7 @@
   },
   {
     "path": "scripts/ledger/build.test.mjs",
-    "pattern": "Part 1 \u2014 picsee \u73b0\u5728\u6709\u4ec0\u4e48|picsee-ledger-",
+    "pattern": "Part 1 — picsee 现在有什么|picsee-ledger-",
     "scopes": [
       "content"
     ],
@@ -454,5 +454,13 @@
       "content"
     ],
     "reason": "#552: only this named historical Info fixture may assign the frozen identity or select expectedName Picsee; its layout adapter explicitly rewrites the legacy executable name."
+  },
+  {
+    "path": "scripts/name-checks/rename-living-docs.mjs",
+    "reason": "#553: idempotent documentation migration must spell out the old identity and protected historical/tooling tokens."
+  },
+  {
+    "path": "scripts/name-checks/living-docs.test.mjs",
+    "reason": "#553: independent baseline and negative fixtures deliberately exercise forbidden historical names and authorized acceptance substitutions."
   }
 ]

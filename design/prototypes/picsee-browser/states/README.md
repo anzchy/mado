@@ -1,4 +1,4 @@
-# picsee C 设计状态稿
+# Mado C 设计状态稿
 
 这里是应随仓库提交的 **22份正式静态状态稿**，与上一级的交互原型分开维护。目录内容不依赖 `.stitch/`、登录凭据、Stitch CLI 或远程图片。
 
@@ -52,7 +52,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 
 22、24、26、35、36、21 都接受 `?theme=dark`；11/12 各是一种外观。35、36 由分支 `prototype/shortcuts-sheet` 上的 `prototype-settings.html?variant=B`、`prototype-shortcuts.html?variant=C` 定稿而来，原型文件不进本目录。15 页面板里的「键盘快捷键」入口已去掉（用户：「Page 15 中去掉快捷键入口」）。
 
-`shortcuts.html` 每一行的 `data-shortcut` 写它对应的命令（`command:<CommandID>`、`menu:<菜单标题>` 或 `key:<按键处理>`，多个用 `|` 分隔）。`scripts/design/shortcut-model.mjs` 从 `CommandID.swift`、`App/Commands/CommandMenu.swift`、`ChromeWindowCommands.swift` 读出菜单快捷键，与页面逐行比较：页面上每个 `<li>` 都算一行，没有 `data-shortcut` 的行、行外的按键、多一行、少一行或按键不同都失败。`App/` 与 `Packages/PicseeKit/Sources` 里每处 `keyDown` 的 `case`、`keyCode ==` 和 `.onKeyPress` 处理的按键，都要在该脚本的 `KEY_SITES` 里登记为页面上的某一行或写明不列入的理由（如聚焦控件内的 Tab/Space/Return、侧栏分隔条的方向键）；新增未登记的按键或登记的按键消失都失败。不比较：`keyDown` 里的修饰键变体（网格里 ⇧/⌘ 加方向键），以及同一文件里同一按键的第二处处理。编辑菜单的撤销、剪切、拷贝、粘贴、全选只作用于搜索框，不列入。
+`shortcuts.html` 每一行的 `data-shortcut` 写它对应的命令（`command:<CommandID>`、`menu:<菜单标题>` 或 `key:<按键处理>`，多个用 `|` 分隔）。`scripts/design/shortcut-model.mjs` 从 `CommandID.swift`、`App/Commands/CommandMenu.swift`、`ChromeWindowCommands.swift` 读出菜单快捷键，与页面逐行比较：页面上每个 `<li>` 都算一行，没有 `data-shortcut` 的行、行外的按键、多一行、少一行或按键不同都失败。`App/` 与 `Packages/MadoKit/Sources` 里每处 `keyDown` 的 `case`、`keyCode ==` 和 `.onKeyPress` 处理的按键，都要在该脚本的 `KEY_SITES` 里登记为页面上的某一行或写明不列入的理由（如聚焦控件内的 Tab/Space/Return、侧栏分隔条的方向键）；新增未登记的按键或登记的按键消失都失败。不比较：`keyDown` 里的修饰键变体（网格里 ⇧/⌘ 加方向键），以及同一文件里同一按键的第二处处理。编辑菜单的撤销、剪切、拷贝、粘贴、全选只作用于搜索框，不列入。
 
 ## #347 · Viewer Tools 与 Thumbnail Size 对照映射
 

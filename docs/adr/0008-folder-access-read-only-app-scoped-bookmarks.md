@@ -32,3 +32,5 @@ app-scope bookmark 由本应用重启后恢复用户授予的范围。File Grant
 ## Bookmark after rebuild
 
 **已验证（2026-10-23，Mac mini，见 `docs/validation/P0.md` P0-04/P0-09 第 13 项）**：构建 A（`da64b08`）授权的目录 bookmark 在较晚 SHA 的签名构建 B（`c09c7f0`，CDHash 不同，同团队 GRT84NAK4T）中 `outcome=resolved`，经 File → Open Recent 直接浏览，不再询问授权；实现者冒烟构建 `a1a15ac` 创建的 bookmark 同样解析。未验：不同签名团队、Release/公证构建、系统升级后的解析。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

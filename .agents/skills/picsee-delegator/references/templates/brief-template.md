@@ -27,7 +27,7 @@ List every changed reachable state and required viewport/appearance/scale/langua
 
 ### Design-derived assertions (written first; the delegator pre-fills the left columns)
 
-Each changed state gets one row per design rule it depends on. The delegator copies selector, property and media range from the pinned CSS **before dispatch**; the implementer writes these tests as the **first RED** of the UI work item, using `PinnedDesign` (`Packages/PicseeKit/Tests/PicseeMacUITests/PinnedDesign.swift`: `assertLength`, `assertEdges`, `assertFont`, `assertColor`) against the **rendered frame**, not layout inputs or constants.
+Each changed state gets one row per design rule it depends on. The delegator copies selector, property and media range from the pinned CSS **before dispatch**; the implementer writes these tests as the **first RED** of the UI work item, using `PinnedDesign` (`Packages/MadoKit/Tests/MadoMacUITests/PinnedDesign.swift`: `assertLength`, `assertEdges`, `assertFont`, `assertColor`) against the **rendered frame**, not layout inputs or constants.
 
 | State | Selector · property · `@media` range | Viewports to assert | Rendered-frame test | Content pressure |
 |---|---|---|---|---|
@@ -66,7 +66,7 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
 - Codex: `$tdd-guardian-workflow` (plan → design tests + spec adversary → per-WI RED receipt → implement → verify →
   coverage). Receipt IDs `<WP>-WI-n`.
 - Kimi / no plugin: write the tests first; run only them
-  (`scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --filter <Name>`); paste the FAILING assertion
+  (`scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --filter <Name>`); paste the FAILING assertion
   output (not compile errors) in the handoff; implement; rerun the same filter; paste GREEN.
 - Test matrix: every applicable Interaction & lifecycle row becomes a matrix entry (or a named device run) before
   implementation; the handoff maps row → test.
@@ -75,17 +75,17 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
 ## Gates (paste decisive lines)
 ```sh
 export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --enable-code-coverage
+scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage
 sh scripts/tdd/swift-lcov.sh      # coverage/lcov.info: sum LF/LH and FNF/FNH → 100% lines and functions
 xcodegen generate
-scripts/heavy-lock.sh xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+scripts/heavy-lock.sh xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
 node --test --test-reporter=spec scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs
 node scripts/ledger/build.mjs --check
 ```
 Only the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call.
 
 ## Device smoke (implementer smoke, not validation) — only if the brief needs it
-`pgrep -x Picsee` first; never kill a Picsee you didn't start; `~/Applications/Picsee.app` is off limits; no
+`pgrep -x Mado` first; never kill a Mado you didn't start; `~/Applications/Mado.app` is off limits; no
 pre-granting, no container/store edits, no system settings; list root IDs you leave behind.
 
 ## Commits

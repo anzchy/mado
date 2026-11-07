@@ -27,3 +27,5 @@
 | 待填（单位、计时边界、运行 ID） | A/B SHA、签名、Release 配置、调优设置 | 机型/芯片/内存、macOS、显示器/scale、存储介质 | S1–S6、manifest、缓存状态 | A/B 次数与交替顺序、原始值路径 | A/B 中位数、最小–最大值；时延另附 p50/p95/极值 | 限制因素、为何不是两倍、物理上界证据 | 起止 signpost、区间内/外工作计数、日志与正确性证据路径 | 待判定 |
 
 结论只用 `faster`、`slower`、`no measurable difference`、`inconclusive`。比较差异必须由重复运行的范围与端到端结果支撑；证据不足时用 `inconclusive`，不得把它写成 `no measurable difference`。**无法命名限制因素，或比较中任一侧未经交付方式调优，必须判为 `inconclusive`。** 对异常、物理上界冲突或计时区间工作量无法核实的运行，也先判 `inconclusive`，补齐证据后再改结论。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

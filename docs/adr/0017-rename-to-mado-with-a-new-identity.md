@@ -12,3 +12,5 @@ The owner renamed the app from Picsee to Mado (2026-11-07: 「下一件事是改
 - The Sparkle mach-lookup exceptions follow the bundle ID (`<bundle id>-spks`/`-spki`, ADR-015), and Mado's feed URL points at the renamed repo.
 - After the repo rename, the old raw appcast URL must be checked on the real URL: it must keep serving Picsee's frozen appcast or fail harmlessly.
 - ADRs and validation records keep the name Picsee as written; living docs say Mado.
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

@@ -1,6 +1,6 @@
-# picsee — 给 agent 的入口
+# Mado — 给 agent 的入口
 
-picsee 是一个 macOS 原生看图应用（Swift 6 + SwiftUI + AppKit，最低 macOS 14，sandbox 开启）。参考对象是 Picview，设计方向是用户确认的 **C · Quiet Image Canvas**。
+Mado 是一个 macOS 原生看图应用（Swift 6 + SwiftUI + AppKit，最低 macOS 14，sandbox 开启）。参考对象是 Picview，设计方向是用户确认的 **C · Quiet Image Canvas**。
 
 **当前状态（2026-10-22）**：原生工程骨架已建立（`P0-01`/`P0-02`），ADR-002…007、Swift receipt lane 和真机测试脚本已合入；`P0-03`（#7）与 `P0-07`（#6）正在进行。
 
@@ -8,12 +8,12 @@ picsee 是一个 macOS 原生看图应用（Swift 6 + SwiftUI + AppKit，最低 
 
 ## 最重要的一份文件：功能账簿
 
-[`docs/feature-ledger.md`](docs/feature-ledger.md) 是 **picsee 现在实际有什么** 的唯一记录：每项能力的状态、代码位置、在 App 里怎么确认。
+[`docs/feature-ledger.md`](docs/feature-ledger.md) 是 **Mado 现在实际有什么** 的唯一记录：每项能力的状态、代码位置、在 App 里怎么确认。
 
 - 开始任何工作前，先在账簿里找到与任务相关的行（按 ID 或「计划」列里的工作包 ID）。行里的「怎么确认」就是这项能力的验收。
 - **改变用户可见行为的提交，同时改它的那一行。** 状态只能升到证据支持的程度：`Shipped` 需要真机记录。
 - 状态升级的那次提交，可以追加或修改「限制：」文本，但不得改写「怎么确认」中的验收本身。确需改验收时，单独提交并在提交说明里引用用户原话或 ADR。
-- 不要因为浏览器原型或 mockup 里有某个功能，就认为 picsee 有它。
+- 不要因为浏览器原型或 mockup 里有某个功能，就认为 Mado 有它。
 - [`docs/feature-ledger.html`](docs/feature-ledger.html) 是它的渲染视图，由账簿生成，不要手改；改账簿后运行 `npm run ledger:build`，两者一起提交。`npm run ledger:html-check` 检查是否同步。
 
 ## doc gardener 每天跑一次
@@ -56,7 +56,7 @@ scripts/               研究与设计工具脚本（Python / Node）
 .claude/agents/        Claude Code subagents；.codex/agents/ 是 Codex 的
 ```
 
-原生工程的目录结构按 [架构 §2.2 建议目录树](docs/PICSEE_ARCHITECTURE.md) 在 P0-01 建立：`App/`、`Packages/PicseeKit/Sources/{PicseeCore,PicseeApplication,PicseeInfrastructure,PicseeMacUI}`、`UITests/`、`TestAssets/`。
+原生工程的目录结构按 [架构 §2.2 建议目录树](docs/PICSEE_ARCHITECTURE.md) 在 P0-01 建立：`App/`、`Packages/MadoKit/Sources/{MadoCore,MadoApplication,MadoInfrastructure,MadoMacUI}`、`UITests/`、`TestAssets/`。
 
 ## 命令
 
@@ -75,11 +75,11 @@ npm run preview:states           # 20 页状态稿，http://127.0.0.1:4313
 
 ```sh
 xcodegen generate
-swift test --package-path Packages/PicseeKit
-xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+swift test --package-path Packages/MadoKit
+xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
 # 本机手动签名（Apple Development，团队 GRT84NAK4T）并启动
-xcodebuild build -scheme Picsee -destination 'platform=macOS' -derivedDataPath .build/dd-signed
-open -n .build/dd-signed/Build/Products/Debug/Picsee.app
+xcodebuild build -scheme Mado -destination 'platform=macOS' -derivedDataPath .build/dd-signed
+open -n .build/dd-signed/Build/Products/Debug/Mado.app
 ```
 
 `*.xcodeproj` 由 `project.yml` 生成，不入库。账簿 HTML 用 `npm run ledger:build` 生成、用 `npm run ledger:html-check` 检查；五条规则门禁 `ledger:check` 仍按迁移计划 A12 待建。
@@ -90,7 +90,7 @@ Swift RED 使用手动 lane `swift-red`，只跑指定测试。先写能编译�
 # 固定使用已验收的 tdd-guardian 0.10.2；测试可用 PICSEE_TDD_PLUGIN_ROOT 覆盖
 plugin_root="$HOME/.claude/plugins/cache/xiaolai/tdd-guardian/0.10.2"
 export PICSEE_SWIFT_FILTER='测试函数名'
-node "$plugin_root/scripts/tdd-guardian/receipt.js" record --id P0-XX-WI-1 --lane swift-red --files Packages/PicseeKit/Tests/PicseeCoreTests/ItemIDTests.swift
+node "$plugin_root/scripts/tdd-guardian/receipt.js" record --id P0-XX-WI-1 --lane swift-red --files Packages/MadoKit/Tests/MadoCoreTests/ItemIDTests.swift
 # 实现后，保留相同 PICSEE_SWIFT_FILTER
 node "$plugin_root/scripts/tdd-guardian/receipt.js" verify --id P0-XX-WI-1
 node "$plugin_root/scripts/tdd-guardian/receipt.js" show
@@ -101,7 +101,7 @@ node --test scripts/tdd/*.test.mjs
 
 App RED 也可只跑指定测试：`node scripts/tdd/app-lane.mjs [filter]`，或在 receipt 的 record **和** verify 前设置同一个 `PICSEE_APP_FILTER`。参数优先于环境变量；filter 是匹配运行时完整 ID 的正则表达式（例如 `issue512ChildReadKeepsTitleCurrentRowAndFailureDash`，多个测试用 `nameA|nameB`）。环境变量不会写入 receipt，`--files` 仍只选指纹文件。设置 `PICSEE_APP_LANE_NO_RETRY=1` 记录 RED；先 build-for-testing 到 `.build/dd-ci`。成功解析后、计数前打印 `app-lane filter=<f>`；零匹配或执行集合不符退出 70，不输出计数。从环境变量读取 filter 时会在 stderr 提示；完整运行前先执行 `unset PICSEE_APP_FILTER`。未传 filter 时仍跑全 bundle（应用隔离清单）。过滤后的精确 ID 通过 `xcrun xctest -XCTest` 传入，Swift Testing 路径已有真实 bundle 运行证据；XCTest 过滤路径仅有 Node 假进程覆盖（真实 App bundle 没有 XCTestCase）。过滤选择中的每个测试必须通过或失败；任何跳过均退出 70，不输出计数。隔离清单中的测试始终排除。
 
-App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"PicseeAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。未指定 filter 时，非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。选定运行的完整一致输出中，测试失败退出 1；环境失败或输出不完整、不一致退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；未指定 filter 且清单为空时，保持原运行参数和解析规则。
+App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"MadoAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。未指定 filter 时，非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。选定运行的完整一致输出中，测试失败退出 1；环境失败或输出不完整、不一致退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；未指定 filter 且清单为空时，保持原运行参数和解析规则。
 升级 Xcode 后，重跑混合 XCTest + Swift Testing probe，确认枚举 ABI 与控制台标签仍兼容。
 
 新 API 按此流程先写可编译桩，桩在 record 时是未提交的实现改动，Swift receipt 总会带 `implementation-already-present` MEDIUM；审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。

@@ -1,6 +1,6 @@
 # Third-party notices
 
-picsee is released under the [MIT License](LICENSE). It includes or will include the following third-party material.
+Mado is released under the [MIT License](LICENSE). It includes or will include the following third-party material.
 
 ## Sparkle
 

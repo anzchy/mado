@@ -1,6 +1,6 @@
 # Recursive folder scan and honest progress
 
-The View menu can include nested folders in browsing. While Picsee searches, it shows an indeterminate reading state; after completion, it shows the actual image count. This recipe covers P2-04 without assuming the HTML mockup's sample files or unavailable future grid controls exist in the App.
+The View menu can include nested folders in browsing. While Mado searches, it shows an indeterminate reading state; after completion, it shows the actual image count. This recipe covers P2-04 without assuming the HTML mockup's sample files or unavailable future grid controls exist in the App.
 
 ## Sub-features
 

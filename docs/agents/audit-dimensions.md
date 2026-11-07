@@ -1,6 +1,6 @@
 # Audit dimensions: what both pre-landing auditors check
 
-This is the single list of audit dimensions for picsee. Both auditors load it:
+This is the single list of audit dimensions for Mado. Both auditors load it:
 - `gpt-auditor` (Codex);
 - `opus-auditor` (Claude Code on Opus, in its own herdr pane; `.claude/agents/picsee-opus-auditor.md`).
 
@@ -17,14 +17,14 @@ in the process, not a style choice.
   - ISO/IEC 25010: reliability and recoverability, performance efficiency, security, interaction
     capability including inclusivity;
   - Bacchelli & Bird 2013: review also transfers knowledge.
-- Two dimensions were added because picsee's P0 risk sits there:
+- Two dimensions were added because Mado's P0 risk sits there:
   - design and architecture fit;
   - concurrency and cancellation.
 - "Redundant code" and "maintainability" were merged into one dimension.
 
 ## The dimensions
 
-| ID | Dimension | What it asks in picsee |
+| ID | Dimension | What it asks in Mado |
 |---|---|---|
 | D1 | Design & architecture fit | Does the change belong, in this target, now? Does it respect the target split and dependency direction in [architecture §2.1](../PICSEE_ARCHITECTURE.md), and the ADRs in `docs/adr/` (for example ADR-001: AppKit owns windows)? Is it the simplest design that meets the brief, with no speculative generality? |
 | D2 | Correctness & reliability | Does it do what the brief's ACs say on ordinary and edge paths? Covers error handling, failure and recovery paths (a missing file, a revoked grant, a corrupt image), and state left behind after a failure. |

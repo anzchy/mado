@@ -1,4 +1,4 @@
-# picsee 设计稿与 Stitch 交接
+# Mado 设计稿与 Stitch 交接
 
 更新：2026-10-21。**正式素材已迁到design/；`.stitch/`整体为本地工作目录，不提交。**
 

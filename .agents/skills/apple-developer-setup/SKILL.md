@@ -1,11 +1,11 @@
 ---
 name: apple-developer-setup
-description: Set up and maintain picsee's Apple Developer distribution: program agreements, the Developer ID Application certificate, the notarisation Apple ID and app-specific password, the Sparkle update-signing key, and the GitHub Secrets the release workflow reads. Use when setting up release signing for the first time, renewing or replacing the certificate, rotating the notarisation password or Sparkle key, checking that signing and notarisation credentials are in place, or diagnosing Xcode or notarytool errors such as "PLA Update available", a missing Developer ID identity, or App Store Connect compliance screening. Not for building or publishing a release (the release workflow, #222) or for App sandbox and entitlement decisions (ADRs).
+description: Set up and maintain Mado's Apple Developer distribution: program agreements, the Developer ID Application certificate, the notarisation Apple ID and app-specific password, the Sparkle update-signing key, and the GitHub Secrets the release workflow reads. Use when setting up release signing for the first time, renewing or replacing the certificate, rotating the notarisation password or Sparkle key, checking that signing and notarisation credentials are in place, or diagnosing Xcode or notarytool errors such as "PLA Update available", a missing Developer ID identity, or App Store Connect compliance screening. Not for building or publishing a release (the release workflow, #222) or for App sandbox and entitlement decisions (ADRs).
 ---
 
-# Apple Developer setup for picsee
+# Apple Developer setup for Mado
 
-picsee ships outside the Mac App Store as a notarised DMG on GitHub Releases. It updates through Sparkle 2 (ADR-015, spec #212). The release workflow, run on a GitHub Actions macOS runner, needs a few credentials, and only the human who owns the Apple Developer team can create them. This skill covers getting those credentials, storing them, checking them and renewing them. The wizard [scripts/setup-secrets-wizard.sh](scripts/setup-secrets-wizard.sh) performs the storage part.
+Mado ships outside the Mac App Store as a notarised DMG on GitHub Releases. It updates through Sparkle 2 (ADR-015, spec #212). The release workflow, run on a GitHub Actions macOS runner, needs a few credentials, and only the human who owns the Apple Developer team can create them. This skill covers getting those credentials, storing them, checking them and renewing them. The wizard [scripts/setup-secrets-wizard.sh](scripts/setup-secrets-wizard.sh) performs the storage part.
 
 Decisions this follows, from the user on 2026-10-28:
 - 「公证 DMG，GitHub Releases」
@@ -57,7 +57,7 @@ Each of these needs the owner's Apple ID with two-factor authentication. The age
 
 The workflow (#222) reads exactly the secret and variable names above.
 - It imports `DEVELOPER_ID_P12_BASE64` and its password into a temporary keychain protected by `KEYCHAIN_PASSWORD`.
-- It signs with hardened runtime and no get-task-allow, then checks the signed app with `node scripts/release/check-entitlements.mjs <Picsee.app> --configuration release`. This fails on any entitlement beyond ADR-015's five or a wrong `-spks`/`-spki` name.
+- It signs with hardened runtime and no get-task-allow, then checks the signed app with `node scripts/release/check-entitlements.mjs <Mado.app> --configuration release`. This fails on any entitlement beyond ADR-015's five or a wrong `-spks`/`-spki` name.
 - It notarises with `xcrun notarytool submit --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$DEVELOPMENT_TEAM" --wait`, then staples and validates with spctl.
 - It signs the appcast with `SPARKLE_ED_PRIVATE_KEY`.
 - The app's Info.plist carries the public key as `SUPublicEDKey` (#220).

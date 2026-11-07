@@ -45,7 +45,7 @@ these findings persist; the runner stops at its first unsuccessful repetition.
 
 All tests use ADR-012's unique container fixture and `XCUIApplication()` bound
 to the built Target Application. They never drive the open panel. The existing
-prelaunch guard skips if any Picsee is already running; it does not quit it.
+prelaunch guard skips if any Mado is already running; it does not quit it.
 A skip is **NOT VERIFIED**, not a reliability pass. Teardown terminates only
 the test-launched App. App/test-host cleanup hooks can leave fixture directories
 behind after XCTest termination. Once owned processes drain, the host runner

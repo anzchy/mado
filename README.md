@@ -1,4 +1,4 @@
-# picsee · Quiet Image Canvas
+# Mado · Quiet Image Canvas
 
 原生 macOS 本地极简看图软件的设计与技术准备仓库，目标架构为 **Swift + SwiftUI + AppKit**。当前包含设计规范、交互原型、20份状态稿和研究资料；原生App实现尚未开始。
 
@@ -13,7 +13,7 @@
 
 ## 隐私
 
-picsee 不收集任何数据，不上传图片或元数据。沙盒保持开启，它只读取你通过系统面板授权的文件夹和文件。目前的 App 不联网。计划中（v0.0.1，#220，尚未实现）唯一的联网是检查更新：Sparkle 访问 GitHub 获取更新信息和更新包，不发送系统信息；第二次启动时询问是否自动检查，之后可在“设置 → 更新”中修改（[ADR-015](docs/adr/0015-sparkle-updates-over-a-network-client-entitlement.md)）。
+Mado 不收集任何数据，不上传图片或元数据。沙盒保持开启，它只读取你通过系统面板授权的文件夹和文件。目前的 App 不联网。计划中（v0.0.1，#220，尚未实现）唯一的联网是检查更新：Sparkle 访问 GitHub 获取更新信息和更新包，不发送系统信息；第二次启动时询问是否自动检查，之后可在“设置 → 更新”中修改（[ADR-015](docs/adr/0015-sparkle-updates-over-a-network-client-entitlement.md)）。
 
 ## 发布签名（维护者）
 
@@ -25,7 +25,7 @@ picsee 不收集任何数据，不上传图片或元数据。沙盒保持开启�
 
 ## 许可
 
-picsee 以 [MIT License](LICENSE) 发布。第三方组件与首次打开页样图的许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+Mado 以 [MIT License](LICENSE) 发布。第三方组件与首次打开页样图的许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 本地预览
 

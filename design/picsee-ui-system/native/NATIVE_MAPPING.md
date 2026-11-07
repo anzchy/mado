@@ -4,23 +4,23 @@
 
 ## 1. 层级和归属
 
-保留[架构](../../../docs/PICSEE_ARCHITECTURE.md)的五个production targets。PicseeDesignKit是逻辑命名，不新增target。
+保留[架构](../../../docs/PICSEE_ARCHITECTURE.md)的五个production targets。MadoDesignKit是逻辑命名，不新增target。
 
 | 层 | 建议归属 | 责任 |
 | --- | --- | --- |
-| 语义资源/样式适配 | PicseeMacUI/DesignSystem | Colors、Typography、Metrics、Symbols、Appearance；供App内SwiftUI与AppKit共用 |
+| 语义资源/样式适配 | MadoMacUI/DesignSystem | Colors、Typography、Metrics、Symbols、Appearance；供App内SwiftUI与AppKit共用 |
 | 可复用原生视觉 | 同一target下的Components | IconCommandButton、ShortcutHint、FolderRow视觉、InspectorInfoRow、EmptyStateContent等 |
-| 大图/网格/窗口宿主 | PicseeMacUI的Canvas/Grid/Windows/Input/Bridges | NSCollectionViewItem、画布、视口坐标、NSWindow、系统输入与焦点桥接 |
-| 页面组合 | PicseeApp/UI | 目录浏览、显示设置、Inspector组合；消费共享组件和Session |
-| 状态/命令 | PicseeApplication | Selection、DisplayPreferences、ViewerChromeState与CommandRouter；不创建NSWindow |
-| 图像与文件服务 | PicseeInfrastructure | 解码、metadata、FileAccess、Cache、Watcher；不引用UI组件 |
+| 大图/网格/窗口宿主 | MadoMacUI的Canvas/Grid/Windows/Input/Bridges | NSCollectionViewItem、画布、视口坐标、NSWindow、系统输入与焦点桥接 |
+| 页面组合 | MadoApp/UI | 目录浏览、显示设置、Inspector组合；消费共享组件和Session |
+| 状态/命令 | MadoApplication | Selection、DisplayPreferences、ViewerChromeState与CommandRouter；不创建NSWindow |
+| 图像与文件服务 | MadoInfrastructure | 解码、metadata、FileAccess、Cache、Watcher；不引用UI组件 |
 
 建议未来目录（仅说明，不创建这些Swift文件）：
 
 ```text
-PicseeMacUI/
+MadoMacUI/
   DesignSystem/
-    Tokens/          # PicseeColors / Typography / Metrics / SymbolCatalog
+    Tokens/          # MadoColors / Typography / Metrics / SymbolCatalog
     Appearance/      # 外观适配与资源解析
     Components/      # 小型原生视觉与样式
   Resources/         # 如采用ColorSet，在此配置模块资源

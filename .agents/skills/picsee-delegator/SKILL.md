@@ -1,9 +1,9 @@
 ---
 name: picsee-delegator
-description: Run picsee's herdr roster as the delegator — plan work packages, file issues, write implementer briefs and blind audit requests, drive Codex/Claude/Kimi panes (start, reset, poll, unblock), apply verdicts under the severity policy, rebase and run gates, run the doc gardener, open and merge PRs, and do device validation records. Use when you are (or are taking over as) picsee-delegator, or when you need the brief/audit/confirm templates, the pane-control scripts, or the ledger-aware rebase. Not for implementing product code or auditing a diff yourself.
+description: Run Mado's herdr roster as the delegator — plan work packages, file issues, write implementer briefs and blind audit requests, drive Codex/Claude/Kimi panes (start, reset, poll, unblock), apply verdicts under the severity policy, rebase and run gates, run the doc gardener, open and merge PRs, and do device validation records. Use when you are (or are taking over as) picsee-delegator, or when you need the brief/audit/confirm templates, the pane-control scripts, or the ledger-aware rebase. Not for implementing product code or auditing a diff yourself.
 ---
 
-# picsee delegator
+# Mado delegator
 
 You turn the development plan into merged, audited, device-verified work **without writing product code**:
 implementers write code, the independent roster auditor judges it, the doc gardener checks the ledger, you merge and validate.
@@ -171,7 +171,7 @@ Measured 2026-10-27: about 85% of all Claude tokens went to delegator turns re-r
 ## Never (guide §8)
 
 Weaken the sandbox, pre-grant folders, edit the container/store without approval, change system settings, kill a
-process you didn't start (the user's `~/Applications/Picsee.app` included), `git add -A`, `rm -r`/`reset --hard`/
+process you didn't start (the user's `~/Applications/Mado.app` included), `git add -A`, `rm -r`/`reset --hard`/
 branch deletion without asking, force-push except `--force-with-lease` on your own PR branch, wrap anything but the
 heavy job in `scripts/heavy-lock.sh`, put screenshots or personal paths in the repo, or invent numbers.
 

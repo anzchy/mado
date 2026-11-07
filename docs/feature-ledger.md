@@ -1,14 +1,14 @@
 # 功能账簿
 
-**picsee** · 首次建账 2026-10-21 · 分支 `main` · 依据 [分阶段开发计划 v0.2](./PICSEE_DEVELOPMENT_PLAN.md)
+**Mado** · 首次建账 2026-10-21 · 分支 `main` · 依据 [分阶段开发计划 v0.2](./PICSEE_DEVELOPMENT_PLAN.md)
 
-这份账簿只回答一件事：**picsee 原生 App 现在实际有什么**。每一项能力占一行，写明状态、代码位置，以及在运行中的 App 里怎么确认。
+这份账簿只回答一件事：**Mado 原生 App 现在实际有什么**。每一项能力占一行，写明状态、代码位置，以及在运行中的 App 里怎么确认。
 
 建账时还没有任何 Swift 源文件，所以每一行都是 `Absent`。这些行是**先写好的验收**：「怎么确认」现在就写成将来要做的操作，实现之后只改状态、验证、位置三格，验收不跟着实现降低（见「防止验收被悄悄放宽」）。
 
 它不是 changelog、计划或 ADR。什么时候变的看 git 历史和 `CHANGELOG.md`；先后顺序与验收门槛看 `docs/PICSEE_DEVELOPMENT_PLAN.md`；为什么这样做看 `docs/adr/`；实测数据和过程记录看 `docs/validation/P*.md`。
 
-浏览器原型 `design/prototypes/` 和 `design/prototypes/picsee-browser/states/` 里的 mockup **不算** picsee 的能力。它们是设计输入，在本账簿里不能把任何一行推到 `Absent` 以外。
+浏览器原型 `design/prototypes/` 和 `design/prototypes/picsee-browser/states/` 里的 mockup **不算** Mado 的能力。它们是设计输入，在本账簿里不能把任何一行推到 `Absent` 以外。
 
 ## 状态
 
@@ -20,11 +20,11 @@
 | `Partial` | 能用，**但有一条写明的限制** |
 | `Stub` | 类型、接口或 UI 已存在，行为还没有 |
 | `Absent` | 还没做 |
-| `Unknown` | 依赖系统或第三方提供、在 picsee 里从未测过，不做任何声称 |
+| `Unknown` | 依赖系统或第三方提供、在 Mado 里从未测过，不做任何声称 |
 
 - `Shipped（仅 JPEG）` 这类写法算错。细节写进「怎么确认」。
 - `Partial` 必须在「怎么确认」里写一条 `限制：`，说明限制是什么。
-- 写着 `Stub` 的能力，对外不能说 picsee「有」。
+- 写着 `Stub` 的能力，对外不能说 Mado「有」。
 - **功能开关后面的能力**：代码已合入但默认关闭（编译开关、隐藏设置），记 `Stub`，并在「怎么确认」里写明开关名。开关打开并通过真机验证后才能改 `Shipped`，同一次提交删掉开关或写明保留理由。
 
 ## 验证
@@ -52,7 +52,7 @@
 | ID | `区域-两位序号`，如 `VIEW-03`。一经分配不改、不复用；删掉的能力移到「不做」并保留 ID。brief、测试名、validation 记录都用这个 ID 引用 |
 | 能力 | 用户能感知到的一件事，一行一件 |
 | 计划 | 开发计划的工作包 ID，可多个，用 `、` 分隔。它说明这条需求从哪来；没有工作包的能力先补进计划再进账簿 |
-| 在哪 | 路径从仓库根写起，放在反引号里，如 `Sources/PicseeViewer/ViewerSession.swift`。不写行号、不写计数、不写构建产物（`.build/`、`DerivedData/`）。`Absent` 写 `—` |
+| 在哪 | 路径从仓库根写起，放在反引号里，如 `Sources/MadoViewer/ViewerSession.swift`。不写行号、不写计数、不写构建产物（`.build/`、`DerivedData/`）。`Absent` 写 `—` |
 | 怎么确认 | 一个在 App 里能做的操作和应看到的结果，不是“看代码”。列出几个入口，就是几个都要验（见「验证」）。**验收部分（「限制：」之前）不超过三句、约 150 字**；「限制：」之后的文字不计入这个长度，但每一句都要是事实（未验的入口、仅单元的范围、待哪个工作包）。过程、截图、日志与历史写进 `docs/validation/`，这里只放链接 |
 
 最后一条是从 mdpro 吸取的教训：mdpro 账簿的单元格逐渐长成上千字的修复史，没人能对着 App 一行行走下去。
@@ -101,7 +101,7 @@
 
 ---
 
-## Part 1 — picsee 现在有什么
+## Part 1 — Mado 现在有什么
 
 ### 打开与输入
 
@@ -114,7 +114,7 @@
 | OPEN-05 | 无法读取的图片 | Partial | 单元 | P1-07、P2-03 | `Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerImageStatus.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerRetryIntent.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/`、`App/CanvasWindowController.swift` | 打开截断的 JPEG：显示 25 页错误态，有“重试”和“下一张”；底部工具仍可用，可经网格按钮或 Esc 返回；不会显示上一张图。限制：网格/Esc 仅单元（P3-01）；@1x 三类错误/重试（截断 PNG）与构图/窄窗通过（[P1](validation/P1.md#p1-07空态加载失败取消菜单焦点与中英文本)、[#92](validation/P1.md#p1-08c-沉浸工具与窗口-chrome)）；JPEG/加载中未验；过滤后下一张与扫描中重试仅单元，原生组合未验；错误图标按 25 页 SVG 绘制为空心模板（32 pt、viewBox 24、描边 1.3，muted），标题完整显示、窄窗换行；文件名与原因合并为一行 muted 文本，仅文件名中间省略、原因完整保留（窄窗必要时换行），全文见 tooltip 与 AX；重试为主按钮、下一张为文本按钮；rc.2 @1x 真机已见 25 页构图与「重试」「下一张」（[J2](validation/P3.md#j2-rc-acceptance-on-v001-rc2-240)）；25 页浅深对照 FAIL (APP)：实心错误图标 → #530（v0.0.2）；适应窗口工具禁用为既定行为，用户 2026-11-06 选择「保持禁用，改设计稿 (Recommended)」，设计稿已改（#539）（[J2 rc.3](validation/P3.md#j2-rc-acceptance-delta-on-v001-rc3-240)）；截断 JPEG、网格/Esc 返回、加载完成后的取消未记录。#538：禁用的缩放标签只应用一次 0.4 不透明度；浅深离屏/窗口宿主像素、启用态回归与禁用激活仅单元，签名真机未验。 |
 | OPEN-06 | 最近打开 | Partial | 单元 | P2-08、P2-09、P3-14 | `Packages/MadoKit/Sources/MadoInfrastructure/FileAccess/RecentFolderStore.swift`、`App/Access/AccessMenus.swift`、`App/CanvasWindowController.swift`、`Packages/MadoKit/Sources/MadoApplication/Access/AccessRecovery.swift` | 打开一个目录后退出重开，最近列表里有它；授权失效时显示重新授权入口；不保存图片副本。限制：重启后浏览、随改名更新、运行中目录消失后第一次 Open Recent 即提示重连 @1x 通过（[记录](validation/P2.md#p2-01授权根存储重连与租约)，早于 P2-07 监听，未复验）；目录在卷上找不到时现显示页 26「找不到」与「在新位置选择…」，重绑后最近项按记录时根位置映射到新位置（#231，自动测试；签名构建冒烟见 PR，未写入 docs/validation）；窗口内正在看的目录不存在时，刷新失败先查授权根：授权根失址直接进入页 26，不先显示失败与重试（#238），授权根仍可读则显示「读取失败」与重试，仅单元；签名真机未验；最近目录重开现进网格，仅单元（P3-01）；仅文件夹、最多 10 项；不保存图片副本未验；损坏库降级仅单元。有多文件预览集合时从最近列表或已授权目录进入，集合要到进入目录浏览时才结束；转入重连提示或出错时集合保留，←/→ 仍在集合内移动，按代码推断，无测试（#150）。带 schemaVersion 的新存储格式（#216）的重启保留仅单元，现有真机重启记录早于该格式。 #507：经符号链接的文件夹只在文件夹面板授权后进入最近记录，按规范目标写入并显示目标文件夹名，以真实目录去重；从最近记录重开时跟随书签目标。仅自动测试，签名真机待复验。 |
 | OPEN-07 | 从剪贴板打开 | Absent | 无 | P4-02 | — | 截图到剪贴板后选“从剪贴板打开”，新窗口显示该图 |
-| OPEN-08 | 首页图片墙 | Partial | 单元 | P3-16 | `Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchView.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchLayout.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchDrift.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateHost.swift`、`Packages/MadoKit/Sources/MadoMacUI/B4Samples/`、`Packages/MadoKit/Sources/MadoMacUI/Input/ViewerDropView.swift` | 没打开文件夹的窗口（首页）：内容区铺满倾斜的图片墙，只用内置的六张样图，不读用户磁盘；倾斜、列、交错与不透明度在浅色、深色下与 21 页一致；中央可“选择文件夹…”或拖入；拖入可打开的文件夹时图片墙淡出、拖入提示高亮，松开即打开；不能打开的拖入不变化，取消后恢复；图片墙不进辅助功能、不拦截拖入。 限制：图片墙几何、浅深色、拖入与辅助设置仅单元；开启「降低透明度」时拖入期间图片墙隐藏（不透明度 0），开启「减弱动态效果」时拖入即时变化、不淡化；图片墙按 21 页缓慢上下往返漂移（#316），只在窗口可见（未最小化、未隐藏、未被完全遮挡）且 picsee 在前台、未开「减弱动态效果」时运行，切到后台、最小化、隐藏或被遮挡时停在原位，回来后从同一位置继续；开启「减弱动态效果」时立即停在原位，关闭后在其余条件满足时继续；离开首页即停止并移除动画；漂移的速度、幅度、暂停/继续与这些触发仅单元（窗口可见与前台由注入的读取器驱动；切后台、最小化的真机行为未记入 docs/validation，遮挡未在真机验证，也未测 CPU/GPU）；首页隐藏查看器浮动控件（#331，见 OPEN-01，仅单元与 App 测试）；签名真机、VoiceOver 实走、@2x 与 21 页视觉对照未验。 |
+| OPEN-08 | 首页图片墙 | Partial | 单元 | P3-16 | `Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchView.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchLayout.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/FirstLaunchDrift.swift`、`Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateHost.swift`、`Packages/MadoKit/Sources/MadoMacUI/B4Samples/`、`Packages/MadoKit/Sources/MadoMacUI/Input/ViewerDropView.swift` | 没打开文件夹的窗口（首页）：内容区铺满倾斜的图片墙，只用内置的六张样图，不读用户磁盘；倾斜、列、交错与不透明度在浅色、深色下与 21 页一致；中央可“选择文件夹…”或拖入；拖入可打开的文件夹时图片墙淡出、拖入提示高亮，松开即打开；不能打开的拖入不变化，取消后恢复；图片墙不进辅助功能、不拦截拖入。 限制：图片墙几何、浅深色、拖入与辅助设置仅单元；开启「降低透明度」时拖入期间图片墙隐藏（不透明度 0），开启「减弱动态效果」时拖入即时变化、不淡化；图片墙按 21 页缓慢上下往返漂移（#316），只在窗口可见（未最小化、未隐藏、未被完全遮挡）且 Mado 在前台、未开「减弱动态效果」时运行，切到后台、最小化、隐藏或被遮挡时停在原位，回来后从同一位置继续；开启「减弱动态效果」时立即停在原位，关闭后在其余条件满足时继续；离开首页即停止并移除动画；漂移的速度、幅度、暂停/继续与这些触发仅单元（窗口可见与前台由注入的读取器驱动；切后台、最小化的真机行为未记入 docs/validation，遮挡未在真机验证，也未测 CPU/GPU）；首页隐藏查看器浮动控件（#331，见 OPEN-01，仅单元与 App 测试）；签名真机、VoiceOver 实走、@2x 与 21 页视觉对照未验。 |
 
 ### 查看与画布
 
@@ -226,7 +226,7 @@
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| CMD-01 | 基础快捷键 | Partial | 单元 | P0-09、P6-09 | `Packages/MadoKit/Sources/MadoCore/Commands/`、`Packages/MadoKit/Sources/MadoApplication/Viewer/CommandRouter.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/CanvasWindowController.swift`、`Packages/MadoKit/Sources/MadoMacUI/Chrome/ChromeWindowCommands.swift`、`Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift`、`Packages/MadoKit/Sources/MadoMacUI/Shortcuts/`、`App/UI/ShortcutWindow.swift`、`App/AppDelegate.swift`、`Packages/MadoKit/Sources/MadoApplication/EntryPoints/EntryPoint.swift`；菜单 ID：`command.preview.menu`、`command.enter.menu`、`command.zoomIn.menu`、`command.zoomOut.menu`、`command.actualPixels.menu`、`command.fit.menu`、`command.<id>.menu.alt.<n>`（隐藏的裸键备用项） | Space、←/→、Esc、Enter、0/1、+/−、⌘F、⌘O、⌘I 在菜单、按钮和键盘上触发的是同一个动作；未实现的不在菜单里显示快捷键。限制：preview/enter 接网格与菜单仅单元，search 的命令目录仅单元，⌘F 的网格 App 接线未验（查看态不可用）；既有菜单/按键与 ⌘W @1x 真机一致；现用工具按钮、新网格快捷键与焦点、Picsee › 设置…（⌘,）未验；按钮仅合成点击。Help › 键盘快捷键（`help.keyboard-shortcuts.menu`）可打开单实例三卡片只读窗口；⌘W 关闭、目录来源与中英文/浅深布局、键帽字形、行名与键帽居中、卡片副标题及其内边距仅单元和渲染断言，签名真机未验；Help 菜单结构与中英文 AX 仅单元，真机未验；报告问题见 CMD-06。View 菜单的缩放项现显示 ⌘+ / ⌘− / ⌘0（实际像素）/ ⌘9（适应），⌘= 同 ⌘+；裸 0/1/+/− 由隐藏菜单项保留查看器原路径；#349 起网格仅 ⌘+ / ⌘= / ⌘− 按 20 pt 调节缩略图大小（140–280），⌘0 重置为 220，⌘9 与裸键禁用；输入框聚焦时 ⌘ 缩放键交给输入框（CMD-02），仅单元与 App 测试（#348、#349），菜单中英文显示与真机按键未验；快捷键窗口与工具提示仍只列裸键。 |
+| CMD-01 | 基础快捷键 | Partial | 单元 | P0-09、P6-09 | `Packages/MadoKit/Sources/MadoCore/Commands/`、`Packages/MadoKit/Sources/MadoApplication/Viewer/CommandRouter.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/CanvasWindowController.swift`、`Packages/MadoKit/Sources/MadoMacUI/Chrome/ChromeWindowCommands.swift`、`Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift`、`Packages/MadoKit/Sources/MadoMacUI/Shortcuts/`、`App/UI/ShortcutWindow.swift`、`App/AppDelegate.swift`、`Packages/MadoKit/Sources/MadoApplication/EntryPoints/EntryPoint.swift`；菜单 ID：`command.preview.menu`、`command.enter.menu`、`command.zoomIn.menu`、`command.zoomOut.menu`、`command.actualPixels.menu`、`command.fit.menu`、`command.<id>.menu.alt.<n>`（隐藏的裸键备用项） | Space、←/→、Esc、Enter、0/1、+/−、⌘F、⌘O、⌘I 在菜单、按钮和键盘上触发的是同一个动作；未实现的不在菜单里显示快捷键。限制：preview/enter 接网格与菜单仅单元，search 的命令目录仅单元，⌘F 的网格 App 接线未验（查看态不可用）；既有菜单/按键与 ⌘W @1x 真机一致；现用工具按钮、新网格快捷键与焦点、Mado › 设置…（⌘,）未验；按钮仅合成点击。Help › 键盘快捷键（`help.keyboard-shortcuts.menu`）可打开单实例三卡片只读窗口；⌘W 关闭、目录来源与中英文/浅深布局、键帽字形、行名与键帽居中、卡片副标题及其内边距仅单元和渲染断言，签名真机未验；Help 菜单结构与中英文 AX 仅单元，真机未验；报告问题见 CMD-06。View 菜单的缩放项现显示 ⌘+ / ⌘− / ⌘0（实际像素）/ ⌘9（适应），⌘= 同 ⌘+；裸 0/1/+/− 由隐藏菜单项保留查看器原路径；#349 起网格仅 ⌘+ / ⌘= / ⌘− 按 20 pt 调节缩略图大小（140–280），⌘0 重置为 220，⌘9 与裸键禁用；输入框聚焦时 ⌘ 缩放键交给输入框（CMD-02），仅单元与 App 测试（#348、#349），菜单中英文显示与真机按键未验；快捷键窗口与工具提示仍只列裸键。 |
 | CMD-02 | 输入框和菜单优先 | Partial | 单元 | P0-09 | `Packages/MadoKit/Sources/MadoApplication/Viewer/CommandRouter.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/InspectorEscapePolicy.swift`、`Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSession.swift`、`App/Commands/CommandMenu.swift`、`App/Commands/CommandWindow.swift` | 在搜索框里按 Space 或 ←，只编辑文字不翻图；菜单打开时按 Esc 只关菜单。限制：网格底栏搜索框见 GRID-07，DEBUG 预览搜索框不是已验路径；@1x 裸键证据来自已移除的 Inspector 占位字段（含打开目录后的 ←/→），网格搜索框中的裸键行为签名真机未验（见 GRID-07）；Edit 菜单与菜单 Esc @1x 真机通过；非画布窗口裸键未验；P3-01 改 Esc 顺序与 Space/Enter 预览后未复验。⌘+ / ⌘= / ⌘− / ⌘0 / ⌘9 在输入框聚焦时归输入框，菜单不缩放，按菜单项判定、不依赖键盘布局所报字符，其他 ⌘ 键仍走菜单（#348）；仅 App 测试，非美式布局与真实输入框中的 ⌘ 键真机未验。 |
 | CMD-03 | 自定义快捷键 | Absent | 无 | P4-04 | — | 在设置里改一个快捷键，立即生效；与已有快捷键冲突时提示 |
 | CMD-04 | 鼠标与触控板预设 | Absent | 无 | P4-04 | — | 切换滚轮为“翻图”或“缩放”，行为随之改变；不影响文本框里的选区和系统手势 |
@@ -318,7 +318,7 @@ v0.0.1 起就是门槛，范围是 J1/J2 的页面（见计划 P3「MVP 还需�
 
 ## Part 2 — 环境差异
 
-picsee 只支持 macOS，没有跨平台差异表，但同一能力在不同硬件和系统上可能表现不同。这里记录**只在部分环境验证过**的情况；表里没有的能力，默认指已在下表“基准”环境验证。
+Mado 只支持 macOS，没有跨平台差异表，但同一能力在不同硬件和系统上可能表现不同。这里记录**只在部分环境验证过**的情况；表里没有的能力，默认指已在下表“基准”环境验证。
 
 | 环境 | 基准 | 状态 |
 |---|---|---|

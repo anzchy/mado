@@ -1,13 +1,13 @@
-# picsee Design System — Quiet Image Canvas
+# Mado Design System — Quiet Image Canvas
 
-更新：2026-10-21。**本文件是 picsee 当前 C 方案的主设计规范。** 产品是原生 macOS 本地看图软件，目标架构为 Swift + SwiftUI + AppKit。浏览器原型与 HTML 状态稿用于验证设计，不是原生应用实现。
+更新：2026-10-21。**本文件是 Mado 当前 C 方案的主设计规范。** 产品是原生 macOS 本地看图软件，目标架构为 Swift + SwiftUI + AppKit。浏览器原型与 HTML 状态稿用于验证设计，不是原生应用实现。
 
 ## 1. 权威来源与验证边界
 
 - 设计规则以本文件及用户明确决定为准；开发阶段与范围以 [开发计划](../docs/PICSEE_DEVELOPMENT_PLAN.md) 为准，原生状态/图像管线以 [架构](../docs/PICSEE_ARCHITECTURE.md) 为准。
 - Token 的运行时实值在 `picsee-ui-system/tokens/{globals,light,dark}.css`；组件契约在 `picsee-ui-system/components/`。下表只是语义摘要，调整后须同步导出。
 - 原生实施输入见 [组件与原生映射](picsee-ui-system/native/README.md)：限定原生角色白名单、组件输入/状态、SwiftUI/AppKit归属及P0-08验收。Web三个primitive的代码不代表已有原生组件。
-- [当前交互原型](prototypes/picsee-browser/viewer-v2.html) 验证 Space、翻图、Esc、主题和已有面板等交互；其初版与 revisions 仅是 picsee 演进记录。
+- [当前交互原型](prototypes/picsee-browser/viewer-v2.html) 验证 Space、翻图、Esc、主题和已有面板等交互；其初版与 revisions 仅是 Mado 演进记录。
 - [本地设计索引](prototypes/picsee-browser/states/index.html) 包含20个界面/状态稿，详细状态以 `manifest.json` 为准。31–34 是本地补充稿；原云端来源以状态稿目录的 `provenance/stitch.json` 和收据为准，重新打包不等于已同步云端。
 - 静态稿中的按钮、菜单、选择态不代表功能已实现。原生窗口、VoiceOver、权限、真实文件操作及性能必须另行实机验收。
 - mdpro 只保留视觉来源归属，不继承其 Markdown 产品布局、ADR、规则优先级或历史对比度豁免。来源见 [IMPORT.md](IMPORT.md)。

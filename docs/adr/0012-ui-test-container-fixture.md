@@ -49,3 +49,5 @@ After the rebase onto main with P2-08a (#140), `App/Access/AccessServices.swift`
 - The UI test target packages only three small synthetic files from `TestAssets`; no `TestAssets`, HTML, research material or test adapter is added to the production App bundle.
 - This fixture build has the same bundle ID and team as the developer's installed Picsee. It shares that App container, thumbnail cache and preferences. The test hook keeps synthetic access records in only its unique fixture subfolder. At test teardown, `app.terminate()` invokes test-only App cleanup; the test also attempts `FileManager` removal of that exact run folder as a fallback. Neither path deletes the container or another run's folder. A forced process kill or denied test-runner container access may leave the one run folder for later manual inspection.
 - A11Y-01 and CMD-01 do not advance from this harness. Its Debug build is signed with the project's Apple Development identity and team, not a Developer ID distribution build. Their native/VoiceOver and keyboard claims still require the specified device observations.
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

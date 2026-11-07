@@ -1,4 +1,4 @@
-# picsee C：经典看图布局与极简设计评审
+# Mado C：经典看图布局与极简设计评审
 
 日期：2026-10-20。Windows 与 macOS 分别由两个子代理调研，主代理结合当前 C 的 JSX/CSS、浅色网格和隐藏控件后的深色大图截图复核。本轮仅评审，不修改原型。
 
@@ -10,7 +10,7 @@
 
 ## 官方样本与适用边界
 
-| 样本 | 官方资料可确认的机制 | 对 picsee 的设计启示 |
+| 样本 | 官方资料可确认的机制 | 对 Mado 的设计启示 |
 | --- | --- | --- |
 | [qView](https://interversehq.com/qview/)（跨平台） | 以图片和标题栏为基本界面，无常规工具栏 | 最接近单图极简目标；窗口操作仍有明确位置 |
 | [Quick Look](https://support.apple.com/en-mt/guide/mac-help/-mh14119/mac) | Space 临时预览；多选时箭头切换；提供全屏与索引；Space 关闭，[Esc 也可关闭](https://support.apple.com/guide/mac-help/preview-a-file-mchlgtd_prev01/mac) | 临时看图与返回原位置的交互值得继承；不能据此认定 Quick Look 会遍历未选中的整个文件夹 |
@@ -21,7 +21,7 @@
 | [FastStone MaxView](https://www.faststone.org/FSMaxViewDetail.htm) | 自动隐藏菜单与工具条、全屏和键盘导航 | 单图默认围绕翻图、缩放、退出组织 |
 | [IrfanView](https://www.irfanview.net/help/guida/hlp_statusbar.htm) | 底部状态栏可隐藏；[快捷键文档](https://www.irfanview.net/help/guida/hlp_hotkeys.htm)列出菜单、工具、标题和状态栏的独立切换 | 信息层可控值得借鉴，无须继承密集工具栏外观 |
 
-上述是官方功能/帮助资料核实，非 Windows/macOS 真机横向实测；不据此断言各应用当前默认按钮位置、像素尺寸或动画时长。下文均为针对 picsee 的设计判断。
+上述是官方功能/帮助资料核实，非 Windows/macOS 真机横向实测；不据此断言各应用当前默认按钮位置、像素尺寸或动画时长。下文均为针对 Mado 的设计判断。
 
 ## 当前 C 的修改建议
 

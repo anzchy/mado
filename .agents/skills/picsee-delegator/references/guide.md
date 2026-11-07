@@ -1,4 +1,4 @@
-# Delegator guide (picsee herdr roster) — full reference
+# Delegator guide (Mado herdr roster) — full reference
 
 This is the long reference behind `SKILL.md`. Paths to helpers are under `.agents/skills/picsee-delegator/scripts/`.
 
@@ -391,10 +391,10 @@ signed-device comparison and independent review **before merging the UI PR**. Un
 7. **Gates** (copy verbatim):
    ```sh
    export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-   scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --enable-code-coverage
+   scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage
    sh scripts/tdd/swift-lcov.sh      # writes coverage/lcov.info; sum LF/LH, FNF/FNH → must be 100% lines and functions
    xcodegen generate
-   scripts/heavy-lock.sh xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+   scripts/heavy-lock.sh xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
    node --test --test-reporter=spec scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs
    node scripts/ledger/build.mjs --check
    ```
@@ -405,8 +405,8 @@ signed-device comparison and independent review **before merging the UI PR**. Un
    - Never change an acceptance sentence; that is the delegator's separate commit quoting the user.
 9. **Commits:** `<type>(<scope>): …`; the body names issue, WP and ledger IDs; trailer `Implemented-by: <name>`;
    stage named paths only; no push, PR, branch deletion, `rm -r`, or touching other worktrees.
-10. **Device smoke** (implementer smoke is not validation): `pgrep -x Picsee` first. Never kill a Picsee it didn't
-    start. The user's `~/Applications/Picsee.app` is off limits. No pre-granting, no container edits, no system
+10. **Device smoke** (implementer smoke is not validation): `pgrep -x Mado` first. Never kill a Mado it didn't
+    start. The user's `~/Applications/Mado.app` is off limits. No pre-granting, no container edits, no system
     settings.
 11. **Handoff** at `~/.picsee/herdr/<implementer>/<item>-handoff.md`: design, AC table with the test that proves
     each AC, RED/GREEN or receipts, changed existing assertions (before, after, why), gates output, diff stat,
@@ -622,11 +622,11 @@ The validation role belongs to someone other than the implementer; the delegator
 ### Desktop GUI lock (shared with mdpro — agreed 2026-10-24)
 
 The mini has one desktop, and mdpro's device tester drives it too. Two drivers at once steal focus, send keys to the
-wrong app and corrupt each other's screenshots. A picsee run once overlapped mdpro's batch B6b because picsee didn't
+wrong app and corrupt each other's screenshots. A Mado run once overlapped mdpro's batch B6b because Mado didn't
 know about the lock. Both projects use the shared lock (mdpro ADR-0134 decision 6, protocol from ADR-0141 WI-2):
 
 - **The lock** (mdpro ADR-0141 WI-2; both sides run the same protocol): the directory `~/.cache/desktop-gui.lock/`
-  holds an `owner` file of exactly eight key=value lines, and that file is the one that counts. picsee writes
+  holds an `owner` file of exactly eight key=value lines, and that file is the one that counts. Mado writes
   `project=picsee`, `session`, `batch=<run-id>`, `start`, `pid`, `expected_minutes`, `purpose` and
   `acquisition_id=<uuid4>`. Every acquire and release runs under the permanent flock mutex
   `~/.cache/desktop-gui.mutex`; never delete, rename or hand-edit either path.
@@ -649,7 +649,7 @@ scripts/device/build.sh "$RUN_DIR"          # signed Debug of HEAD; refuses dirt
 scripts/device/launch.sh "$RUN_DIR"         # records PID, executable, birth time
 scripts/device/doctor.sh "$RUN_DIR" --expected-sha <sha7>   # 12 lines must PASS before driving
 …drive…
-/usr/bin/log show --start "$(cat $RUN_DIR/start.txt)" --style compact --predicate 'subsystem == "io.github.anzchy.picsee"' > $RUN_DIR/app.log
+/usr/bin/log show --start "$(cat $RUN_DIR/start.txt)" --style compact --predicate 'subsystem == "io.github.anzchy.mado"' > $RUN_DIR/app.log
 scripts/device/cleanup.sh "$RUN_DIR"        # kills only the recorded PID
 ```
 
@@ -658,7 +658,7 @@ Driving tools (all synthetic input, which must be disclosed in the record):
   ⌘O = `31 command`, ⌘W = `13 command`, ⌘Q = `12 command`, ⌘⇧G = `5 command shift`. `key.sh` types exactly one
   printable character and nothing else.
 - `.agents/skills/picsee-delegator/scripts/panel-choose.sh RUN PATH`: in an open NSOpenPanel or powerbox of the run's
-  Picsee (needs `RUN/picsee.pid`; the ⌘O AXDialog window, or the reconnect sheet of window 1, not yet driven live), press ⌘⇧G, write the path into the Go-to field **through accessibility**, read it back,
+  Mado (needs `RUN/picsee.pid`; the ⌘O AXDialog window, or the reconnect sheet of window 1, not yet driven live), press ⌘⇧G, write the path into the Go-to field **through accessibility**, read it back,
   press Return, check the sheet closed, then press Return for Open and check the panel closed. Any mismatch fails before Open. It prints
   `input-source: <id>` (read-only) for the record and doesn't touch the pasteboard. The old ⌘A ⌘V paste never reached
   the field (run probe-228, 2026-10-28): every pick silently took the panel's remembered folder.
@@ -671,7 +671,7 @@ Driving tools (all synthetic input, which must be disclosed in the record):
 
 Rules and gotchas:
 
-- **The user's `~/Applications/Picsee.app`** has the same bundle ID and shares the sandbox container, preferences and
+- **The user's `~/Applications/Mado.app`** has the same bundle ID and shares the sandbox container, preferences and
   bookmarks with every test build. If it is running, stop and tell the user; never kill it. Finder "Open With" picks
   the registered copy, so Open With can't be validated while it is installed.
 - **A relaunch needs a new run directory** (cleanup retires the old one). Create `<RUN>-b-…`, copy `bundle.path` and
@@ -736,7 +736,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 - Sandbox stays on. No Full Disk Access, no entitlement bypass, no pre-granted folders, no copying files into the
   container. No container or store edits without the user's approval.
 - Never change system or privacy settings. Never empty the Trash. Never click web links during device runs.
-- Never kill a process this run didn't start; that includes the user's Picsee.
+- Never kill a process this run didn't start; that includes the user's Mado.
 - Ask before `rm -r`, `git reset --hard`, deleting branches or worktrees, or any force push other than
   `--force-with-lease` on your own PR branches. Exception: remove a merged PR's worktree right after the merge
   (user 2026-10-30); its branch stays. After every merge, archive from the merged item's implementer worktree,
@@ -780,9 +780,9 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | Doctor `fixtures` FAIL | files added after hashing, or `.DS_Store` from Finder | hash after copying; keep Finder-touched files outside `fixtures/` |
 | `build.sh` refused: untracked `.DS_Store` | Finder browsing in the repo | move them out intact (don't delete) |
 | A drag "passed" because of cache | the same path had been opened with `open -a` | drag files the app has never opened |
-| A drop landed in another Finder window and *moved* the file | stray Finder window over Picsee | move it back, close stray windows, redo, disclose |
+| A drop landed in another Finder window and *moved* the file | stray Finder window over Mado | move it back, close stray windows, redo, disclose |
 | computer-use drag never arrived | tool limit | `scripts/drag2.sh` CGEvent drag |
-| Finder Open With launched the wrong copy | `~/Applications/Picsee.app` registered with the same bundle ID | NOT VERIFIED while the user's copy is installed |
+| Finder Open With launched the wrong copy | `~/Applications/Mado.app` registered with the same bundle ID | NOT VERIFIED while the user's copy is installed |
 | Gardener died on ECONNRESET | network | check `git status` for partial edits, rerun |
 | Gardener NEEDS-OWNER again and again | over-long cells, over-claims, dropped cautions | write limits that state only what the record shows; keep cautions; one fact per clause |
 | A brief's target was already fixed (Kimi trial) | brief written from an older audit head | a good implementer reports it and makes no empty commit; check `git log -S` before briefing |

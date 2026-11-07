@@ -1,4 +1,4 @@
-# picsee 原生设计实施规范
+# Mado 原生设计实施规范
 
 版本0.1 · 2026-10-21 · 状态：**P0-08 原生 token、状态表面与 Debug 组件预览代码已建立，真机验证待完成**。
 
@@ -11,7 +11,7 @@
 | [COMPONENT_CONTRACTS.md](COMPONENT_CONTRACTS.md) | 组件输入、状态、键盘与可访问性、复用边界、对应 mockup 和阶段 |
 | [NATIVE_MAPPING.md](NATIVE_MAPPING.md) | SwiftUI/AppKit 职责、外观/焦点/图像坐标的桥接、推荐代码归属与验收 |
 
-约束：保留现有五个 production targets；PicseeDesignKit 是现有 UI target 内的逻辑分组，不新增第六个包。不把 JSX、CSS、静态 HTML 或全部遗留 token 机械翻译成 Swift。
+约束：保留现有五个 production targets；MadoDesignKit 是现有 UI target 内的逻辑分组，不新增第六个包。不把 JSX、CSS、静态 HTML 或全部遗留 token 机械翻译成 Swift。
 
 变更路径：先修改主规范和 token 源，再更新本目录，最后实施原生组件。生成清单使用 `python3 scripts/export_native_design_tokens.py`；它只导出规格，不生成 Swift 或原生资源文件。
 
@@ -29,7 +29,7 @@ canonical 来源：[`../tokens/viewer-grid.css`](../tokens/viewer-grid.css)。�
 | --- | --- |
 | `--tool-background-opacity:50%` | Tool Background Opacity 默认0.50，外层 panel 按此比例混合；slider 的含义不变 |
 | `--tool-background-blur:20px`、`--tool-background-saturation:1.6` | 浏览器外观参考，原生使用平台 blur material，不照抄 CSS 数字 |
-| #351 原生材质与不透明度 | `NSVisualEffectView` 使用 `.popover`、`.withinWindow`、`.active`，裁到 6 pt 圆角；上方独立颜色表面按偏好的 30–100% 绘制 panel（默认 50%），内部仍叠加 inset 2 pt / radius 4 pt / panel 50%。100% 时颜色层与外层实色底板保留原外观，并暂停绘制被遮住的材质，避免材质影响抗锯齿边缘；低于 100% 时外层底板保持 panel RGB、alpha 为 0，阴影仍在外层容器。picsee 不读取 Reduce Transparency；系统可将材质回落为实色，独立 panel 颜色层仍按偏好绘制。离屏颜色/几何测试不证明 WindowServer 模糊或设备视觉效果，后两者留待真机。 |
+| #351 原生材质与不透明度 | `NSVisualEffectView` 使用 `.popover`、`.withinWindow`、`.active`，裁到 6 pt 圆角；上方独立颜色表面按偏好的 30–100% 绘制 panel（默认 50%），内部仍叠加 inset 2 pt / radius 4 pt / panel 50%。100% 时颜色层与外层实色底板保留原外观，并暂停绘制被遮住的材质，避免材质影响抗锯齿边缘；低于 100% 时外层底板保持 panel RGB、alpha 为 0，阴影仍在外层容器。Mado 不读取 Reduce Transparency；系统可将材质回落为实色，独立 panel 颜色层仍按偏好绘制。离屏颜色/几何测试不证明 WindowServer 模糊或设备视觉效果，后两者留待真机。 |
 | `--tool-content-backing-opacity:50%`、inset2px、radius4px | 工具内部额外 panel 衬底，外层仍50%；原生以可测量的等效处理保证对比度 |
 | `--tool-foreground-halo`、`--tool-glyph-ink` | 图标、计数、zoom label 用 text 色+halo；glyph 同位文字色叠印保留原线宽。两种外观、平白/平黑底图：实际 glyph ≥3:1，文字 ≥4.5:1。33 的计数也包含在内 |
 | `--thumbnail-size-min/default/max` =140/220/280 | >720pt 的最小列宽，列均分余宽；不是固定 cell 宽 |
