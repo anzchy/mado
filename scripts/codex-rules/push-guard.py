@@ -8,6 +8,11 @@ import subprocess
 import sys
 
 
+# The repository is renamed anzchy/picsee -> anzchy/mado (#554); both names stay approved.
+APPROVED_PUSH_URLS = tuple(url for repo in ('picsee', 'mado')
+                           for url in (f'https://github.com/anzchy/{repo}.git', f'git@github.com:anzchy/{repo}.git'))
+
+
 def git(*args):
     return subprocess.run(['git', *args], check=True, text=True, capture_output=True).stdout.strip()
 
@@ -32,8 +37,8 @@ def main():
         parser.error('only the explicitly provisioned delegator worktree may push')
     if branch in ('main', 'HEAD') or branch.startswith('-'):
         parser.error('push only the current topic branch, never main or a detached HEAD')
-    if len(push_urls) != 1 or push_urls[0] not in ('https://github.com/anzchy/picsee.git', 'git@github.com:anzchy/picsee.git'):
-        parser.error('origin must have exactly one anzchy/picsee push URL')
+    if len(push_urls) != 1 or push_urls[0] not in APPROVED_PUSH_URLS:
+        parser.error('origin must have exactly one anzchy/picsee or anzchy/mado push URL')
 
     ref = f'refs/heads/{branch}'
     command = ['git', 'push']
