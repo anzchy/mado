@@ -2171,6 +2171,7 @@ extension CanvasWindowController: ViewerSingleImageReturnHost {
 // Untested native titlebar/first-responder wiring; policy and views are package-tested.
 extension CanvasWindowController: ViewerChromeHost {
     func applyChrome(toolsVisible: Bool, trafficLightsVisible: Bool) {
+        chromeOverlay.setToolBackgroundOpacity(session.displayPreferences.toolBackgroundOpacity)
         chromeOverlay.setToolsVisible(toolsVisible)
         stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
         if let window {
