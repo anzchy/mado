@@ -23,7 +23,7 @@ enum UITestFixtureLaunch {
         #if DEBUG && PICSEE_UI_TEST_FIXTURE
         guard let name = fixtureName(arguments: arguments) else { return nil }
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true).appendingPathComponent("Picsee/UITestFixtures", isDirectory: true)
+            appropriateFor: nil, create: true).appendingPathComponent("Mado/UITestFixtures", isDirectory: true)
         return try stage(name: name, environment: environment, under: support)
         #else
         return nil
@@ -60,7 +60,7 @@ enum UITestFixtureLaunch {
 
     static func removeRun(folder: URL) throws {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: false).appendingPathComponent("Picsee/UITestFixtures", isDirectory: true)
+            appropriateFor: nil, create: false).appendingPathComponent("Mado/UITestFixtures", isDirectory: true)
         try removeRun(name: folder.lastPathComponent, under: support)
     }
 

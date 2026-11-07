@@ -15,7 +15,7 @@ function cleanTree() {
   return {
     "Contents/Info.plist": "<plist/>",
     "Contents/PkgInfo": "APPL????",
-    "Contents/MacOS/Picsee": "\u0000binary",
+    "Contents/MacOS/Mado": "\u0000binary",
     "Contents/Resources/AppIcon.icns": "icns",
     "Contents/Resources/Assets.car": "car",
     "Contents/Resources/en.lproj/Localizable.strings": "\"a\" = \"b\";",
@@ -36,7 +36,7 @@ function cleanTree() {
 }
 
 function materialise(tree) {
-  const root = mkdtempSync(join(tmpdir(), "picsee-package-")) + "/Picsee.app";
+  const root = mkdtempSync(join(tmpdir(), "picsee-package-")) + "/Mado.app";
   for (const [path, content] of Object.entries(tree)) {
     const file = join(root, path);
     mkdirSync(dirname(file), { recursive: true });
@@ -106,11 +106,11 @@ test("classifyPath allows only the listed exceptions", () => {
 test("build paths inside any file are developer paths", () => {
   for (const leak of ["/Users/jack/Documents/mac-app/picsee/App/Access/", "/Users/runner/work/picsee/picsee/.build/x", "/home/runner/work/x", "/private/var/folders/yc/x/T/y"]) {
     const tree = cleanTree();
-    tree["Contents/MacOS/Picsee"] = `\u0000\u0001prefix${leak}suffix\u0000`;
+    tree["Contents/MacOS/Mado"] = `\u0000\u0001prefix${leak}suffix\u0000`;
     withTree(tree, (root) => {
       const problems = checkPackage(root);
       assert.equal(problems.length, 1, leak);
-      assert.equal(problems[0].path, "Contents/MacOS/Picsee");
+      assert.equal(problems[0].path, "Contents/MacOS/Mado");
       assert.match(problems[0].reason, /developer path/);
     });
   }
@@ -148,8 +148,8 @@ const goodInfo = {
 };
 
 test("checkInfo accepts the shipped Sparkle settings and expected versions", () => {
-  assert.deepEqual(checkInfo(goodInfo, { version: "0.0.1", build: "312" }), []);
-  assert.deepEqual(checkInfo(goodInfo, {}), []);
+  assert.deepEqual(checkInfo(goodInfo, { expectedName: "Picsee", version: "0.0.1", build: "312" }), []);
+  assert.deepEqual(checkInfo(goodInfo, { expectedName: "Picsee" }), []);
 });
 
 test("checkInfo rejects each changed Sparkle or version setting", () => {
@@ -166,7 +166,7 @@ test("checkInfo rejects each changed Sparkle or version setting", () => {
     [{ CFBundleVersion: "1" }, /CFBundleVersion/],
   ];
   for (const [patch, pattern] of cases) {
-    const problems = checkInfo({ ...goodInfo, ...patch }, { version: "0.0.1", build: "312" });
+    const problems = checkInfo({ ...goodInfo, ...patch }, { expectedName: "Picsee", version: "0.0.1", build: "312" });
     assert.equal(problems.length, 1, JSON.stringify(patch));
     assert.match(problems[0], pattern);
   }
@@ -191,7 +191,7 @@ test("framework symlinks are checked as links, never read, and must stay inside 
   } finally { rmSync(dirname(root), { recursive: true, force: true }); }
 });
 
-const layout = readFileSync(new URL("./fixtures/release-layout-0.0.1.txt", import.meta.url), "utf8")
+const layout = readFileSync(new URL("./fixtures/release-layout-0.0.1.txt", import.meta.url), "utf8").replaceAll("MacOS/Picsee", "MacOS/Mado")
   .split("\n").filter((line) => line && !line.startsWith("#"));
 
 test("every entry of the real 0.0.1 release layout is allowed", () => {
@@ -251,9 +251,10 @@ function cli(edit = () => {}) {
   } finally { rmSync(dirname(root), { recursive: true, force: true }); }
 }
 
-test("the CLI passes the clean fixture", () => {
+test("the release CLI refuses the old feed even in an otherwise clean fixture", () => {
   const result = cli();
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /SUFeedURL.*#552/);
 });
 
 test("the CLI fails closed on each auditor regression and names the path", () => {

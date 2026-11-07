@@ -15,11 +15,11 @@ if [ "$source_marketing" != '$(MARKETING_VERSION)' ] || [ "$source_build" != '$(
 fi
 
 xcodegen generate
-xcodebuild build -scheme Picsee -destination 'platform=macOS' \
+xcodebuild build -scheme Mado -destination 'platform=macOS' \
   CODE_SIGNING_ALLOWED=NO -derivedDataPath "$derived_data" \
   MARKETING_VERSION="$marketing_version" CURRENT_PROJECT_VERSION="$build_version"
 
-plist="$derived_data/Build/Products/Debug/Picsee.app/Contents/Info.plist"
+plist="$derived_data/Build/Products/Debug/Mado.app/Contents/Info.plist"
 actual_marketing=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")
 actual_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")
 

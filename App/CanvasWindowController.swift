@@ -28,7 +28,7 @@ private final class FileGrantWakeObservation: @unchecked Sendable {
 @MainActor
 final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private let canvas: CanvasInputBridge
-    private let filesystemLogger = Logger(subsystem: "io.github.anzchy.picsee", category: "filesystem")
+    private let filesystemLogger = Logger(subsystem: "io.github.anzchy.mado", category: "filesystem")
     private let pipeline: any ImagePipeline
     private var fileURL: URL?
     struct WaitingAccessPosition {
@@ -570,11 +570,11 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             title = disk ? String(localized: "External Disk Is Not Connected") : String(localized: "Unable to Access This Folder")
         }
         let detail = notFound
-            ? String(localized: "picsee can’t find “%@”. Choose its location, or choose another folder to continue.")
+            ? String(localized: "Mado can’t find “%@”. Choose its location, or choose another folder to continue.")
             : expired
-            ? String(localized: "Access has expired. Choose this folder again to restore access; picsee will return to where you left off.")
-            : disk ? String(localized: "“%@” is on an external disk.\nConnect the disk and picsee will verify access before restoring your place.")
-            : String(localized: "picsee can’t read “%@” right now. Choose this folder again, or choose another folder to continue.")
+            ? String(localized: "Access has expired. Choose this folder again to restore access; Mado will return to where you left off.")
+            : disk ? String(localized: "“%@” is on an external disk.\nConnect the disk and Mado will verify access before restoring your place.")
+            : String(localized: "Mado can’t read “%@” right now. Choose this folder again, or choose another folder to continue.")
         return LostAccessStateText(title: title, detail: String(format: detail, position.folderURL.lastPathComponent),
             waiting: String(localized: "Waiting for the disk…"), reselect: notFound ? String(localized: "Choose at New Location…") : String(localized: "Choose Folder Again…"),
             chooseOther: String(localized: "Choose Another Folder…"))
@@ -2066,7 +2066,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         session.leaveBrowsing()
         showViewerSurface()
         canvas.showFailure()
-        window?.title = "Picsee"
+        window?.title = "Mado"
         window?.representedURL = nil
         stateHost.refresh()
     }
@@ -2288,8 +2288,8 @@ extension CanvasWindowController: AccessRecoveryHost {
 
 /// Untested os adapter. Lifecycle balancing is covered at the Application tracing port.
 @MainActor private final class NativeFirstPreviewTrace: FirstPreviewTracing {
-    private let log = OSLog(subsystem: "io.github.anzchy.picsee", category: "render")
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "render")
+    private let log = OSLog(subsystem: "io.github.anzchy.mado", category: "render")
+    private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "render")
     private var ids: [UUID: OSSignpostID] = [:]
     func begin(_ id: UUID, fileURL: URL) {
         let signpost = OSSignpostID(log: log)
@@ -2539,8 +2539,8 @@ extension CanvasWindowController: FolderScanHost {
 
     /// Untested native os adapter; structured lifecycle is covered at the Application trace port.
     @MainActor private final class NativeFolderScanTrace: FolderScanTracing {
-        private let log = OSLog(subsystem: "io.github.anzchy.picsee", category: "filesystem")
-        private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "filesystem")
+        private let log = OSLog(subsystem: "io.github.anzchy.mado", category: "filesystem")
+        private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "filesystem")
         private var ids: [UInt64: OSSignpostID] = [:]
         func begin(generation: UInt64, folderURL: URL) {
             let id = OSSignpostID(log: log)

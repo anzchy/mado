@@ -87,7 +87,7 @@ public actor PersonalImageStore {
             return Contents()
         } catch is Damaged {
             storeCorrupt = true
-            Logger(subsystem: "io.github.anzchy.picsee", category: "library").error("PersonalImageStore kind=storeCorrupt")
+            Logger(subsystem: "io.github.anzchy.mado", category: "library").error("PersonalImageStore kind=storeCorrupt")
             return try readRecovery() ?? Contents()
         }
         storeCorrupt = false

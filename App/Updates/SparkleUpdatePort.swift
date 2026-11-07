@@ -2,23 +2,25 @@ import Foundation
 import PicseeApplication
 import Sparkle
 
-/// Untested native forwarding to Sparkle (network, XPC installer); the Settings side is covered with a fake
-/// port, and the real path is checked on a device with a test appcast (#223). Excluded from PicseeAppTests; a source
-/// guard there pins that the controller is built stopped and `start()` goes through `startUpdater()`, so a start
-/// failure still shows Sparkle's own alert (#359).
-@MainActor final class SparkleUpdatePort: NSObject, AppUpdatePort, SPUUpdaterDelegate {
+/// Boundary for Sparkle's native controller. Tests replace only the external framework operations.
+@MainActor protocol SparkleController: AnyObject {
+    var automaticallyChecksForUpdates: Bool { get set }
+    var lastUpdateCheckDate: Date? { get }
+    var canCheckForUpdates: Bool { get }
+    func checkForUpdates()
+    func startUpdater()
+    func observe(_ onChange: @escaping @MainActor () -> Void)
+}
+
+@MainActor final class NativeSparkleController: NSObject, SparkleController, SPUUpdaterDelegate {
     private var controller: SPUStandardUpdaterController!
-    private var observers: [@MainActor () -> Void] = []
     private var observations: [NSKeyValueObservation] = []
+    private var observers: [@MainActor () -> Void] = []
 
     override init() {
         super.init()
-        // Built stopped: start() runs after the first window is front, or Sparkle's second-launch question opens
-        // behind it (#359).
+        // Start only after the first main window is visible (#359).
         controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
-        // Sparkle's second-launch question and Settings both change the automatic flag, and a running check
-        // makes canCheckForUpdates false; both are KVO-compliant on the main thread. lastUpdateCheckDate is not,
-        // so the update-cycle callback below covers it.
         let updater = controller.updater
         observations = [
             updater.observe(\.automaticallyChecksForUpdates) { [weak self] _, _ in
@@ -29,27 +31,40 @@ import Sparkle
             },
         ]
     }
-
-    var versionInfo: AppVersionInfo { AppVersionInfo(infoDictionary: Bundle.main.infoDictionary ?? [:]) }
-
     var automaticallyChecksForUpdates: Bool {
         get { controller.updater.automaticallyChecksForUpdates }
         set { controller.updater.automaticallyChecksForUpdates = newValue }
     }
-
     var lastUpdateCheckDate: Date? { controller.updater.lastUpdateCheckDate }
-
     var canCheckForUpdates: Bool { controller.updater.canCheckForUpdates }
-
     func checkForUpdates() { controller.checkForUpdates(nil) }
-
-    func start() { controller.startUpdater() }
-
+    func startUpdater() { controller.startUpdater() }
     func observe(_ onChange: @escaping @MainActor () -> Void) { observers.append(onChange) }
-
-    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        notify()
-    }
-
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) { notify() }
     private func notify() { observers.forEach { $0() } }
+}
+
+@MainActor final class SparkleUpdatePort: AppUpdatePort {
+    private let controller: (any SparkleController)?
+    init(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
+         makeController: @MainActor () -> any SparkleController = { NativeSparkleController() }) {
+        // #552 will choose Mado's feed. Sparkle reports a missing-feed error if started without one;
+        // avoid constructing it at all until the app supplies a feed, including the manual-check path.
+        guard let feed = infoDictionary["SUFeedURL"] as? String,
+              !feed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            controller = nil
+            return
+        }
+        controller = makeController()
+    }
+    var versionInfo: AppVersionInfo { AppVersionInfo(infoDictionary: Bundle.main.infoDictionary ?? [:]) }
+    var automaticallyChecksForUpdates: Bool {
+        get { controller?.automaticallyChecksForUpdates ?? false }
+        set { controller?.automaticallyChecksForUpdates = newValue }
+    }
+    var lastUpdateCheckDate: Date? { controller?.lastUpdateCheckDate }
+    var canCheckForUpdates: Bool { controller?.canCheckForUpdates ?? false }
+    func checkForUpdates() { controller?.checkForUpdates() }
+    func start() { controller?.startUpdater() }
+    func observe(_ onChange: @escaping @MainActor () -> Void) { controller?.observe(onChange) }
 }

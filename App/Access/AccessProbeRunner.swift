@@ -20,7 +20,7 @@ enum AccessProbeRunner {
         let report: AccessProbeReport
     }
 
-    private static let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "access")
+    private static let logger = Logger(subsystem: "io.github.anzchy.mado", category: "access")
 
     @discardableResult
     static func runIfRequested(arguments: [String]) -> Bool {
@@ -31,7 +31,7 @@ enum AccessProbeRunner {
                     in: .userDomainMask,
                     appropriateFor: nil,
                     create: true
-                ).appendingPathComponent("Picsee/AccessProbe", isDirectory: true)
+                ).appendingPathComponent("Mado/AccessProbe", isDirectory: true)
                 let output = try run(containerURL: container, chooseFolders: chooseFoldersWithPanel)
                 logger.notice("\(resultsLogMessage(for: output), privacy: .public)")
             } catch {

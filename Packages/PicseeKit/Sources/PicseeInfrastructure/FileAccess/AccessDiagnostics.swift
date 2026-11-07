@@ -5,7 +5,7 @@ import os
 public struct AccessDiagnostics: Sendable {
     private let sink: @Sendable (String, URL?) -> Void
     public init(sink: @escaping @Sendable (String, URL?) -> Void = { message, url in
-        Logger(subsystem: "io.github.anzchy.picsee", category: "access").notice("\(message, privacy: .public) path=\(url?.path ?? "none", privacy: .private)")
+        Logger(subsystem: "io.github.anzchy.mado", category: "access").notice("\(message, privacy: .public) path=\(url?.path ?? "none", privacy: .private)")
     }) { self.sink = sink }
     public func emit(_ message: String, path: URL? = nil) { sink(message, path) }
     public static func errorKind(_ error: any Error) -> String {

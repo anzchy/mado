@@ -14,7 +14,7 @@ struct AccessServices: Sendable {
     private let selectionScope: any SecurityScope
     init(buildSHA: String) throws {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true).appendingPathComponent("Picsee")
+            appropriateFor: nil, create: true).appendingPathComponent("Mado")
         let system = SystemSecurityScope()
         selectionScope = system
         files = try FileAccess(scope: system, bookmarks: system,

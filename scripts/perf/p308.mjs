@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// P3-08 (#146) measurement orchestrator for a signed Release Picsee on a real desktop. Run it through
+// P3-08 (#146) measurement orchestrator for a signed Release Mado on a real desktop. Run it through
 // scripts/perf/measure-p3-08.sh; see docs/validation/P3.md「P3-08 测量方法」.
 //
 // It never drives the UI itself: `--driver` (the delegator's GUI step) opens the fixture folder once per sample.
-// It owns only the Picsee processes it spawned as its own children (the child handle, never a pid read from a process
-// list or by name), SIGTERMs only those, never escalates, and refuses to start while another Picsee runs, and never deletes a cache: a cold sample moves picsee's thumbnail cache
+// It owns only the Mado processes it spawned as its own children (the child handle, never a pid read from a process
+// list or by name), SIGTERMs only those, never escalates, and refuses to start while another Mado runs, and never deletes a cache: a cold sample moves picsee's thumbnail cache
 // into the run directory. Evidence stays in the run directory; nothing is written to the checkout.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -55,7 +55,7 @@ export function parseArgs(argv) {
 }
 
 const USAGE = `usage:
-  measure-p3-08.sh run --app <signed Release Picsee.app> --fixture <folder> --tier S1..S6
+  measure-p3-08.sh run --app <signed Release Mado.app> --fixture <folder> --tier S1..S6
       --cache-state cold-app|warm-disk|warm-memory --samples N (≥ ${MIN_SAMPLES}) --driver '<cmd that opens the folder>'
       --out <new run dir> [--manifest <file>] [--tuning <text>] [--content <what the files are>] [--timeout <s>] [--allow-under-30]
   measure-p3-08.sh resources --app … --fixture … --tier … --driver '<cmd>' --browse '<cmd>' --out <new run dir>
@@ -66,7 +66,7 @@ The driver and browse commands get PICSEE_P308_PID, PICSEE_P308_FIXTURE, PICSEE_
 /** picsee's thumbnail cache inside its sandbox container (ThumbnailDiskCache's default directory). Pure. */
 export function cacheDirectory(bundleID, home = homedir()) {
   if (!/^[A-Za-z0-9.-]+$/.test(bundleID)) throw new Error(`unexpected bundle identifier ${bundleID}`);
-  return path.join(home, 'Library/Containers', bundleID, 'Data/Library/Caches/Picsee/Thumbnails');
+  return path.join(home, 'Library/Containers', bundleID, 'Data/Library/Caches/Mado/Thumbnails');
 }
 
 /**
@@ -113,7 +113,7 @@ const logDate = (us) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function picseePIDs() {
-  const out = quiet('/usr/bin/pgrep', ['-x', 'Picsee']);
+  const out = quiet('/usr/bin/pgrep', ['-x', 'Mado']);
   return out ? out.split('\n').map(Number).filter(Boolean) : [];
 }
 
@@ -122,18 +122,18 @@ const children = new Map();
 
 /**
  * Starts the bundle's executable as a child of this script and owns exactly that child. Refuses while any other
- * Picsee runs (it would share the container cache); a Picsee that appears meanwhile is never claimed.
+ * Mado runs (it would share the container cache); a Mado that appears meanwhile is never claimed.
  */
 export async function launch(app, run, { spawn: spawnChild = spawn, picseePIDs: list = picseePIDs, sleep: wait = sleep, readyMs = 2000 } = {}) {
   const before = list();
-  if (before.length) throw new Error(`another Picsee is running (pid ${before.join(', ')}); ask its owner to quit it`);
-  const executable = path.join(app, 'Contents/MacOS/Picsee');
+  if (before.length) throw new Error(`another Mado is running (pid ${before.join(', ')}); ask its owner to quit it`);
+  const executable = path.join(app, 'Contents/MacOS/Mado');
   const child = spawnChild(executable, [], { stdio: 'ignore' });
   if (!child?.pid) throw new Error(`could not start ${executable}`);
   child.on('error', () => {});
   await wait(readyMs);
   if (child.exitCode !== null || child.signalCode !== null) {
-    throw new Error(`Picsee exited during start-up (${child.exitCode ?? child.signalCode}); nothing owned`);
+    throw new Error(`Mado exited during start-up (${child.exitCode ?? child.signalCode}); nothing owned`);
   }
   children.set(child.pid, child);
   const record = { pid: child.pid, executable, birth: quiet('/bin/ps', ['-o', 'lstart=', '-p', String(child.pid)]), child: true };
@@ -203,12 +203,12 @@ function describeBuild(app) {
   const authority = [...(codesign.stderr ?? '').matchAll(/^Authority=(.+)$/gm)].map((m) => m[1]);
   const team = /^TeamIdentifier=(.+)$/m.exec(codesign.stderr ?? '')?.[1];
   const verified = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]).status === 0;
-  const debugDylib = existsSync(path.join(app, 'Contents/MacOS/Picsee.debug.dylib'));
+  const debugDylib = existsSync(path.join(app, 'Contents/MacOS/Mado.debug.dylib'));
   return {
     buildSHA: plist(app, 'PicseeGitSHA') ?? UNKNOWN,
     signing: authority.length ? `${authority[0]}（team ${team ?? UNKNOWN}，codesign --verify ${verified ? '通过' : '失败'}）` : UNKNOWN,
     // Xcode's Debug builds carry a debug dylib; its absence does not prove Release.
-    configuration: debugDylib ? 'Debug（含 Picsee.debug.dylib）' : `${UNKNOWN}（无 debug dylib，不能据此证明 Release）`,
+    configuration: debugDylib ? 'Debug（含 Mado.debug.dylib）' : `${UNKNOWN}（无 debug dylib，不能据此证明 Release）`,
   };
 }
 

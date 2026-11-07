@@ -63,7 +63,7 @@ private struct Page26CopyBookmarks: SecurityScope, BookmarkCoding {
                 #expect(page.titleLabel.stringValue == expected)
                 #expect(!page.titleLabel.stringValue.contains("%@"))
                 if cause == .notFound {
-                    #expect(page.detailLabel.stringValue.replacingOccurrences(of: "\n", with: " ") == "picsee can’t find “\(name)”. Choose its location, or choose another folder to continue.")
+                    #expect(page.detailLabel.stringValue.replacingOccurrences(of: "\n", with: " ") == "Mado can’t find “\(name)”. Choose its location, or choose another folder to continue.")
                 }
                 let shell = try #require(page26CopyFind(GridShellView.self, in: window.contentView))
                 #expect(shell.displayButton.isEnabled)

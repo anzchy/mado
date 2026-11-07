@@ -5,7 +5,7 @@ import Darwin
 
 /// One lease lifetime; only a successfully started security scope requires a stop.
 private struct ScopeSession {
-    static let log = OSLog(subsystem: "io.github.anzchy.picsee", category: "access")
+    static let log = OSLog(subsystem: "io.github.anzchy.mado", category: "access")
     let scope: any SecurityScope
     let url: URL
     let rootID: AccessRootID?
@@ -24,7 +24,7 @@ private struct ScopeSession {
     func stop() {
         if scopeStarted { scope.stop(url) }
         os_signpost(.end, log: Self.log, name: "AccessLease", signpostID: trace, "outcome=released")
-        Logger(subsystem: "io.github.anzchy.picsee", category: "access").notice("AccessLease root=\(rootID?.rawValue.uuidString ?? "file", privacy: .public) remaining=0 outcome=released scopeStarted=\(scopeStarted, privacy: .public) path=\(url.path, privacy: .private)")
+        Logger(subsystem: "io.github.anzchy.mado", category: "access").notice("AccessLease root=\(rootID?.rawValue.uuidString ?? "file", privacy: .public) remaining=0 outcome=released scopeStarted=\(scopeStarted, privacy: .public) path=\(url.path, privacy: .private)")
     }
 }
 
@@ -126,9 +126,9 @@ public actor FileAccess: AccessLeasing {
             let recovery = BookmarkStore(url: store.url.appendingPathExtension("recovered"))
             saved = (try? recovery.load()) ?? []
             self.store = recovery; storeCorrupt = true
-            Logger(subsystem: "io.github.anzchy.picsee", category: "access").error("AccessStore kind=storeCorrupt")
+            Logger(subsystem: "io.github.anzchy.mado", category: "access").error("AccessStore kind=storeCorrupt")
         }
-        let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "access")
+        let logger = Logger(subsystem: "io.github.anzchy.mado", category: "access")
         for index in saved.indices {
             let record = saved[index]
             var outcome = "failed"
@@ -741,7 +741,7 @@ public actor FileAccess: AccessLeasing {
     }
     /// Only an explicit system-panel selection may replace a persisted root.
     public func reconnect(_ id: AccessRootID, folder: URL) throws -> URL {
-        let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "access")
+        let logger = Logger(subsystem: "io.github.anzchy.mado", category: "access")
         var phase = "scope"
         do {
             let session = try ScopeSession(scope: scope, url: folder, rootID: id)
@@ -807,7 +807,7 @@ public actor FileAccess: AccessLeasing {
     }
     /// Only the composition root's successful system panel invokes this operation.
     public func grant(folder: URL, excludingRoot: AccessRootID? = nil) throws -> AccessRootID {
-        let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "access")
+        let logger = Logger(subsystem: "io.github.anzchy.mado", category: "access")
         var id = AccessRootID()
         var existing = false
         var started = false

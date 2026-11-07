@@ -4,7 +4,7 @@ import PicseeCore
 
 /// Only the cancellation flag crosses the worker/actor boundary; guarded by lock.
 final class DecodeTrace: @unchecked Sendable {
-    private static let log = OSLog(subsystem: "io.github.anzchy.picsee", category: "decode")
+    private static let log = OSLog(subsystem: "io.github.anzchy.mado", category: "decode")
     private let id: OSSignpostID
     private let lock = NSLock()
     private var cancelled = false
@@ -37,7 +37,7 @@ final class DecodeTrace: @unchecked Sendable {
         case .failure: bytes = 0; width = 0; height = 0; format = "unknown"
         }
         os_signpost(.end, log: Self.log, name: "Decode", signpostID: id, "outcome=%{public}s bytes=%ld pixels=%ldx%ld format=%{public}s", status, bytes, width, height, format)
-        let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "decode")
+        let logger = Logger(subsystem: "io.github.anzchy.mado", category: "decode")
         logger.notice("Decode outcome=\(status, privacy: .public) bytes=\(bytes, privacy: .public) pixels=\(width, privacy: .public)x\(height, privacy: .public) format=\(format, privacy: .public) file=\(request.fileURL.lastPathComponent, privacy: .private)")
         return result
     }

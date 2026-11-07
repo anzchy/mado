@@ -119,7 +119,7 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         self.openURL = openURL
         self.windowController = windowController
         super.init()
-        let main = CommandMainMenu(title: "Picsee")
+        let main = CommandMainMenu(title: "Mado")
         main.commandOwner = self
         func submenu(_ title: String) -> NSMenu {
             let menu = NSMenu(title: title)
@@ -129,20 +129,20 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
             main.addItem(item)
             return menu
         }
-        let app = submenu("Picsee")
-        app.addItem(withTitle: String(localized: "About Picsee"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let app = submenu("Mado")
+        app.addItem(withTitle: String(localized: "About Mado"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         let settings = app.addItem(withTitle: String(localized: "Settings…"), action: #selector(showSettings(_:)), keyEquivalent: ",")
         settings.target = self
         settings.keyEquivalentModifierMask = [.command]
         settings.setAccessibilityIdentifier("settings.menu")
         app.addItem(.separator())
-        app.addItem(withTitle: String(localized: "Hide Picsee"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: String(localized: "Hide Mado"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = app.addItem(withTitle: String(localized: "Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         hideOthers.keyEquivalentModifierMask = [.option, .command]
         app.addItem(withTitle: String(localized: "Show All"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         app.addItem(.separator())
-        app.addItem(withTitle: String(localized: "Quit Picsee"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: String(localized: "Quit Mado"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let file = submenu(String(localized: "File"))
         let edit = submenu(String(localized: "Edit"))
         edit.addItem(withTitle: String(localized: "Undo"), action: NSSelectorFromString("undo:"), keyEquivalent: "z")

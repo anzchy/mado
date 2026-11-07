@@ -158,9 +158,9 @@ import PicseeMacUI
     let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     let strings = try #require(root["strings"] as? [String: Any])
     let cases: [(String, CGFloat, CGFloat)] = [
-        ("Follows the system language (Chinese / English). Set a language for picsee in System Settings → General → Language & Region.", 390, 67),
-        ("Only thumbnails created by picsee are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing.", 390, 45),
-        ("picsee is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License).", 440, 52)
+        ("Follows the system language (Chinese / English). Set a language for Mado in System Settings → General → Language & Region.", 390, 67),
+        ("Only thumbnails created by Mado are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing.", 390, 45),
+        ("Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License).", 440, 52)
     ]
     for (key, width, height) in cases {
         let entry = try #require(strings[key] as? [String: Any])

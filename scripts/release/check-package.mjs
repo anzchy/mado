@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import { checkFeed } from '../name-checks/identity.mjs';
 /**
- * Check a built Picsee.app for content that must never ship (DIST-03, spec #212 story 34).
+ * Check a built Mado.app for content that must never ship (DIST-03, spec #212 story 34).
  *
- *   node scripts/release/check-package.mjs <Picsee.app> [--require-sparkle-licence]
+ *   node scripts/release/check-package.mjs <Mado.app> [--require-sparkle-licence]
  *        [--expect-version 0.0.1] [--expect-build 312]
  *
  * Fails closed: every file and symlink must belong to the enumerated 0.0.1 release layout, and each
@@ -17,12 +18,12 @@ import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SPARKLE_LICENCE_PATH = "Contents/Resources/ThirdPartyNotices/Sparkle-2.10.0-LICENSE.txt";
-const FEED = "https://raw.githubusercontent.com/anzchy/picsee/main/appcast.xml";
+
 const SPARKLE = String.raw`Contents/Frameworks/Sparkle\.framework`;
 
 // The 0.0.1 release layout (scripts/release/fixtures/release-layout-0.0.1.txt): anything else fails closed.
 const LAYOUT_FILES = [
-  /^Contents\/(Info\.plist|PkgInfo|MacOS\/Picsee|_CodeSignature\/CodeResources|CodeResources)$/,
+  /^Contents\/(Info\.plist|PkgInfo|MacOS\/Mado|_CodeSignature\/CodeResources|CodeResources)$/,
   /^Contents\/Resources\/(AppIcon\.icns|Assets\.car)$/,
   /^Contents\/Resources\/(en|zh-Hans)\.lproj\/(Localizable\.strings|Localizable\.stringsdict)$/,
   new RegExp(`^${SPARKLE_LICENCE_PATH.replace(/[.]/g, "\\.")}$`),
@@ -36,7 +37,7 @@ const LAYOUT_FILES = [
   new RegExp(`^${SPARKLE}/Versions/B/XPCServices/(Installer|Downloader)\\.xpc/Contents/MacOS/\\1$`),
 ];
 const LAYOUT_LINKS = [new RegExp(String.raw`^${SPARKLE}/(Sparkle|Resources|Autoupdate|Updater\.app|XPCServices|Versions/Current)$`)];
-// Each framework link's exact target, as Sparkle 2.10.0 ships it in a built Picsee.app.
+// Each framework link's exact target, as Sparkle 2.10.0 ships it in a built Mado.app.
 const LINK_TARGETS = new Map([
   ...["Sparkle", "Resources", "Autoupdate", "Updater.app", "XPCServices"]
     .map((name) => [`Contents/Frameworks/Sparkle.framework/${name}`, `Versions/Current/${name}`]),
@@ -161,13 +162,13 @@ export function checkPackage(root, { requireSparkleLicence = false } = {}) {
 }
 
 /** Sparkle and version keys of the shipped Info.plist (spec #212 story 7; ADR-015). */
-export function checkInfo(info, { version, build } = {}) {
+export function checkInfo(info, { version, build, expectedName } = {}) {
   const problems = [];
   if ("SUEnableAutomaticChecks" in info) problems.push("SUEnableAutomaticChecks must stay unset so Sparkle asks on the second launch");
   if (info.SUEnableSystemProfiling !== false) problems.push("SUEnableSystemProfiling must be Boolean false");
   if (info.SUEnableInstallerLauncherService !== true) problems.push("SUEnableInstallerLauncherService must be Boolean true");
   if ("SUEnableDownloaderService" in info) problems.push("SUEnableDownloaderService must stay unset (network.client is granted)");
-  if (info.SUFeedURL !== FEED) problems.push(`SUFeedURL must be ${FEED}`);
+  problems.push(...checkFeed(info, expectedName, { release: true }));
   const key = typeof info.SUPublicEDKey === "string" ? Buffer.from(info.SUPublicEDKey, "base64") : Buffer.alloc(0);
   if (key.length !== 32 || key.toString("base64") !== info.SUPublicEDKey) problems.push("SUPublicEDKey must be a base64 Ed25519 public key");
   if (version !== undefined && info.CFBundleShortVersionString !== version) {
@@ -181,7 +182,7 @@ function main(argv) {
   const app = argv[0];
   const option = (name) => { const index = argv.indexOf(name); return index >= 0 ? argv[index + 1] : undefined; };
   if (!app || app.startsWith("--")) {
-    process.stderr.write("usage: check-package.mjs <Picsee.app> [--require-sparkle-licence] [--expect-version V] [--expect-build N]\n");
+    process.stderr.write("usage: check-package.mjs <Mado.app> [--require-sparkle-licence] [--expect-version V] [--expect-build N]\n");
     return 2;
   }
   const problems = checkPackage(app, { requireSparkleLicence: argv.includes("--require-sparkle-licence") })

@@ -5,7 +5,7 @@ import PicseeCore
 @testable import PicseeInfrastructure
 
 @Test func p305PublicCacheErrorCodeNeverIncludesAFilePath() {
-    let path = "/Users/private-person/Library/Caches/Picsee/Thumbnails/index.sqlite3"
+    let path = "/Users/private-person/Library/Caches/Mado/Thumbnails/index.sqlite3"
     let error = NSError(domain: NSCocoaErrorDomain, code: 512, userInfo: [NSFilePathErrorKey: path])
     let code = ThumbnailDiskCache.publicErrorCode(error)
     #expect(code == "cocoa:512")

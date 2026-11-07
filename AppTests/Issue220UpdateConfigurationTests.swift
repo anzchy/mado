@@ -21,7 +21,7 @@ private func isFalse(_ value: Any?) -> Bool {
 // ADR-015 (2026-10-30 addendum): sandbox, read-only user files, app-scope bookmarks, network.client,
 // and Sparkle's installer mach-lookup exception — nothing else.
 @Test func issue220EntitlementsAreExactlyTheFiveDecidedKeys() throws {
-    let entitlements = try plist("App/Resources/Picsee.entitlements")
+    let entitlements = try plist("App/Resources/Mado.entitlements")
     let mach = "com.apple.security.temporary-exception.mach-lookup.global-name"
     let flags = [
         "com.apple.security.app-sandbox",
@@ -38,10 +38,7 @@ private func isFalse(_ value: Any?) -> Bool {
 
 @Test func issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() throws {
     let info = try plist("App/Info.plist")
-    let feed = try #require((info["SUFeedURL"] as? String).flatMap(URL.init(string:)))
-    #expect(feed.scheme == "https")
-    #expect(feed.host == "raw.githubusercontent.com")
-    #expect(feed.absoluteString == "https://raw.githubusercontent.com/anzchy/picsee/main/appcast.xml")
+    #expect(info["SUFeedURL"] == nil, "Mado feed awaits #552; never use Picsee’s frozen feed")
     let key = try #require(info["SUPublicEDKey"] as? String)
     #expect(Data(base64Encoded: key)?.count == 32)
     #expect(key == "XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=")
@@ -67,8 +64,8 @@ private func isFalse(_ value: Any?) -> Bool {
         return String(rest[..<end])
     }
     #expect(try target("PicseeApp").contains("- package: Sparkle"))
-    #expect(try !target("PicseeAppTests").contains("package: Sparkle"))
-    #expect(try target("PicseeAppTests").contains("- Updates/SparkleUpdatePort.swift"))
+    #expect(try target("PicseeAppTests").contains("package: Sparkle"))
+    #expect(try !target("PicseeAppTests").contains("- Updates/SparkleUpdatePort.swift"))
     let notices = try String(contentsOf: repository.appendingPathComponent("THIRD_PARTY_NOTICES.md"), encoding: .utf8)
     #expect(notices.contains("Sparkle 2.10.0"))
 }

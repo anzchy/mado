@@ -5,8 +5,8 @@ import XCTest
 final class PicseeFixtureGridUITests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
-        guard NSRunningApplication.runningApplications(withBundleIdentifier: "io.github.anzchy.picsee").isEmpty else {
-            throw XCTSkip("another Picsee is running; refusing to launch over it")
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "io.github.anzchy.mado").isEmpty else {
+            throw XCTSkip("another Mado is running; refusing to launch over it")
         }
     }
 
@@ -189,7 +189,7 @@ final class PicseeFixtureGridUITests: XCTestCase {
             app.terminate()
             // Fallback if App termination did not run its test-only cleanup hook.
             let runFolder = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Containers/io.github.anzchy.picsee/Data/Library/Application Support/Picsee/UITestFixtures", isDirectory: true)
+                .appendingPathComponent("Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/UITestFixtures", isDirectory: true)
                 .appendingPathComponent(fixtureName, isDirectory: true)
             if FileManager.default.fileExists(atPath: runFolder.path) {
                 try? FileManager.default.removeItem(at: runFolder)

@@ -8,7 +8,7 @@
 // Work counted inside a sample's closed interval [FolderScan begin, GridFirstThumbnails end], and outside it
 // (the rest of that sample's window), per sample and in total.
 
-export const SUBSYSTEM = 'io.github.anzchy.picsee';
+export const SUBSYSTEM = 'io.github.anzchy.mado';
 export const UNKNOWN = '未知';
 export const MIN_SAMPLES = 30;
 
@@ -17,7 +17,7 @@ const TIER_CONTENT = {
   S2: 'S2 为很小的合成图（PNG/TIFF），不是照片；只证明枚举与网格拓扑，不证明真实照片解码吞吐',
 };
 /** How p308.mjs starts the App (launch()); a report pasted alone still names its protocol. */
-export const LAUNCH_METHOD = '启动方式：直接执行 `Contents/MacOS/Picsee`，作为脚本跟踪的子进程，不经 LaunchServices（非 open）；'
+export const LAUNCH_METHOD = '启动方式：直接执行 `Contents/MacOS/Mado`，作为脚本跟踪的子进程，不经 LaunchServices（非 open）；'
   + '计时区间从就绪等待之后的驱动命令开始，不含 App 启动';
 
 /** `--content` when given, else the README's description of the tier, else 未知. */

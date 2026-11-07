@@ -31,9 +31,9 @@ private func page26CatalogValue(_ key: String, _ language: String) throws -> Str
     #expect(try page26CatalogValue("Not Found", "zh-Hans") == "找不到")
     #expect(try page26CatalogValue("Access Has Expired", "zh-Hans") == "授权失效")
     #expect(try page26CatalogValue("Unavailable", "zh-Hans") == "无法访问")
-    let detail = try page26CatalogValue("picsee can’t find “%@”. Choose its location, or choose another folder to continue.", "zh-Hans")
+    let detail = try page26CatalogValue("Mado can’t find “%@”. Choose its location, or choose another folder to continue.", "zh-Hans")
     #expect(detail.replacingOccurrences(of: "\n", with: "") == page26MissingDetail)
-    #expect(try page26CatalogValue("picsee can’t find “%@”. Choose its location, or choose another folder to continue.", "en") == "It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue.")
+    #expect(try page26CatalogValue("Mado can’t find “%@”. Choose its location, or choose another folder to continue.", "en") == "It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue.")
 }
 
 @Test @MainActor func i354ProductionMissingDetailHasTwoBalancedUnclippedLines() async throws {
@@ -43,7 +43,7 @@ private func page26CatalogValue(_ key: String, _ language: String) throws -> Str
     defer { window.close() }
     let view = LostAccessStateView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800))
     window.contentView = view
-    let raw = try page26CatalogValue("picsee can’t find “%@”. Choose its location, or choose another folder to continue.", "zh-Hans")
+    let raw = try page26CatalogValue("Mado can’t find “%@”. Choose its location, or choose another folder to continue.", "zh-Hans")
     let detail = String(format: raw, "待整理")
     var original: NSRect?
     for dark in [false, true] {
