@@ -224,7 +224,7 @@ private func validate499BorrowedGUILease() throws {
             userInfo: [NSLocalizedDescriptionKey: "Expected a valid caller-owned mado GUI lease before real-window rendering."])
     }
     let lines = ownerText.split(separator: "\n").map(String.init)
-    guard lines.contains("project=mado"), lines.contains("acquisition_id=\(token)") else {
+    guard lines.contains("project=picsee"), lines.contains("acquisition_id=\(token)") else {
         throw NSError(domain: "i499-gui-environment-precondition", code: 1,
             userInfo: [NSLocalizedDescriptionKey: "PICSEE_I499_GUI_ACQUISITION does not match the current mado GUI lease."])
     }
