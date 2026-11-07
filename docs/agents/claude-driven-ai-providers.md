@@ -1,11 +1,11 @@
-# picsee 多模型 roster 使用指南（草案）
+# Mado 多模型 roster 使用指南（草案）
 
 探针 P1–P7 尚未运行；只有全部通过后，codex-auditor 才按第 6 节的跨厂商配对取代 gpt-auditor。
 文中的 `scripts/install-shims.sh` 和 `scripts/start-roster.sh` 目前仅在本地 `~/.picsee/herdr/opus-auditor/roster-proposal/scripts/`，尚未入库。
 
 日期：2026-10-28 · 作者：opus-auditor（应用户要求起草）· 状态：**提案，未实测**。
 本指南说明怎样用 [xiaolai/claude-driven-ai-providers](https://github.com/xiaolai/claude-driven-ai-providers)（下称 clai）
-让 Claude Code 驱动 Codex（ChatGPT 订阅）与 Kimi 模型，并在 picsee 现有 herdr 规程里加入五个角色：
+让 Claude Code 驱动 Codex（ChatGPT 订阅）与 Kimi 模型，并在 Mado 现有 herdr 规程里加入五个角色：
 researcher、planner、opus-implementor、codex-implementor、codex-auditor（doc gardener 沿用现有 `picsee-doc-gardener`）。
 
 标 **【待验证】** 的步骤还没有在本机跑过，第一次执行时按「9. 首次探针」逐项确认，结果记进 handoff 日志。

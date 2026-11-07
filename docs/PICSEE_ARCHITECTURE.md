@@ -1,4 +1,4 @@
-# picsee 架构设计
+# Mado 架构设计
 
 版本：v0.2 · 更新：2026-10-21 · 状态：可用于拆分开发任务的设计草案，尚无实现或性能验收结果。
 
@@ -6,7 +6,7 @@
 
 ## 1. 目标、依据与设计边界
 
-picsee 是面向 macOS 的本地图片浏览工具，优先解决 Finder 打开图片后的连续浏览、缩放拖动、文件夹网格和桌面对照。首发以直接浏览文件系统为核心；不要求用户先导入图片库。
+Mado 是面向 macOS 的本地图片浏览工具，优先解决 Finder 打开图片后的连续浏览、缩放拖动、文件夹网格和桌面对照。首发以直接浏览文件系统为核心；不要求用户先导入图片库。
 
 依据：
 
@@ -14,11 +14,11 @@ picsee 是面向 macOS 的本地图片浏览工具，优先解决 Finder 打开�
 - Picview 功能清单 `docs/PICVIEW_FEATURES.md`（本地研究资料，不在公开仓库），包含官方宣传和本地资源证据，二者已区分。
 - 用户已确定专注 macOS，使用 Swift、SwiftUI 和 AppKit。
 
-**本文件的类名、缓存策略、并发参数、性能目标均为 picsee 的设计建议，不是恢复出的 Picview 源码。** Picview 的缓存键、淘汰算法、预取距离仍未被验证，不能作为已知实现照搬。
+**本文件的类名、缓存策略、并发参数、性能目标均为 Mado 的设计建议，不是恢复出的 Picview 源码。** Picview 的缓存键、淘汰算法、预取距离仍未被验证，不能作为已知实现照搬。
 
 ### 1.1 从 Picview 采纳的经验
 
-| Picview 已观察到的事实 | picsee 采用的设计 | 不直接复制的部分 |
+| Picview 已观察到的事实 | Mado 采用的设计 | 不直接复制的部分 |
 |---|---|---|
 | 可取消的图像 Operation，多个独立串行队列 | 主动区分当前图片、可见缩略图、预取和磁盘写入；并发与内存共同限流 | 不把其四条串行队列当作最优参数 |
 | ImageIO 按目标尺寸生成缩略图 | 网格和视口预览按像素尺寸解码，保留方向与色彩信息 | 不默认全部先解码原图再缩放 |
@@ -52,11 +52,11 @@ picsee 是面向 macOS 的本地图片浏览工具，优先解决 Finder 打开�
 
 ```mermaid
 flowchart TD
-    App[PicseeApp：组装与应用入口] --> UI[SwiftUI 面板（嵌入 AppKit 窗口）：设置、侧栏、信息面板]
-    App --> Mac[PicseeMacUI：窗口、画布、网格、输入]
+    App[MadoApp：组装与应用入口] --> UI[SwiftUI 面板（嵌入 AppKit 窗口）：设置、侧栏、信息面板]
+    App --> Mac[MadoMacUI：窗口、画布、网格、输入]
     UI --> Session[窗口级 ViewerSession / BrowserSession]
     Mac --> Session
-    Session --> Core[PicseeCore：标识、快照、命令、服务协议]
+    Session --> Core[MadoCore：标识、快照、命令、服务协议]
     Session --> Image[ImagePipeline：请求去重与调度]
     Session --> Browser[FolderBrowser：枚举、过滤、排序]
     Image --> Decode[ImageIO / CoreGraphics 解码适配器]
@@ -73,13 +73,13 @@ flowchart TD
 
 | Target | 职责与可依赖范围 | 不负责的事情 |
 |---|---|---|
-| `PicseeApp` | App 生命周期（`NSApplicationDelegate`）、服务组装、打开事件、SwiftUI 面板；窗口由 AppKit 拥有（[ADR-001](./adr/0001-appkit-owns-windows.md)）；依赖其他模块 | 不内嵌缓存/解码算法 |
-| `PicseeMacUI` | AppKit 画布、网格、窗口、输入；依赖 Core 与 Application | 不直接读磁盘、枚举目录或拼缓存路径 |
-| `PicseeCore` | 值类型、命令、错误、标识、服务协议；Foundation/CoreGraphics 范围内 | 不引用 SwiftUI、AppKit 控件、数据库或具体解码器 |
-| `PicseeApplication` | 窗口 Session、应用用例、状态协调；依赖 Core | 不创建 NSWindow，不执行阻塞文件 I/O |
-| `PicseeInfrastructure` | ImageIO、FileAccess、FolderBrowser、CacheStore、事件监听、持久化；依赖 Core | 不知道窗口、cell 或 SwiftUI Binding |
+| `MadoApp` | App 生命周期（`NSApplicationDelegate`）、服务组装、打开事件、SwiftUI 面板；窗口由 AppKit 拥有（[ADR-001](./adr/0001-appkit-owns-windows.md)）；依赖其他模块 | 不内嵌缓存/解码算法 |
+| `MadoMacUI` | AppKit 画布、网格、窗口、输入；依赖 Core 与 Application | 不直接读磁盘、枚举目录或拼缓存路径 |
+| `MadoCore` | 值类型、命令、错误、标识、服务协议；Foundation/CoreGraphics 范围内 | 不引用 SwiftUI、AppKit 控件、数据库或具体解码器 |
+| `MadoApplication` | 窗口 Session、应用用例、状态协调；依赖 Core | 不创建 NSWindow，不执行阻塞文件 I/O |
+| `MadoInfrastructure` | ImageIO、FileAccess、FolderBrowser、CacheStore、事件监听、持久化；依赖 Core | 不知道窗口、cell 或 SwiftUI Binding |
 
-P0-03 首个实验切片（#7）的画布偏离已在 P1-03（#37）结束：可复用绘制与输入在 `Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift`，Session 持有缩放模式，纯坐标规则在 PicseeCore。画布通过离屏 AppKit 绘制与公开输入入口测试，纳入 package 的 100% 行/函数覆盖率门槛；`App/CanvasInputBridge.swift` 仅提取无法可靠合成的捏合事件字段。窗口与全屏交接仍在 `App/CanvasWindowController.swift`，原生接线不由 package 覆盖率证明。P0-09（#10/#11）纯值命令目录在 Core，Application 的 CommandRouter 现以每窗口 ViewerSession 为目标，由 Session 决定命令启用、选择/预览、chrome 与 Inspector/焦点状态，App 仅实现宿主效果；规则与测试见[开发计划 §1.4 状态表](./PICSEE_DEVELOPMENT_PLAN.md#viewersession-状态表p0-0911)。画布已在 P1-03 迁入 PicseeMacUI，缩放模式由 Session 持有。P0-05/06（#9）已用共享准入 actor 和一条有界 OperationQueue 替换串行执行器；窗口取消自己的订阅，运行中的 File Grant 保留到解码真实返回。P1-04/P1-05（#41）的渐进加载编排由 PicseeApplication 的 `ViewerImageLoader` 持有并经 Session 测试：初始 ≤512px 预览之后请求首个非预览视口档（即使边长相同），放大时才请求更高细节；App 仅提供源获取与原生呈现接线，原生接线仍不由 package 单元测试证明。
+P0-03 首个实验切片（#7）的画布偏离已在 P1-03（#37）结束：可复用绘制与输入在 `Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift`，Session 持有缩放模式，纯坐标规则在 MadoCore。画布通过离屏 AppKit 绘制与公开输入入口测试，纳入 package 的 100% 行/函数覆盖率门槛；`App/CanvasInputBridge.swift` 仅提取无法可靠合成的捏合事件字段。窗口与全屏交接仍在 `App/CanvasWindowController.swift`，原生接线不由 package 覆盖率证明。P0-09（#10/#11）纯值命令目录在 Core，Application 的 CommandRouter 现以每窗口 ViewerSession 为目标，由 Session 决定命令启用、选择/预览、chrome 与 Inspector/焦点状态，App 仅实现宿主效果；规则与测试见[开发计划 §1.4 状态表](./PICSEE_DEVELOPMENT_PLAN.md#viewersession-状态表p0-0911)。画布已在 P1-03 迁入 MadoMacUI，缩放模式由 Session 持有。P0-05/06（#9）已用共享准入 actor 和一条有界 OperationQueue 替换串行执行器；窗口取消自己的订阅，运行中的 File Grant 保留到解码真实返回。P1-04/P1-05（#41）的渐进加载编排由 MadoApplication 的 `ViewerImageLoader` 持有并经 Session 测试：初始 ≤512px 预览之后请求首个非预览视口档（即使边长相同），放大时才请求更高细节；App 仅提供源获取与原生呈现接线，原生接线仍不由 package 单元测试证明。
 
 Application 通过 Core 中的小型协议调用 Infrastructure；App 是组合根，不建立通用 DI 框架。 原生设计资源与可复用视觉按[组件与原生映射](../design/picsee-ui-system/native/README.md)收敛到现有UI target内的DesignSystem逻辑分组，供SwiftUI/AppKit共享；不新增第六个production target。SwiftUI 页面位于 App/UI，必要的可复用桥接位于 MacUI。测试可使用假服务，真实 I/O 集成测试另行覆盖。
 
@@ -87,28 +87,28 @@ Application 通过 Core 中的小型协议调用 Infrastructure；App 是组合�
 
 ```text
 picsee/
-├── Picsee.xcodeproj/
+├── Mado.xcodeproj/
 ├── App/
-│   ├── PicseeApp.swift
+│   ├── MadoApp.swift
 │   ├── AppDelegate.swift
 │   ├── CompositionRoot.swift
 │   ├── Commands/
 │   ├── UI/                         # SwiftUI 设置、侧栏、Inspector、空态
 │   └── Resources/                  # Assets、String Catalog、entitlements
-├── Packages/PicseeKit/
+├── Packages/MadoKit/
 │   ├── Package.swift
 │   ├── Sources/
-│   │   ├── PicseeCore/
+│   │   ├── MadoCore/
 │   │   │   ├── Identity/           # ItemID、FileRevision、RequestKey
 │   │   │   ├── Models/             # BrowserSnapshot、RenderRequest、EditRecipe
 │   │   │   ├── Commands/
 │   │   │   └── Ports/              # 具体服务协议与错误
-│   │   ├── PicseeApplication/
+│   │   ├── MadoApplication/
 │   │   │   ├── Viewer/             # ViewerSession、请求代次、选中项
 │   │   │   ├── Browser/
 │   │   │   ├── Pins/
 │   │   │   └── Editing/
-│   │   ├── PicseeInfrastructure/
+│   │   ├── MadoInfrastructure/
 │   │   │   ├── FileAccess/
 │   │   │   ├── ImagePipeline/
 │   │   │   ├── Decoders/
@@ -116,7 +116,7 @@ picsee/
 │   │   │   ├── FolderBrowser/
 │   │   │   ├── Watching/
 │   │   │   └── Persistence/
-│   │   └── PicseeMacUI/
+│   │   └── MadoMacUI/
 │   │       ├── Canvas/
 │   │       ├── Grid/
 │   │       ├── Windows/
@@ -129,7 +129,7 @@ picsee/
 └── scripts/                        # 未来构建、性能采样和打包脚本
 ```
 
-这是未来应用工程结构；当前目录中的 REA/npm 属于研究工具，不是 picsee 的运行时依赖。现有 `evidence/` 和报告保留为研究资料，应用 target 不打包它们。
+这是未来应用工程结构；当前目录中的 REA/npm 属于研究工具，不是 Mado 的运行时依赖。现有 `evidence/` 和报告保留为研究资料，应用 target 不打包它们。
 
 ## 3. 状态、标识与窗口边界
 

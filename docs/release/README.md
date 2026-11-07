@@ -1,6 +1,6 @@
-# Releasing picsee
+# Releasing Mado
 
-A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages picsee. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
+A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
 
 ## Before the first release
 
@@ -12,7 +12,7 @@ A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflo
 
 ```sh
 git switch main && git pull
-git tag -a v0.0.1-rc.1 -m "picsee 0.0.1 rc.1"
+git tag -a v0.0.1-rc.1 -m "Mado 0.0.1 rc.1"
 git push origin v0.0.1-rc.1
 ```
 
@@ -57,7 +57,7 @@ Other measures:
    - It is signed, notarised, stapled and validated.
    - `spctl` assesses both the DMG and the app.
 7. **Draft release** `v0.0.1-rc.N`:
-   - Assets: `Picsee-0.0.1.dmg` and `Picsee-0.0.1.dmg.sha256`.
+   - Assets: `Mado-0.0.1.dmg` and `Mado-0.0.1.dmg.sha256`.
    - Notes from [`notes-template.md`](notes-template.md): checksum, privacy statement, a placeholder for what's new.
    - rc tags are marked pre-release.
 8. **Appcast PR:**
@@ -68,9 +68,9 @@ Other measures:
 To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
 
 ```sh
-xcodebuild build -scheme Picsee -configuration Release CODE_SIGNING_ALLOWED=NO \
+xcodebuild build -scheme Mado -configuration Release CODE_SIGNING_ALLOWED=NO \
   DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES -derivedDataPath .build/dd-rel
-node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Picsee.app
+node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Mado.app
 ```
 
 ## What the owner does
@@ -78,7 +78,7 @@ node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Pics
 1. **Check the draft on the MacBook test user:**
    - Download the DMG from the draft release.
    - Check `shasum -a 256` against the notes.
-   - Open the DMG, drag picsee into Applications and launch it. Gatekeeper must not warn.
+   - Open the DMG, drag Mado into Applications and launch it. Gatekeeper must not warn.
    - Edit the notes' "What is in this version".
 2. **Publish the draft.** The appcast's enclosure URL only works once the release is public.
 3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, as soon as `appcast.xml` lands on `main` (the feed in `SUFeedURL`). There is one feed, and GitHub's pre-release flag does not filter it. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.

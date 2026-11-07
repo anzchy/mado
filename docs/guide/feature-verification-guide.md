@@ -1,6 +1,6 @@
 # 用本机 Mac mini 做功能验收：macos-device-test + doc gardener 使用指南
 
-这份指南写给 picsee 的负责人（你）：一个功能开发完之后，怎么在**本机 Mac mini（@1x）**上用
+这份指南写给 Mado 的负责人（你）：一个功能开发完之后，怎么在**本机 Mac mini（@1x）**上用
 `macos-device-test` 技能在真实 App 里验收，再用 doc gardener 检查功能账簿，最后带着证据开 PR。
 只有 @2x 验收例外：从 mini 经 SSH 驱动 MacBook Pro，并把命令送进 MacBook 桌面启动的 tmux 会话。
 
@@ -11,7 +11,7 @@
 
 | 东西 | 位置 | 管什么 | 不管什么 |
 |---|---|---|---|
-| 功能账簿 | [`docs/feature-ledger.md`](../feature-ledger.md) | picsee **现在有什么**：每行一项能力的状态、验证强度、代码位置、「怎么确认」（验收） | 怎么一步步操作 |
+| 功能账簿 | [`docs/feature-ledger.md`](../feature-ledger.md) | Mado **现在有什么**：每行一项能力的状态、验证强度、代码位置、「怎么确认」（验收） | 怎么一步步操作 |
 | `macos-device-test` 技能 | `.agents/skills/macos-device-test/` | **怎么在真实 App 里验**：构建、启动、doctor 自检、按 `features/` 的步骤操作、取证、清理、结论表 | 改账簿、改代码 |
 | doc gardener | [`docs/agents/doc-gardening.md`](../agents/doc-gardening.md) | 每个 PR 前**检查账簿有没有过时或被放宽**：只做更谨慎的修改，升级一律交给你 | 跑 App、写验证记录、提交 |
 
@@ -47,7 +47,7 @@
 | 终端权限 | 运行验收会话的终端 App 已获所需的**屏幕录制**和**辅助功能**权限；验收时不自行更改隐私设置 | computer use 截图能看到桌面 |
 | 输入法 | 验收前切到 **ABC** | 菜单栏输入法图标 |
 | 运行目录 | `mkdir -p ~/.picsee/device-runs` | 目录存在 |
-| 已安装的 Picsee | 用户自己的 Picsee 可保留安装，但验收时不能运行 | `pgrep -fl Picsee` 没有输出 |
+| 已安装的 Mado | 用户自己的 Mado 可保留安装，但验收时不能运行 | `pgrep -fl Mado` 没有输出 |
 
 本机 mini 是 1920×1080 @1x，也是计划 §10.1 的性能基准；除 @2x 外，所有真机验收都只在这里跑。
 mini 没有 HiDPI 模式。VIEW-02 有三个入口：mini 按 `1`、MacBook 按 `1`、从 2× 拖到 1×；账簿里涉及
@@ -104,7 +104,7 @@ $macos-device-test 读 ~/.picsee/device-briefs/brief-2026-11-05-VIEW-02-03.md，
 
 Claude Code 使用同一份 brief，调用 `/macos-device-test`。
 
-会话会按技能顺序做：选机器 → 检查没有别的 Picsee 在跑 → 用锁定的 Xcode 构建并检查签名团队 →
+会话会按技能顺序做：选机器 → 检查没有别的 Mado 在跑 → 用锁定的 Xcode 构建并检查签名团队 →
 `open -n -W` 启动（`-W` 让脚本及时发现 App 退出），按 bundle 内可执行路径及晚于启动时间的出生时间识别唯一新 PID 并记录 → doctor 自检（每一行都要通过）→ 若工具要求授权，仅申请 brief 需要的 App →
 按运行步骤操作 → 存日志和截图 → 按 PID 清理、释放 GUI 锁并确认证据还在。
 
@@ -209,7 +209,7 @@ computer-use 的直接 Escape 路径仍未验证。
 结论写进 `features/README.md` 的「已知工具行为」。
 
 **doctor 没通过怎么办？**
-看失败的那一行：有别的 Picsee 在跑 → 退出它（不要让会话去杀你自己的 Picsee）；构建比源码旧 → 重建；
+看失败的那一行：有别的 Mado 在跑 → 退出它（不要让会话去杀你自己的 Mado）；构建比源码旧 → 重建；
 签名团队不对 → 检查 `project.yml` 的签名设置；SHA 不一致 → 你验的不是你以为的代码，重建并重启。
 
 **验证记录能不能由写代码的会话写？**
@@ -237,16 +237,16 @@ trailer 只是声明，真正的保证仍是流程：验收一定在新会话里
 ## #499 首页按钮的可选原生渲染检查
 
 `Issue499PrimaryFrameTests.issue499RealHomePrimaryFrame` 会激活真实原生窗口，因此普通
-`swift test` 明确跳过它，不获取共享 GUI 锁；桌面被 picsee 或 mdpro 占用也不会导致这项测试失败。
+`swift test` 明确跳过它，不获取共享 GUI 锁；桌面被 Mado 或 mdpro 占用也不会导致这项测试失败。
 现有 `gui-lock.sh` 只支持 acquire/release，没有随测试进程退出释放的租约，本测试选择仅借用调用者
 已持有的租约，不自行获取或释放，避免 routine 测试被 kill、崩溃或挂起后留下它自己的锁。
 
-由已持锁的调用者传入当前 picsee owner 中的 acquisition_id：
+由已持锁的调用者传入当前 Mado owner 中的 acquisition_id：
 
 ```sh
 PICSEE_I499_GUI_ACQUISITION='<当前调用者的 acquisition_id>' \
   ~/.picsee/device/ram/with-ram.sh i499-render scripts/heavy-lock.sh \
-  swift test --package-path Packages/PicseeKit --filter issue499RealHomePrimaryFrame
+  swift test --package-path Packages/MadoKit --filter issue499RealHomePrimaryFrame
 ```
 
 调用者须在测试进程结束、窗口关闭后按原规程释放自己的锁；不要传入其他运行的 token。

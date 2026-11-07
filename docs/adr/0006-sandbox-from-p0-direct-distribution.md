@@ -27,3 +27,5 @@ picsee 从第一个可运行构建起就开启 App Sandbox；首发按启用 san
 - 写权限在 P5-04 加入 `com.apple.security.files.user-selected.read-write`，此前保持只读（用户决定（2026-10-22））；加入时同步更新相关账簿行。所有写用户文件的功能都排在这个写权限切片之后：P5-02 的设置/清除 Finder 标签、P5-04 的导出、P5-06 的移到废纸篓。
 - 只读期间创建的 bookmark（P2-01、P3-14/15）不加 `.securityScopeAllowOnlyReadAccess`。P5-04 必须实测：写权限加入后，此前授权的 Access Root 能否写入；不能写时，第一次写操作经系统打开面板重新授权该目录，并替换旧 bookmark，不静默失败。
 - 重评条件：某个特定功能被证明与 sandbox 冲突且有复现记录时；或产品决定上 Mac App Store 时（商店构建不能包含 Sparkle，需要单独的构建配置去掉它）。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

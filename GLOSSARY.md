@@ -1,13 +1,13 @@
-# picsee
+# Mado
 
-picsee is a macOS image viewer that browses images where they already are on disk, inside the sandbox. This glossary fixes the words for what the user can reach and how it is remembered.
+Mado is a macOS image viewer that browses images where they already are on disk, inside the sandbox. This glossary fixes the words for what the user can reach and how it is remembered.
 
 ## Language
 
 ### Access
 
 **Access Root**（授权根）:
-A folder the user granted through the system open panel, which picsee keeps a bookmark for across relaunches.
+A folder the user granted through the system open panel, which Mado keeps a bookmark for across relaunches.
 _Avoid_: authorized directory, location, 授权目录 (as a noun for the stored grant)
 
 **File Grant**（单文件授权）:
@@ -15,7 +15,7 @@ Access to one file, given by opening it from Finder or dragging it in, that last
 _Avoid_: calling it an Access Root, file bookmark
 
 **Lost Access**（无法访问）:
-The condition of an Access Root that picsee can no longer read, always shown with exactly one cause: Disk Not Connected, Not Found, Access Expired, or Unknown.
+The condition of an Access Root that Mado can no longer read, always shown with exactly one cause: Disk Not Connected, Not Found, Access Expired, or Unknown.
 _Avoid_: broken root, stale grant, "revoked" as the general term
 
 **Disk Not Connected**（外接磁盘未连接）:
@@ -23,11 +23,11 @@ The cause of Lost Access when the disk the Access Root lives on is not mounted.
 _Avoid_: offline, unmounted root
 
 **Not Found**（找不到）:
-The cause of Lost Access when the disk is mounted but the Access Root's bookmark no longer resolves; picsee cannot tell deletion from a move to another disk.
+The cause of Lost Access when the disk is mounted but the Access Root's bookmark no longer resolves; Mado cannot tell deletion from a move to another disk.
 _Avoid_: moved, deleted
 
 **Access Expired**（授权失效）:
-The cause of Lost Access when the folder is still there but the system refuses to let picsee read it.
+The cause of Lost Access when the folder is still there but the system refuses to let Mado read it.
 _Avoid_: revoked permission, denied root
 
 ### Library
@@ -51,7 +51,7 @@ A window with no folder open: the Image Wall with the way to choose or drop a fo
 _Avoid_: first-launch screen (when any folderless window is meant), start page, empty state
 
 **Image Wall**（图片墙）:
-The tilted collage of picsee's built-in sample photographs behind the Home; it never shows the user's own images.
+The tilted collage of Mado's built-in sample photographs behind the Home; it never shows the user's own images.
 _Avoid_: scattered prints (the B4 design it replaced), background photos
 
 **Bottom Bar**（底栏）:
@@ -85,13 +85,13 @@ _Avoid_: playlist, range, "all images" when only a selection was meant
 ### Settings
 
 **Interface Language**（界面语言）:
-The single language every piece of text in picsee appears in, including the text macOS draws for it: Follow System, English or Simplified Chinese. Follow System means Simplified Chinese when the system prefers Chinese, English otherwise.
+The single language every piece of text in Mado appears in, including the text macOS draws for it: Follow System, English or Simplified Chinese. Follow System means Simplified Chinese when the system prefers Chinese, English otherwise.
 _Avoid_: locale, region, "translation" for the setting itself
 
 ## Relationships
 
 - The **Home** has no **Bottom Bar**; every window with a folder open shows it, including the **Reading State**, an empty folder, a failed read and **Lost Access**.
-- A change of **Interface Language** takes effect at the next launch; until then all text stays in the language picsee launched with, so the window never shows two languages at once.
+- A change of **Interface Language** takes effect at the next launch; until then all text stays in the language Mado launched with, so the window never shows two languages at once.
 - Follow System maps any Chinese system language, Traditional included, to Simplified Chinese.
 - Relaunching to apply an **Interface Language** reopens what was open: the same folder in the **Grid**, or the same image.
 - **Interface Language** covers interface text only; file and folder names and metadata values read from a file are never translated.
@@ -107,7 +107,7 @@ _Avoid_: locale, region, "translation" for the setting itself
 - While an **Access Root** has **Lost Access**, no image from inside it is shown, including cached thumbnails; the cache is kept and reused once access returns.
 - Choosing a folder at the new place for a **Not Found** root rebinds that same **Access Root** to it; it never adds a second one. If the chosen folder is already an **Access Root**, the lost one is merged into it.
 - **Lost Access** belongs to the **Access Root** as a whole; one unreadable subfolder or image inside it is not Lost Access.
-- **Lost Access** with cause Unknown is shown as plain 「无法访问此文件夹」; picsee never guesses a cause.
+- **Lost Access** with cause Unknown is shown as plain 「无法访问此文件夹」; Mado never guesses a cause.
 - A **Recent Item** confers no access; reopening one outside every **Access Root** asks the user to grant its folder.
 
 ## Example dialogue

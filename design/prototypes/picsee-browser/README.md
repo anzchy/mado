@@ -1,4 +1,4 @@
-# picsee 图片浏览交互原型
+# Mado 图片浏览交互原型
 
 日期：2026-10-20。使用已更新的 **baoyu-design v1.3.0**。这是用于评审布局和交互的浏览器原型，产品的 Swift + SwiftUI + AppKit 技术路线不变。
 
@@ -16,7 +16,7 @@
 python3 -m http.server 4311 --bind 127.0.0.1 --directory design
 ```
 
-然后打开 [picsee 原型](http://127.0.0.1:4311/prototypes/picsee-browser/)。若端口被占用，更换端口并更新链接即可。保留整个目录便可迁移，React 和演示图片都在本地；运行页面不依赖 CDN。
+然后打开 [Mado 原型](http://127.0.0.1:4311/prototypes/picsee-browser/)。若端口被占用，更换端口并更新链接即可。保留整个目录便可迁移，React 和演示图片都在本地；运行页面不依赖 CDN。
 
 ## 主要流程
 

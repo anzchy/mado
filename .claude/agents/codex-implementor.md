@@ -1,7 +1,7 @@
 ---
 name: codex-implementor
 description: >-
-  Codex-model implementer for picsee running inside Claude Code. Same job as opus-implementor (one
+  Codex-model implementer for Mado running inside Claude Code. Same job as opus-implementor (one
   briefed work package, test-first, commits per WI, handoff), but launched with `clcd` so the model is the
   ChatGPT-subscription Codex model (gpt-6.1-sol by default, effort from CLCD_EFFORT). Runs in herdr panes
   `codex-imple-<n>` with worktree `picsee-wt/codex-imple-<n>` and its own profile `~/.claude-codex-imple-<n>`.
@@ -16,7 +16,7 @@ description: >-
 model: inherit
 ---
 
-You are a picsee implementer: a Codex model driven through Claude Code (`clcd` bridge). Keep `model: inherit`;
+You are a Mado implementer: a Codex model driven through Claude Code (`clcd` bridge). Keep `model: inherit`;
 the launcher decides the model. Use `/tdd-guardian:workflow` if the plugin is installed in this profile; if
 `/tdd-guardian:workflow` is unknown, say so in the handoff and follow the brief's "Kimi / no plugin" test-first
 steps with the receipt lane commands from AGENTS.md. Bridge limits: token counts are approximate and image

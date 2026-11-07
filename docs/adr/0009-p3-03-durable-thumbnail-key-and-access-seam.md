@@ -53,3 +53,5 @@ If store verification observes a changed or unreadable source, it throws typed `
 Unit tests cover same-pipeline in-place A→B pixels and a fresh cache/pipeline reopen, replacement at the post-write hook through access and loader, a benign index failure fallback, an independently decoded equal-byte-length foreign PNG, and eligible in-flight cancellation with a held decoder and real FileAccess lease accounting. They do not establish an atomic snapshot against a concurrent writer that changes and restores the source after the final check. Separate-process, signed-sandbox revocation, cold/warm scale, and device behavior remain unverified. Fresh decoding on a disk miss trades extra decode work for source correspondence; P3-08 must measure this path.
 
 P3-04 update: next-access repair, approximate LRU eviction, process-local read/write leases, owned-temp sweeping, and the 2 GiB default high-water cap now have unit evidence; signed-device and P3-08 scale evidence remain open.
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

@@ -1,6 +1,6 @@
-# Picsee verification map
+# Mado verification map
 
-The run recipes for device-testing Picsee, one file per feature, keyed by feature-ledger row IDs. The ledger
+The run recipes for device-testing Mado, one file per feature, keyed by feature-ledger row IDs. The ledger
 (`docs/feature-ledger.md`) says **whether** a capability works and what proves it; these files say **how to
 drive it** to get that proof. Read this index before a run, then use the matching feature file.
 
@@ -14,7 +14,7 @@ differs, and record the deviation.
   MacBook over SSH through its desktop-started tmux session, or are NOT VERIFIED until that path is set up.
 - A fresh build of the code under test, signed by team `GRT84NAK4T`, launched by this run ([runbook](../references/device-runbook.md) §4–5).
 - Doctor passes every line ([runbook](../references/device-runbook.md) §6).
-- No Picsee instance this run didn't start; the shared desktop GUI lock belongs to this run ([runbook](../references/device-runbook.md) §3).
+- No Mado instance this run didn't start; the shared desktop GUI lock belongs to this run ([runbook](../references/device-runbook.md) §3).
 - Fixtures copied from `TestAssets/` into `$RUN_DIR/fixtures/` and hash-checked against the manifest.
 - Sandbox container state as the brief says: either "existing" (left alone) or "fresh" (deleted with the
   user's approval, recorded).

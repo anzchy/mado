@@ -308,13 +308,13 @@ function generate(markdown) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>功能账簿 · picsee</title>
+<title>功能账簿 · Mado</title>
 <style>
 ${STYLE}
 </style>
 </head>
 <body>
-<header class="titlebar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span>picsee · 功能账簿</span></header>
+<header class="titlebar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span>Mado · 功能账簿</span></header>
 ${renderSidebar(areas, documents)}
 <main id="main">
 <div class="content">

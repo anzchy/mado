@@ -1,8 +1,8 @@
-# picsee 分阶段开发计划
+# Mado 分阶段开发计划
 
 更新：2026-10-28 · 版本：v0.5 · 状态以[功能账簿](./feature-ledger.md)为准（账簿无 Shipped）。v0.0.1 内部按用户旅程推进（[ADR-013](adr/0013-build-by-user-journey-slices.md)，§1.6、§14）。剩余任务见 §14。
 
-技术路线：**Swift + SwiftUI + AppKit**。先阅读 [架构设计](./PICSEE_ARCHITECTURE.md)；功能依据为 Picview 功能清单 `docs/PICVIEW_FEATURES.md` 与技术分析 `docs/PICVIEW_ANALYSIS.md`（本地研究资料，不在公开仓库）。本计划不表示任何原生阶段已验收通过：实际有什么以[功能账簿](./feature-ledger.md)为准，真机记录在 `docs/validation/P*.md`。原生工程已由 P0-01 建立（`project.yml` + `Packages/PicseeKit`）。
+技术路线：**Swift + SwiftUI + AppKit**。先阅读 [架构设计](./PICSEE_ARCHITECTURE.md)；功能依据为 Picview 功能清单 `docs/PICVIEW_FEATURES.md` 与技术分析 `docs/PICVIEW_ANALYSIS.md`（本地研究资料，不在公开仓库）。本计划不表示任何原生阶段已验收通过：实际有什么以[功能账簿](./feature-ledger.md)为准，真机记录在 `docs/validation/P*.md`。原生工程已由 P0-01 建立（`project.yml` + `Packages/MadoKit`）。
 
 设计依据按顺序为：用户确认的 **C · Quiet Image Canvas**、[主设计规范](../design/DESIGN.md)、[20页本地 mockup 索引](../design/prototypes/picsee-browser/states/index.html)与[本地补充说明](design/C_LAYOUT_ADDITIONS.md)。Stitch 云端未采纳的07/08等探索稿不作为实现基线。原生代码不打包 HTML/CSS 或 Stitch/REA/npm 运行时。
 
@@ -58,7 +58,7 @@ P0 技术验证、设计映射与命令底座
 | 现有内容 | 用法 | 不应被当作什么 |
 |---|---|---|
 | Picview 两份报告与 REA 原始证据 | 功能参考、技术假设与测试场景来源 | 可复制的产品源码或已测性能基线 |
-| 本地 REA/npm 与分析脚本 | 持续研究工具 | picsee 应用运行时依赖 |
+| 本地 REA/npm 与分析脚本 | 持续研究工具 | Mado 应用运行时依赖 |
 | 最新架构与本计划 | 后续实现的模块、接口与门槛依据 | 已生成 Xcode 工程或已通过审核的发布产品 |
 | viewer-v2 浏览器原型 | 已有 Space/箭头/Esc、缩放、主题和面板等交互参考 | 原生窗口、目录权限或图像管线已验收 |
 | 20份本地 HTML mockup，含31–34补充 | 视觉、组件及状态对照 | 多选/右键/文件操作等已接入真实系统 |
@@ -175,14 +175,14 @@ J1/J2 的完成标准：各有一份签名 App 端到端真机记录（§5 门�
 
 工作包：
 
-- [ ] `P0-01` 创建原生 App 工程与本地 Swift Package；确立五个 production targets，CI 编译和基础行为测试。P0-01 是 TDD 流程的 bootstrap 例外：tdd-guardian 需要能运行的测试命令，而它由 P0-01 建立；因此 P0-01 仍先写一个失败的 Swift Testing 测试（如 `ItemID` 可编码往返）再实现，红/绿输出放进 PR，但没有 receipt。P0-01 只含五个 target 的骨架、`project.yml`、CI 与这条测试，不含其他行为代码。合入后用户运行 `/tdd-guardian:init`，P0-02 起全部走 tdd-guardian。工程由 XcodeGen 生成：`project.yml` 入库，`*.xcodeproj` 不入库（并行 worktree 不再冲突于 `project.pbxproj`）；Swift 6 语言模式、macOS 14 部署下限与 entitlements 写在 `project.yml` 里。App 显示名 `Picsee`，bundle identifier `io.github.anzchy.picsee`（沙盒容器、偏好与授权都按它归属，发布后不改）。本地与真机构建用 Apple Development 证书、团队 `GRT84NAK4T` **手动签名**（`CODE_SIGN_STYLE: Manual`、`CODE_SIGN_IDENTITY: Apple Development`、`DEVELOPMENT_TEAM` 写在 `project.yml`；macOS 27 上 Xcode 26.6 的图形界面打不开，无法登录 Xcode 账户，所以不用自动签名。2026-10-22 已在 MacBook 上用 26.6 实测签出带 sandbox 的 App），让 P0-04 的 bookmark 结论接近发布签名；CI 只做 ad-hoc 或不签名的编译与测试，证书不进 CI。Developer ID Application 证书到 P6 再申请。测试框架：包内单元测试用 Swift Testing（`@Test`、`#expect`）；`UITests/` 与性能采样用 XCTest（XCUITest、`measure` + os_signpost）。CI（GitHub Actions，PR 与 push 到 `main` 触发）：显式选用 P0-02 锁定的 Xcode 26.6（`runs-on: macos-26`，选 `/Applications/Xcode_26.6.app`；镜像没有该 build 时不悄悄换版本）；lane 为 `xcodegen generate`、`swift test`、`xcodebuild build`（ad-hoc 或不签名），`ledger:check` 写成后加入；XCUITest、性能采样、sandbox/bookmark 检查不进 CI。`main` 分支保护：上述 lane 为必需检查、禁止 force push；不开“必须经 PR 合入”，按 rule 70 由 delegator 在 verifier PASS 且 CI 绿后 `--ff-only` 推送。
-- [ ] `P0-02` 在可运行的本机稳定工具链锁定 Swift 6 模式、SDK 和 macOS 14 部署下限；建立 Apple Silicon 构建记录。已选定（2026-10-22，以 Mac mini 为准）：**Xcode 26.6（build 17F113，Swift 6.3.3，macOS 26.5 SDK）**，MacBook、Mac mini、CI 一致。Mac mini 保持 macOS 26.4 不升级。MacBook（macOS 27）另装 Xcode 26.6，与 Xcode 27.1 并存，picsee 的构建一律用 26.6；26.6 在 macOS 27 上能否正常构建、测试与签名需先实测并记入 P0 验证记录。CI 用 GitHub 的 `macos-26` runner（26.6 是其稳定默认版本）。部署下限仍是 macOS 14。
+- [ ] `P0-01` 创建原生 App 工程与本地 Swift Package；确立五个 production targets，CI 编译和基础行为测试。P0-01 是 TDD 流程的 bootstrap 例外：tdd-guardian 需要能运行的测试命令，而它由 P0-01 建立；因此 P0-01 仍先写一个失败的 Swift Testing 测试（如 `ItemID` 可编码往返）再实现，红/绿输出放进 PR，但没有 receipt。P0-01 只含五个 target 的骨架、`project.yml`、CI 与这条测试，不含其他行为代码。合入后用户运行 `/tdd-guardian:init`，P0-02 起全部走 tdd-guardian。工程由 XcodeGen 生成：`project.yml` 入库，`*.xcodeproj` 不入库（并行 worktree 不再冲突于 `project.pbxproj`）；Swift 6 语言模式、macOS 14 部署下限与 entitlements 写在 `project.yml` 里。App 显示名 `Mado`，bundle identifier `io.github.anzchy.mado`（沙盒容器、偏好与授权都按它归属，发布后不改）。本地与真机构建用 Apple Development 证书、团队 `GRT84NAK4T` **手动签名**（`CODE_SIGN_STYLE: Manual`、`CODE_SIGN_IDENTITY: Apple Development`、`DEVELOPMENT_TEAM` 写在 `project.yml`；macOS 27 上 Xcode 26.6 的图形界面打不开，无法登录 Xcode 账户，所以不用自动签名。2026-10-22 已在 MacBook 上用 26.6 实测签出带 sandbox 的 App），让 P0-04 的 bookmark 结论接近发布签名；CI 只做 ad-hoc 或不签名的编译与测试，证书不进 CI。Developer ID Application 证书到 P6 再申请。测试框架：包内单元测试用 Swift Testing（`@Test`、`#expect`）；`UITests/` 与性能采样用 XCTest（XCUITest、`measure` + os_signpost）。CI（GitHub Actions，PR 与 push 到 `main` 触发）：显式选用 P0-02 锁定的 Xcode 26.6（`runs-on: macos-26`，选 `/Applications/Xcode_26.6.app`；镜像没有该 build 时不悄悄换版本）；lane 为 `xcodegen generate`、`swift test`、`xcodebuild build`（ad-hoc 或不签名），`ledger:check` 写成后加入；XCUITest、性能采样、sandbox/bookmark 检查不进 CI。`main` 分支保护：上述 lane 为必需检查、禁止 force push；不开“必须经 PR 合入”，按 rule 70 由 delegator 在 verifier PASS 且 CI 绿后 `--ff-only` 推送。
+- [ ] `P0-02` 在可运行的本机稳定工具链锁定 Swift 6 模式、SDK 和 macOS 14 部署下限；建立 Apple Silicon 构建记录。已选定（2026-10-22，以 Mac mini 为准）：**Xcode 26.6（build 17F113，Swift 6.3.3，macOS 26.5 SDK）**，MacBook、Mac mini、CI 一致。Mac mini 保持 macOS 26.4 不升级。MacBook（macOS 27）另装 Xcode 26.6，与 Xcode 27.1 并存，Mado 的构建一律用 26.6；26.6 在 macOS 27 上能否正常构建、测试与签名需先实测并记入 P0 验证记录。CI 用 GitHub 的 `macos-26` runner（26.6 是其稳定默认版本）。部署下限仍是 macOS 14。
 - [ ] `P0-03` 验证 AppKit 窗口内嵌 SwiftUI 面板与 AppKit 画布（[ADR-001](./adr/0001-appkit-owns-windows.md)），完成 Retina 尺寸、鼠标锚点缩放与焦点转移实验。
 - [ ] `P0-04` 在启用 sandbox 的应用里验证打开单文件、授权父目录、bookmark 跨重启恢复、关闭后释放范围。
 - [ ] `P0-05` ImageIO 对代表性小图、48MP 大图、带方向照片、透明图、坏文件做尺寸受限解码；记录实际字节与耗时，并实测各解码 lane 的并发上限、重任务 lane 与预取数量对首图时间和内存峰值的影响（ADR-003）。
 - [ ] `P0-06` 受控 OperationQueue 包装异步接口与准入 actor（ADR-003）：覆盖排队/执行时取消、只完成一次、内存预约释放，并用测试检查 ADR-003 列出的五条不变量。
 - [ ] `P0-07` 建立素材 manifest、指标脚本/日志约定和 ADR-002～007 初稿（ADR-001 已在 grilling 中定稿）；记录需要更改的默认值。素材分三层：① 小型自校验素材（1px 棋盘格、坐标网格、EXIF 方向 1–8、alpha 渐变、截断/损坏/超限头）由确定性脚本 `scripts/testassets/` 生成，脚本、文件与 `TestAssets/manifest.json` 入库；② S2 批量与 S3 48MP/100MP 由同一脚本按需生成到 `~/.picsee/testassets/`，只入库参数与预期哈希；③ 真实照片内容（带 EXIF 的 JPEG/HEIC、S4 的 RAW/GIF/PDF）按 URL 下载并校验 sha256，来源限 CC0/宽松许可，manifest 记录 URL、许可与哈希，文件不入库。不用 Git LFS。合成平涂图不得用于性能数字：性能采样用第③层真实照片或带照片噪声的合成图，并在记录里写明。
-- [ ] `P0-08` 建立 PicseeDesignKit 的原生颜色/排版/间距/图标映射（位于现有 UI target 内，不额外拆 target）；以[组件与原生映射规范](../design/picsee-ui-system/native/README.md)为输入，实现30页组件状态预览，核对TOKEN_REGISTRY的源哈希并记录原生控件与CSS token的合理差异。文档准备完成不等于本工作包已实现。
+- [ ] `P0-08` 建立 MadoDesignKit 的原生颜色/排版/间距/图标映射（位于现有 UI target 内，不额外拆 target）；以[组件与原生映射规范](../design/picsee-ui-system/native/README.md)为输入，实现30页组件状态预览，核对TOKEN_REGISTRY的源哈希并记录原生控件与CSS token的合理差异。文档准备完成不等于本工作包已实现。
 - [ ] `P0-09` 最小 CommandRouter、焦点上下文和选择/预览状态表；冻结1.4节默认值，原生菜单、SwiftUI按钮与AppKit输入共用入口。
 
 交付物：可构建的实验工程、素材清单、`docs/validation/P0.md`、锁定工具链信息、ADR。实验代码达到复用质量才迁入 production；不保留第二套加载器。
@@ -374,7 +374,7 @@ Rust、Windows/iOS、账号、云同步、语义搜图、批量资产管理/批�
 | S5 | 损坏/截断文件、同路径替换、目录 symlink、无权限、卷卸载 | 错误恢复、标识与权限边界 |
 | S6 | 3 个查看器 + 3 个 pins，重复与不同大图 | 共享任务、全局预算与关闭释放 |
 
-“冷应用缓存”只代表清空 picsee 内存/磁盘缓存；不能当作 OS 文件页缓存也已清空。热磁盘缓存仍需读取/解码，热内存缓存才是像素命中，报告分别给出。
+“冷应用缓存”只代表清空 Mado 内存/磁盘缓存；不能当作 OS 文件页缓存也已清空。热磁盘缓存仍需读取/解码，热内存缓存才是像素命中，报告分别给出。
 
 ### 10.2 初始工程目标，P0 校准后作为门槛
 
@@ -434,7 +434,7 @@ Rust、Windows/iOS、账号、云同步、语义搜图、批量资产管理/批�
 
 ## 12. 建议下一步
 
-见 §14（按用户旅程排期）。本计划按架构、代码组织、测试和性能维度做过文档自检；不把它标为完成了交互式 gstack 工程评审，也不把研究证据当作 picsee 已实现行为。
+见 §14（按用户旅程排期）。本计划按架构、代码组织、测试和性能维度做过文档自检；不把它标为完成了交互式 gstack 工程评审，也不把研究证据当作 Mado 已实现行为。
 
 ## 13. 历史快照
 

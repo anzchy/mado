@@ -1,4 +1,4 @@
-# picsee herdr 混合模型协作规则迁移计划
+# Mado herdr 混合模型协作规则迁移计划
 
 日期：2026-10-21 · 状态：**执行中**（2026-10-22）。第 3 节标出已完成的配套文件；规则 70 本身尚未写成。
 
@@ -6,13 +6,13 @@
 
 用户决定（2026-10-21）：
 - git init，并建 GitHub 私有库；
-- 合成一份 picsee 自己的规则，不保留 70/71 的两层结构；
+- 合成一份 Mado 自己的规则，不保留 70/71 的两层结构；
 - 角色保留 gpt-imple-1/2、gpt-auditor + opus-auditor 双审（2026-10-23 前为 fable-auditor subagent）、claude-imple-1 真机；不设 `/security-review` fork（历史基线，已被 2026-10-24 第三轮临时覆盖暂停）；
 - 先出本计划，确认后再动手。
 
 用户决定（2026-10-21，第二轮）：
 - 所有运行期文件放在新建的 `~/.picsee/`，不用 `~/.mdpro-redesign/`：「不要放在 ~/.mdpro-redesign文件夹，新建一个 ~/.picsee」；
-- 实现名额“整机两个”只算 picsee：「picsee」；
+- 实现名额“整机两个”只算 Mado：「picsee」；
 - 大体积研究产物不入库：「这些都不入库」。
 
 用户决定（2026-10-22）：
@@ -56,22 +56,22 @@
 ## 1. 为什么不能直接复制
 
 - M71 只是 M70 的覆盖层，只替换角色表、Codex 派活方式、guard、审计分工这几块。合入流程（三个条件和 `--ff-only`）、两份审计结论怎么合并、三轮上限、风险分级、receipts、编号预留、会话轮换、真机批次，都写在 M70 里。
-- 它依赖 9 类配套文件，picsee 都没有（见第 3 节）。
+- 它依赖 9 类配套文件，Mado 都没有（见第 3 节）。
 - 测试命令、receipt 脚本、审计分级、真机条款都是按 Tauri/TS/Rust 写的。
 
 ## 2. 目标文件：`.claude/rules/70-herdr-roster.md`
 
 把 M71 全部内容和 M70 中仍然适用的条款合成一份，约 250–300 行，英文书写，与 mdpro 保持一致，方便以后对照同步。用户原话保留中文引用。
 
-| 节 | 来源 | picsee 改法 |
+| 节 | 来源 | Mado 改法 |
 |---|---|---|
 | 角色表 | M71 Roster + M70 Sessions | delegator 改名 `picsee-delegator`；实现者为 `gpt-imple-1/2`（Codex `gpt-6-sol`、effort `medium`，各自当前任务/修复轮结束后生效，不中断在途工作）、`gpt-imple-3`（Codex `gpt-5.6-sol`）和 `kimi-imple-1`（Kimi Code CLI，模型 `kimi-code/k3.1-pro`，thinking effort `high`；`herdr agent start kimi-imple-1 --kind kimi --pane <id> -- --yolo -m kimi-code/k3.1-pro`，effort 由 `~/.kimi-code/config.toml` 中该模型的 `default_effort = "high"` 设定；独立 worktree `picsee-wt/kimi-imple-1`）；当前唯一活跃审计者为 `opus-auditor`（2026-10-25 起），`gpt-auditor` 保留窗格但暂停派活，直至用户明确恢复；真机为 `claude-imple-1`；报告目录在 `~/.picsee/herdr/<name>/`，`gpt-imple-3` 对应 `~/.picsee/herdr/gpt-imple-3/`；去掉 `/security-review` 行；去掉 mdpro-device-harness 和历史别名表 |
 | 模型规则 | M70 “Every session runs on Opus” | 只保留结论：Claude 会话和 subagent 用 Opus，例外是 `picsee-doc-gardener` subagent 用 Haiku（2026-10-25 用户决定：「picsee-doc-gardener will be powered by Haiku model, from now on」；Codex 端同名 custom agent 不变）；`opus-auditor` 自 2026-10-25 起为唯一审计者（「Opus单审，gpt暂停」），`gpt-auditor` 暂停，Codex 额度恢复不得自动重启；`gpt-imple-1/2` 在各自在途任务完成后使用 `gpt-6-sol`、effort medium，不由文档改动直接切换活会话；其他 Codex 用指定模型；Kimi 实现者固定用 K3.1 Pro、effort high（2026-10-24 用户决定），换模型或 effort 须用户同意。Kimi 没有 `$tdd-guardian-workflow`，brief 须写明测试先行步骤（先写失败测试并贴出失败输出，再实现）。不搬演变历史 |
-| 派活与上限 | M70 How work is assigned、idle pull | 工作项编号用开发计划里的 `P0-01…P7-09`；新发现的问题编号改用 `F<n>`，替代 mdpro 的 D 编号；每会话一个、picsee 整机最多三个未合入实现项，不与 mdpro 合计：`gpt-imple-1/2` 与 `kimi-imple-1` 共用 Medium/High 工作名额，同时最多两个（2026-10-24 起），第三个名额只给 `gpt-imple-3` 的 Low 项。临时审计覆盖规则下，所有实现者和风险级别都由 `gpt-auditor` 单审。`gpt-imple-3` 只接 Low 风险工作：纯文档、机械重命名与路径修复、Low 审计修复、小脚本与测试 fixture、账簿与时间线措辞；Swift、并发、sandbox、entitlements、签名、真机脚本、receipt lane 及 Medium/High 风险仍由 `gpt-imple-1/2` 负责。gardener 与 CI 不变 |
+| 派活与上限 | M70 How work is assigned、idle pull | 工作项编号用开发计划里的 `P0-01…P7-09`；新发现的问题编号改用 `F<n>`，替代 mdpro 的 D 编号；每会话一个、Mado 整机最多三个未合入实现项，不与 mdpro 合计：`gpt-imple-1/2` 与 `kimi-imple-1` 共用 Medium/High 工作名额，同时最多两个（2026-10-24 起），第三个名额只给 `gpt-imple-3` 的 Low 项。临时审计覆盖规则下，所有实现者和风险级别都由 `gpt-auditor` 单审。`gpt-imple-3` 只接 Low 风险工作：纯文档、机械重命名与路径修复、Low 审计修复、小脚本与测试 fixture、账簿与时间线措辞；Swift、并发、sandbox、entitlements、签名、真机脚本、receipt lane 及 Medium/High 风险仍由 `gpt-imple-1/2` 负责。gardener 与 CI 不变 |
 | Codex 智能体 | M71 Codex agents + mdpro ADR-0131 | 照搬 `prompt --wait`、唤醒、超时只重新等待不重发、restart 四步。`herdr agent wait --timeout` 和 `herdr agent prompt --wait --timeout` 的 `--timeout` 均以毫秒计（20 分钟写 `1200000`）；立即返回 timeout 说明单位写错，不是 agent 卡住。`prompt` 后立即 `wait` 可能读到上一轮残留的 `done` 而马上返回；先确认 pane 已进入 working（`herdr pane read` 见 `Working`），或返回后核对 handoff/报告文件确已更新。路径改为 `~/.picsee/herdr/<name>/`，环境变量改为 `PICSEE_ROLE`。每次 gpt-auditor 请求前只在 idle 或 done 时重置：先记录 session id，执行 `herdr pane send-text <pane> '/new'`，再用 `herdr pane send-keys <pane> enter` 提交（`herdr agent send-keys` 不会提交；第一次 Enter 可能被斜杠命令弹层吞掉，要按到出现选择框为止），Codex 0.163.0 随后问「Where should the new conversation run?」，再按一次 Enter 选默认的当前 worktree；都不用 `--wait`。状态行回到 `Context 0% used` 才继续；herdr 要到下一轮才报告新 session id，所以在请求开始后核对 id 已变，没变就作废结果并开新 pane。脚本：`~/.picsee/herdr/delegator/reset.sh <name> <pane>`。2026-10-22 的探针通过：gpt-auditor 重置后 id 由 `01a161b4…` 变为 `01a16250…`，问上一请求答 `NONE`。依赖前先做一次探针：重置后问上一请求是什么；id 已变且回答不含此前请求才通过。实现者每项一个新会话；仅当 fix 1 brief 点名 1–2 个 finding 且 context used 低于约 50% 时留在原会话。其余 fix（fix 2 起）都开新会话，只读 brief、上一份 handoff、merged verdict 和 fix brief。context used 超过约 60% 时先写 progress note，再重启。通过 `herdr pane read` 读取 Codex status line 计算 context used |
 | Brief 与自验收 | M71 Briefs and self-acceptance + mdpro ADR-0131 | 6 节 brief 结构照搬；Background 引用开发计划工作包、mockup 编号、DESIGN 条款和 ADR；测试矩阵、对抗审查四步照搬，skill 改为 `$picsee-tdd-workflow`；每份 handoff 列出曾拒绝的方法及原因 |
-| 测试矩阵用例清单 | M71 | 换成 picsee 的高风险用例：A→B→C 乱序返回、generation 过期、continuation 恰好恢复一次、security-scoped 访问范围释放、bookmark stale、cell 复用串图、取消前/排队中/执行中、1×/2× backing scale、浅深主题、Reduce Motion |
-| 提交与合入 | M70 Commits and branches 1–5 | 主干 `main`；合入条件：verifier PASS、合并后的结论无阻断级 Critical/High、PR head 等于该 SHA 且 CI 绿。树身份校验改看 `:Sources :Tests :Picsee.xcodeproj`（或 `Package.swift`）。去掉 frontend-backend-redesign、release/x.y 等历史 |
+| 测试矩阵用例清单 | M71 | 换成 Mado 的高风险用例：A→B→C 乱序返回、generation 过期、continuation 恰好恢复一次、security-scoped 访问范围释放、bookmark stale、cell 复用串图、取消前/排队中/执行中、1×/2× backing scale、浅深主题、Reduce Motion |
+| 提交与合入 | M70 Commits and branches 1–5 | 主干 `main`；合入条件：verifier PASS、合并后的结论无阻断级 Critical/High、PR head 等于该 SHA 且 CI 绿。树身份校验改看 `:Sources :Tests :Mado.xcodeproj`（或 `Package.swift`）。去掉 frontend-backend-redesign、release/x.y 等历史 |
 | 审计 | M70 item 4 + M71 Audits under herdr + mdpro ADR-0131 | 临时覆盖（2026-10-25 起）：所有风险级别只由 `opus-auditor` 做独立盲审，其单份 verdict 即 merged verdict；不派 `gpt-auditor`，额度恢复也不自动恢复。C/H 阻断，修复后 `/clear` `opus-auditor` 到全新上下文再 confirm；每个工作项最多 2 轮审计（盲审 + 一次 confirm），第 2 轮后仍有 Critical/High 即停止，交用户决定是否继续（2026-10-25）；confirm 请求携带全部 open finding 原文、fix diff、counter-proof，并检查 fix 新引入的 C/H。Medium 政策不变：影响用户可见行为或违背 AC 的项目修一轮、不 confirm；其余 Medium 与 Low 写入 PR `Still open`。单审期间无 challenge；降级仍须复现或反证。opus-auditor 除非请求要求否则不运行 build/test，delegator 负责重跑 owner gates；gardener 与 CI 不变。旧双审/Opus 文本只作历史基线，不是活跃派活规则 |
 | 风险分级 | ADR-0121 映射 | **High**：FileAccess/sandbox/bookmark、磁盘缓存/SQLite、文件写入（导出、Trash、编辑另存）、entitlements、签名/公证、CI、依赖、未列出的路径。**Medium**：其余 `Sources/`。**Low**：文档、设计稿、预览、纯展示测试 |
 | 编号预留 | M70 Reserving numbers | ADR、F 编号和 receipt id 前缀（`P1-05-WI-2`）由 delegator 统一分配 |
@@ -88,7 +88,7 @@ mdpro ADR-0131 的阶段读屏障：
 
 暂不采纳 mdpro ADR-0131 的 escape replay 和 fresh-context cost table。
 
-不搬过来的：claude-mem observer 事件、prompt suggestion 误提交事件、ADR-0047 harness、Fable/Opus 演变史、frontend-backend-redesign 冻结。这些对 picsee 没有约束意义，规则里只保留由此得出的结论（例如“名单外的发件人不算 peer”）。
+不搬过来的：claude-mem observer 事件、prompt suggestion 误提交事件、ADR-0047 harness、Fable/Opus 演变史、frontend-backend-redesign 冻结。这些对 Mado 没有约束意义，规则里只保留由此得出的结论（例如“名单外的发件人不算 peer”）。
 
 ## 3. 配套文件
 
@@ -134,7 +134,7 @@ record/verify、指纹、防削弱检查仍由插件完成，不像 mdpro 那样
 
 2026-11-07 #195：App RED 使用 `node scripts/tdd/app-lane.mjs [filter]` 或 `PICSEE_APP_FILTER`，record/verify 必须保留相同过滤表达式（环境变量不写入 receipt）；具体命令和隔离规则见 [AGENTS.md 的 App RED 段](../../AGENTS.md)。运行时枚举精确 ID 后交给 `xcrun xctest -XCTest`，并核对完整执行集合；零匹配退出 70，无 filter 保持原有全 bundle 路径。
 
-### B. 规则 70 引用到、picsee 也需要的基础规则
+### B. 规则 70 引用到、Mado 也需要的基础规则
 
 | # | 规则 | 内容 |
 |---|---|---|
@@ -144,8 +144,8 @@ record/verify、指纹、防削弱检查仍由插件完成，不像 mdpro 那样
 
 ## 4. 还需要你定的事
 
-1. ~~名字前缀~~：沿用原名，目录隔离到 `~/.picsee/`。注意：如果 mdpro 的 Codex 智能体和 picsee 的在同一个 herdr server 里同时运行，`herdr agent prompt gpt-imple-1` 会有歧义；届时 picsee 一侧临时改名并在规则别名表记录。
-2. ~~实现名额~~：只算 picsee。
+1. ~~名字前缀~~：沿用原名，目录隔离到 `~/.picsee/`。注意：如果 mdpro 的 Codex 智能体和 Mado 的在同一个 herdr server 里同时运行，`herdr agent prompt gpt-imple-1` 会有歧义；届时 Mado 一侧临时改名并在规则别名表记录。
+2. ~~实现名额~~：只算 Mado。
 3. ~~**Mac mini 是否参与真机测试**~~：已决定（2026-10-22）。「现在mac os device test 只需要在mac mini，也就是本机进行测试，看看相关rule哪些需要更新」；Mac mini 是唯一的本地真机测试机。显示验收仍保留 1× 与 2× 两档；「2x 验收，到时候ssh 接macbook」，即 @2x 从 mini 经 SSH 驱动 MacBook 桌面启动的 tmux 会话，接通前记 NOT VERIFIED。
 4. ~~入库范围~~：不入库。`.gitignore` 增加 `evidence/deep-*`、`evidence/*-assembly.txt`、`.stitch/`、`design/` 中的大体积导出、`.playwright-cli/`；具体清单在 git init 前列出给用户确认，建 GitHub 私有库前再确认一次。
 

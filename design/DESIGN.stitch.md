@@ -1,4 +1,4 @@
-# picsee · Stitch 设计规范入口
+# Mado · Stitch 设计规范入口
 
 [DESIGN.md](DESIGN.md) 是仓库内的主规范。Stitch需要同步时以它为输入；`.stitch/DESIGN.md` 仅为本地生成副本，整个 `.stitch/` 被忽略，不是克隆后阅读或预览设计的必需文件。
 

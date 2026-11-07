@@ -15,7 +15,7 @@ covers P0-09's Inspector placeholder, not the real information Inspector or fold
 ## How to get to it (user POV)
 
 - File → Open…; View → Fit, Actual Pixels, Zoom In, Zoom Out, Show Inspector / Hide Inspector,
-  Focus Canvas. App → Quit Picsee; Edit → Cut, Copy, Paste, Select All; Window → Minimize.
+  Focus Canvas. App → Quit Mado; Edit → Cut, Copy, Paste, Select All; Window → Minimize.
 - ⌘I reveals “Inspector Placeholder”. Tab enters “Focus test (not saved)”, which is transient and is not search.
 - Panel buttons: Fit, Actual Pixels, Zoom In, Zoom Out, Hide Inspector. Open and Esc have no dedicated button.
 - Accessibility IDs: `viewer.canvas`; `inspector.focus-test`; `command.<ID>.menu` and

@@ -25,3 +25,5 @@ date: 2026-10-22
   - 替换已存在的其他文件也是事务式的：先写到 `FileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: target, create: true)` 给出的临时位置，成功后用 `replaceItemAt` 原子替换；目标不在任何可写的 Access Root 里（只由保存面板授权这一个文件）时也要可行，这是 P5-04 的一个测试用例；编码失败、磁盘满、用户取消时，旧的目标文件保持完整。这些情况列入 P5-04 / EDIT-03 的验收。
 - v1 的编辑参数（EditRecipe）**不跨关窗或重启保留**；关窗前未保存的编辑按 P5-07 提示（用户决定（2026-10-22））。
 - 重评条件：编辑需求成熟、覆盖路径的冲突检测与原子替换测试通过后（架构 §10）。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

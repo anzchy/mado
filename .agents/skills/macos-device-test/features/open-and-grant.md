@@ -54,4 +54,4 @@ plus the launch and release log excerpts. The delegator writes `docs/validation/
   sheet; the complete repair UI belongs to ACCESS-03/P2-01.
 - AppKit sheets, panels, menus, buttons and true sandbox/bookmark semantics require device evidence.
 - A rebuild may invalidate bookmarks. Keep this **unverified** until the two-build procedure above is recorded.
-- Never drive or terminate a Picsee instance this run did not launch; run doctor before interacting.
+- Never drive or terminate a Mado instance this run did not launch; run doctor before interacting.

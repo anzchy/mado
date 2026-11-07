@@ -33,7 +33,7 @@ The prompt seam `folderGrantPromptOverride` replaces only the alert and panel. T
 
 ```sh
 scripts/heavy-lock.sh xcodegen generate
-scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:PicseeAppTests
+scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:MadoAppTests
 node AppTests/Fixtures/Issue507/target-lane.mjs
 node scripts/tdd/app-lane.mjs
 ```

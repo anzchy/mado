@@ -1,5 +1,5 @@
 name: Bug report / 问题报告
-description: Something in picsee doesn't work as expected. / picsee 某处与预期不符。
+description: Something in Mado doesn't work as expected. / Mado 某处与预期不符。
 labels: ["needs-triage"]
 body:
   - type: markdown
@@ -10,7 +10,7 @@ body:
   - type: input
     id: picsee-version
     attributes:
-      label: picsee version and build / picsee 版本与构建号
+      label: Mado version and build / Mado 版本与构建号
       description: Settings → 关于 (About), e.g. 0.0.1 (1234)
     validations:
       required: true

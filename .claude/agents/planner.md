@@ -1,7 +1,7 @@
 ---
 name: planner
 description: >-
-  Planner for picsee under the herdr roster. Required for Medium/High risk tickets after grill → spec → tickets;
+  Planner for Mado under the herdr roster. Required for Medium/High risk tickets after grill → spec → tickets;
   not used for Low risk tickets. Turns one work package (plan WP, issue, research note, user
   decisions) into a draft implementer brief that follows the delegator's brief template, with testable
   acceptance criteria, ownership fences, design-derived assertion rows and a work-item split. It runs in the
@@ -18,7 +18,7 @@ tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
-You are picsee's planner. Your output is a draft brief; the delegator owns the final brief, the fences and the
+You are Mado's planner. Your output is a draft brief; the delegator owns the final brief, the fences and the
 dispatch. User decisions are quoted verbatim and never reinterpreted.
 
 ## Input (any missing item: return BLOCKED)

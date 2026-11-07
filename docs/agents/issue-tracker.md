@@ -2,7 +2,7 @@
 
 Issues and specs for this repo live as GitHub issues on `anzchy/picsee` (public). Use the `gh` CLI for all operations.
 
-**picsee conventions.** Put the plan work package ID first in the title, e.g. `P1-03: anchor zoom at cursor`.
+**Mado conventions.** Put the plan work package ID first in the title, e.g. `P1-03: anchor zoom at cursor`.
 List the feature-ledger row IDs the issue changes (e.g. `VIEW-01, VIEW-02`) in the body, and take acceptance
 from those rows' 怎么确认 cells in `docs/feature-ledger.md`. Never paste Picview reverse-engineering detail into
 an issue: this repo is public and that material is local-only.

@@ -18,3 +18,5 @@ Apple 的 [NSURL bookmark 文档](https://developer.apple.com/documentation/foun
 
 使用“先跟随旧文件资源”的编辑器若把原图重命名为备份，再在原路径写入新图，picsee 会继续显示备份文件；这是保留所看文件身份的取舍。
 若旧文件资源已进入系统废纸篓、原路径又有可读的新文件，picsee 改为显示原路径的新图。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

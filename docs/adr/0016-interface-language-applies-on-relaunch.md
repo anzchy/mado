@@ -12,3 +12,5 @@ The owner asked that all of picsee's text be in one language, English or Chinese
 - The options are Follow System, English and Simplified Chinese; Follow System maps any Chinese system language, Traditional included, to Simplified Chinese.
 - Relaunching needs a resume path that reopens the open folder or image inside the sandbox, through its Access Root.
 - Scheduled after v0.0.1; until then picsee follows the system language as before.
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

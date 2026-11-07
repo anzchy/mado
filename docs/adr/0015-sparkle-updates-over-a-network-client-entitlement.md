@@ -61,3 +61,5 @@ date: 2026-10-28
 - **用户决定（2026-10-30，选项原文）：** 「Add the exception (Recommended)」；版本「2.10.0 (Recommended)」。
 - **结果：** App 的权限为沙盒、用户选择文件只读、app-scope 书签、`network.client`，以及上面这一项只含两个 Sparkle 服务名的 mach-lookup 例外。沙盒保持开启；不加其他例外。Downloader XPC Service 不启用（已有 `network.client`）。
 - Sparkle 固定为 2.10.0。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

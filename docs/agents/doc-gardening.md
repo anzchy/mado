@@ -1,12 +1,12 @@
 # Doc gardening: keeping the feature ledger true
 
-This is the single procedure for the picsee doc gardener. Two thin wrappers load it:
+This is the single procedure for the Mado doc gardener. Two thin wrappers load it:
 - `.claude/agents/picsee-doc-gardener.md` for Claude Code;
 - `.codex/agents/picsee-doc-gardener.toml` for Codex.
 
 Change the procedure here, never in a wrapper.
 
-**Why it exists.** `docs/feature-ledger.md` is the system of record for what picsee can do. The rule is that
+**Why it exists.** `docs/feature-ledger.md` is the system of record for what Mado can do. The rule is that
 the commit that changes a behaviour also rewrites its row. The ledger's own gate can't tell whether a
 sentence is still true, and authors forget. The gardener runs once a day over everything merged to main since its last run and
 catches the rows those changes made stale. This follows two published practices:

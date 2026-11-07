@@ -19,3 +19,5 @@ picsee 用原生 Swift（SwiftUI + AppKit + ImageIO），不用 Tauri、Electron
 - `PicseeApp` 用 `NSApplicationDelegate` 作为入口和组合根，不用 SwiftUI `App` 场景管理窗口；设置窗口同样由 AppKit 创建、内容为 SwiftUI。
 - P0-03 验证的是「AppKit 窗口内嵌 SwiftUI 面板 + AppKit 画布」：Retina 尺寸、鼠标锚点缩放、AppKit 与 SwiftUI 之间的焦点转移。
 - 重评条件：确定支持其他平台并有可共享核心时；或 SwiftUI 窗口 API 能完整覆盖上述窗口级行为且有实测证据时。
+
+注：Picsee 是 Mado 的旧名（#547、ADR-0017）。

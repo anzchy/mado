@@ -87,6 +87,16 @@
       ],
       "coverage": "none",
       "timeoutMs": 120000
+    },
+    {
+      "name": "docs-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/living-docs.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
