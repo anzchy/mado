@@ -108,8 +108,17 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     private var sidebarKnownCounts: [URL: Int] = [:]
+    // The incoming/main read owns its count mask independently of sidebar selection.
+    private var readingFolderOwner: URL?
+    private var awaitingFolderReadStart = false
+    private func setReadingFolderOwner(_ folder: URL?, awaitingStart: Bool = false) {
+        readingFolderOwner = folder
+        awaitingFolderReadStart = awaitingStart
+        gridShell.readingFolderURL = folder
+    }
     func completeGridDisplay(_ snapshot: FolderSnapshot, currentItemID: ItemID?, offset: NSPoint?) {
         guard waitingAccessPosition == nil, scanReadContext?.permit.isCurrent != false else { return }
+        setReadingFolderOwner(nil)
         searchProjection.cancel()
         let filtered = gridSearch.project(snapshot)
         let current = currentItemID ?? gridSearch.currentItemID(in: filtered, currentItemID: gridView.currentItemID)
@@ -535,6 +544,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
     func showWaitingAccessState() {
         guard let position = waitingAccessPosition else { return }
+        setReadingFolderOwner(nil)
         presentation.showGrid(reading: true)
         // Page 26 keeps the reading surface's disabled footer actions, but nothing is being read.
         gridShell.setReadingStatus(false)
@@ -1357,6 +1367,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        setReadingFolderOwner(nil)
         dismissRebindStrip(force: true)
         accessAttachmentGeneration = UUID()
         accessAttachmentTask?.cancel(); accessAttachmentTask = nil
@@ -1481,6 +1492,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         gridFolderURL = folder
         applyCurrentAccessState()
         if waitingAccessPosition != nil { return }
+        setReadingFolderOwner(folder, awaitingStart: true)
         sidebarKnownCounts.removeAll()
         loadSidebarTree(folder, rootID: rootID, count: nil)
         gridProjection = FolderGridProjection()
@@ -1959,6 +1971,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     /// 「读取失败」 (24F-A) in the grid shell's content area: failed footer, 「重试」 focused (#238).
     private func showReadFailedState() {
         guard session.folderScan?.failure != nil, waitingAccessPosition == nil else { return }
+        setReadingFolderOwner(nil)
         stateHost.refresh()
         // On the reading surface only: a silent refresh failing under a shown grid keeps the grid and its footer.
         guard gridShell.isGridSurface, gridView.isHidden, let page = stateHost.readFailedView else { return }
@@ -1967,6 +1980,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         _ = window?.makeFirstResponder(page.retryButton)
     }
     private func cancelFolderEntry() {
+        setReadingFolderOwner(nil)
         // Cancel Reading during a Retry from 「读取失败」 returns to it. The entry keeps its access authority and
         // restore point for the Retry that completes it (#238).
         if session.folderScan?.isRetryingFailedRead == true {
@@ -2059,6 +2073,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         }
     }
     private func restoreEmptyFolderEntry() {
+        setReadingFolderOwner(nil)
         presentationRootID = nil; scanReadContext = nil; presentationReadContext = nil
         cancelSidebarTree()
         gridShell.showFolder(nil)
@@ -2521,11 +2536,19 @@ extension CanvasWindowController: FolderScanHost {
         }
     }
     func folderScanDidComplete(count: Int) {
+        // A previous scan can finish while a new entry is awaiting admission. Its terminal
+        // callback does not own the incoming folder's already-visible Reading State.
+        if !awaitingFolderReadStart { setReadingFolderOwner(nil) }
         chromeOverlay.refresh(session: session)
         // A completed read leaves nothing of 「读取失败」's footer behind (#238).
         gridShell.setReadFailedStatus(false)
     }
     func folderScanDidStart() {
+        if session.folderScan?.isReadingFolder == true, waitingAccessPosition == nil,
+           let folder = readingFolderOwner ?? gridFolderURL ?? session.folderScan?.sourceSnapshot?.version.folder {
+            // Entry retains its accepted folder; a same-folder rescan or Retry rebinds it.
+            setReadingFolderOwner(folder)
+        }
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
         standaloneWake = nil
@@ -2549,6 +2572,9 @@ extension CanvasWindowController: FolderScanHost {
         showReadingState()
     }
     func folderScanDidEnd() {
+        // Replacing the previous coordinator generation also sends an end callback before
+        // the incoming read starts. Preserve that pending owner until start or cancellation.
+        if !awaitingFolderReadStart { setReadingFolderOwner(nil) }
         chromeOverlay.refresh(session: session)
         // A failed read ends on 「读取失败」, not the grid; its root was already checked (#238).
         if session.folderScan?.failure != nil { showReadFailedState() }
