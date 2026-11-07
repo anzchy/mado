@@ -1,14 +1,13 @@
 # Releasing Mado
 
-> Pending #552: the Mado tag (`mado-v*`), DMG (`Mado-<version>.dmg`) and separate-feed instructions below become operational only when #552 lands. The executable notes template stays owned by #552.
-
-A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
+A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. The artifact is `Mado-<version>.dmg`, containing `Mado.app`. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
 
 ## Before the first release
 
 - The secrets wizard has run: `.agents/skills/apple-developer-setup/scripts/setup-secrets-wizard.sh`. That puts these into GitHub Secrets: `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `SPARKLE_ED_PRIVATE_KEY`. It also sets the repository variable `DEVELOPMENT_TEAM`. The workflow reads nothing else. See the [apple-developer-setup skill](../../.agents/skills/apple-developer-setup/SKILL.md).
 - `MARKETING_VERSION` in `project.yml` is the version you are releasing (0.0.1).
 - The commit to release is on `main`, and CI is green on it.
+- Complete the repository rename to `anzchy/mado` (#554) before the first release. Mado’s configured feed URL, `https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml`, is usable only after that rename; verify the actual response before rollout. `appcast-mado.xml` is Mado’s separate feed and starts without Picsee entries. `appcast.xml` stays frozen as Picsee’s feed with its existing entries; never add Mado entries there.
 
 ## Cut a release candidate
 
@@ -18,7 +17,7 @@ git tag -a mado-v0.0.1-rc.1 -m "Mado 0.0.1 rc.1"
 git push origin mado-v0.0.1-rc.1
 ```
 
-Mado releases use `mado-v0.0.1-rc.N` and `mado-v0.0.1` (#547, ADR-0017). The release tooling transition belongs to #552; use this runbook for a release only after that ticket lands. The run fails before building if:
+The workflow triggers only on `mado-v*` tags, including release candidates such as `mado-v0.0.1-rc.N` and the final `mado-v0.0.1` (#547, ADR-0017). The run fails before building if:
 - the tag isn't on `main`;
 - the tag's version differs from `MARKETING_VERSION`;
 - `DEVELOPMENT_TEAM` is unset.
@@ -51,21 +50,22 @@ Other measures:
 2. Sparkle 2.10.0's `LICENSE` is copied to `Contents/Resources/ThirdPartyNotices/Sparkle-2.10.0-LICENSE.txt`. It comes from the release tools tarball pinned by SHA-256 and includes Sparkle's external licences.
 3. **Re-signing:** Sparkle's helpers are re-signed with Developer ID in the order Sparkle's sandboxing documentation gives: Installer.xpc, Downloader.xpc, Autoupdate, Updater.app, then the framework. The app is signed last, followed by `codesign --verify --deep --strict`.
 4. **Checks on the signed app, before anything is sent to Apple:**
-   - `node scripts/release/check-entitlements.mjs <app> --configuration release`: exactly ADR-015's five entitlements.
+   - `node scripts/release/check-entitlements.mjs <app> --configuration release --expect-bundle-id io.github.anzchy.mado`: exactly ADR-015's five entitlements, including `io.github.anzchy.mado-spks` and `io.github.anzchy.mado-spki`, and the expected Mado bundle ID.
+   - `node scripts/name-checks/built-product.mjs <app> --release`: Mado product identity and the exact configured Mado feed URL.
    - `node scripts/release/check-package.mjs <app> --require-sparkle-licence --expect-version … --expect-build …`. It fails on research, prototype or evidence files, credentials, private photos, scripts, documents or build paths. It also checks that the Sparkle Info.plist keys keep the second-launch question and send no system profile, that the version and build are right, and that the licence is present.
 5. **App notarisation:** the app is notarised (`notarytool submit --wait`, Apple ID with an app-specific password), stapled and validated.
 6. **DMG:**
-   - The DMG holds the stapled app and an Applications link (`hdiutil`, APFS, lzfse).
+   - `Mado-<version>.dmg` holds the stapled `Mado.app` and an Applications link (`hdiutil`, APFS, lzfse).
    - It is signed, notarised, stapled and validated.
    - `spctl` assesses both the DMG and the app.
 7. **Draft release** `mado-v0.0.1-rc.N`:
    - Assets: `Mado-0.0.1.dmg` and `Mado-0.0.1.dmg.sha256`.
-   - Notes from [`notes-template.md`](notes-template.md): checksum, privacy statement, a placeholder for what's new.
+   - Notes rendered from [`notes-template.md`](notes-template.md): Mado names, checksum, privacy statement, a placeholder for what's new, and the workflow's warning that settings, recent folders and folder grants do not carry over from the former app.
    - rc tags are marked pre-release.
 8. **Appcast PR:**
    - The DMG is signed with Sparkle's EdDSA key, which reaches `sign_update` only on standard input.
-   - `scripts/release/appcast.mjs` adds the item to Mado’s separate appcast on a new branch `appcast/<tag>`.
-   - A PR to `main` is opened.
+   - `scripts/release/appcast.mjs` adds the item only to `appcast-mado.xml` on a new branch `appcast-mado/<tag>`.
+   - A PR to `main` is opened with title `release(appcast): mado <version> (<build>) for <tag>`. The PR changes only `appcast-mado.xml`; Picsee’s frozen `appcast.xml` is untouched.
 
 To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
 
@@ -83,16 +83,16 @@ node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Mado
    - Open the DMG, drag Mado into Applications and launch it. Gatekeeper must not warn.
    - Edit the notes' "What is in this version".
 2. **Publish the draft.** The appcast's enclosure URL only works once the release is public.
-3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, as soon as Mado’s appcast lands on `main` at the feed selected by `SUFeedURL`. The separate Mado feed path is selected in #552; never add Mado entries to the frozen former-app `appcast.xml`. GitHub's pre-release flag does not filter updates. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
+3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, in Mado, as soon as `appcast-mado.xml` lands on `main` at the configured `SUFeedURL`. This does not offer Mado to installed Picsee; `appcast.xml` remains frozen. GitHub's pre-release flag does not filter updates. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
 4. **Promote to final:** when an rc is good, tag `mado-v0.0.1` on the same or a later `main` commit and repeat.
 
-The appcast PR is opened with the workflow's token, so GitHub does not run CI on it. It changes only Mado’s appcast. The former app’s `appcast.xml` and v0.0.1 release remain frozen history (#547).
+The appcast PR is opened with the workflow's token, so GitHub does not run CI on it. It changes only `appcast-mado.xml`. Picsee’s `appcast.xml` and `v0.0.1` release remain frozen history (#547).
 
 ## When a run fails
 
 The run stops at the first failing step and always tries to delete its keychain. Nothing a run creates is ever published. What exists on GitHub afterwards depends on where it stopped:
 
-| Stopped at | Draft release `<tag>` | Branch `appcast/<tag>` | Appcast PR |
+| Stopped at | Draft release `<tag>` | Branch `appcast-mado/<tag>` | Appcast PR |
 |---|---|---|---|
 | anything before "Create the draft release" (version check, build, signing, checks, notarisation, DMG, checksum) | no | no | no |
 | "Create the draft release" | maybe: a draft with missing assets if an upload failed | no | no |
@@ -109,7 +109,7 @@ Apple keeps the notarisation submissions; they need no clean-up.
    gh release view <tag> --json isDraft --jq .isDraft   # must print true
    gh release delete <tag> --yes                        # keeps the git tag
    ```
-2. Leave `appcast/<tag>` and its PR as they are. The rerun rebuilds the branch from `main` with the new DMG's signature. It replaces only that branch, with `--force-with-lease` pinned to what it just read, and updates the open PR instead of opening a second one.
+2. Leave `appcast-mado/<tag>` and its PR as they are. The rerun rebuilds the branch from `main` with the new DMG's signature. It replaces only that branch, with `--force-with-lease` pinned to what it just read, and updates the open PR instead of opening a second one.
 3. In Actions, open the failed run and choose **Re-run all jobs**. That reruns the same tag and commit.
 
 **Same tag, new commit** (the fix had to land on `main` first):
@@ -121,7 +121,7 @@ Apple keeps the notarisation submissions; they need no clean-up.
    git tag -a <tag> -m "…" <fixed commit on main>
    git push origin <tag>
    ```
-3. `appcast/<tag>` and its PR may stay; the new run replaces the branch and reuses the PR. To remove them instead: `gh pr close <number>`, then `git push --delete origin appcast/<tag>`.
+3. `appcast-mado/<tag>` and its PR may stay; the new run replaces the branch and reuses the PR. To remove them instead: `gh pr close <number>`, then `git push --delete origin appcast-mado/<tag>`.
 
 **Or skip the tag:** cut `rc.N+1`, then close the old appcast PR and delete its branch. This is the safest choice for a release candidate. For the one final `mado-v0.0.1` tag, use the same-tag path.
 
