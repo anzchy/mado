@@ -272,6 +272,7 @@ function selectionComplete(clean, selection) {
   };
   const finish = (kind, label, state) => {
     const skipped = state === 'skipped';
+    if (selection.requireExecuted && skipped) invalid = true;
     const id = resolve(kind, label);
     if (!id || !expected.has(id) || finished.has(id) || (!skipped && !started.has(id))) invalid = true;
     finished.add(id);
@@ -364,6 +365,8 @@ export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
     stderr(`usage: node scripts/tdd/app-lane.mjs [filter]; or set PICSEE_APP_FILTER for record and verify: ${error.message}\n`);
     return 64;
   }
+  if (argv[0] === undefined && filter !== undefined)
+    stderr(`app-lane: using PICSEE_APP_FILTER=${JSON.stringify(filter)}; unset PICSEE_APP_FILTER before a full run\n`);
   let quarantine, selection = null;
   try {
     quarantine = loadQuarantine(quarantinePath);
@@ -377,7 +380,7 @@ export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
         (!expression || expression.test(row.id)));
       if (expression && !retained.length) throw new Error('filter has no matching runnable tests');
       if (!expression && !retained.some(row => row.kind === 'swift')) throw new Error('unsupported quarantine: no remaining Swift Testing tests; retain at least one Swift Testing test');
-      selection = { inventory, retained, allowEmptySwift: Boolean(expression) };
+      selection = { inventory, retained, allowEmptySwift: Boolean(expression), requireExecuted: Boolean(expression) };
       for (const entry of quarantine) stdout(`app-lane quarantine skip=${entry.id} issue=#${entry.issue}\n`);
       if (!quarantine.length) stdout('app-lane quarantine none\n');
     } else stdout('app-lane quarantine none\n');
