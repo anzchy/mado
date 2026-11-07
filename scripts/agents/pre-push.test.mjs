@@ -211,7 +211,8 @@ function baseAtHead(f) {
 }
 test('documented bootstrap rejects a pre-install base loudly and preserves hooksPath', t => {
   const f = fixture(t);
-  const old = execFileSync('git', ['show', 'e000f1dc:scripts/git-hooks/pre-push'], { cwd: root, encoding: 'utf8' });
+  // Captured verbatim from e000f1dc; no historical Git object is needed.
+  const old = readFileSync(join(root, 'scripts/agents/fixtures/pre-installer-hook.sh.txt'), 'utf8');
   f.write('scripts/git-hooks/pre-push', old);
   baseAtHead(f);
   const result = bootstrap(f);

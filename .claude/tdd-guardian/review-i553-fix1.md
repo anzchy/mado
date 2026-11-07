@@ -12,3 +12,5 @@ Independent workflow reviewer /root/review checked the fix1 diff against d22c005
 New assertions verify observable contents, CLI verdicts and real filesystem/Git transitions. No mocks or wiring-only tests. Removing permanent history constraints and updating inventory assertions are explicitly authorized corrections; original #553 receipt assertions are deliberately superseded for that reason, not weakened to preserve an incorrect permanent policy.
 
 Fix receipt i553-fix1-WI-1: SEPARATION-HELD. L1–L4 remain unchanged as requested. Full/depth-one gates and explicit range result are the implementer's final verification responsibility; no extra roster audit or Swift verification is claimed by this review.
+
+Final shallow-suite fixture portability delta: the first full depth-one run exposed two additional pre-existing historical Git lookups in agent-hook tests. Independent reviewer confirmed the replacement .txt fixtures equal their original source bytes, only the loader statements changed, all behavioral assertions and production scripts remain unchanged, and scanner exceptions cover exactly those two paths. Verdict remains APPROVED; L1–L4 untouched.
