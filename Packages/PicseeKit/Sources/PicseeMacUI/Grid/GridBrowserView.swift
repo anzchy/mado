@@ -718,28 +718,23 @@ private enum GridPageMove {
         let current = currentItemID.flatMap { indices[$0] } ?? 0
         let next = max(0, min(entries.count - 1, current + delta))
         guard includingUnchangedTarget || next != current || currentItemID == nil, let id = itemID(at: next) else { return }
-        // Continue only an anchored interval. Arbitrary picked sets keep their focus-only navigation.
-        let extendsAnchoredRange: Bool
-        if extendingRange, let anchorID = selection.anchorItemID, let anchor = indices[anchorID],
-           selection.currentItemID == currentItemID {
-            let interval = Set(entries[min(anchor, current)...max(anchor, current)].map(\.itemID))
-            extendsAnchoredRange = selection.selectedItemIDs == interval
-        } else {
-            extendsAnchoredRange = false
-        }
         currentItemID = id
-        if extendsAnchoredRange {
-            clickItem(at: next, modifier: .shift)
-        } else if preservingSelection {
-            selection.focus(id, in: entries.map(\.itemID))
-            onCurrentChange?(id)
+        if extendingRange {
+            // Match Shift-click for every picked set; without an anchor, select one item.
+            // clickItem synchronizes and draws the selection itself.
+            clickItem(at: next, modifier: selection.anchorItemID == nil ? .plain : .shift)
         } else {
-            selection.click(id, in: entries.map(\.itemID))
-            onSelect?(id)
+            if preservingSelection {
+                selection.focus(id, in: entries.map(\.itemID))
+                onCurrentChange?(id)
+            } else {
+                selection.click(id, in: entries.map(\.itemID))
+                onSelect?(id)
+            }
+            updating = true
+            drawSelection()
+            updating = false
         }
-        updating = true
-        drawSelection()
-        updating = false
         scrollIntoView(next)
     }
     /// Finder-style: scroll the least distance that shows the whole tile, none when it is already visible.

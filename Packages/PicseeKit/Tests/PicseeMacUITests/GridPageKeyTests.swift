@@ -166,7 +166,9 @@ import PicseeApplication
     for flags: NSEvent.ModifierFlags in [.shift, .command] {
         scene.reset(40, selected: [2, 40, 70])
         scene.press(124, flags)
-        scene.expectSelected([2, 40, 70])
+        // #522: Shift replaces the picked set from anchor70 to new current41.
+        scene.expectSelected(flags == .shift ? Set(41...70) : [2, 40, 70])
+        #expect(scene.grid.selection.anchorItemID == scene.grid.itemID(at: 70))
         #expect(scene.index == 41)
         for code: UInt16 in [121, 116, 115, 119] {
             scene.reset(40, selected: [2, 40, 70])

@@ -118,10 +118,17 @@ import PicseeApplication
             context: nil, characters: "→", charactersIgnoringModifiers: "→", isARepeat: false, keyCode: 124))
         grid.collectionView.keyDown(with: event)
     }
-    try arrow(.shift)
+    try arrow(.command)
     #expect(grid.currentItemID == ids[3])
     #expect(grid.selection.selectedItemIDs == [ids[0], ids[2]])
+    #expect(grid.selection.anchorItemID == ids[2])
     #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 0, section: 0), IndexPath(item: 2, section: 0)])
+    grid.synchronizeSelection(selection)
+    try arrow(.shift)
+    #expect(grid.currentItemID == ids[3])
+    #expect(grid.selection.anchorItemID == ids[2])
+    #expect(grid.selection.selectedItemIDs == [ids[2], ids[3]])
+    #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 2, section: 0), IndexPath(item: 3, section: 0)])
 }
 
 // Owner decision 2026-11-03 (#405, 1B): no ✓ badge at any selection count, deviating from page 32, which draws one

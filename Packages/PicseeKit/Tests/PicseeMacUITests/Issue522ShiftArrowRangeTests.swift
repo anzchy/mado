@@ -78,7 +78,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     let window: NSWindow
     let hasCallbacks: Bool
 
-    init(start: Int, callbacks: Bool = true) throws {
+    init(start: Int, callbacks: Bool = true, selectStart: Bool = true) throws {
         _ = NSApplication.shared
         hasCallbacks = callbacks
         let folder = URL(fileURLWithPath: "/tmp/picsee-issue522-range")
@@ -96,11 +96,23 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
             }
             grid.onSelect = { [session] in session.select($0) }
             grid.onCurrentChange = { [session] in session.focus($0) }
+            grid.onClearSelection = { [session] in
+                session.clearSelection()
+                return session.selection
+            }
         }
         grid.display(FolderSnapshot(version: .init(rootID: root.id, folder: folder, generation: 1),
             entries: entries, isComplete: true), selection: session.selection)
         grid.layoutSubtreeIfNeeded()
         grid.collectionView.layoutSubtreeIfNeeded()
+        if !selectStart {
+            session.focus(ids[start])
+            var selection = BrowserSelection()
+            selection.focus(ids[start], in: ids)
+            grid.synchronizeSelection(callbacks ? session.selection : selection)
+            grid.activate(currentItemID: ids[start])
+            return
+        }
         let tile = try #require(grid.collectionView.collectionViewLayout?
             .layoutAttributesForItem(at: IndexPath(item: start, section: 0))).frame
         let point = grid.collectionView.convert(NSPoint(x: tile.midX, y: tile.midY), to: nil)
@@ -110,6 +122,36 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
         grid.collectionView.mouseDown(with: click)
         try #require(window.firstResponder === grid.collectionView)
         expectSelection(start...start, current: start, anchor: start)
+    }
+
+    func click(_ index: Int?, modifiers: NSEvent.ModifierFlags = []) throws {
+        let point: NSPoint
+        if let index {
+            let tile = try #require(grid.collectionView.collectionViewLayout?
+                .layoutAttributesForItem(at: IndexPath(item: index, section: 0))).frame
+            point = NSPoint(x: tile.midX, y: tile.midY)
+        } else {
+            point = NSPoint(x: 2, y: 2)
+            try #require(grid.collectionView.indexPathForItem(at: point) == nil)
+        }
+        let event = try #require(NSEvent.mouseEvent(with: .leftMouseDown,
+            location: grid.collectionView.convert(point, to: nil), modifierFlags: modifiers,
+            timestamp: 0, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 1, clickCount: 1, pressure: 1))
+        grid.collectionView.mouseDown(with: event)
+    }
+
+    func expectEmpty(current: Int, anchor: Int?) {
+        #expect(grid.selection.selectedItemIDs.isEmpty)
+        #expect(grid.collectionView.selectionIndexPaths.isEmpty)
+        #expect(grid.currentItemID == ids[current])
+        #expect(grid.selection.currentItemID == ids[current])
+        #expect(grid.selection.anchorItemID == anchor.map { ids[$0] })
+        if hasCallbacks {
+            #expect(session.selection.selectedItemIDs.isEmpty)
+            #expect(session.selection.currentItemID == ids[current])
+            #expect(session.selection.anchorItemID == anchor.map { ids[$0] })
+        }
     }
 
     func press(_ key: UInt16, modifiers: NSEvent.ModifierFlags = .shift) throws {
@@ -209,5 +251,68 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     for endpoint in [2, 3, 2] {
         try fixture.press(endpoint > (fixture.ids.firstIndex(of: fixture.grid.currentItemID!)!) ? 124 : 123)
         fixture.expectSelection(1...endpoint, current: endpoint, anchor: 1)
+    }
+}
+
+@Test @MainActor func issue522ShiftResumesRangeAfterCommandFocus() throws {
+    for callbacks in [true, false] {
+        let f = try Issue522RangeFixture(start: 3, callbacks: callbacks)
+        defer { f.window.close() }
+        try f.press(124)
+        f.expectSelection(3...4, current: 4, anchor: 3)
+        try f.press(124)
+        f.expectSelection(3...5, current: 5, anchor: 3)
+        try f.press(123, modifiers: .command)
+        f.expectSelection(3...5, current: 4, anchor: 3)
+        // New current is 3 after left from 4; right then restores endpoint 4.
+        try f.press(123)
+        f.expectSelection(3...3, current: 3, anchor: 3)
+        try f.press(124)
+        f.expectSelection(3...4, current: 4, anchor: 3)
+    }
+}
+
+@Test @MainActor func issue522ShiftReplacesCommandBuiltSelection() throws {
+    for callbacks in [true, false] {
+        for start in [0, 1] {
+            let f = try Issue522RangeFixture(start: start, callbacks: callbacks)
+            defer { f.window.close() }
+            try f.click(2, modifiers: .command)
+            #expect(f.grid.selection.selectedItemIDs == [f.ids[start], f.ids[2]])
+            #expect(f.grid.selection.anchorItemID == f.ids[2])
+            #expect(f.grid.currentItemID == f.ids[2])
+            #expect(f.grid.collectionView.selectionIndexPaths == [IndexPath(item: start, section: 0), IndexPath(item: 2, section: 0)])
+            if callbacks {
+                #expect(f.session.selection == f.grid.selection)
+            }
+            try f.press(124)
+            f.expectSelection(2...3, current: 3, anchor: 2)
+        }
+    }
+}
+
+@Test @MainActor func issue522ShiftRebuildsClearedSelectionFromAnchor() throws {
+    for callbacks in [true, false] {
+        let f = try Issue522RangeFixture(start: 1, callbacks: callbacks)
+        defer { f.window.close() }
+        try f.press(124)
+        try f.press(124)
+        f.expectSelection(1...3, current: 3, anchor: 1)
+        try f.click(nil)
+        f.expectEmpty(current: 3, anchor: 1)
+        try f.press(124)
+        f.expectSelection(1...4, current: 4, anchor: 1)
+    }
+}
+
+@Test @MainActor func issue522ShiftWithoutAnchorSelectsSingleThenExtends() throws {
+    for callbacks in [true, false] {
+        let f = try Issue522RangeFixture(start: 1, callbacks: callbacks, selectStart: false)
+        defer { f.window.close() }
+        f.expectEmpty(current: 1, anchor: nil)
+        try f.press(124)
+        f.expectSelection(2...2, current: 2, anchor: 2)
+        try f.press(124)
+        f.expectSelection(2...3, current: 3, anchor: 2)
     }
 }
