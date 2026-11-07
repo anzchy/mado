@@ -44,13 +44,13 @@ test('a changed modifier mask fails on the row that shows the old keys', () => {
 });
 
 test('a page row with the wrong keys fails', () => {
-  fails(withChange(FILES.page, replaceOnce('data-shortcut="menu:Quit Picsee"><span class="name">退出 picsee</span><span class="keys"><kbd>⌘</kbd><kbd>Q</kbd>',
-    'data-shortcut="menu:Quit Picsee"><span class="name">退出 picsee</span><span class="keys"><kbd>⌘</kbd><kbd>W</kbd>')),
-  /menu:Quit Picsee .* shows ⌘ W, the code has ⌘ Q/);
+  fails(withChange(FILES.page, replaceOnce('data-shortcut="menu:Quit Mado"><span class="name">退出 Mado</span><span class="keys"><kbd>⌘</kbd><kbd>Q</kbd>',
+    'data-shortcut="menu:Quit Mado"><span class="name">退出 Mado</span><span class="keys"><kbd>⌘</kbd><kbd>W</kbd>')),
+  /menu:Quit Mado .* shows ⌘ W, the code has ⌘ Q/);
 });
 
 test('a page row for an Edit-menu key is refused', () => {
-  fails(withChange(FILES.page, replaceOnce('data-shortcut="menu:Quit Picsee"', 'data-shortcut="menu:Quit Picsee|menu:Undo"')),
+  fails(withChange(FILES.page, replaceOnce('data-shortcut="menu:Quit Mado"', 'data-shortcut="menu:Quit Mado|menu:Undo"')),
     /page lists menu:Undo, which is excluded/);
 });
 
@@ -82,8 +82,8 @@ test('a keycap outside a row fails', () => {
 });
 
 test('a row without a name fails', () => {
-  fails(withChange(FILES.page, replaceOnce('<span class="name">退出 picsee</span>', '<span class="name"></span>')),
-    /menu:Quit Picsee has no name/);
+  fails(withChange(FILES.page, replaceOnce('<span class="name">退出 Mado</span>', '<span class="name"></span>')),
+    /menu:Quit Mado has no name/);
 });
 
 test('a new keyDown case fails until it is declared', () => {
