@@ -246,7 +246,7 @@ private enum GridPageMove {
 }
 
 @MainActor private final class GridCollectionView: NSCollectionView, NSUserInterfaceValidations {
-    var onArrow: ((Int, Bool) -> Void)?
+    var onArrow: ((Int, SelectionModifier) -> Void)?
     var onPageOrEdge: ((GridPageMove, Bool) -> Void)?
     var onClick: ((Int?, SelectionModifier) -> Void)?
     var onNativeSelectionChange: (() -> Void)?
@@ -276,7 +276,9 @@ private enum GridPageMove {
         case 126: delta = -columnStep
         default: super.keyDown(with: event); return
         }
-        onArrow?(delta, preserveSelection)
+        let modifier: SelectionModifier = event.modifierFlags.contains(.command) ? .command
+            : event.modifierFlags.contains(.shift) ? .shift : .plain
+        onArrow?(delta, modifier)
     }
     // Select All has no defined P3-09 model semantics; keep the native responder action inert.
     override func selectAll(_ sender: Any?) {}
@@ -370,8 +372,8 @@ private enum GridPageMove {
         collectionView.backgroundColors = [DesignColor.canvasBackground.nsColor]
         collectionView.dataSource = self
         collectionView.delegate = self
-        (collectionView as? GridCollectionView)?.onArrow = { [weak self] delta, preserveSelection in
-            self?.moveCurrent(by: delta, preservingSelection: preserveSelection)
+        (collectionView as? GridCollectionView)?.onArrow = { [weak self] delta, modifier in
+            self?.moveCurrent(by: delta, preservingSelection: modifier != .plain, extendingRange: modifier == .shift)
         }
         (collectionView as? GridCollectionView)?.onPageOrEdge = { [weak self] move, preserveSelection in
             self?.moveCurrent(move, preservingSelection: preserveSelection)
@@ -710,13 +712,25 @@ private enum GridPageMove {
         }
         moveCurrent(by: delta, preservingSelection: preservingSelection, includingUnchangedTarget: includingUnchangedTarget)
     }
-    private func moveCurrent(by delta: Int, preservingSelection: Bool, includingUnchangedTarget: Bool = false) {
+    private func moveCurrent(by delta: Int, preservingSelection: Bool, includingUnchangedTarget: Bool = false,
+                             extendingRange: Bool = false) {
         guard !entries.isEmpty else { return }
         let current = currentItemID.flatMap { indices[$0] } ?? 0
         let next = max(0, min(entries.count - 1, current + delta))
         guard includingUnchangedTarget || next != current || currentItemID == nil, let id = itemID(at: next) else { return }
+        // Continue only an anchored interval. Arbitrary picked sets keep their focus-only navigation.
+        let extendsAnchoredRange: Bool
+        if extendingRange, let anchorID = selection.anchorItemID, let anchor = indices[anchorID],
+           selection.currentItemID == currentItemID {
+            let interval = Set(entries[min(anchor, current)...max(anchor, current)].map(\.itemID))
+            extendsAnchoredRange = selection.selectedItemIDs == interval
+        } else {
+            extendsAnchoredRange = false
+        }
         currentItemID = id
-        if preservingSelection {
+        if extendsAnchoredRange {
+            clickItem(at: next, modifier: .shift)
+        } else if preservingSelection {
             selection.focus(id, in: entries.map(\.itemID))
             onCurrentChange?(id)
         } else {
