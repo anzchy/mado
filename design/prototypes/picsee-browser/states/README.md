@@ -90,7 +90,7 @@ Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计
 | 固定输入 | SHA256 |
 | --- | --- |
 | `folder-loading.html` | `9531f552f4cc9fc4295315a988305671614a5ce1de7065c41425f28f4467328c` |
-| `permission-denied.html` | `9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62` |
+| `permission-denied.html`（#502 已重固定，动作焦点不变） | `e634308e79e4acf4832d799b02bfe565d4c289f1cffd7e31a23473bf9a51f8ad` |
 | `manifest.json`（#443 当时的整份文件，#447 后已更新） | `3d4e8d83d8155d2688d1d3a7493c303e4563b3ced586418ab561de5d595ec6b3` |
 
 ## 维护
@@ -106,3 +106,7 @@ Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计
 ## #540 · Viewer Tools 不透明度变体
 
 14/16/33 的 `?theme=light|dark&tool-opacity=30|50|100`、默认回退和 #351 应固定的 selector / computed-style 值统一维护在 [UI 对照契约 §#540](../../../../docs/agents/ui-parity-contract.md#540--viewer-tools-不透明度变体351-固定输入)。
+
+## #502 · 所有侧栏状态保留添加控件
+
+Owner 于 2026-11-04 选择「Re-pin the design (Recommended)」：第 22 页（含 `?case=no-subfolders`）与第 26 页的各分支保留「文件夹」标题的 `+` 和虚线「添加文件夹」按钮，与第 11、24 页复用相同标记和 CSS。控件位于侧栏，独立于替换子状态的文件夹树；内容区几何、#518 最近列表滚动规则和既有动作焦点不变。此重固定对齐既有 App，未增加原生功能。

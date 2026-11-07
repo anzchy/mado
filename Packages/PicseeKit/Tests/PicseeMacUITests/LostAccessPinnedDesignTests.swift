@@ -35,7 +35,7 @@ private struct LostAccessCase: Sendable, CustomTestStringConvertible {
     #expect(abs(rgb.blueComponent - expected.blue) < 0.01)
 }
 
-private let lostAccessPinnedPageSHA256 = "9f7f345bec6a5ac12548ea0c419acc9d939cc40ac35b4d5b762935efbcf86f62"
+private let lostAccessPinnedPageSHA256 = "e634308e79e4acf4832d799b02bfe565d4c289f1cffd7e31a23473bf9a51f8ad"
 
 private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     let manifest = try JSONSerialization.jsonObject(with: data) as? [String: Any]
