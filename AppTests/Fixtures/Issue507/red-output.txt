@@ -1,0 +1,11 @@
+[i507] direct, legacy=false: scan entered, emit 3 entered, emit returned, scan returned; scanExists=true, scanning=false, complete=true, count=3, gridReady=true, failure=nil
+[i507] symlink, legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil
+[i507] access symlink: system scope start=true, system bookmark create threw Error Domain=NSCocoaErrorDomain Code=256 "Could not open() the item" UserInfo={NSURL=file:///var/folders/yc/pj8fy0nj7vs0sprhg09z8dch0000gn/T/alias507-0A79D6B9-FC72-4132-8B47-4F85DD549818/symlink, NSDebugDescription=Could not open() the item}; sheet=true
+[i507] symlink (directory URL), legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil
+[i507] Finder alias (chooser-resolved), legacy=false: scan entered, emit 3 entered, emit returned, scan returned; scanExists=true, scanning=false, complete=true, count=3, gridReady=true, failure=nil
+[i507] direct, legacy=true: scan entered, emit 3 entered, emit returned, scan returned; scanExists=true, scanning=false, complete=true, count=3, gridReady=true, failure=nil
+[i507] symlink, legacy=true: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil
+[i507] access symlink: system scope start=true, system bookmark create threw Error Domain=NSCocoaErrorDomain Code=256 "Could not open() the item" UserInfo={NSURL=file:///var/folders/yc/pj8fy0nj7vs0sprhg09z8dch0000gn/T/alias507-07BF52B4-8CA2-429D-9AA4-C04774941F30/symlink, NSDebugDescription=Could not open() the item}; sheet=true
+[i507] symlink (directory URL), legacy=true: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil
+[i507] Finder alias (chooser-resolved), legacy=true: scan entered, emit 3 entered, emit returned, scan returned; scanExists=true, scanning=false, complete=true, count=3, gridReady=true, failure=nil
+✘ Test run with 1 test in 0 suites failed after 10.008 seconds with 16 issues.
