@@ -75,9 +75,18 @@ function visibleButton(value, label) {
   assert.equal(value.buttonInsideList, false, `${label}: action outside row scroller`);
 }
 
-// Independent pin dimensions: border/header36, first row37, following rows38.
-const naturalGroupHeight = count => count ? 36 + 37 + (count - 1) * 38 : 0;
-const compactMinimum = count => 32 + 23 + 22.1 + 35 + (count ? 64 + 36 + 37 : 52);
+// Measure intrinsic parts in a fitting page, not the constrained group height or
+// the page's calculated fallback flag. Normal line heights depend on installed fonts.
+async function naturalMetrics(page) {
+  return page.evaluate(() => {
+    const height = selector => document.querySelector(selector).getBoundingClientRect().height;
+    return {
+      title: height('#state-title'), detail: height('#state-text'),
+      action: height('.mock-actions'), header: height('.recent-heading'),
+      firstRow: height('.recent-folder'), followingRow: height('.recent-folder + .recent-folder'),
+    };
+  });
+}
 function insideUsablePage(value, rect, label) {
   const top = Math.max(value.page.top, 0), bottom = Math.min(value.page.bottom, value.footer.top);
   assert.ok(rect.top >= top - 1 && rect.bottom <= bottom + 1,
@@ -107,9 +116,25 @@ test('#518 recent rows scroll within their box and preserve the external action'
       const response = await page.goto(`http://127.0.0.1:${server.address().port}/empty-folder.html?case=no-subfolders&theme=${theme}`);
       assert.equal(response.status(), 200);
       assert.deepEqual(serverErrors, []);
+      await page.evaluate(() => document.fonts.ready);
       await populate(page, count);
     };
     for (const theme of ['light', 'dark']) {
+      await visit({ width: 1280, height: 1600 }, theme, 10);
+      const natural = await naturalMetrics(page);
+      for (const [name, height] of Object.entries(natural))
+        assert.ok(height > 0, `natural ${name} has a measurable height`);
+      // Border2, icon32 and normal/compact spacing are fixed by the pinned CSS.
+      // Only typography-driven heights come from Chromium in this same theme/page.
+      const naturalGroupHeight = count => count
+        ? 2 + natural.header + natural.firstRow + (count - 1) * natural.followingRow : 0;
+      const fixed = 32 + natural.title + natural.detail + natural.action;
+      const naturalStack = count => fixed + 18 + 9 + (count ? 22 : 0) + 18 + naturalGroupHeight(count);
+      const compactMinimum = count => fixed + (count ? 64 + naturalGroupHeight(1) : 52);
+      const fitting = await geometry(page);
+      assert.ok(fitting.available >= 24 + 48 + naturalStack(10), 'intrinsic reference has room for every row');
+      assert.ok(Math.abs(fitting.group.height - naturalGroupHeight(10)) <= 1,
+        'fitting reference retains independently summed header and row heights');
       for (const size of [{ width: 960, height: 640 }, { width: 1280, height: 800 }]) {
         for (const count of [0, 1, 5, 10]) {
           await t.test(`${theme} ${size.width}x${size.height} ${count} rows`, async () => {
@@ -127,7 +152,7 @@ test('#518 recent rows scroll within their box and preserve the external action'
             const overflowing = before.scrollHeight > before.clientHeight + 1;
             if (size.width === 1280 && size.height === 800 && [1, 5].includes(count)) {
               // These counts fit by the pin arithmetic, independent of measured overflow.
-              assert.ok(32 + 23 + 22.1 + 35 + 64 + naturalGroupHeight(count) <= before.available,
+              assert.ok(fixed + 64 + naturalGroupHeight(count) <= before.available,
                 'independent pin arithmetic proves this count fits');
               assert.ok(before.scrollHeight <= before.clientHeight + 1, 'fitting count must not scroll');
               assert.ok(Math.abs(before.group.height - naturalGroupHeight(count)) <= 1,
@@ -167,12 +192,12 @@ test('#518 recent rows scroll within their box and preserve the external action'
       await t.test(`${theme} fitting three-row oracle and size restoration`, async () => {
         await visit({ width: 1280, height: 800 }, theme, 3);
         const before = await geometry(page);
-        // SHA-pinned original CSS: titlebar38, outer16/70, state24/48,
-        // icon32, gaps18/9/22/18, h2=23, detail22.1, recent149, action35.
-        const stack = 32 + 18 + 23 + 9 + 22.1 + 22 + 149 + 18 + 35;
+        // SHA-pinned titlebar38, outer16/70, state24/48 and normal gaps;
+        // intrinsic text/header/row/button heights are measured independently above.
+        const stack = naturalStack(3);
         const icon = 38 + 16 + 24 + (800 - 38 - 16 - 70 - 24 - 48 - stack) / 2;
         for (const [actual, expected] of [[before.icon.top, icon], [before.heading.top, icon + 50],
-          [before.group.top, icon + 50 + 23 + 9 + 22.1 + 22]])
+          [before.group.top, icon + 50 + natural.title + 9 + natural.detail + 22]])
           assert.ok(Math.abs(actual - expected) <= 1, `fitting pin coordinate ${actual} vs ${expected}`);
         await page.setViewportSize({ width: 960, height: 640 }); await settle(page);
         await page.setViewportSize({ width: 1280, height: 800 }); await settle(page);
@@ -180,9 +205,10 @@ test('#518 recent rows scroll within their box and preserve the external action'
         for (const key of ['icon', 'heading', 'group', 'button']) assert.deepEqual(restored[key], before[key], `${key} resize round trip`);
       });
       await t.test(`${theme} reduce spacing before constraining list`, async () => {
-        // Natural ten-row stack594.1 + state72 + outer86 + titlebar38=790.1.
-        // A1.1px deficit can be absorbed by optional spacing alone.
-        await visit({ width: 1280, height: 789 }, theme, 10);
+        // Introduce a small deficit relative to this font set's natural stack.
+        // Optional spacing must absorb it before the list gains a scroll range.
+        const height = Math.ceil(38 + 86 + 24 + 48 + naturalStack(10)) - 2;
+        await visit({ width: 1280, height }, theme, 10);
         const value = await geometry(page);
         visibleButton(value, 'just crowded');
         assert.ok(value.titleGap < 18 && value.titleGap >= 10 - 0.1, 'first deficit reduces optional title gap');
@@ -241,7 +267,7 @@ test('#518 recent rows scroll within their box and preserve the external action'
         for (const delta of [-1, 0, 1]) {
           await t.test(`${theme} compact boundary rows${count} delta${delta}`, async () => {
             await visit({ width: 960, height: 800 }, theme, count);
-            // Exact shell height brackets fractional paragraph22.1 independently.
+            // Bracket the independently measured intrinsic minimum, including fractional text heights.
             await contentHeight(compactMinimum(count) + 86 + delta);
             await checkScopeAndReachability(count, delta < 0);
           });
