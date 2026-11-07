@@ -10,7 +10,11 @@ const rows = [
   { id: extra, kind: 'swift', label: 'issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget()' },
   { id: 'PicseeAppTests.issue507LinkedFirstGrantKeepsCanonicalRootIdentity()', kind: 'swift', label: 'issue507LinkedFirstGrantKeepsCanonicalRootIdentity()' },
   { id: 'PicseeAppTests.issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)', kind: 'swift', label: 'issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)' },
-  { id: 'PicseeAppTests.issue507FooterBookmarkVerifiesRawSymlinkParentSelection()', kind: 'swift', label: 'issue507FooterBookmarkVerifiesRawSymlinkParentSelection()' }
+  { id: 'PicseeAppTests.issue507FooterBookmarkVerifiesRawSymlinkParentSelection()', kind: 'swift', label: 'issue507FooterBookmarkVerifiesRawSymlinkParentSelection()' },
+  { id: 'PicseeAppTests.issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)', kind: 'swift', label: 'issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)' },
+  { id: 'PicseeAppTests.issue507CancelledFolderPanelLeavesNoGrant()', kind: 'swift', label: 'issue507CancelledFolderPanelLeavesNoGrant()' },
+  { id: 'PicseeAppTests.issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()', kind: 'swift', label: 'issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()' },
+  { id: 'PicseeAppTests.issue507NonFolderInputNeverPromptsForAFolder(input:)', kind: 'swift', label: 'issue507NonFolderInputNeverPromptsForAFolder(input:)' }
 ];
 const run = spawnSync('scripts/heavy-lock.sh', ['xcrun', 'xctest', '-XCTest', rows.map(row => row.id).join(','),
   '.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest'], {

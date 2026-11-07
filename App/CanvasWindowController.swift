@@ -105,6 +105,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var sidebarBrowserOverride: SidebarFolderBrowser?
     /// Tests swap the folder lister; the controller still builds and observes its own coordinators.
     var folderScanningOverride: (any FolderScanning)?
+    /// Tests answer the folder grant prompt in place of the alert and system open panel.
+    var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     private var sidebarKnownCounts: [URL: Int] = [:]
     func completeGridDisplay(_ snapshot: FolderSnapshot, currentItemID: ItemID?, offset: NSPoint?) {
         guard waitingAccessPosition == nil, scanReadContext?.permit.isCurrent != false else { return }
@@ -1433,7 +1435,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func openGrantedFolder(_ folder: URL, deliveredSelection: Bool = false) {
+    func openGrantedFolder(_ folder: URL) {
         inputIntent.invalidate()
         let operation = accessIntent.begin()
         showWindow(nil)
@@ -1442,7 +1444,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         navigationTask = Task { [self] in
             do {
                 let services = try await operation.wait { try await accessServices.value }
-                let id = try await operation.wait { try await services.grant(folder, deliveredSelection: deliveredSelection) }
+                let id = try await operation.wait { try await services.grant(folder) }
                 refreshRecents()
                 try operation.check()
                 openFolder(folder, rootID: id)
@@ -1631,7 +1633,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         guard let window, window.attachedSheet == nil else { return }
         let current = generation
         let operation = accessIntent.current
-        FolderGrantPrompt.request(folder: folder, window: window, mismatch: mismatch) { [weak self] chosen in
+        let selected: (URL) -> Void = { [weak self] chosen in
             guard let self, operation.isCurrent else { return }
             self.navigationTask = Task { [self] in
                 do {
@@ -1663,6 +1665,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 } catch { if operation.isCurrent { showAccessError(error) } }
             }
         }
+        if let folderGrantPromptOverride { folderGrantPromptOverride(folder, selected) }
+        else { FolderGrantPrompt.request(folder: folder, window: window, mismatch: mismatch, selected: selected) }
     }
 
     private func showAccessError(_ error: Error) {
@@ -2313,16 +2317,17 @@ extension CanvasWindowController: ViewerInputHost {
             guard let self else { return }
             do {
                 let services = try await operation.wait { try await accessServices.value }
-                if urls.count == 1, let folder = urls.first, services.isDeliveredFolder(folder) {
-                    try operation.check()
-                    openGrantedFolder(folder, deliveredSelection: true)
-                    return
+                // A single folder, plain or through a symlink, is classified by its directory
+                // metadata and takes the folder panel like any folder (owner, 2026-11-07).
+                var input = urls
+                if urls.count == 1, let folder = try await operation.wait({ await services.files.deliveredFolder(urls[0]) }) {
+                    input = [folder]
                 }
                 let scale = window?.backingScaleFactor ?? 1
                 let maximum = max(1, Int(ceil(max(canvas.bounds.width, canvas.bounds.height) * scale)))
                 let admission = ViewerInputAdmission(access: services.files, pipeline: pipeline,
                     maximumPixelSize: maximum, rootCovering: { await services.files.rootCovering($0) })
-                await session.openInput(urls, operation: operation, admission: admission, host: self)
+                await session.openInput(input, operation: operation, admission: admission, host: self)
             } catch { if operation.isCurrent { showAccessError(error) } }
         }
     }
