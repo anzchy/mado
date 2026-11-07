@@ -5,7 +5,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {spawn,spawnSync}=require('node:child_process');
 const base=path.resolve(__dirname,'..');
-const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'picsee-device-'));
+const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'mado-device-'));
 after(()=>fs.rmSync(scratch,{recursive:true,force:true}));
 function call(name,args){return spawnSync(path.join(base,name+'.sh'),args,{encoding:'utf8'});}
 function dummy(dir){

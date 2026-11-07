@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// #114 / P3-11 WI-4: Settings 显示 edits the same three preferences as the page-15 grid Display panel
 /// (owner: 「两者都做，共用一组偏好」).
@@ -237,7 +237,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
         let scrollView = try #require(grid.collectionView.enclosingScrollView)
         scrollView.scrollerStyle = .overlay
         scrollView.tile()
-        let url = URL(fileURLWithPath: "/tmp/picsee-settings-114")
+        let url = URL(fileURLWithPath: "/tmp/mado-settings-114")
         let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: url)
         let entries = (0..<count).map { FolderEntry(url: url.appendingPathComponent("IMG_\($0).jpg"), root: root) }
         grid.display(FolderSnapshot(version: .init(rootID: root.id, folder: url, generation: 1),
@@ -384,7 +384,7 @@ private final class Issue114SettingsScanner: FolderScanning, @unchecked Sendable
     controller.showWindow(nil)
     window.orderFrontRegardless()
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
 
     controller.openGrantedFolder(folder)

@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// #238 (P3-17c D3): 「读取失败」 (24F-A) in the grid shell's content area, and its boundary with page 26.
 private struct Issue238Bookmarks: SecurityScope, BookmarkCoding {
@@ -106,7 +106,7 @@ private final class Issue238Scanner: FolderScanning, @unchecked Sendable {
     /// Bounded and cancelled like the shared `waitUntil` (#392).
     func waitUntil(_ condition: () -> Bool, each: () -> Void = {}, fileID: String = #fileID, line: Int = #line)
         async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { each(); window.update() }, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, between: { each(); window.update() }, condition)
         each()
     }
     var readFailed: ReadFailedStateView? {

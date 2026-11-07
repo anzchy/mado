@@ -17,7 +17,7 @@ import device as d
 
 class RoundTwo(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='picsee-fix2-')
+        self.temp = tempfile.TemporaryDirectory(prefix='mado-fix2-')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve() / 'repo'
         self.root.mkdir()
@@ -61,7 +61,7 @@ class RoundTwo(unittest.TestCase):
                 def fake_build(argv, **kwargs):
                     if str(argv[0]).endswith('xcodebuild'):
                         plist.parent.mkdir(parents=True)
-                        plist.write_bytes(plistlib.dumps(dict(PicseeGitSHA='abcdefg' if mode=='clean' else 'abcdefg-dirty')))
+                        plist.write_bytes(plistlib.dumps(dict(MadoGitSHA='abcdefg' if mode=='clean' else 'abcdefg-dirty')))
                     return subprocess.CompletedProcess(argv,0)
                 def fake_checked(argv, **kwargs):
                     argv = [str(a) for a in argv]
@@ -69,7 +69,7 @@ class RoundTwo(unittest.TestCase):
                     if argv[0].endswith('xcodebuild'): return 'Xcode 26.6\nBuild version 17F113'
                     if argv[0]=='git': return 'abcdefg' if '--short' in argv else 'abcdefg-full'
                     if argv[0].endswith('PlistBuddy'):
-                        plist.write_bytes(plistlib.dumps(dict(PicseeGitSHA='abcdefg')))
+                        plist.write_bytes(plistlib.dumps(dict(MadoGitSHA='abcdefg')))
                         return ''
                     if argv[0].endswith('codesign') and argv[1]=='-d':
                         # The leaf certificate xcodebuild signed with; a second same-named identity must not matter.
@@ -89,7 +89,7 @@ class RoundTwo(unittest.TestCase):
                 self.assertEqual(len(stamping), expected_count)
                 self.assertEqual(len(signing), expected_count)
                 if expected_count:
-                    self.assertEqual(stamping[0], ['/usr/libexec/PlistBuddy','-c','Set :PicseeGitSHA abcdefg',str(plist)])
+                    self.assertEqual(stamping[0], ['/usr/libexec/PlistBuddy','-c','Set :MadoGitSHA abcdefg',str(plist)])
                     self.assertEqual(signing[0], ['/usr/bin/codesign','--force','--sign',hashlib.sha1(b'fake-leaf-der').hexdigest().upper(),'--preserve-metadata=entitlements,requirements,flags,runtime',str(app)])
                 if mode=='dirty-failure':
                     self.assertEqual(result, 1)
@@ -99,7 +99,7 @@ class RoundTwo(unittest.TestCase):
                 else:
                     self.assertEqual(result, 0, output.getvalue())
                     self.assertEqual(json.loads((run/'build.json').read_text())['sha'],'abcdefg')
-                    self.assertEqual(plistlib.loads(plist.read_bytes())['PicseeGitSHA'],'abcdefg')
+                    self.assertEqual(plistlib.loads(plist.read_bytes())['MadoGitSHA'],'abcdefg')
 
     def test_launch_preserves_original_start_on_reused_run(self):
         (self.run/'start.txt').write_text('original timestamp')

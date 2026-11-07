@@ -10,7 +10,7 @@ import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
-const bundle = ".build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest";
+const bundle = ".build/dd-ci/Build/Products/Debug/MadoAppTests.xctest";
 const crashRecords = [
   /^error: (?:Process '[^'\r\n]+' )?Exited with [^\r\n]*\bsignal\b[^\r\n]*$/i,
   /^(?:[^:\r\n]+\.swift:\d+(?::\d+)?: )?Fatal error:(?: |$)/,
@@ -245,7 +245,7 @@ deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(proces
   const frameworks = path.join(platform, 'Developer/Library/Frameworks');
   const privateFrameworks = path.join(platform, 'Developer/Library/PrivateFrameworks');
   const libraries = path.join(platform, 'Developer/usr/lib');
-  const directory = mkdtempSync(path.join(tmpdir(), 'picsee-app-inventory-'));
+  const directory = mkdtempSync(path.join(tmpdir(), 'mado-app-inventory-'));
   try {
     const source = path.join(directory, 'Inventory.swift'), executable = path.join(directory, 'inventory');
     writeFileSync(source, inventorySource);

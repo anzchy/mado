@@ -1,11 +1,11 @@
 #!/bin/sh
-# Export PicseeKit's Swift test coverage as LCOV for tdd-guardian's coverage gate.
-# Run after `swift test --package-path Packages/PicseeKit --enable-code-coverage`.
+# Export MadoKit's Swift test coverage as LCOV for tdd-guardian's coverage gate.
+# Run after `swift test --package-path Packages/MadoKit --enable-code-coverage`.
 # The test bundle path is derived, not hardcoded, so renaming the package
 # cannot silently leave the gate reading a stale profile.
 set -eu
 
-pkg=Packages/PicseeKit
+pkg=Packages/MadoKit
 out=coverage/lcov.info
 bin=$(swift build --package-path "$pkg" --show-bin-path)
 profdata="$bin/codecov/default.profdata"

@@ -1,7 +1,7 @@
 #if DEBUG
 import AppKit
 import SwiftUI
-import PicseeMacUI
+import MadoMacUI
 
 /// Menu target is cheap; the window and both hosting trees are created on first activation.
 @MainActor final class DesignPreviewLauncher: NSObject {

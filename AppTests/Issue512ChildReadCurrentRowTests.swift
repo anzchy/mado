@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private struct Child512Bookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }
@@ -82,7 +82,7 @@ private actor Child512Scanner: FolderScanning {
     }
     func present() { window.update(); window.contentView?.layoutSubtreeIfNeeded() }
     func wait(_ condition: () async -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(between: { present() }, condition)
+        try await MadoAppTests.waitUntil(between: { present() }, condition)
         present()
     }
     controller.openGrantedFolder(tree)
@@ -125,7 +125,7 @@ private actor Child512Scanner: FolderScanning {
         await scanner.failChild()
         // Await the coordinator as well as releasing the adapter, including on an early assertion/wait failure.
         if scan.isScanning {
-            try? await PicseeAppTests.waitUntil(between: { present() }) { !scan.isScanning }
+            try? await MadoAppTests.waitUntil(between: { present() }) { !scan.isScanning }
         }
     }
 }

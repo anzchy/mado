@@ -1,14 +1,14 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue349SettingsSliderLiveKeysAndKeyboardAX() throws {
     let store = InMemoryDisplayPreferencesStore(DisplayPreferences(alwaysShowTools: true, appearance: .dark))
     let a = try Issue349AppScene(store: store), b = try Issue349AppScene(store: store)
-    let suite = "picsee.settings349.\(UUID().uuidString)"
+    let suite = "mado.settings349.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(directory: cacheURL),

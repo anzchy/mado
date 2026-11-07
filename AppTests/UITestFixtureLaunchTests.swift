@@ -3,19 +3,19 @@ import Testing
 
 #if !DEBUG || !PICSEE_UI_TEST_FIXTURE
 @Test func fixtureLaunchArgumentIsIgnoredWithoutTestBuildFlag() throws {
-    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-PicseeUITestFixture", "three-images"]) == nil)
-    #expect(try UITestFixtureLaunch.prepare(arguments: ["-PicseeUITestFixture", "three-images"],
+    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-MadoUITestFixture", "three-images"]) == nil)
+    #expect(try UITestFixtureLaunch.prepare(arguments: ["-MadoUITestFixture", "three-images"],
         environment: [:]) == nil)
 }
 #endif
 
 #if DEBUG && PICSEE_UI_TEST_FIXTURE
 @Test func fixtureLaunchAcceptsOnlyOnePathComponent() {
-    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-PicseeUITestFixture", "three-images"]) == "three-images")
+    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-MadoUITestFixture", "three-images"]) == "three-images")
     for name in ["", "../outside", "/tmp/outside", "a/b", "a\\b", ".", "..", "汉字"] {
-        #expect(UITestFixtureLaunch.fixtureName(arguments: ["-PicseeUITestFixture", name]) == nil)
+        #expect(UITestFixtureLaunch.fixtureName(arguments: ["-MadoUITestFixture", name]) == nil)
     }
-    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-PicseeUITestFixture"]) == nil)
+    #expect(UITestFixtureLaunch.fixtureName(arguments: ["-MadoUITestFixture"]) == nil)
 }
 
 @Test func fixtureStageWritesOnlyThreePinnedFilesAndRefusesReuse() throws {

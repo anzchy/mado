@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
 
 /// #287: with no in-window folder reference, reselect proves the folder against the identity
 /// embedded in the saved bookmark. Real system bookmarks, so that identity is parsed, not faked.

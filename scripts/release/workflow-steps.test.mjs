@@ -71,7 +71,7 @@ function repository() {
   const git = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args],
     { cwd: dir, encoding: "utf8" }).trim();
   git("init", "-q", "-b", "main");
-  writeFileSync(join(dir, "project.yml"), "targets:\n  PicseeApp:\n    settings:\n      base:\n        MARKETING_VERSION: 0.0.1\n");
+  writeFileSync(join(dir, "project.yml"), "targets:\n  MadoApp:\n    settings:\n      base:\n        MARKETING_VERSION: 0.0.1\n");
   git("add", "project.yml"); git("commit", "-q", "-m", "a");
   const first = git("rev-parse", "HEAD");
   git("commit", "-q", "--allow-empty", "-m", "b");

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkGates, checkUIParity } from './ui-parity-pr-body-lint.mjs';
 
-const uiFiles = ['App/UI/InspectorPlaceholder.swift', 'App/Commands/CommandMenu.swift', 'Packages/PicseeKit/Sources/PicseeMacUI/States/ViewerStateHost.swift'];
+const uiFiles = ['App/UI/InspectorPlaceholder.swift', 'App/Commands/CommandMenu.swift', 'Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateHost.swift'];
 const table = '## UI-Parity\n\n| State | Design | Assertion | Status |\n|---|---|---|---|\n| Empty | abc | test | AUTO-PASS |\n';
 const head = '3de39c6012345678901234567890123456789012';
 const oldHead = 'a'.repeat(40);

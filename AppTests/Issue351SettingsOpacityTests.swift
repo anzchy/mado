@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private func issue351Views(_ root: NSView?) -> [NSView] {
     guard let root else { return [] }
@@ -25,7 +25,7 @@ import PicseeMacUI
 /// Real grants, folder scanning and ImageIO loading, with windows kept ordered out.
 @MainActor private final class Issue351AppContext {
     let base: URL, image: URL
-    let suite = "picsee.app351.\(UUID().uuidString)"
+    let suite = "mado.app351.\(UUID().uuidString)"
     let defaults: UserDefaults
     let store: UserDefaultsDisplayPreferencesStore
     let services: AccessServices

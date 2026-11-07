@@ -4,7 +4,7 @@
  * SUFeedURL in App/Info.plist).
  *
  *   node scripts/release/appcast.mjs appcast.xml --version 312 --short-version 0.0.1 \
- *     --url https://github.com/anzchy/picsee/releases/download/v0.0.1/Picsee-0.0.1.dmg \
+ *     --url https://github.com/anzchy/picsee/releases/download/v0.0.1/Mado-0.0.1.dmg \
  *     --length 9123456 --signature <sign_update -p output> [--minimum-system-version 14.0] [--pub-date ISO-8601]
  *
  * The same build number replaces its item; items stay newest first; earlier items are kept as written.

@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-import PicseeApplication
+import MadoApplication
 
 private let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 
@@ -57,7 +57,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     let show = try #require(delegate.range(of: "func showSettings()"))
     #expect(delegate[show.lowerBound...].prefix { $0 != "}" }.contains("makeSettingsWindow("))
 
-    let main = try String(contentsOf: repository.appendingPathComponent("App/PicseeApp.swift"), encoding: .utf8)
+    let main = try String(contentsOf: repository.appendingPathComponent("App/MadoApp.swift"), encoding: .utf8)
     let assignment = try #require(main.range(of: #"\.updates\s*=\s*"#, options: .regularExpression))
     let run = try #require(main.range(of: ".run()"))
     #expect(assignment.lowerBound < run.lowerBound)

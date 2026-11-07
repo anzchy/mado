@@ -1,5 +1,5 @@
 import AppKit
-import PicseeCore
+import MadoCore
 
 @MainActor final class RecentFolderMenuTarget: NSObject {
     var onOpen: ((RecentFolder) -> Void)?

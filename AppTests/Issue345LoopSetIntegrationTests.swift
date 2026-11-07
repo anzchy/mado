@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private final class Issue345Motion: ReduceMotionSource {
     var reduceMotion = true
@@ -48,7 +48,7 @@ func issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario: (Int, Bo
     defer { window.close(); NSApp.mainMenu = oldMenu; withExtendedLifetime(menu) {} }
     window.setContentSize(NSSize(width: 900, height: 620))
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line,
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line,
             between: { window.contentView?.layoutSubtreeIfNeeded() }, condition)
     }
     controller.openGrantedFolder(folder)

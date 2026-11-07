@@ -1,0 +1,646 @@
+import AppKit
+import SwiftUI
+import Observation
+import MadoCore
+import MadoApplication
+
+@MainActor final class ReadingProgressView: NSView {
+    let dividerLayer = CAShapeLayer()
+    let accentLayer = CAShapeLayer()
+    /// Spins around the ring's centre. The view's own layer pivots on its corner and AppKit resets its geometry.
+    private let spinLayer = CALayer()
+    let notificationCenter: NotificationCenter
+    var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    nonisolated(unsafe) private var reduceMotionObserver: NSObjectProtocol?
+
+    init(frame frameRect: NSRect, notificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter) {
+        self.notificationCenter = notificationCenter
+        super.init(frame: frameRect)
+        wantsLayer = true
+        dividerLayer.fillColor = NSColor.clear.cgColor
+        accentLayer.fillColor = NSColor.clear.cgColor
+        dividerLayer.lineWidth = 2
+        accentLayer.lineWidth = 2
+        accentLayer.lineCap = .butt
+        layer?.addSublayer(spinLayer)
+        spinLayer.addSublayer(dividerLayer)
+        spinLayer.addSublayer(accentLayer)
+        setAccessibilityRole(.progressIndicator)
+        refreshAppearance()
+        reduceMotionObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.start() }
+        }
+    }
+    deinit {
+        if let reduceMotionObserver {
+            notificationCenter.removeObserver(reduceMotionObserver)
+        }
+    }
+    required init?(coder: NSCoder) { nil }
+    var rotationLayer: CALayer? { spinLayer }
+
+    override func layout() {
+        super.layout()
+        let inset = bounds.insetBy(dx: 1, dy: 1)
+        dividerLayer.path = CGPath(ellipseIn: inset, transform: nil)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius = min(bounds.width, bounds.height) / 2 - 1
+        let segment = CGMutablePath()
+        segment.addArc(center: center, radius: radius, startAngle: .pi / 4, endAngle: 3 * .pi / 4, clockwise: false)
+        accentLayer.path = segment
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        spinLayer.bounds = bounds
+        spinLayer.position = center
+        dividerLayer.frame = bounds
+        accentLayer.frame = bounds
+        CATransaction.commit()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        refreshAppearance()
+    }
+
+    private func refreshAppearance() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            dividerLayer.strokeColor = DesignColor.divider.nsColor.cgColor
+            accentLayer.strokeColor = DesignColor.accent.nsColor.cgColor
+        }
+    }
+
+    func start() {
+        layout()
+        spinLayer.removeAnimation(forKey: "mado.reading.rotation")
+        guard !reduceMotion() else { return }
+        let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotation.fromValue = 0
+        rotation.toValue = CGFloat.pi * 2
+        rotation.duration = 1
+        rotation.repeatCount = .infinity
+        spinLayer.add(rotation, forKey: "mado.reading.rotation")
+    }
+}
+
+private struct StateText: View {
+    let lines: [String]
+    let isLoading: Bool
+    let isNotice: Bool
+    var body: some View {
+        VStack(spacing: 12) {
+            if isLoading { IndeterminateProgressRow(label: lines[0]) }
+            else {
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    Text(line).font(Font(DesignMetrics.font(isNotice ? "uiSmall" : index == 0 ? "title" : "ui")))
+                        .foregroundStyle(index == 0 ? DesignColor.textPrimary.color : DesignColor.textSecondary.color)
+                }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Native state surface; decisions arrive as Application-owned image status.
+public final class ViewerStateHost: NSView {
+    public private(set) var buttons: [NSButton] = []
+    public private(set) var textLines: [String] = []
+    public private(set) var showsProgress = false
+    /// 「读取失败」 (24F-A) on the folder-entry reading surface (#238).
+    public private(set) var readFailedView: ReadFailedStateView?
+    private let readFailedPage = ReadFailedStateView()
+    public var onRetry: (() -> Void)?
+    public var onCancelFolderReading: (() -> Void)?
+    private weak var keyCanvas: NSView?
+    private weak var keyChrome: ViewerChromeOverlay?
+    private var displayedStatus: ViewerImageStatus?
+    private var displayedNextEnabled = false
+    private var composedState: ViewerImageStatus?
+    private var stateIcon: NSImageView?
+    private var stateLabels: [NSTextField] = []
+    private var firstLaunch: FirstLaunchView?
+    private var readingViews: (progress: NSView, heading: NSTextField, subtitle: NSTextField, cancel: NSButton)?
+    public func setFirstLaunchDragActive(_ active: Bool) { firstLaunch?.setDragActive(active) }
+    public func linkKeyViews(to canvas: NSView, chrome: ViewerChromeOverlay) {
+        keyCanvas = canvas; keyChrome = chrome
+        chrome.setHome(displayedStatus == .empty)
+        ViewerStateFocus.link(canvas: canvas, state: self, chrome: chrome)
+    }
+    private var session: ViewerSession?
+    private var tracking = false
+    /// Which window surface this host sits on; GridViewerPresentation owns it. The grid surface never shows a state.
+    public enum Surface: Sendable { case viewer, gridReading, grid }
+    public var surface: Surface = .viewer {
+        didSet { applyVisibility(); if heldReading, surface != .gridReading { refresh() } }
+    }
+    /// The App shows the Reading State on the reading surface before the scan starts, while the Session still reads
+    /// `.empty`. Rebuilding the Home in that gap restarted its wall drift (#316), so the Reading State holds there.
+    private var heldReading = false
+    /// Page 22 on the viewer surface (owner decision C, #137); GridShellView mirrors its page here.
+    public let emptyFolderView = EmptyFolderStateView()
+    private var emptyFolderPage: EmptyFolderPage?
+    public func setEmptyFolderPage(_ page: EmptyFolderPage?) {
+        emptyFolderPage = page
+        if displayedStatus == .emptyFolder { showEmptyFolderPage() }
+    }
+    /// Shows the bare page until its content arrives, so the generic state never covers an open empty folder.
+    private func showEmptyFolderPage() {
+        let page = emptyFolderPage ?? EmptyFolderPage(subfolders: [], recents: [], includeSubfoldersAvailable: false)
+        emptyFolderView.display(subfolders: page.subfolders, recents: page.recents,
+                                includeSubfoldersAvailable: page.includeSubfoldersAvailable)
+        buttons = emptyFolderView.keyViews.compactMap { $0 as? NSButton }
+        if let keyCanvas, let keyChrome { ViewerStateFocus.link(canvas: keyCanvas, state: self, chrome: keyChrome) }
+    }
+    private func applyVisibility() {
+        isHidden = surface == .grid || displayedStatus == .showing
+        setAccessibilityHidden(isHidden)
+    }
+
+    public convenience init(frame: NSRect, session: ViewerSession) {
+        self.init(frame: frame)
+        self.session = session
+        refresh()
+    }
+    public func refresh() {
+        guard let session else { return }
+        if !tracking {
+            tracking = true
+            withObservationTracking {
+                displaySessionStatus(session)
+            } onChange: { [weak self] in
+                Task { @MainActor [weak self] in self?.tracking = false; self?.refresh() }
+            }
+        } else { displaySessionStatus(session) }
+    }
+    private func displaySessionStatus(_ session: ViewerSession) {
+        let status = session.imageStatus
+        if surface == .gridReading, status == .empty, displayedStatus == .readingFolder { heldReading = true; return }
+        display(status, nextEnabled: session.isEnabled(.next))
+    }
+    public func display(_ status: ViewerImageStatus, nextEnabled: Bool = false) {
+        heldReading = false
+        guard displayedStatus != status || displayedNextEnabled != nextEnabled else { return }
+        displayedStatus = status; displayedNextEnabled = nextEnabled
+        // #331: the chrome hides on the Home before the deferred relink, so the loop keeps Choose Folder….
+        keyChrome?.setHome(status == .empty)
+        if let focused = window?.firstResponder as? NSView,
+           buttons.contains(where: { focused === $0 || focused.isDescendant(of: $0) }), let keyCanvas {
+            session?.updateFocus(.canvas)
+            window?.makeFirstResponder(keyCanvas)
+        }
+        defer {
+            if let keyCanvas, let keyChrome { ViewerStateFocus.link(canvas: keyCanvas, state: self, chrome: keyChrome) }
+        }
+        setAccessibilityChildren([])
+        applyVisibility()
+        // B4's open button sits inside FirstLaunchView, out of reach of the subview sweep below. The empty-folder
+        // page keeps its own controls between visits, so only the outgoing first-launch button is retired here.
+        if firstLaunch != nil {
+            buttons.forEach {
+                $0.isHidden = true; $0.setAccessibilityHidden(true)
+                $0.isEnabled = false; $0.setAccessibilityEnabled(false); $0.nextKeyView = nil
+            }
+        }
+        subviews.forEach {
+            $0.isHidden = true; $0.setAccessibilityHidden(true); $0.nextKeyView = nil
+            if let button = $0 as? NSButton { button.isEnabled = false; button.setAccessibilityEnabled(false) }
+            $0.removeFromSuperview()
+        }
+        buttons = []; textLines = []; showsProgress = false
+        composedState = nil; stateIcon = nil; stateLabels = []; firstLaunch = nil; readingViews = nil; readFailedView = nil
+        var actions: [(String, String)] = []
+        var failure = false
+        let notice = status == .detailLimited
+        switch status {
+        case .empty:
+            textLines = [String(localized: "Drop a photo folder here"), String(localized: "or press ⌘O")]
+            actions = [(String(localized: "Choose Folder…"), "state.open")]
+        case .loading(let name):
+            showsProgress = true
+            textLines = [String(format: String(localized: "Opening %@…"), name)]
+            actions = [(String(localized: "Cancel"), "state.cancel")]
+        case .readingFolder:
+            // Page 24 uses the canvas surface; keep the prior image intact underneath for Cancel.
+            let surface = NSBox(frame: bounds)
+            surface.boxType = .custom; surface.borderType = .noBorder
+            surface.titlePosition = .noTitle; surface.cornerRadius = 0
+            surface.fillColor = DesignColor.canvasBackground.nsColor
+            surface.autoresizingMask = [.width, .height]
+            surface.setAccessibilityElement(false)
+            addSubview(surface)
+            showsProgress = true
+            textLines = [String(localized: "Reading Folder…"),
+                String(localized: "Looking for images to browse. Please wait.")]
+            let progress = ReadingProgressView(frame: NSRect(x: 0, y: 0, width: 28, height: 28))
+            progress.start()
+            progress.setAccessibilityIdentifier("state.folder-progress")
+            progress.setAccessibilityElement(true)
+            progress.setAccessibilityLabel(textLines[0])
+            let heading = NSTextField(labelWithString: textLines[0])
+            heading.font = .systemFont(ofSize: 16, weight: .medium)
+            heading.textColor = DesignColor.textPrimary.nsColor
+            heading.alignment = .center
+            heading.setAccessibilityIdentifier("state.folder-title")
+            let subtitle = NSTextField(labelWithString: textLines[1])
+            subtitle.font = .systemFont(ofSize: 13)
+            subtitle.textColor = DesignColor.textSecondary.nsColor
+            subtitle.alignment = .center
+            subtitle.setAccessibilityIdentifier("state.folder-subtitle")
+            let cancel = ViewerStateButton(title: String(localized: "Cancel Reading"), target: self, action: #selector(activate(_:)))
+            cancel.session = session
+            cancel.isBordered = false
+            cancel.focusRingType = .exterior
+            cancel.contentTintColor = DesignColor.selectionText.nsColor
+            cancel.attributedTitle = NSAttributedString(string: cancel.title, attributes: [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: DesignColor.selectionText.nsColor,
+            ])
+            cancel.identifier = NSUserInterfaceItemIdentifier("state.cancel-folder")
+            cancel.setAccessibilityIdentifier("state.cancel-folder")
+            cancel.setAccessibilityLabel(String(localized: "Cancel Reading"))
+            [progress, heading, subtitle, cancel].forEach { addSubview($0) }
+            readingViews = (progress, heading, subtitle, cancel)
+            buttons = [cancel]; setAccessibilityChildren([progress, heading, subtitle, cancel])
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+            return
+        case .folderScanFailed(let reason, let folder):
+            if surface != .gridReading {
+                failure = true
+                let count = session?.folderScan?.sourceSnapshot?.navigationEntries.count ?? 0
+                textLines = [String(localized: "Unable to finish reading folder"),
+                    String(localized: String.LocalizationValue(reason)),
+                    String(format: String(localized: "Images found before scan stopped: %lld"), Int64(count))]
+                actions = [(String(localized: "Retry"), "state.retry-folder")]
+                break
+            }
+            // 24F-A is folder-entry only: no reason and no partial count (#238).
+            let text = ReadFailedStateText(title: String(format: String(localized: "Couldn't finish reading “%@”"), folder),
+                detail: String(localized: "Reading stopped partway. To avoid showing an incomplete list, the images found so far are hidden."),
+                retry: String(localized: "Retry"), chooseOther: String(localized: "Choose Another Folder…"))
+            let page = readFailedPage
+            page.onRetry = { [weak self] in self?.session?.retryFolderScan(); self?.refresh() }
+            page.onChooseOtherFolder = { [weak self] in
+                guard let session = self?.session else { return }
+                CommandRouter().route(.open, from: .button, to: session)
+            }
+            page.frame = bounds
+            page.autoresizingMask = [.width, .height]
+            page.isHidden = false; page.setAccessibilityHidden(false)
+            page.display(text)
+            addSubview(page)
+            readFailedView = page
+            textLines = [text.title, text.detail]
+            buttons = page.buttons
+            setAccessibilityChildren([page])
+            page.layoutSubtreeIfNeeded()
+            return
+        case .noMatches:
+            textLines = [String(localized: "No Images Match This Filter"),
+                         String(localized: "Choose another extension or clear the filter.")]
+            actions = [(String(localized: "Clear Filter"), "state.clear-filter")]
+        case .failed(let kind, let name):
+            failure = true
+            textLines = [String(localized: "Unable to read this image"), name,
+                String(localized: String.LocalizationValue(kind.messageKey))]
+            actions = [(String(localized: "Retry"), "state.retry")]
+            if nextEnabled { actions.append((String(localized: "Next"), "state.next")) }
+        case .detailLimited: textLines = [String(localized: "Showing reduced detail")]
+        case .emptyFolder:
+            emptyFolderView.frame = bounds
+            emptyFolderView.autoresizingMask = [.width, .height]
+            emptyFolderView.isHidden = false; emptyFolderView.setAccessibilityHidden(false)
+            addSubview(emptyFolderView)
+            setAccessibilityChildren([emptyFolderView])
+            showEmptyFolderPage()
+            return
+        case .showing: return
+        }
+        if case .empty = status {
+            let button = ViewerStateButton(title: actions[0].0, target: self, action: #selector(activate(_:)))
+            button.session = session
+            button.bezelStyle = .rounded; button.focusRingType = .exterior
+            button.identifier = NSUserInterfaceItemIdentifier("state.open")
+            button.setAccessibilityIdentifier("state.open")
+            let launch = FirstLaunchView(frame: bounds, openButton: button)
+            addSubview(launch)
+            firstLaunch = launch; buttons = [button]
+            setAccessibilityChildren(launch.semanticViews)
+            return
+        }
+        if failure {
+            composeState(status, actions: actions)
+            return
+        }
+        let text = NSHostingView(rootView: StateText(lines: textLines, isLoading: showsProgress,
+            isNotice: notice))
+        let center = max(160, bounds.midY)
+        text.frame = NSRect(x: 16, y: notice ? bounds.height - 84 : center,
+            width: max(0, bounds.width - 32), height: notice ? 32 : failure ? 160 : 80)
+        text.autoresizingMask = notice ? [.width, .minYMargin] : [.width, .minYMargin, .maxYMargin]
+        addSubview(text)
+        let width: CGFloat = actions.count > 1 ? 80 : 180
+        let total = CGFloat(actions.count) * width + CGFloat(max(0, actions.count - 1)) * 12
+        for (index, action) in actions.enumerated() {
+            let button = ViewerStateButton(title: action.0, target: self, action: #selector(activate(_:)))
+            button.session = session
+            button.bezelStyle = .rounded; button.focusRingType = .exterior
+            button.identifier = NSUserInterfaceItemIdentifier(action.1)
+            button.setAccessibilityIdentifier(action.1)
+            button.frame = NSRect(x: (bounds.width - total) / 2 + CGFloat(index) * (width + 12),
+                y: center - 44, width: width, height: 32)
+            button.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+            addSubview(button); buttons.append(button)
+        }
+        setAccessibilityChildren([text as NSView] + buttons)
+    }
+
+    /// Page25 image-error.html:32px/viewBox24, stroke1.3, no fill. SF photo
+    /// keeps solid mountains at every weight, so use the pinned template outline (#530).
+    private static let imageErrorOutline: NSImage = {
+        let image = NSImage(size: NSSize(width: 32, height: 32), flipped: true) { rect in
+            let scale = rect.width / 24
+            let outline = NSBezierPath(roundedRect: NSRect(x: 3, y: 3, width: 18, height: 18),
+                                       xRadius: 2, yRadius: 2)
+            outline.appendOval(in: NSRect(x: 7, y: 7, width: 4, height: 4))
+            outline.move(to: NSPoint(x: 21, y: 15))
+            outline.line(to: NSPoint(x: 18, y: 12))
+            // SVG a2 2 0 0 0 -3 0: the small upper radius2 arc to(15,12).
+            let rise = sqrt(CGFloat(1.75))
+            let angle = atan2(-rise, 1.5) * 180 / .pi
+            outline.appendArc(withCenter: NSPoint(x: 16.5, y: 12 + rise), radius: 2,
+                              startAngle: angle, endAngle: -180 - angle, clockwise: true)
+            outline.line(to: NSPoint(x: 6, y: 21))
+            outline.transform(using: AffineTransform(scale: scale))
+            outline.lineWidth = 1.3 * scale
+            NSColor.black.setStroke()
+            outline.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
+
+    private func composeState(_ status: ViewerImageStatus, actions: [(String, String)]) {
+        composedState = status
+        let imageFailure: Bool
+        if case .failed = status { imageFailure = true } else { imageFailure = false }
+        let failure: Bool
+        switch status {
+        case .failed, .folderScanFailed: failure = true
+        default: failure = false
+        }
+        let iconLabel = Self.stateIconLabel(failure: failure)
+        let image = NSImageView(image: imageFailure ? Self.imageErrorOutline : NSImage(systemSymbolName: failure
+            ? "exclamationmark.triangle" : DesignSymbol.folder.name,
+            accessibilityDescription: iconLabel)!)
+        if !imageFailure { image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 28, weight: .regular) }
+        image.imageScaling = imageFailure ? .scaleProportionallyUpOrDown : .scaleProportionallyDown
+        if imageFailure { image.contentTintColor = DesignColor.textSecondary.nsColor }
+        image.setAccessibilityIdentifier("state.icon")
+        image.setAccessibilityRole(.image)
+        image.setAccessibilityLabel(iconLabel)
+        if !failure { image.setAccessibilityElement(false) }
+        addSubview(image); stateIcon = image
+        // Keep the status diagnostics as title/name/reason; page 25 renders the latter two as one muted message.
+        let visibleLines = imageFailure ? [textLines[0], (textLines[1].isEmpty ? "" : textLines[1] + " · ") + textLines[2]] : textLines
+        for (index, line) in visibleLines.enumerated() {
+            let field = NSTextField(labelWithString: line)
+            field.font = index == 0 ? .systemFont(ofSize: 16, weight: .medium) : DesignMetrics.font("ui")
+            field.textColor = failure && index == 2 ? DesignColor.errorText.nsColor :
+                index == 0 ? DesignColor.textPrimary.nsColor : DesignColor.textSecondary.nsColor
+            field.alignment = .center
+            let singleLineMessage = imageFailure && index == 1
+            field.cell?.wraps = !singleLineMessage
+            field.cell?.usesSingleLineMode = singleLineMessage
+            field.maximumNumberOfLines = singleLineMessage ? 1 : 0
+            if imageFailure { field.lineBreakMode = singleLineMessage ? .byTruncatingMiddle : .byWordWrapping }
+            if imageFailure && index == 1 { field.toolTip = line }
+            let id = index == 0 ? "state.heading" : failure
+                ? (index == 1 ? "state.filename" : "state.reason")
+                : (index == 1 ? "state.description" : "state.drop-hint")
+            field.setAccessibilityIdentifier(id)
+            field.setAccessibilityRole(.staticText)
+            field.setAccessibilityLabel(line)
+            addSubview(field); stateLabels.append(field)
+        }
+        for action in actions {
+            let button = ViewerStateButton(title: action.0, target: self, action: #selector(activate(_:)))
+            button.session = session
+            button.bezelStyle = .rounded; button.focusRingType = .exterior
+            button.identifier = NSUserInterfaceItemIdentifier(action.1)
+            button.setAccessibilityIdentifier(action.1)
+            button.setAccessibilityLabel(action.0)
+            if imageFailure {
+                button.isBordered = false
+                button.font = .systemFont(ofSize: 13)
+                button.wantsLayer = true
+                button.layer?.cornerRadius = 6
+            }
+            addSubview(button); buttons.append(button)
+        }
+        setAccessibilityChildren([image] + stateLabels + buttons)
+        if imageFailure { refreshImageErrorColors() }
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+    }
+
+    static func stateIconLabel(failure: Bool, bundle: Bundle = .main, locale: Locale? = nil) -> String {
+        if let locale {
+            let localizedBundle = bundle.path(forResource: locale.identifier, ofType: "lproj")
+                .flatMap(Bundle.init(path:)) ?? bundle
+            return localizedBundle.localizedString(forKey: failure ? "Unreadable image" : "Open folder",
+                                                   value: nil, table: nil)
+        }
+        return failure
+            ? String(localized: "Unreadable image", bundle: bundle)
+            : String(localized: "Open folder", bundle: bundle)
+    }
+
+    /// folder-loading.html `.empty-state` in `.grid-scroll` (padding 16 top, 30 bottom): ring 28 + 8, h2 18 + 23,
+    /// p 9 + 22.1, `.mock-actions` 18 then `.text-button` 8 + 35, centred again whenever the host moves.
+    private func layoutReading(_ views: (progress: NSView, heading: NSTextField, subtitle: NSTextField, cancel: NSButton)) {
+        let groupHeight: CGFloat = 28 + 8 + 18 + 23 + 9 + 22.1 + 18 + 8 + 35
+        let groupTop = (16 + (bounds.height - 46) / 2 - groupHeight / 2).rounded()
+        func y(fromTop offset: CGFloat, height: CGFloat) -> CGFloat { bounds.height - groupTop - offset - height }
+        func centred(_ field: NSTextField, lineTop: CGFloat, lineHeight: CGFloat) {
+            let height = ceil(field.intrinsicContentSize.height)
+            field.frame = NSRect(x: 16, y: y(fromTop: lineTop + (lineHeight - height) / 2, height: height).rounded(),
+                                 width: max(0, bounds.width - 32), height: height)
+        }
+        views.progress.frame = NSRect(x: (bounds.midX - 14).rounded(), y: y(fromTop: 0, height: 28),
+                                      width: 28, height: 28)
+        centred(views.heading, lineTop: 54, lineHeight: 23)
+        centred(views.subtitle, lineTop: 86, lineHeight: 22.1)
+        let cancelWidth = max(32, ceil((views.cancel.intrinsicContentSize.width + 16) / 2) * 2)
+        views.cancel.frame = NSRect(x: (bounds.midX - cancelWidth / 2).rounded(),
+                                    y: y(fromTop: 134.1, height: 35).rounded(), width: cancelWidth, height: 35)
+    }
+
+    /// A sidebar resize moves the host synchronously; keep the reading stack centred before the next layout pass.
+    public override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        if let readingViews { layoutReading(readingViews) }
+        if case .failed? = composedState, let stateIcon { layoutImageError(icon: stateIcon) }
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        if case .failed? = composedState { refreshImageErrorColors() }
+    }
+
+    private func refreshImageErrorColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            for button in buttons {
+                let primary = button.identifier?.rawValue == "state.retry"
+                button.layer?.backgroundColor = primary ? DesignColor.primaryFill.nsColor.cgColor : NSColor.clear.cgColor
+                button.attributedTitle = NSAttributedString(string: button.title, attributes: [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: (primary ? DesignColor.onPrimary : .selectionText).nsColor,
+                ])
+            }
+        }
+    }
+
+    /// image-error.html: SVG32, h2 normal line box23 + margin18, paragraph22.1 + margin9.
+    /// Actions have margin18; the text button's margin-top8 makes the 35pt boxes differ by4pt.
+    private func layoutImageError(icon: NSImageView) {
+        let heading = stateLabels[0], message = stateLabels[1]
+        let available = max(0, bounds.width - 48)
+        // Give the heading the content width, including the cell's horizontal padding.
+        // Page 25 permits wrapping; retain its 23pt line box when one line fits.
+        let headingSize = heading.cell!.cellSize(forBounds:
+            NSRect(x: 0, y: 0, width: available, height: 10000))
+        let headingHeight = max(23, ceil(headingSize.height))
+        let messageHeight = fitImageErrorMessage(message, width: available)
+        let rowHeight: CGFloat = buttons.count > 1 ? 43 : 35
+        let contentHeight: CGFloat = 32 + 18 + headingHeight + 9 + messageHeight + 18 + rowHeight
+        var top = bounds.midY + contentHeight / 2
+        icon.frame = NSRect(x: bounds.midX - 16, y: top - 32, width: 32, height: 32)
+        top -= 32 + 18
+        for (field, height) in [(heading, headingHeight), (message, messageHeight)] {
+            let width = field === heading ? available : min(available, ceil(field.intrinsicContentSize.width))
+            field.frame = NSRect(x: bounds.midX - width / 2, y: top - height, width: width, height: height)
+            top -= height + (field === heading ? 9 : 18)
+        }
+        let font = NSFont.systemFont(ofSize: 13)
+        let widths = buttons.map { button in
+            ceil((button.title as NSString).size(withAttributes: [.font: font]).width) +
+                (button.identifier?.rawValue == "state.retry" ? 32 : 16)
+        }
+        let total = widths.reduce(0, +) + CGFloat(max(0, buttons.count - 1)) * 16
+        var left = bounds.midX - total / 2
+        for (index, button) in buttons.enumerated() {
+            let offset: CGFloat = buttons.count == 1 ? 0 : index == 0 ? 4 : 8
+            button.frame = NSRect(x: left, y: top - offset - 35, width: widths[index], height: 35)
+            left += widths[index] + 16
+        }
+    }
+
+    /// Reserve the whole reason before fitting the filename. At the minimum window
+    /// width the reason itself needs wrapping; never let AppKit elide the joined text.
+    private func fitImageErrorMessage(_ field: NSTextField, width: CGFloat) -> CGFloat {
+        let name = textLines[1], reason = textLines[2]
+        let attributes: [NSAttributedString.Key: Any] = [.font: field.font!]
+        func inkWidth(_ text: String) -> CGFloat { (text as NSString).size(withAttributes: attributes).width }
+        let textWidth = max(0, width - 4) // NSTextFieldCell's horizontal padding.
+        let suffix = name.isEmpty ? reason : " · " + reason
+        let wraps = inkWidth(suffix) + (name.isEmpty ? 0 : inkWidth("…")) > textWidth
+        let nameBudget = max(0, textWidth - inkWidth(wraps ? " · " : suffix))
+        var fittedName = name
+        if !name.isEmpty && inkWidth(name) > nameBudget {
+            let characters = Array(name)
+            func candidate(_ count: Int) -> String {
+                String(characters.prefix((count + 1) / 2)) + "…" + String(characters.suffix(count / 2))
+            }
+            var lower = 0, upper = characters.count
+            while lower < upper {
+                let count = (lower + upper + 1) / 2
+                if inkWidth(candidate(count)) <= nameBudget { lower = count } else { upper = count - 1 }
+            }
+            fittedName = candidate(lower)
+        }
+        field.cell?.wraps = wraps
+        field.cell?.usesSingleLineMode = !wraps
+        field.maximumNumberOfLines = wraps ? 0 : 1
+        field.lineBreakMode = wraps ? .byWordWrapping : .byClipping
+        field.stringValue = name.isEmpty ? reason : fittedName + (wraps ? " · \n" : " · ") + reason
+        guard wraps else { return 22.1 }
+        let size = field.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 10000))
+        return max(22.1, ceil(size.height))
+    }
+
+    public override func layout() {
+        super.layout()
+        if let readingViews { layoutReading(readingViews); return }
+        guard composedState != nil, let icon = stateIcon else { return }
+        if case .failed? = composedState { layoutImageError(icon: icon); return }
+        let available = max(0, bounds.width - 32)
+        let textWidth = min(640, available)
+        func measure(_ field: NSTextField, width: CGFloat) -> CGFloat {
+            let rect = (field.stringValue as NSString).boundingRect(
+                with: NSSize(width: width, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: field.font!])
+            return ceil(rect.height) + 2
+        }
+        let heading = stateLabels[0], description = stateLabels[1]
+        let headingHeight = measure(heading, width: textWidth)
+        let descriptionHeight = measure(description, width: textWidth)
+        let reasonHeight = measure(stateLabels[2], width: textWidth)
+        let buttonWidth: CGFloat = 80
+        let buttonHeight: CGFloat = 32
+        let contentHeight: CGFloat = 32 + 18 + headingHeight + 9 + descriptionHeight + 9 + reasonHeight + 18 + buttonHeight
+        var top = bounds.midY + contentHeight / 2
+        icon.frame = NSRect(x: bounds.midX - 16, y: top - 32, width: 32, height: 32)
+        top -= 32 + 18
+        heading.frame = NSRect(x: bounds.midX - textWidth / 2, y: top - headingHeight,
+                               width: textWidth, height: headingHeight)
+        top -= headingHeight + 9
+        description.frame = NSRect(x: bounds.midX - textWidth / 2, y: top - descriptionHeight,
+                                   width: textWidth, height: descriptionHeight)
+        top -= descriptionHeight
+        top -= 9
+        stateLabels[2].frame = NSRect(x: bounds.midX - textWidth / 2, y: top - reasonHeight,
+                                      width: textWidth, height: reasonHeight)
+        top -= reasonHeight
+        top -= 18
+        let gap: CGFloat = 16
+        let total = CGFloat(buttons.count) * buttonWidth + CGFloat(max(0, buttons.count - 1)) * gap
+        for (index, button) in buttons.enumerated() {
+            button.frame = NSRect(x: bounds.midX - total / 2 + CGFloat(index) * (buttonWidth + gap),
+                                  y: top - buttonHeight, width: buttonWidth, height: buttonHeight)
+        }
+    }
+    @objc private func activate(_ sender: NSButton) {
+        guard !isHiddenOrHasHiddenAncestor, sender.isEnabled, !sender.isHiddenOrHasHiddenAncestor,
+              buttons.contains(where: { $0 === sender }), let session else { return }
+        switch sender.identifier?.rawValue {
+        case "state.cancel": session.cancelImageOpening(); refresh()
+        case "state.cancel-folder":
+            if let onCancelFolderReading { onCancelFolderReading() }
+            else { session.cancelFolderReading() }
+            refresh()
+        case "state.clear-filter":
+            var conditions = session.folderConditions
+            conditions.selectedExtensions = nil
+            session.setFolderConditions(conditions)
+            refresh()
+        case "state.retry": onRetry?()
+        case "state.retry-folder": session.retryFolderScan(); refresh()
+        case "state.next": CommandRouter().route(.next, from: .button, to: session)
+        default: CommandRouter().route(.open, from: .button, to: session)
+        }
+    }
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHiddenOrHasHiddenAncestor else { return nil }
+        let local = convert(point, from: superview)
+        if emptyFolderView.superview === self { return emptyFolderView.hitTest(local) }
+        return buttons.first { button in
+            guard !button.isHidden, let parent = button.superview else { return false }
+            return button.frame.contains(parent.convert(local, from: self))
+        }
+    }
+}

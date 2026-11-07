@@ -13,7 +13,7 @@ import device as d
 
 class XcodeSelection(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='picsee-xcode-')
+        self.temp = tempfile.TemporaryDirectory(prefix='mado-xcode-')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 

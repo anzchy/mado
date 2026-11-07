@@ -29,7 +29,7 @@ lane_result() {
   (( code == 0 )) || failed=1
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
-$hl swift test --package-path Packages/PicseeKit --enable-code-coverage > $o/$p-swift.log 2>&1; lane_result swift $?
+$hl swift test --package-path Packages/MadoKit --enable-code-coverage > $o/$p-swift.log 2>&1; lane_result swift $?
 # swift-lcov.sh only writes coverage/lcov.info; lcov-total.py sums it and fails below 100% (an uncovered line once
 # passed as lcov=0). lcov= is that check's exit code; the next line holds the totals and any uncovered file:line.
 sh scripts/tdd/swift-lcov.sh > $o/$p-lcov.log 2>&1 && python3 $here/lcov-total.py coverage/lcov.info >> $o/$p-lcov.log 2>&1
@@ -37,7 +37,7 @@ lane_result lcov $?
 grep -E '^(lines|uncovered|no report|empty report)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
-$hl xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
+$hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
   > $o/$p-xcodebuild.log 2>&1; lane_result xcodebuild $?
 node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?

@@ -102,7 +102,7 @@ elif name == 'kc.sh':
 
 class PanelChoose(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='picsee-panel-')
+        self.temp = tempfile.TemporaryDirectory(prefix='mado-panel-')
         self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name).resolve()
         self.repo, self.state, self.bin, self.tmp = (base / n for n in ('repo', 'state', 'bin', 'tmp'))

@@ -17,7 +17,7 @@ function fixture(t) {
   t.after(() => rmSync(repo, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const write = (file, content) => { mkdirSync(join(repo, file, '..'), { recursive: true }); writeFileSync(join(repo, file), content); };
-  const paths = execFileSync('git', ['ls-files', '-z', 'App', 'Packages/PicseeKit/Sources'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
+  const paths = execFileSync('git', ['ls-files', '-z', 'App', 'Packages/MadoKit/Sources'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
   for (const path of [...paths, 'docs/feature-ledger.md', 'docs/feature-ledger.html', 'scripts/ledger/build.mjs',
     'scripts/design/shortcut-model.mjs', 'design/prototypes/picsee-browser/states/shortcuts.html',
     'scripts/git-hooks/pre-push', 'scripts/agents/local-pr-lint.mjs', 'scripts/agents/ui-parity-pr-body-lint.mjs']) {

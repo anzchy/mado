@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-import PicseeCore
-import PicseeInfrastructure
+import MadoCore
+import MadoInfrastructure
 
 @Test(arguments: [false, true])
 func issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing: Bool) throws {

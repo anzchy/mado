@@ -1,7 +1,7 @@
 import AppKit
-import PicseeCore
-import PicseeApplication
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoMacUI
 
 extension CommandID {
     var menuTitle: String {

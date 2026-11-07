@@ -1,10 +1,10 @@
 import AppKit
 import ImageIO
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor final class Issue349Motion: ReduceMotionSource {
     var reduceMotion = false
@@ -195,7 +195,7 @@ import PicseeMacUI
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue349TwoWindowsResizeWithoutLosingTheirCurrentSelection() throws {
-    let suite = "picsee.app349.\(UUID().uuidString)"
+    let suite = "mado.app349.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)

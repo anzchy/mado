@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-@testable import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+@testable import MadoInfrastructure
+import MadoMacUI
 
 private final class RecoveryBookmarks: SecurityScope, BookmarkCoding, @unchecked Sendable {
     private let lock = NSLock()

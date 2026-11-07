@@ -1,10 +1,10 @@
 import AppKit
 import Observation
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor func issue527Find(_ view: NSView?, matching: (NSView) -> Bool) -> NSView? {
     guard let view else { return nil }
@@ -81,7 +81,7 @@ import PicseeMacUI
     }
     func layout() { window.contentView?.layoutSubtreeIfNeeded(); window.update() }
     func wait(_ condition: () -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(between: { self.layout() }, condition)
+        try await MadoAppTests.waitUntil(between: { self.layout() }, condition)
     }
     func focusTool() throws -> ChromeToolView {
         let tool = try #require(overlay.tools.first { $0.accessibilityIdentifier() == "chrome.returnToGrid.button" })

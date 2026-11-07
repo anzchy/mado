@@ -1,8 +1,8 @@
 import Foundation
 import os
-import PicseeApplication
-import PicseeCore
-import PicseeInfrastructure
+import MadoApplication
+import MadoCore
+import MadoInfrastructure
 
 struct WindowInspectorReader: InspectorMetadataReading {
     let services: Task<AccessServices, Error>

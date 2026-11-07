@@ -4,7 +4,7 @@
 //
 // It never drives the UI itself: `--driver` (the delegator's GUI step) opens the fixture folder once per sample.
 // It owns only the Mado processes it spawned as its own children (the child handle, never a pid read from a process
-// list or by name), SIGTERMs only those, never escalates, and refuses to start while another Mado runs, and never deletes a cache: a cold sample moves picsee's thumbnail cache
+// list or by name), SIGTERMs only those, never escalates, and refuses to start while another Mado runs, and never deletes a cache: a cold sample moves mado's thumbnail cache
 // into the run directory. Evidence stays in the run directory; nothing is written to the checkout.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -63,7 +63,7 @@ const USAGE = `usage:
   measure-p3-08.sh parse <run dir>
 The driver and browse commands get PICSEE_P308_PID, PICSEE_P308_FIXTURE, PICSEE_P308_SAMPLE and PICSEE_P308_RUN_DIR.`;
 
-/** picsee's thumbnail cache inside its sandbox container (ThumbnailDiskCache's default directory). Pure. */
+/** mado's thumbnail cache inside its sandbox container (ThumbnailDiskCache's default directory). Pure. */
 export function cacheDirectory(bundleID, home = homedir()) {
   if (!/^[A-Za-z0-9.-]+$/.test(bundleID)) throw new Error(`unexpected bundle identifier ${bundleID}`);
   return path.join(home, 'Library/Containers', bundleID, 'Data/Library/Caches/Mado/Thumbnails');
@@ -77,7 +77,7 @@ export function cacheDirectory(bundleID, home = homedir()) {
  */
 export function planCacheAside(cache, runDir, sample, { bundleID, home = homedir(), fs = { lstatSync, existsSync, realpathSync } } = {}) {
   const expected = cacheDirectory(bundleID, home);
-  if (path.resolve(cache) !== expected) return { action: 'refuse', reason: `not picsee's cache directory: ${cache}` };
+  if (path.resolve(cache) !== expected) return { action: 'refuse', reason: `not mado's cache directory: ${cache}` };
   const target = path.join(runDir, 'cache-aside', String(sample).padStart(3, '0'));
   if (fs.existsSync(target)) return { action: 'refuse', reason: `aside target already exists: ${target}` };
   const containers = path.join(home, 'Library/Containers');
@@ -112,7 +112,7 @@ const logDate = (us) => {
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function picseePIDs() {
+function madoPIDs() {
   const out = quiet('/usr/bin/pgrep', ['-x', 'Mado']);
   return out ? out.split('\n').map(Number).filter(Boolean) : [];
 }
@@ -124,7 +124,7 @@ const children = new Map();
  * Starts the bundle's executable as a child of this script and owns exactly that child. Refuses while any other
  * Mado runs (it would share the container cache); a Mado that appears meanwhile is never claimed.
  */
-export async function launch(app, run, { spawn: spawnChild = spawn, picseePIDs: list = picseePIDs, sleep: wait = sleep, readyMs = 2000 } = {}) {
+export async function launch(app, run, { spawn: spawnChild = spawn, madoPIDs: list = madoPIDs, sleep: wait = sleep, readyMs = 2000 } = {}) {
   const before = list();
   if (before.length) throw new Error(`another Mado is running (pid ${before.join(', ')}); ask its owner to quit it`);
   const executable = path.join(app, 'Contents/MacOS/Mado');
@@ -205,7 +205,7 @@ function describeBuild(app) {
   const verified = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]).status === 0;
   const debugDylib = existsSync(path.join(app, 'Contents/MacOS/Mado.debug.dylib'));
   return {
-    buildSHA: plist(app, 'PicseeGitSHA') ?? UNKNOWN,
+    buildSHA: plist(app, 'MadoGitSHA') ?? UNKNOWN,
     signing: authority.length ? `${authority[0]}（team ${team ?? UNKNOWN}，codesign --verify ${verified ? '通过' : '失败'}）` : UNKNOWN,
     // Xcode's Debug builds carry a debug dylib; its absence does not prove Release.
     configuration: debugDylib ? 'Debug（含 Mado.debug.dylib）' : `${UNKNOWN}（无 debug dylib，不能据此证明 Release）`,

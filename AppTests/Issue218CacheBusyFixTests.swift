@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-import PicseeInfrastructure
+import MadoInfrastructure
 
 // Hold the real disk-cache actor between operations without changing its implementation.
 private final class SettingsCacheGate: @unchecked Sendable {

@@ -1,6 +1,6 @@
 import AppKit
-import PicseeApplication
-import PicseeMacUI
+import MadoApplication
+import MadoMacUI
 
 /// Untested native one-shot adapter. The Session supplies the entire deadline policy.
 @MainActor final class ChromeTimerAdapter: NSObject, ViewerChromeScheduling {

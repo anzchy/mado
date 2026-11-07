@@ -80,7 +80,7 @@ const verdictScript = () => {
 const allSucceeded = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
   APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
 const runVerdict = (t, env, { trustedScript = false } = {}) => {
-  const directory = mkdtempSync(join(tmpdir(), 'picsee-walking-skeleton-'));
+  const directory = mkdtempSync(join(tmpdir(), 'mado-walking-skeleton-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   if (trustedScript) {
     mkdirSync(join(directory, 'trusted/scripts/ci'), { recursive: true });
@@ -184,7 +184,7 @@ test('build caches: restored on pull requests and dispatches (unless cold), save
 });
 
 test('every cached build uses incremental file hashing, with identical flags in both package jobs', () => {
-  const swift = [...workflow.matchAll(/^ {10}swift test --package-path Packages\/PicseeKit .*$/gm)].map(match => match[0]);
+  const swift = [...workflow.matchAll(/^ {10}swift test --package-path Packages\/MadoKit .*$/gm)].map(match => match[0]);
   assert.equal(swift.length, 2);
   for (const line of swift) assert.match(line, / -Xswiftc -enable-incremental-file-hashing$/);
   const xcode = [...workflow.matchAll(/(?:run: |^ {10})xcodebuild .*$/gm)].map(match => 'run: ' + match[0].trim().replace(/^run: /, ''));

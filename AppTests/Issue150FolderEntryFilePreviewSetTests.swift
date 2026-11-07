@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private struct Issue150Bookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }
@@ -101,7 +101,7 @@ private struct Issue150HoldingScanner: FolderScanning {
         try? FileManager.default.removeItem(at: base)
     }
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, condition)
         #expect(condition(), "timed out")
     }
     static func button(_ identifier: String, in view: NSView?) -> NSButton? {

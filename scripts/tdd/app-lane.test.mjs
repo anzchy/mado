@@ -49,7 +49,7 @@ const nativeCalls = h => h.calls.filter(c=>c.args[0]==='xcrun'&&c.args[1]==='xct
 
 test('empty quarantine keeps exact native argv/env and prints none before results',()=>{
  const h=harness();assert.equal(h.status,0,h.stderr);assert.equal(h.calls.length,1);
- assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
  assert.deepEqual(h.calls[0].opts.env,{EXAMPLE:'kept',PICSEE_APP_LANE_NO_RETRY:'1',SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1'});
  assert.ok(h.stdout.startsWith('app-lane quarantine none\n'));assert.match(h.stdout,/Tests run: 3, Failures: 0/);
 });
@@ -59,7 +59,7 @@ test('default parser and empty lane reject recorded Selected tests even with com
 });
 test('two entries select inventory minus both exact IDs; combined selected count includes both frameworks',()=>{
  const h=harness(quarantine);assert.equal(h.status,0,h.stderr);
- const native=nativeCalls(h);assert.equal(native.length,1);assert.deepEqual(native[0].args,['xcrun','xctest','-XCTest','OtherProbeTests/testSkip,ProbeTests/testKeep,ProbeTests/testSkipSibling,Probe.swiftKeep(),Probe.swiftSkipSibling()','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ const native=nativeCalls(h);assert.equal(native.length,1);assert.deepEqual(native[0].args,['xcrun','xctest','-XCTest','OtherProbeTests/testSkip,ProbeTests/testKeep,ProbeTests/testSkipSibling,Probe.swiftKeep(),Probe.swiftSkipSibling()','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
  assert.ok(h.stdout.startsWith('app-lane quarantine skip=ProbeTests/testSkip issue=#411\napp-lane quarantine skip=Probe.swiftSkip() issue=#425\n'));
  assert.match(h.stdout,/Tests run: 5, Failures: 0/);
 });
@@ -452,7 +452,7 @@ test('empty-list XCTest thrown failure retains the original environment-failure 
  const output=withThrownXCTest(selected).replaceAll("'Selected tests'","'All tests'");
  const h=harness([],{run:()=>({...result(output),status:1})});
  assert.equal(h.status,70);assert.equal(h.calls.length,1);
- assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
  assert.ok(h.stdout.startsWith('app-lane quarantine none\n'));assert.doesNotMatch(h.stdout,/Tests run:/);
 });
 
@@ -540,7 +540,7 @@ const filterOptions = (filter, output = oneSwift) => ({env:{PICSEE_APP_FILTER:fi
 test('filter inherited from env runs one exact Swift identity and prints filter before counts',()=>{
  const h=harness([],filterOptions('swiftKeep'));
  assert.equal(h.status,0,h.stderr);
- assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','-XCTest','Probe.swiftKeep()','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','-XCTest','Probe.swiftKeep()','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
  assert.match(h.stdout,/app-lane filter=swiftKeep\nTests run: 1, Failures: 0, Errors: 0, Skipped: 0/);
 });
 test('positional filter overrides env without interpreting shell-like filter text',()=>{
@@ -618,7 +618,7 @@ test('filtered assertion RED returns one failure and preserves the native output
 });
 test('absent filter keeps full bundle output without filter diagnostics',()=>{
  const h=harness();assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 3, Failures: 0/);
- assert.doesNotMatch(h.stdout,/app-lane filter=/);assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.doesNotMatch(h.stdout,/app-lane filter=/);assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
 });
 test('CLI forwards positional arguments and inherited filter into validation',()=>{
  const dir=mkdtempSync(path.join(tmpdir(),'i195-cli-'));temporaryDirectories.add(dir);
