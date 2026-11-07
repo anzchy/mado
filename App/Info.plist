@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Picsee</string>
+	<string>Mado</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -39,8 +39,6 @@
 	<true/>
 	<key>SUEnableSystemProfiling</key>
 	<false/>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/anzchy/picsee/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=</string>
 </dict>

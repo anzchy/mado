@@ -36,7 +36,7 @@ struct WindowInspectorReader: InspectorMetadataReading {
         } catch {
             if !Task.isCancelled {
                 let outcome = (error as? InspectorReadError) == .noPermission ? "no-permission" : "unreadable"
-                Logger(subsystem: "io.github.anzchy.picsee", category: "inspector")
+                Logger(subsystem: "io.github.anzchy.mado", category: "inspector")
                     .notice("Metadata read outcome=\(outcome, privacy: .public)")
             }
             throw error

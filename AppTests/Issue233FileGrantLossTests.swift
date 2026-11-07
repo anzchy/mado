@@ -152,7 +152,7 @@ private func lossFixture() -> URL {
     #expect(!controller.hasImage)
     #expect(controller.session.imageLoader.fileURL == nil)
     #expect(controller.session.imageLoader.presented == nil)
-    #expect(window.title == "Picsee")
+    #expect(window.title == "Mado")
     #expect(window.representedURL == nil)
     #expect(controller.inspector.name == nil)
     #expect(controller.inspector.value == .unknown)

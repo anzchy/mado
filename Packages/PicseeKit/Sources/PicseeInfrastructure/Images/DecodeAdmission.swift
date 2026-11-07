@@ -28,7 +28,7 @@ public final class OperationDecodeExecutor: DecodeExecuting, Sendable {
     private let queue: OperationQueue
     public init(workers: Int) {
         queue = OperationQueue()
-        queue.name = "io.github.anzchy.picsee.first-image-decode"
+        queue.name = "io.github.anzchy.mado.first-image-decode"
         queue.maxConcurrentOperationCount = workers
     }
     public func submit(_ work: @escaping @Sendable () -> Void) { queue.addOperation(work) }

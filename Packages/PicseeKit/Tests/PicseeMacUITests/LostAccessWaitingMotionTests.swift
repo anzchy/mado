@@ -5,7 +5,7 @@ import PicseeApplication
 @testable import PicseeMacUI
 
 @MainActor private func waitingText() -> LostAccessStateText {
-    .init(title: "External Disk “T7” Is Not Connected", detail: "Connect the disk and picsee will verify access before restoring your place.",
+    .init(title: "External Disk “T7” Is Not Connected", detail: "Connect the disk and Mado will verify access before restoring your place.",
         waiting: "Waiting for the disk…", reselect: "Choose Folder Again…", chooseOther: "Choose Another Folder…")
 }
 

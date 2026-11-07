@@ -345,7 +345,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         i316PostAccessibilityChange()
         home.view.reduceMotionOverride = false
         i316PostAccessibilityChange()
-        #expect(home.drift == nil, "resumed while picsee is in the background")
+        #expect(home.drift == nil, "resumed while Mado is in the background")
     }
 
     @Test @MainActor func i316LeavingHomeReleasesDriftForEveryExit() async throws {

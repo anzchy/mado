@@ -221,11 +221,11 @@ jobs:
         id: unsigned-build
         # Keep product identity in this outcome: Walking skeleton allows independent App-test failures.
         run: |
-          xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
-          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Picsee.app --entitlements App/Resources/Picsee.entitlements
+          xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
+          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Mado.app --entitlements App/Resources/Mado.entitlements
       - name: Build App tests
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
-        run: xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
+        run: xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
       - name: Run App tests
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         # The runner is the only job on its machine, so the local heavy lock is not needed.

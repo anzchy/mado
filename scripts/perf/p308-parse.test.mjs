@@ -66,7 +66,7 @@ test('64-bit signpost IDs survive parsing exactly', () => {
 
 test('only picsee signposts are kept; junk lines are counted, not fatal', () => {
   const text = [line({ type: 'event', name: 'X', us: BASE, subsystem: 'com.apple.AppKit' }),
-    '{"eventType":"logEvent","subsystem":"io.github.anzchy.picsee"}', 'not json', '',
+    '{"eventType":"logEvent","subsystem":"io.github.anzchy.mado"}', 'not json', '',
     line({ type: 'event', name: 'ThumbnailDiskLookup', us: BASE + 1, msg: message('ThumbnailDiskLookup.hit') })].join('\n');
   const { events, skipped } = parseNdjson(text);
   assert.equal(events.length, 1);
@@ -256,7 +256,8 @@ test('resource rows: three rounds, high-water configured against observed, growt
 // Rows cut from a real `log show --signpost --style ndjson` of a Picsee build (FolderScan and Decode only, which
 // existed before #146); paths, IDs and timestamps replaced. Guards the field names the parser reads.
 test('real log show rows parse with the fields the parser reads', () => {
-  const text = readFileSync(fileURLToPath(new URL('./fixtures/log-show-schema.ndjson', import.meta.url)), 'utf8');
+  const text = readFileSync(fileURLToPath(new URL('./fixtures/log-show-schema.ndjson', import.meta.url)), 'utf8')
+    .replaceAll('io.github.anzchy.picsee', SUBSYSTEM);
   const { events, skipped } = parseNdjson(text);
   assert.equal(skipped, 0);
   assert.deepEqual(events.map((e) => `${e.name}.${e.type}`), ['FolderScan.begin', 'Decode.begin', 'Decode.end', 'FolderScan.end']);
@@ -322,7 +323,7 @@ test('reports label the fixture content; S2 says tiny synthetic images, not phot
 // Fix round 2 (#146 gpt confirm M2): a standalone report names its launch protocol.
 test('reports state the direct-exec launch and where the timed interval starts', () => {
   for (const text of [renderReport({ tier: 'S2' }, analyze([], [])), renderResources({ tier: 'S2' }, [])]) {
-    assert.match(text, /启动方式：直接执行 `Contents\/MacOS\/Picsee`，作为脚本跟踪的子进程，不经 LaunchServices（非 open）/);
+    assert.match(text, /启动方式：直接执行 `Contents\/MacOS\/Mado`，作为脚本跟踪的子进程，不经 LaunchServices（非 open）/);
     assert.match(text, /计时区间从就绪等待之后的驱动命令开始，不含 App 启动/);
   }
 });

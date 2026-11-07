@@ -19,8 +19,8 @@ class Regressions(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix='picsee-offline-')
         self.addCleanup(self.temp.cleanup)
         self.run = Path(self.temp.name).resolve()
-        self.app = self.run / 'Picsee.app'
-        self.exe = self.app / 'Contents/MacOS/Picsee'
+        self.app = self.run / 'Mado.app'
+        self.exe = self.app / 'Contents/MacOS/Mado'
         self.record = dict(pid=4242, executable=str(self.exe), birth='Thu Oct 22 10:00:00 2026')
         (self.run / 'picsee.pid').write_text('4242')
         (self.run / 'bundle.path').write_text(str(self.app))

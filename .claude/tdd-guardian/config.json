@@ -48,13 +48,13 @@
     {
       "name": "app-red",
       "description": "Compiled PicseeAppTests. Optional PICSEE_APP_FILTER selects runtime test IDs; keep the same filter for record and verify (env is not stored in receipts). Set PICSEE_APP_LANE_NO_RETRY=1 for RED. Build-for-testing before RED record.",
-      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:PicseeAppTests",
+      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:PicseeAppTests",
       "command": "node scripts/tdd/app-lane.mjs",
       "gateOn": [
         "manual"
       ],
       "coverage": "none",
-      "probeCommand": "scripts/heavy-lock.sh xcodebuild -list -project Picsee.xcodeproj",
+      "probeCommand": "scripts/heavy-lock.sh xcodebuild -list -project Mado.xcodeproj",
       "timeoutMs": 2400000
     },
     {
@@ -66,6 +66,16 @@
       ],
       "coverage": "none",
       "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "name-check-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/identity-transition.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
       "timeoutMs": 120000
     }
   ],

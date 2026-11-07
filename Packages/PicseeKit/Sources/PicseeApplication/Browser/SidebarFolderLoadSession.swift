@@ -5,7 +5,7 @@ import os
 @MainActor public final class SidebarFolderLoadSession {
     private let browser: SidebarFolderBrowser
     private var task: Task<Void, Never>?
-    private let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "sidebar")
+    private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "sidebar")
     public init(browser: SidebarFolderBrowser) { self.browser = browser }
     public func start(folder: URL, rootID: AccessRootID,
         onRows: @escaping @MainActor ([URL], URL?) -> Void,

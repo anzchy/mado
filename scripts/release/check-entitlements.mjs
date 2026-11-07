@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Check a signed Picsee.app's entitlements against ADR-015's decided set.
+ * Check a signed Mado.app's entitlements against ADR-015's decided set.
  *
- *   node scripts/release/check-entitlements.mjs <Picsee.app> --configuration release|debug
+ *   node scripts/release/check-entitlements.mjs <Mado.app> --configuration release|debug
  *
  * Release: exactly sandbox, user-selected read-only, app-scope bookmarks, network.client (all true) and
  * Sparkle's mach-lookup exception with exactly `<bundle id>-spks` and `<bundle id>-spki`.
@@ -111,7 +111,7 @@ function main(argv) {
   const flag = argv.indexOf("--configuration");
   const configuration = flag >= 0 ? argv[flag + 1] : undefined;
   if (!app || app.startsWith("--") || !configuration) {
-    process.stderr.write("usage: check-entitlements.mjs <Picsee.app> --configuration release|debug\n");
+    process.stderr.write("usage: check-entitlements.mjs <Mado.app> --configuration release|debug\n");
     return 2;
   }
   const xml = execFileSync("/usr/bin/codesign", ["-d", "--entitlements", "-", "--xml", app],

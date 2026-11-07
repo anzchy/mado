@@ -157,8 +157,8 @@ def main(argv=None) -> int:
             fixtures = stage(args.run_root, args.source_dir, runtime_root)
             print(json.dumps({"fixtures": str(fixtures)}))
         elif args.command == "cleanup-app-fixtures":
-            container = (Path.home() / "Library/Containers/io.github.anzchy.picsee/Data/Library"
-                         / "Application Support/Picsee/UITestFixtures")
+            container = (Path.home() / "Library/Containers/io.github.anzchy.mado/Data/Library"
+                         / "Application Support/Mado/UITestFixtures")
             removed = cleanup_app_fixtures(args.run_root, runtime_root, container)
             print(json.dumps({"removed_app_fixtures": removed}))
         else:

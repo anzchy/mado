@@ -67,5 +67,5 @@ extension ViewerSession {
 }
 
 private func logInputExclusions(_ count: Int) {
-    if count > 0 { Logger(subsystem: "io.github.anzchy.picsee", category: "filesystem").notice("Input excluded=\(count, privacy: .public)") }
+    if count > 0 { Logger(subsystem: "io.github.anzchy.mado", category: "filesystem").notice("Input excluded=\(count, privacy: .public)") }
 }

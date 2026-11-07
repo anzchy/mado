@@ -5,7 +5,7 @@ import PicseeApplication
 @testable import PicseeMacUI
 
 @MainActor func issue219Menu() -> NSMenu {
-    let main = NSMenu(title: "Picsee")
+    let main = NSMenu(title: "Mado")
     func submenu(_ title: String) -> NSMenu {
         let menu = NSMenu(title: title)
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -18,11 +18,11 @@ import PicseeApplication
         let item = menu.addItem(withTitle: title, action: NSSelectorFromString(action), keyEquivalent: key)
         item.keyEquivalentModifierMask = modifiers
     }
-    let app = submenu("Picsee")
+    let app = submenu("Mado")
     add("Settings…", ",", "showSettings:", to: app)
-    add("Hide Picsee", "h", "hide:", to: app)
+    add("Hide Mado", "h", "hide:", to: app)
     add("Hide Others", "h", "hideOtherApplications:", to: app, modifiers: [.option, .command])
-    add("Quit Picsee", "q", "terminate:", to: app)
+    add("Quit Mado", "q", "terminate:", to: app)
     let file = submenu("File")
     add("Open…", "o", "invoke:", to: file)
     add("Close", "w", "performClose:", to: file)
@@ -43,9 +43,9 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     ("files", ["menu:Settings…"], ["⌘", ","], ["Settings…"], ["设置…"]),
     ("files", ["menu:Close"], ["⌘", "W"], ["Close Window"], ["关闭窗口"]),
     ("files", ["menu:Minimize"], ["⌘", "M"], ["Minimize"], ["最小化"]),
-    ("files", ["menu:Hide Picsee"], ["⌘", "H"], ["Hide picsee"], ["隐藏 picsee"]),
+    ("files", ["menu:Hide Mado"], ["⌘", "H"], ["Hide Mado"], ["隐藏 Mado"]),
     ("files", ["menu:Hide Others"], ["⌥", "⌘", "H"], ["Hide Others"], ["隐藏其他"]),
-    ("files", ["menu:Quit Picsee"], ["⌘", "Q"], ["Quit picsee"], ["退出 picsee"]),
+    ("files", ["menu:Quit Mado"], ["⌘", "Q"], ["Quit Mado"], ["退出 Mado"]),
     ("grid", ["key:grid-arrows"], ["←", "→", "↑", "↓"], ["Move Current"], ["移动当前项"]),
     ("grid", ["command:preview"], ["Space"], ["Preview Current Item"], ["用大图查看当前项"]),
     ("grid", ["command:enter"], ["Return"], ["Open Current Item"], ["打开当前项"]),
@@ -94,7 +94,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
 
 @Test @MainActor func issue219ShortcutCatalogFollowsImplementedFlagAndMenuAvailability() throws {
     let menu = issue219Menu()
-    let settings = try #require(menu.items.first { $0.title == "Picsee" }?.submenu?.items.first { $0.title == "Settings…" })
+    let settings = try #require(menu.items.first { $0.title == "Mado" }?.submenu?.items.first { $0.title == "Settings…" })
     settings.keyEquivalent = ""
     let catalog = ShortcutCatalog(menu: menu, implementedCommands: Set(CommandID.allCases).subtracting([.fit, .inspector]), language: .english)
     let sources = issue219Flatten(catalog).flatMap(\.1)
@@ -111,8 +111,8 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
 @Test @MainActor func issue219ShortcutCatalogKeepsAllRowsWithChineseMenuTitles() {
     let menu = issue219Menu()
     let titles = [
-        "Settings…": "设置…", "Hide Picsee": "隐藏 Picsee", "Hide Others": "隐藏其他",
-        "Quit Picsee": "退出 Picsee", "Open…": "打开…", "Close": "关闭",
+        "Settings…": "设置…", "Hide Mado": "隐藏 Mado", "Hide Others": "隐藏其他",
+        "Quit Mado": "退出 Mado", "Open…": "打开…", "Close": "关闭",
         "Search current folder": "搜索当前文件夹", "Hide sidebar": "隐藏侧栏",
         "Enter Full Screen": "进入全屏", "Minimize": "最小化",
     ]

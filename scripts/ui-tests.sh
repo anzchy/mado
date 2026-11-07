@@ -90,7 +90,7 @@ echo "UI test evidence: $output"
 python3 "$repo/scripts/ui-test-runtime.py" stage "$output" "$repo/TestAssets/synthetic"
 # Build before acquiring the desktop, so queued builds do not reserve it.
 run_heavy xcodegen generate > "$output/generate.log" 2>&1 || { rc=$?; cat "$output/generate.log"; exit "$rc"; }
-if run_heavy xcodebuild build-for-testing -scheme PicseeFixtureUI -destination 'platform=macOS' \
+if run_heavy xcodebuild build-for-testing -scheme MadoFixtureUI -destination 'platform=macOS' \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) PICSEE_UI_TEST_FIXTURE' \
     -derivedDataPath "$derived" > "$output/build.log" 2>&1; then
   echo 'BUILD-FOR-TESTING PASSED'
@@ -103,9 +103,9 @@ python3 - "$derived" "$plan" "$output" <<'PLAN'
 from pathlib import Path
 import plistlib, sys
 products = Path(sys.argv[1]) / 'Build/Products'
-plans = list(products.glob('PicseeFixtureUI_*.xctestrun'))
+plans = list(products.glob('MadoFixtureUI_*.xctestrun'))
 if len(plans) != 1:
-    raise SystemExit('Expected exactly one generated PicseeFixtureUI test plan')
+    raise SystemExit('Expected exactly one generated MadoFixtureUI test plan')
 def expand(value):
     if isinstance(value, str): return value.replace('__TESTROOT__', str(products))
     if isinstance(value, list): return [expand(v) for v in value]

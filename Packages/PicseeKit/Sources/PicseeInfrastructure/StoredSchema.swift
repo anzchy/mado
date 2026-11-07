@@ -90,7 +90,7 @@ enum StoredSchema {
         let key = category + ":" + store + ":" + url.standardizedFileURL.path
         let first = logState.lock.withLock { logState.paths.insert(key).inserted }
         if first {
-            Logger(subsystem: "io.github.anzchy.picsee", category: category)
+            Logger(subsystem: "io.github.anzchy.mado", category: category)
                 .error("StoredSchema store=\(store, privacy: .public) version=\(version, privacy: .public) kind=unsupportedVersion")
         }
     }

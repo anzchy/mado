@@ -25,9 +25,9 @@ private let shortcutMenuSourceIDs = [
     "showSettings:": "Settings…",
     "performClose:": "Close",
     "performMiniaturize:": "Minimize",
-    "hide:": "Hide Picsee",
+    "hide:": "Hide Mado",
     "hideOtherApplications:": "Hide Others",
-    "terminate:": "Quit Picsee",
+    "terminate:": "Quit Mado",
     "focusGridSearch:": "Search current folder",
     "toggleSidebar:": "Hide sidebar",
     "toggleFullScreen:": "Enter Full Screen",
@@ -91,9 +91,9 @@ public struct ShortcutCatalog: Sendable {
             menuRow("showSettings:", "Settings…", "设置…"),
             menuRow("performClose:", "Close Window", "关闭窗口"),
             menuRow("performMiniaturize:", "Minimize", "最小化"),
-            menuRow("hide:", "Hide picsee", "隐藏 picsee"),
+            menuRow("hide:", "Hide Mado", "隐藏 Mado"),
             menuRow("hideOtherApplications:", "Hide Others", "隐藏其他"),
-            menuRow("terminate:", "Quit picsee", "退出 picsee"),
+            menuRow("terminate:", "Quit Mado", "退出 Mado"),
         ].compactMap { $0 }
         let grid = [
             keyRow("grid-arrows", ["←", "→", "↑", "↓"], "Move Current", "移动当前项"),

@@ -11,7 +11,7 @@ import PicseeApplication
     let image = folder.appendingPathComponent("A.jpg")
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
         styleMask: [.titled], backing: .buffered, defer: false)
-    for previousTitle in ["A.jpg", "Picsee"] {
+    for previousTitle in ["A.jpg", "Mado"] {
         window.title = previousTitle
         window.representedURL = image
         GridWindowIdentity.showFolder(folder, in: window)

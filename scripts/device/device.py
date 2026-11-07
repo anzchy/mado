@@ -96,7 +96,7 @@ def inside(exe, app):
 
 def running():
     try:
-        r = command(['/usr/bin/pgrep', '-x', 'Picsee'])
+        r = command(['/usr/bin/pgrep', '-x', 'Mado'])
     except (OSError, subprocess.TimeoutExpired) as error:
         raise RuntimeError('pgrep process query failed: ' + str(error)) from error
     if r.returncode == 1 and not r.stdout.strip() and not r.stderr.strip():
@@ -146,7 +146,7 @@ def machine():
 def logs(run, pid):
     start = (run / 'start.txt').read_text().strip()
     r = command(['/usr/bin/log', 'show', '--start', start, '--style', 'compact', '--info',
-                 '--predicate', f'subsystem == "io.github.anzchy.picsee" AND processID == {pid}'])
+                 '--predicate', f'subsystem == "io.github.anzchy.mado" AND processID == {pid}'])
     if r.returncode:
         raise RuntimeError(r.stderr.strip())
     (run / 'app.log').write_text(r.stdout)
@@ -213,7 +213,7 @@ def signing_identity(app):
 
 def build(run):
     if running():
-        raise RuntimeError('another Picsee is running; ask its owner to quit it')
+        raise RuntimeError('another Mado is running; ask its owner to quit it')
     inputs = assert_clean_inputs(ROOT)
     xcode, version = select_xcode()
     os.environ['DEVELOPER_DIR'] = str(xcode / 'Contents/Developer')
@@ -221,14 +221,14 @@ def build(run):
     full = checked(['git', '-C', ROOT, 'rev-parse', 'HEAD'])
     dd = ROOT / '.build' / ('device-' + run.name)
     with (run / 'build.log').open('w') as output:
-        for argv in [['xcodegen', 'generate'], ['/usr/bin/xcodebuild', 'build', '-scheme', 'Picsee',
+        for argv in [['xcodegen', 'generate'], ['/usr/bin/xcodebuild', 'build', '-scheme', 'Mado',
                      '-configuration', 'Debug', '-destination', 'platform=macOS', '-derivedDataPath', str(dd)]]:
             r = subprocess.run(argv, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT)
             if r.returncode:
                 raise RuntimeError(f'build failed; see {run / "build.log"}')
     if inputs != assert_clean_inputs(ROOT) or full != checked(['git', '-C', ROOT, 'rev-parse', 'HEAD']):
         raise RuntimeError('build inputs or commit changed during build; refusing proof image')
-    app = dd / 'Build/Products/Debug/Picsee.app'
+    app = dd / 'Build/Products/Debug/Mado.app'
     # The inherited stamp marks all tracked metadata edits dirty. Only normalize after
     # verifying every binary input against HEAD, then restore the development signature.
     plist = app / 'Contents/Info.plist'
@@ -247,7 +247,7 @@ def launch(run):
         raise RuntimeError('run already has an ownership record; use a new run directory')
     before = set(running())
     if before:
-        raise RuntimeError('another Picsee is running; ask its owner to quit it')
+        raise RuntimeError('another Mado is running; ask its owner to quit it')
     app = Path((run / 'bundle.path').read_text().strip()).resolve()
     sha = json.loads((run / 'build.json').read_text())['sha']
     argv = ['/usr/bin/open', '-n', '-W', str(app)]
@@ -272,9 +272,9 @@ def launch(run):
             _, diagnostic = opener.communicate()
             raise RuntimeError('LaunchServices app exited before readiness'
                                + (': ' + diagnostic.strip() if diagnostic.strip() else ''))
-        candidates = [p for p in running() if p not in before and executable(p) == app / 'Contents/MacOS/Picsee']
+        candidates = [p for p in running() if p not in before and executable(p) == app / 'Contents/MacOS/Mado']
         if len(candidates) > 1:
-            raise RuntimeError('more than one new matching Picsee process; no PID recorded')
+            raise RuntimeError('more than one new matching Mado process; no PID recorded')
         if not candidates and (run / 'process.json').exists():
             raise RuntimeError('launched process exited after identity was recorded')
         if candidates:
@@ -297,11 +297,11 @@ def launch(run):
             ws = windows(pid)  # Authorization failures stop immediately; never dismiss prompts.
             visible = checked(['/usr/bin/osascript', '-l', 'JavaScript', HERE / 'winid.js', str(pid)])
             log = logs(run, pid)
-            if len(ws) == 1 and ws[0]['title'] == 'Picsee' and visible and f'Picsee launch git={sha}' in log:
+            if len(ws) == 1 and ws[0]['title'] == 'Mado' and visible and f'Mado launch git={sha}' in log:
                 save(run, 'ready.json', ws)
-                print(f'PASS ready pid={pid} title=Picsee git={sha}')
+                print(f'PASS ready pid={pid} title=Mado git={sha}')
                 return
-            missing = 'visible Picsee window or public launch SHA log'
+            missing = 'visible Mado window or public launch SHA log'
         time.sleep(0.5)
     raise RuntimeError('ready timeout after 30 s: missing ' + missing)
 
@@ -376,18 +376,18 @@ def verdicts(data):
     windows_seen = data.get('windows', [])
     window_title = windows_seen[0].get('title') if len(windows_seen) == 1 else None
     fixture_titles = {Path(name).name for name in data.get('fixtureNames', [])}
-    window_ok = window_title == 'Picsee' or window_title in fixture_titles
+    window_ok = window_title == 'Mado' or window_title in fixture_titles
     checks = [
         ('build-sha', data.get('sha') == data.get('expectedSHA') and bool(data.get('expectedSHA')), 'PicseeGitSHA differs from expected SHA'),
-        ('bundle-id', data.get('bundleID') == 'io.github.anzchy.picsee', 'wrong bundle identifier'),
+        ('bundle-id', data.get('bundleID') == 'io.github.anzchy.mado', 'wrong bundle identifier'),
         ('signature-team', data.get('team') == 'GRT84NAK4T', 'wrong signing team'),
         ('signature-valid', data.get('signatureValid') is True, 'codesign verification failed'),
         ('sandbox', data.get('sandbox') is True, 'App Sandbox entitlement missing'),
         ('process-bundle', data.get('processMatches') is True, 'PID executable differs from recorded bundle'),
         ('fresh-sources', data.get('fresh') is True, 'build input modified, missing, untracked or newer than bundle'),
-        ('single-instance', data.get('alone') is True, 'recorded PID is not the only Picsee instance'),
-        ('window', len(windows_seen) == 1 and window_ok, 'expected one window titled Picsee or a recorded fixture file'),
-        ('launch-log', bool(re.search(r'Picsee launch git=' + re.escape(str(data.get('expectedSHA'))) + r'(?![\w-])', data.get('log', ''))), 'public SHA launch log missing'),
+        ('single-instance', data.get('alone') is True, 'recorded PID is not the only Mado instance'),
+        ('window', len(windows_seen) == 1 and window_ok, 'expected one window titled Mado or a recorded fixture file'),
+        ('launch-log', bool(re.search(r'Mado launch git=' + re.escape(str(data.get('expectedSHA'))) + r'(?![\w-])', data.get('log', ''))), 'public SHA launch log missing'),
         ('machine', data.get('machineMatches') is True, 'machine/display differs from build record'),
         ('fixtures', data.get('fixturesIntact') is True, 'fixture hashes missing or changed')]
     checks = [(name, ok and name not in data.get('errors', {}), why) for name, ok, why in checks]

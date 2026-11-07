@@ -14,7 +14,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
     private let lock = NSLock()
     private var roots: [AccessRootID: Root] = [:]
     /// Paths stay out of the log; root IDs and error kinds are public so a folder that stops updating can be diagnosed.
-    private let log = Logger(subsystem: "io.github.anzchy.picsee", category: "watch")
+    private let log = Logger(subsystem: "io.github.anzchy.mado", category: "watch")
 
     /// Mutable state below is guarded by the hub's lock.
     private final class Subscriber: @unchecked Sendable {

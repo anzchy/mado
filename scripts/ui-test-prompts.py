@@ -37,7 +37,7 @@ def processes():
 
 def stop_run(result_path, derived, baseline):
     # Never signal an App that predates this watch or an executable from another build.
-    app = str(Path(derived) / 'Build/Products/Debug/Picsee.app/Contents/MacOS/Picsee')
+    app = str(Path(derived) / 'Build/Products/Debug/Mado.app/Contents/MacOS/Mado')
     fixture_prefix = Path(result_path).parent.name + '-'
     for pid, command in processes().items():
         if pid in baseline or pid == os.getpid():

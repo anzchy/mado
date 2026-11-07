@@ -1,4 +1,4 @@
-"""Offline regressions for Picsee process enumeration before device actions."""
+"""Offline regressions for Mado process enumeration before device actions."""
 
 from pathlib import Path
 import subprocess
@@ -14,7 +14,7 @@ import device as d
 class ProcessQueryTests(unittest.TestCase):
     def query(self, status, output, error=''):
         result = subprocess.CompletedProcess(
-            ['/usr/bin/pgrep', '-x', 'Picsee'], status, output, error)
+            ['/usr/bin/pgrep', '-x', 'Mado'], status, output, error)
         return patch.object(d, 'command', return_value=result)
 
     def test_success_returns_valid_pids(self):
@@ -60,7 +60,7 @@ class ProcessQueryTests(unittest.TestCase):
     def test_launch_stops_before_open_when_enumeration_fails(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            (run / 'bundle.path').write_text(str(run / 'Picsee.app') + '\n')
+            (run / 'bundle.path').write_text(str(run / 'Mado.app') + '\n')
             (run / 'build.json').write_text('{"sha":"abcdefg"}\n')
             with self.query(3, '', 'query unavailable'), \
                     patch.object(d, 'checked', side_effect=AssertionError('open must not run')) as checked:
@@ -72,7 +72,7 @@ class ProcessQueryTests(unittest.TestCase):
     def test_launch_does_not_signal_unrecorded_process_when_followup_query_fails(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            (run / 'bundle.path').write_text(str(run / 'Picsee.app') + '\n')
+            (run / 'bundle.path').write_text(str(run / 'Mado.app') + '\n')
             (run / 'build.json').write_text('{"sha":"abcdefg"}\n')
             responses = [[], RuntimeError('pgrep process query failed')]
             def fake_running():
@@ -94,7 +94,7 @@ class ProcessQueryTests(unittest.TestCase):
     def test_doctor_fails_single_instance_on_query_error(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            app = run / 'Picsee.app'
+            app = run / 'Mado.app'
             with self.query(3, '', 'query unavailable'), \
                     patch.object(d, 'identity', return_value=(42, app)), \
                     patch.object(d, 'windows', return_value=[]), \
@@ -111,7 +111,7 @@ class ProcessQueryTests(unittest.TestCase):
     def test_cleanup_refuses_pid_without_run_ownership_record(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            (run / 'bundle.path').write_text(str(run / 'Picsee.app') + '\n')
+            (run / 'bundle.path').write_text(str(run / 'Mado.app') + '\n')
             (run / 'picsee.pid').write_text('4242\n')
             with patch.object(d.os, 'kill') as kill, \
                     patch.object(d, 'process_snapshot') as snapshot:

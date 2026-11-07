@@ -102,7 +102,7 @@ private struct T229AppInspector: InspectorMetadataReading {
         #expect(controller.session.folderScan?.snapshot == nil)
         #expect(controller.inspector.name == nil && controller.inspector.value == .unknown)
         #expect(controller.window?.representedURL == nil)
-        #expect(controller.window?.title == "Picsee")
+        #expect(controller.window?.title == "Mado")
         #expect(controller.gridShellVisible)
         #expect(controller.window?.attachedSheet == nil)
         let grid = try #require(controller.window?.contentView?.subviews.compactMap { $0 as? GridShellView }.first?
@@ -174,7 +174,7 @@ private struct T229AppInspector: InspectorMetadataReading {
     #expect(!controller.hasImage)
     #expect(controller.session.imageLoader.fileURL == nil && controller.session.imageLoader.presented == nil)
     #expect(controller.inspector.name == nil && controller.inspector.value == .unknown)
-    #expect(controller.window?.representedURL == nil && controller.window?.title == "Picsee")
+    #expect(controller.window?.representedURL == nil && controller.window?.title == "Mado")
     #expect(controller.gridShellVisible && controller.window?.attachedSheet == nil)
 }
 
@@ -212,7 +212,7 @@ private struct T229AppInspector: InspectorMetadataReading {
     #expect(grid.displayedItemIDs.isEmpty)
     #expect(grid.currentItemID == nil)
     #expect(shell.folderTree.rows.isEmpty)
-    #expect(controller.window?.representedURL == nil && controller.window?.title == "Picsee")
+    #expect(controller.window?.representedURL == nil && controller.window?.title == "Mado")
     #expect(!controller.hasImage)
 }
 
@@ -314,7 +314,7 @@ private struct T229AppInspector: InspectorMetadataReading {
     #expect(page.titleLabel.stringValue == String(localized: "Unable to Access This Folder"))
     #expect(page.buttons.count == 2)
     #expect(window.firstResponder === page.reselectButton)
-    #expect(window.representedURL == nil && window.title == "Picsee")
+    #expect(window.representedURL == nil && window.title == "Mado")
     window.selectNextKeyView(nil)
     #expect(window.firstResponder === page.chooseOtherButton)
     window.selectPreviousKeyView(nil)

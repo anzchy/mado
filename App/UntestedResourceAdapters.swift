@@ -4,8 +4,8 @@ import os
 
 /// Untested native sink; field values and mutation ordering are verified through the package port.
 struct UntestedNativeResourceSnapshotTrace: ResourceSnapshotTracing {
-    private let performance = OSLog(subsystem: "io.github.anzchy.picsee", category: "performance")
-    private let cache = Logger(subsystem: "io.github.anzchy.picsee", category: "cache")
+    private let performance = OSLog(subsystem: "io.github.anzchy.mado", category: "performance")
+    private let cache = Logger(subsystem: "io.github.anzchy.mado", category: "cache")
     func lookup(isPreview: Bool, hit: Bool) {
         cache.notice("memory tier=\(isPreview ? "preview" : "detail", privacy: .public) outcome=\(hit ? "hit" : "miss", privacy: .public)")
     }
@@ -38,7 +38,7 @@ final class UntestedNativeMemoryPressureForwarder {
     init(pipeline: ImageIOPipeline, windows: @escaping @MainActor (MemoryPressureLevel) -> Void) {
         let (events, levels) = AsyncStream<MemoryPressureLevel>.makeStream()
         let source = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical],
-            queue: DispatchQueue(label: "io.github.anzchy.picsee.memory-pressure"))
+            queue: DispatchQueue(label: "io.github.anzchy.mado.memory-pressure"))
         self.source = source; self.levels = levels
         consumer = Task {
             for await level in events {
