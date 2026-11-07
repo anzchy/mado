@@ -307,8 +307,6 @@ public struct EmptyFolderPage: Equatable, Sendable {
     public override func layout() {
         super.layout()
         let showingRecents = tiles.isEmpty
-        configureScrollDocument(showingRecents: showingRecents)
-        if !showingRecents { scrollView.frame = bounds }
         dropOutline.frame = bounds.insetBy(dx: 18, dy: 18)
         dropBorder.frame = dropOutline.bounds
         dropBorder.path = CGPath(roundedRect: dropOutline.bounds.insetBy(dx: 0.75, dy: 0.75), cornerWidth: 13.25,
@@ -327,15 +325,26 @@ public struct EmptyFolderPage: Equatable, Sendable {
         var spaces: [CGFloat] = [24, 48, 18, 9, recentRows.isEmpty ? 0 : 22, 18]
         let available = max(0, viewport.height - contentInsets.top - contentInsets.bottom)
         var groupHeight = naturalGroup
+        var scrollRows = false
         if showingRecents {
             let compact: [CGFloat] = [8, 16, 10, 6, recentRows.isEmpty ? 0 : 12, 12]
             let fixed = 32 + headingHeight + detailHeight + chooseButton.actionSize.height
-            let savings = zip(spaces, compact).reduce(0) { $0 + $1.0 - $1.1 }
-            let excess = max(0, fixed + naturalGroup + spaces.reduce(0, +) - available)
-            let reduction = min(1, excess / savings)
-            spaces = zip(spaces, compact).map { $0 - ($0 - $1) * reduction }
-            groupHeight = min(naturalGroup, max(0, available - fixed - spaces.reduce(0, +)))
+            let minimumGroup = recentRows.first.map { 36 + $0.height } ?? 0
+            scrollRows = available >= fixed + compact.reduce(0, +) + minimumGroup
+            if scrollRows {
+                let savings = zip(spaces, compact).reduce(0) { $0 + $1.0 - $1.1 }
+                let excess = max(0, fixed + naturalGroup + spaces.reduce(0, +) - available)
+                let reduction = min(1, excess / savings)
+                spaces = zip(spaces, compact).map { $0 - ($0 - $1) * reduction }
+                groupHeight = min(naturalGroup, max(0, available - fixed - spaces.reduce(0, +)))
+            } else {
+                // Below one complete row, scroll the whole stack instead of
+                // collapsing its heading/rows or stranding the choose action.
+                spaces = compact
+            }
         }
+        configureScrollDocument(scrollRows: scrollRows)
+        if !scrollRows { scrollView.frame = bounds }
         let middle: CGFloat = !tiles.isEmpty ? 22 + CGFloat(tileRows) * (tileHeight + 14) - 14
             : recentsGroup.isHidden ? 0 : spaces[4] + groupHeight
         let actions = [primaryButton, chooseButton].filter { !$0.isHidden }
@@ -343,7 +352,8 @@ public struct EmptyFolderPage: Equatable, Sendable {
         let content = 32 + spaces[2] + headingHeight + spaces[3] + detailHeight + middle + spaces[5] + actionHeight
         let verticalInsets = contentInsets.top + contentInsets.bottom
         document.frame = NSRect(x: 0, y: 0, width: width,
-                                height: showingRecents ? viewport.height : max(viewport.height, content + 72 + verticalInsets))
+            height: scrollRows ? viewport.height : max(viewport.height,
+                content + spaces[0] + spaces[1] + verticalInsets))
         var top = contentInsets.top + spaces[0]
             + max(0, (available - spaces[0] - spaces[1] - content) / 2)
         icon.frame = NSRect(x: width / 2 - 16, y: top, width: 32, height: 32)
@@ -358,7 +368,7 @@ public struct EmptyFolderPage: Equatable, Sendable {
                                 width: 150, height: tileHeight)
         }
         recentsGroup.frame = NSRect(x: (width - 380) / 2, y: top, width: 380, height: groupHeight)
-        if showingRecents { layoutRecents(height: groupHeight) }
+        if showingRecents { layoutRecents(height: groupHeight, scrollRows: scrollRows) }
         top = detail.frame.maxY + middle + spaces[5]
         let actionsWidth = actions.map(\.actionSize.width).reduce(0, +) + CGFloat(actions.count - 1) * 16
         var x = (width - actionsWidth) / 2
@@ -368,16 +378,17 @@ public struct EmptyFolderPage: Equatable, Sendable {
             x += size.width + 16
         }
     }
-    /// Reuse one system scroller. Recents have a static stack and scroll rows;
-    /// subfolders retain the full-page document. Never nest vertical scroll views.
-    private func configureScrollDocument(showingRecents: Bool) {
-        let target: NSView = showingRecents ? recentDocument : document
+    /// Reuse one system scroller. Bound recent rows only while a complete row
+    /// fits; shorter pages and subfolders use the whole-page document.
+    private func configureScrollDocument(scrollRows: Bool) {
+        let target: NSView = scrollRows ? recentDocument : document
         guard scrollView.documentView !== target else { return }
         scrollView.documentView = nil
         scrollView.removeFromSuperview()
-        if showingRecents {
+        if scrollRows {
             addSubview(document, positioned: .below, relativeTo: dropOutline)
             recentsGroup.addSubview(scrollView)
+            resetRecentScroll = true
         } else {
             document.removeFromSuperview()
             addSubview(scrollView, positioned: .below, relativeTo: dropOutline)
@@ -386,21 +397,25 @@ public struct EmptyFolderPage: Equatable, Sendable {
     }
 
     /// .recent-folders border1, header34, then a bounded row-only viewport.
-    private func layoutRecents(height total: CGFloat) {
+    private func layoutRecents(height total: CGFloat, scrollRows: Bool) {
         let boxHeight: CGFloat = 34
         let atTop = recentDocument.bounds.maxY - scrollView.contentView.bounds.maxY <= 1
         recentsHeadingBox.frame = NSRect(x: 1, y: total - 1 - boxHeight, width: 378, height: boxHeight)
         recentsHeadingRule.frame = NSRect(x: 0, y: 0, width: 378, height: 1)
         recentsHeading.frame = NSRect(x: 12, y: 9, width: 354, height: 17)
-        scrollView.frame = NSRect(x: 1, y: 1, width: 378, height: max(0, total - 2 - boxHeight))
         let rowHeight = recentRows.map(\.height).reduce(0, +)
-        recentDocument.frame = NSRect(x: 0, y: 0, width: 378, height: rowHeight)
+        if scrollRows {
+            scrollView.frame = NSRect(x: 1, y: 1, width: 378, height: max(0, total - 2 - boxHeight))
+        } else if recentDocument.superview !== recentsGroup {
+            recentsGroup.addSubview(recentDocument)
+        }
+        recentDocument.frame = NSRect(x: scrollRows ? 0 : 1, y: scrollRows ? 0 : 1, width: 378, height: rowHeight)
         var y = rowHeight
         for row in recentRows {
             y -= row.height
             row.frame = NSRect(x: 0, y: y, width: 378, height: row.height)
         }
-        if resetRecentScroll || atTop {
+        if scrollRows && (resetRecentScroll || atTop) {
             scrollView.contentView.scroll(to: NSPoint(x: 0, y: max(0, rowHeight - scrollView.contentSize.height)))
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }

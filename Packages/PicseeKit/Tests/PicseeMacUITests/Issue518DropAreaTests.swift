@@ -111,3 +111,77 @@ import PicseeApplication
         using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) { }
     func resetSpringLoading() { }
 }
+
+@Test @MainActor func issue518Fix3PopulatedRecentListAndPaddingRouteFolderDrops() throws {
+    _ = NSApplication.shared
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),
+            preferencesStore: InMemoryDisplayPreferencesStore())
+        let window = NSWindow(contentRect: shell.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.appearance = NSAppearance(named: appearance)
+        window.contentView = shell
+        shell.showFolderTree(current: GridSidebarFolder(url: URL(fileURLWithPath: "/design/待整理")),
+            parent: nil, children: [])
+        let now = Date(timeIntervalSince1970: 1_615_809_600)
+        let recents = (0..<10).map { index in
+            RecentFolder(rootID: AccessRootID(), url: URL(fileURLWithPath: "/recent/r\(index + 1)"),
+                displayName: "最近文件夹 \(index + 1)", openedAt: now.addingTimeInterval(-Double(index + 1) * 86_400))
+        }
+        shell.setEmptyFolderState(true, recents: recents, now: now)
+        shell.layoutSubtreeIfNeeded()
+        let page = shell.emptyFolderView
+        page.layoutSubtreeIfNeeded()
+        let last = try #require(page.recentRows.last)
+        let scroll = try #require(last.enclosingScrollView)
+        let document = try #require(scroll.documentView)
+        #expect(page.recentRows.count == 10)
+        #expect(document.bounds.height > scroll.contentSize.height + 1,
+            "The drag must cross the populated, genuinely scrollable list hierarchy")
+        #expect(!page.chooseButton.isDescendant(of: scroll))
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let folder = URL(fileURLWithPath: "/photos/Trip", isDirectory: true)
+        #expect(pasteboard.writeObjects([folder as NSURL]))
+        var received: [[URL]] = []
+        page.onDropFolders = { received.append($0) }
+        for position in 0..<2 {
+            if position == 1 { last.scrollToVisible(last.bounds) }
+            let clip = page.convert(scroll.contentView.bounds, from: scroll.contentView)
+            let group = page.convert(page.recentsGroup.bounds, from: page.recentsGroup)
+            let points = [
+                NSPoint(x: clip.midX, y: clip.midY),
+                NSPoint(x: group.maxX + 5, y: group.midY),
+                NSPoint(x: page.bounds.midX, y: 5),
+                NSPoint(x: page.bounds.midX, y: page.bounds.maxY - 5),
+            ]
+            for (index, local) in points.enumerated() {
+                let point = shell.convert(local, from: page)
+                let hit = try #require(shell.hitTest(point))
+                #expect(hit === page || hit.isDescendant(of: page), "List and surrounding padding hit the page subtree")
+                if index == 0 {
+                    #expect(hit === scroll || hit.isDescendant(of: scroll), "List point exercises the nested clip/row hierarchy")
+                }
+                var destination: NSView? = hit
+                while let current = destination, !current.registeredDraggedTypes.contains(.fileURL) {
+                    destination = current.superview
+                }
+                #expect(destination === page, "The first registered folder-drop destination is the page")
+                let drag = Issue518PaddingDragInfo(pasteboard, at: page.convert(local, to: nil), window: window)
+                let before = received.count
+                #expect(page.draggingEntered(drag) == .copy)
+                #expect(page.isDragOver && !page.dropOutline.isHidden)
+                #expect(page.draggingUpdated(drag) == .copy)
+                #expect(page.prepareForDragOperation(drag))
+                #expect(page.performDragOperation(drag))
+                #expect(received.count == before + 1 && received.last == [folder], "Real pasteboard URL delivered once")
+                #expect(!page.isDragOver && page.dropOutline.isHidden)
+            }
+        }
+        for point in [NSPoint(x: 40, y: 60), NSPoint(x: 640, y: 20)] {
+            let hit = shell.hitTest(point)
+            #expect(hit !== page && hit?.isDescendant(of: page) != true, "Sidebar/footer remain outside page drop destination")
+        }
+    }
+}

@@ -212,3 +212,160 @@ private struct Issue518RecentOracle {
         }
     }
 }
+
+// fix3: a bounded list is useful only while a complete row fits. Below that
+// threshold the existing page document must scroll, including the zero-row case.
+private struct Issue518Fix3Minimum {
+    let available: CGFloat
+    let outer: CGFloat
+    let naturalGroup: CGFloat
+
+    init(pin: PinnedDesign, width: CGFloat, count: Int, grid: Bool) throws {
+        var compact = try ["--compact-padding-top", "--compact-padding-bottom", "--compact-title-gap",
+            "--compact-detail-gap", "--compact-recent-gap", "--compact-action-gap"].map {
+                try pin.length(".recovery-state.has-recents", $0, viewport: width)
+            }
+        if count == 0 { compact[4] = 0 }
+        // Independent CSS line boxes: icon32, h2=23, paragraph ceil(22.1),
+        // secondary action19 +7/7 padding +2 borders; header34 +2 borders.
+        let fixed = 32 + 23 + ceil(try pin.lineHeight(".empty-state p", viewport: width)) + 35
+        available = fixed + compact.reduce(0, +) + (count == 0 ? 0 : 36 + 37)
+        outer = grid ? try pin.length(".layout-exploration.is-grid .grid-scroll", "padding-top", viewport: width)
+            + pin.length(".grid-scroll", "padding-bottom", viewport: width) : 0
+        naturalGroup = count == 0 ? 0 : 36 + 37 + CGFloat(count - 1) * 38
+    }
+}
+
+@MainActor private extension Issue518RecentScene {
+    func fix3CheckReachability(count: Int, label: String) throws {
+        let minimum = try Issue518Fix3Minimum(pin: pin, width: page.bounds.width, count: count, grid: grid)
+        let footer = grid ? try pin.length(".grid-bottom-bar", "height", viewport: page.bounds.width) : 0
+        let available = page.bounds.height - (minimum.outer - footer)
+        let fullPage = available < minimum.available
+        let scroll = page.scrollView
+        let document = try #require(scroll.documentView)
+        #expect(page.chooseButton.isDescendant(of: scroll) == fullPage,
+            "\(label): choose action joins the full-page scroller exactly below compact minimum")
+        #expect(page.recentRows.count == count, "\(label): preserve every recent")
+        func allScrollers(_ view: NSView) -> [NSScrollView] {
+            let own = (view as? NSScrollView).map { [$0] } ?? []
+            return own + view.subviews.flatMap { allScrollers($0) }
+        }
+        #expect(allScrollers(page).count == 1, "\(label): reuse one system scroll view")
+        #expect(scroll.hasVerticalScroller, "\(label): system vertical scrolling")
+        if fullPage {
+            #expect(page.icon.isDescendant(of: scroll), "\(label): the entire stack is in the scroll document")
+            #expect(document.bounds.height > scroll.contentSize.height,
+                "\(label): short content has a real page scroll range")
+            #expect(scroll.frame == page.bounds, "\(label): page scroller fills the content area")
+        }
+        if count == 0 {
+            #expect(page.recentsGroup.isHidden, "\(label): no phantom recent group")
+        } else if fullPage {
+            #expect(abs(page.recentsGroup.bounds.height - minimum.naturalGroup) <= 1,
+                "\(label): page mode retains the natural header and all rows")
+        } else {
+            #expect(page.recentsGroup.bounds.height >= 36 + 37 - 1,
+                "\(label): bounded mode retains heading and a complete first row")
+        }
+        func visible(_ control: NSView) -> Bool {
+            let onPage = page.convert(control.bounds, from: control)
+            let insidePage = page.bounds.insetBy(dx: -1, dy: -1).contains(onPage)
+            guard control.isDescendant(of: scroll) else { return insidePage }
+            let inDocument = document.convert(control.bounds, from: control)
+            return insidePage && scroll.documentVisibleRect.insetBy(dx: -1, dy: -1).contains(inDocument)
+        }
+        for (index, row) in page.recentRows.enumerated() {
+            #expect(row.bounds.height == (index == 0 ? 37 : 38), "\(label): complete natural row height")
+            row.scrollToVisible(row.bounds)
+            #expect(visible(row), "\(label): row \(index) can be completely scrolled into usable page")
+        }
+        page.chooseButton.scrollToVisible(page.chooseButton.bounds)
+        #expect(visible(page.chooseButton), "\(label): action can be completely scrolled into usable page")
+        if grid {
+            let actionInShell = shell.convert(page.chooseButton.bounds, from: page.chooseButton)
+            #expect(actionInShell.minY >= shell.footer.frame.maxY - 1,
+                "\(label): revealed action is above the footer")
+        }
+        for row in [page.recentRows.last, page.recentRows.first].compactMap({ $0 }) {
+            #expect(window.makeFirstResponder(row), "\(label): row accepts real focus")
+            #expect(window.firstResponder === row && visible(row), "\(label): focus reveals row in active document")
+        }
+    }
+
+    func fix3Resize(height: CGFloat, width: CGFloat) {
+        window.setContentSize(NSSize(width: width, height: height))
+        ((host as NSView?) ?? shell).needsLayout = true
+        layout()
+    }
+}
+
+@Test @MainActor func issue518Fix3ShortHeightCountThemeAndSurfaceMatrix() throws {
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        for grid in [true, false] {
+            for height: CGFloat in [300, 200] {
+                for count in [0, 1, 5, 10] {
+                    let scene = try Issue518RecentScene(count: count, height: height, width: 960,
+                        grid: grid, appearance: appearance)
+                    defer { scene.window.close() }
+                    #expect(scene.page.bounds.height == height - (grid ? 40 : 0),
+                        "Fixture measures native content height, excluding only grid footer")
+                    try scene.fix3CheckReachability(count: count,
+                        label: "\(appearance.rawValue) \(grid ? "grid" : "viewer") h\(height) rows\(count)")
+                }
+            }
+        }
+    }
+}
+
+@Test @MainActor func issue518Fix3CompactThresholdBoundaries() throws {
+    let pin = try PinnedDesign.page("empty-folder")
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        for grid in [true, false] {
+            for count in [0, 1, 10] {
+                let minimum = try Issue518Fix3Minimum(pin: pin, width: 960, count: count, grid: grid)
+                #expect(minimum.available == (count == 0 ? 165 : 250), "Independent compact CSS minimum")
+                for delta: CGFloat in [-1, 0, 1] {
+                    let height = minimum.available + minimum.outer + delta
+                    let scene = try Issue518RecentScene(count: count, height: height, width: 960,
+                        grid: grid, appearance: appearance)
+                    defer { scene.window.close() }
+                    try scene.fix3CheckReachability(count: count,
+                        label: "boundary \(appearance.rawValue) grid\(grid) rows\(count) delta\(delta)")
+                }
+            }
+        }
+    }
+}
+
+@Test @MainActor func issue518Fix3ResizeRestoresFramesRowsAndFocus() throws {
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        for grid in [true, false] {
+            for count in [0, 10] {
+                let scene = try Issue518RecentScene(count: count, height: 772, width: 1280,
+                    grid: grid, appearance: appearance)
+                defer { scene.window.close() }
+                let page = scene.page
+                let views: [NSView] = [page.icon, page.heading, page.recentsGroup, page.chooseButton]
+                let frames = views.map { page.convert($0.bounds, from: $0) }
+                let rows = page.recentRows.map(ObjectIdentifier.init)
+                let scroller = ObjectIdentifier(page.scrollView)
+                for _ in 0..<2 {
+                    scene.fix3Resize(height: 640, width: 960)
+                    try scene.fix3CheckReachability(count: count, label: "bounded transition")
+                    scene.fix3Resize(height: 200, width: 960)
+                    try scene.fix3CheckReachability(count: count, label: "page transition")
+                    scene.window.makeFirstResponder(nil)
+                    scene.fix3Resize(height: 772, width: 1280)
+                    #expect(views.map { page.convert($0.bounds, from: $0) } == frames,
+                        "Tall→bounded→page→tall restores fitting frames")
+                    #expect(page.recentRows.map(ObjectIdentifier.init) == rows, "Resize preserves actual row identities")
+                    #expect(ObjectIdentifier(page.scrollView) == scroller, "Resize reuses the same scroller")
+                    scene.layout()
+                    #expect(views.map { page.convert($0.bounds, from: $0) } == frames, "Repeated layout is idempotent")
+                    try scene.fix3CheckReachability(count: count, label: "restored focus")
+                }
+            }
+        }
+    }
+}
