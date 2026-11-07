@@ -11,9 +11,9 @@ const job = id => workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(?=^  [a-z]
 const success = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
   APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
 
-test('Node name suites and code scan run in the existing required Ubuntu ledger job', () => {
+test('Node name suites and code scan run in the existing required macOS ledger job', () => {
   const ledger = job('ledger-check');
-  assert.match(ledger, /runs-on: ubuntu-latest/);
+  assert.match(ledger, /runs-on: macos-26/);
   assert.match(ledger, /run: node --test scripts\/name-checks\/\*\.test\.mjs scripts\/ci\/name-checks-ci\.test\.mjs/);
   assert.match(ledger, /run: node scripts\/name-checks\/code-name\.mjs/);
   assert.equal(verdict({ ...success, LEDGER: 'failure' }).ok, false);
@@ -36,5 +36,37 @@ test('executing the real unsigned-build shell block gates on build AND product c
       env: { PATH: bin, BUILD_STATUS: String(build), NAME_STATUS: String(checker) } });
     assert.equal(run.status === 0, ok, `build=${build} checker=${checker}: ${run.stderr}`);
     assert.equal(verdict({ ...success, UNSIGNED_BUILD: run.status === 0 ? 'success' : 'failure' }).ok, ok);
+  }
+});
+
+
+test('release regressions run unconditionally in the required ledger job with a shallow safe checkout', () => {
+  const ledger = job('ledger-check');
+  assert.doesNotMatch(ledger, /^    (?:if|continue-on-error):/m);
+  assert.match(ledger, /^    permissions:\n      contents: read\n/m);
+  const steps = ledger.split(/^      - name: /m);
+  const checkout = steps.find(step => step.startsWith('Checkout\n'));
+  assert.ok(checkout);
+  assert.match(checkout, /^          fetch-depth: 1$/m);
+  assert.match(checkout, /^          persist-credentials: false$/m);
+  const release = steps.find(step => step.startsWith('Test release regressions\n'));
+  assert.ok(release, 'the full release suite is required even for documentation-only changes');
+  assert.match(release, /^        run: node --test scripts\/release\/\*\.test\.mjs$/m);
+  assert.doesNotMatch(release, /^        (?:if|continue-on-error):/m);
+  assert.doesNotMatch(release, /\|\||continue-on-error|set \+e|--test-name-pattern/);
+  assert.match(ledger, /^        run: node scripts\/ledger\/build\.mjs --check$/m);
+  const skeleton = job('walking-skeleton');
+  assert.match(skeleton, /^    if: always\(\)$/m);
+  assert.match(skeleton, /^    needs: \[.*\bledger-check\b.*\]$/m);
+  assert.match(skeleton, /^          LEDGER: \$\{\{ needs\.ledger-check\.result \}\}$/m);
+});
+
+test('required ledger failures reject both native and documentation-only verdicts', () => {
+  const docsOnly = { ...success, NATIVE: 'false', PACKAGE: 'skipped', MACUI: 'skipped', APP_JOB: 'skipped', UNSIGNED_BUILD: '' };
+  for (const baseline of [success, docsOnly]) {
+    assert.equal(verdict(baseline).ok, true);
+    for (const LEDGER of ['failure', 'cancelled', 'skipped']) {
+      assert.equal(verdict({ ...baseline, LEDGER }).ok, false, `native=${baseline.NATIVE} ledger=${LEDGER}`);
+    }
   }
 });

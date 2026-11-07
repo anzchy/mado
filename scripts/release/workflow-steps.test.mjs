@@ -184,7 +184,7 @@ function assertFrozenFeed(world) {
 }
 const remoteFeed = (world) => world.git(world.origin, "show", "appcast-mado/mado-v0.0.1:appcast-mado.xml");
 
-test("the appcast step signs from stdin, pushes appcast/<tag> and opens one PR", () => {
+test("the appcast step signs from stdin, pushes appcast-mado/<tag> and opens one PR", () => {
   const world = appcastWorld();
   try {
     const step = runAppcast(world);

@@ -127,9 +127,9 @@ test('a base without the script falls back to requiring every job and the build 
   assert.equal(docsOnly.status, 1, 'the fallback never accepts a docs-only skip');
 });
 
-test('the ledger check runs on Ubuntu', () => {
+test('the ledger and release checks run on macOS', () => {
   const ledger = jobBlock('ledger-check');
-  assert.match(ledger, /^    runs-on: ubuntu-latest$/m);
+  assert.match(ledger, /^    runs-on: macos-26$/m);
   assert.match(ledger, /^        run: node scripts\/ledger\/build\.mjs --check$/m);
   assert.doesNotMatch(ledger, /^    if:/m);
 });
@@ -194,9 +194,10 @@ test('every cached build uses incremental file hashing, with identical flags in 
   ]);
 });
 
-test('the Ubuntu jobs added for the speed-up read the repo only and keep no token in their checkouts', () => {
+test('the classification ledger and verdict jobs read the repo only and keep no token in their checkouts', () => {
   for (const id of ['changes', 'ledger-check', 'walking-skeleton']) {
     const job = jobBlock(id);
+    assert.match(job, new RegExp(`^    runs-on: ${id === 'ledger-check' ? 'macos-26' : 'ubuntu-latest'}$`, 'm'), id);
     assert.match(job, /^    permissions:\n      contents: read\n/m, id);
     assert.doesNotMatch(job, /^      [a-z-]+: write$/m, id);
     const checkouts = job.split(/^      - name: /m).filter(step => step.includes('uses: actions/checkout@'));
