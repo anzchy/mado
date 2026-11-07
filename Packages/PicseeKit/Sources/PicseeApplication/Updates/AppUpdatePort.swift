@@ -19,6 +19,8 @@ public struct AppVersionInfo: Equatable, Sendable {
 /// Settings → Updates talks to the updater only through this port; the Sparkle adapter lives in the App target.
 @MainActor public protocol AppUpdatePort: AnyObject {
     var versionInfo: AppVersionInfo { get }
+    /// Whether this build has an updater, independent of readiness to check right now.
+    var isAvailable: Bool { get }
     var automaticallyChecksForUpdates: Bool { get set }
     var lastUpdateCheckDate: Date? { get }
     /// False while the updater cannot start a user-initiated check (for example, a background check is running).
