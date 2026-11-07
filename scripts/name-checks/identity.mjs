@@ -52,7 +52,11 @@ export function checkFeed(info, expectedName, { release = false, notes = [] } = 
   let inferred = false;
   try {
     const url = new URL(observed);
-    inferred = /^(?:\/repos)?\/anzchy\/mado(?:\/|$)/i.test(url.pathname);
+    const frozen = new URL(identityFor('Picsee').info.SUFeedURL);
+    const frozenVariant = /^https?:$/.test(url.protocol) && url.hostname === frozen.hostname
+      && url.pathname.replace(/\/+$/, '') === frozen.pathname;
+    const pagesVariant = url.hostname === 'anzchy.github.io' && /^\/mado(?:\/|$)/i.test(url.pathname);
+    inferred = frozenVariant || pagesVariant || /^(?:\/repos)?\/anzchy\/mado(?:\/|$)/i.test(url.pathname);
   } catch { /* An absent feed is permitted only outside release mode. */ }
   if (observed === identityFor('Picsee').info.SUFeedURL || inferred) {
     return [`Info.plist:SUFeedURL forbidden while Mado's feed is undecided (#552): ${JSON.stringify(observed)}`];
