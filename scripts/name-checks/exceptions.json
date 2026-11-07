@@ -67,5 +67,268 @@
   {
     "pattern": "\\bpicsee-(?:delegator|doc-gardener)\\b",
     "reason": "Roster role and skill identifiers move in tooling ticket 8; adjacent app identifiers remain checked."
+  },
+  {
+    "pathRegex": "(?:^|/)[^/]+\\.md$",
+    "reason": "#553: living prose documentation is renamed in the docs step; historical Markdown and test evidence remain as written. Executable scripts are not exempt."
+  },
+  {
+    "prefix": "design/",
+    "reason": "#553: design asset paths, prototype identity and design schema move together in the docs/design step."
+  },
+  {
+    "prefix": "Packages/MadoKit/Tests/MadoMacUITests/B4PinnedDesign/",
+    "reason": "Frozen design evidence retains original bytes and names; changing it would invalidate independent visual test oracles."
+  },
+  {
+    "pattern": "anzchy(?:/|\\\\/)picsee\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#554: repository URLs and their escaped fixture spellings move after the code series."
+  },
+  {
+    "pattern": "design/(?:prototypes/picsee-browser|picsee-ui-system)\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553: executable consumers must continue reading deferred existing design paths."
+  },
+  {
+    "pattern": "picsee\\.native-design-spec/v1",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553: design generator/schema contract stays paired with deferred design data."
+  },
+  {
+    "pattern": "picsee\\.pid\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: device/roster run record filename is read across tooling invocations; retain until coordinated tooling step."
+  },
+  {
+    "path": ".gitignore",
+    "reason": "#553/#556: exclusions describe existing design paths and local tool state until those steps rename them."
+  },
+  {
+    "pathRegex": "^\\.codex/(?:agents|rules)/",
+    "reason": "#556: installed roster role/config and safety-rule identities remain unchanged in tooling step."
+  },
+  {
+    "prefix": "scripts/agents/",
+    "reason": "#556: roster/lifecycle/PR tooling and its historical fixtures; build target references are mechanically updated by the replay. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
+    "pattern": "picsee-(?:ci-fixture|ci-types|gates-ancestor|gates-layout|gates-rows|local-lint-test|pr-lint|pre-push-installer-v1|pre-push-test|trusted-lint|ui-lint|ui-rename)\\b",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
+    "prefix": "scripts/codex-rules/",
+    "reason": "#556: role installation/safety guard identifiers and filenames are coordinated tooling, repository URL switch is #554. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
+    "pattern": "picsee(?:-role)?\\.rules|picsee-role-|(?<=Local )picsee(?= role)|(?<=own )picsee(?= worktree)|(?<=current )picsee(?= topic)",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
+    "prefix": "scripts/git-hooks/",
+    "reason": "#556: roster hook paths and role identity remain until tooling migration. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
+    "pattern": "picsee-(?:hook-snapshots|pre-push-installer-v1|pre-push\\.)",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
+    "pathRegex": "^scripts/(?:heavy-lock\\.sh|tdd/heavy-lock(?:\\.py|\\.test\\.mjs)|tdd/fixtures/heavy-lock-faults\\.py)$",
+    "reason": "#556: machine-wide lock identity and interop fixtures must remain compatible with mdpro until coordinated tooling migration.",
+    "pattern": "(?<![A-Za-z0-9_.])picsee(?![A-Za-z0-9_.])|picsee-(?:heavy|fixture|interop|group|lock|shared|test)[A-Za-z0-9_.-]*",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
+    "prefix": "scripts/testassets/",
+    "reason": "#556: corpus tooling/cache/download identity is coordinated with tool-state migration; generated corpus stays stable. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
+    "pattern": "picsee-(?:testassets|v1)\\b|Picsee(?= unsupported non-image ZIP container fixture)",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
+    "path": "TestAssets/manifest.json",
+    "reason": "Existing deterministic corpus provenance identifies its original generator; no corpus regeneration is part of #551."
+  },
+  {
+    "path": "TestAssets/synthetic/not-an-image.jpg",
+    "reason": "Existing malformed-image fixture deliberately contains original corpus text; preserve behavior oracle."
+  },
+  {
+    "path": "scripts/name-checks/identity-transition.test.mjs",
+    "reason": "Independent identity-transition tests must reject frozen old feeds and test both names unchanged."
+  },
+  {
+    "path": "scripts/name-checks/identity.mjs",
+    "pattern": "(?<=['\\\"])Picsee(?=['\\\"])",
+    "scopes": [
+      "content"
+    ],
+    "reason": "The shared identity checker must look up the historical identity to reject its frozen feed; this is checker data, not a live module."
+  },
+  {
+    "path": "scripts/name-checks/rename-modules.mjs",
+    "reason": "One-time replay mapping necessarily spells old and new identifiers; script bytes must remain invariant under replay."
+  },
+  {
+    "prefix": "scripts/release/fixtures/",
+    "reason": "Historical release/feed fixtures are independent evidence of Picsee 0.0.1; retain original names and resource layout."
+  },
+  {
+    "pathRegex": "^(?:\\.github/workflows/release\\.yml|scripts/release/.*\\.test\\.mjs|scripts/release/appcast\\.mjs)$",
+    "pattern": "\\b(?:Picsee|picsee)\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#552: historical feed assertions and deferred release artifact identity remain paired; module/resource bundle identifiers are still scanned and renamed by #551."
+  },
+  {
+    "path": "docs/feature-ledger.html",
+    "reason": "#553: generated ledger retains its prose identity; #551 regenerates path changes only."
+  },
+  {
+    "pathRegex": "^\\.claude/tdd-guardian/(?:i194-fix1-red-scaffold|receipt-audit-20261030-231)\\.json$",
+    "reason": "Frozen RED scaffolding/audit evidence must retain original source fingerprints and names."
+  },
+  {
+    "path": ".agents/skills/picsee-delegator/agents/openai.yaml",
+    "reason": "#556: roster agent descriptor follows the deferred role name."
+  },
+  {
+    "pathRegex": "^\\.agents/skills/(?:apple-developer-setup/scripts/setup-secrets-wizard\\.sh|picsee-delegator/scripts/(?:gui-lock\\.sh|listen-notify\\.py|panel-choose\\.sh|prefs\\.py|rebase-verify-tree\\.py|reset\\.sh|test_delegator_scripts\\.py|test_gui_lock\\.py|test_listen_notify\\.py|fixtures/.*))$",
+    "pattern": "picsee|Picsee(?=[:' .])",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: existing roster/GUI lock, preference inspector, listener and credential keychain tooling contracts stay unchanged; module/target names remain checked."
+  },
+  {
+    "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+    "reason": "#553: user-facing issue-template prose follows documentation rename."
+  },
+  {
+    "path": ".github/actions/xcode-setup/action.yml",
+    "pattern": "picsee-xcode-version",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: temporary diagnostic filename is tooling, shared with existing action checks."
+  },
+  {
+    "path": "scripts/check_stitch_mcp.mjs",
+    "pattern": "picsee-stitch-project-check",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: research tooling client identity."
+  },
+  {
+    "pathRegex": "^scripts/(?:design-check\\.mjs|design/rasterize-app-icon\\.sh)$",
+    "pattern": "picsee-(?:design-check|app-icon)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: temporary design-tool output directory names."
+  },
+  {
+    "pathRegex": "^scripts/ledger/(?:build(?:\\.test)?|garden-gate(?:\\.test)?)\\.mjs$",
+    "pattern": "picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553/#556: ledger HTML prose/theme-storage key and gardener scratch identities follow docs/tooling; build/module identifiers remain checked."
+  },
+  {
+    "path": "scripts/perf/fixtures/log-show-schema.ndjson",
+    "reason": "Historical captured log schema fixture stays byte-for-byte original; parser test adapts its subsystem at runtime."
+  },
+  {
+    "path": "scripts/perf/p308-parse.test.mjs",
+    "pattern": "io\\.github\\.anzchy\\.picsee",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Explicit historical captured-fixture subsystem is adapted to the current subsystem before parsing."
+  },
+  {
+    "pathRegex": "^scripts/(?:ui-test-runtime\\.py|tests/ui-test-(?:runtime|prompts)\\.test\\.py)$",
+    "pattern": "\\.picsee-ui-fixtures\\.json",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: UI fixture marker is persistent tooling data and must remain paired with existing runtime records."
+  },
+  {
+    "path": "scripts/verify_design_catalog.js",
+    "pattern": "/(?:prototypes/picsee-browser|picsee-ui-system)\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553: relative design fetches keep reading existing prototype paths until design migration."
+  },
+  {
+    "pathRegex": "^scripts/tests/ui-test-(?:runtime|prompts)\\.test\\.py$",
+    "pattern": "picsee-(?:prompt-test|runtime-test|ui-refusal)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: temporary UI-tool test directory names; no application identifier is exempt."
+  },
+  {
+    "path": "scripts/release/check-package.test.mjs",
+    "pattern": "PicseeKit_PicseeMacUI",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Historical release-layout fixture resource name is explicitly adapted to the renamed resource bundle before policy validation."
+  },
+  {
+    "path": "scripts/perf/p308-parse.test.mjs",
+    "pattern": "Picsee(?= build)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Captured historical log provenance comment must remain accurate."
+  },
+  {
+    "pattern": "picsee-(?:ui-system|browser)\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#553: existing design relative paths must keep resolving until coordinated design directory rename."
+  },
+  {
+    "path": "scripts/codex-rules/rules.test.mjs",
+    "pattern": "Picsee\\.entitlements",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: safety-rule fixture exercises installed historical signing-rule argv; it is not a build target."
+  },
+  {
+    "path": "scripts/agents/ui-parity-pr-body-lint.mjs",
+    "pattern": "picsee(?=.{0,2}/herdr)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556: escaped regex spelling of the existing .picsee/herdr audit path contract."
+  },
+  {
+    "pathRegex": "^scripts/testassets/(?:generate|test_checks)\\.py$",
+    "pattern": "PICSEE(?= (?:deliberately corrupt image|text fixture))",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Deterministic malformed corpus bytes and their independent assertions must remain unchanged."
   }
 ]
