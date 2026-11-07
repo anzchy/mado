@@ -44,14 +44,6 @@
     "reason": "Checker documentation explains both settings and the deliberate failure proof."
   },
   {
-    "prefix": ".agents/skills/picsee-delegator/",
-    "reason": "Roster tooling and its skill move in ticket 8, after the app and repository rename."
-  },
-  {
-    "path": ".claude/skills/picsee-delegator",
-    "reason": "The roster skill symlink moves with the tooling in ticket 8."
-  },
-  {
     "pattern": "\\bPICSEE_[A-Z0-9_]+\\b",
     "scopes": [
       "content"

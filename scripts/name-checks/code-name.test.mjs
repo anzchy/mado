@@ -195,3 +195,22 @@ test('a shorthand enum identifier is code while quoted or slash-qualified dot di
   assert.ok(problems.some(message => message.startsWith('live.swift:1:')));
   assert.ok(problems.some(message => message.startsWith('live.swift:2:')));
 });
+
+
+test('production tooling spans under the delegator skill cannot conceal live app identifiers', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  const root = repo();
+  const path = '.agents/skills/picsee-delegator/scripts/owner-gates.sh';
+  const tooling = 'picsee-delegator PICSEE_LOCK "~/.picsee/state" picsee-wt';
+  file(root, path, `${tooling} -scheme Picsee\n`);
+  const before = scan(root, 'Mado', exceptions);
+  assert.equal(before.length, 1, before.join('\n'));
+  assert.match(before[0], /owner-gates\.sh:1:.*unexpected "Picsee"/);
+  assert.deepEqual(scan(root, 'Mado', exceptions), before);
+  file(root, path, `${tooling} -scheme Picsee\nPackages/PicseeKit io.github.anzchy.picsee\n`);
+  const after = scan(root, 'Mado', exceptions);
+  assert.equal(after.length, before.length + 2, after.join('\n'));
+  assert.deepEqual(after.filter(message => !message.includes(':2:')), before);
+  assert.ok(after.every(message => !message.includes(':path:')));
+  assert.deepEqual(scan(root, 'Picsee', exceptions), []);
+});

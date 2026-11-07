@@ -188,9 +188,9 @@ jobs:
 
   # One macOS job builds the unsigned app and then the App tests: build-for-testing builds PicseeApp as well, so a
   # separate unsigned-build job duplicated that work and took a fourth macOS slot. The unsigned build runs in its own
-  # step: the same command as before plus only the incremental-file-hashing flag, which changes how the compiler detects
-  # changed files, not what it builds. Walking skeleton reads that step's outcome, not the App test result (App tests
-  # are not a required check). A dispatch with app_tests=false runs only the Build unsigned app step.
+  # step, using incremental-file-hashing to detect changed files, followed by the built-product identity check.
+  # Walking skeleton requires both to succeed through that step's outcome; independent App-test failures remain allowed.
+  # A dispatch with app_tests=false runs only the Build unsigned app step.
   app-tests:
     name: App tests
     needs: changes
