@@ -108,6 +108,11 @@ import PicseeCore
                                      row.folder.displayName, row.relativeTime))
     }
     required init?(coder: NSCoder) { nil }
+    public override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { scrollToVisible(bounds) }
+        return accepted
+    }
     /// .recent-folder: padding 9/12, gap 10; .recent-folder+.recent-folder border-top 1.
     var height: CGFloat { 18 + 19 + (separator.isHidden ? 0 : 1) }
     public override func layout() {
@@ -160,6 +165,8 @@ public struct EmptyFolderPage: Equatable, Sendable {
     // Grid supplies CSS grid-scroll padding; the viewer uses zero insets.
     var contentInsets = NSEdgeInsets() { didSet { needsLayout = true } }
     private let document = FlippedView()
+    private let recentDocument = NSView()
+    private var resetRecentScroll = true
     private var displayedRequest: EmptyFolderPage?
 
     public override init(frame frameRect: NSRect) {
@@ -222,10 +229,11 @@ public struct EmptyFolderPage: Equatable, Sendable {
             document.addSubview(tile)
             return tile
         }
+        resetRecentScroll = true
         recentRows = subfolders.isEmpty ? recents.enumerated().map { index, row in
             let button = EmptyFolderRecentButton(row, first: index == 0)
             button.target = self; button.action = #selector(selectRecent(_:))
-            recentsGroup.addSubview(button)
+            recentDocument.addSubview(button)
             return button
         } : []
         recentsGroup.isHidden = recentRows.isEmpty
@@ -298,12 +306,14 @@ public struct EmptyFolderPage: Equatable, Sendable {
     /// h2 margin-top 18, p margin-top 9 and max-width 460, tiles/recents margin-top 22, actions margin-top 18 gap 16.
     public override func layout() {
         super.layout()
-        scrollView.frame = bounds
+        let showingRecents = tiles.isEmpty
+        configureScrollDocument(showingRecents: showingRecents)
+        if !showingRecents { scrollView.frame = bounds }
         dropOutline.frame = bounds.insetBy(dx: 18, dy: 18)
         dropBorder.frame = dropOutline.bounds
         dropBorder.path = CGPath(roundedRect: dropOutline.bounds.insetBy(dx: 0.75, dy: 0.75), cornerWidth: 13.25,
                                  cornerHeight: 13.25, transform: nil)
-        let viewport = scrollView.contentSize
+        let viewport = bounds.size
         // The flex item's automatic minimum includes the 380pt recent list and
         // .empty-state's two 24pt sides. Preserve it when the main area is narrow.
         let width = recentsGroup.isHidden ? viewport.width : max(viewport.width, 380 + 48)
@@ -311,29 +321,45 @@ public struct EmptyFolderPage: Equatable, Sendable {
         let headingHeight = measuredHeight(heading, width: textWidth, lineHeight: 23)
         let detailHeight = measuredHeight(detail, width: textWidth, lineHeight: 22.1)
         let tileRows = (tiles.count + 2) / 3, tileHeight = EmptyFolderTile.height
-        let groupHeight = layoutRecents()
+        let naturalGroup: CGFloat = recentRows.isEmpty ? 0 : 36 + recentRows.map(\.height).reduce(0, +)
+        // #518 approved pin: normal24/48/18/9/22/18; compact8/16/10/6/12/12.
+        // Spend optional spacing proportionally before bounding the row viewport.
+        var spaces: [CGFloat] = [24, 48, 18, 9, recentRows.isEmpty ? 0 : 22, 18]
+        let available = max(0, viewport.height - contentInsets.top - contentInsets.bottom)
+        var groupHeight = naturalGroup
+        if showingRecents {
+            let compact: [CGFloat] = [8, 16, 10, 6, recentRows.isEmpty ? 0 : 12, 12]
+            let fixed = 32 + headingHeight + detailHeight + chooseButton.actionSize.height
+            let savings = zip(spaces, compact).reduce(0) { $0 + $1.0 - $1.1 }
+            let excess = max(0, fixed + naturalGroup + spaces.reduce(0, +) - available)
+            let reduction = min(1, excess / savings)
+            spaces = zip(spaces, compact).map { $0 - ($0 - $1) * reduction }
+            groupHeight = min(naturalGroup, max(0, available - fixed - spaces.reduce(0, +)))
+        }
         let middle: CGFloat = !tiles.isEmpty ? 22 + CGFloat(tileRows) * (tileHeight + 14) - 14
-            : recentsGroup.isHidden ? 0 : 22 + groupHeight
+            : recentsGroup.isHidden ? 0 : spaces[4] + groupHeight
         let actions = [primaryButton, chooseButton].filter { !$0.isHidden }
         let actionHeight = actions.reduce(0) { max($0, $1.actionSize.height) }
-        let content = 32 + 18 + headingHeight + 9 + detailHeight + middle + 18 + actionHeight
+        let content = 32 + spaces[2] + headingHeight + spaces[3] + detailHeight + middle + spaces[5] + actionHeight
         let verticalInsets = contentInsets.top + contentInsets.bottom
         document.frame = NSRect(x: 0, y: 0, width: width,
-                                height: max(viewport.height, content + 72 + verticalInsets))
-        var top = contentInsets.top + 24 + max(0, (viewport.height - verticalInsets - 72 - content) / 2)
+                                height: showingRecents ? viewport.height : max(viewport.height, content + 72 + verticalInsets))
+        var top = contentInsets.top + spaces[0]
+            + max(0, (available - spaces[0] - spaces[1] - content) / 2)
         icon.frame = NSRect(x: width / 2 - 16, y: top, width: 32, height: 32)
-        top += 50
+        top += 32 + spaces[2]
         heading.frame = NSRect(x: (width - textWidth) / 2, y: top, width: textWidth, height: headingHeight)
-        top += headingHeight + 9
+        top += headingHeight + spaces[3]
         detail.frame = NSRect(x: (width - textWidth) / 2, y: top, width: textWidth, height: detailHeight)
-        top += detailHeight + 22
+        top += detailHeight + (showingRecents ? spaces[4] : 22)
         let gridX = (width - 478) / 2 // repeat(3, 150px), gap 14
         for (index, tile) in tiles.enumerated() {
             tile.frame = NSRect(x: gridX + CGFloat(index % 3) * 164, y: top + CGFloat(index / 3) * (tileHeight + 14),
                                 width: 150, height: tileHeight)
         }
         recentsGroup.frame = NSRect(x: (width - 380) / 2, y: top, width: 380, height: groupHeight)
-        top = detail.frame.maxY + middle + 18
+        if showingRecents { layoutRecents(height: groupHeight) }
+        top = detail.frame.maxY + middle + spaces[5]
         let actionsWidth = actions.map(\.actionSize.width).reduce(0, +) + CGFloat(actions.count - 1) * 16
         var x = (width - actionsWidth) / 2
         for button in actions {
@@ -342,20 +368,46 @@ public struct EmptyFolderPage: Equatable, Sendable {
             x += size.width + 16
         }
     }
-    /// .recent-folders: 380 wide, 1px border; .recent-heading padding 8/12 above a 1px rule.
-    private func layoutRecents() -> CGFloat {
-        // Browser normal line boxes: 12pt recent heading → 17pt; 13pt rows → 19pt.
-        let headingHeight: CGFloat = 17, boxHeight = 17 + headingHeight
-        let total = 2 + boxHeight + recentRows.map(\.height).reduce(0, +)
+    /// Reuse one system scroller. Recents have a static stack and scroll rows;
+    /// subfolders retain the full-page document. Never nest vertical scroll views.
+    private func configureScrollDocument(showingRecents: Bool) {
+        let target: NSView = showingRecents ? recentDocument : document
+        guard scrollView.documentView !== target else { return }
+        scrollView.documentView = nil
+        scrollView.removeFromSuperview()
+        if showingRecents {
+            addSubview(document, positioned: .below, relativeTo: dropOutline)
+            recentsGroup.addSubview(scrollView)
+        } else {
+            document.removeFromSuperview()
+            addSubview(scrollView, positioned: .below, relativeTo: dropOutline)
+        }
+        scrollView.documentView = target
+    }
+
+    /// .recent-folders border1, header34, then a bounded row-only viewport.
+    private func layoutRecents(height total: CGFloat) {
+        let boxHeight: CGFloat = 34
+        let atTop = recentDocument.bounds.maxY - scrollView.contentView.bounds.maxY <= 1
         recentsHeadingBox.frame = NSRect(x: 1, y: total - 1 - boxHeight, width: 378, height: boxHeight)
         recentsHeadingRule.frame = NSRect(x: 0, y: 0, width: 378, height: 1)
-        recentsHeading.frame = NSRect(x: 12, y: 9, width: 354, height: headingHeight)
-        var y = recentsHeadingBox.frame.minY
+        recentsHeading.frame = NSRect(x: 12, y: 9, width: 354, height: 17)
+        scrollView.frame = NSRect(x: 1, y: 1, width: 378, height: max(0, total - 2 - boxHeight))
+        let rowHeight = recentRows.map(\.height).reduce(0, +)
+        recentDocument.frame = NSRect(x: 0, y: 0, width: 378, height: rowHeight)
+        var y = rowHeight
         for row in recentRows {
             y -= row.height
-            row.frame = NSRect(x: 1, y: y, width: 378, height: row.height)
+            row.frame = NSRect(x: 0, y: y, width: 378, height: row.height)
         }
-        return total
+        if resetRecentScroll || atTop {
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: max(0, rowHeight - scrollView.contentSize.height)))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        resetRecentScroll = false
+        if let focused = window?.firstResponder as? EmptyFolderRecentButton, recentRows.contains(focused) {
+            focused.scrollToVisible(focused.bounds)
+        }
     }
 
     @objc private func selectTile(_ sender: EmptyFolderTile) { onSelectSubfolder?(sender.url) }
