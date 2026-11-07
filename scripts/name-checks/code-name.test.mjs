@@ -225,3 +225,27 @@ test('deferred executable tooling never conceals live schemes, modules or bundle
     assert.equal(problems.length, 3, `${path}: ${problems.join('\n')}`);
   }
 });
+
+test('reviewed release, roster and ledger artifacts cannot hide adjacent live identities', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  for (const path of ['.github/workflows/release.yml', 'scripts/release/appcast.mjs',
+    'scripts/release/workflow-steps.test.mjs', 'scripts/release/check-package.test.mjs',
+    '.agents/skills/picsee-delegator/scripts/gui-lock.sh',
+    '.agents/skills/picsee-delegator/scripts/prefs.py',
+    '.agents/skills/picsee-delegator/scripts/listen-notify.py',
+    'scripts/ledger/build.mjs', 'scripts/ledger/garden-gate.test.mjs']) {
+    const root = repo();
+    file(root, path, '-scheme Picsee\nRelease/Picsee.app\nopen Picsee.app\nio.github.anzchy.picsee\nimport PicseeCore\n');
+    assert.equal(scan(root, 'Mado', exceptions).length, 5, path);
+  }
+});
+
+test('historical Info identity is confined to the named release fixture', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  for (const [path, count] of [['scripts/release/check-package.test.mjs', 0],
+    ['scripts/release/appcast.test.mjs', 1], ['scripts/release/workflow-steps.test.mjs', 1]]) {
+    const root = repo();
+    file(root, path, 'CFBundleIdentifier: "io.github.anzchy.picsee"\n');
+    assert.equal(scan(root, 'Mado', exceptions).length, count, path);
+  }
+});
