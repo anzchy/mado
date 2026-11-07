@@ -9,3 +9,5 @@ No Swift source, native metadata, ledger/ADR/validation file, bundle or manifest
 Historical preservation checks moved out of the permanent suite into explicit check-living-docs-range.mjs --base <commit> --head <commit>. Tests operate on synthetic Git trees and the lasting scanner permits future sanctioned history/acceptance edits. No missing-base skip or default fixed baseline exists.
 
 Evidence directory: ~/.picsee/herdr/gpt-imple-2/i553-fix1-logs/. See the handoff for post-commit depth-one/full suite outputs, one-shot range counts, final replay and release-template hash comparison.
+
+The first full depth-one run passed the corrected name suite but exposed two unrelated pre-existing fixture lookups (3de39c60/e000f1dc). Exact captured .txt fixture bytes replace those history lookups; original assertions remain intact. Initial failing output is all-node-shallow.log; final full/depth-one reruns and provenance are recorded in the external handoff. No test skip or repository deepening was introduced.

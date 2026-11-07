@@ -31,3 +31,7 @@
 - L1–L4 remain open and must be listed in the PR/handoff.
 - Release implementation #552, repo rename #554 and tooling rename #556.
 - Renaming generated bundle/manifest exports, Swift changes, unrelated doc cleanup, pushing, PR creation and gardening.
+
+## Discovered during required depth-one full-suite gate
+
+Two pre-existing agent-hook tests loaded historical code via git show 3de39c60/e000f1dc. In the genuine depth-one clone they failed before their behavioral assertions because those objects were absent. Preserve exactly those historical bytes as committed .txt fixtures and change only the data-loading lines. Keep every trusted-guard/bootstrap assertion unchanged. This is required to satisfy the brief's all-Node depth-one gate; production hooks/lint code and L1–L4 remain unchanged. The initial failing shallow log is the pre-fix reproduction (no assertion RED receipt is claimed for a missing historical fixture object).

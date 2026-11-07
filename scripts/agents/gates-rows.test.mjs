@@ -606,7 +606,8 @@ test('pre-Gates baseline lint fails the trusted guard', async t => {
   assert.ok(indentedShell, 'missing trusted lint shell');
   const shell = indentedShell.split('\n').filter(Boolean).map(line => line.slice(10)).join('\n');
   const root = fileURLToPath(new URL('../../', import.meta.url));
-  const baseline = execFileSync('git', ['show', '3de39c60:scripts/agents/ui-parity-pr-body-lint.mjs'], { cwd: root, encoding: 'utf8' });
+  // Captured verbatim from 3de39c60; test data must survive depth-one CI.
+  const baseline = readFileSync(new URL('./fixtures/pre-gates-lint.mjs.txt', import.meta.url), 'utf8');
   assert.doesNotMatch(baseline, /^export function checkGates/m);
   const directory = mkdtempSync(join(tmpdir(), 'picsee-trusted-lint-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
