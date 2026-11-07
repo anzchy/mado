@@ -228,12 +228,22 @@ public final class ChromeToolView: NSView {
     }
 }
 
-private final class ChromeFloatingGroupView: NSView {
+/// Visual-only surfaces do not add hit targets or accessibility elements to the tool pods.
+private final class ChromeToolMaterialView: NSVisualEffectView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+private final class ChromeToolPanelView: NSView {
+    var opacity: Double = 50
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func draw(_ dirtyRect: NSRect) {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), xRadius: 5.75, yRadius: 5.75)
-            DesignColor.popoverBackground.nsColor.setFill()
+            DesignColor.popoverBackground.nsColor.withAlphaComponent(opacity / 100).setFill()
             outline.fill()
+            // The fixed content backing is independent of the outer preference (pages 14/16/33).
+            DesignColor.popoverBackground.nsColor.withAlphaComponent(0.5).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 4, yRadius: 4).fill()
             let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             DesignColor.textPrimary.nsColor.withAlphaComponent(dark ? 0.16 : 0.12).setStroke()
             outline.lineWidth = 0.5
@@ -242,7 +252,45 @@ private final class ChromeFloatingGroupView: NSView {
     }
 }
 
+private final class ChromeFloatingGroupView: NSView {
+    private let material = ChromeToolMaterialView()
+    private let panel = ChromeToolPanelView()
+    convenience init(toolFrame: NSRect) {
+        self.init(frame: toolFrame)
+        material.material = .popover
+        material.blendingMode = .withinWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = 6
+        material.layer?.masksToBounds = true
+        for surface in [material, panel] {
+            surface.frame = bounds
+            surface.autoresizingMask = [.width, .height]
+            surface.setAccessibilityElement(false)
+            surface.setAccessibilityHidden(true)
+            addSubview(surface)
+        }
+        panel.setAccessibilityIdentifier("chrome.tool-background")
+    }
+    func updateOpacity(_ opacity: Double) {
+        panel.opacity = opacity
+        // The original opaque layer remains at 100%; below it the material samples the image,
+        // without a second panel-colour contribution beneath the effect.
+        layer?.backgroundColor = DesignColor.popoverBackground.nsColor.withAlphaComponent(opacity == 100 ? 1 : 0).cgColor
+        // An opaque panel fully covers the effect; omitting it also preserves the original edge raster.
+        material.isHidden = opacity == 100
+        panel.needsDisplay = true
+    }
+}
+
 public final class ViewerChromeOverlay: NSView {
+    private var toolBackgroundOpacity: Double = 50
+    public func setToolBackgroundOpacity(_ percent: Double) {
+        let normalized = DisplayPreferences.normalizedToolBackgroundOpacity(percent)
+        guard toolBackgroundOpacity != normalized else { return }
+        toolBackgroundOpacity = normalized
+        updateGroupColors()
+    }
     private var session: ViewerSession?
     public private(set) var tools: [ChromeToolView] = []
     public private(set) var groups: [NSView] = []
@@ -267,6 +315,7 @@ public final class ViewerChromeOverlay: NSView {
                             hidesOnHome: Bool = false) {
         self.init(frame: frame)
         self.session = session
+        toolBackgroundOpacity = session.displayPreferences.toolBackgroundOpacity
         self.hidesOnHome = hidesOnHome
         // page 14 (#444): 侧栏 / 返回网格 / 更多 | ← name → | − 缩放模式 +. Pods 104 and 174 wide; the 缩放模式
         // select is 100×26 at y 6, the buttons 30×28 at y 5.
@@ -277,7 +326,7 @@ public final class ViewerChromeOverlay: NSView {
             NSRect(x: bounds.width - 190, y: 14, width: 174, height: 38)]
         let positions: [[CGFloat]] = [[5, 37, 69], [5, 39], [5, 37, 139]]
         for index in 0..<3 {
-            let group = ChromeFloatingGroupView(frame: frames[index])
+            let group = ChromeFloatingGroupView(toolFrame: frames[index])
             group.wantsLayer = true; group.layer?.cornerRadius = DesignMetrics.radii["control"]!
             addSubview(group); groups.append(group)
             for (offset, kind) in kinds[index].enumerated() {
@@ -315,7 +364,7 @@ public final class ViewerChromeOverlay: NSView {
             metadataSortNotice.layer?.backgroundColor = DesignColor.canvasBackground.nsColor.cgColor
             for group in groups {
                 guard let layer = group.layer else { continue }
-                layer.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
+                (group as? ChromeFloatingGroupView)?.updateOpacity(toolBackgroundOpacity)
                 layer.shadowColor = dark ? NSColor.black.cgColor : DesignColor.textPrimary.nsColor.cgColor
                 layer.shadowOpacity = dark ? 0.45 : 0.08
                 layer.shadowRadius = 12
