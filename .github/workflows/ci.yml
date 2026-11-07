@@ -179,6 +179,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      - name: Test identity checks
+        run: node --test scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs
+      - name: Check tracked code identity
+        run: node scripts/name-checks/code-name.mjs
       - name: Check generated feature ledger HTML
         run: node scripts/ledger/build.mjs --check
 
@@ -215,7 +219,10 @@ jobs:
           restore-keys: ${{ steps.dd-key.outputs.prefix }}
       - name: Build unsigned app
         id: unsigned-build
-        run: xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
+        # Keep product identity in this outcome: Walking skeleton allows independent App-test failures.
+        run: |
+          xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
+          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Picsee.app --entitlements App/Resources/Picsee.entitlements
       - name: Build App tests
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         run: xcodebuild build-for-testing -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'

@@ -1,0 +1,7 @@
+{
+  "expectedName": "Picsee",
+  "knownNames": ["Picsee", "Mado"],
+  "bundleIdTemplate": "io.github.anzchy.{slug}",
+  "feedURLTemplate": "https://raw.githubusercontent.com/anzchy/{slug}/main/appcast.xml",
+  "machSuffixes": ["-spks", "-spki"]
+}

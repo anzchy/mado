@@ -1,0 +1,79 @@
+[
+  {
+    "prefix": "docs/adr/",
+    "reason": "ADRs retain historical and future identity decisions verbatim (ADR-0017)."
+  },
+  {
+    "prefix": "docs/validation/",
+    "reason": "Validation records describe the identity actually tested and are not rewritten."
+  },
+  {
+    "prefix": "evidence/",
+    "reason": "Static research evidence retains original product names."
+  },
+  {
+    "pathRegex": "^\\.claude/tdd-guardian/(?:plan|tests|attack|coverage|gate|review|repro|i[0-9]+)[^/]*\\.md$",
+    "reason": "Frozen TDD plans, RED and validation records retain their original names; config and executable tooling are still scanned."
+  },
+  {
+    "path": "appcast.xml",
+    "reason": "The installed old app's feed is frozen with its existing entries (ADR-0017)."
+  },
+  {
+    "path": "docs/knowledge/former-name.md",
+    "reason": "The former-name note must name both identities; this reserved path is for the later docs ticket."
+  },
+  {
+    "path": "scripts/name-checks/identity.json",
+    "reason": "The single identity declaration deliberately contains both known names."
+  },
+  {
+    "path": "scripts/name-checks/exceptions.json",
+    "reason": "The reviewed exception declarations necessarily spell out historical and deferred names."
+  },
+  {
+    "path": "scripts/name-checks/built-product.test.mjs",
+    "reason": "Independent literal fixtures must exercise both passing and forbidden identities."
+  },
+  {
+    "path": "scripts/name-checks/code-name.test.mjs",
+    "reason": "Independent scanner fixtures must exercise both names and exception boundaries."
+  },
+  {
+    "path": "scripts/name-checks/README.md",
+    "reason": "Checker documentation explains both settings and the deliberate failure proof."
+  },
+  {
+    "prefix": ".agents/skills/picsee-delegator/",
+    "reason": "Roster tooling and its skill move in ticket 8, after the app and repository rename."
+  },
+  {
+    "path": ".claude/skills/picsee-delegator",
+    "reason": "The roster skill symlink moves with the tooling in ticket 8."
+  },
+  {
+    "pattern": "\\bPICSEE_[A-Z0-9_]+\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Existing environment variable identifiers move in tooling ticket 8; only this occurrence is exempt."
+  },
+  {
+    "pattern": "/\\.picsee(?=/|[\"'\\s]|$)|(?<=[\"'])\\.picsee(?=[/\"'])|(?<![A-Za-z0-9_.])\\.picsee/",
+    "scopes": [
+      "content"
+    ],
+    "reason": "The existing home/state/lock directory moves in tooling ticket 8, with mdpro coordination."
+  },
+  {
+    "pattern": "\\bpicsee-wt\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "Local worktree directory names move in tooling ticket 8."
+  },
+  {
+    "pattern": "\\bpicsee-(?:delegator|doc-gardener)\\b",
+    "reason": "Roster role and skill identifiers move in tooling ticket 8; adjacent app identifiers remain checked."
+  }
+]

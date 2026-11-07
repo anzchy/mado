@@ -54,8 +54,11 @@ test('the App tests job keeps the exact unsigned build as its own step, and Walk
   assert.match(build, /^        id: unsigned-build$/m);
   // The baseline command (`xcodebuild build -scheme Picsee -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
   // -derivedDataPath .build/dd-ci`) plus exactly one argument, the hashing flag (#479 acceptance criteria).
-  const run = build.split('\n').filter(line => line.startsWith('        run: '));
-  assert.deepEqual(run, [`        run: ${BASELINE_BUILD} ${HASHING_SETTING}`]);
+  const run = build.match(/^        run: \|\n((?:          .*\n)+)/m)?.[1].trimEnd().split('\n');
+  assert.deepEqual(run, [
+    `          ${BASELINE_BUILD} ${HASHING_SETTING}`,
+    '          node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Picsee.app --entitlements App/Resources/Picsee.entitlements',
+  ]);
   assert.doesNotMatch(build, /^        if:/m, 'the unsigned build runs on every event');
   assert.match(app, /^      unsigned_build: \$\{\{ steps\.unsigned-build\.outcome \}\}$/m);
   assert.ok(app.indexOf('Build unsigned app\n') < app.indexOf('Build App tests\n'), 'build runs before build-for-testing');
@@ -184,7 +187,7 @@ test('every cached build uses incremental file hashing, with identical flags in 
   const swift = [...workflow.matchAll(/^ {10}swift test --package-path Packages\/PicseeKit .*$/gm)].map(match => match[0]);
   assert.equal(swift.length, 2);
   for (const line of swift) assert.match(line, / -Xswiftc -enable-incremental-file-hashing$/);
-  const xcode = [...workflow.matchAll(/run: xcodebuild .*$/gm)].map(match => match[0]);
+  const xcode = [...workflow.matchAll(/(?:run: |^ {10})xcodebuild .*$/gm)].map(match => 'run: ' + match[0].trim().replace(/^run: /, ''));
   assert.deepEqual(xcode, [
     `run: ${BASELINE_BUILD} ${HASHING_SETTING}`,
     `run: ${BASELINE_BUILD.replace('xcodebuild build ', 'xcodebuild build-for-testing ')} ${HASHING_SETTING}`,
