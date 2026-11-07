@@ -630,3 +630,58 @@ test('CLI forwards positional arguments and inherited filter into validation',()
   assert.equal(run.status,64,run.stderr);assert.match(run.stderr,/filter|usage/);assert.doesNotMatch(run.stdout,/Tests run:/);
  }
 });
+
+for (const started of [true, false]) {
+ test(`filtered Swift all-skipped selection with start=${started} fails closed`,()=>{
+  const skipped=oneSwift.replace('✔ Test swiftKeep() passed after 0.001 seconds.', '➜ Test swiftKeep() skipped: disabled');
+  const output=started ? skipped : skipped.replace('◇ Test swiftKeep() started.\n','');
+  const h=harness([],filterOptions('swiftKeep',output));
+  assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);assert.equal(nativeCalls(h).length,1);
+ });
+ test(`filtered XCTest all-skipped selection with start=${started} fails closed`,()=>{
+  const skipped=oneXCTest.replace("passed (0.001 seconds).", "skipped (0.001 seconds).")
+   .replaceAll('with 0 failures', 'with 1 test skipped and 0 failures');
+  const output=(started ? skipped : skipped.replace("Test Case '-[Probe.ProbeTests testKeep]' started.\n",''))+swiftOutput([]).slice(filteredRoot.length);
+  const h=harness([],filterOptions('ProbeTests/testKeep',output));
+  assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);assert.equal(nativeCalls(h).length,1);
+ });
+}
+test('filtered mixed pass and skip cannot hide a skipped selection',()=>{
+ for(const [filter,output] of [
+  ['swiftKeep|swiftSkipSibling',twoSwift.replace('✔ Test swiftKeep() passed after 0.001 seconds.','➜ Test swiftKeep() skipped: disabled')],
+  ['ProbeTests/testKeep|swiftKeep',oneXCTest.replace('passed (0.001 seconds).','skipped (0.001 seconds).').replaceAll('with 0 failures','with 1 test skipped and 0 failures')+oneSwift.slice(filteredRoot.length)],
+ ]) {
+  const h=harness([],filterOptions(filter,output));
+  assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
+ }
+});
+test('filtered XCTest-only missing case fails closed despite completed zero Swift root',()=>{
+ const h=harness([],filterOptions('ProbeTests/testKeep',swiftOutput([])));
+ assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
+});
+test('filtered XCTest-only failing case returns assertion failure with counts',()=>{
+ const output=oneXCTest.replace('passed (0.001 seconds).','failed (0.001 seconds).')
+  .replaceAll('passed at now.','failed at now.').replaceAll('with 0 failures','with 1 failure')+swiftOutput([]).slice(filteredRoot.length);
+ const h=harness([],{...filterOptions('ProbeTests/testKeep'),run:()=>({...result(output),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.match(h.stdout,/Tests run: 1, Failures: 1, Errors: 0, Skipped: 0/);
+ assert.doesNotMatch(h.stdout,/retrying once/);assert.equal(nativeCalls(h).length,1);
+});
+test('inherited filter warns on stderr with full-run unset guidance only when used',()=>{
+ const inherited=harness([],filterOptions('swiftKeep'));
+ assert.equal(inherited.status,0);assert.match(inherited.stderr,/PICSEE_APP_FILTER.*unset PICSEE_APP_FILTER/);
+ for(const h of [harness(),harness([],{...filterOptions('swiftSkip'),argv:['swiftKeep']})]) {
+  assert.equal(h.status,0,h.stderr);assert.doesNotMatch(h.stderr,/PICSEE_APP_FILTER/);
+ }
+});
+
+test('filtered failure plus selected skip is environment failure without counts',()=>{
+ const failedSwift=oneSwift.replace('✔ Test swiftKeep() passed after 0.001 seconds.',
+  '✘ Test swiftKeep() recorded an issue at Probe.swift:1:1: Expectation failed\n✘ Test swiftKeep() failed after 0.001 seconds with 1 issue.')
+  .replace('✔ Test run with 1 tests in 0 suites passed after 0.001 seconds.','✘ Test run with 1 tests in 0 suites failed after 0.001 seconds with 1 issue.');
+ const swiftSkip=failedSwift.replace('✘ Test run with 1 tests', '➜ Test swiftSkipSibling() skipped: disabled\n✘ Test run with 2 tests');
+ const xctSkip=oneXCTest.replace('passed (0.001 seconds).','skipped (0.001 seconds).').replaceAll('with 0 failures','with 1 test skipped and 0 failures')+failedSwift.slice(filteredRoot.length);
+ for(const [filter,output] of [['swiftKeep|swiftSkipSibling',swiftSkip],['ProbeTests/testKeep|swiftKeep',xctSkip]]) {
+  const h=harness([],{...filterOptions(filter),run:()=>({...result(output),status:1})});
+  assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
+ }
+});
