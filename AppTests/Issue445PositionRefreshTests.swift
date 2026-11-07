@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private final class Issue445PositionMotion: ReduceMotionSource {
     var reduceMotion = true
@@ -69,7 +69,7 @@ import PicseeMacUI
         try? FileManager.default.removeItem(at: base)
     }
     func waitUntil(_ condition: () -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(between: { self.window.update() }, condition)
+        try await MadoAppTests.waitUntil(between: { self.window.update() }, condition)
     }
     func filenameField() throws -> NSTextField {
         let overlay = try #require(issue445PositionView(window.contentView, as: ViewerChromeOverlay.self))

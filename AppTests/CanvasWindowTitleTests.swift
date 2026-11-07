@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private final class StaticMotionSource: ReduceMotionSource {
     var reduceMotion = false
@@ -44,7 +44,7 @@ import PicseeMacUI
 }
 
 @MainActor @Test func issue136WindowRoutesInspectorCommandTabAndEscape() throws {
-    let defaultsDomain = Bundle.main.bundleIdentifier ?? "PicseeAppTests"
+    let defaultsDomain = Bundle.main.bundleIdentifier ?? "MadoAppTests"
     let keyboardMode = UserDefaults.standard.persistentDomain(forName: defaultsDomain)?["AppleKeyboardUIMode"]
     UserDefaults.standard.set(0, forKey: "AppleKeyboardUIMode")
     defer {

@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// Real enumeration with explicit attempt-scoped completion/failure, including cancellation drainage.
 private actor ReadOwner454Scanner: FolderScanning {
@@ -106,7 +106,7 @@ private actor ReadOwner454Scanner: FolderScanning {
         readOwner454Find(NSTextField.self, in: window.contentView) { $0.accessibilityIdentifier() == identifier }
     }
     func wait(_ description: String, _ condition: () async -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(description, between: { self.present() }, condition)
+        try await MadoAppTests.waitUntil(description, between: { self.present() }, condition)
         present()
     }
     func expectCount(_ url: URL, _ count: Int?) throws {
@@ -163,7 +163,7 @@ private actor ReadOwner454Scanner: FolderScanning {
     func close() async {
         await scanner.releaseAll()
         window.close()
-        try? await PicseeAppTests.waitUntil("read-owner scanner teardown") { await self.scanner.allEnded }
+        try? await MadoAppTests.waitUntil("read-owner scanner teardown") { await self.scanner.allEnded }
         try? FileManager.default.removeItem(at: base)
     }
 }

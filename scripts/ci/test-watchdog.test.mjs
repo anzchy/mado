@@ -57,12 +57,12 @@ test('budgetMs takes the earlier of the timeout and the deadline, never below ze
 
 const PS = [
   '  1     0 /sbin/launchd',
-  ' 10     1 swift test --package-path Packages/PicseeKit',
+  ' 10     1 swift test --package-path Packages/MadoKit',
   ' 11    10 /usr/bin/swift-build --build-tests',
-  ' 12    10 /Applications/Xcode.app/usr/libexec/swift/pm/swiftpm-testing-helper --test-bundle-path PicseeKitPackageTests.xctest',
+  ' 12    10 /Applications/Xcode.app/usr/libexec/swift/pm/swiftpm-testing-helper --test-bundle-path MadoKitPackageTests.xctest',
   ' 13    12 /bin/sh -c child',
-  ' 14    10 /usr/bin/xctest PicseeKitPackageTests.xctest',
-  ' 20     1 unrelated PicseeKitPackageTests',
+  ' 14    10 /usr/bin/xctest MadoKitPackageTests.xctest',
+  ' 20     1 unrelated MadoKitPackageTests',
   ' 30     1 swiftpm-testing-helper orphan',
 ].join('\n');
 

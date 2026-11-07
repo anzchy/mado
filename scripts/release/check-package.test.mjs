@@ -7,7 +7,7 @@ import test from "node:test";
 import { checkInfo, checkPackage, classifyPath, SPARKLE_LICENCE_PATH } from "./check-package.mjs";
 
 const samples = ["alley", "gate", "hillside", "lakehouse", "lakeside", "temple"];
-const bundle = "Contents/Resources/PicseeKit_PicseeMacUI.bundle/Contents/Resources";
+const bundle = "Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources";
 const sparkleLicence = "Copyright (c) 2006-2013 Andy Matuschak.\nPermission is hereby granted\nEXTERNAL LICENSES\nbsdiff\n";
 
 /** A clean release-shaped bundle: what the real build plus the workflow's licence copy produce. */
@@ -192,6 +192,7 @@ test("framework symlinks are checked as links, never read, and must stay inside 
 });
 
 const layout = readFileSync(new URL("./fixtures/release-layout-0.0.1.txt", import.meta.url), "utf8").replaceAll("MacOS/Picsee", "MacOS/Mado")
+  .replaceAll("PicseeKit_PicseeMacUI", "MadoKit_MadoMacUI")
   .split("\n").filter((line) => line && !line.startsWith("#"));
 
 test("every entry of the real 0.0.1 release layout is allowed", () => {
@@ -206,10 +207,10 @@ test("anything outside the release layout fails, including look-alikes of allowe
     "Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle",
     "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Downloader",
     "Contents/Resources/fr.lproj/Localizable.strings", "Contents/Resources/en.lproj/Secrets.strings",
-    "Contents/Resources/PicseeKit_PicseeMacUI.bundle/Contents/Resources/sub/alley.jpg",
+    "Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/sub/alley.jpg",
     "Contents/Resources/ThirdPartyNotices/other.txt", "Contents/Info.plist.bak",
-    "Contents/Resources/PicseeKit_PicseeMacUI.bundle/Contents/_CodeSignature/CodeEntitlements",
-    "Contents/Resources/PicseeKit_PicseeMacUI.bundle/_CodeSignature/CodeDirectory",
+    "Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature/CodeEntitlements",
+    "Contents/Resources/MadoKit_MadoMacUI.bundle/_CodeSignature/CodeDirectory",
     "Contents/Resources/Other.bundle/Contents/_CodeSignature/CodeDirectory", "Contents/_CodeSignature/CodeDirectory",
   ]) assert.notEqual(classifyPath(path), null, path);
 });

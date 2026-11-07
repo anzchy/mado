@@ -1,12 +1,12 @@
 import Foundation
-import PicseeCore
-import PicseeInfrastructure
+import MadoCore
+import MadoInfrastructure
 
 /// Compiled only when the UI probe explicitly passes PICSEE_UI_TEST_FIXTURE.
 enum UITestFixtureLaunch {
     static func fixtureName(arguments: [String]) -> String? {
         #if DEBUG && PICSEE_UI_TEST_FIXTURE
-        guard let index = arguments.firstIndex(of: "-PicseeUITestFixture"),
+        guard let index = arguments.firstIndex(of: "-MadoUITestFixture"),
               arguments.indices.contains(index + 1) else { return nil }
         let name = arguments[index + 1]
         guard !name.isEmpty, name.utf8.allSatisfy({ byte in
@@ -32,7 +32,7 @@ enum UITestFixtureLaunch {
 
     #if DEBUG && PICSEE_UI_TEST_FIXTURE
     static func stage(name: String, environment: [String: String], under support: URL) throws -> URL {
-        guard fixtureName(arguments: ["-PicseeUITestFixture", name]) != nil else { throw FixtureError.invalidName }
+        guard fixtureName(arguments: ["-MadoUITestFixture", name]) != nil else { throw FixtureError.invalidName }
         let filenames = ["landscape-3x2.png", "portrait-2x3.png", "orientation-1.tiff"]
         let images = try filenames.indices.map { index -> Data in
             guard let encoded = environment["PICSEE_UI_FIXTURE_\(index)"],
@@ -51,7 +51,7 @@ enum UITestFixtureLaunch {
     }
 
     static func removeRun(name: String, under support: URL) throws {
-        guard fixtureName(arguments: ["-PicseeUITestFixture", name]) != nil else { throw FixtureError.invalidName }
+        guard fixtureName(arguments: ["-MadoUITestFixture", name]) != nil else { throw FixtureError.invalidName }
         let folder = support.appendingPathComponent(name, isDirectory: true)
         guard folder.resolvingSymlinksInPath().deletingLastPathComponent().standardizedFileURL ==
               support.resolvingSymlinksInPath().standardizedFileURL else { throw FixtureError.outsideContainer }

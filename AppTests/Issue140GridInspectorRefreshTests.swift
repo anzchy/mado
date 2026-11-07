@@ -1,10 +1,10 @@
 import AppKit
 import Darwin
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private final class GridInspectorMotionSource: ReduceMotionSource {
     var reduceMotion = false

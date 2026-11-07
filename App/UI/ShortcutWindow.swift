@@ -1,5 +1,5 @@
 import AppKit
-import PicseeMacUI
+import MadoMacUI
 
 @MainActor
 final class ShortcutWindow: NSObject {

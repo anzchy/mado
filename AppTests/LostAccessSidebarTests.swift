@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private struct T232SidebarBookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }

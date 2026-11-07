@@ -41,7 +41,7 @@ export function timestampMicros(text) {
   return (seconds - offset) * 1_000_000 + micros;
 }
 
-/** Signpost events of picsee's subsystem from ndjson text; other lines are skipped (non-JSON lines are counted). */
+/** Signpost events of mado's subsystem from ndjson text; other lines are skipped (non-JSON lines are counted). */
 export function parseNdjson(text) {
   const events = [];
   let skipped = 0;

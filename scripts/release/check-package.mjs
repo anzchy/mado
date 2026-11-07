@@ -27,9 +27,9 @@ const LAYOUT_FILES = [
   /^Contents\/Resources\/(AppIcon\.icns|Assets\.car)$/,
   /^Contents\/Resources\/(en|zh-Hans)\.lproj\/(Localizable\.strings|Localizable\.stringsdict)$/,
   new RegExp(`^${SPARKLE_LICENCE_PATH.replace(/[.]/g, "\\.")}$`),
-  /^Contents\/Resources\/PicseeKit_PicseeMacUI\.bundle\/Contents\/(Info\.plist|Resources\/(alley|gate|hillside|lakehouse|lakeside|temple)\.jpg|Resources\/PROVENANCE\.md)$/,
+  /^Contents\/Resources\/MadoKit_MadoMacUI\.bundle\/Contents\/(Info\.plist|Resources\/(alley|gate|hillside|lakehouse|lakeside|temple)\.jpg|Resources\/PROVENANCE\.md)$/,
   // Xcode signs the B4 resource bundle with a detached signature (observed on a signed Release build).
-  /^Contents\/Resources\/PicseeKit_PicseeMacUI\.bundle\/Contents\/_CodeSignature\/(CodeDirectory|CodeRequirements|CodeResources|CodeSignature)$/,
+  /^Contents\/Resources\/MadoKit_MadoMacUI\.bundle\/Contents\/_CodeSignature\/(CodeDirectory|CodeRequirements|CodeResources|CodeSignature)$/,
   new RegExp(`^${SPARKLE}/Versions/B/(Autoupdate|Sparkle|_CodeSignature/CodeResources|` +
     String.raw`Resources/(Info\.plist|ReleaseNotesColorStyle\.css|SUUpdateAlert\.nib|SUUpdatePermissionPrompt\.nib|(Base|[a-z]{2,3}([_-][A-Za-z]{2,4})?)\.lproj/Sparkle\.strings)|` +
     String.raw`Updater\.app/Contents/(Info\.plist|PkgInfo|MacOS/Updater|_CodeSignature/CodeResources)|` +

@@ -38,7 +38,7 @@ private func isFalse(_ value: Any?) -> Bool {
 
 @Test func issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() throws {
     let info = try plist("App/Info.plist")
-    #expect(info["SUFeedURL"] == nil, "Mado feed awaits #552; never use Picsee’s frozen feed")
+    #expect(info["SUFeedURL"] == nil, "Mado feed awaits #552; never use the frozen legacy feed")
     let key = try #require(info["SUPublicEDKey"] as? String)
     #expect(Data(base64Encoded: key)?.count == 32)
     #expect(key == "XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=")
@@ -63,9 +63,9 @@ private func isFalse(_ value: Any?) -> Bool {
         let end = rest.range(of: #"\n  [A-Za-z]+:\n"#, options: .regularExpression)?.lowerBound ?? rest.endIndex
         return String(rest[..<end])
     }
-    #expect(try target("PicseeApp").contains("- package: Sparkle"))
-    #expect(try target("PicseeAppTests").contains("package: Sparkle"))
-    #expect(try !target("PicseeAppTests").contains("- Updates/SparkleUpdatePort.swift"))
+    #expect(try target("MadoApp").contains("- package: Sparkle"))
+    #expect(try target("MadoAppTests").contains("package: Sparkle"))
+    #expect(try !target("MadoAppTests").contains("- Updates/SparkleUpdatePort.swift"))
     let notices = try String(contentsOf: repository.appendingPathComponent("THIRD_PARTY_NOTICES.md"), encoding: .utf8)
     #expect(notices.contains("Sparkle 2.10.0"))
 }

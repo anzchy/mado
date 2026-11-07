@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-@testable import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+@testable import MadoInfrastructure
 
 // Audit M1: reader failures and app activation must not each start a full
 // root listing. Every root check enumerates mounts once, so the mount port

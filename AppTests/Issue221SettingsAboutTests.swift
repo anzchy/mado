@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private struct Issue221AboutViews {
     let pane: NSView

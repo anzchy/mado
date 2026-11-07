@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 // #444 in the real window: 侧栏 / 返回网格 / 更多 and the viewer's folder sidebar beside a preview from the grid.
 
@@ -73,7 +73,7 @@ import PicseeMacUI
     }
     func layout() { window.contentView?.layoutSubtreeIfNeeded() }
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { self.layout() }, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, between: { self.layout() }, condition)
     }
     var content: NSView { window.contentView! }
     var grid: GridBrowserView? { issue444Find(content) { $0 is GridBrowserView } as? GridBrowserView }

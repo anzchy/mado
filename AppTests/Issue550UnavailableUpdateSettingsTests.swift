@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor private func issue550Settings(_ port: SparkleUpdatePort) -> SettingsPanelWindow {
     let preferences = InMemoryDisplayPreferencesStore()

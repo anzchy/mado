@@ -63,7 +63,7 @@ jobs:
             echo 'native=true' >> "$GITHUB_OUTPUT"
           fi
 
-  # The package suite runs as two processes (#391): the non-UI targets, and PicseeMacUITests one test at a time,
+  # The package suite runs as two processes (#391): the non-UI targets, and MadoMacUITests one test at a time,
   # because its window tests saturate the runner's main actor when Swift Testing runs them in parallel. Each run is
   # wrapped in scripts/ci/test-watchdog.mjs and the logs, xunit results and stacks are uploaded even when the job fails.
   # Watchdog margin, against timeout-minutes: 30 (1800 s): the deadline is JOB_STARTED + 1560 s (or 1500 s after the
@@ -87,14 +87,14 @@ jobs:
       - name: SwiftPM cache key
         id: spm-key
         env:
-          MANIFEST: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
-          INPUTS: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'Packages/PicseeKit/Sources/**', 'Packages/PicseeKit/Tests/**') }}
+          MANIFEST: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'Packages/MadoKit/Sources/**', 'Packages/MadoKit/Tests/**') }}
         run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
       - name: Restore SwiftPM build
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/PicseeKit/.build
+          path: Packages/MadoKit/.build
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Swift Testing (Core, Application, Infrastructure)
@@ -103,7 +103,7 @@ jobs:
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/PicseeKit --skip 'PicseeMacUITests\.' -Xswiftc -enable-incremental-file-hashing
+          swift test --package-path Packages/MadoKit --skip 'MadoMacUITests\.' -Xswiftc -enable-incremental-file-hashing
           --xunit-output ci-logs/package-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Upload test logs
         if: always()
@@ -117,7 +117,7 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/PicseeKit/.build
+          path: Packages/MadoKit/.build
           key: ${{ steps.spm-key.outputs.key }}
 
   package-macui-tests:
@@ -136,14 +136,14 @@ jobs:
       - name: SwiftPM cache key
         id: spm-key
         env:
-          MANIFEST: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
-          INPUTS: ${{ hashFiles('Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'Packages/PicseeKit/Sources/**', 'Packages/PicseeKit/Tests/**') }}
+          MANIFEST: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'Packages/MadoKit/Sources/**', 'Packages/MadoKit/Tests/**') }}
         run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
       - name: Restore SwiftPM build
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/PicseeKit/.build
+          path: Packages/MadoKit/.build
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Swift Testing (MacUI, serial)
@@ -152,8 +152,8 @@ jobs:
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-macui-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/PicseeKit --no-parallel -Xswiftc -enable-incremental-file-hashing
-          --skip '(PicseeCoreTests|PicseeApplicationTests|PicseeInfrastructureTests)\.'
+          swift test --package-path Packages/MadoKit --no-parallel -Xswiftc -enable-incremental-file-hashing
+          --skip '(MadoCoreTests|MadoApplicationTests|MadoInfrastructureTests)\.'
           --xunit-output ci-logs/package-macui-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Upload test logs
         if: always()
@@ -186,7 +186,7 @@ jobs:
       - name: Check generated feature ledger HTML
         run: node scripts/ledger/build.mjs --check
 
-  # One macOS job builds the unsigned app and then the App tests: build-for-testing builds PicseeApp as well, so a
+  # One macOS job builds the unsigned app and then the App tests: build-for-testing builds MadoApp as well, so a
   # separate unsigned-build job duplicated that work and took a fourth macOS slot. The unsigned build runs in its own
   # step, using incremental-file-hashing to detect changed files, followed by the built-product identity check.
   # Walking skeleton requires both to succeed through that step's outcome; independent App-test failures remain allowed.
@@ -207,8 +207,8 @@ jobs:
       - name: DerivedData cache key
         id: dd-key
         env:
-          MANIFEST: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved') }}
-          INPUTS: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/PicseeKit/Package.swift', 'Packages/PicseeKit/Package.resolved', 'App/**', 'AppTests/**', 'Packages/PicseeKit/Sources/**') }}
+          MANIFEST: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
+          INPUTS: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'App/**', 'AppTests/**', 'Packages/MadoKit/Sources/**') }}
         run: node scripts/ci/cache-key.mjs dd "$MANIFEST" "$INPUTS"
       - name: Restore DerivedData
         if: github.event_name != 'push' && !inputs.cold

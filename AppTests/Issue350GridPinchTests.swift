@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private final class Issue350AppMagnifyEvent: NSEvent {
     var delta: CGFloat = 0
@@ -22,7 +22,7 @@ private final class Issue350AppMagnifyEvent: NSEvent {
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue350AppPinchSynchronizesRenderedWindowsSettingsAndPersistence() throws {
-    let suite = "picsee.app350.\(UUID().uuidString)"
+    let suite = "mado.app350.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: cacheURL) }

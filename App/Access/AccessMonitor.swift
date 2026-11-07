@@ -1,9 +1,9 @@
 import AppKit
 import Foundation
 import Darwin
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
 
 private final class AccessMonitorNotification: @unchecked Sendable {
     let center: NotificationCenter

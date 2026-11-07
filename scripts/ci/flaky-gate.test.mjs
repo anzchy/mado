@@ -24,7 +24,7 @@ const eligible = r=>assert.equal(classifyFlaky(r).decision,'retry-eligible');
 const denied = r=>assert.equal(classifyFlaky(r).decision,'fail');
 function harness(sequence, options={}) {
   let calls=0, stdout='',stderr='';
-  const evidencePath=path.join(mkdtempSync(path.join(tmpdir(),'picsee-i424-')),'app-lane-attempt1.log');
+  const evidencePath=path.join(mkdtempSync(path.join(tmpdir(),'mado-i424-')),'app-lane-attempt1.log');
   const status=runAppLane({spawn:()=>{assert.ok(calls<sequence.length,'unexpected extra attempt');return sequence[calls++];},env:{},evidencePath,stdout:s=>stdout+=s,stderr:s=>stderr+=s,...options});
   return {status,calls,stdout,stderr,evidencePath};
 }
@@ -46,7 +46,7 @@ test('derived A4 diagnostic fixture changes only the recorded issue line', () =>
 test('A4 diagnostic fixture issue sites agree with the final live Swift source', () => {
   const source = readFileSync(path.join(root, 'AppTests/SidebarTreeControllerTests.swift'), 'utf8').split('\n');
   const signature = parseAppResult(result(fixtures[1])).issues[0].signature;
-  const location = /^SidebarTreeControllerTests\.swift:(\d+):2: Caught error: wait timed out after 100\.0 seconds at PicseeAppTests\/SidebarTreeControllerTests\.swift:(\d+) \(sidebar stage: restore A tree\); state: /.exec(signature);
+  const location = /^SidebarTreeControllerTests\.swift:(\d+):2: Caught error: wait timed out after 100\.0 seconds at MadoAppTests\/SidebarTreeControllerTests\.swift:(\d+) \(sidebar stage: restore A tree\); state: /.exec(signature);
   assert.ok(location, 'derived fixture represents the diagnostic restore-A wait failure');
   const annotation = source.findIndex(line => line.includes(`@Test(`) && line.includes(`func ${names[1]}()`));
   const restore = source.findIndex(line => line.includes('try await waitForSidebar("restore A tree", state: state)'));
@@ -150,7 +150,7 @@ test('real Node child process transports recorded output, stderr and exit status
   assert.equal(h.status,0);assert.equal(n,2);assert.equal(readFileSync(h.evidencePath,'utf8'),text+'\nreal stderr\n');assert.match(h.stderr,/real stderr/);
 });
 test('evidence-write ENOTDIR is visible and prevents retry',()=>{
-  const dir=mkdtempSync(path.join(tmpdir(),'picsee-i424-enotdir-')), parent=path.join(dir,'file');writeFileSync(parent,'intact');
+  const dir=mkdtempSync(path.join(tmpdir(),'mado-i424-enotdir-')), parent=path.join(dir,'file');writeFileSync(parent,'intact');
   const h=harness([result(),pass],{evidencePath:path.join(parent,'attempt1.log')});assert.equal(h.status,70);assert.equal(h.calls,1);assert.match(h.stderr,/app-lane:.*(?:preserve|evidence|attempt1)/);assert.doesNotMatch(h.stdout,/retrying once/);assert.equal(readFileSync(parent,'utf8'),'intact');
 });
 test('real module imports do not launch native tools',()=>{
@@ -173,7 +173,7 @@ test('flaky gate CLI refuses missing metadata, invalid status and unreadable log
 test('injected process boundary uses locked native command and preserves environment',()=>{
   let command,args,options;
   const h=harness([pass],{env:{PICSEE_APP_LANE_NO_RETRY:'1',EXAMPLE:'kept'},spawn:(...values)=>{[command,args,options]=values;return pass;}});
-  assert.equal(h.status,0);assert.match(command,/scripts\/heavy-lock\.sh$/);assert.deepEqual(args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);assert.equal(options.env.EXAMPLE,'kept');assert.equal(options.env.SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH,'1');
+  assert.equal(h.status,0);assert.match(command,/scripts\/heavy-lock\.sh$/);assert.deepEqual(args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);assert.equal(options.env.EXAMPLE,'kept');assert.equal(options.env.SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH,'1');
 });
 test('default output streams emit final result using recorded Node transport',()=>{
   const code=`import {runAppLane} from ${JSON.stringify(new URL('../tdd/app-lane.mjs',import.meta.url).href)}; process.exitCode=runAppLane({spawn:()=>(${JSON.stringify({...pass,stderr:'default-stderr-marker\n'})})});`;

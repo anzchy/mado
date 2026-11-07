@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// Real enumeration with explicit attempt-scoped completion/failure, including cancellation drainage.
 private actor Recount454Scanner: FolderScanning {
@@ -202,7 +202,7 @@ private actor Recount454Enumerator: SidebarFolderEnumerating {
         }
     }
     func wait(_ description: String, _ condition: () async -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(description, between: { self.present() }, condition)
+        try await MadoAppTests.waitUntil(description, between: { self.present() }, condition)
         present()
     }
     func expectCount(_ folder: URL, _ count: Int?) throws {
@@ -260,7 +260,7 @@ private actor Recount454Enumerator: SidebarFolderEnumerating {
         await counter.releaseAll()
         await scanner.releaseAll()
         window.close()
-        try? await PicseeAppTests.waitUntil("recount boundary and scanner teardown") {
+        try? await MadoAppTests.waitUntil("recount boundary and scanner teardown") {
             await self.counter.releaseAll()
             let countsEnded = await self.counter.allEnded
             let scanEnded = await self.scanner.allEnded

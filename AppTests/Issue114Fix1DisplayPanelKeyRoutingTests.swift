@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
-import PicseeCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
+import MadoCore
 
 @MainActor private final class Issue114Fix1MotionSource: ReduceMotionSource {
     var reduceMotion = false

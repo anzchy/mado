@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// Delays only completion: real FolderBrowser still enumerates and emits every entry.
 private final class Sidebar454HeldScanner: FolderScanning, @unchecked Sendable {
@@ -110,7 +110,7 @@ func issue454SidebarCountStaysBlankWhileMainScanIsReading() async throws {
         controller.browseRecoveredFolder(folder, rootID: rootID)
         // SidebarFolderLoadSession counts current before children. Child=1 proves the real
         // independent session has delivered its current-folder count, without injecting one.
-        try await PicseeAppTests.waitUntil("real sidebar counts and held main scan", between: { present() }) {
+        try await MadoAppTests.waitUntil("real sidebar counts and held main scan", between: { present() }) {
             scanner.isHolding && row(child)?.countLabel.stringValue == "1"
                 && controller.session.folderScan?.isReadingFolder == true
                 && footer()?.stringValue == String(localized: "Reading…")
@@ -138,7 +138,7 @@ func issue454SidebarCountStaysBlankWhileMainScanIsReading() async throws {
         #expect(childRow.accessibilityLabel() == expectedAX(child, count: 1))
 
         scanner.release()
-        try await PicseeAppTests.waitUntil("main scan completed with final count", between: { present() }) {
+        try await MadoAppTests.waitUntil("main scan completed with final count", between: { present() }) {
             scan.sourceSnapshot?.isComplete == true && !scan.isScanning
                 && row(folder)?.countLabel.stringValue == "3"
                 && row(child)?.countLabel.stringValue == "1"
@@ -159,6 +159,6 @@ func issue454SidebarCountStaysBlankWhileMainScanIsReading() async throws {
         // Close cancels controller-owned navigation, scan and sidebar work. Await the real
         // scanner before the enclosing defer removes its filesystem fixture.
         window.close()
-        try? await PicseeAppTests.waitUntil("held scanner teardown") { scanner.allEnded }
+        try? await MadoAppTests.waitUntil("held scanner teardown") { scanner.allEnded }
     }
 }

@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor @Test func issue219HelpOpensOneShortcutWindowAndCommandWClosesIt() throws {
     _ = NSApplication.shared

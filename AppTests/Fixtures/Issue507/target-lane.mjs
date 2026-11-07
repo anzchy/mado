@@ -3,21 +3,21 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseAppResult } from '../../../scripts/tdd/app-lane.mjs';
 // Run from the repository root. Only #507 tests are selected; validate full root-run completion.
 mkdirSync('.build/i507', { recursive: true });
-const id = 'PicseeAppTests.issue507FolderPathsComplete(legacyScanner:)';
-const extra = 'PicseeAppTests.issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget()';
+const id = 'MadoAppTests.issue507FolderPathsComplete(legacyScanner:)';
+const extra = 'MadoAppTests.issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget()';
 const rows = [
   { id, kind: 'swift', label: 'issue507FolderPathsComplete(legacyScanner:)' },
   { id: extra, kind: 'swift', label: 'issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget()' },
-  { id: 'PicseeAppTests.issue507LinkedFirstGrantKeepsCanonicalRootIdentity()', kind: 'swift', label: 'issue507LinkedFirstGrantKeepsCanonicalRootIdentity()' },
-  { id: 'PicseeAppTests.issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)', kind: 'swift', label: 'issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)' },
-  { id: 'PicseeAppTests.issue507FooterBookmarkVerifiesRawSymlinkParentSelection()', kind: 'swift', label: 'issue507FooterBookmarkVerifiesRawSymlinkParentSelection()' },
-  { id: 'PicseeAppTests.issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)', kind: 'swift', label: 'issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)' },
-  { id: 'PicseeAppTests.issue507CancelledFolderPanelLeavesNoGrant()', kind: 'swift', label: 'issue507CancelledFolderPanelLeavesNoGrant()' },
-  { id: 'PicseeAppTests.issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()', kind: 'swift', label: 'issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()' },
-  { id: 'PicseeAppTests.issue507NonFolderInputNeverPromptsForAFolder(input:)', kind: 'swift', label: 'issue507NonFolderInputNeverPromptsForAFolder(input:)' }
+  { id: 'MadoAppTests.issue507LinkedFirstGrantKeepsCanonicalRootIdentity()', kind: 'swift', label: 'issue507LinkedFirstGrantKeepsCanonicalRootIdentity()' },
+  { id: 'MadoAppTests.issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)', kind: 'swift', label: 'issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:)' },
+  { id: 'MadoAppTests.issue507FooterBookmarkVerifiesRawSymlinkParentSelection()', kind: 'swift', label: 'issue507FooterBookmarkVerifiesRawSymlinkParentSelection()' },
+  { id: 'MadoAppTests.issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)', kind: 'swift', label: 'issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:)' },
+  { id: 'MadoAppTests.issue507CancelledFolderPanelLeavesNoGrant()', kind: 'swift', label: 'issue507CancelledFolderPanelLeavesNoGrant()' },
+  { id: 'MadoAppTests.issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()', kind: 'swift', label: 'issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt()' },
+  { id: 'MadoAppTests.issue507NonFolderInputNeverPromptsForAFolder(input:)', kind: 'swift', label: 'issue507NonFolderInputNeverPromptsForAFolder(input:)' }
 ];
 const run = spawnSync('scripts/heavy-lock.sh', ['xcrun', 'xctest', '-XCTest', rows.map(row => row.id).join(','),
-  '.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest'], {
+  '.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest'], {
   encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
   env: { ...process.env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: '1' }
 });

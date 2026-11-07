@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 import Darwin
 
 private final class Retry442BundleAnchor: NSObject {}
@@ -131,7 +131,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     init() throws {
         _ = NSApplication.shared
         previousActivationPolicy = NSApp.activationPolicy()
-        // Match PicseeApp startup; a bare xctest host otherwise has prohibited activation.
+        // Match MadoApp startup; a bare xctest host otherwise has prohibited activation.
         _ = NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         let fm = FileManager.default
@@ -184,7 +184,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     var canvas: CanvasView? { retry442Find(CanvasView.self, in: window.contentView) }
 
     func wait(_ condition: () -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(between: { window.update() }, condition)
+        try await MadoAppTests.waitUntil(between: { window.update() }, condition)
     }
 
     func openGrid() async throws {

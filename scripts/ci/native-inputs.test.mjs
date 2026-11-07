@@ -17,7 +17,7 @@ test('docs and agent files only: native jobs skip', () => {
 });
 
 test('any native or unlisted input runs native jobs', () => {
-  for (const file of ['THIRD_PARTY_NOTICES.md', 'App/AppDelegate.swift', 'AppTests/X.swift', 'Packages/PicseeKit/Package.swift',
+  for (const file of ['THIRD_PARTY_NOTICES.md', 'App/AppDelegate.swift', 'AppTests/X.swift', 'Packages/MadoKit/Package.swift',
     'UITests/X.swift', 'TestAssets/synthetic/a.png', 'design/DESIGN.md', 'scripts/perf/fixtures/signpost-messages.json',
     'scripts/ci/native-inputs.mjs', 'scripts/tdd/app-lane.mjs', 'scripts/heavy-lock.sh', 'project.yml', 'package.json',
     '.github/workflows/ci.yml', '.github/actions/xcode-setup/action.yml', 'appcast.xml', 'NEW.md', 'docs', 'docsx/a.md']) {
@@ -96,7 +96,7 @@ test('HTTP and parse failures return no list', async () => {
 });
 
 function runMain(event, payload, fetchImpl) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'picsee-native-inputs-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'mado-native-inputs-'));
   const eventPath = path.join(dir, 'event.json');
   const output = path.join(dir, 'output');
   writeFileSync(output, '');

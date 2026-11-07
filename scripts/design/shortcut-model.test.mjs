@@ -55,7 +55,7 @@ test('a page row for an Edit-menu key is refused', () => {
 });
 
 test('a key handler that no longer matches its anchor fails', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     replaceOnce('if event.keyCode == 48 { onTab?(', 'if event.keyCode == 49 { onTab?(')),
   /key:viewer-tab: .*CanvasView\.swift no longer matches/);
 });
@@ -87,7 +87,7 @@ test('a row without a name fails', () => {
 });
 
 test('a new keyDown case fails until it is declared', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridShellView.swift',
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Grid/GridShellView.swift',
     replaceOnce('case 124: onAdjust?(8)', 'case 124: onAdjust?(8)\n        case 51: onAdjust?(0)')),
   /GridShellView\.swift handles key code 51, which KEY_SITES does not declare/);
 });
@@ -100,25 +100,25 @@ test('a new keyCode comparison in another file fails until it is declared', () =
 });
 
 test('a new code in a key code list fails until it is declared', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     replaceOnce('![36, 49, 76].contains(event.keyCode)', '![36, 49, 51, 76].contains(event.keyCode)')),
   /CanvasView\.swift handles key code 51, which KEY_SITES does not declare/);
 });
 
 test('a key code list without a leading ! is read too', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     replaceOnce('![36, 49, 76].contains(event.keyCode)', '[36, 49, 51, 76].contains(event.keyCode)')),
   /CanvasView\.swift handles key code 51, which KEY_SITES does not declare/);
 });
 
 test('a new SwiftUI key press fails until it is declared', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift',
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Components/DesignComponents.swift',
     replaceOnce('.onKeyPress(.space, action: activateFromKeyboard)', '.onKeyPress(.space, action: activateFromKeyboard).onKeyPress(.return, action: activateFromKeyboard)')),
   /DesignComponents\.swift handles key code return, which KEY_SITES does not declare/);
 });
 
 test('a declared key site that is gone fails', () => {
-  fails(withChange('Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridShellView.swift', replaceOnce('case 124: onAdjust?(8)\n', '')),
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Grid/GridShellView.swift', replaceOnce('case 124: onAdjust?(8)\n', '')),
     /KEY_SITES declares key code 124 in .*GridShellView\.swift, which no longer handles it/);
 });
 

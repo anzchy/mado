@@ -2,10 +2,10 @@ import AppKit
 import Foundation
 import ImageIO
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeMacUI
-@testable import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoMacUI
+@testable import MadoInfrastructure
 
 @MainActor private final class InspectorBudgetMotionSource: ReduceMotionSource {
     var reduceMotion = false

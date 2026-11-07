@@ -64,7 +64,7 @@ test('64-bit signpost IDs survive parsing exactly', () => {
   assert.equal(pairIntervals(events, 'Decode').intervals.length, 0, 'IDs differing in the last digit were paired');
 });
 
-test('only picsee signposts are kept; junk lines are counted, not fatal', () => {
+test('only mado signposts are kept; junk lines are counted, not fatal', () => {
   const text = [line({ type: 'event', name: 'X', us: BASE, subsystem: 'com.apple.AppKit' }),
     '{"eventType":"logEvent","subsystem":"io.github.anzchy.mado"}', 'not json', '',
     line({ type: 'event', name: 'ThumbnailDiskLookup', us: BASE + 1, msg: message('ThumbnailDiskLookup.hit') })].join('\n');

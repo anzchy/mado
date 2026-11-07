@@ -16,7 +16,7 @@ import device as d
 
 class Regressions(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='picsee-offline-')
+        self.temp = tempfile.TemporaryDirectory(prefix='mado-offline-')
         self.addCleanup(self.temp.cleanup)
         self.run = Path(self.temp.name).resolve()
         self.app = self.run / 'Mado.app'
@@ -130,7 +130,7 @@ class Regressions(unittest.TestCase):
                 calls=[]
                 def fake_checked(argv, **kwargs):
                     calls.append([str(a) for a in argv])
-                    if any('winid.js' in str(a) for a in argv):return '99\t4242\t0\t960\t672\tPicsee'
+                    if any('winid.js' in str(a) for a in argv):return '99\t4242\t0\t960\t672\tMado'
                     if str(argv[0]).endswith('screencapture'):
                         Path(argv[-1]).write_bytes(b'' if mode=='empty' else b'fake PNG'+b'x'*200);return ''
                     if any('check-image.js' in str(a) for a in argv):

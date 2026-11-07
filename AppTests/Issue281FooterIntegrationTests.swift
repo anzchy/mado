@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 private struct Issue281Bookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }
@@ -142,7 +142,7 @@ private final class Issue281Scanner: FolderScanning, @unchecked Sendable {
     window.setContentSize(NSSize(width: 1280, height: 800))
 
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
     func footer() throws -> (name: NSTextField, count: NSTextField) {
         (try #require(issue281View("grid.current-file-status", in: window.contentView) as? NSTextField),
@@ -274,7 +274,7 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
     window.orderFrontRegardless()
 
     func waitUntil(_ condition: () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
-        try await PicseeAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
+        try await MadoAppTests.waitUntil(fileID: fileID, line: line, between: { window.update() }, condition)
     }
     func footer() throws -> (name: String, count: String) {
         window.contentView?.layoutSubtreeIfNeeded()

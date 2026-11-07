@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { posix } from 'node:path';
 
 const isUIFile = file => file.startsWith('App/') ||
-  file.startsWith('Packages/PicseeKit/Sources/PicseeMacUI/');
+  file.startsWith('Packages/MadoKit/Sources/MadoMacUI/');
 
 const cells = line => line.split('|').slice(1, -1).map(value => value.trim());
 const validStatus = value => /^(?:AUTO-PASS|NOT VERIFIED|PENDING\([A-Za-z0-9-]+\))$/.test(value);
