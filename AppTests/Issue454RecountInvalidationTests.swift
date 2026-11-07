@@ -347,7 +347,9 @@ func issue454RecountFailureCannotRevealOldCountWhenReadingEnds() async throws {
                 await f.counter.setFailing(target, false)
                 f.refreshSidebar()
                 try await f.wait("fresh successful recount after failure") {
-                    f.row(target)?.countLabel.stringValue == String(freshCount) && f.watch.recursiveCount == 1
+                    f.row(target)?.countLabel.stringValue == String(freshCount)
+                        && f.row(f.sibling)?.countLabel.stringValue == "2"
+                        && f.watch.recursiveCount == 1
                 }
                 try f.expectCount(target, freshCount)
                 try f.expectCount(f.sibling, 2)
