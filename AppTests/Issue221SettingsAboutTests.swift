@@ -78,9 +78,9 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
     defer { panel.window.close() }
     let views = try issue221AboutViews(in: panel)
     let expectations: [(EntryPoint, URL)] = [
-        (.reportIssue, URL(string: "https://github.com/anzchy/picsee/issues/new?template=bug_report.yml")!),
-        (.settingsAboutPrivacyNote, URL(string: "https://github.com/anzchy/picsee#%E9%9A%90%E7%A7%81")!),
-        (.settingsAboutSourceCode, URL(string: "https://github.com/anzchy/picsee")!),
+        (.reportIssue, URL(string: "https://github.com/anzchy/mado/issues/new?template=bug_report.yml")!),
+        (.settingsAboutPrivacyNote, URL(string: "https://github.com/anzchy/mado#%E9%9A%90%E7%A7%81")!),
+        (.settingsAboutSourceCode, URL(string: "https://github.com/anzchy/mado")!),
     ]
     for (index, expected) in expectations.enumerated() {
         let button = views.links[index]

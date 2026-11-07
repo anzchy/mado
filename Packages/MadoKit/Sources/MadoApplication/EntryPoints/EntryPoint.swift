@@ -19,9 +19,9 @@ public enum EntryPointLanguage: Sendable {
 }
 
 public enum EntryPoint: String, CaseIterable, Sendable {
-    public static let reportIssueURL = URL(string: "https://github.com/anzchy/picsee/issues/new?template=bug_report.yml")!
-    public static let settingsAboutPrivacyNoteURL = URL(string: "https://github.com/anzchy/picsee#%E9%9A%90%E7%A7%81")!
-    public static let settingsAboutSourceCodeURL = URL(string: "https://github.com/anzchy/picsee")!
+    public static let reportIssueURL = URL(string: "https://github.com/anzchy/mado/issues/new?template=bug_report.yml")!
+    public static let settingsAboutPrivacyNoteURL = URL(string: "https://github.com/anzchy/mado#%E9%9A%90%E7%A7%81")!
+    public static let settingsAboutSourceCodeURL = URL(string: "https://github.com/anzchy/mado")!
 
     case reportIssue
     case diagnostics
