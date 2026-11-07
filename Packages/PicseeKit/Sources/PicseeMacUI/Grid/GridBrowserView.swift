@@ -250,6 +250,8 @@ private enum GridPageMove {
     var onPageOrEdge: ((GridPageMove, Bool) -> Void)?
     var onClick: ((Int?, SelectionModifier) -> Void)?
     var onNativeSelectionChange: (() -> Void)?
+    var onMagnify: ((NSEvent) -> Void)?
+    override func magnify(with event: NSEvent) { onMagnify?(event) }
     var columnStep = 1
     override func mouseDown(with event: NSEvent) {
         guard event.clickCount == 1, !event.modifierFlags.contains(.control) else { return }
@@ -303,6 +305,9 @@ private enum GridPageMove {
         }
     }
     public var onCurrentFileChange: ((String?) -> Void)?
+    /// The shell writes the same app-wide preference used by keys and Settings.
+    public var onThumbnailSizeChange: ((Double) -> Void)?
+    private var pinchSize: Double?
     public var onSelect: ((ItemID) -> Void)?
     public var onSelectionGesture: ((ItemID, SelectionModifier) -> BrowserSelection)?
     public var onClearSelection: (() -> BrowserSelection)?
@@ -385,6 +390,9 @@ private enum GridPageMove {
             guard let self, !self.updating else { return }
             self.synchronizeSelection(self.selection)
         }
+        (collectionView as? GridCollectionView)?.onMagnify = { [weak self] event in
+            self?.magnify(with: event)
+        }
         collectionView.register(GridPhotoItem.self, forItemWithIdentifier: Self.reuseID)
         collectionView.setAccessibilityIdentifier("grid.collection")
         scrollView.frame = bounds
@@ -422,6 +430,21 @@ private enum GridPageMove {
     public required init?(coder: NSCoder) { nil }
 
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    public override func magnify(with event: NSEvent) {
+        guard !isHiddenOrHasHiddenAncestor else { pinchSize = nil; return }
+        if event.phase.contains(.cancelled) { pinchSize = nil; return }
+        if event.phase.contains(.began) { pinchSize = nil }
+        let current = displayOptions.thumbnailSize
+        // A store echo rounds our own value. An external size change replaces the gesture base.
+        let base = pinchSize.flatMap {
+            DisplayPreferences.normalizedThumbnailSize($0) == current ? $0 : nil
+        } ?? current
+        let next = ThumbnailSizeGesture.size(from: base, magnification: Double(event.magnification))
+        pinchSize = next
+        onThumbnailSizeChange?(next)
+        if event.phase.contains(.ended) { pinchSize = nil }
+    }
 
     @objc private func clipFrameChanged() {
         updateGeometry()
