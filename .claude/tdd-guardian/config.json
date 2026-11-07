@@ -108,6 +108,16 @@
       ],
       "coverage": "none",
       "timeoutMs": 120000
+    },
+    {
+      "name": "release-tag-ci-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/check-tag-ci.test.mjs scripts/release/release-workflow.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
