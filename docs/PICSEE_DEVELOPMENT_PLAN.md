@@ -131,7 +131,8 @@ P0 技术验证、设计映射与命令底座
 | 普通点击 / 无效 ID | 单选并设置 current、anchor；不在列表的 ID 不改变状态 | §1.4 选择模型 | `browserSelectionModifiersAndReconciliation` |
 | ⌘点击 | 切换一个 ID；current 可不在选择内；anchor 移到点击项 | §1.4 修饰键；P3-09 已在 NSCollectionView 复核 | `browserSelectionModifiersAndReconciliation`、`gridMouseModifiersDrawExactlyTheSessionSelection` |
 | Shift 点击 | 以 anchor 到点击项的双向闭区间替换选择；anchor 不动；缺失 anchor 回退普通点击 | §1.4 修饰键；P3-09 已在 NSCollectionView 复核 | `browserSelectionModifiersAndReconciliation`、`gridMouseModifiersDrawExactlyTheSessionSelection` |
-| 网格 Shift/⌘ + 方向键 | 仅移动 current，保留已有选择集合与 anchor；普通方向键单选 | P3-09 原生实现与测试；这是本工作包的键盘规则记录 | `gridModifiedArrowKeepsMultiSelection`、`gridEntryDefinesCurrentWithoutSelectionThenArrowsPreviewAndEscUseIt` |
+| 网格 ⌘ + 方向键 | 仅移动 current，保留已有选择集合与 anchor；普通方向键单选 | P3-09 原生实现与测试；这是本工作包的键盘规则记录 | `gridModifiedArrowKeepsMultiSelection`、`gridEntryDefinesCurrentWithoutSelectionThenArrowsPreviewAndEscUseIt` |
+| 网格 Shift + 方向键 | 有 anchor 时，与 Shift 点击新 current 相同：用 anchor 到新 current 的双向闭区间替换选择，anchor 不动；无 anchor 时回退普通方向键单选并建立 anchor。适用于 ⌘移动焦点后、⌘构造的选择及空白点击清空选择后 | P0-09 Shift 点击规则；P3-09、#522，delegator 2026-11-07 明确新规则 | `issue522ShiftResumesRangeAfterCommandFocus`、`issue522ShiftReplacesCommandBuiltSelection`、`issue522ShiftRebuildsClearedSelectionFromAnchor`、`issue522ShiftWithoutAnchorSelectsSingleThenExtends`、`issue522ShiftRangeShrinksAndCrossesAnchor`、`issue522VerticalRangeUsesLayoutColumnsAndClampsAtEdge` |
 | 列表更新 | selected、current、anchor 扣除离开列表的 ID | §1.4 选择与快照协调 | `browserSelectionModifiersAndReconciliation` |
 | Space / Enter 进入 | 零/单选冻结整个过滤排序列表；多选冻结列表顺序中的选中项；保存版本、选择、current、滚动锚点 | §1.4 Preview Set | `previewSetFrozenOrderRemovalAndOrigin`、`sessionRouterPreviewAndEscape` |
 | 多选起点 | current 在集合内从它开始，否则从首个选中项开始 | §1.4 Preview Set；P3-09 已覆盖模型与网格选择，App 全链路待真机 | `previewSetFrozenOrderRemovalAndOrigin`、`sessionRouterPreviewAndEscape`、`gridMultiPreviewFreezesOrderAndRestoresSelection` |
