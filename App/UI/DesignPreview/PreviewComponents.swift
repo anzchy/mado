@@ -1,1 +1,1 @@
-// Reusable component compositions live in PicseeMacUI/DesignSystem/Components.
+// Reusable component compositions live in MadoMacUI/DesignSystem/Components.

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
-import PicseeCore
-import PicseeMacUI
+import MadoCore
+import MadoMacUI
 
 /// Untested native panel (CACHE-04, a native exception: no pinned C state). The model's refresh loop runs only
 /// while the panel is on screen; closing, minimising or covering it stops the loop. Shows counts and sizes only.

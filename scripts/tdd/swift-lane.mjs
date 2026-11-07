@@ -2,7 +2,7 @@
  * Swift receipt adapter, adapted from mdpro scripts/cargo-test-lane.mjs @9f133f1d.
  * Usage: node scripts/tdd/swift-lane.mjs [filter]
  * Or set PICSEE_SWIFT_FILTER for receipt.js record AND verify (env is inherited).
- * Always runs SwiftPM under the picsee heavy lock. No filter => 64; no completed
+ * Always runs SwiftPM under the mado heavy lock. No filter => 64; no completed
  * tests / compile failure / inconsistent outcome => 70 (runner-error/environment).
  * Completed assertion failure => 1 plus Maven counts; pass => 0 plus counts.
  * Keeps raw-byte streaming, backpressure, per-stream decoding and signal relay
@@ -147,7 +147,7 @@ function main(argv) {
     return;
   }
   const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
-  const child = spawn(lock, ["swift", "test", "--package-path", "Packages/PicseeKit", "--filter", filter], { stdio: ["inherit", "pipe", "pipe"] });
+  const child = spawn(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: ["inherit", "pipe", "pipe"] });
   const stdoutDetector = createDetector();
   const stderrDetector = createDetector();
   pipeThrough(child.stdout, process.stdout, stdoutDetector);

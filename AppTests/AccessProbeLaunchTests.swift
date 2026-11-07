@@ -11,12 +11,12 @@ struct AccessProbeLaunchTests {
             runCount += 1
         }, terminate: {})
         let similar = AccessProbeRunner.runIfRequested(
-            arguments: ["Mado", "-PicseeAccessProbeExtra"],
+            arguments: ["Mado", "-MadoAccessProbeExtra"],
             runProbe: { runCount += 1 },
             terminate: {}
         )
         let requested = AccessProbeRunner.runIfRequested(
-            arguments: ["Mado", "-PicseeAccessProbe"],
+            arguments: ["Mado", "-MadoAccessProbe"],
             runProbe: { runCount += 1 },
             terminate: {}
         )
@@ -33,7 +33,7 @@ struct AccessProbeLaunchTests {
         var accessServicesConstructionCount = 0
         var events: [AppDelegateProbeHooks.ProductEvent] = []
         let delegate = AppDelegate(probeHooks: AppDelegateProbeHooks(
-            arguments: ["Mado", "-PicseeAccessProbe"],
+            arguments: ["Mado", "-MadoAccessProbe"],
             runProbe: { probeRunCount += 1 },
             terminate: { terminationCount += 1 },
             makeAccessServices: {

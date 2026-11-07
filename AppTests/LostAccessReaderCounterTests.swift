@@ -1,8 +1,8 @@
 import Foundation
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
 
 private struct T229CounterAdapter: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }

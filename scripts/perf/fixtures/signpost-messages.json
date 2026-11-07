@@ -1,5 +1,5 @@
 {
-  "about": "One table of signpost message formats shared by the Swift tests (which format them) and scripts/perf/p308-parse.test.mjs (which parses them). 'package' messages are produced and asserted by PicseeKit; 'app' messages are emitted by App/ adapters and copied here from the App source by code reading (not unit-tested in Swift).",
+  "about": "One table of signpost message formats shared by the Swift tests (which format them) and scripts/perf/p308-parse.test.mjs (which parses them). 'package' messages are produced and asserted by MadoKit; 'app' messages are emitted by App/ adapters and copied here from the App source by code reading (not unit-tested in Swift).",
   "package": {
     "GridFirstThumbnails.begin": "generation=7 items=5000",
     "GridFirstThumbnails.end": "outcome=complete generation=7 visible=24 shown=23 failed=1",

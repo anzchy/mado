@@ -1,7 +1,7 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeMacUI
+import MadoApplication
+import MadoMacUI
 
 @Suite(.timeLimit(.minutes(3))) struct AccessRebindRenderedContract {
 @MainActor @Test(arguments: [NSSize(width: 1280, height: 800), NSSize(width: 800, height: 680)])

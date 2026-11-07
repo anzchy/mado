@@ -2,7 +2,7 @@
 # Submit one file to Apple's notary service and wait. Fails unless the submission is Accepted,
 # printing Apple's log so the run shows why. Credentials come from the environment (GitHub Secrets).
 #
-#   APPLE_ID=… APPLE_APP_SPECIFIC_PASSWORD=… DEVELOPMENT_TEAM=… scripts/release/notarize.sh Picsee.zip
+#   APPLE_ID=… APPLE_APP_SPECIFIC_PASSWORD=… DEVELOPMENT_TEAM=… scripts/release/notarize.sh Mado.zip
 set -euo pipefail
 
 if [[ $# -ne 1 || ! -f "$1" ]]; then

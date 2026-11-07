@@ -11,8 +11,8 @@
   "lanes": [
     {
       "name": "unit",
-      "description": "PicseeKit package tests (Swift Testing) via SwiftPM; in-process, no external services. Same command as the CI 'Swift Testing' step, plus coverage.",
-      "command": "swift test --package-path Packages/PicseeKit --enable-code-coverage",
+      "description": "MadoKit package tests (Swift Testing) via SwiftPM; in-process, no external services. Same command as the CI 'Swift Testing' step, plus coverage.",
+      "command": "swift test --package-path Packages/MadoKit --enable-code-coverage",
       "coverageReportCommand": "sh scripts/tdd/swift-lcov.sh",
       "gateOn": [
         "taskCompleted",
@@ -20,7 +20,7 @@
       ],
       "coverage": "include",
       "coverageSummaryPath": "coverage/lcov.info",
-      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --list-tests",
+      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --list-tests",
       "timeoutMs": 600000
     },
     {
@@ -31,7 +31,7 @@
         "manual"
       ],
       "coverage": "none",
-      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --list-tests --filter 'issue73SystemScopeReadabilityReflectsRealFiles|issue73ReadableDropSessionOpensEmptyThenReplacesAndRejectsZIP|accessSystemAdapterCreatesAndResolvesRealBookmark|issue140SystemFileBookmarkFollowsSameVolumeRename'",
+      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --list-tests --filter 'issue73SystemScopeReadabilityReflectsRealFiles|issue73ReadableDropSessionOpensEmptyThenReplacesAndRejectsZIP|accessSystemAdapterCreatesAndResolvesRealBookmark|issue140SystemFileBookmarkFollowsSameVolumeRename'",
       "timeoutMs": 600000
     },
     {
@@ -42,13 +42,13 @@
         "manual"
       ],
       "coverage": "none",
-      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/PicseeKit --list-tests",
+      "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --list-tests",
       "timeoutMs": 600000
     },
     {
       "name": "app-red",
-      "description": "Compiled PicseeAppTests. Optional PICSEE_APP_FILTER selects runtime test IDs; keep the same filter for record and verify (env is not stored in receipts). Set PICSEE_APP_LANE_NO_RETRY=1 for RED. Build-for-testing before RED record.",
-      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:PicseeAppTests",
+      "description": "Compiled MadoAppTests. Optional PICSEE_APP_FILTER selects runtime test IDs; keep the same filter for record and verify (env is not stored in receipts). Set PICSEE_APP_LANE_NO_RETRY=1 for RED. Build-for-testing before RED record.",
+      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:MadoAppTests",
       "command": "node scripts/tdd/app-lane.mjs",
       "gateOn": [
         "manual"

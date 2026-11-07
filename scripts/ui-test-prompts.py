@@ -54,8 +54,8 @@ def stop_run(result_path, derived, baseline):
                      and args[1] == str(Path(__file__).resolve().parent / 'tdd/heavy-lock.py'))
         own_build = result_path in args and (Path(args[0]).name == 'xcodebuild' or own_heavy)
         own_app = False
-        if args[0] == app and '-PicseeUITestFixture' in args:
-            index = args.index('-PicseeUITestFixture') + 1
+        if args[0] == app and '-MadoUITestFixture' in args:
+            index = args.index('-MadoUITestFixture') + 1
             own_app = index < len(args) and args[index].startswith(fixture_prefix)
         if own_build or own_app:
             try:

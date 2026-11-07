@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// Blocks only the synchronous system adapter on FileAccess's executor, never MainActor.
 private final class ReplacementGate: @unchecked Sendable {

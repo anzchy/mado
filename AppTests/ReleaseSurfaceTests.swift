@@ -1,7 +1,7 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
+import MadoApplication
+import MadoInfrastructure
 
 @MainActor @Test func issue215HelpMenuMovesDiagnosticsAndReportsBugTemplate() throws {
     _ = NSApplication.shared

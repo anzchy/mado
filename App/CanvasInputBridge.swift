@@ -1,5 +1,5 @@
 import AppKit
-import PicseeMacUI
+import MadoMacUI
 
 /// Only extracts the native gesture fields; policy and Session updates live in the reusable canvas.
 @MainActor

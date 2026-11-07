@@ -1,7 +1,7 @@
 import Foundation
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
 
 struct AccessServices: Sendable {
     let files: FileAccess

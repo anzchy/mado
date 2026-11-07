@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor func issue220Panel(_ port: FakeUpdatePort?) -> SettingsPanelWindow {
     let preferences = InMemoryDisplayPreferencesStore()

@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// The OS bookmark boundary is deterministic; folders, scan, controller copy and AppKit views are real.
 private struct Page26CopyBookmarks: SecurityScope, BookmarkCoding {

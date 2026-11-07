@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// #331 (spec #311 amendment, 2026-10-31): 「我看到程序安装后，进入首页（没有加载文件夹和图片），还是用toolbar出现」, then
 /// 「Hide all on Home (Recommended)」. The real controller's Home shows no viewer floating controls; an opened image does.

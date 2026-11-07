@@ -57,8 +57,8 @@ test('cache aside: moves only the exact plain directory into a new target, never
   assert.equal(planCacheAside(cache, '/R', 7, options('link')).action, 'refuse');
   assert.equal(planCacheAside(cache, '/R', 7, options('file')).action, 'refuse');
   assert.match(planCacheAside(cache, '/R', 7, options('dir', true)).reason, /already exists/);
-  assert.match(planCacheAside('/Users/u/Library/Caches', '/R', 7, options('dir')).reason, /not picsee's cache/);
-  assert.match(planCacheAside(cache + '/..', '/R', 7, options('dir')).reason, /not picsee's cache/);
+  assert.match(planCacheAside('/Users/u/Library/Caches', '/R', 7, options('dir')).reason, /not mado's cache/);
+  assert.match(planCacheAside(cache + '/..', '/R', 7, options('dir')).reason, /not mado's cache/);
 });
 
 // ---- fix round 1: real filesystem trees and real child processes (#146 H1–H3, M1) ----
@@ -79,21 +79,21 @@ function tree() {
 test('cache aside (real tree): a symlinked ancestor anywhere below the container root is refused, nothing moves', () => {
   const t = tree();
   try {
-    // Data/Library/Caches/Picsee → a directory outside the container, holding its own Thumbnails.
+    // Data/Library/Caches/Mado → a directory outside the container, holding its own Thumbnails.
     const foreign = mkdtempSync(path.join(tmpdir(), 'p308-foreign-'));
     t.extra.push(foreign);
     mkdirSync(path.join(foreign, 'Thumbnails'));
-    writeFileSync(path.join(foreign, 'Thumbnails', 'keep'), 'not picsee');
-    const picsee = path.dirname(t.cache);
-    rmSync(picsee, { recursive: true });
-    symlinkSync(foreign, picsee);
+    writeFileSync(path.join(foreign, 'Thumbnails', 'keep'), 'not mado');
+    const mado = path.dirname(t.cache);
+    rmSync(mado, { recursive: true });
+    symlinkSync(foreign, mado);
     const plan = planCacheAside(t.cache, t.out, 1, { bundleID: BUNDLE, home: t.home });
     assert.equal(plan.action, 'refuse');
     assert.match(plan.reason, /symlink/);
     assert.match(plan.reason, /Caches\/Mado/);
     const run = { cache: t.cache, bundleID: BUNDLE, cacheMoves: [] };
     assert.throws(() => moveCacheAside(t.out, run, 1, { home: t.home }), /cold cache refused: .*symlink/);
-    assert.equal(readFileSync(path.join(foreign, 'Thumbnails', 'keep'), 'utf8'), 'not picsee', 'the foreign directory stays put');
+    assert.equal(readFileSync(path.join(foreign, 'Thumbnails', 'keep'), 'utf8'), 'not mado', 'the foreign directory stays put');
     assert.equal(existsSync(path.join(t.out, 'cache-aside')), false);
   } finally { t.cleanup(); }
 });
@@ -137,7 +137,7 @@ test('cache aside: only ENOENT means absent; EACCES (real) and EPERM fail the ru
     if (process.getuid?.() === 0) {
       t2.diagnostic('running as root: permission bits do not deny root, real EACCES case skipped');
     } else {
-      chmodSync(path.dirname(t.cache), 0o000); // Caches/Picsee unreadable: lstat of Thumbnails fails with EACCES
+      chmodSync(path.dirname(t.cache), 0o000); // Caches/Mado unreadable: lstat of Thumbnails fails with EACCES
       const plan = planCacheAside(t.cache, t.out, 1, { bundleID: BUNDLE, home: t.home });
       assert.equal(plan.action, 'refuse');
       assert.match(plan.reason, /EACCES/);
@@ -181,7 +181,7 @@ test('launch: owns exactly the child it spawned, even when another Mado appears 
   let calls = 0;
   const stranger = process.pid; // a live process the script must never claim or signal
   const deps = { sleep: async () => {}, readyMs: 0,
-    picseePIDs: () => (calls++ === 0 ? [] : [stranger]) };
+    madoPIDs: () => (calls++ === 0 ? [] : [stranger]) };
   const record = await launch(app, run, deps);
   try {
     assert.ok(record.child && record.pid !== stranger);
@@ -198,7 +198,7 @@ test('launch: refuses while another Mado runs and spawns nothing', async () => {
   let spawned = false;
   const run = { owned: [] };
   try {
-    await assert.rejects(launch(app, run, { picseePIDs: () => [4242], spawn: () => { spawned = true; }, sleep: async () => {}, readyMs: 0 }), /another Mado is running \(pid 4242\)/);
+    await assert.rejects(launch(app, run, { madoPIDs: () => [4242], spawn: () => { spawned = true; }, sleep: async () => {}, readyMs: 0 }), /another Mado is running \(pid 4242\)/);
     assert.equal(spawned, false);
     assert.deepEqual(run.owned, []);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -209,7 +209,7 @@ test('launch: a child that exits during start-up is reported and never owned', a
   const { app, root } = fakeApp('exits');
   const run = { owned: [] };
   try {
-    await assert.rejects(launch(app, run, { picseePIDs: () => [], sleep: (ms) => new Promise((r) => setTimeout(r, ms)), readyMs: 5000 }), /exited during start-up/);
+    await assert.rejects(launch(app, run, { madoPIDs: () => [], sleep: (ms) => new Promise((r) => setTimeout(r, ms)), readyMs: 5000 }), /exited during start-up/);
     assert.deepEqual(run.owned, []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

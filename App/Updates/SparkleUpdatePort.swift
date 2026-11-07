@@ -1,5 +1,5 @@
 import Foundation
-import PicseeApplication
+import MadoApplication
 import Sparkle
 
 /// Boundary for Sparkle's native controller. Tests replace only the external framework operations.

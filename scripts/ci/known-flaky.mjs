@@ -10,7 +10,7 @@ export const knownFlaky = [
   },
   {
     name: 'sidebarCancelRestoresPriorTreeAndWatchRefreshRemovesDeletedChild',
-    signature: /^SidebarTreeControllerTests\.swift:305:2: Caught error: wait timed out after 100\.0 seconds at PicseeAppTests\/SidebarTreeControllerTests\.swift:389 \(sidebar stage: restore A tree\); state: rows=.+$/,
+    signature: /^SidebarTreeControllerTests\.swift:305:2: Caught error: wait timed out after 100\.0 seconds at MadoAppTests\/SidebarTreeControllerTests\.swift:389 \(sidebar stage: restore A tree\); state: rows=.+$/,
     issue: 425,
     // The A4 180-second test-time-limit variant is not covered.
   },

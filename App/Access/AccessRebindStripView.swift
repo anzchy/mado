@@ -1,5 +1,5 @@
 import AppKit
-import PicseeMacUI
+import MadoMacUI
 
 @MainActor private final class RebindStripButton: NSButton {
     override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }

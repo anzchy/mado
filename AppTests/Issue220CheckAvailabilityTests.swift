@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-import PicseeApplication
+import MadoApplication
 
 // Audit r1 M1: 立即检查 follows the updater's canCheckForUpdates, as Sparkle's own menu validation would.
 @MainActor @Test func issue220CheckNowFollowsUpdaterAvailability() throws {

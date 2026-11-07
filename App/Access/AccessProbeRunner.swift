@@ -1,7 +1,7 @@
 #if DEBUG
 import AppKit
 import Foundation
-import PicseeInfrastructure
+import MadoInfrastructure
 import os
 
 @MainActor
@@ -43,7 +43,7 @@ enum AccessProbeRunner {
     }
 
     static func isRequested(arguments: [String]) -> Bool {
-        arguments.contains("-PicseeAccessProbe")
+        arguments.contains("-MadoAccessProbe")
     }
 
     static func resultsLogMessage(for output: URL) -> String {

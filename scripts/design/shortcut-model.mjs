@@ -11,33 +11,33 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const FILES = {
-  commandID: 'Packages/PicseeKit/Sources/PicseeCore/Commands/CommandID.swift',
+  commandID: 'Packages/MadoKit/Sources/MadoCore/Commands/CommandID.swift',
   menu: 'App/Commands/CommandMenu.swift',
-  windowCommands: 'Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ChromeWindowCommands.swift',
+  windowCommands: 'Packages/MadoKit/Sources/MadoMacUI/Chrome/ChromeWindowCommands.swift',
   page: 'design/prototypes/picsee-browser/states/shortcuts.html',
 };
 // Directories searched for key equivalents the parser above does not read; any found fails the check.
-const SCAN = ['App', 'Packages/PicseeKit/Sources'];
+const SCAN = ['App', 'Packages/MadoKit/Sources'];
 
 // Keys handled in keyDown rather than by a menu item. Each anchor must still match its file, or the check fails and
 // this list has to be revisited together with the page.
 export const KEY_HANDLERS = [
-  { id: 'key:grid-arrows', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+  { id: 'key:grid-arrows', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /case 123: delta = -1\s+case 124: delta = 1\s+case 125: delta = columnStep\s+case 126: delta = -columnStep/,
     keys: ['←', '→', '↑', '↓'] },
-  { id: 'key:grid-page-up', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+  { id: 'key:grid-page-up', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 116: onPageOrEdge\?\(\.page\(-1\), preserveSelection\); return/,
     keys: ['Page Up', '⇧', 'Page Up'] },
-  { id: 'key:grid-page-down', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+  { id: 'key:grid-page-down', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 121: onPageOrEdge\?\(\.page\(1\), preserveSelection\); return/,
     keys: ['Page Down', '⇧', 'Page Down'] },
-  { id: 'key:grid-home', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+  { id: 'key:grid-home', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 115: onPageOrEdge\?\(\.first, preserveSelection\); return/,
     keys: ['Home', '⇧', 'Home'] },
-  { id: 'key:grid-end', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift',
+  { id: 'key:grid-end', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 119: onPageOrEdge\?\(\.last, preserveSelection\); return/,
     keys: ['End', '⇧', 'End'] },
-  { id: 'key:viewer-tab', file: 'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift',
+  { id: 'key:viewer-tab', file: 'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     anchor: /if event\.keyCode == 48 \{ onTab\?\(/, keys: ['Tab'] },
 ];
 // Every key code handled outside the menus, per file: the page row it belongs to, or why it has none. A code found in a
@@ -46,30 +46,30 @@ const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Spa
 const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
 const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissal, not a command';
 export const KEY_SITES = {
-  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridBrowserView.swift': {
+  'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
     123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
     116: 'key:grid-page-up', 121: 'key:grid-page-down', 115: 'key:grid-home', 119: 'key:grid-end' },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
+  'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
     36: { excluded: OPEN_KEY_RING }, 49: { excluded: OPEN_KEY_RING }, 76: { excluded: OPEN_KEY_RING } },
   'App/CanvasWindowController.swift': { 34: 'command:inspector', 53: 'command:escape', 49: 'command:preview', 36: 'command:enter', 76: 'command:enter',
     48: { excluded: 'Tab moves focus between the grid, its footer and the Inspector' } },
   'App/Commands/CommandMenu.swift': { 34: 'command:inspector' },
-  'Packages/PicseeKit/Sources/PicseeApplication/Viewer/InspectorEscapePolicy.swift': { 53: 'command:escape' },
-  'Packages/PicseeKit/Sources/PicseeMacUI/States/ViewerStateFocus.swift': { 53: 'command:escape',
+  'Packages/MadoKit/Sources/MadoApplication/Viewer/InspectorEscapePolicy.swift': { 53: 'command:escape' },
+  'Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateFocus.swift': { 53: 'command:escape',
     48: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 36: { excluded: FOCUSED_CONTROL } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Chrome/ViewerChromeOverlay.swift': { 53: 'command:escape',
+  'Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift': { 53: 'command:escape',
     48: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridShellView.swift': {
+  'Packages/MadoKit/Sources/MadoMacUI/Grid/GridShellView.swift': {
     123: { excluded: 'arrows resize the focused sidebar divider' }, 124: { excluded: 'arrows resize the focused sidebar divider' },
     53: { excluded: DISPLAY_PANEL_ESC }, 48: { excluded: 'Tab stays in the open Display panel\'s own key loop' } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridDisplayPanelView.swift': { 53: { excluded: DISPLAY_PANEL_ESC } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/Grid/GridSidebarTreeView.swift': {
+  'Packages/MadoKit/Sources/MadoMacUI/Grid/GridDisplayPanelView.swift': { 53: { excluded: DISPLAY_PANEL_ESC } },
+  'Packages/MadoKit/Sources/MadoMacUI/Grid/GridSidebarTreeView.swift': {
     36: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
-  'Packages/PicseeKit/Sources/PicseeMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
+  'Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
+  'Packages/MadoKit/Sources/MadoMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
-const CHARACTER_FILES = ['Packages/PicseeKit/Sources/PicseeMacUI/Canvas/CanvasView.swift'];
+const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
  * (with or without a leading !), and .onKeyPress(.name). */

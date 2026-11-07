@@ -1,9 +1,9 @@
 import AppKit
 import os
-import PicseeCore
-import PicseeApplication
-import PicseeMacUI
-import PicseeInfrastructure
+import MadoCore
+import MadoApplication
+import MadoMacUI
+import MadoInfrastructure
 import SwiftUI
 import Observation
 import Darwin
@@ -2354,7 +2354,7 @@ extension CanvasWindowController: ViewerInputHost {
     func promptForInputFolder(_ folder: URL) { promptForFolder(folder, currentImage: nil, direction: .next) }
 }
 
-// Untested native scan effects; snapshot navigation policy is covered in PicseeApplication.
+// Untested native scan effects; snapshot navigation policy is covered in MadoApplication.
 extension CanvasWindowController: FolderScanHost {
     private func folderScanner(_ services: AccessServices) -> FolderScanCoordinator {
         if let scan = session.folderScan {

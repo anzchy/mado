@@ -59,7 +59,7 @@ def main():
             'webTitleStripReferencePx': 38, 'nativeTitlebarHeight': 'system-defined',
         },
         'behaviorReferences': {'viewerIdleDelaySeconds': 2.5, 'shortTransitionSeconds': 0.15,
-                               'reducedMotionTransitionSeconds': 0, 'timerOwner': 'PicseeApplication'},
+                               'reducedMotionTransitionSeconds': 0, 'timerOwner': 'MadoApplication'},
         'legacyExclusion': ['editor-*', 'color-editor-bg', 'color-code-bg', 'color-highlight',
                             'bottom-tabs-height', 'traffic-lights-*', 'color-running-*',
                             'unused aliases'],

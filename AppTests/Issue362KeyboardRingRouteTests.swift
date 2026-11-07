@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 /// Makes `event` the application's current event, as AppKit does while it dispatches a real key press.
 @MainActor private func issue362Dispatching(_ event: NSEvent, _ body: () -> Void) {

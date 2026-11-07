@@ -1,7 +1,7 @@
 import AppKit
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 enum SettingsSection: String, CaseIterable {
     case general, display, cache, update, about

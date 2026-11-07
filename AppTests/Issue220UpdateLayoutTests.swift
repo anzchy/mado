@@ -1,7 +1,7 @@
 import AppKit
 import Testing
-import PicseeApplication
-import PicseeMacUI
+import MadoApplication
+import MadoMacUI
 
 // settings.html ?section=update: .form grid 120px label column + 16px gap (controls at x 162 in the 580pt pane),
 // .hint muted ui-sm text, .switch (native checkbox, #218 mapping) and .btn rows at the #218 vertical rhythm.

@@ -3,8 +3,8 @@ options:
   deploymentTarget:
     macOS: "14.0"
 packages:
-  PicseeKit:
-    path: Packages/PicseeKit
+  MadoKit:
+    path: Packages/MadoKit
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.10.0
@@ -17,7 +17,7 @@ settings:
     DEVELOPMENT_TEAM: GRT84NAK4T
     ENABLE_HARDENED_RUNTIME: YES
 targets:
-  PicseeApp:
+  MadoApp:
     type: application
     platform: macOS
     sources:
@@ -25,14 +25,14 @@ targets:
         excludes:
           - Resources/Mado.entitlements
     dependencies:
-      - package: PicseeKit
-        product: PicseeCore
-      - package: PicseeKit
-        product: PicseeApplication
-      - package: PicseeKit
-        product: PicseeInfrastructure
-      - package: PicseeKit
-        product: PicseeMacUI
+      - package: MadoKit
+        product: MadoCore
+      - package: MadoKit
+        product: MadoApplication
+      - package: MadoKit
+        product: MadoInfrastructure
+      - package: MadoKit
+        product: MadoMacUI
       - package: Sparkle
     settings:
       base:
@@ -59,37 +59,37 @@ targets:
             sha="$sha-dirty"
           fi
           plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-          if /usr/libexec/PlistBuddy -c "Print :PicseeGitSHA" "$plist" >/dev/null 2>&1; then
-            /usr/libexec/PlistBuddy -c "Set :PicseeGitSHA $sha" "$plist"
+          if /usr/libexec/PlistBuddy -c "Print :MadoGitSHA" "$plist" >/dev/null 2>&1; then
+            /usr/libexec/PlistBuddy -c "Set :MadoGitSHA $sha" "$plist"
           else
-            /usr/libexec/PlistBuddy -c "Add :PicseeGitSHA string $sha" "$plist"
+            /usr/libexec/PlistBuddy -c "Add :MadoGitSHA string $sha" "$plist"
           fi
-  PicseeAppTests:
+  MadoAppTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: App
         excludes:
-          - PicseeApp.swift
+          - MadoApp.swift
           - Info.plist
           - Resources
       - path: AppTests
     dependencies:
-      - package: PicseeKit
-        product: PicseeCore
-      - package: PicseeKit
-        product: PicseeApplication
-      - package: PicseeKit
-        product: PicseeInfrastructure
-      - package: PicseeKit
-        product: PicseeMacUI
+      - package: MadoKit
+        product: MadoCore
+      - package: MadoKit
+        product: MadoApplication
+      - package: MadoKit
+        product: MadoInfrastructure
+      - package: MadoKit
+        product: MadoMacUI
       - package: Sparkle
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
         CODE_SIGNING_ALLOWED: NO
-  PicseeUITests:
+  MadoUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
@@ -101,29 +101,29 @@ targets:
       - path: TestAssets/synthetic/orientation-1.tiff
         buildPhase: resources
     dependencies:
-      - target: PicseeApp
+      - target: MadoApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.uitests
-        TEST_TARGET_NAME: PicseeApp
+        TEST_TARGET_NAME: MadoApp
 schemes:
   Mado:
     build:
       targets:
-        PicseeApp: all
+        MadoApp: all
     test:
       targets:
-        - PicseeAppTests
+        - MadoAppTests
     run:
       config: Debug
   MadoFixtureUI:
     build:
       targets:
-        PicseeApp: all
-        PicseeUITests: all
+        MadoApp: all
+        MadoUITests: all
     test:
       targets:
-        - PicseeUITests
+        - MadoUITests
     run:
       config: Debug

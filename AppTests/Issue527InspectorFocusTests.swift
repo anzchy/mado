@@ -1,8 +1,8 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoMacUI
 
 @Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
       .timeLimit(.minutes(3))) @MainActor

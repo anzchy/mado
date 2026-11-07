@@ -18,18 +18,18 @@ mkdir -p "$output"
 derived="$HOME/.picsee/ui-tests/dd"
 ram="$HOME/.picsee/device/ram/with-ram.sh"
 lock="$repo/.agents/skills/picsee-delegator/scripts/gui-lock.sh"
-selectors=(-only-testing:PicseeUITests)
+selectors=(-only-testing:MadoUITests)
 expected=4
 case "$mode" in
   flows)
-    selectors=(-only-testing:PicseeUITests/PicseeFixtureGridUITests/testKeyboardLoopRestoresCurrentItemSelectionAndFocus
-      -only-testing:PicseeUITests/PicseeFixtureGridUITests/testMenuStatesFollowGridAndViewer)
+    selectors=(-only-testing:MadoUITests/MadoFixtureGridUITests/testKeyboardLoopRestoresCurrentItemSelectionAndFocus
+      -only-testing:MadoUITests/MadoFixtureGridUITests/testMenuStatesFollowGridAndViewer)
     expected=2 ;;
   audit)
-    selectors=(-only-testing:PicseeUITests/PicseeFixtureGridUITests/testAccessibilityAuditGridAndViewer)
+    selectors=(-only-testing:MadoUITests/MadoFixtureGridUITests/testAccessibilityAuditGridAndViewer)
     expected=1 ;;
   smoke)
-    selectors=(-only-testing:PicseeUITests/PicseeFixtureGridUITests/testContainerFixtureOpensThreeImageGrid)
+    selectors=(-only-testing:MadoUITests/MadoFixtureGridUITests/testContainerFixtureOpensThreeImageGrid)
     expected=1 ;;
 esac
 run_heavy() { "$ram" i145 "$repo/scripts/heavy-lock.sh" "$@"; }
@@ -112,7 +112,7 @@ def expand(value):
     if isinstance(value, dict): return {k: expand(v) for k, v in value.items()}
     return value
 plan = expand(plistlib.load(plans[0].open('rb')))
-target = plan['PicseeUITests']
+target = plan['MadoUITests']
 target.setdefault('EnvironmentVariables', {}).update(
     PICSEE_UI_FIXTURE_DIR=str(Path(sys.argv[3]) / 'fixtures'),
     PICSEE_UI_RUN_ID=Path(sys.argv[3]).name, PWD=sys.argv[3])

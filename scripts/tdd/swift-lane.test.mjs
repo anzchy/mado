@@ -7,7 +7,7 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 
 const root = process.cwd();
-const temp = mkdtempSync(path.join(os.tmpdir(), 'picsee-swift-tests-'));
+const temp = mkdtempSync(path.join(os.tmpdir(), 'mado-swift-tests-'));
 after(() => rmSync(temp, { recursive: true, force: true }));
 // Only Swift itself is replaced: the real wrapper and heavy lock execute.
 writeFileSync(path.join(temp, 'swift'), `#!${process.execPath}
@@ -80,7 +80,7 @@ pluginTest('compile failure is runner-error/environment with no count line', ({ 
 test('only the selected filter is passed as a literal argv under the lock', () => {
   const r = run('swift-pass',0,{args:['selected name;$literal']});
   assert.equal(r.status,0,r.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(r.argvFile)),{argv:['test','--package-path','Packages/PicseeKit','--filter','selected name;$literal'],held:'1'});
+  assert.deepEqual(JSON.parse(readFileSync(r.argvFile)),{argv:['test','--package-path','Packages/MadoKit','--filter','selected name;$literal'],held:'1'});
 });
 test('missing filter fails closed rather than running the full suite', () => {
   const r = run('swift-pass',0,{filter:''});

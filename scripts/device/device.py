@@ -203,7 +203,7 @@ def run_dir(value):
 def signing_identity(app):
     # Re-sign with the exact certificate xcodebuild chose for the team; the name
     # "Apple Development" is ambiguous once the keychain holds another team's identity.
-    with tempfile.TemporaryDirectory(prefix='picsee-sign-') as folder:
+    with tempfile.TemporaryDirectory(prefix='mado-sign-') as folder:
         prefix = Path(folder) / 'cert'
         checked(['/usr/bin/codesign', '-d', '--extract-certificates=' + str(prefix), app])
         leaf = Path(str(prefix) + '0')
@@ -232,8 +232,8 @@ def build(run):
     # The inherited stamp marks all tracked metadata edits dirty. Only normalize after
     # verifying every binary input against HEAD, then restore the development signature.
     plist = app / 'Contents/Info.plist'
-    if plistlib.loads(plist.read_bytes()).get('PicseeGitSHA') != sha:
-        checked(['/usr/libexec/PlistBuddy', '-c', 'Set :PicseeGitSHA ' + sha, plist])
+    if plistlib.loads(plist.read_bytes()).get('MadoGitSHA') != sha:
+        checked(['/usr/libexec/PlistBuddy', '-c', 'Set :MadoGitSHA ' + sha, plist])
         checked(['/usr/bin/codesign', '--force', '--sign', signing_identity(app),
                  '--preserve-metadata=entitlements,requirements,flags,runtime', app])
     if inputs != assert_clean_inputs(ROOT):
@@ -329,7 +329,7 @@ def collect(run, expected):
                   lambda: Path((run / 'bundle.path').read_text().strip()).resolve())
     info = observe(('build-sha', 'bundle-id'),
                    lambda: plistlib.loads((app / 'Contents/Info.plist').read_bytes()), {})
-    data.update(sha=info.get('PicseeGitSHA'), bundleID=info.get('CFBundleIdentifier'))
+    data.update(sha=info.get('MadoGitSHA'), bundleID=info.get('CFBundleIdentifier'))
     def team():
         r = command(['/usr/bin/codesign', '-dv', '--verbose=2', app])
         if r.returncode: raise RuntimeError(r.stderr)
@@ -378,7 +378,7 @@ def verdicts(data):
     fixture_titles = {Path(name).name for name in data.get('fixtureNames', [])}
     window_ok = window_title == 'Mado' or window_title in fixture_titles
     checks = [
-        ('build-sha', data.get('sha') == data.get('expectedSHA') and bool(data.get('expectedSHA')), 'PicseeGitSHA differs from expected SHA'),
+        ('build-sha', data.get('sha') == data.get('expectedSHA') and bool(data.get('expectedSHA')), 'MadoGitSHA differs from expected SHA'),
         ('bundle-id', data.get('bundleID') == 'io.github.anzchy.mado', 'wrong bundle identifier'),
         ('signature-team', data.get('team') == 'GRT84NAK4T', 'wrong signing team'),
         ('signature-valid', data.get('signatureValid') is True, 'codesign verification failed'),

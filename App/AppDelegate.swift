@@ -1,10 +1,10 @@
 import AppKit
 import UniformTypeIdentifiers
 import os
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 #if DEBUG
 struct AppDelegateProbeHooks {
@@ -43,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         if let probeHooks { return probeHooks.makeAccessServices() }
         #endif
-        let sha = Bundle.main.object(forInfoDictionaryKey: "PicseeGitSHA") as? String ?? "unknown"
+        let sha = Bundle.main.object(forInfoDictionaryKey: "MadoGitSHA") as? String ?? "unknown"
         #if DEBUG && PICSEE_UI_TEST_FIXTURE
         let fixtureRoot = uiTestFixtureRoot
         return Task.detached {
@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let sha = Bundle.main.object(forInfoDictionaryKey: "PicseeGitSHA") as? String ?? "unknown"
+        let sha = Bundle.main.object(forInfoDictionaryKey: "MadoGitSHA") as? String ?? "unknown"
         logger.notice("Mado launch git=\(sha, privacy: .public)")
         #if DEBUG
         if let probeHooks {
@@ -211,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Untested native forwarding only; injected source behavior is covered in PicseeMacUI.
+/// Untested native forwarding only; injected source behavior is covered in MadoMacUI.
 @MainActor private final class UntestedNativeReduceMotionSource: NSObject, ReduceMotionSource {
     var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     var onChange: (@MainActor () -> Void)?

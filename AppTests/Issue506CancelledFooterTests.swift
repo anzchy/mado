@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 struct Footer506Bookmarks: SecurityScope, BookmarkCoding {
     func start(_ url: URL) -> Bool { true }
@@ -71,7 +71,7 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
     controller.showWindow(nil)
     window.setContentSize(NSSize(width: 1280, height: 800))
     func wait(_ condition: () -> Bool) async throws {
-        try await PicseeAppTests.waitUntil(between: { window.update() }, condition)
+        try await MadoAppTests.waitUntil(between: { window.update() }, condition)
     }
     func count() throws -> String {
         try #require(footer506Find("grid.folder-count", window.contentView) as? NSTextField).stringValue
@@ -215,7 +215,7 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
     let window = try #require(controller.window)
     defer { window.close() }
     controller.openGrantedFolder(spelling)
-    try await PicseeAppTests.waitUntil(between: { window.update() }) {
+    try await MadoAppTests.waitUntil(between: { window.update() }) {
         controller.session.folderScan?.sourceSnapshot?.isComplete == true
             && controller.session.folderScan?.isScanning == false
     }

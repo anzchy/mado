@@ -1,5 +1,5 @@
 import Foundation
-import PicseeApplication
+import MadoApplication
 
 /// In-memory stand-in for the Sparkle updater; the real path is device-verified (#223).
 @MainActor final class FakeUpdatePort: AppUpdatePort {

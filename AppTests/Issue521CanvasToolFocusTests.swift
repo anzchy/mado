@@ -1,9 +1,9 @@
 import AppKit
 import Testing
-import PicseeCore
-import PicseeApplication
-import PicseeInfrastructure
-import PicseeMacUI
+import MadoCore
+import MadoApplication
+import MadoInfrastructure
+import MadoMacUI
 
 @MainActor final class Issue521Motion: ReduceMotionSource {
     var reduceMotion = true
@@ -78,9 +78,9 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     window.makeKey()
     try #require(window.isKeyWindow, "native mouse dispatch requires the fixture window to be key")
     controller.openGrantedFolder(folder)
-    try await PicseeAppTests.waitUntil(between: { window.update() }) { controller.gridSearchAvailable }
+    try await MadoAppTests.waitUntil(between: { window.update() }) { controller.gridSearchAvailable }
     try #require(controller.route(.preview, from: .key))
-    try await PicseeAppTests.waitUntil(between: { window.update() }) {
+    try await MadoAppTests.waitUntil(between: { window.update() }) {
         controller.session.mode == .viewing && controller.hasImage && controller.session.imageLoader.phase == .settled
     }
     let canvas = try #require(issue521Find(CanvasView.self, in: window.contentView))
@@ -88,7 +88,7 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     try #require(!canvas.isHiddenOrHasHiddenAncestor)
     try #require(window.firstResponder === canvas)
     try #require(controller.route(.actualPixels, from: .key))
-    try await PicseeAppTests.waitUntil(between: { window.update() }) { controller.session.imageLoader.phase == .settled }
+    try await MadoAppTests.waitUntil(between: { window.update() }) { controller.session.imageLoader.phase == .settled }
     window.contentView?.layoutSubtreeIfNeeded()
     try #require(controller.session.zoomMode == .actualPixels)
     try #require(2400 / window.backingScaleFactor > canvas.bounds.width + 100)

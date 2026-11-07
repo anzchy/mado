@@ -65,11 +65,11 @@ test("tooling-only range gives SKIP", (t) => {
 
 test("an App path gives RUN", (t) => {
   const r = makeRepo(t);
-  r.commit("chore: app tweak", { "App/PicseeApp.swift": "// x\n" });
+  r.commit("chore: app tweak", { "App/MadoApp.swift": "// x\n" });
   assert.equal(r.run(r.base, "HEAD").line, "RUN");
 });
 
-for (const path of ["Packages/PicseeKit/Sources/PicseeCore/Item.swift", "docs/validation/P1.md", "project.yml", HTML]) {
+for (const path of ["Packages/MadoKit/Sources/MadoCore/Item.swift", "docs/validation/P1.md", "project.yml", HTML]) {
   test(`fixed mapped prefix ${path} gives RUN`, (t) => {
     const r = makeRepo(t);
     r.commit("chore: touch", { [path]: "x\n" });
@@ -79,7 +79,7 @@ for (const path of ["Packages/PicseeKit/Sources/PicseeCore/Item.swift", "docs/va
 
 test("a 在哪 file outside App/Packages gives RUN", (t) => {
   const r = makeRepo(t);
-  r.commit("chore: entitlements", { "Config/Picsee.entitlements": "<plist/>\n" });
+  r.commit("chore: entitlements", { "Config/Mado.entitlements": "<plist/>\n" });
   assert.equal(r.run(r.base, "HEAD").line, "RUN");
 });
 
@@ -91,8 +91,8 @@ test("a file under a 在哪 directory gives RUN", (t) => {
 
 test("a path change made and reverted inside the range still gives RUN", (t) => {
   const r = makeRepo(t);
-  r.commit("chore: add", { "Config/Picsee.entitlements": "<plist/>\n" });
-  r.git("rm", "-q", "Config/Picsee.entitlements");
+  r.commit("chore: add", { "Config/Mado.entitlements": "<plist/>\n" });
+  r.git("rm", "-q", "Config/Mado.entitlements");
   r.git("commit", "-q", "-m", "chore: remove");
   assert.equal(r.run(r.base, "HEAD").line, "RUN");
 });
@@ -125,7 +125,7 @@ for (const id of ["P2-08", "P2-08c", "p3-01"]) {
 
 test("REUSE after a docs-only fix commit", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   const head = r.commit("docs(agents): fix typo", { "docs/agents/notes.md": "y\n" });
   for (const verdict of ["CLEAN", "UPDATED"]) {
     assert.equal(
@@ -137,14 +137,14 @@ test("REUSE after a docs-only fix commit", (t) => {
 
 test("RUN after a mapped fix commit", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
-  r.commit("fix: app", { "App/PicseeApp.swift": "// y\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
+  r.commit("fix: app", { "App/MadoApp.swift": "// y\n" });
   assert.equal(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "CLEAN").line, "RUN");
 });
 
 test("REUSE is not given for NEEDS-OWNER or BLOCK with a docs-only fix", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   r.commit("docs(agents): fix typo", { "docs/agents/notes.md": "y\n" });
   assert.equal(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER").line, "RUN");
   assert.equal(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "BLOCK").line, "RUN");
@@ -152,8 +152,8 @@ test("REUSE is not given for NEEDS-OWNER or BLOCK with a docs-only fix", (t) => 
 
 test("RESOLVED after a ledger-only owner commit", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
-  const edited = r.read(LEDGER).replace("`Config/Picsee.entitlements`", "`Config/Picsee.entitlements`、`App/Access/`");
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
+  const edited = r.read(LEDGER).replace("`Config/Mado.entitlements`", "`Config/Mado.entitlements`、`App/Access/`");
   const head = r.commitLedger("docs(ledger): owner fixes ACCESS-01", edited);
   assert.equal(
     r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER").line,
@@ -179,7 +179,7 @@ for (const [name, before, after, resolved] of [
     if (name === "marker-free trailing padding") {
       r.commitLedger("chore: distinct fixture label", r.read(LEDGER).replace("| VIEW-02 | 1:1 显示 |", "| VIEW-02 | 原始像素 |"));
     }
-    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
     const original = r.read(LEDGER);
     assert.ok(original.includes(before));
     const head = r.commitLedger("docs(ledger): owner", original.replace(before, after));
@@ -200,7 +200,7 @@ for (const status of ["Partial", "Shipped"]) {
     const original = r.read(LEDGER);
     assert.match(original, new RegExp(`\\| VIEW-01 \\|[^\\n]*\\| ${status} \\|`));
     assert.ok(original.includes("打开一张 JPEG，画布显示该图。限制：真机未验 |"));
-    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
     r.commitLedger("docs: remove limitation", original.replace("打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|"));
     const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
     assert.equal(result.line, "RUN");
@@ -211,7 +211,7 @@ for (const status of ["Partial", "Shipped"]) {
 test("unsafe intermediate limitation removal cannot be hidden by restoration", (t) => {
   const r = makeRepo(t);
   const original = r.read(LEDGER);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   r.commitLedger("docs: remove limitation", original.replace("打开一张 JPEG，画布显示该图。限制：真机未验 |", "打开一张 JPEG，画布显示该图。|"));
   r.commitLedger("docs: restore limitation", original);
   assert.equal(r.read(LEDGER), original);
@@ -222,7 +222,7 @@ test("unsafe intermediate limitation removal cannot be hidden by restoration", (
 
 test("unsafe intermediate acceptance edit cannot be hidden by a revert", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   const original = r.read(LEDGER);
   r.commitLedger("docs: edit acceptance", original.replace("打开一张 JPEG", "打开两张 JPEG"));
   r.commitLedger("docs: restore acceptance and fix limitation", original.replace("限制：真机未验", "限制：未做真机验收"));
@@ -232,7 +232,7 @@ test("unsafe intermediate acceptance edit cannot be hidden by a revert", (t) => 
 for (const [cell, from, to] of [["状态", "| Partial | 单元 | P0-09", "| Shipped | 单元 | P0-09"], ["验证", "| Partial | 单元 | P0-09", "| Partial | 真机 | P0-09"]]) {
   test(`not RESOLVED when the owner commit edits a ${cell} cell`, (t) => {
     const r = makeRepo(t);
-    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
     r.commitLedger("docs(ledger): owner", r.read(LEDGER).replace(from, to));
     const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
     assert.equal(result.line, "RUN");
@@ -242,7 +242,7 @@ for (const [cell, from, to] of [["状态", "| Partial | 单元 | P0-09", "| Ship
 
 test("not RESOLVED when the owner commit adds a row", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   r.commitLedger("docs(ledger): owner", r.read(LEDGER).replace("| VIEW-02 |", "| VIEW-03 | 缩放 | Absent | 无 | P1-05 | — | 捏合缩放 |\n| VIEW-02 |"));
   const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
   assert.equal(result.line, "RUN");
@@ -251,8 +251,8 @@ test("not RESOLVED when the owner commit adds a row", (t) => {
 
 test("not RESOLVED when the owner commit also touches a non-ledger file", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
-  r.write(LEDGER, r.read(LEDGER).replace("`Config/Picsee.entitlements`", "`Config/Picsee.entitlements`、`App/Access/`"));
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
+  r.write(LEDGER, r.read(LEDGER).replace("`Config/Mado.entitlements`", "`Config/Mado.entitlements`、`App/Access/`"));
   r.buildHtml();
   r.commit("docs(ledger): owner with extra file", { "docs/agents/notes.md": "z\n", [LEDGER]: r.read(LEDGER), [HTML]: r.read(HTML) });
   const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
@@ -262,7 +262,7 @@ test("not RESOLVED when the owner commit also touches a non-ledger file", (t) =>
 
 test("not RESOLVED with no commits since the gardened head", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
   assert.equal(result.line, "RUN");
   assert.match(result.stderr, /no commits/);
@@ -270,8 +270,8 @@ test("not RESOLVED with no commits since the gardened head", (t) => {
 
 test("not RESOLVED when the generated HTML is stale at head", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
-  const edited = r.read(LEDGER).replace("`Config/Picsee.entitlements`", "`Config/Picsee.entitlements`、`App/Access/`");
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
+  const edited = r.read(LEDGER).replace("`Config/Mado.entitlements`", "`Config/Mado.entitlements`、`App/Access/`");
   r.commitLedger("docs(ledger): owner", edited, { rebuild: false });
   const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "NEEDS-OWNER");
   assert.equal(result.line, "RUN");
@@ -281,9 +281,9 @@ test("not RESOLVED when the generated HTML is stale at head", (t) => {
 test("a non-ancestor --since gives RUN for a mapped range", (t) => {
   const r = makeRepo(t);
   r.git("checkout", "-q", "-b", "old");
-  const gardened = r.commit("chore: app old", { "App/PicseeApp.swift": "// old\n" });
+  const gardened = r.commit("chore: app old", { "App/MadoApp.swift": "// old\n" });
   r.git("checkout", "-q", "main");
-  r.commit("chore: app new", { "App/PicseeApp.swift": "// new\n" });
+  r.commit("chore: app new", { "App/MadoApp.swift": "// new\n" });
   r.commit("docs(agents): note", { "docs/agents/notes.md": "y\n" });
   assert.equal(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "CLEAN").line, "RUN");
 });
@@ -302,7 +302,7 @@ test("a base that is not an ancestor is judged from the merge-base", (t) => {
   r.git("checkout", "-q", "-b", "feature");
   const head = r.commit("chore: tool", { "scripts/tool.py": "print('f')\n" });
   r.git("checkout", "-q", "main");
-  r.commit("feat: app on main", { "App/PicseeApp.swift": "// main\n" });
+  r.commit("feat: app on main", { "App/MadoApp.swift": "// main\n" });
   r.git("checkout", "-q", "feature");
   assert.equal(r.run("main", "HEAD").line, skipLine(r.base, head));
 });
@@ -350,8 +350,8 @@ test("outside a git repository it fails closed to RUN", (t) => {
 // F1: Git quotes non-ASCII and quote characters in display output; paths must be read raw.
 const quotedPaths = [
   ["a unicode path under App/", "App/画布.swift", null],
-  ["a unicode path named in 在哪", "Config/授权.entitlements", (ledger) => ledger.replace("`Config/Picsee.entitlements`", "`Config/授权.entitlements`")],
-  ["a path with a quote and a space named in 在哪", 'Config/Pic "see" one.entitlements', (ledger) => ledger.replace("`Config/Picsee.entitlements`", '`Config/Pic "see" one.entitlements`')],
+  ["a unicode path named in 在哪", "Config/授权.entitlements", (ledger) => ledger.replace("`Config/Mado.entitlements`", "`Config/授权.entitlements`")],
+  ["a path with a quote and a space named in 在哪", 'Config/Pic "see" one.entitlements', (ledger) => ledger.replace("`Config/Mado.entitlements`", '`Config/Pic "see" one.entitlements`')],
 ];
 for (const [name, path, edit] of quotedPaths) {
   test(`${name} gives RUN`, (t) => {
@@ -366,7 +366,7 @@ for (const [name, path, edit] of quotedPaths) {
   test(`${name} gives RUN instead of REUSE`, (t) => {
     const r = makeRepo(t);
     if (edit) r.commitLedger("chore: ledger", edit(r.read(LEDGER)));
-    const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+    const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
     r.commit("chore: adjust file", { [path]: "x\n" });
     const result = r.run(r.base, "HEAD", "--since", gardened, "--verdict", "CLEAN");
     assert.equal(result.line, "RUN");
@@ -376,14 +376,14 @@ for (const [name, path, edit] of quotedPaths) {
 
 // F2: a `*` in a 在哪 path keeps its literal prefix as a plain string prefix.
 const wildcards = [
-  ["a file-prefix wildcard", "`Config/Picsee*.entitlements`", "Config/PicseeDebug.entitlements"],
+  ["a file-prefix wildcard", "`Config/Mado*.entitlements`", "Config/MadoDebug.entitlements"],
   ["a directory wildcard", "`Config/*`", "Config/Other.plist"],
   ["a leading star", "`*.entitlements`", "Elsewhere/thing.txt"],
 ];
 for (const [name, named, path] of wildcards) {
   test(`${name} in 在哪 gives RUN`, (t) => {
     const r = makeRepo(t);
-    const base = r.commitLedger("chore: ledger", r.read(LEDGER).replace("`Config/Picsee.entitlements`", named));
+    const base = r.commitLedger("chore: ledger", r.read(LEDGER).replace("`Config/Mado.entitlements`", named));
     r.commit("chore: adjust file", { [path]: "x\n" });
     assert.equal(r.run(base, "HEAD").line, "RUN");
     const gardened = r.git("rev-parse", "HEAD~1");
@@ -393,7 +393,7 @@ for (const [name, named, path] of wildcards) {
 
 test("a literal 在哪 file path does not cover a sibling with a longer name", (t) => {
   const r = makeRepo(t);
-  const head = r.commit("chore: adjust file", { "Config/Picsee.entitlements.bak": "x\n" });
+  const head = r.commit("chore: adjust file", { "Config/Mado.entitlements.bak": "x\n" });
   assert.equal(r.run(r.base, "HEAD").line, skipLine(r.base, head));
 });
 
@@ -433,7 +433,7 @@ test("a failed baseline ledger lookup gives RUN, not SKIP", (t) => {
 
 test("a failed --since ledger read gives RUN, not REUSE", (t) => {
   const r = makeRepo(t);
-  const gardened = r.commit("chore: app", { "App/PicseeApp.swift": "// x\n" });
+  const gardened = r.commit("chore: app", { "App/MadoApp.swift": "// x\n" });
   r.commit("chore: notes", { "notes.txt": "x\n" });
   assert.match(r.run(r.base, "HEAD", "--since", gardened, "--verdict", "CLEAN").line, /^Ledger-Gardener: REUSE /);
   const result = runWith(r, gitShim(t, `show ${gardened}:${LEDGER}`), r.base, "HEAD", "--since", gardened, "--verdict", "CLEAN");
