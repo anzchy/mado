@@ -63,7 +63,7 @@ test('shortcut table drift blocks via the real standalone browser-free checker',
   const f = fixture(t);
   const file = 'design/prototypes/picsee-browser/states/shortcuts.html';
   const original = readFileSync(join(f.repo, file), 'utf8');
-  f.write(file, original.replace('data-shortcut="menu:Quit Picsee"', 'data-shortcut="menu:Unknown command"'));
+  f.write(file, original.replace('data-shortcut="menu:Quit Mado"', 'data-shortcut="menu:Unknown command"'));
   f.git('add', '.'); f.git('commit', '-qm', 'commit drift');
   const broken = f.run({ oid: f.git('rev-parse', 'HEAD') });
   assert.notEqual(broken.status, 0, broken.stdout + broken.stderr);
@@ -115,7 +115,7 @@ test('shortcut check uses pushed OID despite HEAD and checkout drift', t => {
   const f = fixture(t);
   const file = 'design/prototypes/picsee-browser/states/shortcuts.html';
   const original = readFileSync(join(f.repo, file), 'utf8');
-  f.write(file, original.replace('data-shortcut="menu:Quit Picsee"', 'data-shortcut="menu:Unknown command"'));
+  f.write(file, original.replace('data-shortcut="menu:Quit Mado"', 'data-shortcut="menu:Unknown command"'));
   f.git('add', file); f.git('commit', '-qm', 'stale shortcuts');
   const stale = f.git('rev-parse', 'HEAD');
   status(f.run({ oid: f.head }), 0, /shortcut-model PASS/);
@@ -305,7 +305,7 @@ for (const checker of ['ledger', 'shortcut']) {
     // The unchanged checker still rejects drift, even when the other is deferred.
     if (checker === 'ledger') {
       const page = 'design/prototypes/picsee-browser/states/shortcuts.html';
-      f.write(page, readFileSync(join(f.repo, page), 'utf8').replace('menu:Quit Picsee', 'menu:Unknown command'));
+      f.write(page, readFileSync(join(f.repo, page), 'utf8').replace('menu:Quit Mado', 'menu:Unknown command'));
     } else f.write('docs/feature-ledger.html', 'stale');
     f.git('add', 'docs', 'design'); f.git('commit', '-qm', 'other checker drift');
     const failed = run();
