@@ -51,6 +51,12 @@ private struct Issue521Timeout: Error, CustomStringConvertible {
 @Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
       .timeLimit(.minutes(3))) @MainActor
 func issue521NativePanPassesInIsolatedProcess() async throws {
+    try await issue521RunNativeTest(filter: "issue521WindowDragPansFromCanvasAndTabFocusedTools\\b",
+        summary: "Test issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:) with 3 test cases passed")
+}
+
+/// Shared isolated native host; callers retain their own filter and successful nonzero summary.
+@MainActor func issue521RunNativeTest(filter: String, summary: String) async throws {
     // All three stages spend this one monotonic budget. Reserve 30 seconds inside the
     // parent's three-minute limit for termination/reaping and failure reporting.
     let deadline = ContinuousClock.now.advanced(by: .seconds(150))
@@ -92,13 +98,13 @@ func issue521NativePanPassesInIsolatedProcess() async throws {
     environment["PICSEE_ISSUE521_NATIVE_CHILD"] = "1"
     environment["PICSEE_ISSUE521_TEST_BUNDLE"] = Bundle(for: Issue521BundleAnchor.self).bundleURL.path
     environment["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] = "1"
-    let (status, output) = try await issue521Run(executable, ["--filter", "issue521WindowDragPansFromCanvasAndTabFocusedTools\\b"],
+    let (status, output) = try await issue521Run(executable, ["--filter", filter],
         environment: environment, log: temporary.appendingPathComponent("native.log"),
         deadline: deadline, stage: "native canvas drag matrix")
     // Prefix captured child records so the enclosing App lane sees exactly its own test-run root.
     print(output.split(separator: "\n").map { "[issue521-child] \($0)" }.joined(separator: "\n"))
     // Keep macro failure diagnostics from printing unprefixed embedded test-run records.
-    let nativePassed = output.contains("Test issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:) with 3 test cases passed")
+    let nativePassed = output.contains(summary)
     let nativeRootCompleted = output.range(of: "Test run with 1 test in [0-9]+ suites? passed after",
         options: .regularExpression) != nil
     #expect(status == 0, "the isolated native canvas drag matrix must pass")

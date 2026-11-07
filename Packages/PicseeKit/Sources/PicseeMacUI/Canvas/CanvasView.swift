@@ -144,6 +144,12 @@ open class CanvasView: NSView {
     public override func drawFocusRingMask() {}
 
     public override func mouseDown(with event: NSEvent) {
+        // AppKit can forward a background view's unhandled press to this canvas.
+        if let content = window?.contentView, let parent = content.superview,
+           content.hitTest(parent.convert(event.locationInWindow, from: nil)) !== self {
+            dragPoint = nil
+            return
+        }
         hideKeyboardFocusRing()
         onCanvasFocus?()
         window?.makeFirstResponder(self)
