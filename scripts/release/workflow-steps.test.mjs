@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { emptyAppcast } from "./appcast.mjs";
 
 const root = new URL("../../", import.meta.url).pathname;
 const workflow = readFileSync(join(root, ".github/workflows/release.yml"), "utf8");
@@ -133,7 +134,7 @@ function appcastWorld() {
   git(dir, "init", "-q", "-b", "main", seed);
   mkdirSync(join(seed, "scripts/release"), { recursive: true });
   writeFileSync(join(seed, "scripts/release/appcast.mjs"), readFileSync(join(root, "scripts/release/appcast.mjs")));
-  writeFileSync(join(seed, "appcast.xml"), readFileSync(join(root, "appcast.xml")));
+  writeFileSync(join(seed, "appcast.xml"), emptyAppcast());
   git(seed, "add", "."); git(seed, "commit", "-q", "-m", "main");
   git(seed, "remote", "add", "origin", origin); git(seed, "push", "-q", "origin", "main");
   git(dir, "clone", "-q", origin, work);
