@@ -11,11 +11,12 @@ private struct ScopeSession {
     let rootID: AccessRootID?
     let trace: OSSignpostID
     let scopeStarted: Bool
-    init(scope: any SecurityScope, url: URL, rootID: AccessRootID?) throws {
+    init(scope: any SecurityScope, url: URL, rootID: AccessRootID?, deliveredSelection: Bool = false) throws {
         let started = scope.start(url)
         // Finder drops/open events may already carry sandbox read access without
-        // a startable URL scope. Bookmark roots still require their own scope.
-        guard started || (rootID == nil && scope.isReadable(url)) else { throw FileAccessError.startFailed }
+        // a startable URL scope. Persistent bookmark roots still require their own
+        // scope; only a fresh, explicitly delivered selection can opt in here.
+        guard started || ((rootID == nil || deliveredSelection) && scope.isReadable(url)) else { throw FileAccessError.startFailed }
         scopeStarted = started
         self.scope = scope; self.url = url; self.rootID = rootID
         trace = OSSignpostID(log: Self.log)
@@ -805,46 +806,76 @@ public actor FileAccess: AccessLeasing {
         }
         return nil
     }
+    /// A fresh native drop/open event may carry process-level read authority rather
+    /// than a startable scope. A usable bookmark is proved before saving this root.
+    public func grantDeliveredFolder(_ folder: URL) throws -> AccessRootID {
+        try grant(folder: folder, excludingRoot: nil, deliveredSelection: true)
+    }
     /// Only the composition root's successful system panel invokes this operation.
     public func grant(folder: URL, excludingRoot: AccessRootID? = nil) throws -> AccessRootID {
+        try grant(folder: folder, excludingRoot: excludingRoot, deliveredSelection: false)
+    }
+    private func grant(folder: URL, excludingRoot: AccessRootID?, deliveredSelection: Bool) throws -> AccessRootID {
         let logger = Logger(subsystem: "io.github.anzchy.picsee", category: "access")
+        let kind = deliveredSelection ? "deliveredFolder" : "panelFolder"
         var id = AccessRootID()
         var existing = false
         var started = false
         var phase = "scope"
         do {
-            let session = try ScopeSession(scope: scope, url: folder, rootID: id)
-            started = true
+            let session = try ScopeSession(scope: scope, url: folder, rootID: id, deliveredSelection: deliveredSelection)
+            started = session.scopeStarted
             defer { session.stop() }
             phase = "directory"
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
                 throw FileAccessError.invalidFolder
             }
+            // Resolve only while the original user-selected URL's authority is held.
+            // The bookmark must name the directory target, not the symlink inode.
+            let target = canonical(folder)
+            let selectedIdentity: FileResourceIdentity?
+            if deliveredSelection {
+                _ = try FileManager.default.contentsOfDirectory(at: target, includingPropertiesForKeys: nil)
+                selectedIdentity = try resourceReader.identity(for: target)
+            } else { selectedIdentity = nil }
             phase = "match"
-            if let held = matchingRoot(canonical(folder), excluding: excludingRoot) { id = held; existing = true }
+            if let held = matchingRoot(target, excluding: excludingRoot) { id = held; existing = true }
             phase = "bookmark"
-            let bookmark = try bookmarks.create(for: folder)
+            let bookmark = try bookmarks.create(for: target)
+            var publishedURL = folder
+            if deliveredSelection {
+                // Readability alone must never become persisted authority. Resolve
+                // the actual bookmark and verify its scoped, selected target first.
+                let resolved = try bookmarks.resolve(bookmark).url
+                let proof = try ScopeSession(scope: scope, url: resolved, rootID: id)
+                defer { proof.stop() }
+                guard canonical(resolved).pathComponents == target.pathComponents,
+                      try resourceReader.identity(for: resolved) == selectedIdentity else { throw FileAccessError.invalidFolder }
+                _ = try FileManager.default.contentsOfDirectory(at: resolved, includingPropertiesForKeys: nil)
+                // Retain the bookmark URL's opaque scope, not a plain path reconstruction.
+                publishedURL = resolved
+            }
             var replacement = saved
             if let index = replacement.firstIndex(where: { $0.id == id }) { replacement[index].bookmark = bookmark }
             else {
                 replacement.append(AccessRootRecord(id: id, bookmark: bookmark, displayName: folder.lastPathComponent,
                     creatingBuildSHA: buildSHA, createdAt: Date()))
             }
-            let selectedTrash = try explicitTrashEvidence(at: canonical(folder))
+            let selectedTrash = try explicitTrashEvidence(at: target)
             phase = "store"
             invalidateSavedGrantVersion(id)
             try store.save(replacement)
             saved = replacement
             explicitTrashSelections[id] = selectedTrash
             legacyBaseline.removeValue(forKey: id)
-            recoveryBaseline[id] = Self.trustedRecoveryIdentity(at: folder, expected: bookmarkIdentity(bookmark),
+            recoveryBaseline[id] = Self.trustedRecoveryIdentity(at: target, expected: bookmarkIdentity(bookmark),
                 rawReader: resourceReader, recoveryReader: recoveryResourceReader)
-            publishRoot(id, url: folder)
-            logger.notice("AccessGrant kind=panelFolder scopeStarted=true root=\(id.rawValue.uuidString, privacy: .public) existing=\(existing, privacy: .public) outcome=granted path=\(folder.path, privacy: .private)")
+            publishRoot(id, url: publishedURL)
+            logger.notice("AccessGrant kind=\(kind, privacy: .public) scopeStarted=\(started, privacy: .public) root=\(id.rawValue.uuidString, privacy: .public) existing=\(existing, privacy: .public) outcome=granted path=\(folder.path, privacy: .private)")
             return id
         } catch {
-            logger.notice("AccessGrant kind=panelFolder scopeStarted=\(started, privacy: .public) root=\(id.rawValue.uuidString, privacy: .public) existing=\(existing, privacy: .public) outcome=failed error=\(phase, privacy: .public) path=\(folder.path, privacy: .private)")
+            logger.notice("AccessGrant kind=\(kind, privacy: .public) scopeStarted=\(started, privacy: .public) root=\(id.rawValue.uuidString, privacy: .public) existing=\(existing, privacy: .public) outcome=failed error=\(phase, privacy: .public) path=\(folder.path, privacy: .private)")
             throw error
         }
     }

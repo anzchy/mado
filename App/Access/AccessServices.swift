@@ -47,10 +47,27 @@ struct AccessServices: Sendable {
         watch = WatchHub(access: files, source: FSEventSource(), scheduler: DispatchWatchScheduler())
     }
     #endif
-    func grant(_ folder: URL) async throws -> AccessRootID {
-        let id = try await files.grant(folder: folder)
+    /// Inspect a single native selection under its delivered authority. FileManager
+    /// follows directory symlinks even when the URL lacks a trailing slash.
+    func isDeliveredFolder(_ url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        let started = selectionScope.start(url)
+        defer { if started { selectionScope.stop(url) } }
+        guard started || selectionScope.isReadable(url) else { return false }
+        var directory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &directory) && directory.boolValue
+    }
+    func grant(_ folder: URL, deliveredSelection: Bool = false) async throws -> AccessRootID {
+        // Retain the native selection's authority through canonical recent-folder
+        // recording; a resolved path alone must not establish access.
+        let started = selectionScope.start(folder)
+        defer { if started { selectionScope.stop(folder) } }
+        let id: AccessRootID
+        if deliveredSelection { id = try await files.grantDeliveredFolder(folder) }
+        else { id = try await files.grant(folder: folder) }
         await monitor.reauthorize(id, explicitSelection: true)
-        try await recent.add(RecentFolder(rootID: id, url: folder, displayName: folder.lastPathComponent, recordedRoot: folder))
+        let target = folder.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+        try await recent.add(RecentFolder(rootID: id, url: target, displayName: target.lastPathComponent, recordedRoot: target))
         return id
     }
     func images(in folder: URL, rootID: AccessRootID) async throws -> [URL] {
