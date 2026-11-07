@@ -20,6 +20,7 @@ import PicseeApplication
             var normalized = newValue
             normalized.gridSidebarWidth = DisplayPreferences.normalizedSidebarWidth(normalized.gridSidebarWidth)
             normalized.thumbnailSize = DisplayPreferences.normalizedThumbnailSize(normalized.thumbnailSize)
+            normalized.toolBackgroundOpacity = DisplayPreferences.normalizedToolBackgroundOpacity(normalized.toolBackgroundOpacity)
             guard normalized != storedValue else { return }
             storedValue = normalized
             if let existing = defaults.data(forKey: Self.key), let version = Self.unsupportedVersion(existing) {
