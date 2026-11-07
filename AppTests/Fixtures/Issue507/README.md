@@ -8,19 +8,26 @@ The native input route had two additional problems: classification relied on `ha
 
 ## Current behavior
 
-A single native input checks actual directory metadata while holding the selected URL's authority. FileAccess bookmarks the canonical target under that authority. Delivered folder grants separately prove directory access, actual bookmark creation/resolution, target identity and a scoped read before persistence. They retain the exact verified bookmark URL, including its opaque capability. Strict panel admission and subsequent root containment checks remain intact.
+Owner decision, 2026-11-07, verbatim choice 「Same as a plain folder (Recommended)」: a folder reached through a symlink is handled exactly like a plain folder. Only the system open panel creates an Access Root (ADR-006, ADR-008, GLOSSARY).
 
-The existing coordinator lease owns scan admission and failure handling. Real FolderBrowser resolves the enumeration directory within it; both supplementary one-batch fixtures now do the same. Canvas adds no separate pre-scan lease. That avoids changing recovery/Undo and sidebar watch sequencing merely to accommodate a fixture.
+- **Drop / Open With / `open -a`:** a single input is classified on `FileAccess` (off the MainActor) by its real directory metadata, not by `hasDirectoryPath`. A directory, plain or linked, becomes its canonical target and goes through `ViewerSession.openInput` to the existing folder prompt: "Browsing Needs Folder Access", then NSOpenPanel opened on that target. Nothing is granted, bookmarked or remembered before the panel answers; cancelling leaves nothing. When the selection can't be read, the input keeps its original URL and classification.
+- **Panel:** `FileAccess.grant` bookmarks the canonical target while the selection's scope is held, which fixes the Cocoa error 256 for a raw symlink URL. Recents record the canonical target name (amendment 1). The first window title is the name the panel returned.
 
-Amendment 1 approves canonical target names in recents. The added recent-name assertion, originally line 132 and now line 135, now expects `path.1.standardizedFileURL.resolvingSymlinksInPath().lastPathComponent`. The initial title retains the selected name. Chooser-resolved input, return to grid and recent reopen can display the target name. No original phase-1 scan assertion or two-second bound changed.
+Round 1's delivered-folder admission (a root saved straight from a drop or open event) was removed in round 2.
+
+The existing coordinator lease owns scan admission and failure handling. Real FolderBrowser resolves the enumeration directory within it; both supplementary one-batch fixtures do the same.
 
 ## Tests
 
-- `Issue507AliasFolderScanTests.swift`: direct, raw/hinted symlink, chooser-resolved alias and shared drop/Open With entry; real and legacy scanners; exact three-image sets, no sheet, title and canonical recent name. Every opening retains its independent two-second deadline. Real bookmark tests also cover both grant orders and missing targets.
-- Package `Issue507DeliveredFolderGrantTests.swift`: delivered access without a startable selected scope, persisted reopen, explicit verification, sibling rejection, transactional failures and retention of the bookmark-resolved URL. Its synthetic capability marker models an opaque scope boundary; it is not an OS security token. Real bookmark operations, identities and file I/O remain in use.
-- `Issue507FooterBookmarkRoundTripTests.swift`: directory URL hints survive both present and absent directories, and the original symlink-parent spelling passes real FileAccess verification and leased reads. The directory-only #506 double now reconstructs with `isDirectory: true`.
+- `Issue507AliasFolderScanTests.swift`:
+  - The panel entry (`openGrantedFolder`) with a direct path, a raw or hinted symlink, and a chooser-resolved alias, through real and legacy scanners: the exact three-image set, no sheet, the title and the canonical recent name, each within its own two-second deadline.
+  - Drop and `open -a` of a link or a plain folder: one prompt with the canonical target, and nothing persisted before the answer. After the simulated grant, the grid completes within two seconds with no second sheet.
+  - Also covered: cancel, an unreadable hinted folder, a lone image, a link plus an image, and a stale link drop replaced by an image.
+  - Real bookmark tests cover both grant orders and missing targets.
+- Package `Issue507DeliveredFolderClassificationTests.swift`: `FileAccess.deliveredFolder` for a raw link, an unhinted plain folder, files, file links, dangling links, non-file URLs, and unstartable selections (readable or not). Scope starts and stops balance, and no record is created.
+- `Issue507FooterBookmarkRoundTripTests.swift`: directory URL hints survive whether the directory is present or absent, and the original symlink-parent spelling passes real FileAccess verification and leased reads. The directory-only #506 double now reconstructs with `isDirectory: true`.
 
-All seven original #507 and 27 original #506 expectation lines remain unchanged. The two new opaque-scope path comparisons were corrected to compare both sides' canonical full path components: `/var` and `/private/var` can name the same target. Their byte and reload assertions are unchanged.
+The prompt seam `folderGrantPromptOverride` replaces only the alert and panel. The selection closure it receives is the production one.
 
 ## Run
 
@@ -31,8 +38,8 @@ node AppTests/Fixtures/Issue507/target-lane.mjs
 node scripts/tdd/app-lane.mjs
 ```
 
-The targeted runner selects five #507 functions, takes heavy-lock only for xctest, validates the exact completed execution set with the repository parser, and writes `.build/i507/target-result.json`.
+The targeted runner selects the #507 functions, takes heavy-lock only for xctest, validates the exact completed execution set with the repository parser, and writes `.build/i507/target-result.json`.
 
 Raw historical receipt verdicts remain unchanged. The handoff documents accepted source/specification corrections rather than replacing RED evidence. The temporary two-second recovery/sidebar diagnostic wrappers were moved to `.build`; the permanent original tests remain in the full App lane.
 
-Final gates and commit SHAs: `~/.picsee/herdr/gpt-imple-1/i507-fix-handoff.md` (`Report-Task: i507-fix-b`). These unsigned tests do not prove genuine Finder/Open With sandbox-extension delivery. No entitlement change, ancestor grant, path-only bookmark fallback or signed-device acceptance is claimed.
+Final gates and commit SHAs: `~/.picsee/herdr/gpt-imple-1/i507-fix-handoff.md` (`Report-Task: i507-fix-b`). These unsigned tests do not prove genuine Finder/Open With sandbox delivery, nor the real NSOpenPanel's preselection. No entitlement change, ancestor grant, path-only bookmark fallback or signed-device acceptance is claimed. Round 2 handoff: `~/.picsee/herdr/opus-imple-1/i507-fix2-handoff.md`.
