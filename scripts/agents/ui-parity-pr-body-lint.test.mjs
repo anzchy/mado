@@ -691,6 +691,14 @@ for (const refs of [
   'https://example.com/review/1,https://example.com/review/2',
   'https://github.com/anzchy/other/pull/472#issuecomment-1,https://github.com/anzchy/picsee/pull/472#issuecomment-2',
   'https://github.com/anzchy/picsee/pull/472,https://github.com/anzchy/picsee/issues/471',
+  // #554: anzchy/mado is accepted with the same exact shape, and nothing looser.
+  ...['https://github.com/anzchy/mado-foo/pull/472#issuecomment-1', 'https://github.com/other/mado/pull/472#issuecomment-1',
+    'http://github.com/anzchy/mado/pull/472#issuecomment-1', 'https://github.com/anzchy/Mado/pull/472#issuecomment-1',
+    'https://github.com/anzchy/mado/pull/472', 'https://github.com/anzchy/mado/issues/472#issuecomment-1',
+    'https://github.com/anzchy/mado/pull/0#pullrequestreview-1', 'https://github.com/anzchy/mado/pull/472#issuecomment-0',
+  ].map(bad => `${bad},https://github.com/anzchy/picsee/pull/472#issuecomment-2`),
+  // After the rename both spellings name the same report.
+  'https://github.com/anzchy/picsee/pull/472#issuecomment-1,https://github.com/anzchy/mado/pull/472#issuecomment-1',
   '~/.picsee/herdr/gpt-auditor/i471-audit.md#r1,~/.picsee/herdr/gpt-auditor/i471-audit.md#r2',
   '~/.picsee/herdr/gpt-auditor/i471-audit.md,~/.picsee/herdr/gpt-auditor/./i471-audit.md',
   ...['TBD', 'none', 'n/a', 'n-a', 'todo', 'x'].map(token =>
@@ -712,6 +720,17 @@ test('checker-change CLI accepts normalized report paths and mixed report/review
     '~/.picsee/herdr/gpt-auditor/./i471-audit2.md#r1,~/.picsee/herdr/opus-auditor/i471-confirm-fix1.md')));
   assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
     '~/.picsee/herdr/gpt-auditor/i471-audit.md,https://github.com/anzchy/picsee/pull/472#pullrequestreview-123')));
+});
+
+test('checker-change CLI accepts anzchy/mado PR review and comment references (#554)', t => {
+  const f = checkerGitFixture(t);
+  const sha = f.change('scripts/ledger/rules.mjs');
+  assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
+    'https://github.com/anzchy/mado/pull/560#pullrequestreview-123,https://github.com/anzchy/mado/pull/560#issuecomment-456')));
+  assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
+    'https://github.com/anzchy/picsee/pull/472#pullrequestreview-123,https://github.com/anzchy/mado/pull/560#issuecomment-456')));
+  assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
+    '~/.picsee/herdr/gpt-auditor/i554-audit.md,https://github.com/anzchy/mado/pull/560#pullrequestreview-7')));
 });
 
 test('checker-change CLI ignores fenced unclosed comments before a real acknowledgement', t => {
