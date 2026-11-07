@@ -356,7 +356,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             guard let self else { return }
             // AppKit asks to focus the hit view before delivering mouseDown. Release the
             // Session's tool/panel focus guard only for a primary press that hits the canvas.
-            if event.type == .leftMouseDown, let content = window?.contentView,
+            // A non-key window's first press may only activate it and retain the tool responder.
+            if event.type == .leftMouseDown, window?.isKeyWindow == true, let content = window?.contentView,
                let parent = content.superview,
                content.hitTest(parent.convert(event.locationInWindow, from: nil)) === self.canvas {
                 self.session.updateFocus(.canvas)
