@@ -79,6 +79,10 @@ import PicseeCore
     private var countText = ""
     private var countIsSearchSummary = false
     private var isReading = false
+    /// The main-read owner, supplied independently of the selected sidebar row.
+    public var readingFolderURL: URL? {
+        didSet { if oldValue != readingFolderURL { applyReadStatus() } }
+    }
     /// 「读取失败」 (24F-A, #238): the footer reads `–` / Read incomplete and the read folder's row `—`.
     private var isReadFailed = false
     /// Reading or failed: the footer shows the read's status, not the stored name and count.
@@ -736,19 +740,25 @@ import PicseeCore
     /// (Avenir Next); SF's en dash has that width.
     public func setReadingStatus(_ reading: Bool) {
         isReading = reading
-        if reading { isReadFailed = false }
+        if reading {
+            isReadFailed = false
+            // Standalone presentation callers begin on the current folder. Once captured,
+            // rebuilding or selecting rows cannot transfer the active read to another URL.
+            if readingFolderURL == nil { readingFolderURL = folderTree.currentFolderURL }
+        } else { readingFolderURL = nil }
         applyReadStatus()
     }
     /// folder-loading.html `?case=failed`: `–` in the name slot, 「读取未完成」 in the count's, `—` for the folder's
     /// count; search, sort and information are unavailable while nothing complete is shown.
     public func setReadFailedStatus(_ failed: Bool) {
         isReadFailed = failed
-        if failed { isReading = false }
+        if failed { isReading = false; readingFolderURL = nil }
         applyReadStatus()
     }
     private func applyReadStatus() {
         folderTree.showsZeroForUnknownCurrent = false
         folderTree.showsDashForCurrent = isReadFailed
+        folderTree.readingFolderURL = isReading ? readingFolderURL : nil
         applyStatusText()
         applyFooterState()
         needsLayout = true

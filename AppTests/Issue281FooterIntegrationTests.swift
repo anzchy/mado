@@ -227,11 +227,12 @@ private final class Issue281GatedRetryScanner: FolderScanning, @unchecked Sendab
 private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
     private var released = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
-    func children(in folder: URL, root: URL) -> [URL] { [] }
+    func children(in folder: URL, root: URL) async throws -> [URL] {
+        try await SystemSidebarFolderEnumerator().children(in: folder, root: root)
+    }
     func imageCount(in folder: URL, root: URL) async throws -> Int {
         if !released { await withCheckedContinuation { waiters.append($0) } }
-        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "png" }.count
+        return try await SystemSidebarFolderEnumerator().imageCount(in: folder, root: root)
     }
     func release() { released = true; for waiter in waiters { waiter.resume() }; waiters.removeAll() }
 }
@@ -249,6 +250,9 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
     let folder = base.appendingPathComponent("Retry")
     try fm.createDirectory(at: folder, withIntermediateDirectories: true)
     for file in ["山海之间_0001.png", "山海之间_0002.png"] { try data.write(to: folder.appendingPathComponent(file)) }
+    let child = folder.appendingPathComponent("Child")
+    try fm.createDirectory(at: child, withIntermediateDirectories: true)
+    try data.write(to: child.appendingPathComponent("child.png"))
     let adapter = Issue281Bookmarks()
     let access = try FileAccess(scope: adapter, bookmarks: adapter,
         store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue281")
@@ -278,10 +282,19 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
         let count = try #require(issue281View("grid.folder-count", in: window.contentView) as? NSTextField)
         return (name.isHidden ? "" : name.stringValue, count.isHidden ? "" : count.stringValue)
     }
+    func sidebarRow(_ url: URL) -> GridSidebarFolderButton? {
+        window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
+            .folderTree.rows.first { $0.folderURL.resolvingSymlinksInPath().standardizedFileURL.path == url.resolvingSymlinksInPath().standardizedFileURL.path }
+    }
     func sidebarCount() -> String? {
-        guard let shell = window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first,
-              let row = shell.folderTree.rows.first(where: { $0.current }) else { return nil }
+        guard let row = sidebarRow(folder) else { return nil }
         return row.countLabel.isHidden ? "" : row.countLabel.stringValue
+    }
+    func expectReadingSidebar() throws {
+        let row = try #require(sidebarRow(folder))
+        #expect(row.countLabel.stringValue.isEmpty)
+        #expect(row.countLabel.isHidden)
+        #expect(row.accessibilityLabel() == folder.lastPathComponent)
     }
 
     // First read, held: the reading footer and the sidebar's count for the folder being read.
@@ -295,7 +308,9 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
         .folderTree.showsZeroForUnknownCurrent
     // #379: the order CI hit, forced: the sidebar learns the real count before the read fails.
     await counter.release()
-    try await waitUntil { sidebarCount() == "2" }
+    // The load session counts root before children; Child=1 proves the root result was delivered.
+    try await waitUntil { sidebarRow(child)?.countLabel.stringValue == "1" }
+    try expectReadingSidebar()
 
     // It stops part way; the failure page's Retry, held.
     scanner.release()
@@ -306,8 +321,9 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
     retry.performClick(nil)
     try await waitUntil { scanner.started == 2 && controller.session.folderScan?.isReadingFolder == true }
     #expect(try footer() == ("—", "Reading…"), "held retry")
-    // #238: a held retry keeps the folder's known count, never the failed read's `—`.
-    #expect(sidebarCount() == "2", "held retry: the known count, not the failed read's dash")
+    // Page 24: Retry hides even a known count, never retaining the failed read's dash.
+    #expect(sidebarCount() == "", "held retry: the active read count is blank")
+    try expectReadingSidebar()
     #expect(firstReadShowsZero == false && window.contentView?.subviews.compactMap({ $0 as? GridShellView }).first?
         .folderTree.showsZeroForUnknownCurrent == firstReadShowsZero, "held retry: unknown count stays blank as for a first read")
 
@@ -315,4 +331,6 @@ private actor Issue281GatedSidebarCounter: SidebarFolderEnumerating {
     scanner.release()
     try await waitUntil { controller.gridSearchAvailable && controller.session.folderScan?.failure == nil }
     #expect(try footer() == ("山海之间_0001.png", "2 images"), "retry completed")
+    try await waitUntil { sidebarCount() == "2" }
+    #expect(sidebarRow(folder)?.countLabel.isHidden == false)
 }
