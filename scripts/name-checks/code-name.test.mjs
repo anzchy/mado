@@ -214,3 +214,14 @@ test('production tooling spans under the delegator skill cannot conceal live app
   assert.ok(after.every(message => !message.includes(':path:')));
   assert.deepEqual(scan(root, 'Picsee', exceptions), []);
 });
+
+test('deferred executable tooling never conceals live schemes, modules or bundle identities', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  for (const path of ['scripts/agents/live.mjs', 'scripts/codex-rules/live.py',
+    'scripts/git-hooks/live', 'scripts/testassets/live.py']) {
+    const root = repo();
+    file(root, path, '-scheme Picsee\nPackages/PicseeKit\nio.github.anzchy.picsee\n');
+    const problems = scan(root, 'Mado', exceptions);
+    assert.equal(problems.length, 3, `${path}: ${problems.join('\n')}`);
+  }
+});
