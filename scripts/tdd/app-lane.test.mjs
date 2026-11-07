@@ -524,3 +524,109 @@ test(`discovery startup ${fault} returns 70 before native launch`,()=>{
  assert.match(run.stderr,/app-lane inventory.*cannot (inspect|identify) discovery process group/);
  assert.equal(existsSync(marker),false,'failed startup metadata must prevent native launch');
 });
+
+// #195: filter at the public lane boundary, with real parser and fake native processes.
+const filteredRoot = `Test Suite 'Selected tests' started at now.
+Test Suite 'Selected tests' passed at now.
+ Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds
+`;
+const swiftOutput = names => filteredRoot + '◇ Test run started.\n' + names.map(name =>
+ `◇ Test ${name}() started.\n✔ Test ${name}() passed after 0.001 seconds.\n`).join('') +
+ `✔ Test run with ${names.length} tests in 0 suites passed after 0.001 seconds.\n`;
+const oneSwift = swiftOutput(['swiftKeep']);
+const twoSwift = swiftOutput(['swiftKeep','swiftSkipSibling']);
+const filterOptions = (filter, output = oneSwift) => ({env:{PICSEE_APP_FILTER:filter,PICSEE_APP_LANE_NO_RETRY:'1'},run:()=>result(output)});
+
+test('filter inherited from env runs one exact Swift identity and prints filter before counts',()=>{
+ const h=harness([],filterOptions('swiftKeep'));
+ assert.equal(h.status,0,h.stderr);
+ assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','-XCTest','Probe.swiftKeep()','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+ assert.match(h.stdout,/app-lane filter=swiftKeep\nTests run: 1, Failures: 0, Errors: 0, Skipped: 0/);
+});
+test('positional filter overrides env without interpreting shell-like filter text',()=>{
+ const h=harness([],{...filterOptions('swiftSkip'),argv:['swiftKeep']});
+ assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/app-lane filter=swiftKeep\nTests run: 1/);
+ assert.equal(nativeCalls(h)[0].args[3],'Probe.swiftKeep()');
+ const literal=harness([],filterOptions('swiftKeep|\nabsent;$(false)'));
+ assert.equal(literal.status,0,literal.stderr);
+ assert.match(literal.stdout,/app-lane filter=swiftKeep\|\\nabsent;\$\(false\)\nTests run: 1/);
+});
+test('narrowing a filter rejects the formerly valid broader execution set',()=>{
+ const broad=harness([],filterOptions('swiftKeep|swiftSkipSibling',twoSwift));
+ assert.equal(broad.status,0,broad.stderr);assert.match(broad.stdout,/Tests run: 2, Failures: 0/);
+ assert.equal(nativeCalls(broad)[0].args[3],'Probe.swiftKeep(),Probe.swiftSkipSibling()');
+ const narrow=harness([],filterOptions('swiftKeep',twoSwift));
+ assert.equal(narrow.status,70);assert.doesNotMatch(narrow.stdout,/Tests run:/);
+ const exact=harness([],filterOptions('swiftKeep',oneSwift));assert.equal(exact.status,0,exact.stderr);
+});
+for (const [label,options] of [
+ ['blank argument',{argv:[' ']}],['blank env',filterOptions(' ')],
+ ['extra arguments',{argv:['swiftKeep','swiftSkip']}],['invalid regex',filterOptions('[')],
+]) test(`filter ${label} is usage failure before processes`,()=>{
+ const h=harness([],options);assert.equal(h.status,64);assert.equal(h.calls.length,0);
+ assert.match(h.stderr,/filter|usage/);assert.doesNotMatch(h.stdout,/Tests run:/);
+});
+test('zero matching filter and fully quarantined match fail without running bundle',()=>{
+ for(const [entries,filter] of [[[],'absentTest'],[quarantine,'swiftSkip$|swiftSkip\\(\\)$']]) {
+  const h=harness(entries,filterOptions(filter));assert.equal(h.status,70);
+  assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/no.*match|zero.*match/i);assert.doesNotMatch(h.stdout,/Tests run:/);
+ }
+});
+test('filter intersects quarantine rather than reintroducing excluded tests',()=>{
+ const h=harness(quarantine,filterOptions('swiftKeep|swiftSkip',twoSwift));
+ assert.equal(h.status,0,h.stderr);assert.equal(nativeCalls(h)[0].args[3],'Probe.swiftKeep(),Probe.swiftSkipSibling()');
+ assert.match(h.stdout,/quarantine skip=Probe.swiftSkip\(\) issue=#425/);assert.match(h.stdout,/Tests run: 2, Failures: 0/);
+});
+const oneXCTest = `Test Suite 'Selected tests' started at now.
+Test Suite 'ProbeTests' started at now.
+Test Case '-[Probe.ProbeTests testKeep]' started.
+Test Case '-[Probe.ProbeTests testKeep]' passed (0.001 seconds).
+Test Suite 'ProbeTests' passed at now.
+ Executed 1 test, with 0 failures (0 unexpected) in 0.001 seconds
+Test Suite 'Selected tests' passed at now.
+ Executed 1 test, with 0 failures (0 unexpected) in 0.001 seconds
+`;
+test('XCTest-only filter accepts a completed zero Swift root and counts the XCTest',()=>{
+ const h=harness([],filterOptions('ProbeTests/testKeep',oneXCTest+swiftOutput([]).slice(filteredRoot.length)));
+ assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 1, Failures: 0/);
+ assert.equal(nativeCalls(h)[0].args[3],'ProbeTests/testKeep');
+});
+test('mixed filter counts both selected frameworks',()=>{
+ const h=harness([],filterOptions('ProbeTests/testKeep|swiftKeep',oneXCTest+oneSwift.slice(filteredRoot.length)));
+ assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 2, Failures: 0/);
+ assert.equal(nativeCalls(h)[0].args[3],'ProbeTests/testKeep,Probe.swiftKeep()');
+});
+for(const [label,run] of [
+ ['zero execution',result(swiftOutput([]))],
+ ['missing terminal',result(oneSwift.replace('✔ Test swiftKeep() passed after 0.001 seconds.\n',''))],
+ ['missing XCTest root',result(oneSwift.replace("Test Suite 'Selected tests' passed at now.\n",''))],
+ ['missing Swift root',result(oneSwift.replace('✔ Test run with 1 tests in 0 suites passed after 0.001 seconds.\n',''))],
+ ['signal',{...result(oneSwift),status:null,signal:'SIGTERM'}],
+ ['status mismatch',{...result(oneSwift),status:1}],
+ ['unselected identity',result(swiftOutput(['swiftSkip']))],
+]) test(`filtered ${label} returns 70 without counts`,()=>{
+ const h=harness([],{...filterOptions('swiftKeep'),run:()=>run});
+ assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:/);assert.equal(nativeCalls(h).length,1);
+});
+test('filtered assertion RED returns one failure and preserves the native output',()=>{
+ const failing=oneSwift.replace('✔ Test swiftKeep() passed after 0.001 seconds.',
+  '✘ Test swiftKeep() recorded an issue at Probe.swift:1:1: Expectation failed\n✘ Test swiftKeep() failed after 0.001 seconds with 1 issue.')
+  .replace('✔ Test run with 1 tests in 0 suites passed after 0.001 seconds.','✘ Test run with 1 tests in 0 suites failed after 0.001 seconds with 1 issue.');
+ const h=harness([],{...filterOptions('swiftKeep'),run:()=>({...result(failing),status:1})});
+ assert.equal(h.status,1,h.stderr);assert.match(h.stdout,/app-lane filter=swiftKeep\nTests run: 1, Failures: 1, Errors: 0, Skipped: 0/);
+ assert.equal(nativeCalls(h).length,1);assert.equal(readFileSync(path.join(h.dir,'evidence.log'),'utf8'),failing+'\n');
+});
+test('absent filter keeps full bundle output without filter diagnostics',()=>{
+ const h=harness();assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 3, Failures: 0/);
+ assert.doesNotMatch(h.stdout,/app-lane filter=/);assert.deepEqual(nativeCalls(h)[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/PicseeAppTests.xctest']);
+});
+test('CLI forwards positional arguments and inherited filter into validation',()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'i195-cli-'));temporaryDirectories.add(dir);
+ writeFileSync(path.join(dir,'xcrun'),'#!/bin/sh\nexit 0\n',{mode:0o755});
+ for(const [argv,env] of [[[' '],{}],[['keep','extra'],{}],[[],{PICSEE_APP_FILTER:' '}]]) {
+  const run=spawnSync(process.execPath,[fileURLToPath(new URL('./app-lane.mjs',import.meta.url)),...argv],{
+   encoding:'utf8',env:{...process.env,PATH:dir+path.delimiter+process.env.PATH,PICSEE_APP_FILTER:undefined,...env},timeout:10000,
+  });
+  assert.equal(run.status,64,run.stderr);assert.match(run.stderr,/filter|usage/);assert.doesNotMatch(run.stdout,/Tests run:/);
+ }
+});
