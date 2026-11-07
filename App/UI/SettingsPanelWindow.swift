@@ -35,6 +35,8 @@ enum SettingsSection: String, CaseIterable {
     private var entryPoints: [ObjectIdentifier: EntryPoint] = [:]
     private var toolsButton: NSButton!
     private var displaySize: NSSlider!
+    private var toolOpacity: NSSlider!
+    private var toolOpacityValue: NSTextField!
     private var displayNames: NSButton!
     private var fitButtons: [ThumbnailFit: NSButton] = [:]
     private var cacheSize: NSTextField!
@@ -108,6 +110,8 @@ enum SettingsSection: String, CaseIterable {
         }
         toolsButton.state = preferences.alwaysShowTools ? .on : .off
         displaySize.doubleValue = preferences.thumbnailSize
+        toolOpacity.doubleValue = preferences.toolBackgroundOpacity
+        toolOpacityValue.stringValue = ToolBackgroundOpacitySlider.percentage(preferences.toolBackgroundOpacity)
         displayNames.state = preferences.showFileNames ? .on : .off
         for (fit, button) in fitButtons {
             button.state = fit == preferences.thumbnailFit ? .on : .off
@@ -286,6 +290,27 @@ enum SettingsSection: String, CaseIterable {
         let note = label(String(localized: "These are the same preferences as the grid footer Display panel; changes will sync immediately."), role: "uiSmall", muted: true)
         note.frame = NSRect(x: 162, y: 260, width: 390, height: 40)
         pane.addSubview(note)
+        // Viewer-only preference, below the grid-preference note. Both localized titles fit on one line.
+        let opacityTitle = label(String(localized: "Tool Background Opacity"))
+        opacityTitle.alignment = .right
+        opacityTitle.maximumNumberOfLines = 1
+        opacityTitle.frame = NSRect(x: 26, y: 211, width: 230, height: 24)
+        opacityTitle.setAccessibilityIdentifier("settings.display.tool-opacity.label")
+        pane.addSubview(opacityTitle)
+        toolOpacity = ToolBackgroundOpacitySlider(value: 50, minValue: 30, maxValue: 100,
+            target: self, action: #selector(changeToolBackgroundOpacity(_:)))
+        toolOpacity.isContinuous = true
+        toolOpacity.font = DesignMetrics.font("ui")
+        toolOpacity.frame = NSRect(x: 280, y: 211, width: 210, height: 24)
+        toolOpacity.setAccessibilityIdentifier("settings.display.tool-opacity")
+        toolOpacity.setAccessibilityLabel(String(localized: "Tool Background Opacity"))
+        pane.addSubview(toolOpacity)
+        toolOpacityValue = label("50%")
+        toolOpacityValue.font = DesignMetrics.font("ui", monospaced: true)
+        toolOpacityValue.alignment = .right
+        toolOpacityValue.frame = NSRect(x: 500, y: 211, width: 54, height: 24)
+        toolOpacityValue.setAccessibilityIdentifier("settings.display.tool-opacity.value")
+        pane.addSubview(toolOpacityValue)
     }
 
     private func buildCache() {
@@ -502,6 +527,11 @@ enum SettingsSection: String, CaseIterable {
         writeDisplay { $0.thumbnailSize = size }
     }
 
+    @objc private func changeToolBackgroundOpacity(_ sender: NSSlider) {
+        let opacity = DisplayPreferences.normalizedToolBackgroundOpacity(sender.doubleValue)
+        writeDisplay { $0.toolBackgroundOpacity = opacity }
+    }
+
     @objc private func changeFileNames(_ sender: NSButton) {
         let names = sender.state == .on
         writeDisplay { $0.showFileNames = names }
@@ -514,6 +544,34 @@ enum SettingsSection: String, CaseIterable {
 
     @objc private func changeTools(_ sender: NSButton) {
         preferencesStore.value.alwaysShowTools = sender.state == .on
+    }
+}
+
+private final class ToolBackgroundOpacitySlider: NSSlider {
+    static func percentage(_ value: Double) -> String {
+        (value / 100).formatted(.percent.precision(.fractionLength(0...1)))
+    }
+    override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+    override var canBecomeKeyView: Bool { acceptsFirstResponder }
+    override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
+    override func accessibilityChildren() -> [Any]? { [] }
+    override func accessibilityRole() -> NSAccessibility.Role? { .slider }
+    override func accessibilityValue() -> Any? { NSNumber(value: doubleValue) }
+    override func accessibilityValueDescription() -> String? { Self.percentage(doubleValue) }
+    override func accessibilityMinValue() -> Any? { NSNumber(value: minValue) }
+    override func accessibilityMaxValue() -> Any? { NSNumber(value: maxValue) }
+    override func accessibilityPerformIncrement() -> Bool { changeValue(by: 1) }
+    override func accessibilityPerformDecrement() -> Bool { changeValue(by: -1) }
+    override func keyDown(with event: NSEvent) {
+        guard acceptsFirstResponder else { return }
+        super.keyDown(with: event)
+    }
+    private func changeValue(by delta: Double) -> Bool {
+        guard acceptsFirstResponder else { return false }
+        let next = min(maxValue, max(minValue, doubleValue + delta))
+        guard next != doubleValue else { return false }
+        doubleValue = next
+        return sendAction(action, to: target)
     }
 }
 
