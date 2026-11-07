@@ -132,6 +132,8 @@ record/verify、指纹、防削弱检查仍由插件完成，不像 mdpro 那样
 
 `08989fe` 以 Python 3 标准库 `fcntl.flock` 取代目录锁/PID 回收：持久文件 `~/.picsee/locks/heavy.lock`（不删除/移动），job 经 `pass_fds` 继承描述符，只有最后一次 close 才解锁。选择 Python 是因为 macOS 支持该标准库，并能明确控制继承和进程组；没有额外包依赖。保留嵌套、超时 75、退出码与信号转发。SIGKILL holder 后其存活子进程仍持锁，两个 waiter 与三方竞争均有自动化测试。`unit` 原测试/coverage 命令不变，整个 lane 可由外层 heavy lock 串行；两个 discovery probe 都加锁。测试临时目录在 `os.tmpdir()`，由 `after()` 清理，测试插件固定为 0.10.2（保留 env override），fixtures 仅把 scratch/home 前缀改为中性路径。暂不实现 UITests/xcodebuild lane，XCTest 使用真实 scratch SwiftPM 输出验证。
 
+2026-11-07 #195：App RED 使用 `node scripts/tdd/app-lane.mjs [filter]` 或 `PICSEE_APP_FILTER`，record/verify 必须保留相同过滤表达式（环境变量不写入 receipt）；具体命令和隔离规则见 [AGENTS.md 的 App RED 段](../../AGENTS.md)。运行时枚举精确 ID 后交给 `xcrun xctest -XCTest`，并核对完整执行集合；零匹配退出 70，无 filter 保持原有全 bundle 路径。
+
 ### B. 规则 70 引用到、picsee 也需要的基础规则
 
 | # | 规则 | 内容 |

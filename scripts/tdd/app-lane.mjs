@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-/** Run the compiled App test bundle. Set PICSEE_APP_LANE_NO_RETRY=1 for RED receipts. */
+/** Run the compiled App test bundle. Optional [filter] overrides PICSEE_APP_FILTER.
+ * Keep the same filter for receipt record/verify; env is not stored in receipts.
+ * Set PICSEE_APP_LANE_NO_RETRY=1 for RED receipts. */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -44,8 +46,12 @@ export function parseAppResult(run, selection = null) {
   const crash = clean.split('\n').some(line => crashRecords.some(record => record.test(line)));
   const selected = selection === null ? null : selectionComplete(clean, selection);
   const xctFailed = selected?.failed ?? 0;
+  // A filtered XCTest-only selection still starts and completes the Swift root,
+  // but has no Swift test bodies. Quarantine-only parsing keeps its old contract.
+  const emptySwiftAllowed = selection?.allowEmptySwift === true &&
+    !selection.retained.some(row => row.kind === 'swift') && count === 0;
   let reliable = !(run.error || run.signal || crash || (selection === null && rootFailures) ||
-    (selection === null ? !rootDone : !selected.complete) || starts.length !== 1 || summaries.length !== 1 || !count ||
+    (selection === null ? !rootDone : !selected.complete) || starts.length !== 1 || summaries.length !== 1 || (!count && !emptySwiftAllowed) ||
     passed + failed + skipped !== count || (summaries[0]?.[2] === "failed") !== (failed > 0) ||
     ![0, 1].includes(run.status) || (run.status === 0) !== (failed + xctFailed === 0));
   return { reliable, status: reliable ? run.status : 70, output,
@@ -347,21 +353,33 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
-export function runAppLane({ spawn = spawnSync, env = process.env,
+export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
   evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile, bundlePath = bundle, stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
+  const filter = argv[0] ?? env.PICSEE_APP_FILTER;
+  let expression;
+  try {
+    if (argv.length > 1 || (filter !== undefined && !filter.trim())) throw new Error('expected one nonblank filter');
+    if (filter !== undefined) expression = new RegExp(filter);
+  } catch (error) {
+    stderr(`usage: node scripts/tdd/app-lane.mjs [filter]; or set PICSEE_APP_FILTER for record and verify: ${error.message}\n`);
+    return 64;
+  }
   let quarantine, selection = null;
   try {
     quarantine = loadQuarantine(quarantinePath);
-    if (quarantine.length) {
+    if (quarantine.length || expression) {
       const inventory = discoverInventory(spawn, env, bundlePath);
       for (const entry of quarantine) if (!inventory.some(row => row.id === entry.id)) {
         stderr(`app-lane quarantine warning: missing inventory id=${entry.id} issue=#${entry.issue}\n`);
         throw new Error(`inventory does not contain quarantined id ${entry.id}`);
       }
-      const retained = inventory.filter(row => !quarantine.some(entry => entry.id === row.id));
-      if (!retained.some(row => row.kind === 'swift')) throw new Error('unsupported quarantine: no remaining Swift Testing tests; retain at least one Swift Testing test');
-      selection = { inventory, retained };
+      const retained = inventory.filter(row => !quarantine.some(entry => entry.id === row.id) &&
+        (!expression || expression.test(row.id)));
+      if (expression && !retained.length) throw new Error('filter has no matching runnable tests');
+      if (!expression && !retained.some(row => row.kind === 'swift')) throw new Error('unsupported quarantine: no remaining Swift Testing tests; retain at least one Swift Testing test');
+      selection = { inventory, retained, allowEmptySwift: Boolean(expression) };
       for (const entry of quarantine) stdout(`app-lane quarantine skip=${entry.id} issue=#${entry.issue}\n`);
+      if (!quarantine.length) stdout('app-lane quarantine none\n');
     } else stdout('app-lane quarantine none\n');
   } catch (error) {
     stderr(`app-lane quarantine: ${error.message}\n`); return 70;
@@ -394,7 +412,10 @@ export function runAppLane({ spawn = spawnSync, env = process.env,
   }
   const final = attempt.parsed;
   if (!final.reliable) stderr('app-lane: no reliable completed App test result; environment failure\n');
-  else stdout(`\nTests run: ${final.count}, Failures: ${final.failed}, Errors: 0, Skipped: ${final.skipped}\n`);
+  else {
+    const diagnostic = filter === undefined ? '' : `app-lane filter=${JSON.stringify(filter).slice(1, -1)}\n`;
+    stdout(`\n${diagnostic}Tests run: ${final.count}, Failures: ${final.failed}, Errors: 0, Skipped: ${final.skipped}\n`);
+  }
   return final.status;
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runAppLane();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runAppLane({ argv: process.argv.slice(2) });

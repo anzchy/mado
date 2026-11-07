@@ -99,7 +99,9 @@ node --test scripts/tdd/*.test.mjs
 
 也可直接用 `node scripts/tdd/swift-lane.mjs itemIDSurvivesJSONRoundTrip` 跑单测。所有已启动框架均须完成根运行；编译失败、零测试、崩溃或不完整输出退出 70，不输出计数。正常断言失败退出 1；计数前打印 `swift-lane filter=<f>` 供输出 tail 审计，verify 仍须传相同过滤器。
 
-App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"PicseeAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。选定运行的完整一致输出中，测试失败退出 1；环境失败或输出不完整、不一致退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；空清单保持原运行参数和解析规则。
+App RED 也可只跑指定测试：`node scripts/tdd/app-lane.mjs [filter]`，或在 receipt 的 record **和** verify 前设置同一个 `PICSEE_APP_FILTER`。参数优先于环境变量；filter 是匹配运行时完整 ID 的正则表达式（例如 `issue512ChildReadKeepsTitleCurrentRowAndFailureDash`，多个测试用 `nameA|nameB`）。环境变量不会写入 receipt，`--files` 仍只选指纹文件。设置 `PICSEE_APP_LANE_NO_RETRY=1` 记录 RED；先 build-for-testing 到 `.build/dd-ci`。成功解析后、计数前打印 `app-lane filter=<f>`；零匹配或执行集合不符退出 70，不输出计数。未传 filter 时仍跑全 bundle（应用隔离清单）。过滤后的精确 ID 通过 `xcrun xctest -XCTest` 传入，同时适用于 Swift Testing 与 XCTest；隔离清单中的测试始终排除。
+
+App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.json`（默认 `[]`）。隔离时添加 `{"id":"PicseeAppTests.someTest()","issue":411,"reason":"具体原因"}`；每条必须有正整数 issue 和非空原因，修复后删除对应条目。XCTest 标识用 `Class/method`，Swift Testing 用运行时列举的模块限定形式 `Module.func()` 或 `Module.Suite/method()`。实测 `XCTestInvertScope` 不会排除目标；非空清单因此先从编译 bundle 枚举两类测试，再由原来的 `xcrun xctest -XCTest` 只运行剩余标识，并逐项核对执行集合。未指定 filter 时，非空清单必须保留至少一个 Swift Testing 测试，否则以明确的不支持提示退出 70。选定运行的完整一致输出中，测试失败退出 1；环境失败或输出不完整、不一致退出 70。清单无效、枚举失败、标识不支持或有歧义均退出 70；已不存在的标识先警告再退出 70。CI 会逐条打印标识与 issue；未指定 filter 且清单为空时，保持原运行参数和解析规则。
 升级 Xcode 后，重跑混合 XCTest + Swift Testing probe，确认枚举 ABI 与控制台标签仍兼容。
 
 新 API 按此流程先写可编译桩，桩在 record 时是未提交的实现改动，Swift receipt 总会带 `implementation-already-present` MEDIUM；审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。
