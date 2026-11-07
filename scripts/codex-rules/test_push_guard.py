@@ -71,6 +71,34 @@ class PushGuardTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 self.invoke()
 
+    def test_accepts_exactly_one_picsee_or_mado_push_url(self):
+        # #554: the repo is renamed anzchy/picsee -> anzchy/mado; both names stay pushable.
+        for url in ['https://github.com/anzchy/picsee.git', 'git@github.com:anzchy/picsee.git',
+                    'https://github.com/anzchy/mado.git', 'git@github.com:anzchy/mado.git']:
+            self.remotes = [url]
+            try:
+                result, run = self.invoke('--dry-run')
+            except SystemExit:
+                self.fail(f'{url} was refused')
+            self.assertEqual(result, 0, url)
+            run.assert_called_once_with(['git', 'push', '--dry-run', url, 'HEAD:refs/heads/fix/topic'], check=False)
+
+    def test_rejects_near_miss_push_urls(self):
+        for remotes in [
+            ['https://github.com/other/mado.git'], ['git@github.com:other/mado.git'],
+            ['https://github.com/anzchy/mado-foo.git'], ['git@github.com:anzchy/mado-foo.git'],
+            ['https://github.com/anzchy/other.git'], ['http://github.com/anzchy/mado.git'],
+            ['https://github.com/anzchy/mado'], ['git@github.com:anzchy/mado'],
+            ['https://github.com/anzchy/mado.git/'], ['https://github.com/anzchy/Mado.git'],
+            ['ssh://git@github.com/anzchy/mado.git'], [' https://github.com/anzchy/mado.git'],
+            ['https://github.com/anzchy/mado.git', 'git@github.com:anzchy/mado.git'],
+            ['https://github.com/anzchy/picsee.git', 'https://github.com/anzchy/mado.git'],
+            [],
+        ]:
+            self.remotes = remotes
+            with self.subTest(remotes=remotes), self.assertRaises(SystemExit):
+                self.invoke()
+
     def test_rejects_malformed_lease(self):
         with self.assertRaises(SystemExit):
             self.invoke('--expected-remote-oid', 'not-an-oid')
