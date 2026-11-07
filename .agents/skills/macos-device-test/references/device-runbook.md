@@ -120,7 +120,7 @@ first of `/Applications/Xcode-26.6.app` and `/Applications/Xcode.app` whose `xco
 build. `PICSEE_XCODE` explicitly overrides this search but is checked against the same build. On the MacBook,
 Xcode 26.6 sits beside Xcode 27.1; Mado is never built with 27.1.
 Confirm `xcodebuild -version` prints `Build version 17F113` before building. Product and scheme `Mado`, bundle identifier
-`io.github.anzchy.mado` (decided 2026-10-21; P0-01 creates them). Run long builds in the background and monitor `build.log`. If you test a Debug build, say so in the record: it's a different binary, and
+`io.github.anzchy.mado` (#547, ADR-0017; renamed by #550/#551). Run long builds in the background and monitor `build.log`. If you test a Debug build, say so in the record: it's a different binary, and
 its performance numbers don't count.
 
 **Signing matters for the sandbox.** The sandbox and security-scoped bookmarks only work in a signed app.
