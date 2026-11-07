@@ -462,5 +462,13 @@
   {
     "path": "scripts/name-checks/living-docs.test.mjs",
     "reason": "#553: independent baseline and negative fixtures deliberately exercise forbidden historical names and authorized acceptance substitutions."
+  },
+  {
+    "path": "scripts/name-checks/check-living-docs-range.mjs",
+    "reason": "#553 one-shot range audit deliberately names the former identity and selected acceptance-name transition; never a permanent project baseline."
+  },
+  {
+    "path": "scripts/name-checks/docs-fix.test.mjs",
+    "reason": "#553 regression fixtures exercise stale identities, immutable synthetic ranges and preserved generated namespace/release inputs."
   }
 ]

@@ -90,13 +90,14 @@
     },
     {
       "name": "docs-node",
-      "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/living-docs.test.mjs",
+      "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/living-docs.test.mjs scripts/name-checks/docs-fix.test.mjs scripts/design/design-prompts.test.mjs",
       "probeCommand": "node --version",
       "gateOn": [
         "manual"
       ],
       "coverage": "none",
-      "timeoutMs": 120000
+      "timeoutMs": 120000,
+      "description": "Manual lightweight documentation RED receipts and current-identity/export contracts; node --version discovery needs no native heavy lock."
     }
   ],
   "coverageThresholds": {

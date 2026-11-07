@@ -20,7 +20,7 @@ function rename(text) {
   text = text.replaceAll('io.github.anzchy.picsee', 'io.github.anzchy.mado');
   const saved = [];
   const protect = span => `\uE000${saved.push(span) - 1}\uE001`;
-  let out = text.replace(/(?<=session `)picsee(?=`)|(?<=project=)picsee|picsee(?= flock| holder| 从不回收| never reclaims| doc gardener)|「[^」]*[Pp]icsee[^」]*」|(?:former name: Picsee|https?:\/\/|git@)[^\s<>`）)\]]*|(?:[\w.~$\/-]*\/)?(?:picsee-ui-system|picsee-browser|picsee-wt|\.picsee)(?:[\w.\/-]*)|\bpicsee-(?:delegator|doc-gardener|opus-auditor)\b|\bPICSEE_[A-Z0-9_*]+\b|\banzchy\/picsee\b|\bpicsee\.(?:pid|log)\b|\bpicsee-mbp\b|\bpicsee\//g, protect);
+  let out = text.replace(/\bPicseeUiSystem_bb8eab\b|(?<=session `)picsee(?=`)|(?<=project=)picsee|picsee(?= flock| holder| 从不回收| never reclaims| doc gardener)|「[^」]*[Pp]icsee[^」]*」|(?:former name: Picsee|https?:\/\/|git@)[^\s<>`）)\]]*|(?:[\w.~$\/-]*\/)?(?:picsee-ui-system|picsee-browser|picsee-wt|\.picsee)(?:[\w.\/-]*)|\bpicsee-(?:delegator|doc-gardener|opus-auditor)\b|\bPICSEE_[A-Z0-9_*]+\b|\banzchy\/picsee\b|\bpicsee\.(?:pid|log)\b|\bpicsee-mbp\b|\bpicsee\//g, protect);
   out = out.replaceAll('io.github.anzchy.picsee', 'io.github.anzchy.mado')
     .replace(/Picsee[A-Za-z0-9]*/g, token => token.replace('Picsee', 'Mado'))
     .replace(/(?<![A-Za-z0-9_.\/-])picsee(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9])/g, 'Mado');
@@ -50,6 +50,7 @@ for (const path of paths) {
   const file = resolve(root, path);
   if (lstatSync(file).isSymbolicLink()) continue;
   const frozen = /^docs\/(?:adr|validation)\/.*\.md$/.test(path);
+  if (path === 'docs/release/notes-template.md') continue; // executable release input owned by #552
   if (path === 'scripts/name-checks/README.md') continue; // documents both identities deliberately
   if (!frozen && !living(path) && path !== 'scripts/ledger/build.mjs' && path !== '.codex/agents/picsee-doc-gardener.toml' && path !== '.github/ISSUE_TEMPLATE/bug_report.yml') continue;
   const old = readFileSync(file, 'utf8');

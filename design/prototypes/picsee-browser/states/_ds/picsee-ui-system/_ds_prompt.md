@@ -4,7 +4,7 @@
 
 Scope: the design system is a visual style reference only. Its guide may describe example products, brands, or people unrelated to the user and to the subject of this conversation. Never treat anything in the design system as a fact about the user, their work, or the topic.
 
-**Loading the bundle is how you use this design system.** Every page you build must load `_ds/picsee-ui-system/_ds_bundle.js` and compose with the components it exports on `window.MadoUiSystem_bb8eab` — do not recreate those components from scratch or restyle raw HTML to look like them. The bundle calls `React.createElement`, so `window.React` and `window.ReactDOM` must load first — the pinned tags below provide them. Add these once:
+**Loading the bundle is how you use this design system.** Every page you build must load `_ds/picsee-ui-system/_ds_bundle.js` and compose with the components it exports on `window.PicseeUiSystem_bb8eab` — do not recreate those components from scratch or restyle raw HTML to look like them. The bundle calls `React.createElement`, so `window.React` and `window.ReactDOM` must load first — the pinned tags below provide them. Add these once:
 
 ```html
 <!-- React first — the bundle calls React.createElement -->
@@ -20,14 +20,14 @@ Scope: the design system is a visual style reference only. Its guide may describ
 
 With several design systems bound, keep each system's stylesheets together and load the PRIMARY system's `<link>`s LAST so its tokens win.
 
-The bundle is plain compiled JS — load it with a regular `<script>` (no `type="text/babel"` or `type="module"`). Every component is then available on `window.MadoUiSystem_bb8eab` — e.g. `const { IconButton, Keycap } = window.MadoUiSystem_bb8eab;`. The linked stylesheet(s) carry the design tokens (colors, type, spacing) — style against those via `var(--*)` and the design system's classes rather than guessing values.
+The bundle is plain compiled JS — load it with a regular `<script>` (no `type="text/babel"` or `type="module"`). Every component is then available on `window.PicseeUiSystem_bb8eab` — e.g. `const { IconButton, Keycap } = window.PicseeUiSystem_bb8eab;`. The linked stylesheet(s) carry the design tokens (colors, type, spacing) — style against those via `var(--*)` and the design system's classes rather than guessing values.
 
 Your own page code stays separate from the bundle: write it in `<script type="text/babel">` blocks, with Babel standalone loaded once (pinned tag below) to transpile your JSX in the browser —
 
 ```html
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script type="text/babel">
-  const { IconButton, Keycap } = window.MadoUiSystem_bb8eab;
+  const { IconButton, Keycap } = window.PicseeUiSystem_bb8eab;
   ReactDOM.createRoot(document.getElementById('root')).render(<IconButton />);
 </script>
 ```

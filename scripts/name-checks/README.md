@@ -33,4 +33,12 @@ node --test scripts/name-checks/living-docs.test.mjs
 
 The CLI preserves filenames and link targets, tooling paths and identifiers reserved for #556, repo references reserved for #554, release history, static research and historical audit/test/review/TDD reports. It appends exactly one former-name note to each ADR and validation record. Ledger history and acceptance prefixes remain unchanged during replay; amendment 1's four acceptance-name substitutions are committed separately. The glossary definition, capitalization guidance and this dual-identity explanation are hand edits.
 
-The Node contract compares frozen records and ledger rows against the fixed `bf5052b2` baseline. Only OPEN-03, CMD-05, WIN-02 and EXT-03 may substitute the app name in acceptance; limitations permit mechanical names only. Same-line tooling references cannot hide a stale native command. Real Git/filesystem replay fixtures check first-run effects and second-run byte equality.
+The lasting Node contract scans current native-command identities without reading historical commits. Historical records and sanctioned acceptance changes may evolve after this ticket. Prompt tests check copied design-system globals against each manifest and the actual running bundle. The namespace `PicseeUiSystem_bb8eab` is a generated runtime export, so the replay preserves it; #552 owns the release notes template, which the replay also leaves untouched.
+
+To audit this ticket's preservation rules once, select both immutable revisions explicitly (full history containing them is required):
+
+```sh
+node scripts/name-checks/check-living-docs-range.mjs --base bf5052b2 --head <reviewed-commit>
+```
+
+This one-shot command checks the former-name notes, original ADR/validation bytes and paths, ledger rows/acceptance and the unchanged release template only across the selected trees. Only OPEN-03, CMD-05, WIN-02 and EXT-03 may substitute the app name in acceptance; limitations permit mechanical names only. It has no default baseline or head, does not read working-tree records, and fails visibly if either chosen object is unavailable. It is outside the always-run test glob. Generic fixture tests verify those command semantics without pinning future project history.
