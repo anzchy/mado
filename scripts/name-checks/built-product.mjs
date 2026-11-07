@@ -16,7 +16,9 @@ export function checkBuiltProduct({ info, entitlements, catalogs }, expectedName
   const expected = identityFor(expectedName);
   const problems = [];
   for (const [key, value] of Object.entries(expected.info)) {
-    if (info?.[key] !== value) problems.push(`Info.plist:${key}: expected ${JSON.stringify(value)}, found ${JSON.stringify(info?.[key])}`);
+    if (key === 'SUFeedURL' && value === null) {
+      problems.push(`Info.plist:SUFeedURL undecided for ${expected.name} (decided in #552)`);
+    } else if (info?.[key] !== value) problems.push(`Info.plist:${key}: expected ${JSON.stringify(value)}, found ${JSON.stringify(info?.[key])}`);
   }
   const names = entitlements?.[MACH];
   if (!Array.isArray(names) || names.length !== expected.machLookup.length || !expected.machLookup.every(name => names.includes(name))) {

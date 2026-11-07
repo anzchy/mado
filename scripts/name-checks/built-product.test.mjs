@@ -74,11 +74,13 @@ test('all en/zh nested variants, each occurrence and source fallback are scanned
   assert.ok(failures.every(message => !message.includes('Mado key only') && !message.includes('/fr/')));
 });
 
-test('finite identity swap and additive localization diagnostics obey symmetry and locality', () => {
+test('identity swap preserves diagnostic locality while the Mado feed remains undecided', () => {
   const first = fixture();
   const second = JSON.parse(JSON.stringify(first).replaceAll('Picsee', 'Mado').replaceAll('picsee', 'mado'));
   for (const [artifact, own, other] of [[first, 'Picsee', 'Mado'], [second, 'Mado', 'Picsee']]) {
-    assert.deepEqual(checkBuiltProduct(artifact, own), []);
+    // #552 must decide Mado's feed, so own-name success is intentionally asymmetric.
+    assert.deepEqual(checkBuiltProduct(artifact, own), own === 'Picsee' ? []
+      : ['Info.plist:SUFeedURL undecided for Mado (decided in #552)']);
     assert.equal(checkBuiltProduct(artifact, other).length, 7);
     const before = checkBuiltProduct(artifact, other);
     artifact.catalogs[0].data.strings.extra = { localizations: { en: unit(`Open ${own}`) } };
@@ -143,6 +145,7 @@ test('public CLI reads built metadata and explicit unsigned template with honest
   assert.match(pass.stdout, /unsigned.*template/i);
   const fail = run(f, ['--expected-name', 'Mado']);
   assert.equal(fail.status, 1, fail.stderr);
+  assert.match(fail.stderr, /SUFeedURL undecided for Mado \(decided in #552\)/);
   for (const field of [...Object.keys(info), mach, '/localizations/en/', '/localizations/zh-Hans/']) {
     assert.ok(fail.stderr.includes(field), field);
   }
@@ -190,4 +193,27 @@ test('unsigned CLI missing Sparkle key still lists all identity failures without
     assert.ok(result.stderr.includes(location), location);
   }
   assert.doesNotMatch(result.stderr, /TypeError|reading 'includes'/);
+});
+
+
+test('an undecided Mado feed fails independently of every observed feed value', () => {
+  const values = [
+    'https://raw.githubusercontent.com/anzchy/mado/main/appcast.xml',
+    info.SUFeedURL, 'https://example.com/new-feed.xml', '', null, undefined,
+    ...Array.from({ length: 12 }, (_, n) => `https://example.com/feed-${n}.xml`),
+  ];
+  for (const value of values) {
+    const input = {
+      info: { CFBundleName: 'Mado', CFBundleDisplayName: 'Mado',
+        CFBundleIdentifier: 'io.github.anzchy.mado', SUFeedURL: value },
+      entitlements: { [mach]: ['io.github.anzchy.mado-spks', 'io.github.anzchy.mado-spki'] },
+      catalogs: [catalog({})],
+    };
+    assert.deepEqual(checkBuiltProduct(input, 'Mado'),
+      ['Info.plist:SUFeedURL undecided for Mado (decided in #552)']);
+    delete input.info.SUFeedURL;
+    assert.deepEqual(checkBuiltProduct(input, 'Mado'),
+      ['Info.plist:SUFeedURL undecided for Mado (decided in #552)']);
+  }
+  assert.deepEqual(checkBuiltProduct(fixture(), 'Picsee'), []);
 });

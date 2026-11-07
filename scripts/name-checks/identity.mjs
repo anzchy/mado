@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 // The templates are transcribed from project.yml, App/Info.plist and the app entitlements.
-// The feed ticket can change its path here when it separates the frozen and new feeds.
+// Per-name feed URLs preserve the frozen feed; null remains undecided until #552.
 const source = JSON.parse(readFileSync(new URL('./identity.json', import.meta.url), 'utf8'));
 
 export function identityFor(expectedName = source.expectedName) {
@@ -14,7 +14,7 @@ export function identityFor(expectedName = source.expectedName) {
       CFBundleName: expectedName,
       CFBundleDisplayName: expectedName,
       CFBundleIdentifier: bundleId,
-      SUFeedURL: source.feedURLTemplate.replaceAll('{slug}', slug),
+      SUFeedURL: source.feedURLs[expectedName],
     },
     machLookup: source.machSuffixes.map(suffix => bundleId + suffix),
   };
