@@ -17,6 +17,16 @@ export function classifyFlaky(run) {
   if (entries.some(entry => !entry)) return fail;
   if (parsed.issues.some(issue => !entries.some(entry => entry.name === issue.name && entry.signature.test(issue.signature)))) return fail;
   if (entries.some(entry => !parsed.issues.some(issue => issue.name === entry.name))) return fail;
+  for (const entry of entries) if (entry.childFailureSignatures) {
+    const diagnostics = parsed.output.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r/g, '').split('\n')
+      .filter(line => line.startsWith(entry.childPrefix))
+      .map(line => line.slice(entry.childPrefix.length))
+      .filter(line => line.startsWith('✘') || /^(?:error:|(?:[^:\r\n]+\.swift:\d+(?::\d+)?: )?Fatal error:|Segmentation fault|Bus error|Abort trap)/i.test(line));
+    // Every failed child assertion, test and root must be the recorded failure.
+    // Additional failures or missing child evidence revoke the parent's retry.
+    if (diagnostics.length !== entry.childFailureSignatures.length ||
+        entry.childFailureSignatures.some(signature => diagnostics.filter(line => signature.test(line)).length !== 1)) return fail;
+  }
   return { decision: 'retry-eligible', names: parsed.failureNames, issues: [...new Set(entries.map(entry => entry.issue))] };
 }
 

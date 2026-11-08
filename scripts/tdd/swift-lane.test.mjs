@@ -136,9 +136,9 @@ pluginTest('a started Swift Testing stream must finish even when XCTest finished
 test('all discovery probes share the heavy lock and issue-specific integration stays manual', () => {
   const config=JSON.parse(readFileSync('.claude/tdd-guardian/config.json','utf8'));
   // Pure Node lanes run light tests only, so their discovery stays outside the heavy lock.
-  const heavy=config.lanes.filter(l=>!['release-node','name-check-node','module-name-node','docs-node','ci-cache-node','release-tag-ci-node'].includes(l.name));
+  const heavy=config.lanes.filter(l=>!['release-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node'].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);
-  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red','ci-cache-node','docs-node','integration','module-name-node','name-check-node','release-node','release-tag-ci-node','swift-red','unit']);
+  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red','ci-cache-node','ci-flaky-node','docs-node','integration','module-name-node','name-check-node','release-node','release-tag-ci-node','swift-red','unit']);
   assert.deepEqual(config.lanes.find(l=>l.name==='integration').gateOn, ['manual']);
   assert.deepEqual(config.lanes.find(l=>l.name==='app-red').gateOn, ['manual']);
   const release=config.lanes.find(l=>l.name==='release-node');

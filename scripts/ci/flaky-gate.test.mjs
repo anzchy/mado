@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseAppResult, runAppLane } from '../tdd/app-lane.mjs';
 import { classifyFlaky } from './flaky-gate.mjs';
 
+const emptyQuarantinePath = fileURLToPath(new URL('../tdd/fixtures/i587-empty-quarantine.json', import.meta.url));
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const fixtures = ['a1','a4-diagnostic','a5'].map(id => readFileSync(new URL(`./fixtures/app-${id}.txt`, import.meta.url),'utf8'));
 const recordedA4 = readFileSync(new URL('./fixtures/app-a4.txt', import.meta.url), 'utf8');
@@ -25,7 +26,7 @@ const denied = r=>assert.equal(classifyFlaky(r).decision,'fail');
 function harness(sequence, options={}) {
   let calls=0, stdout='',stderr='';
   const evidencePath=path.join(mkdtempSync(path.join(tmpdir(),'mado-i424-')),'app-lane-attempt1.log');
-  const status=runAppLane({spawn:()=>{assert.ok(calls<sequence.length,'unexpected extra attempt');return sequence[calls++];},env:{},evidencePath,stdout:s=>stdout+=s,stderr:s=>stderr+=s,...options});
+  const status=runAppLane({spawn:()=>{assert.ok(calls<sequence.length,'unexpected extra attempt');return sequence[calls++];},env:{},quarantinePath:emptyQuarantinePath,evidencePath,stdout:s=>stdout+=s,stderr:s=>stderr+=s,...options});
   return {status,calls,stdout,stderr,evidencePath};
 }
 
@@ -176,7 +177,7 @@ test('injected process boundary uses locked native command and preserves environ
   assert.equal(h.status,0);assert.match(command,/scripts\/heavy-lock\.sh$/);assert.deepEqual(args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);assert.equal(options.env.EXAMPLE,'kept');assert.equal(options.env.SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH,'1');
 });
 test('default output streams emit final result using recorded Node transport',()=>{
-  const code=`import {runAppLane} from ${JSON.stringify(new URL('../tdd/app-lane.mjs',import.meta.url).href)}; process.exitCode=runAppLane({spawn:()=>(${JSON.stringify({...pass,stderr:'default-stderr-marker\n'})})});`;
+  const code=`import {runAppLane} from ${JSON.stringify(new URL('../tdd/app-lane.mjs',import.meta.url).href)}; process.exitCode=runAppLane({quarantinePath:${JSON.stringify(emptyQuarantinePath)},spawn:()=>(${JSON.stringify({...pass,stderr:'default-stderr-marker\n'})})});`;
   const r=spawnSync(process.execPath,['--input-type=module','-e',code],{encoding:'utf8',cwd:root});assert.equal(r.status,0,r.stderr);assert.ok(r.stdout.includes(passing));assert.match(r.stdout,/Tests run: 2, Failures: 0, Errors: 0, Skipped: 1/);assert.equal(r.stderr,'default-stderr-marker\n');
 });
 
@@ -215,4 +216,92 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
   assert.ok(lane, 'App lane step exists');
   assert.match(lane, /^        run: node scripts\/tdd\/app-lane\.mjs$/m);
   assert.doesNotMatch(lane, /continue-on-error:/);
+});
+
+
+// #587 recordings are exact CI output; mutations below are explicitly synthetic.
+// Amendment 2: fixture transport tails and historical namespaces are normalized as documented in fixtures/README.md.
+const i587Recordings=['140','521-old','521-new'].map(id=>readFileSync(new URL(`./fixtures/i587-${id}.txt`,import.meta.url),'utf8'));
+const i587Names=['issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet','issue521NativePanPassesInIsolatedProcess','issue521NativePanPassesInIsolatedProcess'];
+const i587Issues=[520,564,564];
+for(const [i,text] of i587Recordings.entries()) {
+ test(`i587 real recording ${i} has an exact tracked signature`,()=>{
+  assert.equal(parseAppResult(result(text)).reliable,true);
+  assert.deepEqual(classifyFlaky(result(text)),{decision:'retry-eligible',names:[i587Names[i]],issues:[i587Issues[i]]});
+ });
+ test(`i587 signature ${i} rejects each parent assertion near miss`,()=>{
+  const lines=text.split('\n').filter(line=>line.startsWith('✘ Test ')&&line.includes(' recorded an issue at '));
+  for(const line of lines) for(const changed of [line.replace('.swift:','.txt:'),line.replace(/\.swift:\d+:/,'.swift:999:'),line.replace(/(:\d+):\d+: Expectation/,'$1:99: Expectation'),line.replace('Expectation failed:','Expectation failed: unrelated assertion:')]) {
+   assert.notEqual(changed,line);const mutated=text.replace(line,changed);
+   assert.equal(parseAppResult(result(mutated)).reliable,true);denied(result(mutated));
+  }
+ });
+ test(`i587 signature ${i} cannot hide unknown assertions or incomplete output`,()=>{
+  const line=text.split('\n').find(line=>line.startsWith('✘ Test ')&&line.includes(' recorded an issue at '));
+  const extra=`✘ Test ${i587Names[i]}() recorded an issue at Other.swift:1:1: Expectation failed: unrelated`;
+  const foreign=text.replace(line,line+'\n'+extra).replace(/^✘ Test run with (.+) with (\d+) issues?\.$/m,(_,a,n)=>`✘ Test run with ${a} with ${Number(n)+1} issues.`);
+  denied(result(foreign));
+  const unknown=text.replace(/^✘ Test run with (\d+) tests in (\d+) suites failed after (.+) with (\d+) issues?\.$/m,(_,n,s,time,issues)=>`✘ Test i587Unknown() recorded an issue at Other.swift:1:1: Expectation failed\n✘ Test i587Unknown() failed after 0.001 seconds with 1 issue.\n✘ Test run with ${Number(n)+1} tests in ${s} suites failed after ${time} with ${Number(issues)+1} issues.`);
+  assert.notEqual(unknown,text);assert.equal(parseAppResult(result(unknown)).reliable,true);denied(result(unknown));
+  denied(result(text+'\n✘ Test run recorded an issue: anonymous\n'));
+  denied(result(text,{stderr:'error: Exited with unexpected signal code 9\n'}));
+  denied(result(text.replace(/^Test Suite 'All tests' passed at .*\n/m,'')));
+ });
+ test(`i587 signature ${i} retries once and preserves evidence for both outcomes`,()=>{
+  const first=result(text,{stderr:'i587 initial stderr\n'});
+  for(const second of [pass,result(text)]) {
+   const h=harness([first,second,pass]);assert.equal(h.calls,2);assert.equal(h.status,second.status);
+   assert.equal((h.stdout.match(/retrying once/g)||[]).length,1);
+   assert.equal(readFileSync(h.evidencePath,'utf8'),first.stdout+'\n'+first.stderr);
+   assert.ok(h.stdout.includes(`#${i587Issues[i]}`));
+  }
+ });
+}
+for(const [i,text] of i587Recordings.entries()) if(i>0) test(`i587 child ${i} rejects changed, absent and additional child failures`,()=>{
+ const line=text.split('\n').find(line=>line.startsWith('[issue521-child] ✘')&&line.includes('recorded an issue'));
+ const rootLine=text.split('\n').find(line=>line.startsWith('[issue521-child] ✘ Test run with '));
+ for(const mutated of [
+  text.replace(line,''),text.replace(line,line.replace('isKeyWindow','isVisible')),
+  text.replace(line,line.replace('→ false','→ true')),text.replace(line,line.replace(':79:9',':80:9')),
+  text.replace(line,line.replace('tabCount → 0','tabCount → 1')),
+  text.replace(line,line+'\n'+line.replace('isKeyWindow','isVisible')).replace(rootLine,rootLine.replace('1 issue','2 issues')),
+  text+'\n[issue521-child] ✘ Test unknownChild() recorded an issue at Other.swift:1:1: Expectation failed\n[issue521-child] ✘ Test unknownChild() failed after 0.001 seconds with 1 issue.\n[issue521-child] ✘ Test run with 1 test in 0 suites failed after 0.001 seconds with 1 issue.\n',
+  text+'\n[issue521-child] Fatal error: child trap\n',
+ ]) {assert.notEqual(mutated,text);denied(result(mutated));}
+});
+test('i587 one failing SHA for issue527 does not authorize a signature',()=>{
+ denied(result(readFileSync(new URL('./fixtures/i587-527.txt',import.meta.url),'utf8')));
+});
+test('i587 configured default quarantine excludes and reports issue454 with accountability',(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T12:00:00Z')});
+ const entries=JSON.parse(readFileSync(new URL('../tdd/app-quarantine.json',import.meta.url),'utf8'));
+ const id='MadoAppTests.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()';
+ assert.deepEqual(entries.map(({id,issue,owner,expires})=>({id,issue,owner,expires})),[{id,issue:'TBD-454',owner:'delegator',expires:'2026-11-22'}]);
+ assert.ok(entries[0].reason.trim());
+ const inventory=`APP_LANE_INVENTORY_BEGIN\n${id}\nMadoAppTests.passing()\nAPP_LANE_INVENTORY_END\n`;
+ const output="Test Suite 'Selected tests' started at 2026-11-08 00:00:00.000.\nTest Suite 'Selected tests' passed at 2026-11-08 00:00:00.001.\n Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds\n◇ Test run started.\n◇ Test passing() started.\n✔ Test passing() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
+ let stdout='',stderr='',nativeArgs;
+ const status=runAppLane({env:{},stdout:s=>stdout+=s,stderr:s=>stderr+=s,spawn:(cmd,args)=>{
+  if(cmd==='xcrun'&&args[0]==='--show-sdk-platform-path')return {...pass,stdout:'/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n'};
+  if(args.includes('swiftc'))return {...pass,stdout:''};
+  if(args[0]==='xcrun'&&args[1]==='xctest'){nativeArgs=args;return {...pass,stdout:output};}
+  return {...pass,stdout:inventory};
+ }});
+ assert.equal(status,0,stderr);assert.match(stdout,/quarantine skip=MadoAppTests\.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder\(\) issue=#TBD-454/);
+ assert.equal(nativeArgs[3],'MadoAppTests.passing()');assert.ok(!nativeArgs[3].includes('issue454'));
+ assert.match(stdout,/Tests run: 1, Failures: 0/);
+});
+
+
+test('i587 current-name child signature rejects the historical module',()=>{
+ const identity=JSON.parse(readFileSync(new URL('../name-checks/identity.json',import.meta.url),'utf8'));
+ const historical=identity.knownNames.find(name=>name!==identity.expectedName);
+ assert.ok(historical);
+ const text=i587Recordings[2];
+ const line=text.split('\n').find(line=>line.startsWith('[issue521-child] ✘')&&line.includes('recorded an issue'));
+ const changed=line.replace(`${identity.expectedName}AppTests.CommandWindow`,`${historical}AppTests.CommandWindow`);
+ assert.notEqual(changed,line);
+ const mutated=text.replace(line,changed);
+ assert.equal(parseAppResult(result(mutated)).reliable,true);
+ denied(result(mutated));
 });

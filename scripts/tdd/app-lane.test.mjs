@@ -1,3 +1,4 @@
+import { knownFlaky } from '../ci/known-flaky.mjs';
 import test, { afterEach, after } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.met
 const selected = readFileSync(new URL('./fixtures/i411-selected.txt', import.meta.url), 'utf8');
 const ids = ['OtherProbeTests/testSkip', 'ProbeTests/testKeep', 'ProbeTests/testSkip', 'ProbeTests/testSkipSibling', 'Probe.swiftKeep()', 'Probe.swiftSkip()', 'Probe.swiftSkipSibling()'];
 const inventory = 'APP_LANE_INVENTORY_BEGIN\n' + ids.map(id => id.includes('(') ? id : `XCT_ID=-[${id.replace('/', ' ')}]`).join('\n') + '\nAPP_LANE_INVENTORY_END\n';
-const quarantine = [{id:'ProbeTests/testSkip',issue:411,reason:'test failure'}, {id:'Probe.swiftSkip()',issue:425,reason:'test failure'}];
+const quarantine = [{owner:'test-owner',expires:'9999-12-31',id:'ProbeTests/testSkip',issue:411,reason:'test failure'}, {owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',issue:425,reason:'test failure'}];
 const result = stdout => ({status:0,stdout,stderr:'',signal:null});
 const temporaryDirectories = new Set();
 afterEach(()=>{
@@ -64,10 +65,10 @@ test('two entries select inventory minus both exact IDs; combined selected count
  assert.match(h.stdout,/Tests run: 5, Failures: 0/);
 });
 for(const [label,entries] of [
- ['missing issue',[{id:'Probe.swiftSkip()',reason:'failure'}]],['invalid issue',[{id:'Probe.swiftSkip()',issue:0,reason:'failure'}]],
- ['missing reason',[{id:'Probe.swiftSkip()',issue:411}]],['blank reason',[{id:'Probe.swiftSkip()',issue:411,reason:'  '}]],
- ['malformed JSON','{'],['object root','{}'],['null entry',[null]],['invalid id',[{id:'foo.*',issue:411,reason:'failure'}]],
- ['duplicate id',[quarantine[0],quarantine[0]]],['atomic validation',[quarantine[0],{id:'Probe.swiftSkip()',reason:'failure'}]],
+ ['missing issue',[{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',reason:'failure'}]],['invalid issue',[{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',issue:0,reason:'failure'}]],
+ ['missing reason',[{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',issue:411}]],['blank reason',[{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',issue:411,reason:'  '}]],
+ ['malformed JSON','{'],['object root','{}'],['null entry',[null]],['invalid id',[{owner:'test-owner',expires:'9999-12-31',id:'foo.*',issue:411,reason:'failure'}]],
+ ['duplicate id',[quarantine[0],quarantine[0]]],['atomic validation',[quarantine[0],{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',reason:'failure'}]],
 ]) test(`${label} fails with 70 before any process`,()=>{
  const h=harness(entries);assert.equal(h.status,70);assert.equal(h.calls.length,0);assert.match(h.stderr,/quarantine/);assert.doesNotMatch(h.stdout,/quarantine skip=|Tests run:/);
 });
@@ -75,7 +76,7 @@ test('missing and unreadable file fail closed before any process',()=>{
  for(const p of [path.join(tmpdir(),'i411-does-not-exist.json'),tmpdir()]) {const h=harness([],{quarantinePath:p});assert.equal(h.status,70);assert.equal(h.calls.length,0);assert.match(h.stderr,/quarantine/);}
 });
 test('missing quarantined ID warns and fails before test execution',()=>{
- const h=harness([{id:'Probe.absent()',issue:411,reason:'failure'}]);assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/warn.*Probe\.absent\(\)/i);assert.doesNotMatch(h.stdout,/Tests run:/);
+ const h=harness([{owner:'test-owner',expires:'9999-12-31',id:'Probe.absent()',issue:411,reason:'failure'}]);assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/warn.*Probe\.absent\(\)/i);assert.doesNotMatch(h.stdout,/Tests run:/);
 });
 for(const [label,discovery] of [
  ['truncated',result(inventory.replace('APP_LANE_INVENTORY_END\n',''))],['malformed',result('garbage\n')],
@@ -105,7 +106,7 @@ test('same configuration path rereads empty -> populated -> empty and restores i
 });
 
 test('selection with no remaining Swift tests fails before xctest',()=>{
- const allSwift=ids.filter(id=>id.includes('(')).map(id=>({id,issue:411,reason:'failure'}));
+ const allSwift=ids.filter(id=>id.includes('(')).map(id=>({owner:'test-owner',expires:'9999-12-31',id,issue:411,reason:'failure'}));
  const h=harness(allSwift);assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);assert.match(h.stderr,/no remaining/);
 });
 for(const [label,output] of [
@@ -271,13 +272,13 @@ for(const [label,sdk] of [
 for(const [label,excluded] of [
  ['all Swift tests',ids.filter(id=>id.includes('('))],['every test',ids],
 ]) test(`quarantine of ${label} explains the retained Swift requirement`,()=>{
- const entries=excluded.map(id=>({id,issue:524,reason:'limit test'}));
+ const entries=excluded.map(id=>({owner:'test-owner',expires:'9999-12-31',id,issue:524,reason:'limit test'}));
  const h=harness(entries);assert.equal(h.status,70);assert.equal(nativeCalls(h).length,0);
  assert.match(h.stderr,/unsupported.*retain at least one Swift Testing test/i);
  assert.doesNotMatch(h.stdout,/quarantine skip=|Tests run:/);
 });
 test('one retained Swift Testing test is supported',()=>{
- const entries=[...quarantine,{id:'Probe.swiftSkipSibling()',issue:524,reason:'boundary'}];
+ const entries=[...quarantine,{owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkipSibling()',issue:524,reason:'boundary'}];
  const output=selected.replace(/^.*swiftSkipSibling\(\).*\n/gm,'').replace('2 tests in 0 suites','1 test in 0 suites');
  const h=harness(entries,{run:()=>result(output)});assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 4, Failures: 0/);
 });
@@ -684,4 +685,113 @@ test('filtered failure plus selected skip is environment failure without counts'
   const h=harness([],{...filterOptions(filter),run:()=>({...result(output),status:1})});
   assert.equal(h.status,70);assert.doesNotMatch(h.stdout,/Tests run:|retrying once/);
  }
+});
+
+
+// #587 WI-1: validation uses the real quarantine file and rejects before discovery.
+function i587Rejected(entries, diagnostic) {
+ const h=harness(entries);
+ assert.equal(h.status,70,h.stderr);
+ assert.match(h.stderr,diagnostic);
+ assert.equal(h.calls.length,0);
+ assert.doesNotMatch(h.stdout,/quarantine skip=|Tests run:/);
+ return h;
+}
+for(const owner of [undefined,null,7,'','  ']) test(`i587 quarantine rejects owner ${JSON.stringify(owner)}`,()=>{
+ const entry={...quarantine[0],owner};
+ if(owner===undefined)delete entry.owner;
+ i587Rejected([entry,quarantine[1]],/quarantine.*owner.*nonblank/i);
+});
+for(const expires of [undefined,null,7,'','2026-1-01','2099-02-30','2099-02-29','2099-13-01','2099-01-00','2099-01-01T00:00:00Z']) test(`i587 quarantine rejects invalid calendar expiry ${JSON.stringify(expires)}`,()=>{
+ const entry={...quarantine[0],expires};
+ if(expires===undefined)delete entry.expires;
+ const h=i587Rejected([entry,quarantine[1]],/quarantine.*expires.*ISO.*date/i);
+ assert.doesNotMatch(h.stderr,/expired/i);
+});
+test('i587 valid future leap day is accepted',()=>{
+ const h=harness(quarantine.map(entry=>({...entry,expires:'2096-02-29'})));
+ assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 5, Failures: 0/);
+ assert.match(h.stdout,/quarantine skip=ProbeTests\/testSkip issue=#411/);
+});
+test('i587 expired metadata rejects atomically in either order',()=>{
+ for(const patch of [{owner:undefined},{expires:'2000-01-01'}]) {
+  const invalid={...quarantine[0],...patch};
+  for(const entries of [[invalid,quarantine[1]],[quarantine[1],invalid]]) {
+   i587Rejected(entries,patch.expires?/quarantine.*expired.*2000-01-01/i:/quarantine.*owner/i);
+  }
+ }
+});
+for(const issue of [0,-1,1.5,'454','TBD-','TBD-0','TBD-xyz','anything',[],null]) test(`i587 quarantine rejects issue reference ${JSON.stringify(issue)}`,()=>{
+ i587Rejected([{...quarantine[0],issue},quarantine[1]],/quarantine.*issue/i);
+});
+for(const issue of [411,'TBD-454']) test(`i587 quarantine accepts tracking reference ${issue}`,()=>{
+ const h=harness([{...quarantine[0],issue},quarantine[1]]);
+ assert.equal(h.status,0,h.stderr);
+ assert.ok(h.stdout.includes(`quarantine skip=ProbeTests/testSkip issue=#${issue}\n`));
+ assert.match(h.stdout,/Tests run: 5, Failures: 0/);
+});
+
+// Run the same frozen-clock cases in real processes whose local days differ.
+// No App process is launched: only the existing native-boundary fixture is used.
+if(process.env.I587_TZ_PROBE==='1') test('i587 UTC expiry probe',(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T00:01:00Z')});
+ for(const instant of ['2026-11-08T00:01:00Z','2026-11-08T23:59:00Z']) {
+  t.mock.timers.setTime(Date.parse(instant));
+  const statuses=[];
+  for(const expires of ['2026-11-07','2026-11-08','2026-11-09']) {
+   const h=harness(quarantine.map(entry=>({...entry,expires})));
+   statuses.push(h.status);
+   if(expires==='2026-11-07') {
+    assert.match(h.stderr,/expired.*2026-11-07/);assert.equal(h.calls.length,0);
+    assert.doesNotMatch(h.stdout,/quarantine skip=|Tests run:/);
+   } else {
+    assert.match(h.stdout,/quarantine skip=ProbeTests\/testSkip issue=#411/);
+    assert.match(h.stdout,/Tests run: 5, Failures: 0/);
+   }
+  }
+  assert.deepEqual(statuses,[70,0,0],`${process.env.TZ} at ${instant}`);
+ }
+ t.mock.timers.setTime(Date.parse('2026-11-09T00:00:00Z'));
+ i587Rejected(quarantine.map(entry=>({...entry,expires:'2026-11-08'})),/expired.*2026-11-08/);
+});
+test('i587 UTC expiry is independent of the process timezone',()=>{
+ // This synchronous test starts a fresh runner, not an inherited test worker.
+ // Keep the original recorded assertions; normalize only runner transport.
+ const outerContext=process.env.NODE_TEST_CONTEXT;
+ delete process.env.NODE_TEST_CONTEXT;
+ try {
+ for(const TZ of ['Pacific/Kiritimati','Etc/GMT+12']) {
+  const r=spawnSync(process.execPath,['--test','--test-name-pattern','^i587 UTC expiry probe$',fileURLToPath(import.meta.url)],{
+   encoding:'utf8',timeout:30000,env:{...process.env,TZ,I587_TZ_PROBE:'1'},
+  });
+  assert.equal(r.status,0,`${TZ}\n${r.stdout}\n${r.stderr}`);
+  assert.match(r.stdout,/i587 UTC expiry probe/);
+ }
+ } finally {
+  if(outerContext===undefined)delete process.env.NODE_TEST_CONTEXT;
+  else process.env.NODE_TEST_CONTEXT=outerContext;
+ }
+});
+
+
+// #587 WI-3: clean runs expose the configured exceptions, without retrying.
+for(const [label,entries,options] of [
+ ['full empty quarantine',[],{}],['full populated quarantine',quarantine,{}],
+ ['selected empty quarantine',[],filterOptions('swiftKeep')],
+ ['selected populated quarantine',quarantine,filterOptions('swiftKeep')],
+]) test(`i587 every-run exception roster: ${label}`,()=>{
+ const h=harness(entries,options);
+ assert.equal(h.status,0,h.stderr);assert.equal(nativeCalls(h).length,1);
+ assert.doesNotMatch(h.stdout,/retrying once/);
+ const lines=h.stdout.split('\n');
+ assert.deepEqual(lines.filter(line=>line.startsWith('app-lane known-flaky test=')).sort(),
+  knownFlaky.map(entry=>`app-lane known-flaky test=${entry.name} issue=#${entry.issue}`).sort());
+ assert.deepEqual(lines.filter(line=>line.startsWith('app-lane quarantine skip=')).sort(),
+  entries.map(entry=>`app-lane quarantine skip=${entry.id} issue=#${entry.issue}`).sort());
+ assert.deepEqual(lines.filter(line=>line.startsWith('app-lane quarantine owner=')).sort(),
+  entries.map(entry=>`app-lane quarantine owner=${entry.owner} expires=${entry.expires} id=${entry.id}`).sort());
+});
+test('i587 invalid quarantine cannot print a partly validated exception roster',()=>{
+ const h=i587Rejected([quarantine[0],{...quarantine[1],owner:''}],/owner/);
+ assert.equal(h.stdout,'');
 });
