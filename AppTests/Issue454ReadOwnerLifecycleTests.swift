@@ -248,3 +248,100 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
         try f.expectCount(f.grandchild, 1)
     } teardown: { await f.close() }
 }
+
+/// #597: force the catch policy to run before the scan publishes its failed-read state.
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue597StartedReadFailureDoesNotPromptBeforePublication() async throws {
+    let f = try await ReadOwner454Fixture()
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        var grantRequests: [URL] = []
+        f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
+        #expect(f.controller.session.folderScan?.failure == nil)
+        #expect(f.controller.session.folderScan?.isReadingFolder == true)
+        f.controller.handleFolderOpenFailure(CocoaError(.fileReadUnknown), folder: f.child, scanStarted: true)
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.attachedSheet == nil)
+        #expect(f.controller.session.folderScan?.isReadingFolder == true)
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL == f.child)
+        await f.scanner.release(f.child, attempt: 1, fail: true)
+        try await f.wait("597 child Read incomplete with Retry") {
+            f.controller.session.folderScan?.failure != nil && f.button("state.retry-folder") != nil
+                && f.row(f.child)?.countLabel.stringValue == "—"
+        }
+        f.controller.handleFolderOpenFailure(CocoaError(.fileReadUnknown), folder: f.child, scanStarted: true)
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.attachedSheet == nil)
+        #expect(!f.window.isVisible)
+        #expect(f.field("grid.folder-count")?.stringValue == String(localized: "Read incomplete"))
+        try #require(f.button("state.retry-folder")).performClick(nil)
+        try await f.wait("597 Retry reads same child") { await f.scanner.isHolding(f.child, attempt: 2) }
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL == f.child)
+        await f.scanner.release(f.child, attempt: 2)
+        try await f.wait("597 Retry completes") {
+            f.controller.session.folderScan?.sourceSnapshot?.isComplete == true
+                && f.controller.session.folderScan?.isScanning == false
+                && f.row(f.child)?.countLabel.stringValue == "3"
+        }
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.attachedSheet == nil)
+    } teardown: { await f.close() }
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue597PreScanFailureStillRestoresAndOffersFolderAccess() async throws {
+    let f = try await ReadOwner454Fixture()
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        var grantRequests: [URL] = []
+        f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
+        f.controller.handleFolderOpenFailure(CocoaError(.fileReadUnknown), folder: f.child, scanStarted: false)
+        #expect(grantRequests == [f.child])
+        #expect(f.window.attachedSheet == nil)
+        #expect(f.window.title == f.parent.lastPathComponent)
+        #expect(f.controller.session.folderScan?.sourceSnapshot?.version.folder.standardizedFileURL == f.parent)
+        #expect(f.controller.session.folderScan?.sourceSnapshot?.isComplete == true)
+        #expect(f.controller.session.folderScan?.isReadingFolder == false)
+    } teardown: { await f.close() }
+}
+
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
+func issue597StartedAccessErrorsStillOfferFolderAccess(needsReconnection: Bool) async throws {
+    let f = try await ReadOwner454Fixture()
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        var grantRequests: [URL] = []
+        f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
+        let error: FileAccessError = needsReconnection ? .needsReconnection(f.rootID) : .startFailed
+        f.controller.handleFolderOpenFailure(error, folder: f.child, scanStarted: true)
+        #expect(grantRequests == [f.child])
+        #expect(f.window.attachedSheet == nil)
+        #expect(f.controller.session.folderScan?.isReadingFolder == true)
+        #expect(f.window.title == f.child.lastPathComponent)
+    } teardown: { await f.close() }
+}
+
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
+func issue597CorruptStoreStillShowsAccessError(scanStarted: Bool) async throws {
+    let f = try await ReadOwner454Fixture()
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        var grantRequests: [URL] = []
+        f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
+        f.controller.handleFolderOpenFailure(FileAccessError.corruptStore, folder: f.child, scanStarted: scanStarted)
+        let sheet = try #require(f.window.attachedSheet)
+        let message = readOwner454Find(NSTextField.self, in: sheet.contentView) {
+            $0.stringValue == String(localized: "Folder Access Failed")
+        }
+        #expect(message != nil)
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.title == (scanStarted ? f.child : f.parent).lastPathComponent)
+    } teardown: {
+        if let sheet = f.window.attachedSheet { f.window.endSheet(sheet); sheet.orderOut(nil) }
+        await f.close()
+    }
+}

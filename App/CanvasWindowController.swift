@@ -1523,15 +1523,22 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     canPresent: { authority.isCurrent && context.permit.isCurrent }).value
             } catch {
                 if operation.isCurrent, generation == current {
-                    // Before begin there is no scan to finish the Reading State. Restore exactly as Cancel Reading
-                    // does before offering recovery, while preserving any terminal Lost Access presentation.
-                    let preScanFailure = !scanStarted
-                    if preScanFailure, waitingAccessPosition == nil { cancelFolderEntry() }
-                    if error as? FileAccessError == .corruptStore { showAccessError(error) }
-                    else if preScanFailure || session.folderScan?.failure == nil { promptForFolder(folder, currentImage: nil, direction: .next) }
+                    handleFolderOpenFailure(error, folder: folder, scanStarted: scanStarted)
                 }
             }
         }
+    }
+
+    /// Recovery for the current folder-open operation; callers retain the operation/generation guard.
+    func handleFolderOpenFailure(_ error: any Error, folder: URL, scanStarted: Bool) {
+        // Before begin there is no scan to finish the Reading State. Restore exactly as Cancel Reading
+        // does before offering recovery, while preserving any terminal Lost Access presentation.
+        let preScanFailure = !scanStarted
+        if preScanFailure, waitingAccessPosition == nil { cancelFolderEntry() }
+        if error as? FileAccessError == .corruptStore { showAccessError(error) }
+        // A started scan owns its read-failure presentation. Session state may already belong to a Retry,
+        // so only the thrown access error can request a grant here (#597).
+        else if preScanFailure || error is FileAccessError { promptForFolder(folder, currentImage: nil, direction: .next) }
     }
 
     private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?) {
