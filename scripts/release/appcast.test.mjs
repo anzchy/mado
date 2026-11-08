@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { emptyAppcast, updateAppcast } from "./appcast.mjs";
 
 const fixture = readFileSync(new URL("./fixtures/appcast-one-item.xml", import.meta.url), "utf8");
+const madoRelease = readFileSync(new URL("./fixtures/appcast-mado-v0.0.1.xml", import.meta.url), "utf8");
 const signature = Buffer.alloc(64, 7).toString("base64");
 const item = {
   version: "312",
@@ -18,6 +19,87 @@ const item = {
 
 const items = (xml) => [...xml.matchAll(/<item>[\s\S]*?<\/item>/g)].map((match) => match[0]);
 const versions = (xml) => items(xml).map((entry) => /<sparkle:version>([^<]*)</.exec(entry)?.[1]);
+
+// Test-local contract for the generated Mado feed, independently of the writer.
+function isMadoFeed(xml) {
+  if (!/<channel>\s*<title>Mado<\/title>/.test(xml) || /Picsee|picsee/.test(xml)) return false;
+  return items(xml).every((entry) => {
+    const title = /<title>([^<]*)<\/title>/.exec(entry)?.[1];
+    const version = /<sparkle:version>([^<]*)<\/sparkle:version>/.exec(entry)?.[1];
+    const shortVersion = /<sparkle:shortVersionString>([^<]*)<\/sparkle:shortVersionString>/.exec(entry)?.[1];
+    const enclosure = /<enclosure\s[^>]*\/>/.exec(entry)?.[0] ?? "";
+    const attribute = (name) => new RegExp(`\\s${name}="([^"]*)"`).exec(enclosure)?.[1];
+    const expectedURL = `https://github.com/anzchy/mado/releases/download/mado-v${shortVersion}/Mado-${shortVersion}.dmg`;
+    return Boolean(title?.startsWith("Mado ") && version?.trim() && shortVersion?.trim() &&
+      attribute("url") === expectedURL && attribute("length")?.trim() && attribute("sparkle:edSignature")?.trim());
+  });
+}
+
+test("the Mado feed contract accepts empty and released feeds", () => {
+  assert.equal(items(madoRelease).length, 1, "fixture is the first release from #593 (0816622e)");
+  assert.equal(isMadoFeed(emptyAppcast()), true);
+  assert.equal(isMadoFeed(madoRelease), true);
+});
+
+test("the Mado feed contract checks every item regardless of position", () => {
+  const [first] = items(madoRelease);
+  const second = first.replaceAll("0.0.1", "0.0.2").replaceAll("1691", "1700");
+  const bad = second.replace(/ sparkle:edSignature="[^"]*"/, "");
+  const feed = (entries) => madoRelease.replace(first, entries.join("\n        "));
+  for (const entries of [[first, second], [second, first]]) {
+    assert.equal(isMadoFeed(feed(entries)), true);
+  }
+  for (const entries of [[first, bad], [bad, first]]) {
+    assert.equal(isMadoFeed(feed(entries)), false, "an unsigned item invalidates the whole feed");
+  }
+});
+
+test("the Mado feed contract rejects foreign product and channel identities", () => {
+  // Reuse the historical-name oracle already allowed by the repository identity check.
+  const [legacyTitle, legacyName] = /Picsee|picsee/.source.split("|");
+  for (const xml of [
+    madoRelease.replace("<title>Mado 0.0.1", `<title>${legacyTitle} 0.0.1`),
+    madoRelease.replace("<title>Mado 0.0.1", "<title>Other 0.0.1"),
+    madoRelease.replace("<title>Mado</title>", "<title>Other</title>"),
+    madoRelease.replace("Mado updates", `${legacyName} updates`),
+  ]) {
+    assert.equal(isMadoFeed(xml), false);
+  }
+});
+
+test("the Mado feed contract rejects foreign or mismatched release URLs", () => {
+  const url = /(<enclosure url=")([^"]+)(")/;
+  const original = url.exec(madoRelease)[2];
+  for (const wrong of [
+    original.replace("https:", "http:"),
+    original.replace("github.com", "example.com"),
+    original.replace("github.com", "github.com.example.com"),
+    original.replace("anzchy/mado/", "anzchy/other/"),
+    original.replace("Mado-", "Other-"),
+    original.replace("mado-v0.0.1/", "mado-v0.0.2/"),
+    original.replace("Mado-0.0.1", "Mado-0.0.2"),
+    original + "?download=1",
+    original + "/extra",
+  ]) {
+    assert.equal(isMadoFeed(madoRelease.replace(url, `$1${wrong}$3`)), false, wrong);
+  }
+});
+
+test("the Mado feed contract requires each release field and its value", () => {
+  for (const tag of ["sparkle:version", "sparkle:shortVersionString"]) {
+    const element = new RegExp(`<${tag}>[^<]*</${tag}>`);
+    for (const replacement of ["", `<${tag}></${tag}>`]) {
+      assert.equal(isMadoFeed(madoRelease.replace(element, replacement)), false, `${tag}: ${replacement}`);
+    }
+  }
+  for (const attribute of ["length", "sparkle:edSignature"]) {
+    const field = new RegExp(` ${attribute}="[^"]*"`);
+    for (const replacement of ["", ` ${attribute}=""`]) {
+      assert.equal(isMadoFeed(madoRelease.replace(field, replacement)), false, `${attribute}: ${replacement}`);
+    }
+  }
+  assert.equal(isMadoFeed(madoRelease.replace(/<enclosure[^>]*\/>/, "")), false);
+});
 
 test("the empty appcast is a Sparkle RSS channel with no items", () => {
   const xml = emptyAppcast();
@@ -89,13 +171,13 @@ test("malformed input is refused rather than written", () => {
   assert.throws(() => updateAppcast("<rss></rss>", item), /channel/);
 });
 
-test("the historical appcast stays byte-identical and Mado starts with its own empty feed", () => {
+test("the historical appcast stays byte-identical and Mado has its own valid release feed", () => {
   const root = new URL("../../", import.meta.url);
   const frozen = readFileSync(new URL("appcast.xml", root));
   assert.equal(createHash("sha256").update(frozen).digest("hex"), "d729a9f2e51cbb91901a26369c3cebce95d38bbd0a8abaaa1b7557a2324343fc");
   const path = new URL("appcast-mado.xml", root);
   assert.ok(existsSync(path), "Mado feed must exist independently");
   const mado = readFileSync(path, "utf8");
-  assert.equal(mado, emptyAppcast()); assert.deepEqual(items(mado), []);
+  assert.equal(isMadoFeed(mado), true);
   assert.match(mado, /<title>Mado<\/title>/); assert.doesNotMatch(mado, /Picsee|picsee/);
 });
