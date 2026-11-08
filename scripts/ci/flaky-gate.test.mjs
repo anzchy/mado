@@ -221,9 +221,9 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
 
 // #587 recordings are exact CI output; mutations below are explicitly synthetic.
 // Amendment 2: fixture transport tails and historical namespaces are normalized as documented in fixtures/README.md.
-const i587Recordings=['140','521-old','521-new'].map(id=>readFileSync(new URL(`./fixtures/i587-${id}.txt`,import.meta.url),'utf8'));
-const i587Names=['issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet','issue521NativePanPassesInIsolatedProcess','issue521NativePanPassesInIsolatedProcess'];
-const i587Issues=[520,564,564];
+const i587Recordings=['140','521-new'].map(id=>readFileSync(new URL(`./fixtures/i587-${id}.txt`,import.meta.url),'utf8'));
+const i587Names=['issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet','issue521NativePanPassesInIsolatedProcess'];
+const i587Issues=[520,564];
 for(const [i,text] of i587Recordings.entries()) {
  test(`i587 real recording ${i} has an exact tracked signature`,()=>{
   assert.equal(parseAppResult(result(text)).reliable,true);
@@ -297,11 +297,121 @@ test('i587 current-name child signature rejects the historical module',()=>{
  const identity=JSON.parse(readFileSync(new URL('../name-checks/identity.json',import.meta.url),'utf8'));
  const historical=identity.knownNames.find(name=>name!==identity.expectedName);
  assert.ok(historical);
- const text=i587Recordings[2];
+ const text=i587Recordings[1];
  const line=text.split('\n').find(line=>line.startsWith('[issue521-child] ✘')&&line.includes('recorded an issue'));
  const changed=line.replace(`${identity.expectedName}AppTests.CommandWindow`,`${historical}AppTests.CommandWindow`);
  assert.notEqual(changed,line);
  const mutated=text.replace(line,changed);
  assert.equal(parseAppResult(result(mutated)).reliable,true);
+ denied(result(mutated));
+});
+
+
+// #587 fix2 H1: the shared prefix contains complete, recognized child runs.
+const i587Fix2Golden=readFileSync(new URL('./fixtures/i587-521-new.txt',import.meta.url),'utf8');
+const i587Fix2Blocks=[...i587Fix2Golden.matchAll(/\[issue521-child\] ◇ Test run started\.\n[\s\S]*?\[issue521-child\] [✔✘] Test run with 1 test in 0 suites (?:passed|failed) after [^\n]+\n/g)].map(match=>match[0]);
+const i587Fix2Crashes=[
+ "*** Terminating app due to uncaught exception 'NSInternalInconsistencyException'",
+ 'libc++abi: terminating due to uncaught exception of type NSException',
+ 'Trace/BPT trap: 5','Trace/breakpoint trap','Abort trap: 6','Segmentation fault: 11',
+ 'Bus error: 10','Fatal error: fixture','error: Exited with unexpected signal code 9',
+ 'Terminated by signal SIGABRT','Process crashed: SIGSEGV',
+];
+test('i587 fix2 complete known siblings and issue521-only child selection remain eligible',()=>{
+ assert.equal(i587Fix2Blocks.length,4);
+ eligible(result(i587Fix2Golden));
+ const only521=i587Fix2Blocks.slice(1).reduce((text,block)=>text.replace(block,''),i587Fix2Golden);
+ eligible(result(only521));
+});
+for(const diagnostic of i587Fix2Crashes) test(`i587 fix2 rejects child diagnostic anywhere: ${diagnostic}`,()=>{
+ const line=`[issue521-child] ${diagnostic}\n`;
+ const first=i587Fix2Blocks[0];
+ const finish=first.split('\n').find(l=>l.startsWith('[issue521-child] ✘ Test issue521')&&l.includes(' failed after '));
+ for(const text of [i587Fix2Golden.replace(first,line+first),i587Fix2Golden.replace(finish,line+finish),i587Fix2Golden+line]) {
+  assert.notEqual(text,i587Fix2Golden);denied(result(text));
+ }
+ denied(result(i587Fix2Golden,{stderr:line}));
+});
+for(const [index,block] of i587Fix2Blocks.entries()) test(`i587 fix2 validates all lifecycle records in child block ${index}`,()=>{
+ const lines=block.trimEnd().split('\n');
+ const start=lines.find(l=>/^\[issue521-child\] ◇ Test (?!run started|case passing).+ started\.$/.test(l));
+ const finish=lines.find(l=>/^\[issue521-child\] [✔✘] Test (?!run with).+ (?:passed|failed) after /.test(l));
+ const root=lines.find(l=>/^\[issue521-child\] [✔✘] Test run with /.test(l));
+ const firstCase=lines.find(l=>l.startsWith('[issue521-child] ◇ Test case passing '));
+ const mutations=[
+  block.replace(start,''),block.replace(finish,''),block.replace(root,''),
+  block.replace('[issue521-child] ◇ Test run started.',''),
+  block.replace(start,start+'\n'+start),block.replace(finish,finish+'\n'+finish),
+  block.replace(root,root+'\n'+root),block.replace(start,'[issue521-child] ◇ Test run started.\n'+start),
+  block.replace(start,start+'\n[issue521-child] ◇ Test unrelatedChild() started.'),
+  block.replace(finish,'[issue521-child] ✔ Test unrelatedChild() passed after 0.001 seconds.\n'+finish),
+  block.replace(finish,'[issue521-child] ◇ Suite unrelatedSuite started.\n'+finish),
+  block.replace(finish,'[issue521-child] ✔ Suite unrelatedSuite passed after 0.001 seconds.\n'+finish),
+  block.replace(finish,'[issue521-child] ➜ Test unrelatedChild() skipped: "fixture"\n'+finish),
+  block.replace(finish,finish.replace(/[✔✘]/,'➜')),
+  block.replace(root,root.replace('with 1 test in 0 suites','with 2 tests in 0 suites')),
+  block.replace(root,root.replace('in 0 suites','in 1 suite')),
+  block.replace(finish,'[issue521-child] ◇ Test case passing 1 argument unrelated → 0 to unrelatedChild() started.\n'+finish),
+ ];
+ if(firstCase) mutations.push(block.replace(firstCase,''),block.replace(firstCase,firstCase+'\n'+firstCase),
+  block.replace(firstCase,firstCase.replace('1 argument','2 arguments')),
+  block.replace(finish,finish.replace(/with \d+ test cases/,'with 99 test cases')));
+ for(const changed of mutations) {
+  assert.notEqual(changed,block);denied(result(i587Fix2Golden.replace(block,changed)));
+ }
+});
+test('i587 fix2 rejects extra child records and complete unknown blocks after completed roots',()=>{
+ for(const extra of [
+  '◇ Test unrelatedChild() started.','✔ Test unrelatedChild() passed after 0.001 seconds.',
+  '➜ Test issue527InactiveFirstClickKeepsFocusConsistent() skipped: "fixture"',
+  '◇ Test run started.\n◇ Test unrelatedChild() started.\n✔ Test unrelatedChild() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.',
+ ]) {
+  const addition=extra.split('\n').map(line=>'[issue521-child] '+line).join('\n')+'\n';
+  denied(result(i587Fix2Golden+addition));
+ }
+});
+test('i587 fix2 audited child counterexamples preserve evidence without retry',()=>{
+ for(const diagnostic of [...i587Fix2Crashes.slice(0,2),'◇ Test unrelatedChild() started.']) {
+  const first=result(i587Fix2Golden+'\n[issue521-child] '+diagnostic+'\n');
+  const h=harness([first,pass]);
+  assert.equal(h.status,1);assert.equal(h.calls,1);assert.doesNotMatch(h.stdout,/retrying once/);
+  assert.equal(readFileSync(h.evidencePath,'utf8'),first.stdout+'\n'+first.stderr);
+ }
+});
+
+
+// #587 fix2 follow-up: unknown runtime diagnostics are not benign metadata.
+for(const diagnostic of [
+ 'Unhandled exception: fixture',
+ 'terminate called after throwing an instance of std::runtime_error',
+ 'libc++abi: Pure virtual function called!',
+ 'Unhandled NSException: fixture',
+ 'Unhandled runtime Error: fixture',
+ 'dyld: Library not loaded: fixture.dylib',
+]) test(`i587 fix2 rejects non-protocol child diagnostics: ${diagnostic}`,()=>{
+ const line=`[issue521-child] ${diagnostic}\n`;
+ const first=i587Fix2Blocks[0];
+ const finish=first.split('\n').find(l=>l.startsWith('[issue521-child] ✘ Test issue521')&&l.includes(' failed after '));
+ for(const text of [i587Fix2Golden.replace(first,line+first),i587Fix2Golden.replace(finish,line+finish),i587Fix2Golden+line]) {
+  assert.notEqual(text,i587Fix2Golden);denied(result(text));
+ }
+ denied(result(i587Fix2Golden,{stderr:line}));
+ const initial=result(i587Fix2Golden,{stderr:line});
+ const h=harness([initial,pass]);
+ assert.equal(h.status,1);assert.equal(h.calls,1);assert.doesNotMatch(h.stdout,/retrying once/);
+ assert.equal(readFileSync(h.evidencePath,'utf8'),initial.stdout+'\n'+initial.stderr);
+});
+
+
+// #587 fix2 L1: old source locations are evidence, never current retry policy.
+test('i587 old issue521 parent-location recording remains an explicit negative',()=>{
+ const text=readFileSync(new URL('./fixtures/i587-521-old.txt',import.meta.url),'utf8');
+ assert.equal(parseAppResult(result(text)).reliable,true);
+ denied(result(text));
+});
+for(const [current,old] of [[110,104],[111,105],[112,106]]) test(`i587 current parent line ${current} cannot borrow old line ${old}`,()=>{
+ const text=i587Fix2Golden;
+ const mutated=text.replace(`Issue521NativePanRunner.swift:${current}:5:`,`Issue521NativePanRunner.swift:${old}:5:`);
+ assert.notEqual(mutated,text);assert.equal(parseAppResult(result(mutated)).reliable,true);
  denied(result(mutated));
 });

@@ -76,10 +76,8 @@ function loadQuarantine(filename) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
         typeof entry.id !== 'string' || !(swiftID.test(entry.id) || xctID.test(entry.id)))
       throw new Error('quarantine id must be an exact supported XCTest Class/method or Swift Testing Module.func() identifier');
-    // Delegator replaces constrained tracking placeholders before opening the PR.
-    if (!(Number.isSafeInteger(entry.issue) && entry.issue > 0) &&
-        !(typeof entry.issue === 'string' && /^TBD-[1-9]\d*$/.test(entry.issue)))
-      throw new Error('quarantine issue must be a positive integer or TBD-<positive integer> placeholder');
+    if (!Number.isSafeInteger(entry.issue) || entry.issue <= 0)
+      throw new Error('quarantine issue must be a positive safe integer');
     if (typeof entry.reason !== 'string' || !entry.reason.trim()) throw new Error('quarantine reason must be nonblank');
     if (typeof entry.owner !== 'string' || !entry.owner.trim()) throw new Error('quarantine owner must be nonblank');
     const expiry = typeof entry.expires === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.expires)
