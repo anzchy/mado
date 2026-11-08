@@ -272,23 +272,49 @@ for(const [i,text] of i587Recordings.entries()) if(i>0) test(`i587 child ${i} re
 test('i587 one failing SHA for issue527 does not authorize a signature',()=>{
  denied(result(readFileSync(new URL('./fixtures/i587-527.txt',import.meta.url),'utf8')));
 });
-test('i587 configured default quarantine excludes and reports issue454 with accountability',(t)=>{
+test('i587 fixture quarantine excludes and reports an accountable exception',(t)=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T12:00:00Z')});
- const entries=JSON.parse(readFileSync(new URL('../tdd/app-quarantine.json',import.meta.url),'utf8'));
- const id='MadoAppTests.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()';
- assert.deepEqual(entries.map(({id,issue,owner,expires})=>({id,issue,owner,expires})),[{id,issue:597,owner:'delegator',expires:'2026-11-22'}]);
- assert.ok(entries[0].reason.trim());
+ const id='MadoAppTests.quarantinedFixture()';
+ const entry={id,issue:597,reason:'Fixture read failure',owner:'fixture-owner',expires:'2026-11-22'};
+ const quarantinePath=path.join(mkdtempSync(path.join(tmpdir(),'mado-quarantine-fixture-')),'quarantine.json');
+ writeFileSync(quarantinePath,JSON.stringify([entry]));
  const inventory=`APP_LANE_INVENTORY_BEGIN\n${id}\nMadoAppTests.passing()\nAPP_LANE_INVENTORY_END\n`;
  const output="Test Suite 'Selected tests' started at 2026-11-08 00:00:00.000.\nTest Suite 'Selected tests' passed at 2026-11-08 00:00:00.001.\n Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds\n◇ Test run started.\n◇ Test passing() started.\n✔ Test passing() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
  let stdout='',stderr='',nativeArgs;
- const status=runAppLane({env:{},stdout:s=>stdout+=s,stderr:s=>stderr+=s,spawn:(cmd,args)=>{
+ const status=runAppLane({env:{},quarantinePath,stdout:s=>stdout+=s,stderr:s=>stderr+=s,spawn:(cmd,args)=>{
   if(cmd==='xcrun'&&args[0]==='--show-sdk-platform-path')return {...pass,stdout:'/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n'};
   if(args.includes('swiftc'))return {...pass,stdout:''};
   if(args[0]==='xcrun'&&args[1]==='xctest'){nativeArgs=args;return {...pass,stdout:output};}
   return {...pass,stdout:inventory};
  }});
- assert.equal(status,0,stderr);assert.match(stdout,/quarantine skip=MadoAppTests\.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder\(\) issue=#597/);
- assert.equal(nativeArgs[3],'MadoAppTests.passing()');assert.ok(!nativeArgs[3].includes('issue454'));
+ assert.equal(status,0,stderr);assert.match(stdout,/quarantine skip=MadoAppTests\.quarantinedFixture\(\) issue=#597/);
+ assert.match(stdout,/quarantine owner=fixture-owner expires=2026-11-22 id=MadoAppTests\.quarantinedFixture\(\)/);
+ assert.equal(nativeArgs[3],'MadoAppTests.passing()');assert.ok(!nativeArgs[3].includes('quarantinedFixture'));
+ assert.match(stdout,/Tests run: 1, Failures: 0/);
+ for(const patch of [{owner:''},{expires:'2026-11-07'},{issue:0}]) {
+  writeFileSync(quarantinePath,JSON.stringify([{...entry,...patch}]));
+  let invalidOutput='',invalidError='';
+  const invalidStatus=runAppLane({env:{},quarantinePath,stdout:s=>invalidOutput+=s,stderr:s=>invalidError+=s,
+   spawn:()=>assert.fail('invalid quarantine must not launch a process')});
+  assert.equal(invalidStatus,70);
+  assert.match(invalidError,/app-lane quarantine:/);
+  assert.doesNotMatch(invalidOutput,/Tests run:|quarantine owner=/);
+ }
+});
+
+test('i597 real default quarantine parses and passes production validation',()=>{
+ const entries=JSON.parse(readFileSync(new URL('../tdd/app-quarantine.json',import.meta.url),'utf8'));
+ assert.ok(Array.isArray(entries));
+ const inventory=['APP_LANE_INVENTORY_BEGIN',...entries.map(entry=>entry.id),'MadoAppTests.passing()','APP_LANE_INVENTORY_END',''].join('\n');
+ const output="Test Suite 'Selected tests' started at 2026-11-08 00:00:00.000.\nTest Suite 'Selected tests' passed at 2026-11-08 00:00:00.001.\n Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds\n◇ Test run started.\n◇ Test passing() started.\n✔ Test passing() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
+ let stdout='',stderr='';
+ const status=runAppLane({env:{},argv:['^MadoAppTests\\.passing\\(\\)$'],stdout:s=>stdout+=s,stderr:s=>stderr+=s,spawn:(cmd,args)=>{
+  if(cmd==='xcrun'&&args[0]==='--show-sdk-platform-path')return {...pass,stdout:'/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n'};
+  if(args.includes('swiftc'))return {...pass,stdout:''};
+  if(args[0]==='xcrun'&&args[1]==='xctest')return {...pass,stdout:output};
+  return {...pass,stdout:inventory};
+ }});
+ assert.equal(status,0,stderr);
  assert.match(stdout,/Tests run: 1, Failures: 0/);
 });
 

@@ -1,9 +1,1 @@
-[
-  {
-    "id": "MadoAppTests.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()",
-    "issue": 597,
-    "reason": "Issue454ReadOwnerLifecycleTests.swift:118:9 sees window.isVisible true; 8 failing versus 5 passing main executions since 2026-11-05, with recovery on main run 42439831377 attempt 2 and PR reruns. Reproduce under the desktop lock before fixing.",
-    "owner": "delegator",
-    "expires": "2026-11-22"
-  }
-]
+[]
