@@ -46,7 +46,7 @@ test('missing or malformed parts are errors, never a weaker key', () => {
 });
 
 const digest = value => createHash('sha256').update(value).digest('hex').slice(0, 16);
-const workspaces = ['/Users/runner/work/picsee/picsee', base.workspace,
+const workspaces = ['/Users/runner/work/legacy-app/legacy-app', base.workspace,
   '/opt/runner/work/mado/mado', '/tmp/CI checkout/项目/mado'];
 
 for (const family of ['spm', 'dd']) {
