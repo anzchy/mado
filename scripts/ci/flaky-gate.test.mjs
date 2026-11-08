@@ -276,7 +276,7 @@ test('i587 configured default quarantine excludes and reports issue454 with acco
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T12:00:00Z')});
  const entries=JSON.parse(readFileSync(new URL('../tdd/app-quarantine.json',import.meta.url),'utf8'));
  const id='MadoAppTests.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()';
- assert.deepEqual(entries.map(({id,issue,owner,expires})=>({id,issue,owner,expires})),[{id,issue:'TBD-454',owner:'delegator',expires:'2026-11-22'}]);
+ assert.deepEqual(entries.map(({id,issue,owner,expires})=>({id,issue,owner,expires})),[{id,issue:597,owner:'delegator',expires:'2026-11-22'}]);
  assert.ok(entries[0].reason.trim());
  const inventory=`APP_LANE_INVENTORY_BEGIN\n${id}\nMadoAppTests.passing()\nAPP_LANE_INVENTORY_END\n`;
  const output="Test Suite 'Selected tests' started at 2026-11-08 00:00:00.000.\nTest Suite 'Selected tests' passed at 2026-11-08 00:00:00.001.\n Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds\n◇ Test run started.\n◇ Test passing() started.\n✔ Test passing() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
@@ -287,7 +287,7 @@ test('i587 configured default quarantine excludes and reports issue454 with acco
   if(args[0]==='xcrun'&&args[1]==='xctest'){nativeArgs=args;return {...pass,stdout:output};}
   return {...pass,stdout:inventory};
  }});
- assert.equal(status,0,stderr);assert.match(stdout,/quarantine skip=MadoAppTests\.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder\(\) issue=#TBD-454/);
+ assert.equal(status,0,stderr);assert.match(stdout,/quarantine skip=MadoAppTests\.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder\(\) issue=#597/);
  assert.equal(nativeArgs[3],'MadoAppTests.passing()');assert.ok(!nativeArgs[3].includes('issue454'));
  assert.match(stdout,/Tests run: 1, Failures: 0/);
 });

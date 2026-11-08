@@ -724,7 +724,8 @@ test('i587 expired metadata rejects atomically in either order',()=>{
 for(const issue of [0,-1,1.5,'454','TBD-','TBD-0','TBD-xyz','anything',[],null]) test(`i587 quarantine rejects issue reference ${JSON.stringify(issue)}`,()=>{
  i587Rejected([{...quarantine[0],issue},quarantine[1]],/quarantine.*issue/i);
 });
-for(const issue of [411,'TBD-454']) test(`i587 quarantine accepts tracking reference ${issue}`,()=>{
+// Synthetic schema fixture; production tracking references use filed issue numbers.
+for(const issue of [411,'TBD-12345']) test(`i587 quarantine accepts tracking reference ${issue}`,()=>{
  const h=harness([{...quarantine[0],issue},quarantine[1]]);
  assert.equal(h.status,0,h.stderr);
  assert.ok(h.stdout.includes(`quarantine skip=ProbeTests/testSkip issue=#${issue}\n`));
