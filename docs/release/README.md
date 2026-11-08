@@ -26,6 +26,8 @@ The build number is the tag commit's commit count (`git rev-list --count`), so b
 
 Before signing, the workflow requires green `Walking skeleton` and `App tests` on the tag commit. It checks the newest `ci.yml` push run on `main` (greatest run ID), using each job's latest execution. Earlier successes retained when only failed jobs were rerun count only when the final confirmed run is successful. Dispatch runs do not count; missing, skipped, incomplete or non-success jobs and API errors block the release. If `App tests` flaked, rerun that failed job on the same commit, then rerun the release using the same-tag recovery below; if a fix needs a new commit, wait for its CI and follow the tag re-push instructions.
 
+If the tag is pushed before its commit's CI has completed, the release fails with “not completed”; once CI is green, choose “Re-run all jobs” on the same tag's release run.
+
 ## Credentials on the runner
 
 The six secrets reach only the steps that use them, through step environment variables. GitHub masks their values in logs. Four of them, the Apple ID and three passwords, still appear as **process arguments** while a command runs, because the tools take them no other way in a non-interactive job:
