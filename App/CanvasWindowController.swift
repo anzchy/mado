@@ -1537,8 +1537,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         if preScanFailure, waitingAccessPosition == nil { cancelFolderEntry() }
         if error as? FileAccessError == .corruptStore { showAccessError(error) }
         // A started scan owns its read-failure presentation. Session state may already belong to a Retry,
-        // so only the thrown access error can request a grant here (#597).
-        else if preScanFailure || error is FileAccessError { promptForFolder(folder, currentImage: nil, direction: .next) }
+        // so grant recovery belongs only to failures before the scan started (#597).
+        else if preScanFailure { promptForFolder(folder, currentImage: nil, direction: .next) }
     }
 
     private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?) {
