@@ -11,11 +11,16 @@ private actor ReadOwner454Scanner: FolderScanning {
     private var attempts: [String: Int] = [:]
     private var active: Set<String> = []
     private var held: [String: CheckedContinuation<Bool, Never>] = [:]
+    private var errors: [String: FileAccessError] = [:]
     private func key(_ folder: URL, _ attempt: Int) -> String { "\(folder.standardizedFileURL.path)#\(attempt)" }
     func isHolding(_ folder: URL, attempt: Int) -> Bool { held[key(folder, attempt)] != nil }
     var allEnded: Bool { active.isEmpty }
     func release(_ folder: URL, attempt: Int, fail: Bool = false) {
         held.removeValue(forKey: key(folder, attempt))?.resume(returning: fail)
+    }
+    func fail(_ folder: URL, attempt: Int, error: FileAccessError) {
+        errors[key(folder, attempt)] = error
+        release(folder, attempt: attempt, fail: true)
     }
     func releaseAll() {
         let continuations = Array(held.values)
@@ -38,6 +43,7 @@ private actor ReadOwner454Scanner: FolderScanning {
             }
         } onCancel: { Task { await self.cancelled(key) } }
         try Task.checkCancellation()
+        if fail, let error = errors.removeValue(forKey: key) { throw error }
         if fail { throw CocoaError(.fileReadUnknown) }
     }
 }
@@ -249,9 +255,9 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
     } teardown: { await f.close() }
 }
 
-/// #597: force the catch policy to run before the scan publishes its failed-read state.
+/// #597: model the stale openFolder catch resuming after Retry has cleared the prior failure.
 @Test(.timeLimit(.minutes(3))) @MainActor
-func issue597StartedReadFailureDoesNotPromptBeforePublication() async throws {
+func issue597StaleReadFailureDoesNotPromptDuringRetry() async throws {
     let f = try await ReadOwner454Fixture()
     try await withAsyncTeardown {
         let previous = try await f.beginParent()
@@ -264,7 +270,7 @@ func issue597StartedReadFailureDoesNotPromptBeforePublication() async throws {
         #expect(grantRequests.isEmpty)
         #expect(f.window.attachedSheet == nil)
         #expect(f.controller.session.folderScan?.isReadingFolder == true)
-        #expect(f.shell?.readingFolderURL?.standardizedFileURL == f.child)
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
         await f.scanner.release(f.child, attempt: 1, fail: true)
         try await f.wait("597 child Read incomplete with Retry") {
             f.controller.session.folderScan?.failure != nil && f.button("state.retry-folder") != nil
@@ -277,7 +283,7 @@ func issue597StartedReadFailureDoesNotPromptBeforePublication() async throws {
         #expect(f.field("grid.folder-count")?.stringValue == String(localized: "Read incomplete"))
         try #require(f.button("state.retry-folder")).performClick(nil)
         try await f.wait("597 Retry reads same child") { await f.scanner.isHolding(f.child, attempt: 2) }
-        #expect(f.shell?.readingFolderURL?.standardizedFileURL == f.child)
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
         await f.scanner.release(f.child, attempt: 2)
         try await f.wait("597 Retry completes") {
             f.controller.session.folderScan?.sourceSnapshot?.isComplete == true
@@ -301,26 +307,72 @@ func issue597PreScanFailureStillRestoresAndOffersFolderAccess() async throws {
         #expect(grantRequests == [f.child])
         #expect(f.window.attachedSheet == nil)
         #expect(f.window.title == f.parent.lastPathComponent)
-        #expect(f.controller.session.folderScan?.sourceSnapshot?.version.folder.standardizedFileURL == f.parent)
+        #expect(f.controller.session.folderScan?.sourceSnapshot?.version.folder.standardizedFileURL.path == f.parent.path)
         #expect(f.controller.session.folderScan?.sourceSnapshot?.isComplete == true)
         #expect(f.controller.session.folderScan?.isReadingFolder == false)
     } teardown: { await f.close() }
 }
 
-@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
-func issue597StartedAccessErrorsStillOfferFolderAccess(needsReconnection: Bool) async throws {
+/// A real started child read with a readable root belongs to 24F-A, even for FileAccessError.
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue597StartedChildAccessErrorShowsReadFailedWithoutGrant() async throws {
     let f = try await ReadOwner454Fixture()
     try await withAsyncTeardown {
         let previous = try await f.beginParent()
         try await f.beginChild(replaying: previous)
         var grantRequests: [URL] = []
         f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
-        let error: FileAccessError = needsReconnection ? .needsReconnection(f.rootID) : .startFailed
-        f.controller.handleFolderOpenFailure(error, folder: f.child, scanStarted: true)
-        #expect(grantRequests == [f.child])
+        await f.scanner.fail(f.child, attempt: 1, error: .invalidFolder)
+        try await f.wait("597 child access error is Read incomplete") {
+            f.controller.session.folderScan?.failure != nil && f.button("state.retry-folder") != nil
+                && f.controller.session.folderScan?.isScanning == false
+        }
+        // Let the real openFolder awaiter resume after the coordinator has published its result.
+        for _ in 0..<20 { try await Task.sleep(for: .milliseconds(10)); f.present() }
+        #expect(grantRequests.isEmpty)
         #expect(f.window.attachedSheet == nil)
-        #expect(f.controller.session.folderScan?.isReadingFolder == true)
-        #expect(f.window.title == f.child.lastPathComponent)
+        #expect(!f.window.isVisible)
+        #expect(f.controller.session.folderScan?.failure as? FileAccessError == .invalidFolder)
+        #expect(f.field("grid.folder-count")?.stringValue == String(localized: "Read incomplete"))
+        #expect(f.row(f.child)?.countLabel.stringValue == "—")
+        #expect(readOwner454Find(LostAccessStateView.self, in: f.window.contentView) { !$0.isHiddenOrHasHiddenAncestor } == nil)
+        try #require(f.button("state.retry-folder")).performClick(nil)
+        try await f.wait("597 access-error Retry reads child") { await f.scanner.isHolding(f.child, attempt: 2) }
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
+        await f.scanner.release(f.child, attempt: 2)
+        try await f.wait("597 access-error Retry completes child") {
+            f.controller.session.folderScan?.sourceSnapshot?.isComplete == true
+                && f.controller.session.folderScan?.isScanning == false
+                && f.row(f.child)?.countLabel.stringValue == "3"
+        }
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.attachedSheet == nil)
+    } teardown: { await f.close() }
+}
+
+/// The same real root loss presents page 26 for either an access error or a Cocoa read error.
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
+func issue597LostRootDuringStartedChildReadShowsLostAccessWithoutSheet(accessError: Bool) async throws {
+    let f = try await ReadOwner454Fixture()
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        var grantRequests: [URL] = []
+        f.controller.folderGrantPromptOverride = { folder, _ in grantRequests.append(folder) }
+        try FileManager.default.removeItem(at: f.parent)
+        if accessError { await f.scanner.fail(f.child, attempt: 1, error: .invalidFolder) }
+        else { await f.scanner.release(f.child, attempt: 1, fail: true) }
+        try await f.wait("597 removed root is Lost Access") {
+            readOwner454Find(LostAccessStateView.self, in: f.window.contentView) { !$0.isHiddenOrHasHiddenAncestor } != nil
+                && f.controller.session.folderScan?.isScanning != true
+        }
+        for _ in 0..<20 { try await Task.sleep(for: .milliseconds(10)); f.present() }
+        #expect(grantRequests.isEmpty)
+        #expect(f.window.attachedSheet == nil)
+        #expect(!f.window.isVisible)
+        #expect(f.button("state.retry-folder") == nil)
+        #expect(f.controller.session.folderScan?.failure == nil)
+        #expect(readOwner454Find(LostAccessStateView.self, in: f.window.contentView) { !$0.isHiddenOrHasHiddenAncestor } != nil)
     } teardown: { await f.close() }
 }
 
