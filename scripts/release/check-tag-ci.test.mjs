@@ -16,7 +16,10 @@ const run = (patch = {}) => ({ id: 100, head_sha: SHA, head_branch: "main", even
 const job = (name, patch = {}) => ({ id: name === NAMES[0] ? 1001 : 1002, run_id: 100,
   head_sha: SHA, run_attempt: 1, name, status: "completed", conclusion: "success", ...patch });
 const jobs = (patch = {}) => NAMES.map((name) => job(name, patch));
-const evidence = (patch = {}) => ({ sha: SHA, runs: [run()], jobs: jobs(), ...patch });
+const evidence = (patch = {}) => {
+  const input = { sha: SHA, runs: [run()], jobs: jobs(), ...patch };
+  return { confirmedRuns: structuredClone(input.runs), ...input };
+};
 function denied(input, name = NAMES) {
   const result = evaluateTagCI(input);
   assert.equal(result.pass, false, JSON.stringify(input));
@@ -336,3 +339,95 @@ test("WI-2 CLI preserves current-attempt successes despite unrelated final failu
   assert.ok(result.output.includes(SHA), result.output);
   assert.doesNotMatch(result.output, /fixture-private-token/);
 });
+
+// WI-3: filter=all can list the same job ID once in each attempt.
+const unrelatedReuse = () => [...jobs({ run_attempt: 2 }),
+  job("Unrelated", { id: 9000 }), job("Unrelated", { id: 9000, run_attempt: 2 })];
+const requiredReuse = (name, latest = {}) => [
+  ...jobs({ run_attempt: 2 }).filter((j) => j.name !== name),
+  job(name, { conclusion: "failure" }), job(name, { run_attempt: 2, ...latest }),
+];
+const reuseEvidence = (entries) => evidence({ runs: [attempted("success")], jobs: entries });
+const reuseResponses = (entries) => [pages("workflow_runs", [attempted("success")]),
+  pages("jobs", entries), pages("workflow_runs", [attempted("success")])];
+
+test("WI-3 unrelated job ID reuse across attempts does not invalidate required success", () => {
+  const input = reuseEvidence(unrelatedReuse());
+  const before = structuredClone(input);
+  const result = evaluateTagCI(input);
+  assert.equal(result.pass, true, result.reason);
+  assert.ok(result.reason.includes(SHA), result.reason);
+  assert.deepEqual(input, before);
+});
+
+for (const name of NAMES) {
+  test(`WI-3 reused ${name} ID follows latest success instead of historical failure`, () => {
+    const result = evaluateTagCI(reuseEvidence(requiredReuse(name)));
+    assert.equal(result.pass, true, result.reason);
+    assert.ok(result.reason.includes(SHA), result.reason);
+    const retained = requiredReuse(name);
+    retained.find((j) => j.name === name && j.run_attempt === 1).conclusion = "success";
+    assert.equal(evaluateTagCI(reuseEvidence(retained)).pass, true);
+  });
+  for (const latest of [{ conclusion: "failure" }, { status: "in_progress", conclusion: null }]) {
+    test(`WI-3 reused ${name} ID cannot hide latest ${latest.conclusion ?? latest.status}`, () => {
+      const entries = requiredReuse(name, latest);
+      entries.find((j) => j.name === name && j.run_attempt === 1).conclusion = "success";
+      const result = denied(reuseEvidence(entries), name);
+      assert.match(result.reason, /did not complete successfully/);
+    });
+  }
+  test(`WI-3 ${name} still denies real ambiguity within the latest attempt`, () => {
+    const entries = requiredReuse(name);
+    const newest = entries.find((j) => j.name === name && j.run_attempt === 2);
+    denied(reuseEvidence([...entries, { ...newest }]), name);
+    for (const conclusion of ["success", "failure"]) {
+      const result = denied(reuseEvidence([...entries, { ...newest, id: 9999, conclusion }]), name);
+      assert.match(result.reason, /ambiguous/);
+    }
+  });
+}
+
+test("WI-3 missing or undefined confirmation cannot authorize otherwise green evidence", () => {
+  const missing = { sha: SHA, runs: [run()], jobs: jobs() };
+  denied(missing);
+  denied(evidence({ confirmedRuns: undefined }));
+  denied(evidence({ confirmedRuns: null }));
+  const explicit = evidence();
+  assert.equal(evaluateTagCI(explicit).pass, true);
+  denied({ ...explicit, confirmedRuns: [run({ id: 101, status: "queued" })] });
+});
+
+test("WI-3 reused execution selection is invariant to historical ordering", () => {
+  for (const name of NAMES) {
+    const ambiguous = [...requiredReuse(name), job(name, { id: 9999, run_attempt: 2 })];
+    for (const entries of [unrelatedReuse(), requiredReuse(name), requiredReuse(name, { conclusion: "failure" }), ambiguous]) {
+      const input = reuseEvidence(entries);
+      const before = structuredClone(input);
+      const expected = evaluateTagCI(input);
+      const transformed = { ...input, jobs: [...input.jobs, job("Other", { id: 8000, run_attempt: 2 })].reverse() };
+      assert.deepEqual(evaluateTagCI(transformed), expected);
+      assert.deepEqual(input, before);
+    }
+  }
+});
+
+test("WI-3 CLI accepts reused unrelated IDs across attempts", () => {
+  const result = cli(reuseResponses(unrelatedReuse()));
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.output.includes(SHA), result.output);
+  assert.doesNotMatch(result.output, /fixture-private-token/);
+});
+
+for (const name of NAMES) {
+  test(`WI-3 CLI reused ${name} ID succeeds only with its unique latest success`, () => {
+    const result = cli(reuseResponses(requiredReuse(name)));
+    assert.equal(result.status, 0, result.output);
+    assert.ok(result.output.includes(SHA), result.output);
+    assert.doesNotMatch(result.output, /fixture-private-token/);
+    const failed = requiredReuse(name, { conclusion: "failure" });
+    failed.find((j) => j.name === name && j.run_attempt === 1).conclusion = "success";
+    cliDenied(cli(reuseResponses(failed)), name);
+    cliDenied(cli(reuseResponses([...requiredReuse(name), job(name, { id: 9999, run_attempt: 2 })])), name);
+  });
+}

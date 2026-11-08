@@ -22,10 +22,10 @@ function selectRun(runs, sha) {
 /**
  * Pure API-JSON decision. `jobs` is the selected run's complete filter=all response.
  * Each name's most recent execution counts; retain earlier successes only after a green final run.
- * `confirmedRuns` is a second complete run listing, taken after loading jobs, to detect races.
+ * Required `confirmedRuns` is a second complete run listing, taken after loading jobs, to detect races.
  */
 export function evaluateTagCI(input) {
-  const { sha = "unknown", runs, jobs, confirmedRuns = runs } = input ?? {};
+  const { sha = "unknown", runs, jobs, confirmedRuns } = input ?? {};
   const fail = (detail, names) => result(sha, false, detail, names);
   if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) return fail("invalid commit SHA");
   const run = selectRun(runs, sha);
@@ -36,7 +36,7 @@ export function evaluateTagCI(input) {
   if (!confirmed || confirmed.id !== run.id || confirmed.run_attempt !== run.run_attempt ||
       confirmed.status !== run.status) return fail("latest CI run changed while loading evidence; retry release");
   if (!Array.isArray(jobs) || jobs.some((job) => !job || !positiveInteger(job.id)) ||
-      new Set(jobs.map((job) => job.id)).size !== jobs.length) return fail("invalid or duplicate job evidence");
+      new Set(jobs.map((job) => `${job.id}:${job.run_attempt}`)).size !== jobs.length) return fail("invalid or duplicate job evidence");
   const failures = [];
   for (const name of REQUIRED) {
     const executions = jobs.filter((job) => job.name === name);
