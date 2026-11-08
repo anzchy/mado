@@ -1,0 +1,27 @@
+{
+  "i587-140.txt": {
+    "run": "42173760903",
+    "attempt": 1,
+    "sha": "1610c8a37ee60ce0a0ba83ea8a52e67031c4faf4",
+    "historicalNamespaceSanitized": false
+  },
+  "i587-521-old.txt": {
+    "run": "42270208258",
+    "attempt": 1,
+    "sha": "5d9e00cedc4423610945eac80091b5bf5f3ad045",
+    "historicalNamespaceSanitized": true
+  },
+  "i587-521-new.txt": {
+    "run": "42437734660",
+    "attempt": 3,
+    "sha": "9a107618d7ae83cbad6217234744c16fe222d266",
+    "historicalNamespaceSanitized": false
+  },
+  "i587-527.txt": {
+    "run": "42399022708",
+    "attempt": 1,
+    "sha": "fdbacfd4de497eef648441297cc3a4f01e648db5",
+    "historicalNamespaceSanitized": false
+  },
+  "extraction": "Strip GitHub job/step/timestamp prefixes; retain from the first All tests start through the complete test output, including child stderr printed after the outer root. Drop app-lane metadata, Tests run counts, GitHub error wrappers and the post-test upload-artifact/job tail. Historical brand namespace is normalized to the current name where present; runner home paths use /SCRATCH/ if retained. Normalize trailing blank lines to one final newline. These are sanitized test-output fixtures, not byte-for-byte raw logs; see README."
+}

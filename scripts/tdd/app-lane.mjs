@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "nod
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
+import { knownFlaky } from "../ci/known-flaky.mjs";
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
 const bundle = ".build/dd-ci/Build/Products/Debug/MadoAppTests.xctest";
@@ -75,8 +76,19 @@ function loadQuarantine(filename) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
         typeof entry.id !== 'string' || !(swiftID.test(entry.id) || xctID.test(entry.id)))
       throw new Error('quarantine id must be an exact supported XCTest Class/method or Swift Testing Module.func() identifier');
-    if (!Number.isSafeInteger(entry.issue) || entry.issue <= 0) throw new Error('quarantine issue must be a positive integer');
+    // Delegator replaces constrained tracking placeholders before opening the PR.
+    if (!(Number.isSafeInteger(entry.issue) && entry.issue > 0) &&
+        !(typeof entry.issue === 'string' && /^TBD-[1-9]\d*$/.test(entry.issue)))
+      throw new Error('quarantine issue must be a positive integer or TBD-<positive integer> placeholder');
     if (typeof entry.reason !== 'string' || !entry.reason.trim()) throw new Error('quarantine reason must be nonblank');
+    if (typeof entry.owner !== 'string' || !entry.owner.trim()) throw new Error('quarantine owner must be nonblank');
+    const expiry = typeof entry.expires === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.expires)
+      ? new Date(`${entry.expires}T00:00:00.000Z`) : null;
+    if (!expiry || !Number.isFinite(expiry.getTime()) || expiry.toISOString().slice(0, 10) !== entry.expires)
+      throw new Error('quarantine expires must be a real ISO calendar date (YYYY-MM-DD)');
+    // An expiry stays valid through its stated UTC date, independent of runner TZ.
+    if (entry.expires < new Date().toISOString().slice(0, 10))
+      throw new Error(`quarantine expired ${entry.expires}: ${entry.id} (owner=${entry.owner})`);
     if (ids.has(entry.id)) throw new Error(`quarantine duplicate id ${entry.id}`);
     ids.add(entry.id);
   }
@@ -387,6 +399,12 @@ export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
   } catch (error) {
     stderr(`app-lane quarantine: ${error.message}\n`); return 70;
   }
+  // Keep exceptions visible even when every executed test passes. Report only
+  // after the complete quarantine and selection have been validated.
+  for (const entry of quarantine)
+    stdout(`app-lane quarantine owner=${entry.owner} expires=${entry.expires} id=${entry.id}\n`);
+  for (const entry of knownFlaky)
+    stdout(`app-lane known-flaky test=${entry.name} issue=#${entry.issue}\n`);
   const execute = () => {
     const run = nativeSpawn(env, spawn, selection?.retained.map(row => row.id) ?? null, bundlePath);
     stdout(run.stdout ?? ''); stderr(run.stderr ?? '');
