@@ -721,11 +721,10 @@ test('i587 expired metadata rejects atomically in either order',()=>{
   }
  }
 });
-for(const issue of [0,-1,1.5,'454','TBD-','TBD-0','TBD-xyz','anything',[],null]) test(`i587 quarantine rejects issue reference ${JSON.stringify(issue)}`,()=>{
+for(const issue of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1,'454','TBD-12345','TBD-','TBD-0','TBD-xyz','anything',[],null]) test(`i587 quarantine rejects issue reference ${JSON.stringify(issue)}`,()=>{
  i587Rejected([{...quarantine[0],issue},quarantine[1]],/quarantine.*issue/i);
 });
-// Synthetic schema fixture; production tracking references use filed issue numbers.
-for(const issue of [411,'TBD-12345']) test(`i587 quarantine accepts tracking reference ${issue}`,()=>{
+for(const issue of [411]) test(`i587 quarantine accepts tracking reference ${issue}`,()=>{
  const h=harness([{...quarantine[0],issue},quarantine[1]]);
  assert.equal(h.status,0,h.stderr);
  assert.ok(h.stdout.includes(`quarantine skip=ProbeTests/testSkip issue=#${issue}\n`));
@@ -795,4 +794,16 @@ for(const [label,entries,options] of [
 test('i587 invalid quarantine cannot print a partly validated exception roster',()=>{
  const h=i587Rejected([quarantine[0],{...quarantine[1],owner:''}],/owner/);
  assert.equal(h.stdout,'');
+});
+
+
+// #587 fix2 M1 explicitly restores the positive-safe-integer issue contract.
+test('i587 integer issue schema rejects invalid entries atomically in either order',()=>{
+ for(const issue of ['TBD-12345','411',Number.MAX_SAFE_INTEGER+1]) {
+  const invalid={...quarantine[0],issue};
+  for(const entries of [[invalid,quarantine[1]],[quarantine[1],invalid]]) {
+   const h=i587Rejected(entries,/quarantine.*issue/i);
+   assert.equal(h.stdout,'');
+  }
+ }
 });

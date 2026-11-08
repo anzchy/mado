@@ -27,3 +27,6 @@ These four fixtures retain complete test-output sections from `gh run view --log
 Extraction starts at the first `Test Suite 'All tests' started` line. It preserves child stderr that appears after the outer Swift test-root summary. The first subsequent `##[group]Run actions/upload-artifact` line, when present, starts the discarded post-test tail, including artifact URLs, git configuration and runner paths. App-lane metadata/count lines and GitHub error wrappers are excluded. Any retained runner home path is sanitized to `/SCRATCH/`, matching the convention above; none remains in these retained sections. Each fixture ends with exactly one newline.
 
 The pre-rename module spelling is deliberately normalized under the owner's amendment 2; future signatures match only the current `MadoAppTests` spelling. Original source locations, assertion expressions, pointer values and test timings remain as captured. Negative/retry cases are explicitly derived mutations in the Node tests.
+
+
+`i587-521-old.txt` is retained only as a negative for obsolete parent source locations 104/105/106. Current retry eligibility requires 110/111/112; the modern capture remains the positive control. Its sanitized child output is historical evidence, not permission to retry current failures at obsolete locations.
