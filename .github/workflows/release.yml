@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -42,6 +43,11 @@ jobs:
           [[ -n "$DEVELOPMENT_TEAM" ]] || { echo "::error::repository variable DEVELOPMENT_TEAM is not set"; exit 1; }
           { echo "TAG=$TAG"; echo "VERSION=$VERSION"; echo "BUILD=$BUILD"; } >> "$GITHUB_ENV"
           echo "Releasing Mado $VERSION ($BUILD) from $TAG"
+
+      - name: Check CI on the tag commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/check-tag-ci.mjs
 
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup

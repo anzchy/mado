@@ -28,10 +28,23 @@ test("only the mado-v* tag pattern triggers a release", () => {
   assert.match(on, /^on:\n  push:\n    tags:\n      - 'mado-v\*'\n$/);
 });
 
-test("permissions are only contents and pull-requests write", () => {
+test("permissions are only contents and pull-requests write plus actions read", () => {
   const block = /\npermissions:\n((?:  .*\n)+)/.exec(workflow)?.[1];
-  assert.equal(block, "  contents: write\n  pull-requests: write\n");
+  assert.equal(block, "  contents: write\n  pull-requests: write\n  actions: read\n");
   assert.equal((workflow.match(/permissions:/g) ?? []).length, 1);
+});
+
+test("tag CI is checked immediately after version validation and before any signing secret", () => {
+  const gate = step(/^Check CI on the tag commit$/);
+  assert.equal(steps().filter((s) => s.name === gate.name).length, 1);
+  assert.equal(index(/^Check CI on the tag commit$/), index(/^Check the tag against the project version$/) + 1);
+  assert.ok(index(/^Check CI on the tag commit$/) < index(/^Import the Developer ID certificate$/));
+  for (const [position, entry] of steps().entries()) {
+    if (/secrets\./.test(entry.text)) assert.ok(index(/^Check CI on the tag commit$/) < position, entry.name);
+  }
+  assert.match(gate.text, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(gate.text, /run: node scripts\/release\/check-tag-ci\.mjs/);
+  assert.doesNotMatch(gate.text, /continue-on-error|if:|\|\|/);
 });
 
 test("every action is local or pinned to a full commit SHA", () => {
