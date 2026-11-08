@@ -22,18 +22,19 @@ private actor BrokenInspectorLease: AccessLeasing {
 }
 
 @Test func issue136CancellationReachesImageIOWorker() async throws {
-    let (events, continuation) = AsyncStream<Void>.makeStream()
     let reader = ImageIOInspectorMetadataReader(access: InspectorLease(), workerStarted: {
-        continuation.yield(())
+        // Cancel before handler registration, so onCancel runs even if the worker
+        // has already finished. An asynchronous notification can arrive too late.
+        withUnsafeCurrentTask { $0?.cancel() }
     })
     let url = fixture("landscape-3x2.png")
     let task = Task { try await reader.read(url, access: .fileGrant(url)) }
-    var iterator = events.makeAsyncIterator()
-    _ = await iterator.next()
-    task.cancel()
-    _ = try? await task.value
-    continuation.finish()
-    #expect(task.isCancelled)
+    do {
+        _ = try await task.value
+        Issue.record("Expected the cancelled metadata read to throw")
+    } catch {
+        #expect(error is CancellationError)
+    }
 }
 
 @Test func issue136InspectorReadsRealImageHeaderAndAttributes() async throws {
