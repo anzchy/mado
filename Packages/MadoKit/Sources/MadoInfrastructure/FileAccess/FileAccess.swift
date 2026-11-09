@@ -83,12 +83,6 @@ public actor FileAccess: AccessLeasing {
     /// Session-only: File Grants never become persisted Access Roots.
     private struct FileGrantBookmark { var data: Data; var resource: FileResourceIdentity? }
     private var fileBookmarks: [URL: FileGrantBookmark] = [:]
-    // Temporary #610 observation; sequence numbers identify calls, never files.
-    private var diagnostic610Sequence: UInt64 = 0
-    private static let diagnostic610Logger = Logger(subsystem: "io.github.anzchy.mado", category: "filesystem")
-    private static func diagnostic610(_ message: String) {
-        diagnostic610Logger.notice("[DEBUG-i610] \(message, privacy: .public)")
-    }
 
     public init(scope: any SecurityScope, bookmarks: any BookmarkCoding, store: BookmarkStore, buildSHA: String,
                 diagnostics: AccessDiagnostics = AccessDiagnostics(),
@@ -651,29 +645,18 @@ public actor FileAccess: AccessLeasing {
     }
     public func resolveFileGrant(_ file: URL) throws -> URL {
         let key = file.standardizedFileURL
-        diagnostic610Sequence &+= 1
-        let sequence = diagnostic610Sequence
-        let originalExists = FileManager.default.fileExists(atPath: file.path)
-        guard let bookmark = fileBookmarks[key] else {
-            Self.diagnostic610("seq=\(sequence) bookmark=absent originalExists=\(originalExists) branch=noBookmark")
-            return file
-        }
-        Self.diagnostic610("seq=\(sequence) bookmark=present originalExists=\(originalExists)")
+        guard let bookmark = fileBookmarks[key] else { return file }
         // A new inode at the old name could be a replacement or reuse after rename.
-        if originalExists {
+        if FileManager.default.fileExists(atPath: file.path) {
             let current = try? resourceReader.identity(for: file)
-            if bookmark.resource == nil || current == bookmark.resource {
-                Self.diagnostic610("seq=\(sequence) branch=originalIdentity")
-                return file
-            }
+            if bookmark.resource == nil || current == bookmark.resource { return file }
             do {
-                let moved = try resolveFileBookmark(bookmark, original: file, sequence: sequence)
+                let moved = try resolveFileBookmark(bookmark, original: file)
                 if moved != file, FileManager.default.fileExists(atPath: moved.path) { return moved }
             } catch FileAccessError.fileDeleted(_) {
                 // A trashed former inode yields to a live replacement at the granted path.
             }
             catch { /* Bookmark failure permits the replacement at the original path. */ }
-            Self.diagnostic610("seq=\(sequence) branch=replacement")
             let session = try ScopeSession(scope: scope, url: file, rootID: nil)
             defer { session.stop() }
             guard FileManager.default.isReadableFile(atPath: file.path) else {
@@ -684,62 +667,39 @@ public actor FileAccess: AccessLeasing {
             }
             return file
         }
-        return try resolveFileBookmark(bookmark, original: file, sequence: sequence)
+        return try resolveFileBookmark(bookmark, original: file)
     }
-    private func resolveFileBookmark(_ bookmark: FileGrantBookmark, original: URL, sequence: UInt64) throws -> URL {
-        Self.diagnostic610("seq=\(sequence) branch=resolveBookmark")
-        var stage = "resolve"
+    private func resolveFileBookmark(_ bookmark: FileGrantBookmark, original: URL) throws -> URL {
         do {
             let resolved = try bookmarks.resolve(bookmark.data)
-            Self.diagnostic610("seq=\(sequence) resolution=returned stale=\(resolved.stale) returnedEqualsOriginal=\(resolved.url == original) returnedExists=\(FileManager.default.fileExists(atPath: resolved.url.path))")
-            if Self.isTrashed(resolved.url, diagnostic610Sequence: sequence) { throw FileAccessError.fileDeleted(original) }
+            if Self.isTrashed(resolved.url) { throw FileAccessError.fileDeleted(original) }
             if resolved.stale {
-                stage = "refresh"
                 let session = try ScopeSession(scope: scope, url: resolved.url, rootID: nil)
                 defer { session.stop() }
                 fileBookmarks[original.standardizedFileURL]?.data = try bookmarks.create(for: resolved.url)
-                Self.diagnostic610("seq=\(sequence) refresh=ok")
             }
             return resolved.url
         } catch FileAccessError.fileDeleted(let file) { throw FileAccessError.fileDeleted(file) }
-        catch {
-            Self.diagnostic610("seq=\(sequence) \(stage == "resolve" ? "resolution=failed" : "refresh=failed") error=\(AccessDiagnostics.errorKind(error))")
-            throw FileAccessError.needsFileReconnection(original)
-        }
+        catch { throw FileAccessError.needsFileReconnection(original) }
     }
-    static func isTrashed(_ url: URL, diagnostic610Sequence: UInt64? = nil) -> Bool {
+    static func isTrashed(_ url: URL) -> Bool {
         let normalized = url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
         let components = normalized.pathComponents
-        let trash = try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: false)
-        let userTrashMatches = trash.map { components.starts(with: $0.standardizedFileURL.pathComponents) } ?? false
-        func report(volumeLookup: String, perUserMatches: Bool, result: Bool) {
-            guard let sequence = diagnostic610Sequence else { return }
-            Self.diagnostic610("seq=\(sequence) trashCheck userTrashLookup=\(trash == nil ? "failed" : "returned") userTrashMatches=\(userTrashMatches) normalizedEqualsInput=\(normalized == url) hasDotTrashComponent=\(components.contains(".Trash")) volumeLookup=\(volumeLookup) perUserVolumeTrashMatches=\(perUserMatches) result=\(result)")
-        }
-        if userTrashMatches {
-            report(volumeLookup: "notAttempted", perUserMatches: false, result: true)
-            return true
-        }
+        if let trash = try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false),
+           components.starts(with: trash.standardizedFileURL.pathComponents) { return true }
         // Resource values are unavailable for a missing descendant. Its nearest
         // existing ancestor still establishes the actual mounted volume root.
         var ancestor = normalized
         var volume = try? ancestor.resourceValues(forKeys: [.volumeURLKey]).volume
-        var volumeLookup = volume == nil ? "unavailable" : "direct"
         while volume == nil {
             let parent = ancestor.deletingLastPathComponent()
             if parent.path == ancestor.path { break }
             ancestor = parent
             volume = try? ancestor.resourceValues(forKeys: [.volumeURLKey]).volume
-            if volume != nil { volumeLookup = "ancestor" }
         }
-        guard let volume else {
-            report(volumeLookup: volumeLookup, perUserMatches: false, result: false)
-            return false
-        }
-        let result = isInPerUserVolumeTrash(normalized, volume: volume)
-        report(volumeLookup: volumeLookup, perUserMatches: result, result: result)
-        return result
+        guard let volume else { return false }
+        return isInPerUserVolumeTrash(normalized, volume: volume)
     }
     static func isInPerUserVolumeTrash(_ url: URL, volume: URL, uid: uid_t = getuid()) -> Bool {
         let perUserTrash = volume.appendingPathComponent(".Trashes", isDirectory: true)
@@ -973,10 +933,8 @@ public actor FileAccess: AccessLeasing {
                     let data = try bookmarks.create(for: url)
                     fileBookmarks[file.standardizedFileURL] = FileGrantBookmark(data: data,
                         resource: try? resourceReader.identity(for: url))
-                    Self.diagnostic610("bookmarkCreate create=ok")
                 } catch {
                     diagnostics.emit("FileGrantBookmark stage=create outcome=failed kind=\(AccessDiagnostics.errorKind(error))")
-                    Self.diagnostic610("bookmarkCreate create=failed error=\(AccessDiagnostics.errorKind(error))")
                 }
             }
         }
