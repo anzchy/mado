@@ -48,9 +48,10 @@ import Sparkle
     private let controller: (any SparkleController)?
     init(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
          makeController: @MainActor () -> any SparkleController = { NativeSparkleController() }) {
-        // #552 will choose Mado's feed. Sparkle reports a missing-feed error if started without one;
-        // avoid constructing it at all until the app supplies a feed, including the manual-check path.
-        guard let feed = infoDictionary["SUFeedURL"] as? String,
+        // Debug builds must never create Sparkle, regardless of its persisted automatic-update flags.
+        // Read the build-resolved plist, not UserDefaults; reuse the missing-feed unavailable state.
+        guard infoDictionary["MadoDisableUpdates"] as? String != "YES",
+              let feed = infoDictionary["SUFeedURL"] as? String,
               !feed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             controller = nil
             return

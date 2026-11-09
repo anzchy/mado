@@ -46,6 +46,11 @@ targets:
         # Git metadata lives outside a linked worktree; only this target's build script is unsandboxed.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Debug:
+          MADO_DISABLE_UPDATES: "YES"
+        Release:
+          MADO_DISABLE_UPDATES: "NO"
     postBuildScripts:
       - name: Stamp build Git SHA
         basedOnDependencyAnalysis: false
