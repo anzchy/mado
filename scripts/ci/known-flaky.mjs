@@ -3,12 +3,6 @@
  */
 export const knownFlaky = [
   {
-    name: 'issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet',
-    signature: /^Issue140NativeTrashTests\.swift:56:5: Expectation failed: \(window\.attachedSheet → <_NSAlertPanel: 0x[0-9a-f]+>\) == nil$/,
-    issue: 520,
-    // Same assertion on unrelated main SHAs; PR run 41964260444 passed attempt 2.
-  },
-  {
     name: 't231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves',
     signature: /^LostAccessRecoveryTests\.swift:1315:13: Time limit was exceeded: 180\.000 seconds$/,
     issue: 379,

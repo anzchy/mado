@@ -29,4 +29,4 @@ Extraction starts at the first `Test Suite 'All tests' started` line. It preserv
 The pre-rename module spelling is deliberately normalized under the owner's amendment 2; future signatures match only the current `MadoAppTests` spelling. Original source locations, assertion expressions, pointer values and test timings remain as captured. Negative/retry cases are explicitly derived mutations in the Node tests.
 
 
-`i587-521-old.txt` is retained only as a negative for obsolete parent source locations 104/105/106. Current retry eligibility requires 110/111/112; the modern capture remains the positive control. Its sanitized child output is historical evidence, not permission to retry current failures at obsolete locations.
+`i587-140.txt` is retained as a negative after retiring the #520 retry signature. Both `i587-521-old.txt` (parent source locations 104/105/106) and `i587-521-new.txt` (110/111/112) remain historical negatives after the key-window fixture migration removed issue521 retry authorization. Their sanitized child output is historical evidence and cannot authorize a retry; an unknown child-process failure remains explicitly denied.

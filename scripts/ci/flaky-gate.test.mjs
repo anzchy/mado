@@ -224,11 +224,10 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
 // Amendment 2: fixture transport tails and historical namespaces are normalized as documented in fixtures/README.md.
 const i587Recordings=['140'].map(id=>readFileSync(new URL(`./fixtures/i587-${id}.txt`,import.meta.url),'utf8'));
 const i587Names=['issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet'];
-const i587Issues=[520];
 for(const [i,text] of i587Recordings.entries()) {
- test(`i587 real recording ${i} has an exact tracked signature`,()=>{
+ test(`i587 historical issue140 recording ${i} is no longer retry eligible (#520)`,()=>{
   assert.equal(parseAppResult(result(text)).reliable,true);
-  assert.deepEqual(classifyFlaky(result(text)),{decision:'retry-eligible',names:[i587Names[i]],issues:[i587Issues[i]]});
+  assert.deepEqual(classifyFlaky(result(text)),{decision:'fail',names:[],issues:[]});
  });
  test(`i587 signature ${i} rejects each parent assertion near miss`,()=>{
   const lines=text.split('\n').filter(line=>line.startsWith('✘ Test ')&&line.includes(' recorded an issue at '));
@@ -248,14 +247,13 @@ for(const [i,text] of i587Recordings.entries()) {
   denied(result(text,{stderr:'error: Exited with unexpected signal code 9\n'}));
   denied(result(text.replace(/^Test Suite 'All tests' passed at .*\n/m,'')));
  });
- test(`i587 signature ${i} retries once and preserves evidence for both outcomes`,()=>{
+ test(`i587 historical issue140 recording ${i} runs once and preserves evidence (#520)`,()=>{
   const first=result(text,{stderr:'i587 initial stderr\n'});
-  for(const second of [pass,result(text)]) {
-   const h=harness([first,second,pass]);assert.equal(h.calls,2);assert.equal(h.status,second.status);
-   assert.equal((h.stdout.match(/retrying once/g)||[]).length,1);
-   assert.equal(readFileSync(h.evidencePath,'utf8'),first.stdout+'\n'+first.stderr);
-   assert.ok(h.stdout.includes(`#${i587Issues[i]}`));
-  }
+  const h=harness([first,pass]);
+  assert.equal(h.calls,1);
+  assert.equal(h.status,1);
+  assert.doesNotMatch(h.stdout,/retrying once/);
+  assert.equal(readFileSync(h.evidencePath,'utf8'),first.stdout+'\n'+first.stderr);
  });
 }
 test('i587 one failing SHA for issue527 does not authorize a signature',()=>{
@@ -353,4 +351,20 @@ test('key-window fixture failures do not authorize a retry after migration', () 
     assert.doesNotMatch(h.stdout, /retrying once/);
     assert.equal(readFileSync(h.evidencePath, 'utf8'), initial.stdout + '\n' + initial.stderr);
   }
+});
+
+// #609 M2: removing the unconsumed child validator cannot authorize unknown
+// failures printed by the historical child process after its parent completed.
+test('unknown historical issue521 child-process failure cannot authorize a retry (#609)', () => {
+  const child = '[issue521-child] ✘ Test unknownChildFailure() recorded an issue at UnknownChild.swift:1:1: Expectation failed: unexpected child failure\n';
+  const text = i587Fix2Golden + child;
+  assert.ok(text.includes('✘ Test run with '), 'completed parent-root evidence retained');
+  assert.equal(parseAppResult(result(text)).reliable, true);
+  denied(result(text));
+  const first = result(text, { stderr: 'unknown child-process evidence\n' });
+  const h = harness([first, pass]);
+  assert.equal(h.calls, 1);
+  assert.equal(h.status, 1);
+  assert.doesNotMatch(h.stdout, /retrying once/);
+  assert.equal(readFileSync(h.evidencePath, 'utf8'), first.stdout + '\n' + first.stderr);
 });
