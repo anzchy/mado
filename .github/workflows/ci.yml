@@ -217,6 +217,11 @@ jobs:
         run: echo "APP_JOB_STARTED_MS=$(node -p 'Date.now()')" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Validate App repeat input
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          APP_REPEAT: ${{ inputs.app_repeat }}
+        run: node scripts/ci/app-repeat.mjs --validate
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
       - name: DerivedData cache key
@@ -266,6 +271,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
       - name: Upload App repeat logs
+        continue-on-error: true
         if: always() && github.event_name == 'workflow_dispatch' && inputs.app_tests && inputs.app_repeat > 1
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
