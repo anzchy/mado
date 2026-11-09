@@ -26,6 +26,15 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      - name: Install portable device test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git zsh
+      - name: Test portable device tools
+        working-directory: pr-head
+        run: |
+          python3 -m unittest discover -s scripts/device/tests -p '*_test.py'
+          node --test scripts/device/tests/device.test.cjs scripts/device/tests/platform_split.test.cjs
       - name: Test agent tooling
         working-directory: pr-head
         run: node --test scripts/agents/*.test.mjs scripts/perf/*.test.mjs scripts/ledger/*.test.mjs scripts/tdd/*.test.mjs

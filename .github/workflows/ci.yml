@@ -90,6 +90,8 @@ jobs:
         run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - name: Watchdog script tests
         run: node --test scripts/ci/*.test.mjs
+      - name: Test macOS device tools
+        run: node --test scripts/device/tests/macos.test.cjs
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
       - name: SwiftPM cache key
