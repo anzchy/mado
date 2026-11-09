@@ -127,8 +127,10 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     let menu: CommandMenu
     let previousMenu: NSMenu?
     let previousActivationPolicy: NSApplication.ActivationPolicy
+    let keyWindowTimeout: Duration
 
-    init() throws {
+    init(keyWindowTimeout: Duration) throws {
+        self.keyWindowTimeout = keyWindowTimeout
         _ = NSApplication.shared
         previousActivationPolicy = NSApp.activationPolicy()
         // Match MadoApp startup; a bare xctest host otherwise has prohibited activation.
@@ -161,8 +163,12 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
             openDiagnostics: {}, windowController: { target })
         window.setContentSize(NSSize(width: 1280, height: 772))
         controller.showWindow(nil)
-        window.makeKeyAndOrderFront(nil)
-        retry442StartNativeDispatch()
+        do {
+            try makeFixtureWindowKey(window, timeout: keyWindowTimeout)
+        } catch {
+            close()
+            throw error
+        }
     }
 
     func close() {
@@ -212,17 +218,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     /// Use the actual application dispatch and installed production menu, with a real current key event.
     /// The test never calls route(), performClick(), or a menu action in place of event delivery.
     func press(_ keypad: Bool) throws {
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        // A bare xctest host can be inactive; makeKeyAndOrderFront then only orders the window.
-        // Explicit key ownership is required before testing NSApplication's real equivalent routing.
-        window.makeKey()
-        let deadline = Date(timeIntervalSinceNow: 2)
-        while NSApp.keyWindow !== window && Date() < deadline {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
-            window.makeKeyAndOrderFront(nil)
-            window.makeKey()
-        }
+        try makeFixtureWindowKey(window, timeout: keyWindowTimeout)
         try #require(NSApp.keyWindow === window)
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: keypad ? [.numericPad] : [], timestamp: 0,
@@ -237,23 +233,6 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     }
 }
 
-/// Unlike the production executable, a bare xctest host never enters NSApplication.run().
-/// Let AppKit finish activation and key-window delivery before exercising its event route.
-@MainActor private func retry442StartNativeDispatch() {
-    guard !NSApp.isRunning else { return }
-    let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
-        MainActor.assumeIsolated {
-            NSApp.stop(nil)
-            if let idle = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [],
-                timestamp: 0, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) {
-                NSApp.postEvent(idle, atStart: true)
-            }
-        }
-    }
-    NSApp.run()
-    timer.invalidate()
-}
-
 @MainActor private func retry442ClearCurrentEvent() {
     guard let idle = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [],
         timestamp: 0, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) else { return }
@@ -266,7 +245,8 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
 @Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_RETRY442_NATIVE_CHILD"] == "1"),
       .timeLimit(.minutes(3))) @MainActor
 func retry442NativeKeyboardMatrix() async throws {
-    let scene = try Retry442Scene()
+    // Each acquisition reserves one twelfth of this child's three-minute limit.
+    let scene = try Retry442Scene(keyWindowTimeout: .seconds(180) / 12)
     defer { scene.close() }
     var requests = 0
     scene.controller.onOpenRequest = { requests += 1 }

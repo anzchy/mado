@@ -16,7 +16,8 @@ func issue527InspectorCanvasPressPassesInIsolatedProcess() async throws {
 func issue527InspectorCloseCanvasPressPans() async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    try await scene.open()
+    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     try #require(scene.controller.route(.inspector, from: .key))
     try await scene.wait {
         issue527Find(scene.window.contentView) { $0.accessibilityIdentifier() == "inspector.close" } != nil

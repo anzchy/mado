@@ -56,11 +56,9 @@ import MadoMacUI
         window.setContentSize(NSSize(width: 1000, height: 650))
     }
 
-    func open() async throws {
+    func open(keyWindowTimeout: Duration) async throws {
         controller.showWindow(nil)
-        window.makeKeyAndOrderFront(nil)
-        issue521StartNativeDispatch()
-        window.makeKey()
+        try makeFixtureWindowKey(window, timeout: keyWindowTimeout)
         try #require(window.isKeyWindow)
         controller.openGrantedFolder(folder)
         try await wait { self.controller.gridSearchAvailable }
@@ -123,7 +121,8 @@ func issue527NonCanvasPressesPassInIsolatedProcess() async throws {
 func issue527NonCanvasPressPreservesFocusAndImage(target: String) async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    try await scene.open()
+    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     let content = try #require(scene.window.contentView)
     var addedOverlay: NSView?
     defer { addedOverlay?.removeFromSuperview() }

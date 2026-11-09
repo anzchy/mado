@@ -9,30 +9,6 @@ export const knownFlaky = [
     // Same assertion on unrelated main SHAs; PR run 41964260444 passed attempt 2.
   },
   {
-    name: 'issue521NativePanPassesInIsolatedProcess',
-    signature: /^Issue521NativePanRunner\.swift:(?:110:5: Expectation failed: \(status → 1\) == 0|111:5: Expectation failed: nativePassed|112:5: Expectation failed: nativeRootCompleted)$/,
-    issue: 564,
-    // Parent runner assertions alone cannot distinguish unrelated child bugs.
-    // Successful probes share this prefix; validate every present child lifecycle.
-    childPrefix: '[issue521-child] ',
-    childTests: [
-      { name: 'issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)', failed: true,
-        cases: ['tabCount → 0', 'tabCount → 1', 'tabCount → 2'],
-        metadata: /^↳ native mouse dispatch requires the fixture window to be key$/ },
-      { name: 'issue527NonCanvasPressPreservesFocusAndImage(target:)', failed: false,
-        cases: ['target → "inspector"', 'target → "sidebar"', 'target → "chromeGap"', 'target → "overlay"'],
-        metadata: /^\[issue527-hit\] target=(?:inspector|sidebar|chromeGap|overlay) point=\(.+\) class=.+ id=.* expectedClass=.+ expectedID=.* canvas=(?:true|false) key=(?:true|false)$/ },
-      { name: 'issue527InactiveFirstClickKeepsFocusConsistent()', failed: false, cases: [],
-        metadata: /^\[issue527-inactive\] phase=(?:before|afterDown|afterUp|activated|afterTab) key=(?:true|false) otherKey=(?:true|false) focus=\S+ responder=.+ id=\S* canvas=(?:true|false)$/ },
-      { name: 'issue527InspectorCloseCanvasPressPans()', failed: false, cases: [] },
-    ],
-    childFailureSignatures: [
-      /^✘ Test issue521WindowDragPansFromCanvasAndTabFocusedTools\(tabCount:\) recorded an issue with 1 argument tabCount → 0 at Issue521CanvasToolFocusTests\.swift:79:9: Expectation failed: \(window → <MadoAppTests\.CommandWindow: 0x[0-9a-f]+>\)\.isKeyWindow → false$/,
-      /^✘ Test issue521WindowDragPansFromCanvasAndTabFocusedTools\(tabCount:\) with 3 test cases failed after \d+\.\d+ seconds with 1 issue\.$/,
-      /^✘ Test run with 1 test in 0 suites failed after \d+\.\d+ seconds with 1 issue\.$/,
-    ],
-  },
-  {
     name: 't231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves',
     signature: /^LostAccessRecoveryTests\.swift:1315:13: Time limit was exceeded: 180\.000 seconds$/,
     issue: 379,
