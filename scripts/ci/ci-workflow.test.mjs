@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verdict as oldBaseVerdict } from './fixtures/walking-skeleton-b213bb18.mjs';
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 const BASELINE_BUILD = "xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci";
@@ -79,12 +80,12 @@ const verdictScript = () => {
 };
 const allSucceeded = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
   APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', EVENT_NAME: 'push' };
-const runVerdict = (t, env, { trustedScript = false } = {}) => {
+const runVerdict = (t, env, { trustedScript = false, baseFixture = false } = {}) => {
   const directory = mkdtempSync(join(tmpdir(), 'mado-walking-skeleton-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  if (trustedScript) {
+  if (trustedScript || baseFixture) {
     mkdirSync(join(directory, 'trusted/scripts/ci'), { recursive: true });
-    copyFileSync(fileURLToPath(new URL('./walking-skeleton.mjs', import.meta.url)),
+    copyFileSync(fileURLToPath(new URL(baseFixture ? './fixtures/walking-skeleton-b213bb18.mjs' : './walking-skeleton.mjs', import.meta.url)),
       join(directory, 'trusted/scripts/ci/walking-skeleton.mjs'));
   }
   return spawnSync('bash', ['-e', '-c', verdictScript()],
@@ -95,7 +96,8 @@ test('Walking skeleton runs the verdict from a checkout of the trusted base, nev
   const skeleton = jobBlock('walking-skeleton');
   assert.match(skeleton, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}\n(?:          .*\n)*?          path: trusted\n/);
   const script = verdictScript();
-  assert.match(script, /^if \[ -f trusted\/scripts\/ci\/walking-skeleton\.mjs \]; then\n  node trusted\/scripts\/ci\/walking-skeleton\.mjs\n/);
+  // F1 adds a head-workflow App minimum before invoking the trusted verdict.
+  assert.match(script, /^if \[ -f trusted\/scripts\/ci\/walking-skeleton\.mjs \]; then\n  node trusted\/scripts\/ci\/walking-skeleton\.mjs\n/m);
   assert.doesNotMatch(script, /(^|[^/])scripts\/ci\/walking-skeleton\.mjs/m, 'no path outside trusted/');
 });
 
@@ -126,7 +128,8 @@ test('a base without the script falls back to requiring every job and the build 
     for (const value of ['failure', 'cancelled', 'skipped', '']) {
       const result = runVerdict(t, { ...allSucceeded, [key]: value });
       assert.equal(result.status, 1, `${key}=${value}`);
-      assert.match(result.stdout, /walking-skeleton: FAIL \(strict fallback/, `${key}=${value}`);
+      const reason = ['APP_JOB', 'APP_TEST_STEP'].includes(key) ? /walking-skeleton: FAIL \(App minimum/ : /walking-skeleton: FAIL \(strict fallback/;
+      assert.match(result.stdout, reason, `${key}=${value}`);
     }
   }
   for (const native of ['false', '', 'TRUE']) {
@@ -337,5 +340,68 @@ test('App report marks build-only dispatch and absent or cancelled test steps as
     assert.match(summary, /formal App evidence: false/);
     assert.doesNotMatch(summary, /passed directly|passed after/);
     if (step === 'skipped') assert.match(summary, /tests not run/);
+  }
+});
+
+
+// Exact historical collaborator: git show b213bb18:scripts/ci/walking-skeleton.mjs.
+// It deliberately accepts App assertion failures, so rollout tests cannot pass by
+// accidentally supplying the candidate's already-strict verdict as trusted base.
+test('old b213bb18 trusted verdict retains its permissive App failure behavior', () => {
+  assert.equal(oldBaseVerdict({ ...allSucceeded, APP_JOB: 'failure' }).ok, true);
+  assert.equal(oldBaseVerdict({ ...allSucceeded, APP_TEST_STEP: 'skipped' }).ok, true);
+});
+
+test('head workflow App minimum rejects every unsuccessful App job or run step with old b213bb18 base', t => {
+  for (const event of ['pull_request', 'push']) {
+    const baseline = { ...allSucceeded, EVENT_NAME: event };
+    const pass = runVerdict(t, baseline, { baseFixture: true });
+    assert.equal(pass.status, 0, `${event}: ${pass.stdout}${pass.stderr}`);
+    for (const key of ['APP_JOB', 'APP_TEST_STEP']) {
+      for (const value of ['failure', 'cancelled', 'skipped', '', undefined, 'neutral']) {
+        const run = runVerdict(t, { ...baseline, [key]: value }, { baseFixture: true });
+        assert.equal(run.status, 1, `${event} ${key}=${value}: ${run.stdout}${run.stderr}`);
+        assert.match(run.stdout, /walking-skeleton: FAIL \(App minimum/);
+      }
+    }
+    // A PR or push cannot use the build-only diagnostic exemption.
+    const bypass = runVerdict(t, { ...baseline, APP_TESTS: 'false', APP_TEST_STEP: 'skipped' }, { baseFixture: true });
+    assert.equal(bypass.status, 1, `${event}: diagnostic bypass`);
+  }
+});
+
+test('independent App minimum preserves trusted-base decisions for other requirements and approved skips', t => {
+  for (const key of ['CHANGES', 'LEDGER', 'PACKAGE', 'MACUI', 'UNSIGNED_BUILD']) {
+    const run = runVerdict(t, { ...allSucceeded, [key]: 'failure' }, { baseFixture: true });
+    assert.equal(run.status, 1, `${key}: ${run.stdout}${run.stderr}`);
+    assert.match(run.stdout, /walking-skeleton: FAIL/);
+    assert.doesNotMatch(run.stdout, /App minimum/);
+  }
+  const docs = { CHANGES: 'success', NATIVE: 'false', LEDGER: 'success', PACKAGE: 'skipped', MACUI: 'skipped',
+    APP_JOB: 'skipped', UNSIGNED_BUILD: '', APP_TEST_STEP: '', EVENT_NAME: 'pull_request' };
+  const skipped = runVerdict(t, docs, { baseFixture: true });
+  assert.equal(skipped.status, 0, skipped.stdout + skipped.stderr);
+  assert.match(skipped.stdout, /no native input changed; native jobs skipped/);
+  const untrustedSkip = runVerdict(t, { ...docs, LEDGER: 'failure' }, { baseFixture: true });
+  assert.equal(untrustedSkip.status, 1);
+  const diagnostic = runVerdict(t, { ...allSucceeded, EVENT_NAME: 'workflow_dispatch', APP_TESTS: 'false',
+    APP_TEST_STEP: 'skipped' }, { trustedScript: true });
+  assert.equal(diagnostic.status, 0, diagnostic.stdout + diagnostic.stderr);
+  assert.match(diagnostic.stdout, /tests not run/);
+  assert.match(diagnostic.stdout, /formal App evidence: false/);
+});
+
+test('strict fallback facts and pass or fail messages describe the App test step', t => {
+  // Dispatch reaches the fallback directly instead of the native PR/main minimum.
+  const baseline = { ...allSucceeded, EVENT_NAME: 'workflow_dispatch', APP_TESTS: 'true' };
+  const pass = runVerdict(t, baseline);
+  assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  assert.match(pass.stdout, /app-test-step=success/);
+  assert.match(pass.stdout, /walking-skeleton: PASS \(strict fallback: .*App test step succeeded/);
+  for (const step of ['failure', 'skipped', '', undefined]) {
+    const run = runVerdict(t, { ...baseline, APP_TEST_STEP: step });
+    assert.equal(run.status, 1);
+    assert.match(run.stdout, new RegExp(`app-test-step=${step || '\\(none\\)'}`));
+    assert.match(run.stdout, /walking-skeleton: FAIL \(strict fallback: .*App test step did not succeed/);
   }
 });
