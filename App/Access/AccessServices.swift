@@ -61,7 +61,7 @@ struct AccessServices: Sendable {
             trace?.record(stage, .completed)
             stage = "monitor.reauthorize"
             trace?.record(stage, .entered)
-            await monitor.reauthorize(id, explicitSelection: true)
+            await monitor.reauthorize(id, explicitSelection: true, trace: trace)
             trace?.record(stage, .completed)
             let target = folder.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
             stage = "recents"

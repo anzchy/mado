@@ -106,7 +106,18 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Tests swap the folder lister; the controller still builds and observes its own coordinators.
     var folderScanningOverride: (any FolderScanning)?
     var folderOpenStageObserver: (@Sendable (FolderOpenStageEvent) -> Void)?
-    /// Optional scheduling probe before recovery metadata I/O; normal opening installs none.
+    private var folderOpenLifecycleTrace: FolderOpenStageRecorder?
+    private var folderOpenActiveTrace: FolderOpenStageRecorder?
+    private var folderOpenDiagnostics: FolderOpenStageRecorder? {
+        guard folderOpenLifecycleTrace != nil, let own = folderOpenActiveTrace ?? folderOpenLifecycleTrace else { return nil }
+        if let context = FolderOpenStageRecorder.synchronousContext, context.controllerID == own.controllerID { return context }
+        return own
+    }
+    func diagnosticSynchronous<T>(_ stage: String, _ body: () throws -> T) rethrows -> T {
+        guard let trace = folderOpenDiagnostics else { return try body() }
+        return try trace.synchronous(stage, body)
+    }
+    /// Test hook before recovery metadata I/O; nil in production.
     var recoveryCaptureWillBegin: (@MainActor (URL) async -> Void)?
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
@@ -120,6 +131,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         gridShell.readingFolderURL = folder
     }
     func completeGridDisplay(_ snapshot: FolderSnapshot, currentItemID: ItemID?, offset: NSPoint?) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("completeGridDisplay.sync")
+        defer { diagnosticSpan?.finish() }
         guard waitingAccessPosition == nil, scanReadContext?.permit.isCurrent != false else { return }
         setReadingFolderOwner(nil)
         searchProjection.cancel()
@@ -190,7 +203,13 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     func memoryPressure(_ active: Bool) { gridView.setMemoryPressure(active) }
 
     init(pipeline: any ImagePipeline, preferencesStore: any DisplayPreferencesStore, accessServices: Task<AccessServices, Error>,
-         motionPolicy: MotionPolicy, inspectorReader: (any InspectorMetadataReading)? = nil) {
+         motionPolicy: MotionPolicy, inspectorReader: (any InspectorMetadataReading)? = nil,
+         folderOpenDiagnosticObserver: (@Sendable (FolderOpenStageEvent) -> Void)? = nil) {
+        let lifecycleTrace = folderOpenDiagnosticObserver.map { FolderOpenStageRecorder(observer: $0, extended: true) }
+        let constructionSpan = lifecycleTrace?.beginSynchronous("controller.init")
+        defer { constructionSpan?.finish() }
+        self.folderOpenLifecycleTrace = lifecycleTrace
+        self.folderOpenStageObserver = folderOpenDiagnosticObserver
         self.pipeline = pipeline
         self.accessServices = accessServices
         session = ViewerSession(preferencesStore: preferencesStore, imageLoader: ViewerImageLoader(trace: NativeFirstPreviewTrace(), presentation: pipeline as? any ImagePresentationPinning))
@@ -404,43 +423,66 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func observeAccessMotionPolicy() {
+        let callbackTrace = folderOpenDiagnostics
         withObservationTracking {
             lostAccessView.reduceMotion = motionPolicy.reduceMotion
         } onChange: { [weak self] in
-            Task { @MainActor [weak self] in self?.observeAccessMotionPolicy() }
+            let job = callbackTrace?.queuedJob("motion.observation.task")
+            Task { @MainActor [weak self] in
+                job?.entered(); defer { job?.finished() }
+                if let job { job.synchronous("motion.observation.apply") { self?.observeAccessMotionPolicy() } }
+                else { self?.observeAccessMotionPolicy() }
+            }
         }
     }
 
     private func attachAccessMonitor() {
         guard accessObserver == nil, accessAttachmentTask == nil else { return }
         let attachment = accessAttachmentGeneration
+        let job = folderOpenDiagnostics?.queuedJob("accessAttachment.task")
         accessAttachmentTask = Task { @MainActor [weak self, accessServices] in
-            guard let services = try? await accessServices.value, let self,
+            job?.entered(); defer { job?.finished() }
+            let loaded: AccessServices?
+            if let job { loaded = try? await job.waiting("accessAttachment.services") { try await accessServices.value } }
+            else { loaded = try? await accessServices.value }
+            guard let services = loaded, let self,
                   !Task.isCancelled, self.accessAttachmentGeneration == attachment else { return }
             let monitor = services.monitor
-            self.bindAccessMonitor(monitor)
-            await monitor.start()
+            if let job { job.synchronous("accessAttachment.bind") { self.bindAccessMonitor(monitor) } }
+            else { self.bindAccessMonitor(monitor) }
+            if let job { await job.waiting("accessAttachment.monitorStart") { await monitor.start(trace: job) } }
+            else { await monitor.start() }
             guard !Task.isCancelled, self.accessAttachmentGeneration == attachment else { return }
             self.accessAttachmentTask = nil
-            self.applyCurrentAccessState()
+            if let job { job.synchronous("accessAttachment.apply") { self.applyCurrentAccessState() } }
+            else { self.applyCurrentAccessState() }
         }
     }
     private func bindAccessMonitor(_ monitor: AccessMonitor) {
         guard accessObserver == nil else { return }
         accessMonitor = monitor
+        let callbackTrace = folderOpenDiagnostics
         accessObserver = monitor.state.observe { [weak self] change in
             guard let self else { return }
-            switch change {
-            case .lost(let id, let counter): self.handleAccessLoss(id, counter: counter)
-            case .recovered(let id, let counter): self.recoverWaitingAccess(id, counter: counter)
+            let apply = {
+                switch change {
+                case .lost(let id, let counter): self.handleAccessLoss(id, counter: counter)
+                case .recovered(let id, let counter): self.recoverWaitingAccess(id, counter: counter)
+                }
             }
+            if let callbackTrace { callbackTrace.synchronous("access.state.callback", apply) }
+            else { apply() }
         }
         accessReadinessObserver = monitor.observeReadiness { [weak self] id in
+            let span = callbackTrace?.beginSynchronous("access.readiness.callback")
+            defer { span?.finish() }
             guard let self, let counter = self.accessMonitor?.state.snapshot(for: id)?.counter else { return }
             self.recoverWaitingAccess(id, counter: counter)
         }
     }
     private func applyCurrentAccessState() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("applyCurrentAccessState.sync")
+        defer { diagnosticSpan?.finish() }
         guard let root = gridFolderRoot ?? presentationRootID,
               let snapshot = accessMonitor?.state.snapshot(for: root),
               case .lost = snapshot.availability else { return }
@@ -462,6 +504,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
     private func handleAccessLoss(_ rootID: AccessRootID, counter: UInt64,
                                   initialPosition: WaitingAccessPosition? = nil) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("handleAccessLoss.sync")
+        defer { diagnosticSpan?.finish() }
         guard gridFolderRoot == rootID || presentationRootID == rootID || waitingAccessPosition?.rootID == rootID else { return }
         if undoRebindBusy, reboundLocation?.result.rootID == rootID {
             canvas.showFailure()
@@ -546,6 +590,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         showWaitingAccessState()
     }
     func showWaitingAccessState() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("showWaitingAccessState.sync")
+        defer { diagnosticSpan?.finish() }
         guard let position = waitingAccessPosition else { return }
         setReadingFolderOwner(nil)
         presentation.showGrid(reading: true)
@@ -1373,6 +1419,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("windowWillClose.sync")
+        defer { diagnosticSpan?.finish() }
         setReadingFolderOwner(nil)
         dismissRebindStrip(force: true)
         accessAttachmentGeneration = UUID()
@@ -1422,14 +1470,28 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
 
     func refreshRecents() {
         let operation = accessIntent.current
+        let job = folderOpenDiagnostics?.queuedJob("recents.task")
         Task { [weak self] in
+            job?.entered(); defer { job?.finished() }
             guard let self else { return }
             do {
-                let services = try await operation.wait { try await accessServices.value }
-                let folders = try await operation.wait { try await services.recent.load() }
-                onRecentsChanged?(folders)
-                latestRecents = folders
-                updateEmptyFolderState()
+                let services: AccessServices
+                let folders: [RecentFolder]
+                if let job {
+                    services = try await job.waiting("recents.services") { try await operation.wait { try await accessServices.value } }
+                    folders = try await job.waiting("recents.load") { try await operation.wait { try await services.recent.load() } }
+                    job.synchronous("recents.apply") {
+                        onRecentsChanged?(folders)
+                        latestRecents = folders
+                        updateEmptyFolderState()
+                    }
+                } else {
+                    services = try await operation.wait { try await accessServices.value }
+                    folders = try await operation.wait { try await services.recent.load() }
+                    onRecentsChanged?(folders)
+                    latestRecents = folders
+                    updateEmptyFolderState()
+                }
             } catch { if operation.isCurrent { showAccessError(error) } }
         }
     }
@@ -1453,7 +1515,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func openGrantedFolder(_ folder: URL) {
-        let trace = folderOpenStageObserver.map { FolderOpenStageRecorder(observer: $0) }
+        let trace = folderOpenStageObserver.map { FolderOpenStageRecorder(observer: $0,
+            controllerID: folderOpenLifecycleTrace?.controllerID ?? folderOpenActiveTrace?.controllerID,
+            extended: folderOpenLifecycleTrace != nil) }
+        folderOpenActiveTrace = trace
         trace?.record("openGrantedFolder", .entered)
         inputIntent.invalidate()
         let operation = accessIntent.begin()
@@ -1488,6 +1553,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private func openFolder(_ folder: URL, rootID: AccessRootID, currentItemID: ItemID? = nil,
                             trace: FolderOpenStageRecorder? = nil,
                             recoveryTiming: FolderRecoveryTiming = .beforeInitialScan) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("openFolder.sync")
+        defer { diagnosticSpan?.finish() }
         trace?.record("openFolder", .entered)
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
@@ -1532,7 +1599,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         refreshRecents()
         navigationTask?.cancel()
         let current = generation
+        let scanJob = trace?.queuedJob("scan.task")
         navigationTask = Task { [self] in
+            scanJob?.entered(); defer { scanJob?.finished() }
             var scanStarted = false
             var stage = "scan.services"
             do {
@@ -1619,33 +1688,49 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("loadSidebarTree.sync")
+        defer { diagnosticSpan?.finish() }
         cancelSidebarTree(preservingWatch: true)
         let generation = sidebarTreeGeneration
         gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
+        let sidebarJob = folderOpenDiagnostics?.queuedJob("sidebar.task")
         sidebarTreeTask = Task(priority: .utility) { [weak self, accessServices] in
+            sidebarJob?.entered(); defer { sidebarJob?.finished() }
             var failureContext: AccessMonitor.ReadContext?
             var monitor: AccessMonitor?
             do {
-                let services = try await accessServices.value
+                let services: AccessServices
+                if let sidebarJob { services = try await sidebarJob.waiting("sidebar.services") { try await accessServices.value } }
+                else { services = try await accessServices.value }
                 monitor = services.monitor
-                let context = try await services.monitor.readContext(for: rootID)
+                let context: AccessMonitor.ReadContext
+                if let sidebarJob { context = try await sidebarJob.waiting("sidebar.readContext") { try await services.monitor.readContext(for: rootID) } }
+                else { context = try await services.monitor.readContext(for: rootID) }
                 failureContext = context
                 try Task.checkCancellation()
                 try context.permit.check()
                 guard let self, self.sidebarTreeGeneration == generation,
                     self.gridFolderURL == folder else { return }
+                let setupSpan = sidebarJob?.beginSynchronous("sidebar.setup")
                 let browser = self.sidebarBrowserOverride ?? SidebarFolderBrowser(
                     access: services.files, enumerator: SystemSidebarFolderEnumerator())
                 let loader = SidebarFolderLoadSession(browser: browser)
                 self.sidebarLoader = loader
+                setupSpan?.finish()
+                let watchSpan = sidebarJob?.beginWait("sidebar.watchSubscribe")
+                defer { watchSpan?.finish() }
                 let watch = try await services.watch.subscribe(rootID: rootID, folder: folder,
                     recursive: true, onChange: { [weak self] in
+                        let callbackJob = sidebarJob?.queuedJob("sidebar.watchCallback.task")
                         Task { @MainActor [weak self] in
+                            callbackJob?.entered(); defer { callbackJob?.finished() }
                             guard let self, self.gridFolderURL == folder,
                                 self.sidebarWatchGeneration == generation || self.sidebarTreeGeneration == generation else { return }
-                            self.loadSidebarTree(folder, rootID: rootID, count: nil)
+                            if let callbackJob { callbackJob.synchronous("sidebar.watchCallback.apply") { self.loadSidebarTree(folder, rootID: rootID, count: nil) } }
+                            else { self.loadSidebarTree(folder, rootID: rootID, count: nil) }
                         }
                     })
+                watchSpan?.finish()
                 guard !Task.isCancelled, self.sidebarTreeGeneration == generation, context.permit.isCurrent else {
                     await watch.cancel()
                     return
@@ -1653,19 +1738,34 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 let previous = self.sidebarWatchSubscription
                 self.sidebarWatchSubscription = watch
                 self.sidebarWatchGeneration = generation
-                if let previous { Task { await previous.cancel() } }
+                if let previous {
+                    let cleanup = sidebarJob?.queuedJob("sidebar.previousWatch.cancel.task")
+                    Task {
+                        cleanup?.entered(); defer { cleanup?.finished() }
+                        if let cleanup { await cleanup.waiting("sidebar.previousWatch.cancel") { await previous.cancel() } }
+                        else { await previous.cancel() }
+                    }
+                }
+                let startSpan = sidebarJob?.beginSynchronous("sidebar.loaderStart")
+                defer { startSpan?.finish() }
                 loader.start(folder: folder, rootID: rootID, onRows: { [weak self] children, parentURL in
+                    let span = sidebarJob?.beginSynchronous("sidebar.rows.apply")
+                    defer { span?.finish() }
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
                     self.gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: self.sidebarKnownCounts[folder] ?? count),
                         parent: parentURL.map { GridSidebarFolder(url: $0, count: self.sidebarKnownCounts[$0]) },
                         children: children.map { GridSidebarFolder(url: $0) })
                 }, onCount: { [weak self] child, imageCount in
+                    let span = sidebarJob?.beginSynchronous("sidebar.count.apply")
+                    defer { span?.finish() }
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
                     self.sidebarKnownCounts[child] = imageCount
                     self.gridShell.updateFolderCount(imageCount, for: child)
                 }, onFailure: { [weak self] _ in
+                    let span = sidebarJob?.beginSynchronous("sidebar.failure.apply")
+                    defer { span?.finish() }
                     guard let self, self.sidebarTreeGeneration == generation,
                           self.gridFolderURL == folder, context.permit.isCurrent else { return }
                     Task { await services.monitor.reportReadFailure(rootID, from: context.stamp) }
@@ -1678,13 +1778,22 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         }
     }
     private func cancelSidebarTree(preservingWatch: Bool = false) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("cancelSidebarTree.sync")
+        defer { diagnosticSpan?.finish() }
         sidebarTreeGeneration = UUID()
         sidebarTreeTask?.cancel()
         sidebarTreeTask = nil
         sidebarLoader?.cancel()
         sidebarLoader = nil
         if !preservingWatch {
-            if let watch = sidebarWatchSubscription { Task { await watch.cancel() } }
+            if let watch = sidebarWatchSubscription {
+                let cleanup = folderOpenDiagnostics?.queuedJob("sidebar.watch.cancel.task")
+                Task {
+                    cleanup?.entered(); defer { cleanup?.finished() }
+                    if let cleanup { await cleanup.waiting("sidebar.watch.cancel") { await watch.cancel() } }
+                    else { await watch.cancel() }
+                }
+            }
             sidebarWatchSubscription = nil
             sidebarWatchGeneration = nil
         }
@@ -1907,6 +2016,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         presentation.showViewer()
     }
     private func layoutInspector() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("layoutInspector.sync")
+        defer { diagnosticSpan?.finish() }
         guard inspectorHost != nil else { return }
         if let width = window?.contentView?.bounds.width {
             let overlay = InspectorPanelLayout.overlaysContent(at: width)
@@ -1941,6 +2052,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         }
     }
     private func syncInspector(refresh: Bool = false) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("syncInspector.sync")
+        defer { diagnosticSpan?.finish() }
         // Passive window updates retain their origin; explicit new reads obtain the current input.
         if refresh { bindFileGrantInspectorFailure(input: inputIntent.current) }
         guard waitingAccessPosition == nil, session.inspectorFocus.isVisible else {
@@ -2000,6 +2113,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         if let window { GridWindowIdentity.showFolder(folder, in: window) }
     }
     func showGrid(reading: Bool = false) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("showGrid.sync")
+        defer { diagnosticSpan?.finish() }
         if waitingAccessPosition != nil { showWaitingAccessState(); return }
         presentation.showGrid(reading: reading)
         inspectorHost.isHidden = reading || !inspectorVisible
@@ -2046,6 +2161,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         session.setFolderConditions(FolderMenuPolicy.applying(action, to: selection).conditions)
     }
     private func showReadingState() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("showReadingState.sync")
+        defer { diagnosticSpan?.finish() }
         stateHost.display(.readingFolder)
         if let cancel = stateHost.buttons.first {
             gridShell.linkKeyViews(from: cancel)
@@ -2246,7 +2363,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         return false
     }
     func windowDidUpdate(_ notification: Notification) {
-        stateHost.refresh()
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("windowDidUpdate.sync")
+        defer { diagnosticSpan?.finish() }
+        diagnosticSynchronous("windowDidUpdate.stateHost") { stateHost.refresh() }
         if waitingAccessPosition != nil {
             stateHost.isHidden = true
             stateHost.setAccessibilityHidden(true)
@@ -2471,6 +2590,9 @@ extension CanvasWindowController: FolderScanHost {
         }
     }
     private func observeGridSnapshot(_ scan: FolderScanCoordinator) {
+        let callbackTrace = folderOpenDiagnostics
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("observeGridSnapshot.sync")
+        defer { diagnosticSpan?.finish() }
         withObservationTracking {
             gridView.setMetadataSortState(scan.metadataSortState)
             chromeOverlay.setMetadataSortState(scan.metadataSortState)
@@ -2498,13 +2620,18 @@ extension CanvasWindowController: FolderScanHost {
                 }
             }
         } onChange: { [weak self, weak scan] in
+            let job = callbackTrace?.queuedJob("grid.observation.task")
             Task { @MainActor [weak self, weak scan] in
+                job?.entered(); defer { job?.finished() }
                 guard let self, let scan, self.session.folderScan === scan else { return }
-                self.observeGridSnapshot(scan)
+                if let job { job.synchronous("grid.observation.apply") { self.observeGridSnapshot(scan) } }
+                else { self.observeGridSnapshot(scan) }
             }
         }
     }
     func applyObservedGridSnapshot(_ snapshot: FolderSnapshot) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("applyObservedGridSnapshot.sync")
+        defer { diagnosticSpan?.finish() }
         guard waitingAccessPosition == nil, scanReadContext?.permit.isCurrent != false else { return }
         // A queued callback from the previous folder must not complete a new entry while it awaits admission:
         // doing so discards Cancel Reading's restore point before the new scanner even starts (#506).
@@ -2606,6 +2733,8 @@ extension CanvasWindowController: FolderScanHost {
     }
     /// Page 22 (ADR-014) replaces the empty-folder alert once a complete scan finds no images.
     private func updateEmptyFolderState() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("updateEmptyFolderState.sync")
+        defer { diagnosticSpan?.finish() }
         gridShell.setEmptyFolderState(session.isEmptyFolder, recents: latestRecents, now: Date())
         loadViewerEmptyFolderChildren()
     }
@@ -2616,17 +2745,31 @@ extension CanvasWindowController: FolderScanHost {
               let version = session.folderScan?.sourceSnapshot?.version else { viewerEmptyFolderChildren = nil; return }
         guard viewerEmptyFolderChildren != version.folder else { return }
         viewerEmptyFolderChildren = version.folder
+        let job = folderOpenDiagnostics?.queuedJob("emptyChildren.task")
         Task { [weak self, accessServices] in
-            guard let services = try? await accessServices.value, let self else { return }
+            job?.entered(); defer { job?.finished() }
+            let loaded: AccessServices?
+            if let job { loaded = try? await job.waiting("emptyChildren.services") { try await accessServices.value } }
+            else { loaded = try? await accessServices.value }
+            guard let services = loaded, let self else { return }
             let browser = self.sidebarBrowserOverride ?? SidebarFolderBrowser(
                 access: services.files, enumerator: SystemSidebarFolderEnumerator())
             guard let children = try? await browser.children(in: version.folder, rootID: version.rootID),
                   self.gridFolderRoot == nil, self.viewerEmptyFolderChildren == version.folder else { return }
-            self.gridShell.showFolderTree(current: GridSidebarFolder(url: version.folder), parent: nil,
-                                          children: children.map { GridSidebarFolder(url: $0) })
+            if let job {
+                job.synchronous("emptyChildren.apply") {
+                    self.gridShell.showFolderTree(current: GridSidebarFolder(url: version.folder), parent: nil,
+                        children: children.map { GridSidebarFolder(url: $0) })
+                }
+            } else {
+                self.gridShell.showFolderTree(current: GridSidebarFolder(url: version.folder), parent: nil,
+                    children: children.map { GridSidebarFolder(url: $0) })
+            }
         }
     }
     func folderScanDidComplete(count: Int) {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("folderScanDidComplete.sync")
+        defer { diagnosticSpan?.finish() }
         // A previous scan can finish while a new entry is awaiting admission. Its terminal
         // callback does not own the incoming folder's already-visible Reading State.
         if !awaitingFolderReadStart { setReadingFolderOwner(nil) }
@@ -2635,6 +2778,8 @@ extension CanvasWindowController: FolderScanHost {
         gridShell.setReadFailedStatus(false)
     }
     func folderScanDidStart() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("folderScanDidStart.sync")
+        defer { diagnosticSpan?.finish() }
         if session.folderScan?.isReadingFolder == true, waitingAccessPosition == nil,
            let folder = readingFolderOwner ?? gridFolderURL ?? session.folderScan?.sourceSnapshot?.version.folder {
             // Entry retains its accepted folder; a same-folder rescan or Retry rebinds it.
@@ -2663,6 +2808,8 @@ extension CanvasWindowController: FolderScanHost {
         showReadingState()
     }
     func folderScanDidEnd() {
+        let diagnosticSpan = folderOpenDiagnostics?.beginSynchronous("folderScanDidEnd.sync")
+        defer { diagnosticSpan?.finish() }
         // Replacing the previous coordinator generation also sends an end callback before
         // the incoming read starts. Preserve that pending owner until start or cancellation.
         if !awaitingFolderReadStart { setReadingFolderOwner(nil) }

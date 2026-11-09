@@ -111,7 +111,7 @@ func issue600RejectedOpenReportsCompletedGrantAndReason() async throws {
     #expect(try await rig.services.recent.load().first?.url == rig.folder)
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue600SuccessfulTraceIsOrderedAndDefaultStillScans() async throws {
     var results: [Set<String>] = []
     for recording in [true, false] {
@@ -132,7 +132,7 @@ func issue600SuccessfulTraceIsOrderedAndDefaultStillScans() async throws {
         }
         let before = ContinuousClock.now
         controller.openGrantedFolder(rig.folder)
-        if recording { await recovered.wait() }
+        if recording { try await wait600Signal(recovered) }
         try await wait600 { controller.gridSearchAvailable && controller.session.folderScan?.sourceSnapshot?.isComplete == true }
         let after = ContinuousClock.now
         let scan = controller.session.folderScan
@@ -200,7 +200,7 @@ func issue600SupersededOpeningKeepsItsCapturedObserver() async throws {
 // #600: the scheduling gate delays optional metadata without blocking FileAccess's
 // actor. Gate entry is the deterministic observation point: the real initial
 // scan must already have completed, with no polling or sleep to induce the stall.
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue600HeldRecoveryCaptureStillCompletesInitialGrid() async throws {
     let rig = try FolderOpen600Rig()
     defer { rig.remove() }
@@ -217,7 +217,7 @@ func issue600HeldRecoveryCaptureStillCompletesInitialGrid() async throws {
         if event.stage == "recovery", event.outcome == .completed { Task { await settled.signal() } }
     }
     controller.openGrantedFolder(link)
-    await gate.entered.wait()
+    try await wait600Signal(gate.entered)
     let scan = controller.session.folderScan
     #expect(scan?.sourceSnapshot?.isComplete == true)
     #expect(scan?.isScanning == false)
@@ -227,13 +227,13 @@ func issue600HeldRecoveryCaptureStillCompletesInitialGrid() async throws {
     #expect(try await rig.services.recent.load().first?.url == rig.folder)
     #expect(controller.folderRecoveryReference == nil)
     gate.release()
-    await settled.wait()
+    try await wait600Signal(settled)
     #expect(controller.folderRecoveryReference?.folderURL == rig.folder)
     #expect(controller.session.folderScan?.sourceSnapshot?.isComplete == true)
     #expect(controller.gridSearchAvailable)
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue600SupersededRecoveryCannotPublishOldFolder() async throws {
     let rig = try FolderOpen600Rig()
     defer { rig.remove() }
@@ -251,18 +251,18 @@ func issue600SupersededRecoveryCannotPublishOldFolder() async throws {
         if event.stage == "recovery", event.outcome == .completed { Task { await oldSettled.signal() } }
     }
     controller.openGrantedFolder(rig.folder)
-    await gate.entered.wait()
+    try await wait600Signal(gate.entered)
     controller.recoveryCaptureWillBegin = nil
     controller.folderOpenStageObserver = { event in
         if event.stage == "recovery", event.outcome == .completed { Task { await latestSettled.signal() } }
     }
     controller.openGrantedFolder(second)
-    await latestSettled.wait()
+    try await wait600Signal(latestSettled)
     let latestReference = controller.folderRecoveryReference
     #expect(latestReference?.folderURL == second)
     #expect(controller.session.folderScan?.sourceSnapshot?.isComplete == true)
     gate.release()
-    await oldSettled.wait()
+    try await wait600Signal(oldSettled)
     #expect(controller.folderRecoveryReference?.rootID == latestReference?.rootID)
     #expect(controller.folderRecoveryReference?.folderURL == latestReference?.folderURL)
     #expect(controller.folderRecoveryReference?.folderIdentity == latestReference?.folderIdentity)
@@ -280,7 +280,7 @@ func issue600SupersededRecoveryCannotPublishOldFolder() async throws {
     #expect(controller.waitingAccessPosition?.folderURL == second)
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue600ClosedWindowRejectsDelayedRecoveryPublication() async throws {
     let rig = try FolderOpen600Rig()
     defer { rig.remove() }
@@ -295,12 +295,12 @@ func issue600ClosedWindowRejectsDelayedRecoveryPublication() async throws {
         if event.stage == "recovery", event.outcome == .completed { Task { await settled.signal() } }
     }
     controller.openGrantedFolder(rig.folder)
-    await gate.entered.wait()
+    try await wait600Signal(gate.entered)
     #expect(controller.session.folderScan?.sourceSnapshot?.isComplete == true)
     let grid = try grid600(controller)
     window.close()
     gate.release()
-    await settled.wait()
+    try await wait600Signal(settled)
     #expect(!window.isVisible)
     // Base 58df8a93 retains the stopped coordinator and derived search flag.
     // Assert the rendered presentation is revoked rather than object disposal.
@@ -311,7 +311,7 @@ func issue600ClosedWindowRejectsDelayedRecoveryPublication() async throws {
     #expect(controller.folderRecoveryReference == nil)
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue600AccessLossRejectsDelayedRecoveryPublication() async throws {
     let rig = try FolderOpen600Rig()
     defer { rig.remove() }
@@ -326,7 +326,7 @@ func issue600AccessLossRejectsDelayedRecoveryPublication() async throws {
         if event.stage == "recovery", event.outcome == .completed { Task { await settled.signal() } }
     }
     controller.openGrantedFolder(rig.folder)
-    await gate.entered.wait()
+    try await wait600Signal(gate.entered)
     #expect(controller.session.folderScan?.sourceSnapshot?.isComplete == true)
     let root = try #require(await rig.services.files.records().first?.id)
     rig.services.monitor.restoreLostRoot(root, volumeUUID: nil, cause: .notFound)
@@ -334,7 +334,7 @@ func issue600AccessLossRejectsDelayedRecoveryPublication() async throws {
     #expect(controller.waitingAccessPosition?.folderURL == rig.folder)
     #expect(controller.waitingAccessPosition?.folderReference == nil)
     gate.release()
-    await settled.wait()
+    try await wait600Signal(settled)
     #expect(controller.waitingAccessPosition?.rootID == root)
     #expect(controller.waitingAccessPosition?.counter == counter)
     #expect(controller.waitingAccessPosition?.folderReference == nil)
@@ -509,4 +509,96 @@ func issue600AuthorizedOpeningCapturesRecoveryBeforeGridReadiness() async throws
         #expect(controller.folderRecoveryReference?.rootID == root)
         #expect(Set(controller.session.folderScan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == Set(["0.png", "1.png", "2.png"]))
     }
+}
+
+private func assert600DiagnosticSpans(_ events: [FolderOpenStageEvent]) {
+    let spans = Dictionary(grouping: events.filter { $0.kind == .synchronous }, by: { $0.spanID })
+    #expect(!spans.isEmpty)
+    for (_, span) in spans {
+        #expect(span.first?.spanID != nil)
+        #expect(span.filter { $0.outcome == .entered }.count == 1)
+        #expect(span.filter { $0.outcome == .completed || $0.outcome == .rejected }.count == 1)
+        if let first = span.first, let last = span.last { #expect(first.instant <= last.instant) }
+    }
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600DiagnosticJobsAndSynchronousSpansPreserveOutput() async throws {
+    var results: [Set<String>] = []
+    for observing in [false, true] {
+        let rig = try FolderOpen600Rig(); defer { rig.remove() }
+        let captured = FolderOpen600Events()
+        let observer: (@Sendable (FolderOpenStageEvent) -> Void)? = observing ? { @Sendable event in captured.append(event) } : nil
+        let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+            accessServices: Task { rig.services }, motionPolicy: MotionPolicy(source: FolderOpen600Motion()),
+            folderOpenDiagnosticObserver: observer)
+        let window = try #require(controller.window); defer { window.close() }
+        controller.openGrantedFolder(rig.folder)
+        try await wait600 { controller.gridSearchAvailable && controller.session.folderScan?.sourceSnapshot?.isComplete == true && controller.session.folderScan?.isScanning == false }
+        let scan = controller.session.folderScan
+        #expect(scan?.sourceSnapshot?.isComplete == true)
+        #expect(scan?.isScanning == false)
+        #expect(controller.gridSearchAvailable)
+        #expect(window.title == rig.folder.lastPathComponent)
+        #expect(window.attachedSheet == nil)
+        #expect(try await rig.services.recent.load().first?.url == rig.folder)
+        results.append(Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []))
+        window.close()
+        let events = captured.events.sorted { $0.instant < $1.instant }
+        if observing {
+            for stage in ["scan.task", "recents.task", "sidebar.task", "accessAttachment.task"] {
+                let queued = events.filter { $0.kind == .job && $0.stage == stage && $0.outcome == .queued }
+                #expect(!queued.isEmpty, "Missing queued job \(stage)")
+                for entry in queued {
+                    #expect(entry.jobID != nil)
+                    let started = events.first { $0.kind == .job && $0.jobID == entry.jobID && $0.outcome == .entered }
+                    #expect(started != nil)
+                    if let started { #expect(entry.instant <= started.instant) }
+                }
+            }
+            assert600DiagnosticSpans(events)
+            #expect(Set(events.map(\.controllerID)).count == 1)
+            #expect(events.filter { $0.kind == .synchronous }.allSatisfy { $0.isMainThread })
+        } else { #expect(events.isEmpty) }
+    }
+    #expect(results == [Set(["0.png", "1.png", "2.png"]), Set(["0.png", "1.png", "2.png"])])
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600DiagnosticPriorControllerWaitKeepsCapturedAttribution() async throws {
+    let firstRig = try FolderOpen600Rig(), latestRig = try FolderOpen600Rig()
+    defer { firstRig.remove(); latestRig.remove() }
+    let shared = FolderOpen600Events(), replaced = FolderOpen600Events()
+    var release: CheckedContinuation<AccessServices, Never>?
+    let services = Task<AccessServices, any Error> { await withCheckedContinuation { release = $0 } }
+    let first = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+        accessServices: services, motionPolicy: MotionPolicy(source: FolderOpen600Motion()),
+        folderOpenDiagnosticObserver: { shared.append($0) })
+    let firstWindow = try #require(first.window); defer { firstWindow.close(); release?.resume(returning: firstRig.services); release = nil }
+    try await wait600 { release != nil && shared.events.contains { $0.kind == .wait && $0.outcome == .entered } }
+    #expect(release != nil)
+    let firstIDs = Set(shared.events.map(\.controllerID))
+    #expect(firstIDs.count == 1)
+    let pending = shared.events
+    let openSync = Dictionary(grouping: pending.filter { $0.kind == .synchronous }, by: { $0.spanID })
+    #expect(openSync.values.allSatisfy { span in span.filter { $0.outcome == .entered }.count == span.filter { $0.outcome == .completed || $0.outcome == .rejected }.count })
+    first.folderOpenStageObserver = { replaced.append($0) }
+    firstWindow.close()
+    let latest = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+        accessServices: Task { latestRig.services }, motionPolicy: MotionPolicy(source: FolderOpen600Motion()),
+        folderOpenDiagnosticObserver: { shared.append($0) })
+    let latestWindow = try #require(latest.window); defer { latestWindow.close() }
+    latest.openGrantedFolder(latestRig.folder)
+    try await wait600 { latest.gridSearchAvailable && latest.session.folderScan?.sourceSnapshot?.isComplete == true }
+    release?.resume(returning: firstRig.services); release = nil
+    try await wait600 { shared.events.contains { firstIDs.contains($0.controllerID) && $0.kind == .job && $0.stage == "accessAttachment.task" && $0.outcome == .completed } }
+    #expect(!firstWindow.isVisible)
+    #expect(first.folderRecoveryReference == nil)
+    #expect(latest.gridSearchAvailable)
+    #expect(Set(latest.session.folderScan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == Set(["0.png", "1.png", "2.png"]))
+    #expect(latestWindow.title == latestRig.folder.lastPathComponent)
+    #expect(replaced.events.isEmpty)
+    #expect(Set(shared.events.map(\.controllerID)).count == 2)
+    #expect(shared.events.contains { firstIDs.contains($0.controllerID) && $0.kind == .job && $0.outcome == .completed })
+    assert600DiagnosticSpans(shared.events)
 }

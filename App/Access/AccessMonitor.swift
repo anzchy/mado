@@ -93,11 +93,25 @@ private final class AccessMonitorNotification: @unchecked Sendable {
     }
     deinit { events?.cancel() }
 
-    func start() async {
+    func start(trace: FolderOpenStageRecorder? = nil) async {
         if let startup { await startup.value; return }
+        let job = trace?.queuedJob("monitor.startup.task")
         let task = Task { @MainActor [weak self] in
+            job?.entered(); defer { job?.finished() }
             guard let self else { return }
-            let port = mounts ?? SystemDiskMountPort(diagnostics: files.diagnostics)
+            let port: any DiskMountPort
+            if let mounts { port = mounts }
+            else if let job {
+                port = job.synchronous("monitor.mountPort.init") {
+                    SystemDiskMountPort(mountedVolumes: {
+                        job.synchronous("monitor.systemMountedVolumes.provider") {
+                            // Keep the native provider identical to DiskMountPort.swift's default.
+                            AccessProbeFactGatherer.mountedVolumes(at: FileManager.default.mountedVolumeURLs(
+                                includingResourceValuesForKeys: [.volumeUUIDStringKey, .volumeNameKey, .volumeURLKey], options: []))
+                        }
+                    }, diagnostics: files.diagnostics)
+                }
+            } else { port = SystemDiskMountPort(diagnostics: files.diagnostics) }
             self.port = port
             diagnosticObservation = state.observe { [weak self] change in
                 guard let self, case .lost(let id, let counter) = change,
@@ -105,12 +119,17 @@ private final class AccessMonitorNotification: @unchecked Sendable {
                       case .lost(let cause) = snapshot.availability else { return }
                 files.diagnostics.emit("AccessRootLost root=\(id.rawValue.uuidString) counter=\(counter) cause=\(String(describing: cause)) volume=\(snapshot.volumeUUID ?? "unknown")")
             }
-            let stream = await port.events()
+            let stream: AsyncStream<DiskMountEvent>
+            if let job { stream = await job.waiting("monitor.events.subscribe") { await port.events() } }
+            else { stream = await port.events() }
+            let eventsJob = job?.queuedJob("monitor.events.task")
             events = Task { @MainActor [weak self] in
+                eventsJob?.entered(); defer { eventsJob?.finished() }
                 defer { (port as? SystemDiskMountPort)?.stop() }
                 for await event in stream {
                     guard !Task.isCancelled else { break }
-                    self?.receive(event)
+                    if let eventsJob { eventsJob.synchronous("monitor.event.apply") { self?.receive(event) } }
+                    else { self?.receive(event) }
                 }
             }
             // Subscribe before enumerating roots. The latest event map also covers
@@ -118,10 +137,18 @@ private final class AccessMonitorNotification: @unchecked Sendable {
             for record in await files.records() { await registerEntry(record.id) }
             notifications = [
                 AccessMonitorNotification(center: .default, name: NSApplication.didBecomeActiveNotification) { [weak self] _ in
-                    Task { @MainActor [weak self] in self?.requestRecheck() }
+                    let callbackJob = job?.queuedJob("monitor.activation.task")
+                    Task { @MainActor [weak self] in
+                        callbackJob?.entered(); defer { callbackJob?.finished() }
+                        self?.requestRecheck(trace: callbackJob)
+                    }
                 },
                 AccessMonitorNotification(center: NSWorkspace.shared.notificationCenter, name: NSWorkspace.didWakeNotification) { [weak self] _ in
-                    Task { @MainActor [weak self] in self?.requestRecheck() }
+                    let callbackJob = job?.queuedJob("monitor.wake.task")
+                    Task { @MainActor [weak self] in
+                        callbackJob?.entered(); defer { callbackJob?.finished() }
+                        self?.requestRecheck(trace: callbackJob)
+                    }
                 }
             ]
         }
@@ -178,7 +205,8 @@ private final class AccessMonitorNotification: @unchecked Sendable {
             }
         }
     }
-    func reauthorize(_ id: AccessRootID, explicitSelection: Bool = false, preservingReadableAuthority: Bool = false) async {
+    func reauthorize(_ id: AccessRootID, explicitSelection: Bool = false, preservingReadableAuthority: Bool = false,
+                     trace: FolderOpenStageRecorder? = nil) async {
         trackedRoots.insert(id)
         cancelRecovery(id)
         let request = UUID()
@@ -186,7 +214,7 @@ private final class AccessMonitorNotification: @unchecked Sendable {
         defer {
             if reauthorizationRequests[id] == request { reauthorizationRequests.removeValue(forKey: id) }
         }
-        await start()
+        await start(trace: trace)
         guard reauthorizationRequests[id] == request else { return }
         guard let grant = await files.savedGrantSnapshot(id) else {
             guard reauthorizationRequests[id] == request else { return }
@@ -402,14 +430,16 @@ private final class AccessMonitorNotification: @unchecked Sendable {
         return mounted.contains { $0.uuid == uuid }
     }
     /// Repeated activation or wake while a recheck runs joins that recheck.
-    private func requestRecheck() {
+    private func requestRecheck(trace: FolderOpenStageRecorder? = nil) {
         guard recheck == nil else { return }
+        let job = trace?.queuedJob("monitor.recheck.task")
         recheck = Task { @MainActor [weak self] in
-            await self?.recheckRoots()
+            job?.entered(); defer { job?.finished() }
+            await self?.recheckRoots(trace: job)
             self?.recheck = nil
         }
     }
-    private func recheckRoots() async {
+    private func recheckRoots(trace: FolderOpenStageRecorder? = nil) async {
         for record in await files.records() {
             guard !Task.isCancelled else { return }
             await registerEntry(record.id)
@@ -417,6 +447,8 @@ private final class AccessMonitorNotification: @unchecked Sendable {
                 await reportReadFailure(record.id, from: state.stamp(for: record.id))
                 guard !Task.isCancelled else { return }
                 if state.snapshot(for: record.id)?.availability == .readable {
+                    let span = trace?.beginSynchronous("monitor.readiness.publish")
+                    defer { span?.finish() }
                     for observer in Array(readinessObservers.values) { observer(record.id) }
                 }
             } else {

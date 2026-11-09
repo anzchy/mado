@@ -13,6 +13,19 @@ private final class Alias507Events: @unchecked Sendable {
 }
 
 
+private final class Alias507Timeline: @unchecked Sendable {
+    private let origin = ContinuousClock.now
+    private let lock = NSLock()
+    private var captured: [(String, FolderOpenStageEvent)] = []
+    func append(_ label: String, _ event: FolderOpenStageEvent) { lock.withLock { captured.append((label, event)) } }
+    func report() -> String {
+        let events = lock.withLock { captured }.sorted { $0.1.instant < $1.1.instant }
+        return events.map { label, event in
+            "shared=+\(origin.duration(to: event.instant)) path=\(label) \(event.description)"
+        }.joined(separator: "\n")
+    }
+}
+
 private struct Alias507SystemAccess: SecurityScope, BookmarkCoding {
     let events: Alias507Events
     let system = SystemSecurityScope()
@@ -97,6 +110,8 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     } catch {
         print("[i507] Finder alias fixture unavailable: \(error)")
     }
+    let timeline = Alias507Timeline()
+    defer { print("[i507.shared-timeline] \(timeline.report())") }
     for (index, path) in paths.enumerated() {
         let events = Alias507Events()
         let adapter = Alias507SystemAccess(events: events)
@@ -105,19 +120,25 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         let services = AccessServices(files: access,
             recent: RecentFolderStore(url: base.appendingPathComponent("recent-\(index).json")),
             browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+        let stages = FolderOpen600Events()
+        let label = "\(path.0),legacy=\(legacyScanner)"
+        let observer: @Sendable (FolderOpenStageEvent) -> Void = { event in
+            if event.kind == .stage { stages.append(event) }
+            timeline.append(label, event)
+        }
         let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
-            accessServices: Task { services }, motionPolicy: MotionPolicy(source: Alias507Motion()))
+            accessServices: Task { services }, motionPolicy: MotionPolicy(source: Alias507Motion()),
+            folderOpenDiagnosticObserver: observer)
         let scanner = Alias507Scanner(legacy: legacyScanner)
         controller.folderScanningOverride = scanner
-        let stages = FolderOpen600Events()
-        controller.folderOpenStageObserver = { stages.append($0) }
+        controller.folderOpenStageObserver = observer
         let window = try #require(controller.window)
         controller.openGrantedFolder(path.1)
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         while ContinuousClock.now < deadline && !Task.isCancelled {
             if controller.session.folderScan?.sourceSnapshot?.isComplete == true,
                controller.session.folderScan?.isScanning == false, controller.gridSearchAvailable { break }
-            window.update()
+            controller.diagnosticSynchronous("test.window.update") { window.update() }
             try await Task.sleep(for: .milliseconds(5))
         }
         let scan = controller.session.folderScan
@@ -133,7 +154,7 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         let recent = try await services.recent.load()
         #expect(recent.first?.displayName == path.1.standardizedFileURL.resolvingSymlinksInPath().lastPathComponent, "\(diagnostic)")
         #expect(Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == Set(["0.png", "1.png", "2.png"]), "\(diagnostic)")
-        window.close()
+        controller.diagnosticSynchronous("test.window.close") { window.close() }
     }
 }
 
