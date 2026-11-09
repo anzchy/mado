@@ -364,7 +364,7 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
-export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
+function runAppLaneBody({ spawn = spawnSync, env = process.env, argv = [], recordAttempt = () => {},
   evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile, bundlePath = bundle, stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
   const filter = argv[0] ?? env.PICSEE_APP_FILTER;
   let expression;
@@ -404,6 +404,7 @@ export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
   for (const entry of knownFlaky)
     stdout(`app-lane known-flaky test=${entry.name} issue=#${entry.issue}\n`);
   const execute = () => {
+    recordAttempt();
     const run = nativeSpawn(env, spawn, selection?.retained.map(row => row.id) ?? null, bundlePath);
     stdout(run.stdout ?? ''); stderr(run.stderr ?? '');
     return { run, parsed: parseAppResult(run, selection) };
@@ -436,5 +437,31 @@ export function runAppLane({ spawn = spawnSync, env = process.env, argv = [],
     stdout(`\n${diagnostic}Tests run: ${final.count}, Failures: ${final.failed}, Errors: 0, Skipped: ${final.skipped}\n`);
   }
   return final.status;
+}
+/** Optional current-run machine evidence. Initialize before argument/quarantine
+ * validation so an early return cannot reuse an earlier successful result. */
+export function runAppLane(options = {}) {
+  const env = options.env ?? process.env;
+  const destination = env.PICSEE_APP_RESULT_PATH;
+  if (!destination) return runAppLaneBody(options);
+  const record = { version: 1, runId: env.PICSEE_APP_RESULT_ID ?? '', complete: false,
+    attempts: 0, status: null, filter: options.argv?.[0] ?? env.PICSEE_APP_FILTER ?? null,
+    retryEnabled: env.PICSEE_APP_LANE_NO_RETRY !== '1',
+    defaultQuarantine: path.resolve(options.quarantinePath ?? quarantineFile) === path.resolve(quarantineFile) };
+  const save = () => {
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(destination, JSON.stringify(record) + '\n');
+  };
+  const errorOut = options.stderr ?? (text => process.stderr.write(text));
+  try { save(); }
+  catch (error) { errorOut(`app-lane: cannot initialize structured result evidence: ${error.message}\n`); return 70; }
+  let status;
+  try { status = runAppLaneBody({ ...options, recordAttempt: () => { record.attempts++; } }); }
+  catch (error) { errorOut(`app-lane: process execution failed: ${error.message}\n`); status = 70; }
+  record.complete = true;
+  record.status = status;
+  try { save(); }
+  catch (error) { errorOut(`app-lane: cannot finalize structured result evidence: ${error.message}\n`); return 70; }
+  return status;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runAppLane({ argv: process.argv.slice(2) });
