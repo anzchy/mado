@@ -12,7 +12,7 @@ struct SecurityScopedBookmarkCreation: Sendable {
     }
 
     func create(for url: URL, keys: Set<URLResourceKey>?) throws -> Data {
-        try bookmarkData(url, [.withSecurityScope], keys)
+        try bookmarkData(url, [.withSecurityScope, .securityScopeAllowOnlyReadAccess], keys)
     }
 }
 
