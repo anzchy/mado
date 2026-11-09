@@ -145,7 +145,39 @@ const goodInfo = {
   SUPublicEDKey: "XaqePs6p9CwP2w+sJAC+eAKcExNITNS9W54AtIZGpSs=",
   SUEnableSystemProfiling: false,
   SUEnableInstallerLauncherService: true,
+  MadoDisableUpdates: "NO",
 };
+
+const issue611ReleaseInfo = {
+  ...goodInfo,
+  CFBundleIdentifier: "io.github.anzchy.mado",
+  SUFeedURL: "https://raw.githubusercontent.com/anzchy/mado/main/appcast-mado.xml",
+};
+
+test("#611 checkInfo accepts the exact Release MadoDisableUpdates string NO", () => {
+  assert.deepEqual(checkInfo(issue611ReleaseInfo), []);
+});
+
+for (const [label, value] of [
+  ["Debug YES", "YES"],
+  ["unexpanded build setting", "$(MADO_DISABLE_UPDATES)"],
+  ["missing key", undefined],
+  ["Boolean false", false],
+  ["Boolean true", true],
+  ["empty string", ""],
+  ["lowercase no", "no"],
+  ["padded NO", " NO "],
+  ["numeric zero", 0],
+  ["null", null],
+]) {
+  test(`#611 checkInfo rejects MadoDisableUpdates ${label}`, () => {
+    const info = { ...issue611ReleaseInfo, MadoDisableUpdates: value };
+    if (value === undefined) delete info.MadoDisableUpdates;
+    const problems = checkInfo(info);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], /MadoDisableUpdates.*#611/);
+  });
+}
 
 test("checkInfo accepts the shipped Sparkle settings and expected versions", () => {
   assert.deepEqual(checkInfo(goodInfo, { expectedName: "Picsee", version: "0.0.1", build: "312" }), []);
