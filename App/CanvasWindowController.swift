@@ -105,6 +105,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var sidebarBrowserOverride: SidebarFolderBrowser?
     /// Tests swap the folder lister; the controller still builds and observes its own coordinators.
     var folderScanningOverride: (any FolderScanning)?
+    var folderOpenStageObserver: (@Sendable (FolderOpenStageEvent) -> Void)?
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     private var sidebarKnownCounts: [URL: Int] = [:]
@@ -1447,23 +1448,39 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func openGrantedFolder(_ folder: URL) {
+        let trace = folderOpenStageObserver.map { FolderOpenStageRecorder(observer: $0) }
+        trace?.record("openGrantedFolder", .entered)
         inputIntent.invalidate()
         let operation = accessIntent.begin()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         navigationTask?.cancel()
         navigationTask = Task { [self] in
+            var stage = "services"
             do {
+                trace?.record(stage, .entered)
                 let services = try await operation.wait { try await accessServices.value }
-                let id = try await operation.wait { try await services.grant(folder) }
+                trace?.record(stage, .completed)
+                stage = "grant"
+                trace?.record(stage, .entered)
+                let id = try await operation.wait { try await services.grant(folder, trace: trace) }
+                trace?.record(stage, .completed)
                 refreshRecents()
+                stage = "grant.operationCheck"
                 try operation.check()
-                openFolder(folder, rootID: id)
-            } catch { if operation.isCurrent { showAccessError(error) } }
+                trace?.record(stage, .completed)
+                openFolder(folder, rootID: id, trace: trace)
+            } catch {
+                trace?.record(stage, .rejected, reason: Task.isCancelled ? "task-cancelled" :
+                    (!operation.isCurrent ? "operation-superseded" : FolderOpenStageRecorder.errorReason(error)))
+                if operation.isCurrent { showAccessError(error) }
+            }
         }
     }
 
-    private func openFolder(_ folder: URL, rootID: AccessRootID, currentItemID: ItemID? = nil) {
+    private func openFolder(_ folder: URL, rootID: AccessRootID, currentItemID: ItemID? = nil,
+                            trace: FolderOpenStageRecorder? = nil) {
+        trace?.record("openFolder", .entered)
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
         standaloneWake = nil
@@ -1491,7 +1508,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         gridFolderRoot = rootID
         gridFolderURL = folder
         applyCurrentAccessState()
-        if waitingAccessPosition != nil { return }
+        if waitingAccessPosition != nil {
+            trace?.record("openFolder", .rejected, reason: "waiting-access")
+            return
+        }
         setReadingFolderOwner(folder, awaitingStart: true)
         sidebarKnownCounts.removeAll()
         loadSidebarTree(folder, rootID: rootID, count: nil)
@@ -1506,27 +1526,56 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         let current = generation
         navigationTask = Task { [self] in
             var scanStarted = false
+            var stage = "scan.services"
             do {
-                let authority = FolderScanPresentationAuthority(access: operation, input: inputIntent.current, originatingTask: navigationTask)
+                let scanInput = inputIntent.current
+                let originatingTask = navigationTask
+                let authority = FolderScanPresentationAuthority(access: operation, input: scanInput, originatingTask: originatingTask)
+                trace?.record(stage, .entered)
                 let services = try await operation.wait { try await accessServices.value }
+                trace?.record(stage, .completed)
                 self.bindAccessMonitor(services.monitor)
                 self.applyCurrentAccessState()
+                stage = "scan.operationCheck"
                 try operation.check()
+                stage = "readContext"
+                trace?.record(stage, .entered)
                 let context = try await operation.wait { try await services.monitor.readContext(for: rootID) }
+                trace?.record(stage, .completed)
                 self.scanReadContext = context
                 self.applyCurrentAccessState()
+                stage = "readContext.operationCheck"
                 try operation.check()
+                stage = "recovery"
+                trace?.record(stage, .entered)
                 await self.captureRecoveryPosition(folder, rootID: rootID, services: services, context: context, operation: operation)
+                trace?.record(stage, .completed)
+                stage = "recovery.operationCheck"
                 try operation.check()
                 scanStarted = true
-                try await folderScanner(services).begin(folder: folder, rootID: rootID,
-                    canPresent: { authority.isCurrent && context.permit.isCurrent }).value
+                stage = "coordinator.begin"
+                trace?.record(stage, .entered)
+                let task = folderScanner(services).begin(folder: folder, rootID: rootID,
+                    canPresent: {
+                        let allowed = authority.isCurrent && context.permit.isCurrent
+                        if !allowed {
+                            trace?.record("coordinator.authority", .rejected,
+                                reason: "access=\(operation.isCurrent) input=\(scanInput.isCurrent) originatingTaskCancelled=\(originatingTask?.isCancelled == true) permit=\(context.permit.isCurrent)")
+                        }
+                        return allowed
+                    })
+                trace?.record(stage, .completed)
+                stage = "coordinator.task"
+                try await task.value
             } catch {
+                trace?.record(stage, .rejected, reason: Task.isCancelled ? "task-cancelled" :
+                    (!operation.isCurrent ? "operation-superseded" : FolderOpenStageRecorder.errorReason(error)))
                 if operation.isCurrent, generation == current {
                     handleFolderOpenFailure(error, folder: folder, scanStarted: scanStarted)
                 }
             }
         }
+        trace?.record("openFolder", .completed)
     }
 
     /// Recovery for the current folder-open operation; callers retain the operation/generation guard.
