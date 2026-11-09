@@ -14,7 +14,7 @@ private final class Alias507Events: @unchecked Sendable {
 
 
 private final class Alias507Timeline: @unchecked Sendable {
-    private let origin = ContinuousClock.now
+    let origin = ContinuousClock.now
     private let lock = NSLock()
     private var captured: [(String, FolderOpenStageEvent)] = []
     func append(_ label: String, _ event: FolderOpenStageEvent) { lock.withLock { captured.append((label, event)) } }
@@ -162,6 +162,8 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     } teardown: {
         let report = await sampler.finish()
         print("[i507.main-stack] status=\(report.status) job=\(report.triggerJob?.uuidString ?? "none") attempts=\(report.attempts) joined=\(report.joined) rawRemoved=\(report.rawRemoved) queuedToEntryMs=\(report.queuedToEntryMilliseconds.map { String(format: "%.3f", $0) } ?? "unknown")")
+        print("[i507.sampler-target] targetPID=\(report.targetPID) childPID=\(report.childPID.map(String.init) ?? "none")")
+        for stamp in report.lifecycle { print("[i507.sampler-lifecycle] \(stamp.line(relativeTo: timeline.origin))") }
         if !report.text.isEmpty { print(report.text) }
     }
 }

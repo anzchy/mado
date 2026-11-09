@@ -189,7 +189,7 @@ func issue600SamplerErrorsAlwaysReleaseAndDrain() async throws {
         let result = await sampler.finish()
         #expect(result.status == (status == "captured" ? "no-main-thread" : status))
         #expect(result.joined && result.rawRemoved && !sampler.state().running)
-        #expect(result.text.isEmpty)
+        #expect(status == "timeout" ? result.text.contains("partial-report=missing") : result.text.isEmpty)
     }
     let timeout = ScanLag600Sampler(manualTrigger: true, capture: { ScanLag600Sampler.controlledTimeoutForTest($0) })
     let (_, event) = try sample600Job(timeout)
@@ -244,4 +244,117 @@ func issue600SamplerReportsMissedTriggerWhenEntryIsAlreadyLate() async throws {
     #expect(result.queuedToEntryMilliseconds == 2000)
     #expect(result.childPID == nil && result.attempts == 0)
     #expect(result.text.isEmpty && result.joined && result.rawRemoved)
+}
+
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600SamplerRetainsEntryAfterReservationAndFinish() async throws {
+    let gate = Sample600CaptureGate(); defer { gate.open() }
+    let origin = ContinuousClock.now
+    let sampler = ScanLag600Sampler(manualTrigger: true, capture: { gate.capture($0) }, now: { origin })
+    let (_, queued) = try sample600Job(sampler)
+    #expect(sampler.fireForTest(queued.jobID!))
+    try await gate.entered.wait()
+    let finishing = Task { await sampler.finish() }
+    await Task.yield()
+    for (id, seconds) in [(UUID(), 9), (queued.jobID!, 2), (queued.jobID!, 3)] {
+        sampler.observe(FolderOpenStageEvent(controllerID: queued.controllerID, jobID: id,
+            spanID: nil, kind: .job, isMainThread: false, openingID: queued.openingID,
+            stage: "scan.task", outcome: .entered, instant: queued.instant.advanced(by: .seconds(seconds)),
+            elapsed: .seconds(seconds), reason: nil))
+    }
+    gate.open()
+    let result = await finishing.value
+    #expect(result.queuedToEntryMilliseconds == 2000)
+    #expect(result.attempts == 1 && result.triggerJob == queued.jobID)
+    #expect(result.lifecycle.first { $0.name == "trigger.queued" }?.instant == queued.instant)
+    #expect(result.lifecycle.first { $0.name == "timer.executed" }?.instant == origin)
+    #expect(result.lifecycle.first { $0.name == "reservation" }?.instant == origin)
+    #expect(result.lifecycle.filter { $0.name == "trigger.entered" }.map(\.instant) == [queued.instant.advanced(by: .seconds(2))])
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600SamplerTimeoutKeepsPartialAndAlignedLifecycle() async throws {
+    let origin = ContinuousClock.now
+    let sampler = ScanLag600Sampler(manualTrigger: true, capture: { output in
+        ScanLag600Sampler.partialTimeoutForTest(output, raw: sample600Fixture, now: { origin }) { pid, signal in
+            if signal == SIGTERM { return (-1, EPERM) }
+            let result = Darwin.kill(pid, signal)
+            return (result, result == 0 ? 0 : errno)
+        }
+    }, now: { origin })
+    let (_, queued) = try sample600Job(sampler)
+    #expect(sampler.fireForTest(queued.jobID!))
+    let result = await sampler.finish()
+    #expect(result.status == "timeout")
+    #expect(result.text.contains("timeout / partial / incomplete"))
+    #expect(result.text.contains("issue600SamplerHeldMainActorFrame"))
+    #expect(result.text.contains("progress: sampling"))
+    #expect(!result.text.contains("secret") && !result.text.contains("/Users/") && !result.text.contains("Binary Images"))
+    #expect(result.text.utf8.count <= ScanLag600Sampler.maximumBytes)
+    #expect(result.joined && result.rawRemoved)
+    let pid = try #require(result.childPID)
+    #expect(Darwin.kill(pid, 0) == -1 && errno == ESRCH)
+    let stamps = result.lifecycle
+    for name in ["launch.begin", "launch.return", "watchdog.term.callback", "watchdog.kill.callback", "child.reaped", "report.completed"] {
+        #expect(stamps.first { $0.name == name }?.instant == origin)
+    }
+    #expect(stamps.first { $0.name == "launch.return" }?.pid == pid)
+    #expect(stamps.first { $0.name == "watchdog.term.deadline" }?.instant == origin.advanced(by: .seconds(0.1)))
+    #expect(stamps.first { $0.name == "watchdog.kill.deadline" }?.instant == origin.advanced(by: .seconds(0.35)))
+    let term = try #require(stamps.first { $0.name == "watchdog.term.signal" })
+    #expect(term.pid == pid && term.signalResult == -1 && term.signalErrno == EPERM)
+    let killed = try #require(stamps.first { $0.name == "watchdog.kill.signal" })
+    #expect(killed.pid == pid && killed.signalResult == 0 && killed.signalErrno == 0)
+    let reap = try #require(stamps.firstIndex { $0.name == "child.reaped" })
+    let completed = try #require(stamps.firstIndex { $0.name == "report.completed" })
+    #expect(reap < completed)
+}
+
+@Test(.timeLimit(.minutes(3)), arguments: ["", "Thread_2 unrelated", sample600Fixture + String(repeating: "界", count: 20000)]) @MainActor
+func issue600SamplerTimeoutOutputIsExplicitAndBounded(raw: String) async throws {
+    let sampler = ScanLag600Sampler(manualTrigger: true, capture: { _ in
+        .init("timeout", raw: raw, progress: "Sampling process 123 /Users/secret\nsecret-token-value\n" + String(repeating: "private", count: 10000))
+    })
+    let (_, queued) = try sample600Job(sampler)
+    #expect(sampler.fireForTest(queued.jobID!))
+    let result = await sampler.finish()
+    #expect(result.status == "timeout")
+    #expect(result.text.contains("timeout / partial / incomplete"))
+    #expect(result.text.contains(raw.isEmpty ? "partial-report=missing" : (raw.contains("com.apple.main-thread") ? "partial-report=main-thread" : "partial-report=unparseable")))
+    #expect(!result.text.contains("secret") && !result.text.contains("private"))
+    #expect(result.text.utf8.count <= ScanLag600Sampler.maximumBytes)
+    #expect(result.joined && result.rawRemoved)
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600SamplerAutomaticTimerAndSharedOrigin() async throws {
+    let origin = ContinuousClock.now
+    let sampler = ScanLag600Sampler(milliseconds: 1, capture: { _ in .init("captured", raw: sample600Fixture) })
+    let (_, queued) = try sample600Job(sampler)
+    // Completion follows the actual background timer; no MainActor polling deadline.
+    while !sampler.state().spent { try await Task.sleep(for: .milliseconds(1)) }
+    let result = await sampler.finish()
+    let timer = try #require(result.lifecycle.first { $0.name == "timer.executed" })
+    let reserved = try #require(result.lifecycle.first { $0.name == "reservation" })
+    #expect(result.lifecycle.filter { $0.name == "timer.executed" }.count == 1)
+    #expect(queued.instant <= timer.instant && timer.instant <= reserved.instant)
+    let fixed = Sample600Stamp(name: "launch.begin", instant: origin.advanced(by: .seconds(2)))
+    #expect(fixed.line(relativeTo: origin).contains("shared=+2.0 seconds"))
+    #expect(fixed.line(relativeTo: origin.advanced(by: .seconds(1))).contains("shared=+1.0 seconds"))
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue600SamplerTriggerCannotInheritAnotherJobsLag() async throws {
+    let sampler = ScanLag600Sampler(manualTrigger: true, capture: { _ in .init("timeout") })
+    let (_, a) = try sample600Job(sampler)
+    sampler.observe(FolderOpenStageEvent(controllerID: a.controllerID, jobID: a.jobID,
+        spanID: nil, kind: .job, isMainThread: false, openingID: a.openingID,
+        stage: "scan.task", outcome: .entered, instant: a.instant.advanced(by: .seconds(2)),
+        elapsed: .seconds(2), reason: nil))
+    let (_, b) = try sample600Job(sampler)
+    #expect(sampler.fireForTest(b.jobID!))
+    let result = await sampler.finish()
+    #expect(result.triggerJob == b.jobID)
+    #expect(result.queuedToEntryMilliseconds == nil)
 }
