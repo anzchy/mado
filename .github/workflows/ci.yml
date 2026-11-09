@@ -14,6 +14,14 @@ on:
         description: Also build and run the App test bundle
         type: boolean
         default: true
+      app_filter:
+        description: Optional App test regex for repeat runs; empty runs the full bundle
+        type: string
+        default: ''
+      app_repeat:
+        description: App repetitions (1–50); values above 1 enable reproduction without retry or quarantine
+        type: number
+        default: 1
       cold:
         description: Build from scratch, without restoring the SwiftPM or DerivedData cache
         type: boolean
@@ -200,10 +208,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.native == 'true'
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 && 120 || 45 }}
     outputs:
       unsigned_build: ${{ steps.unsigned-build.outcome }}
     steps:
+      - name: Record repeat job start
+        if: github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1
+        run: echo "APP_JOB_STARTED_MS=$(node -p 'Date.now()')" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up Xcode
@@ -235,7 +246,16 @@ jobs:
         # The runner is the only job on its machine, so the local heavy lock is not needed.
         env:
           PICSEE_HEAVY_LOCK_HELD: '1'
-        run: node scripts/tdd/app-lane.mjs
+          REPEAT_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 }}
+          APP_FILTER: ${{ inputs.app_filter }}
+          APP_REPEAT: ${{ inputs.app_repeat }}
+        run: |
+          if [ "$REPEAT_ENABLED" = true ]; then
+            export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
+            node scripts/ci/app-repeat.mjs
+          else
+            node scripts/tdd/app-lane.mjs
+          fi
       - name: Upload first App attempt
         continue-on-error: true
         if: always()
@@ -245,6 +265,14 @@ jobs:
           path: .build/app-lane-attempt1.log
           include-hidden-files: true
           if-no-files-found: ignore
+      - name: Upload App repeat logs
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.app_tests && inputs.app_repeat > 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-repeat
+          path: .build/app-repeat
+          include-hidden-files: true
+          if-no-files-found: warn
       - name: Save DerivedData
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

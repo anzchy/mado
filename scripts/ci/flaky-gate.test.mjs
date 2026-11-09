@@ -214,7 +214,7 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
   assert.match(upload, /^        uses: actions\/upload-artifact@[a-f0-9]{40}/m);
   assert.match(upload, /^          path: \.build\/app-lane-attempt1\.log$/m);
   assert.ok(lane, 'App lane step exists');
-  assert.match(lane, /^        run: node scripts\/tdd\/app-lane\.mjs$/m);
+  assert.match(lane, /^          else\n            node scripts\/tdd\/app-lane\.mjs\n          fi$/m);
   assert.doesNotMatch(lane, /continue-on-error:/);
 });
 
@@ -440,4 +440,19 @@ for(const [current,old] of [[110,104],[111,105],[112,106]]) test(`i587 current p
  const mutated=text.replace(`Issue521NativePanRunner.swift:${current}:5:`,`Issue521NativePanRunner.swift:${old}:5:`);
  assert.notEqual(mutated,text);assert.equal(parseAppResult(result(mutated)).reliable,true);
  denied(result(mutated));
+});
+
+// #606 amendment 1: snapshot metadata never broadens the exact retry signature.
+test('A4 failure followed by an AppKit snapshot keeps its classification; unknown failure does not', () => {
+  const snapshot = '\n  appkit: NSApp.isActive=false keyWindow=nil mainWindow=nil\n'
+    + '  appkit: class=NSWindow title="photo.jpg" isVisible=false level=0 attachedSheet="nil"\n';
+  const withSnapshot = fixtures[1].replace(issueLines[1], issueLines[1] + snapshot);
+  assert.equal(classifyFlaky(result(withSnapshot)).decision, 'retry-eligible');
+  assert.deepEqual(classifyFlaky(result(withSnapshot)), classifyFlaky(result(fixtures[1])));
+  const unknown = withSnapshot.replace('restore A tree', 'unknown stage');
+  assert.equal(classifyFlaky(result(unknown)).decision, 'fail');
+  const unknownTest = withSnapshot.replaceAll(names[1], 'unknownAppFailure');
+  assert.equal(classifyFlaky(result(unknownTest)).decision, 'fail');
+  // Actual helper output precedes the issue because it is printed before throwing.
+  assert.deepEqual(classifyFlaky(result(fixtures[1].replace(issueLines[1], snapshot + issueLines[1]))), classifyFlaky(result(fixtures[1])));
 });
