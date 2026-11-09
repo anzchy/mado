@@ -4,6 +4,7 @@ A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflo
 
 ## Before the first release
 
+- The repository owner enables **Allow GitHub Actions to create and approve pull requests** under **Settings → Actions → General**. This permits the workflow token to open the appcast PR; the workflow retains `pull-requests: write`. The workflow does not change this repository setting or approve/merge the PR.
 - The secrets wizard has run: `.agents/skills/apple-developer-setup/scripts/setup-secrets-wizard.sh`. That puts these into GitHub Secrets: `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `SPARKLE_ED_PRIVATE_KEY`. It also sets the repository variable `DEVELOPMENT_TEAM`. The workflow reads nothing else. See the [apple-developer-setup skill](../../.agents/skills/apple-developer-setup/SKILL.md).
 - `MARKETING_VERSION` in `project.yml` is the version you are releasing (0.0.1).
 - The commit to release is on `main`, and CI is green on it.
@@ -70,6 +71,7 @@ Other measures:
    - The DMG is signed with Sparkle's EdDSA key, which reaches `sign_update` only on standard input.
    - `scripts/release/appcast.mjs` adds the item only to `appcast-mado.xml` on a new branch `appcast-mado/<tag>`.
    - A PR to `main` is opened with title `release(appcast): mado <version> (<build>) for <tag>`. The PR changes only `appcast-mado.xml`; Picsee’s frozen `appcast.xml` is untouched.
+   - `scripts/release/appcast-pr-body.mjs` writes the rollout warning, Gates table, `Device-Smoke` and `Ledger-Gardener` metadata. Native/UI/ledger checks are marked inapplicable with reasons; checks not run on the generated branch are marked `NOT RUN`, without borrowing PASS results from the tag commit. Both creation and an already-open PR use that body file. A rerun refreshes the existing PR body through `gh pr edit --body-file`.
 
 To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
 
