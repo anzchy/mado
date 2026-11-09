@@ -1626,6 +1626,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         sidebarLoader?.cancel()
         sidebarLoader = nil
         if !preservingWatch {
+            sidebarFailedReadFolder = nil
             if let watch = sidebarWatchSubscription { Task { await watch.cancel() } }
             sidebarWatchSubscription = nil
             sidebarWatchGeneration = nil
