@@ -138,6 +138,7 @@ function appcastWorld() {
   git(dir, "init", "-q", "-b", "main", seed);
   mkdirSync(join(seed, "scripts/release"), { recursive: true });
   writeFileSync(join(seed, "scripts/release/appcast.mjs"), readFileSync(join(root, "scripts/release/appcast.mjs")));
+  writeFileSync(join(seed, "scripts/release/appcast-pr-body.mjs"), readFileSync(join(root, "scripts/release/appcast-pr-body.mjs")));
   writeFileSync(join(seed, "appcast.xml"), readFileSync(join(root, "appcast.xml")));
   writeFileSync(join(seed, "appcast-mado.xml"), emptyAppcast());
   git(seed, "add", "."); git(seed, "commit", "-q", "-m", "main");
@@ -159,7 +160,7 @@ const refuseSecrets = (...names) => `for v in ${names.join(" ")}; do
 done
 `;
 
-function runAppcast(world, { openPR = "" } = {}) {
+function runAppcast(world, { openPR = "", failWrite = false } = {}) {
   const ghLog = join(world.dir, "gh-calls");
   const guard = refuseSecrets("SPARKLE_ED_PRIVATE_KEY");
   return runStep("Sign the update and open the appcast PR", {
@@ -169,7 +170,20 @@ function runAppcast(world, { openPR = "" } = {}) {
       GIT_CONFIG_GLOBAL: "/dev/null" },
     // Everything after sign_update runs without the Sparkle key in its environment.
     fakes: {
-      gh: `${guard}printf '%s\\n' "$*" >> "${ghLog}"\nif [[ "$1 $2" == "pr list" ]]; then printf '%s' '${openPR}'; fi\n`,
+      gh: `${guard}printf '%s\\n' "$*" >> "${ghLog}"
+if [[ "$1 $2" == "pr list" ]]; then printf '%s' '${openPR}'; exit 0; fi
+if [[ "$1 $2" == "pr create" || "$1 $2" == "pr edit" ]]; then
+  if [[ '${failWrite}' == 'true' ]]; then echo 'PR write refused' >&2; exit 23; fi
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --body-file) cat "$2" > "${world.dir}/pr-body"; exit $? ;;
+      --body) printf '%s' "$2" > "${world.dir}/pr-body"; exit 0 ;;
+    esac
+    shift
+  done
+  echo 'missing PR body' >&2; exit 24
+fi
+`,
       git: `${guard}exec /usr/bin/git "$@"\n`,
       node: `${guard}exec "${process.execPath}" "$@"\n`,
     },
@@ -183,6 +197,18 @@ function assertFrozenFeed(world) {
   assert.match(world.git(world.origin, "log", "-1", "--format=%s", branch), /release\(appcast\): mado /);
 }
 const remoteFeed = (world) => world.git(world.origin, "show", "appcast-mado/mado-v0.0.1:appcast-mado.xml");
+const prBody = (world) => readFileSync(join(world.dir, "pr-body"), "utf8");
+function assertBodyAccepted(world) {
+  const checked = spawnSync(process.execPath, [join(root, "scripts/agents/ui-parity-pr-body-lint.mjs"),
+    "--base", "origin/main", "--body-file", join(world.dir, "pr-body")], { cwd: world.work, encoding: "utf8" });
+  assert.equal(checked.status, 0, checked.stderr);
+  assert.match(checked.stdout, /UI-Parity PR body: PASS/);
+  const expected = join(world.dir, "expected-body.md");
+  const generated = spawnSync(process.execPath, [join(root, "scripts/release/appcast-pr-body.mjs"),
+    "mado-v0.0.1", "0.0.1", "312", expected], { encoding: "utf8" });
+  assert.equal(generated.status, 0, generated.stderr);
+  assert.equal(prBody(world), readFileSync(expected, "utf8"));
+}
 
 test("the appcast step signs from stdin, pushes appcast-mado/<tag> and opens one PR", () => {
   const world = appcastWorld();
@@ -200,6 +226,8 @@ test("the appcast step signs from stdin, pushes appcast-mado/<tag> and opens one
     const calls = ghCalls(world);
     assert.equal(calls.filter((c) => c.startsWith("pr create")).length, 1, calls.join("\n"));
     assert.match(calls.find((c) => c.startsWith("pr create")), /--base main --head appcast-mado\/mado-v0\.0\.1/);
+    assert.match(calls.find((c) => c.startsWith("pr create")), /--body-file /);
+    assertBodyAccepted(world);
   } finally { rmSync(world.dir, { recursive: true, force: true }); }
 });
 
@@ -209,6 +237,7 @@ test("a rerun of the same tag replaces its appcast branch and reuses the open PR
     const first = runAppcast(world); first.cleanup();
     assert.equal(first.status, 0, first.stderr);
     const before = world.git(world.origin, "rev-parse", "appcast-mado/mado-v0.0.1");
+    writeFileSync(join(world.dir, "pr-body"), "stale body from a previous run");
     // A fresh runner: a new clone, while the branch and its PR already exist.
     rmSync(world.work, { recursive: true, force: true });
     world.git(world.dir, "clone", "-q", world.origin, world.work);
@@ -220,6 +249,9 @@ test("a rerun of the same tag replaces its appcast branch and reuses the open PR
     assert.match(remoteFeed(world), /length="5000"/);
     assert.equal((remoteFeed(world).match(/<item>/g) ?? []).length, 1);
     assert.equal(ghCalls(world).filter((c) => c.startsWith("pr create")).length, 1, "no second PR");
+    assert.match(ghCalls(world).find((c) => c.startsWith("pr edit")), /^pr edit 17 --body-file /);
+    assert.doesNotMatch(prBody(world), /stale body/);
+    assertBodyAccepted(world);
   } finally { rmSync(world.dir, { recursive: true, force: true }); }
 });
 
@@ -244,12 +276,27 @@ test("the appcast PR body says that merging offers the build to every installed 
     assertFrozenFeed(world);
     const create = ghCalls(world).find((c) => c.startsWith("pr create"));
     assert.match(create, /--title release\(appcast\): mado/);
-    assert.match(create, /Adds mado-v0\.0\.1 to appcast-mado\.xml/);
-    assert.match(create, /offers Mado 0\.0\.1 \(312\) to every installed copy that has update checks on/);
-    assert.match(create, /release candidate, close this PR unless you mean a general rollout/);
-    assert.match(create, /Merge only after publishing the draft release mado-v0\.0\.1/);
+    const body = prBody(world);
+    assert.match(body, /Adds mado-v0\.0\.1 to appcast-mado\.xml/);
+    assert.match(body, /offers Mado 0\.0\.1 \(312\) to every installed copy that has update checks on/);
+    assert.match(body, /release candidate, close this PR unless you mean a general rollout/);
+    assert.match(body, /Merge only after publishing the draft release mado-v0\.0\.1/);
   } finally { rmSync(world.dir, { recursive: true, force: true }); }
 });
+
+for (const openPR of ["", "17"]) {
+  test(`appcast PR ${openPR ? "edit" : "create"} failure fails the workflow step`, () => {
+    const world = appcastWorld();
+    try {
+      const step = runAppcast(world, { openPR, failWrite: true });
+      try {
+        assert.equal(step.status, 23);
+        assert.match(step.stderr, /PR write refused/);
+        assert.equal(spawnSync("/bin/test", ["-e", join(world.dir, "pr-body")]).status, 1);
+      } finally { step.cleanup(); }
+    } finally { rmSync(world.dir, { recursive: true, force: true }); }
+  });
+}
 
 for (const [name, target] of [["Notarise the app", "APP"], ["Notarise the DMG", "DMG"]]) {
   test(`"${name}" unsets the Apple ID and app-specific password after notarisation, before stapling`, () => {

@@ -230,13 +230,16 @@ jobs:
           else
             git push origin "HEAD:refs/heads/$BRANCH"
           fi
+          BODY="$RUNNER_TEMP/appcast-pr-body.md"
+          node scripts/release/appcast-pr-body.mjs "$TAG" "$VERSION" "$BUILD" "$BODY"
           OPEN=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
           if [[ -n "$OPEN" ]]; then
+            gh pr edit "$OPEN" --body-file "$BODY"
             echo "appcast PR #$OPEN already open for $BRANCH; its branch now carries this run's item"
             exit 0
           fi
           gh pr create --base main --head "$BRANCH" --title "release(appcast): mado $VERSION ($BUILD) for $TAG" \
-            --body "Adds $TAG to appcast-mado.xml. Merging this offers Mado $VERSION ($BUILD) to every installed copy that has update checks on, as soon as it lands on main; GitHub's pre-release flag does not filter the feed. For a release candidate, close this PR unless you mean a general rollout. Merge only after publishing the draft release $TAG: the enclosure URL works once the release is public."
+            --body-file "$BODY"
 
       - name: Delete the temporary keychain
         if: always()
