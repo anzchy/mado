@@ -1,5 +1,6 @@
 """Offline LaunchServices ownership regressions; no App is opened."""
 
+import datetime
 import json
 from pathlib import Path
 import sys
@@ -11,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import device as d
 
 BIRTH = 'Tue Oct 27 12:00:01 2026'
+# process_snapshot birth strings are local time; derive the matching epoch locally.
+LAUNCH_TIME = datetime.datetime.strptime(
+    'Tue Oct 27 12:00:00 2026', '%a %b %d %H:%M:%S %Y').timestamp()
 
 
 class OpenHelper:
@@ -42,7 +46,7 @@ class LaunchContractTests(unittest.TestCase):
     def test_records_new_launchservices_pid_executable_and_birth(self):
         mocks = self.launch_mocks([[], [4242]], [self.record, self.record])
         with patch.object(d, 'executable', return_value=Path(self.record['executable'])), \
-                patch.object(d.time, 'time', return_value=1793073600.0):
+                patch.object(d.time, 'time', return_value=LAUNCH_TIME):
             with mocks[0], mocks[1], mocks[2], mocks[3], mocks[4], mocks[5]:
                 d.launch(self.run)
         self.assertEqual(json.loads((self.run / 'process.json').read_text()), self.record)
@@ -65,7 +69,7 @@ class LaunchContractTests(unittest.TestCase):
                 patch.object(d, 'checked', return_value=''), \
                 patch.object(d, 'windows', return_value=[]), \
                 patch.object(d, 'logs', return_value=''), \
-                patch.object(d.time, 'time', return_value=1793073600.0), \
+                patch.object(d.time, 'time', return_value=LAUNCH_TIME), \
                 patch.object(d.time, 'monotonic', side_effect=[0, 1, 31]), \
                 patch.object(d.time, 'sleep'), patch.object(d.os, 'kill') as kill, \
                 patch.object(d.subprocess, 'Popen', return_value=OpenHelper()):
@@ -79,7 +83,7 @@ class LaunchContractTests(unittest.TestCase):
                 patch.object(d, 'process_snapshot', return_value=None), \
                 patch.object(d, 'executable', return_value=Path(self.record['executable'])), \
                 patch.object(d, 'checked', return_value=''), \
-                patch.object(d.time, 'time', return_value=1793073600.0), \
+                patch.object(d.time, 'time', return_value=LAUNCH_TIME), \
                 patch.object(d.time, 'monotonic', side_effect=[0, 1]), \
                 patch.object(d.time, 'sleep') as sleep, \
                 patch.object(d.subprocess, 'Popen', return_value=OpenHelper()):
@@ -104,15 +108,17 @@ class LaunchContractTests(unittest.TestCase):
         old = dict(self.record, birth='Tue Oct 27 11:59:59 2026')
         with patch.object(d, 'running', side_effect=[[], [4242]]), \
                 patch.object(d, 'process_snapshot', return_value=old), \
+                patch.object(d, 'logs', return_value=''), \
                 patch.object(d, 'executable', return_value=Path(self.record['executable'])), \
                 patch.object(d, 'checked', return_value=''), \
                 patch.object(d.subprocess, 'Popen', return_value=OpenHelper()), \
-                patch.object(d.time, 'time', return_value=1793073600.0), \
+                patch.object(d.time, 'time', return_value=LAUNCH_TIME), \
                 patch.object(d.time, 'monotonic', side_effect=[0, 1]), \
                 patch.object(d.os, 'kill') as kill:
             with self.assertRaisesRegex(RuntimeError, 'birth'):
                 d.launch(self.run)
         self.assertFalse((self.run / 'process.json').exists())
+        self.assertFalse((self.run / 'picsee.pid').exists())
         kill.assert_not_called()
 
     def test_launchservices_reports_immediate_exit_before_pid_observation(self):
@@ -141,10 +147,13 @@ class LaunchContractTests(unittest.TestCase):
                 patch.object(d, 'windows', return_value=[{'title': 'Mado'}]), \
                 patch.object(d, 'logs', return_value='Mado launch git=abcdefg'), \
                 patch.object(d.subprocess, 'Popen', side_effect=fake_open), \
-                patch.object(d.time, 'time', return_value=1793073600.0):
+                patch.object(d.time, 'time', return_value=LAUNCH_TIME):
             d.launch(self.run)
         self.assertEqual(seen, [['/usr/bin/open', '-n', '-W', str(self.app),
                                  '--args', '-AppleLanguages', '(zh-Hans)']])
+        self.assertEqual(json.loads((self.run / 'process.json').read_text()), self.record)
+        self.assertEqual((self.run / 'picsee.pid').read_text(), '4242\n')
+        self.assertEqual(json.loads((self.run / 'ready.json').read_text()), [{'title': 'Mado'}])
 
     def test_app_lang_file_rejects_values_that_are_not_a_language_tag(self):
         (self.run / 'app-lang.txt').write_text('zh-Hans) -NSFoo (x\n')
