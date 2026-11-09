@@ -129,7 +129,7 @@ test("the version step fails on a mismatched or malformed tag, a commit off main
 });
 
 /** An origin with main (appcast.xml + the real appcast script) and a fresh clone to run the appcast step in. */
-function appcastWorld() {
+function appcastWorld({ malformedBody = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "picsee-appcast-"));
   const git = (cwd, ...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args],
     { cwd, encoding: "utf8" }).trim();
@@ -138,7 +138,11 @@ function appcastWorld() {
   git(dir, "init", "-q", "-b", "main", seed);
   mkdirSync(join(seed, "scripts/release"), { recursive: true });
   writeFileSync(join(seed, "scripts/release/appcast.mjs"), readFileSync(join(root, "scripts/release/appcast.mjs")));
-  writeFileSync(join(seed, "scripts/release/appcast-pr-body.mjs"), readFileSync(join(root, "scripts/release/appcast-pr-body.mjs")));
+  const helper = readFileSync(join(root, "scripts/release/appcast-pr-body.mjs"), "utf8");
+  // Deliberate fixture fault: the actual CLI runs, but emits an invalid Gates heading.
+  writeFileSync(join(seed, "scripts/release/appcast-pr-body.mjs"), malformedBody ? helper.replace("## Gates", "## Broken Gates") : helper);
+  mkdirSync(join(seed, "scripts/agents"), { recursive: true });
+  writeFileSync(join(seed, "scripts/agents/ui-parity-pr-body-lint.mjs"), readFileSync(join(root, "scripts/agents/ui-parity-pr-body-lint.mjs")));
   writeFileSync(join(seed, "appcast.xml"), readFileSync(join(root, "appcast.xml")));
   writeFileSync(join(seed, "appcast-mado.xml"), emptyAppcast());
   git(seed, "add", "."); git(seed, "commit", "-q", "-m", "main");
@@ -160,14 +164,14 @@ const refuseSecrets = (...names) => `for v in ${names.join(" ")}; do
 done
 `;
 
-function runAppcast(world, { openPR = "", failWrite = false } = {}) {
+function runAppcast(world, { openPR = "", failWrite = false, runnerTemp } = {}) {
   const ghLog = join(world.dir, "gh-calls");
   const guard = refuseSecrets("SPARKLE_ED_PRIVATE_KEY");
   return runStep("Sign the update and open the appcast PR", {
     cwd: world.work,
     env: { TAG: "mado-v0.0.1", VERSION: "0.0.1", BUILD: "312", DMG: world.dmg, SPARKLE_TOOLS: world.tools,
       GITHUB_REPOSITORY: "anzchy/mado", GH_TOKEN: "token", SPARKLE_ED_PRIVATE_KEY: "private-key-material",
-      GIT_CONFIG_GLOBAL: "/dev/null" },
+      GIT_CONFIG_GLOBAL: "/dev/null", ...(runnerTemp ? { RUNNER_TEMP: runnerTemp } : {}) },
     // Everything after sign_update runs without the Sparkle key in its environment.
     fakes: {
       gh: `${guard}printf '%s\\n' "$*" >> "${ghLog}"
@@ -204,10 +208,13 @@ function assertBodyAccepted(world) {
   assert.equal(checked.status, 0, checked.stderr);
   assert.match(checked.stdout, /UI-Parity PR body: PASS/);
   const expected = join(world.dir, "expected-body.md");
+  const base = world.git(world.work, "rev-parse", "origin/main");
+  const head = world.git(world.work, "rev-parse", "HEAD");
   const generated = spawnSync(process.execPath, [join(root, "scripts/release/appcast-pr-body.mjs"),
-    "mado-v0.0.1", "0.0.1", "312", expected], { encoding: "utf8" });
+    "mado-v0.0.1", "0.0.1", "312", expected, base, head], { encoding: "utf8" });
   assert.equal(generated.status, 0, generated.stderr);
   assert.equal(prBody(world), readFileSync(expected, "utf8"));
+  assert.ok(prBody(world).includes(`Ledger-Gardener: DAILY ${base.slice(0, 7)}..${head.slice(0, 7)} (covered by the daily sweep)`));
 }
 
 test("the appcast step signs from stdin, pushes appcast-mado/<tag> and opens one PR", () => {
@@ -294,6 +301,27 @@ for (const openPR of ["", "17"]) {
         assert.match(step.stderr, /PR write refused/);
         assert.equal(spawnSync("/bin/test", ["-e", join(world.dir, "pr-body")]).status, 1);
       } finally { step.cleanup(); }
+    } finally { rmSync(world.dir, { recursive: true, force: true }); }
+  });
+}
+
+for (const failure of ["generation", "lint"]) {
+  test(`appcast body ${failure} failure leaves no pushed branch or PR calls`, () => {
+    const world = appcastWorld({ malformedBody: failure === "lint" });
+    try {
+      if (failure === "generation") mkdirSync(join(world.dir, "appcast-pr-body.md"));
+      const step = runAppcast(world, { runnerTemp: world.dir });
+      try {
+        assert.notEqual(step.status, 0);
+        assert.match(step.stderr, failure === "generation" ? /EISDIR/ : /missing ## Gates table/);
+        assert.equal(world.git(world.origin, "for-each-ref", "--format=%(refname)", "refs/heads/appcast-mado/"), "");
+        assert.deepEqual(ghCalls(world), []);
+      } finally { step.cleanup(); }
+      const script = stepScript("Sign the update and open the appcast PR");
+      const generationAt = script.indexOf("node scripts/release/appcast-pr-body.mjs");
+      const lintAt = script.indexOf("node scripts/agents/ui-parity-pr-body-lint.mjs");
+      assert.ok(generationAt >= 0 && lintAt > generationAt);
+      assert.ok(lintAt < script.indexOf("git push"));
     } finally { rmSync(world.dir, { recursive: true, force: true }); }
   });
 }
