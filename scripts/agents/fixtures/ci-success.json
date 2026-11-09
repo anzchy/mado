@@ -24,5 +24,7 @@
         }
       ]
     }
-  ]
+  ],
+  "event": "pull_request",
+  "attempt": 1
 }
