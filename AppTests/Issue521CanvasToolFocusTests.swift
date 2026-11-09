@@ -73,7 +73,7 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     defer { window.close() }
     window.setContentSize(NSSize(width: 800, height: 500))
     controller.showWindow(nil)
-    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
     try makeFixtureWindowKey(window, timeout: .seconds(180) / 12)
     try #require(window.isKeyWindow, "native mouse dispatch requires the fixture window to be key")
     controller.openGrantedFolder(folder)

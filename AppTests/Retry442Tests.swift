@@ -218,7 +218,11 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     /// Use the actual application dispatch and installed production menu, with a real current key event.
     /// The test never calls route(), performClick(), or a menu action in place of event delivery.
     func press(_ keypad: Bool) throws {
-        try makeFixtureWindowKey(window, timeout: keyWindowTimeout)
+        // Once key ownership is established, post the key without opening a run-loop
+        // window for a watch refresh to start the scan before the key is delivered.
+        if !(NSApp.keyWindow === window && window.isKeyWindow) {
+            try makeFixtureWindowKey(window, timeout: keyWindowTimeout)
+        }
         try #require(NSApp.keyWindow === window)
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: keypad ? [.numericPad] : [], timestamp: 0,
@@ -245,7 +249,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
 @Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_RETRY442_NATIVE_CHILD"] == "1"),
       .timeLimit(.minutes(3))) @MainActor
 func retry442NativeKeyboardMatrix() async throws {
-    // Each acquisition reserves one twelfth of this child's three-minute limit.
+    // Allow 15 s per acquisition; the parent's shared 150 s deadline also covers swiftc.
     let scene = try Retry442Scene(keyWindowTimeout: .seconds(180) / 12)
     defer { scene.close() }
     var requests = 0

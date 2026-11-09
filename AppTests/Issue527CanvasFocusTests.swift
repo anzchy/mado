@@ -121,7 +121,7 @@ func issue527NonCanvasPressesPassInIsolatedProcess() async throws {
 func issue527NonCanvasPressPreservesFocusAndImage(target: String) async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     let content = try #require(scene.window.contentView)
     var addedOverlay: NSView?

@@ -121,4 +121,28 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
         #expect(!never.isKeyWindow && NSApp.keyWindow !== never)
         #expect(!NSApp.isRunning)
     }
+
+    // Pair the short budgets above with a longer one: a fixed subsecond wait must fail
+    // the lower bound, while the historical two-second wait must fail the upper bound.
+    do {
+        let never = DeferredKeyFixtureWindow(turns: 0, title: "ikw-never-long-budget")
+        defer { never.close() }
+        let budget: Duration = .milliseconds(1500)
+        let started = ContinuousClock.now
+        var failure: KeyWindowFixtureError?
+        do {
+            try makeFixtureWindowKey(never, timeout: budget)
+            Issue.record("a never-key window must respect the longer caller budget")
+        } catch let error as KeyWindowFixtureError {
+            failure = error
+        }
+        let elapsed = started.duration(to: .now)
+        let error = try #require(failure)
+        #expect(error.reason == "timed out waiting for target window")
+        #expect(error.description.contains(never.title))
+        #expect(elapsed >= budget)
+        #expect(elapsed < budget + .milliseconds(250), "caller budget bounds the wait with 250 ms slack")
+        #expect(!never.isKeyWindow && NSApp.keyWindow !== never)
+        #expect(!NSApp.isRunning)
+    }
 }

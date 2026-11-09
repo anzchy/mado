@@ -16,7 +16,7 @@ func issue527InactiveFirstClickPassesInIsolatedProcess() async throws {
 func issue527InactiveFirstClickKeepsFocusConsistent() async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     let tool = try scene.focusTool()
     let other = NSWindow(contentRect: NSRect(x: 40, y: 40, width: 220, height: 150),
