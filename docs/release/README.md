@@ -71,7 +71,7 @@ Other measures:
    - The DMG is signed with Sparkle's EdDSA key, which reaches `sign_update` only on standard input.
    - `scripts/release/appcast.mjs` adds the item only to `appcast-mado.xml` on a new branch `appcast-mado/<tag>`.
    - A PR to `main` is opened with title `release(appcast): mado <version> (<build>) for <tag>`. The PR changes only `appcast-mado.xml`; Picsee’s frozen `appcast.xml` is untouched.
-   - `scripts/release/appcast-pr-body.mjs` writes the rollout warning, Gates table, `Device-Smoke` and `Ledger-Gardener` metadata. Native/UI/ledger checks are marked inapplicable with reasons; checks not run on the generated branch are marked `NOT RUN`, without borrowing PASS results from the tag commit. Both creation and an already-open PR use that body file. A rerun refreshes the existing PR body through `gh pr edit --body-file`.
+   - Before pushing the branch, `scripts/release/appcast-pr-body.mjs` writes the rollout warning, owner check-trigger instruction, Gates table, `Device-Smoke` and `Ledger-Gardener` metadata, then the unchanged PR-body lint validates the body against `origin/main`. A generation or validation failure stops before any push or PR call. Native/UI/ledger checks are marked inapplicable with reasons; `NOT RUN` reasons describe the state at body generation, without borrowing PASS results from the tag commit. `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)` uses the fetched `origin/main` and committed appcast HEAD; it follows the daily-sweep convention and does not claim that a sweep ran during release. Both creation and an already-open PR use that body file. A rerun refreshes the existing PR body through `gh pr edit --body-file`.
 
 To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
 
@@ -83,16 +83,17 @@ node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Mado
 
 ## What the owner does
 
-1. **Check the draft on the MacBook test user:**
+1. **Trigger the appcast PR checks as a human.** After every workflow create or update, close and reopen the appcast PR once as yourself (or push a commit as a human). GITHUB_TOKEN suppresses pull_request workflows for bot create/edit events; a human body edit alone does not start CI. Reopening starts both PR body Gates and CI. Wait for PR body Gates and CI to pass before publishing or merging.
+2. **Check the draft on the MacBook test user:**
    - Download the DMG from the draft release.
    - Check `shasum -a 256` against the notes.
    - Open the DMG, drag Mado into Applications and launch it. Gatekeeper must not warn.
    - Edit the notes' "What is in this version".
-2. **Publish the draft.** The appcast's enclosure URL only works once the release is public.
-3. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, in Mado, as soon as `appcast-mado.xml` lands on `main` at the configured `SUFeedURL`. This does not offer Mado to installed Picsee; `appcast.xml` remains frozen. GitHub's pre-release flag does not filter updates. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
-4. **Promote to final:** when an rc is good, tag `mado-v0.0.1` on the same or a later `main` commit and repeat.
+3. **Publish the draft.** The appcast's enclosure URL only works once the release is public.
+4. **Decide on the appcast PR.** Merging an appcast PR offers that build to every installed copy that has update checks on, in Mado, as soon as `appcast-mado.xml` lands on `main` at the configured `SUFeedURL`. This does not offer Mado to installed Picsee; `appcast.xml` remains frozen. GitHub's pre-release flag does not filter updates. For a release candidate, close the appcast PR unless you mean a general rollout. For a build meant for everyone, merge it after publishing.
+5. **Promote to final:** when an rc is good, tag `mado-v0.0.1` on the same or a later `main` commit and repeat.
 
-The appcast PR is opened with the workflow's token, so GitHub does not run CI on it. It changes only `appcast-mado.xml`. Picsee’s `appcast.xml` and `v0.0.1` release remain frozen history (#547).
+The appcast PR changes only `appcast-mado.xml`; the human trigger above is required after each bot update to run its checks. Picsee’s `appcast.xml` and `v0.0.1` release remain frozen history (#547).
 
 ## When a run fails
 

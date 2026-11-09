@@ -222,6 +222,11 @@ jobs:
           git add appcast-mado.xml
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -m "release(appcast): mado $VERSION ($BUILD) for $TAG"
+          BASE_SHA=$(git rev-parse origin/main)
+          HEAD_SHA=$(git rev-parse HEAD)
+          BODY="$RUNNER_TEMP/appcast-pr-body.md"
+          node scripts/release/appcast-pr-body.mjs "$TAG" "$VERSION" "$BUILD" "$BODY" "$BASE_SHA" "$HEAD_SHA"
+          node scripts/agents/ui-parity-pr-body-lint.mjs --base origin/main --body-file "$BODY"
           # A rerun of this tag rebuilds appcast-mado/<tag> from main and replaces that branch only, leased to the
           # commit just read, so nothing pushed there in between is lost silently.
           REMOTE=$(git ls-remote --heads origin "refs/heads/$BRANCH" | cut -f 1)
@@ -230,8 +235,6 @@ jobs:
           else
             git push origin "HEAD:refs/heads/$BRANCH"
           fi
-          BODY="$RUNNER_TEMP/appcast-pr-body.md"
-          node scripts/release/appcast-pr-body.mjs "$TAG" "$VERSION" "$BUILD" "$BODY"
           OPEN=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
           if [[ -n "$OPEN" ]]; then
             gh pr edit "$OPEN" --body-file "$BODY"
