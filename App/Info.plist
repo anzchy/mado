@@ -35,6 +35,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>MadoDisableUpdates</key>
+	<string>$(MADO_DISABLE_UPDATES)</string>
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUEnableSystemProfiling</key>
