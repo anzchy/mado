@@ -73,9 +73,8 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     defer { window.close() }
     window.setContentSize(NSSize(width: 800, height: 500))
     controller.showWindow(nil)
-    window.makeKeyAndOrderFront(nil)
-    issue521StartNativeDispatch()
-    window.makeKey()
+    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    try makeFixtureWindowKey(window, timeout: .seconds(180) / 12)
     try #require(window.isKeyWindow, "native mouse dispatch requires the fixture window to be key")
     controller.openGrantedFolder(folder)
     try await MadoAppTests.waitUntil(between: { window.update() }) { controller.gridSearchAvailable }
