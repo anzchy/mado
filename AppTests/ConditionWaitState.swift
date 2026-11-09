@@ -70,7 +70,8 @@ func conditionWaitFormatState(active: Bool, key: String?, main: String?, windows
         fields(content)
         return values
     }
-    let allWindows = app.windows
+    // Keep the newer window numbers when stale windows from earlier tests fill the capture cap.
+    let allWindows = app.windows.sorted { $0.windowNumber > $1.windowNumber }
     let windows = allWindows.prefix(20).map { window in
         ConditionWaitWindowState(className: String(describing: type(of: window)), title: text(window.title),
             isVisible: window.isVisible, level: window.level.rawValue,
