@@ -16,7 +16,7 @@ func issue527InspectorCanvasPressPassesInIsolatedProcess() async throws {
 func issue527InspectorCloseCanvasPressPans() async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Reserve one twelfth of this child's three-minute limit for key acquisition.
+    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     try #require(scene.controller.route(.inspector, from: .key))
     try await scene.wait {
