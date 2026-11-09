@@ -57,7 +57,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private var accessRecoveryID: UUID?
     private var accessRecoveryScan: FolderScanCoordinator?
     private var pendingAccessRecovery = false
-    private var folderRecoveryReference: AccessFolderRecoveryReference?
+    private(set) var folderRecoveryReference: AccessFolderRecoveryReference?
     private var folderRecoveryURLs: Set<URL> = []
     private var accessAttachmentTask: Task<Void, Never>?
     private var accessAttachmentGeneration = UUID()
@@ -106,6 +106,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Tests swap the folder lister; the controller still builds and observes its own coordinators.
     var folderScanningOverride: (any FolderScanning)?
     var folderOpenStageObserver: (@Sendable (FolderOpenStageEvent) -> Void)?
+    /// Optional scheduling probe before recovery metadata I/O; normal opening installs none.
+    var recoveryCaptureWillBegin: (@MainActor (URL) async -> Void)?
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     private var sidebarKnownCounts: [URL: Int] = [:]
@@ -818,9 +820,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private func captureRecoveryPosition(_ folder: URL, rootID: AccessRootID,
                                          services: AccessServices, context: AccessMonitor.ReadContext,
                                          operation: AccessOperation, shownFolder: URL? = nil) async {
+        let shownFolder = shownFolder?.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+        await recoveryCaptureWillBegin?(folder)
         let reference = try? await services.files.captureRecoveryFolder(rootID: rootID, folder: folder)
         guard operation.isCurrent, context.permit.isCurrent, waitingAccessPosition == nil,
-              presentationRootID == rootID, shownFolder.map({ gridFolderURL == $0 }) ?? true else { return }
+              presentationRootID == rootID,
+              shownFolder.map({ gridFolderURL?.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL == $0 }) ?? true else { return }
         folderRecoveryReference = reference
         folderRecoveryURLs = [folder.standardizedFileURL]
         if let reference { folderRecoveryURLs.insert(reference.folderURL) }
@@ -1469,7 +1474,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 stage = "grant.operationCheck"
                 try operation.check()
                 trace?.record(stage, .completed)
-                openFolder(folder, rootID: id, trace: trace)
+                openFolder(folder, rootID: id, trace: trace, recoveryTiming: .afterInitialScan)
             } catch {
                 trace?.record(stage, .rejected, reason: Task.isCancelled ? "task-cancelled" :
                     (!operation.isCurrent ? "operation-superseded" : FolderOpenStageRecorder.errorReason(error)))
@@ -1478,8 +1483,11 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    private enum FolderRecoveryTiming { case beforeInitialScan, afterInitialScan }
+
     private func openFolder(_ folder: URL, rootID: AccessRootID, currentItemID: ItemID? = nil,
-                            trace: FolderOpenStageRecorder? = nil) {
+                            trace: FolderOpenStageRecorder? = nil,
+                            recoveryTiming: FolderRecoveryTiming = .beforeInitialScan) {
         trace?.record("openFolder", .entered)
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
@@ -1546,12 +1554,16 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 self.applyCurrentAccessState()
                 stage = "readContext.operationCheck"
                 try operation.check()
-                stage = "recovery"
-                trace?.record(stage, .entered)
-                await self.captureRecoveryPosition(folder, rootID: rootID, services: services, context: context, operation: operation)
-                trace?.record(stage, .completed)
-                stage = "recovery.operationCheck"
-                try operation.check()
+                // Authorized navigation must retain its recovery proof before a
+                // completed grid can become a move/Cancel Reading restore point.
+                if case .beforeInitialScan = recoveryTiming {
+                    stage = "recovery"
+                    trace?.record(stage, .entered)
+                    await self.captureRecoveryPosition(folder, rootID: rootID, services: services, context: context, operation: operation)
+                    trace?.record(stage, .completed)
+                    stage = "recovery.operationCheck"
+                    try operation.check()
+                }
                 scanStarted = true
                 stage = "coordinator.begin"
                 trace?.record(stage, .entered)
@@ -1567,6 +1579,22 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 trace?.record(stage, .completed)
                 stage = "coordinator.task"
                 try await task.value
+                trace?.record(stage, .completed)
+                try operation.check()
+                // A fresh grant can scan before optional identity I/O. Freeze
+                // the canonical displayed folder before suspension: a watched
+                // move under this same operation must keep its newer identity.
+                if case .afterInitialScan = recoveryTiming {
+                    guard let displayed = self.gridFolderURL, self.gridFolderRoot == rootID else { throw CancellationError() }
+                    let captureFolder = displayed.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+                    stage = "recovery"
+                    trace?.record(stage, .entered)
+                    await self.captureRecoveryPosition(captureFolder, rootID: rootID, services: services, context: context,
+                        operation: operation, shownFolder: captureFolder)
+                    trace?.record(stage, .completed)
+                    stage = "recovery.operationCheck"
+                    try operation.check()
+                }
             } catch {
                 trace?.record(stage, .rejected, reason: Task.isCancelled ? "task-cancelled" :
                     (!operation.isCurrent ? "operation-superseded" : FolderOpenStageRecorder.errorReason(error)))
@@ -2498,12 +2526,18 @@ extension CanvasWindowController: FolderScanHost {
             if gridFolderURL != snapshot.version.folder {
                 // The first scan canonicalizes its folder identity. Keep the name
                 // the user selected when that spelling still names this directory.
-                let presentationFolder = gridFolderURL.flatMap { selected in
+                let selectedSpelling = gridFolderURL.flatMap { selected in
                     selected.resolvingSymlinksInPath().standardizedFileURL.pathComponents ==
                         snapshot.version.folder.resolvingSymlinksInPath().standardizedFileURL.pathComponents ? selected : nil
-                } ?? snapshot.version.folder
+                }
+                let presentationFolder = selectedSpelling ?? snapshot.version.folder
                 gridFolderURL = snapshot.version.folder
-                followRecoveryPosition(to: snapshot.version.folder, rootID: snapshot.version.rootID)
+                // Initial symlink canonicalization is not a watched move. Its
+                // recovery capture belongs after the initial scan, otherwise this
+                // second path can enqueue the same optional I/O before completion.
+                if selectedSpelling == nil {
+                    followRecoveryPosition(to: snapshot.version.folder, rootID: snapshot.version.rootID)
+                }
                 loadSidebarTree(snapshot.version.folder, rootID: snapshot.version.rootID, count: nil)
                 if session.mode == .browsing, let window {
                     GridWindowIdentity.showFolder(presentationFolder, in: window)
