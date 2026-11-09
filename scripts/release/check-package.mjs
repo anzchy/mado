@@ -164,6 +164,7 @@ export function checkPackage(root, { requireSparkleLicence = false } = {}) {
 /** Sparkle and version keys of the shipped Info.plist (spec #212 story 7; ADR-015). */
 export function checkInfo(info, { version, build, expectedName } = {}) {
   const problems = [];
+  if (info.MadoDisableUpdates !== "NO") problems.push('MadoDisableUpdates must be exactly the string "NO" in a release (#611)');
   if ("SUEnableAutomaticChecks" in info) problems.push("SUEnableAutomaticChecks must stay unset so Sparkle asks on the second launch");
   if (info.SUEnableSystemProfiling !== false) problems.push("SUEnableSystemProfiling must be Boolean false");
   if (info.SUEnableInstallerLauncherService !== true) problems.push("SUEnableInstallerLauncherService must be Boolean true");
