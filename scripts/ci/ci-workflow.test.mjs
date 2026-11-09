@@ -235,3 +235,15 @@ test('dispatch repeat routing leaves push, PR, default dispatch and build-only b
   assert.match(originalUpload, /^        if: always\(\)$/m);
   assert.match(originalUpload, /name: app-lane-attempt1\n/);
 });
+
+test('dispatch validates all repeat inputs before building, and repeat upload is nonfatal', () => {
+  const app = jobBlock('app-tests');
+  const validate = app.split(/^      - name: /m).find(s => s.startsWith('Validate App repeat input\n'));
+  assert.ok(validate);
+  assert.match(validate, /^        if: github.event_name == 'workflow_dispatch'$/m);
+  assert.match(validate, /APP_REPEAT: \$\{\{ inputs.app_repeat \}\}/);
+  assert.match(validate, /run: node scripts\/ci\/app-repeat.mjs --validate/);
+  assert.ok(app.indexOf('Validate App repeat input') < app.indexOf('Build unsigned app'));
+  const upload = app.split(/^      - name: /m).find(s => s.startsWith('Upload App repeat logs\n'));
+  assert.match(upload, /^        continue-on-error: true$/m);
+});

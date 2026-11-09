@@ -23,8 +23,8 @@ func waitUntil(
     let deadline = Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true ? clock.now.advanced(by: timeout) : nil
     while try await !condition() {
         let site = comment().isEmpty ? "\(fileID):\(line)" : "\(fileID):\(line) (\(comment()))"
-        if Task.isCancelled { throw await conditionWaitFailure("wait cancelled at \(site)") }
-        if let deadline, clock.now >= deadline { throw await conditionWaitFailure("wait timed out after \(timeout) at \(site)") }
+        if Task.isCancelled { throw conditionWaitFailure("wait cancelled at \(site)") }
+        if let deadline, clock.now >= deadline { throw conditionWaitFailure("wait timed out after \(timeout) at \(site)") }
         between()
         try? await clock.sleep(until: clock.now.advanced(by: .milliseconds(5)), tolerance: nil)
     }
