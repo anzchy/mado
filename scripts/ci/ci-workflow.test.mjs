@@ -1,7 +1,7 @@
 // Structural checks on .github/workflows/ci.yml that keep the required checks and the main-branch guarantees intact.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -78,7 +78,7 @@ const verdictScript = () => {
   return match[1].replace(/^ {10}/gm, '');
 };
 const allSucceeded = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
-  APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', EVENT_NAME: 'push' };
 const runVerdict = (t, env, { trustedScript = false } = {}) => {
   const directory = mkdtempSync(join(tmpdir(), 'mado-walking-skeleton-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -100,18 +100,29 @@ test('Walking skeleton runs the verdict from a checkout of the trusted base, nev
 });
 
 test('with the trusted script, the step follows its verdict', t => {
-  const pass = runVerdict(t, { ...allSucceeded, APP_JOB: 'failure' }, { trustedScript: true });
+  const pass = runVerdict(t, allSucceeded, { trustedScript: true });
   assert.equal(pass.status, 0, pass.stdout + pass.stderr);
   assert.match(pass.stdout, /walking-skeleton: PASS/);
-  const fail = runVerdict(t, { ...allSucceeded, APP_JOB: 'cancelled' }, { trustedScript: true });
-  assert.equal(fail.status, 1);
+  for (const key of ['APP_JOB', 'APP_TEST_STEP', 'UNSIGNED_BUILD']) {
+    for (const value of ['failure', 'cancelled', 'skipped', '']) {
+      const fail = runVerdict(t, { ...allSucceeded, [key]: value }, { trustedScript: true });
+      assert.equal(fail.status, 1, `${key}=${value}`);
+    }
+  }
+  const diagnostic = runVerdict(t, { ...allSucceeded, EVENT_NAME: 'workflow_dispatch', APP_TESTS: 'false', APP_TEST_STEP: 'skipped' }, { trustedScript: true });
+  assert.equal(diagnostic.status, 0, diagnostic.stdout + diagnostic.stderr);
+  assert.match(diagnostic.stdout, /tests not run/);
+  assert.match(diagnostic.stdout, /formal App evidence: false/);
+  const docs = runVerdict(t, { CHANGES: 'success', NATIVE: 'false', LEDGER: 'success', PACKAGE: 'skipped',
+    MACUI: 'skipped', APP_JOB: 'skipped', UNSIGNED_BUILD: '', APP_TEST_STEP: '' }, { trustedScript: true });
+  assert.equal(docs.status, 0, docs.stdout + docs.stderr);
 });
 
 test('a base without the script falls back to requiring every job and the build step to succeed, with no skip', t => {
   const pass = runVerdict(t, allSucceeded);
   assert.equal(pass.status, 0, pass.stdout + pass.stderr);
   assert.match(pass.stdout, /walking-skeleton: PASS \(strict fallback/);
-  for (const key of ['CHANGES', 'LEDGER', 'PACKAGE', 'MACUI', 'APP_JOB', 'UNSIGNED_BUILD']) {
+  for (const key of ['CHANGES', 'LEDGER', 'PACKAGE', 'MACUI', 'APP_JOB', 'UNSIGNED_BUILD', 'APP_TEST_STEP']) {
     for (const value of ['failure', 'cancelled', 'skipped', '']) {
       const result = runVerdict(t, { ...allSucceeded, [key]: value });
       assert.equal(result.status, 1, `${key}=${value}`);
@@ -246,4 +257,85 @@ test('dispatch validates all repeat inputs before building, and repeat upload is
   assert.ok(app.indexOf('Validate App repeat input') < app.indexOf('Build unsigned app'));
   const upload = app.split(/^      - name: /m).find(s => s.startsWith('Upload App repeat logs\n'));
   assert.match(upload, /^        continue-on-error: true$/m);
+});
+
+
+const appStep = name => {
+  const step = jobBlock('app-tests').split(/^      - name: /m).find(s => s.startsWith(`${name}\n`));
+  assert.ok(step, `${name} step exists`);
+  return step;
+};
+const shellBlock = step => {
+  const script = step.match(/^        run: \|\n((?:          .*\n)+)/m)?.[1].replace(/^ {10}/gm, '');
+  assert.ok(script, 'step has a shell run block');
+  return script;
+};
+
+test('App evidence step outputs reach Walking skeleton and report runs on every outcome', () => {
+  const app = jobBlock('app-tests');
+  assert.match(appStep('Run App tests'), /^        id: app-run$/m);
+  assert.match(app, /app_test_step: \$\{\{ steps\.app-run\.outcome \}\}/);
+  assert.match(app, /app_retried: \$\{\{ steps\.app-report\.outputs\.retried \}\}/);
+  const report = appStep('Report App test evidence');
+  assert.match(report, /^        if: always\(\)$/m);
+  assert.match(report, /^        id: app-report$/m);
+  assert.match(report, /APP_TEST_STEP: \$\{\{ steps\.app-run\.outcome \}\}/);
+  assert.match(report, /EVENT_NAME: \$\{\{ github\.event_name \}\}/);
+  assert.match(report, /APP_TESTS: \$\{\{ inputs\.app_tests \}\}/);
+  for (const [field, expression] of [
+    ['APP_TEST_STEP', 'needs.app-tests.outputs.app_test_step'],
+    ['APP_RETRIED', 'needs.app-tests.outputs.app_retried'],
+    ['EVENT_NAME', 'github.event_name'], ['APP_TESTS', 'inputs.app_tests'],
+  ]) assert.ok(jobBlock('walking-skeleton').includes(field + ': $' + '{{ ' + expression + ' }}'), field);
+  const upload = appStep('Upload first App attempt');
+  assert.match(upload, /^        if: always\(\)$/m);
+  assert.match(upload, /^        continue-on-error: true$/m);
+});
+
+test('actual App run and report shells preserve exit status, logs, quarantine and retry evidence', t => {
+  const runScript = shellBlock(appStep('Run App tests'));
+  const reportScript = shellBlock(appStep('Report App test evidence'));
+  const directory = mkdtempSync(join(tmpdir(), 'app-evidence-shell-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const quarantine = 'app-lane quarantine skip=MadoAppTests.fixture() issue=#597\napp-lane quarantine owner=fixture expires=2026-11-22 id=MadoAppTests.fixture()\n';
+  const retry = 'app-lane: known flaky fixture (#425); retrying once\n';
+  for (const [status, retried] of [[0, false], [0, true], [1, false], [70, false], [1, true]]) {
+    const output = quarantine + (retried ? retry : '') + 'Tests run: 1, Failures: ' + (status ? '1' : '0') + ', Errors: 0, Skipped: 0\n';
+    const env = { PATH: process.env.PATH, REPEAT_ENABLED: 'false', APP_JOB_STARTED_MS: '0',
+      FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status),
+      GITHUB_OUTPUT: join(directory, 'outputs'), GITHUB_STEP_SUMMARY: join(directory, 'summary'),
+      EVENT_NAME: 'push', APP_TESTS: '', APP_TEST_STEP: status ? 'failure' : 'success' };
+    writeFileSync(env.GITHUB_OUTPUT, ''); writeFileSync(env.GITHUB_STEP_SUMMARY, '');
+    // A real Node process stands in for the native runner; all shell/filesystem transport is real.
+    const standIn = `node() { command node -e 'process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
+    const run = spawnSync('bash', ['-e', '-c', standIn + runScript], { cwd: directory, env, encoding: 'utf8' });
+    assert.equal(run.status, status, run.stdout + run.stderr);
+    assert.equal(run.stdout, output);
+    assert.equal(readFileSync(join(directory, '.build/app-tests.log'), 'utf8'), output);
+    const report = spawnSync('bash', ['-e', '-c', reportScript], { cwd: directory, env, encoding: 'utf8' });
+    assert.equal(report.status, 0, report.stdout + report.stderr);
+    assert.match(readFileSync(env.GITHUB_OUTPUT, 'utf8'), new RegExp(`^retried=${retried}$`, 'm'));
+    const summary = readFileSync(env.GITHUB_STEP_SUMMARY, 'utf8');
+    assert.match(summary, status ? /App tests: failed/ : retried ? /passed after the one automatic retry/ : /passed directly/);
+    assert.match(summary, new RegExp(`formal App evidence: ${!status}`));
+    assert.ok(summary.includes(quarantine.trim()), 'quarantine reports are retained');
+    if (retried) assert.ok(summary.includes(retry.trim()), 'retry hit is retained even on failure');
+  }
+});
+
+test('App report marks build-only dispatch and absent or cancelled test steps as no formal evidence', t => {
+  const script = shellBlock(appStep('Report App test evidence'));
+  const directory = mkdtempSync(join(tmpdir(), 'app-evidence-skipped-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const step of ['skipped', 'cancelled', '', 'failure']) {
+    const env = { PATH: process.env.PATH, EVENT_NAME: 'workflow_dispatch', APP_TESTS: 'false', APP_TEST_STEP: step,
+      GITHUB_OUTPUT: join(directory, 'outputs'), GITHUB_STEP_SUMMARY: join(directory, 'summary') };
+    writeFileSync(env.GITHUB_OUTPUT, ''); writeFileSync(env.GITHUB_STEP_SUMMARY, '');
+    const report = spawnSync('bash', ['-e', '-c', script], { cwd: directory, env, encoding: 'utf8' });
+    assert.equal(report.status, 0, report.stderr);
+    const summary = readFileSync(env.GITHUB_STEP_SUMMARY, 'utf8');
+    assert.match(summary, /formal App evidence: false/);
+    assert.doesNotMatch(summary, /passed directly|passed after/);
+    if (step === 'skipped') assert.match(summary, /tests not run/);
+  }
 });

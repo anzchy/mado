@@ -214,7 +214,8 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
   assert.match(upload, /^        uses: actions\/upload-artifact@[a-f0-9]{40}/m);
   assert.match(upload, /^          path: \.build\/app-lane-attempt1\.log$/m);
   assert.ok(lane, 'App lane step exists');
-  assert.match(lane, /^          else\n            node scripts\/tdd\/app-lane\.mjs\n          fi$/m);
+  // The real pipeline exit-status contract is exercised in ci-workflow.test.mjs.
+  assert.match(lane, /else\n +node scripts\/tdd\/app-lane\.mjs\n +fi\n +\} 2>&1 \| tee \.build\/app-tests\.log/m);
   assert.doesNotMatch(lane, /continue-on-error:/);
 });
 
