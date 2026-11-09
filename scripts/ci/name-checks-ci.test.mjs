@@ -9,7 +9,7 @@ import { verdict } from './walking-skeleton.mjs';
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 const job = id => workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:|$$(?![\\s\\S]))`, 'm'))?.[1] ?? '';
 const success = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
-  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false' };
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', APP_FORMAL: 'true', APP_DIAGNOSTIC: 'false' };
 
 test('Node name suites and code scan run in the existing required macOS ledger job', () => {
   const ledger = job('ledger-check');

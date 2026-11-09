@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { verdict } from './walking-skeleton.mjs';
 
 const nativeRun = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
-  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', EVENT_NAME: 'push' };
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', APP_FORMAL: 'true', APP_DIAGNOSTIC: 'false', EVENT_NAME: 'push' };
 const skippedRun = { CHANGES: 'success', NATIVE: 'false', LEDGER: 'success', PACKAGE: 'skipped', MACUI: 'skipped',
   APP_JOB: 'skipped', UNSIGNED_BUILD: '', APP_TEST_STEP: '' };
 const ok = env => verdict(env).ok;
@@ -122,4 +122,14 @@ test('CLI exit status and summary follow App execution evidence', () => {
   assert.equal(diagnostic.status, 0);
   assert.match(diagnostic.stdout, /tests not run/);
   assert.match(diagnostic.stdout, /formal App evidence: false/);
+});
+
+// M1/M2: structured provenance, not job success or free-text retry guesses.
+test('structured evidence is required and diagnostic dispatches cannot claim formal App success', () => {
+  for (const value of ['', undefined, 'false']) assert.equal(verdict({...nativeRun,APP_FORMAL:value}).ok,false);
+  for (const patch of [{APP_FILTER:'passing'},{APP_REPEAT:'2'},{APP_FORMAL:'false',APP_DIAGNOSTIC:'true',APP_RETRIED:'unknown'}]) {
+    const r=verdict({...nativeRun,EVENT_NAME:'workflow_dispatch',...patch});
+    assert.equal(r.ok,true);assert.equal(r.formalAppEvidence,false);assert.match(r.reason,/diagnostic/);
+  }
+  assert.equal(verdict({...nativeRun,APP_FORMAL:'false',APP_DIAGNOSTIC:'true'}).ok,false);
 });

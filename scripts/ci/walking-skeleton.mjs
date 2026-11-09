@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 export function verdict(env) {
   const { CHANGES, NATIVE, LEDGER, PACKAGE, MACUI, APP_JOB, UNSIGNED_BUILD,
-    APP_TEST_STEP, APP_RETRIED, EVENT_NAME, APP_TESTS } = env;
+    APP_TEST_STEP, APP_RETRIED, EVENT_NAME, APP_TESTS, APP_FORMAL, APP_DIAGNOSTIC, APP_FILTER, APP_REPEAT } = env;
   const facts = `changes=${CHANGES} native=${NATIVE} ledger=${LEDGER} package-tests=${PACKAGE} ` +
     `package-macui-tests=${MACUI} app-tests=${APP_JOB} unsigned-build-step=${UNSIGNED_BUILD || '(none)'} ` +
     `app-test-step=${APP_TEST_STEP || '(none)'} app-retried=${APP_RETRIED || '(none)'}`;
@@ -26,6 +26,9 @@ export function verdict(env) {
       return result(true, 'diagnostic dispatch: tests not run');
     }
     if (APP_TEST_STEP !== 'success') return fail('App test run step did not succeed');
+    const diagnostic = APP_DIAGNOSTIC === 'true' || Boolean(APP_FILTER) || (APP_REPEAT && APP_REPEAT !== '1');
+    if (EVENT_NAME === 'workflow_dispatch' && diagnostic) return result(true, 'diagnostic App test run; excluded from formal App evidence');
+    if (APP_FORMAL !== 'true' || diagnostic) return fail('structured evidence does not prove a formal full App run');
     if (!['true', 'false'].includes(APP_RETRIED)) return fail('App retry reporting is missing or invalid');
     return result(true, APP_RETRIED === 'true'
       ? 'native jobs succeeded; App tests passed after the one automatic retry'

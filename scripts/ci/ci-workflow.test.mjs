@@ -79,7 +79,7 @@ const verdictScript = () => {
   return match[1].replace(/^ {10}/gm, '');
 };
 const allSucceeded = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
-  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', EVENT_NAME: 'push' };
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false', APP_FORMAL: 'true', APP_DIAGNOSTIC: 'false', EVENT_NAME: 'push' };
 const runVerdict = (t, env, { trustedScript = false, baseFixture = false } = {}) => {
   const directory = mkdtempSync(join(tmpdir(), 'mado-walking-skeleton-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -297,7 +297,7 @@ test('App evidence step outputs reach Walking skeleton and report runs on every 
 
 test('actual App run and report shells preserve exit status, logs, quarantine and retry evidence', t => {
   const runScript = shellBlock(appStep('Run App tests'));
-  const reportScript = shellBlock(appStep('Report App test evidence'));
+  const reportScript = shellBlock(appStep('Report App test evidence')).replace('scripts/ci/app-evidence.mjs', JSON.stringify(fileURLToPath(new URL('./app-evidence.mjs',import.meta.url))));
   const directory = mkdtempSync(join(tmpdir(), 'app-evidence-shell-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const quarantine = 'app-lane quarantine skip=MadoAppTests.fixture() issue=#597\napp-lane quarantine owner=fixture expires=2026-11-22 id=MadoAppTests.fixture()\n';
@@ -305,12 +305,12 @@ test('actual App run and report shells preserve exit status, logs, quarantine an
   for (const [status, retried] of [[0, false], [0, true], [1, false], [70, false], [1, true]]) {
     const output = quarantine + (retried ? retry : '') + 'Tests run: 1, Failures: ' + (status ? '1' : '0') + ', Errors: 0, Skipped: 0\n';
     const env = { PATH: process.env.PATH, REPEAT_ENABLED: 'false', APP_JOB_STARTED_MS: '0',
-      FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status),
+      FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status), FIXTURE_ATTEMPTS: retried?'2':'1', APP_RESULT_PATH:join(directory,'.build/app-result.json'), PICSEE_APP_RESULT_PATH:join(directory,'.build/app-result.json'), APP_RESULT_ID:'workflow-fixture', PICSEE_APP_RESULT_ID:'workflow-fixture',
       GITHUB_OUTPUT: join(directory, 'outputs'), GITHUB_STEP_SUMMARY: join(directory, 'summary'),
       EVENT_NAME: 'push', APP_TESTS: '', APP_TEST_STEP: status ? 'failure' : 'success' };
     writeFileSync(env.GITHUB_OUTPUT, ''); writeFileSync(env.GITHUB_STEP_SUMMARY, '');
     // A real Node process stands in for the native runner; all shell/filesystem transport is real.
-    const standIn = `node() { command node -e 'process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
+    const standIn = `node() { command node -e 'require("node:fs").writeFileSync(process.env.PICSEE_APP_RESULT_PATH,JSON.stringify({version:1,runId:process.env.PICSEE_APP_RESULT_ID,complete:true,attempts:Number(process.env.FIXTURE_ATTEMPTS),status:Number(process.env.FIXTURE_STATUS),filter:null,retryEnabled:true,defaultQuarantine:true})); process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
     const run = spawnSync('bash', ['-e', '-c', standIn + runScript], { cwd: directory, env, encoding: 'utf8' });
     assert.equal(run.status, status, run.stdout + run.stderr);
     assert.equal(run.stdout, output);
@@ -327,7 +327,7 @@ test('actual App run and report shells preserve exit status, logs, quarantine an
 });
 
 test('App report marks build-only dispatch and absent or cancelled test steps as no formal evidence', t => {
-  const script = shellBlock(appStep('Report App test evidence'));
+  const script = shellBlock(appStep('Report App test evidence')).replace('scripts/ci/app-evidence.mjs', JSON.stringify(fileURLToPath(new URL('./app-evidence.mjs',import.meta.url))));
   const directory = mkdtempSync(join(tmpdir(), 'app-evidence-skipped-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   for (const step of ['skipped', 'cancelled', '', 'failure']) {
@@ -404,4 +404,14 @@ test('strict fallback facts and pass or fail messages describe the App test step
     assert.match(run.stdout, new RegExp(`app-test-step=${step || '\\(none\\)'}`));
     assert.match(run.stdout, /walking-skeleton: FAIL \(strict fallback: .*App test step did not succeed/);
   }
+});
+
+test('workflow transports structured evidence paths policy and report verdict outputs', () => {
+  const run=appStep('Run App tests'), report=appStep('Report App test evidence'), skeleton=jobBlock('walking-skeleton');
+  assert.match(run,/PICSEE_APP_RESULT_PATH: \.build\/app-result\.json/);
+  assert.match(report,/run: \|\n +node scripts\/ci\/app-evidence\.mjs/);
+  assert.doesNotMatch(report,/grep -q/);
+  assert.match(report,/APP_FILTER:/);assert.match(report,/APP_REPEAT:/);assert.match(report,/APP_RESULT_ID:/);
+  assert.match(skeleton,/APP_FORMAL: \$\{\{ needs\.app-tests\.outputs\.app_formal \}\}/);
+  assert.match(skeleton,/APP_DIAGNOSTIC: \$\{\{ needs\.app-tests\.outputs\.app_diagnostic \}\}/);
 });

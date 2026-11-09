@@ -215,6 +215,8 @@ jobs:
       unsigned_build: ${{ steps.unsigned-build.outcome }}
       app_test_step: ${{ steps.app-run.outcome }}
       app_retried: ${{ steps.app-report.outputs.retried }}
+      app_formal: ${{ steps.app-report.outputs.formal }}
+      app_diagnostic: ${{ steps.app-report.outputs.diagnostic }}
     steps:
       - name: Record repeat job start
         if: github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1
@@ -256,6 +258,8 @@ jobs:
         # The runner is the only job on its machine, so the local heavy lock is not needed.
         env:
           PICSEE_HEAVY_LOCK_HELD: '1'
+          PICSEE_APP_RESULT_PATH: .build/app-result.json
+          PICSEE_APP_RESULT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           REPEAT_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 }}
           APP_FILTER: ${{ inputs.app_filter }}
           APP_REPEAT: ${{ inputs.app_repeat }}
@@ -277,35 +281,12 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           APP_TESTS: ${{ inputs.app_tests }}
           APP_TEST_STEP: ${{ steps.app-run.outcome }}
+          APP_FILTER: ${{ inputs.app_filter }}
+          APP_REPEAT: ${{ inputs.app_repeat }}
+          APP_RESULT_PATH: .build/app-result.json
+          APP_RESULT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          retried=false
-          if [ -f .build/app-tests.log ] && grep -q '^app-lane: known flaky .*; retrying once$' .build/app-tests.log; then
-            retried=true
-          fi
-          echo "retried=$retried" >> "$GITHUB_OUTPUT"
-          formal=false
-          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$APP_TESTS" = false ] && [ "$APP_TEST_STEP" = skipped ]; then
-            status='tests not run (diagnostic dispatch)'
-          elif [ "$APP_TEST_STEP" = success ]; then
-            formal=true
-            if [ "$retried" = true ]; then
-              status='passed after the one automatic retry'
-            else
-              status='passed directly'
-            fi
-          else
-            status="failed or not completed (step=${APP_TEST_STEP:-(none)})"
-          fi
-          {
-            echo "App tests: $status"
-            echo "formal App evidence: $formal"
-            echo 'First-attempt log: app-lane-attempt1 (uploaded when produced)'
-            if [ -f .build/app-tests.log ]; then
-              echo '```text'
-              grep -E '^app-lane( quarantine |: (known flaky |first-attempt failures:))' .build/app-tests.log || true
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          node scripts/ci/app-evidence.mjs
       - name: Upload first App attempt
         continue-on-error: true
         if: always()
@@ -363,6 +344,10 @@ jobs:
           UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}
           APP_TEST_STEP: ${{ needs.app-tests.outputs.app_test_step }}
           APP_RETRIED: ${{ needs.app-tests.outputs.app_retried }}
+          APP_FORMAL: ${{ needs.app-tests.outputs.app_formal }}
+          APP_DIAGNOSTIC: ${{ needs.app-tests.outputs.app_diagnostic }}
+          APP_FILTER: ${{ inputs.app_filter }}
+          APP_REPEAT: ${{ inputs.app_repeat }}
           EVENT_NAME: ${{ github.event_name }}
           APP_TESTS: ${{ inputs.app_tests }}
         run: |
