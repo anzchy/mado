@@ -376,3 +376,113 @@ func issue604LateOldResultsCannotRebuildNewTree(fails: Bool) async throws {
         #expect(scene.failed == nil)
     } teardown: { await late.release(); await scene.reads.release() }
 }
+
+/// Hold whichever listing the reopened session requests, so a stale failure marker cannot race past the check.
+private actor Issue604PendingListing: SidebarFolderEnumerating {
+    let reads: Issue604Reads
+    private var armed = true
+    private var released = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private(set) var holding = false
+    init(reads: Issue604Reads) { self.reads = reads }
+    func release() { released = true; waiter?.resume(); waiter = nil }
+    func children(in folder: URL, root: URL) async throws -> [URL] {
+        if armed {
+            armed = false
+            holding = true
+            if !released { await withCheckedContinuation { waiter = $0 } }
+            holding = false
+        }
+        return try await reads.children(in: folder, root: root)
+    }
+    func imageCount(in folder: URL, root: URL) async throws -> Int {
+        try await reads.imageCount(in: folder, root: root)
+    }
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue604LeaveThenReopenSameFolderStartsNormalL0Fallback() async throws {
+    let scene = try Issue604Scene(holdScan: true)
+    defer { scene.close() }
+    let listing = Issue604PendingListing(reads: scene.reads)
+    try await withAsyncTeardown {
+        try await scene.openParent()
+        let rootID = try #require(scene.controller.session.folderScan?.sourceSnapshot?.version.rootID)
+        let lockedURL = try #require(scene.row(scene.locked)).folderURL
+        try #require(scene.row(scene.locked)).performClick(nil)
+        try await scene.wait { await scene.reads.lockedScans == 1 }
+        await scene.reads.release()
+        try await scene.wait { scene.failed != nil }
+        try await scene.settleFailureTree()
+        try scene.expectFailureTree()
+        let image = scene.base.appendingPathComponent("standalone.png")
+        try Data(contentsOf: scene.parent.appendingPathComponent("0.png")).write(to: image)
+        scene.controller.open(image, accessRequest: .fileGrant(image))
+        try await scene.wait {
+            scene.controller.hasImage && scene.controller.session.folderScan?.snapshot == nil &&
+                scene.controller.session.folderScan?.isScanning != true
+        }
+        #expect(scene.failed == nil)
+        await scene.reads.holdNextScan()
+        scene.controller.sidebarBrowserOverride = SidebarFolderBrowser(access: scene.sidebarAccess, enumerator: listing)
+        // Reuse the exact row URL, including its directory spelling, rather than a path-equivalent new URL.
+        scene.controller.browseRecoveredFolder(lockedURL, rootID: rootID)
+        // Synchronous fallback belongs to the new read, before any listing can repair the stale marker.
+        #expect(scene.topology == ["Locked:0:true"])
+        #expect(scene.failed == nil)
+        #expect(scene.row(scene.locked)?.countLabel.isHidden == true)
+        #expect(scene.row(scene.locked)?.countLabel.stringValue.isEmpty == true)
+        try await scene.wait {
+            let heldListing = await listing.holding
+            let scans = await scene.reads.lockedScans
+            return heldListing && scans == 2
+        }
+        #expect(scene.topology == ["Locked:0:true"])
+        #expect(scene.controller.session.folderScan?.isReadingFolder == true)
+        #expect(scene.failed == nil)
+    } teardown: { await listing.release(); await scene.reads.release() }
+}
+
+/// Forward real reads and observe the next authoritative reload after a real filesystem write.
+private actor Issue604WatchReads: SidebarFolderEnumerating {
+    let reads: Issue604Reads
+    private(set) var listings = 0
+    private(set) var counts: [String: Int] = [:]
+    init(reads: Issue604Reads) { self.reads = reads }
+    func children(in folder: URL, root: URL) async throws -> [URL] {
+        listings += 1
+        return try await reads.children(in: folder, root: root)
+    }
+    func imageCount(in folder: URL, root: URL) async throws -> Int {
+        let value = try await reads.imageCount(in: folder, root: root)
+        counts[folder.standardizedFileURL.path] = value
+        return value
+    }
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor func issue604RealWatchReloadKeepsFailedRootTree() async throws {
+    let scene = try Issue604Scene()
+    defer { scene.close() }
+    let probe = Issue604WatchReads(reads: scene.reads)
+    let leases = Issue604ObservedLeases(access: scene.sidebarAccess)
+    scene.controller.sidebarBrowserOverride = SidebarFolderBrowser(access: leases, enumerator: probe)
+    try await scene.openParent()
+    try #require(scene.row(scene.locked)).performClick(nil)
+    try await scene.wait { scene.failed != nil }
+    try await scene.settleFailureTree()
+    try await scene.wait { scene.row(scene.parent)?.countLabel.stringValue == "1" }
+    try scene.expectFailureTree()
+    try await scene.wait { await leases.outstanding == 0 }
+    let beforeWrite = await probe.listings
+    let image = try Data(contentsOf: scene.parent.appendingPathComponent("0.png"))
+    try image.write(to: scene.parent.appendingPathComponent("watch-added.png"))
+    // No reconcileAll or synthetic callback: production FSEventSource and WatchHub must deliver the write.
+    try await scene.wait { await probe.listings > beforeWrite }
+    try await scene.wait {
+        scene.row(scene.parent)?.countLabel.stringValue == "2" || scene.topology == ["Locked:0:true"]
+    }
+    // Observe either the completed real count or the broken topology; a mutant fails assertions, not a timeout.
+    try scene.expectFailureTree()
+    #expect(scene.row(scene.parent)?.countLabel.stringValue == "2")
+    #expect(await probe.counts[scene.parent.standardizedFileURL.path] == 2)
+}
