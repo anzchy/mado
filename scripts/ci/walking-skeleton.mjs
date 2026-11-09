@@ -1,36 +1,42 @@
 #!/usr/bin/env node
-// The required `Walking skeleton` check. It passes only when
-//   - the native-inputs classifier and the ledger check both succeeded, and
-//   - either native jobs were required and both package suites succeeded and the unsigned `xcodebuild build` step in
-//     the App tests job succeeded and that job ended in success or failure (a failing App test step is allowed: App
-//     tests are not a required check; a cancelled or missing job is not), or
-//   - the classifier said no native input changed and every native job was skipped.
-//
-//   CHANGES=… NATIVE=… LEDGER=… PACKAGE=… MACUI=… APP_JOB=… UNSIGNED_BUILD=… node scripts/ci/walking-skeleton.mjs
+// The required Walking skeleton check trusts the native-inputs classifier and
+// requires every native job, the unsigned build, and the App run step to succeed.
+// Only an explicit build-only manual dispatch may pass without App evidence;
+// a trusted docs-only classification must skip every native job.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function verdict(env) {
-  const { CHANGES, NATIVE, LEDGER, PACKAGE, MACUI, APP_JOB, UNSIGNED_BUILD } = env;
+  const { CHANGES, NATIVE, LEDGER, PACKAGE, MACUI, APP_JOB, UNSIGNED_BUILD,
+    APP_TEST_STEP, APP_RETRIED, EVENT_NAME, APP_TESTS } = env;
   const facts = `changes=${CHANGES} native=${NATIVE} ledger=${LEDGER} package-tests=${PACKAGE} ` +
-    `package-macui-tests=${MACUI} app-tests=${APP_JOB} unsigned-build-step=${UNSIGNED_BUILD || '(none)'}`;
-  const fail = reason => ({ ok: false, facts, reason });
+    `package-macui-tests=${MACUI} app-tests=${APP_JOB} unsigned-build-step=${UNSIGNED_BUILD || '(none)'} ` +
+    `app-test-step=${APP_TEST_STEP || '(none)'} app-retried=${APP_RETRIED || '(none)'}`;
+  const result = (ok, reason, formalAppEvidence = false) => ({ ok, facts, reason, formalAppEvidence });
+  const fail = reason => result(false, reason);
   if (CHANGES !== 'success') return fail('native-inputs classifier did not succeed');
   if (LEDGER !== 'success') return fail('ledger HTML check did not succeed');
   if (NATIVE === 'true') {
     if (PACKAGE !== 'success') return fail('package tests (non-UI) did not succeed');
     if (MACUI !== 'success') return fail('package tests (MacUI) did not succeed');
-    // A failed App test step is allowed (App tests are not a required check); a cancelled,
-    // skipped or missing job is not, because its build output can no longer be trusted to describe this run.
-    if (!['success', 'failure'].includes(APP_JOB)) return fail('App tests job neither succeeded nor failed');
+    if (APP_JOB !== 'success') return fail('App tests job did not succeed');
     if (UNSIGNED_BUILD !== 'success') return fail('unsigned xcodebuild build step did not succeed');
-    return { ok: true, facts, reason: 'native jobs ran and the required ones succeeded' };
+    if (EVENT_NAME === 'workflow_dispatch' && APP_TESTS === 'false') {
+      if (APP_TEST_STEP !== 'skipped' || APP_RETRIED === 'true') return fail('build-only dispatch reported inconsistent App execution');
+      return result(true, 'diagnostic dispatch: tests not run');
+    }
+    if (APP_TEST_STEP !== 'success') return fail('App test run step did not succeed');
+    if (!['true', 'false'].includes(APP_RETRIED)) return fail('App retry reporting is missing or invalid');
+    return result(true, APP_RETRIED === 'true'
+      ? 'native jobs succeeded; App tests passed after the one automatic retry'
+      : 'native jobs succeeded; App tests passed directly', true);
   }
   if (NATIVE === 'false') {
-    if ([PACKAGE, MACUI, APP_JOB].some(result => result !== 'skipped') || UNSIGNED_BUILD) {
+    if ([PACKAGE, MACUI, APP_JOB].some(value => value !== 'skipped') || UNSIGNED_BUILD ||
+        (APP_TEST_STEP && APP_TEST_STEP !== 'skipped') || APP_RETRIED === 'true') {
       return fail('classifier skipped native inputs but a native job did not skip');
     }
-    return { ok: true, facts, reason: 'no native input changed; native jobs skipped' };
+    return result(true, 'no native input changed; native jobs skipped');
   }
   return fail('classifier gave no native=true|false output');
 }
@@ -39,5 +45,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const result = verdict(process.env);
   console.log(result.facts);
   console.log(`walking-skeleton: ${result.ok ? 'PASS' : 'FAIL'} (${result.reason})`);
+  console.log(`formal App evidence: ${result.formalAppEvidence}`);
   process.exitCode = result.ok ? 0 : 1;
 }

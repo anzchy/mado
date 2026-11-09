@@ -9,7 +9,7 @@ import { verdict } from './walking-skeleton.mjs';
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 const job = id => workflow.match(new RegExp(`^  ${id}:\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:|$$(?![\\s\\S]))`, 'm'))?.[1] ?? '';
 const success = { CHANGES: 'success', NATIVE: 'true', LEDGER: 'success', PACKAGE: 'success', MACUI: 'success',
-  APP_JOB: 'success', UNSIGNED_BUILD: 'success' };
+  APP_JOB: 'success', UNSIGNED_BUILD: 'success', APP_TEST_STEP: 'success', APP_RETRIED: 'false' };
 
 test('Node name suites and code scan run in the existing required macOS ledger job', () => {
   const ledger = job('ledger-check');
@@ -17,7 +17,8 @@ test('Node name suites and code scan run in the existing required macOS ledger j
   assert.match(ledger, /run: node --test scripts\/name-checks\/\*\.test\.mjs scripts\/ci\/name-checks-ci\.test\.mjs/);
   assert.match(ledger, /run: node scripts\/name-checks\/code-name\.mjs/);
   assert.equal(verdict({ ...success, LEDGER: 'failure' }).ok, false);
-  assert.equal(verdict({ ...success, APP_JOB: 'failure' }).ok, true);
+  // #587 step 2 requires App assertion failures to fail the required check.
+  assert.equal(verdict({ ...success, APP_JOB: 'failure' }).ok, false);
 });
 
 test('executing the real unsigned-build shell block gates on build AND product checker outcomes', () => {
@@ -62,7 +63,7 @@ test('release regressions run unconditionally in the required ledger job with a 
 });
 
 test('required ledger failures reject both native and documentation-only verdicts', () => {
-  const docsOnly = { ...success, NATIVE: 'false', PACKAGE: 'skipped', MACUI: 'skipped', APP_JOB: 'skipped', UNSIGNED_BUILD: '' };
+  const docsOnly = { ...success, NATIVE: 'false', PACKAGE: 'skipped', MACUI: 'skipped', APP_JOB: 'skipped', UNSIGNED_BUILD: '', APP_TEST_STEP: '' };
   for (const baseline of [success, docsOnly]) {
     assert.equal(verdict(baseline).ok, true);
     for (const LEDGER of ['failure', 'cancelled', 'skipped']) {

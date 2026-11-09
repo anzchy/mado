@@ -203,7 +203,7 @@ jobs:
   # One macOS job builds the unsigned app and then the App tests: build-for-testing builds MadoApp as well, so a
   # separate unsigned-build job duplicated that work and took a fourth macOS slot. The unsigned build runs in its own
   # step, using incremental-file-hashing to detect changed files, followed by the built-product identity check.
-  # Walking skeleton requires both to succeed through that step's outcome; independent App-test failures remain allowed.
+  # Walking skeleton requires the build, App run step and entire App job to succeed.
   # A dispatch with app_tests=false runs only the Build unsigned app step.
   app-tests:
     name: App tests
@@ -213,6 +213,8 @@ jobs:
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 && 120 || 45 }}
     outputs:
       unsigned_build: ${{ steps.unsigned-build.outcome }}
+      app_test_step: ${{ steps.app-run.outcome }}
+      app_retried: ${{ steps.app-report.outputs.retried }}
     steps:
       - name: Record repeat job start
         if: github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1
@@ -241,7 +243,7 @@ jobs:
           restore-keys: ${{ steps.dd-key.outputs.prefix }}
       - name: Build unsigned app
         id: unsigned-build
-        # Keep product identity in this outcome: Walking skeleton allows independent App-test failures.
+        # Keep product identity in this outcome as well as the complete App job result.
         run: |
           xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
           node scripts/name-checks/built-product.mjs .build/dd-ci/Build/Products/Debug/Mado.app --entitlements App/Resources/Mado.entitlements
@@ -249,6 +251,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         run: xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci 'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'
       - name: Run App tests
+        id: app-run
         if: github.event_name != 'workflow_dispatch' || inputs.app_tests
         # The runner is the only job on its machine, so the local heavy lock is not needed.
         env:
@@ -257,12 +260,52 @@ jobs:
           APP_FILTER: ${{ inputs.app_filter }}
           APP_REPEAT: ${{ inputs.app_repeat }}
         run: |
-          if [ "$REPEAT_ENABLED" = true ]; then
-            export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
-            node scripts/ci/app-repeat.mjs
-          else
-            node scripts/tdd/app-lane.mjs
+          set -o pipefail
+          mkdir -p .build
+          {
+            if [ "$REPEAT_ENABLED" = true ]; then
+              export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
+              node scripts/ci/app-repeat.mjs
+            else
+              node scripts/tdd/app-lane.mjs
+            fi
+          } 2>&1 | tee .build/app-tests.log
+      - name: Report App test evidence
+        id: app-report
+        if: always()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          APP_TESTS: ${{ inputs.app_tests }}
+          APP_TEST_STEP: ${{ steps.app-run.outcome }}
+        run: |
+          retried=false
+          if [ -f .build/app-tests.log ] && grep -q '^app-lane: known flaky .*; retrying once$' .build/app-tests.log; then
+            retried=true
           fi
+          echo "retried=$retried" >> "$GITHUB_OUTPUT"
+          formal=false
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$APP_TESTS" = false ] && [ "$APP_TEST_STEP" = skipped ]; then
+            status='tests not run (diagnostic dispatch)'
+          elif [ "$APP_TEST_STEP" = success ]; then
+            formal=true
+            if [ "$retried" = true ]; then
+              status='passed after the one automatic retry'
+            else
+              status='passed directly'
+            fi
+          else
+            status="failed or not completed (step=${APP_TEST_STEP:-(none)})"
+          fi
+          {
+            echo "App tests: $status"
+            echo "formal App evidence: $formal"
+            echo 'First-attempt log: app-lane-attempt1 (uploaded when produced)'
+            if [ -f .build/app-tests.log ]; then
+              echo '```text'
+              grep -E '^app-lane( quarantine |: (known flaky |first-attempt failures:))' .build/app-tests.log || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload first App attempt
         continue-on-error: true
         if: always()
@@ -289,8 +332,8 @@ jobs:
           key: ${{ steps.dd-key.outputs.key }}
 
   # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the classifier and the ledger
-  # check must have succeeded, and then either both package suites and the unsigned build step succeeded (and the App
-  # tests job ended in success or failure), or the classifier found no native input and every native job skipped.
+  # check must have succeeded, and then every native job and App execution succeeded, or the trusted classifier
+  # found no native input and every native job skipped. Build-only dispatches are explicitly diagnostic.
   # Like the classifier, the verdict comes from the base commit, so a pull request cannot loosen the rule that judges
   # it. A base without the script gets a stricter inline rule: every job and the build step succeeded, no skip.
   walking-skeleton:
@@ -308,7 +351,7 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: trusted
           persist-credentials: false
-      - name: Require the ledger check, package tests and the unsigned build
+      - name: Require the ledger check, package tests and App tests
         env:
           CHANGES: ${{ needs.changes.result }}
           NATIVE: ${{ needs.changes.outputs.native }}
@@ -317,6 +360,10 @@ jobs:
           MACUI: ${{ needs.package-macui-tests.result }}
           APP_JOB: ${{ needs.app-tests.result }}
           UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}
+          APP_TEST_STEP: ${{ needs.app-tests.outputs.app_test_step }}
+          APP_RETRIED: ${{ needs.app-tests.outputs.app_retried }}
+          EVENT_NAME: ${{ github.event_name }}
+          APP_TESTS: ${{ inputs.app_tests }}
         run: |
           if [ -f trusted/scripts/ci/walking-skeleton.mjs ]; then
             node trusted/scripts/ci/walking-skeleton.mjs
@@ -326,7 +373,7 @@ jobs:
               echo 'walking-skeleton: FAIL (strict fallback: base has no verdict script and native was not true)'
               exit 1
             fi
-            for result in "$CHANGES" "$LEDGER" "$PACKAGE" "$MACUI" "$APP_JOB" "$UNSIGNED_BUILD"; do
+            for result in "$CHANGES" "$LEDGER" "$PACKAGE" "$MACUI" "$APP_JOB" "$UNSIGNED_BUILD" "$APP_TEST_STEP"; do
               if [ "$result" != success ]; then
                 echo 'walking-skeleton: FAIL (strict fallback: base has no verdict script and a job or the build step did not succeed)'
                 exit 1
