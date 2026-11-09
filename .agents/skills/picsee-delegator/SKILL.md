@@ -117,9 +117,14 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    commit quoting the user); BLOCK → tell the user, open an issue. Record the swept head. Keep the weekly `full` run
    (`docs/agents/doc-gardening.md` §When it runs).
 8. **PR & merge** — body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. Build Gates with
-   `gh run view <id> --json headSha,url,status,conclusion,jobs > run.json`, then
+   `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt > run.json`, then
    `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the seven owner-gates lanes (including `design-check`) and CI
-   `app-tests`; add audit and device-smoke rows, keep every status, SHA and source honest and run the PR-body lint. For changed UI, add
+   `app-tests`. App PASS requires a current completed run, one completed successful App job and one completed successful
+   Run App tests step. Failed/cancelled jobs cannot borrow step success. Docs-only/build-only are reasoned NOT RUN;
+   filtered/repeat diagnostics are NOT VERIFIED, including dispatches whose inputs are absent from gh jobs exports.
+   Preserve the generated verdict; add audit/device-smoke rows and run the real PR-body lint. Current required checks:
+   Walking skeleton, PR body Gates, Agent tooling. App tests + Design check required and strict are planned by #613;
+   the owner must enable and verify those settings. Design check already runs in CI. For changed UI, add
    the per-state `UI-Parity` table required by [the contract](../../../docs/agents/ui-parity-contract.md). Before
    merge, every changed reachable state needs design-derived automated assertions (geometry from the pinned CSS checked
    on rendered frames, colours, truncation, visible states, keyboard/menu behaviour), marked `AUTO-PASS`, plus both
