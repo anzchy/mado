@@ -111,5 +111,7 @@
     }
   ],
   "status": "completed",
-  "url": "https://github.com/anzchy/picsee/actions/runs/41790488799"
+  "url": "https://github.com/anzchy/picsee/actions/runs/41790488799",
+  "event": "pull_request",
+  "attempt": 1
 }

@@ -163,11 +163,11 @@ function runCI(t, run, { summary = false, expectedHead = head } = {}) {
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const file = join(directory, 'run.json');
   writeFileSync(file, JSON.stringify(run));
-  const args = ['--ci', file, '--head', expectedHead];
+  const args = ['--ci', file, ...(expectedHead === null ? [] : ['--head', expectedHead])];
   return summary ? runRows(t, typeof summary === 'string' ? summary : complete, args)
     : spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
 }
-const validRun = () => ({ headSha: head, url: 'https://github.com/anzchy/picsee/actions/runs/322',
+const validRun = () => ({ event: 'pull_request', attempt: 1, headSha: head, url: 'https://github.com/anzchy/picsee/actions/runs/322',
   status: 'completed', jobs: [{ name: 'App tests', status: 'completed', conclusion: 'success',
     steps: [{ name: 'Run App tests', number: 8, status: 'completed', conclusion: 'success' }] }] });
 
@@ -228,7 +228,8 @@ for (const scenario of ['docs-only', 'native', 'dispatch-app-tests-false']) {
 }
 
 // Exported with gh run view 41790488799 --json headSha,url,status,conclusion,jobs.
-// Step fields are status/conclusion, not outcome; no synthetic event/inputs are needed.
+// event/attempt supplemented from the same run via gh run view --json event,attempt,headSha,url.
+// Real metadata: event=pull_request, attempt=1. Step fields are status/conclusion, not outcome.
 const nativeExport = JSON.parse(readFileSync(new URL('./fixtures/ci-app-tests-native.json', import.meta.url), 'utf8'));
 for (const [conclusion, jobConclusion, expected] of [
   ['success', 'success', 'PASS'], ['success', 'failure', 'FAIL'], ['success', 'cancelled', 'FAIL'],
@@ -652,8 +653,7 @@ for (const conclusion of ['', 'unknown', 'neutral', 'timed_out', 'action_require
     run.jobs[0].conclusion = conclusion;
     const result = runCI(t, run);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
-    assert.match(result.stdout, /evidence|conclusion/);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests step evidence missing or invalid ${run.url} |\n`);
   });
 }
 
@@ -666,8 +666,7 @@ for (const name of diagnosticMarkers) {
       run.jobs[0].steps.push({ name, status, conclusion });
       const result = runCI(t, run);
       assert.equal(result.status, 0, result.stderr);
-      assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
-      assert.match(result.stdout, /diagnostic|scope/);
+      assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests diagnostic run does not prove full-suite scope ${run.url} |\n`);
     });
   }
 }
@@ -676,8 +675,8 @@ for (const metadata of [{ event: 'workflow_dispatch' }, { attempt: 2 }, { event:
   test(`diagnostic run metadata ${JSON.stringify(metadata)} cannot provide full App PASS`, t => {
     const result = runCI(t, Object.assign(validRun(), metadata));
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
-    assert.match(result.stdout, /diagnostic|scope/);
+    const run = validRun();
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests diagnostic run does not prove full-suite scope ${run.url} |\n`);
   });
 }
 
@@ -747,5 +746,124 @@ for (const conclusion of ['failure', 'cancelled']) {
     assert.equal(result.stdout.trim().split('\n').length, 8);
     const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling only |\n| device-smoke | N/A | — | no UI change |\n`;
     assert.deepEqual(checkGates(body, head), { ok: false, reason: 'app-tests is a FAIL row' });
+  });
+}
+
+
+// Fix1 specification: absent provenance is no longer accepted as current, ordinary attempt 1.
+for (const missing of ['--head', 'event', 'attempt', 'event+attempt', '--head+event+attempt']) {
+  test(`successful App evidence with missing ${missing} is exactly unverified`, t => {
+    const run = validRun();
+    if (missing.includes('event')) delete run.event;
+    if (missing.includes('attempt')) delete run.attempt;
+    const noHead = missing.includes('--head');
+    const reason = noHead ? '--head not supplied' : missing.includes('event') ? 'event not exported' : 'attempt not exported';
+    const result = runCI(t, run, { expectedHead: noHead ? null : head });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests ${reason} ${run.url} |\n`);
+  });
+}
+
+for (const event of [null, '', ' ', 1, true, [], {}, 'PULL_REQUEST', 'pull-request', 'pull\rrequest', 'pull\nrequest', 'pull|request']) {
+  test(`successful App evidence with invalid event ${JSON.stringify(event)} is exactly unverified`, t => {
+    const run = Object.assign(validRun(), { event });
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests event invalid ${run.url} |\n`);
+  });
+}
+
+for (const attempt of [null, '1', 0, -1, 1.5, true, [], {}]) {
+  test(`successful App evidence with invalid attempt ${JSON.stringify(attempt)} is exactly unverified`, t => {
+    const run = Object.assign(validRun(), { attempt });
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests attempt invalid ${run.url} |\n`);
+  });
+}
+
+test('explicit push provenance permits full first-attempt App PASS', t => {
+  const run = Object.assign(validRun(), { event: 'push' });
+  const result = runCI(t, run);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `| app-tests | PASS | ${head} | ${run.url} |\n`);
+});
+
+test('S6 all metadata removals and diagnostic alternatives deny App PASS', t => {
+  for (const suppliedHead of [false, true]) {
+    for (const event of [undefined, 'pull_request', 'workflow_dispatch']) {
+      for (const attempt of [undefined, 1, 2]) {
+        const run = Object.assign(validRun(), { event, attempt });
+        run.jobs[0].steps.push(...diagnosticMarkers.map(name => ({ name, status: 'completed', conclusion: 'skipped' })));
+        const result = runCI(t, run, { expectedHead: suppliedHead ? head : null });
+        assert.equal(result.status, 0, result.stderr);
+        const missing = !suppliedHead ? '--head not supplied' : event === undefined ? 'event not exported'
+          : attempt === undefined ? 'attempt not exported' : undefined;
+        const diagnostic = event === 'workflow_dispatch' || attempt === 2;
+        const expected = missing ? `| app-tests | NOT VERIFIED | ${head} | App tests ${missing} ${run.url} |\n`
+          : diagnostic ? `| app-tests | NOT VERIFIED | ${head} | App tests diagnostic run does not prove full-suite scope ${run.url} |\n`
+            : `| app-tests | PASS | ${head} | ${run.url} |\n`;
+        assert.equal(result.stdout, expected, JSON.stringify({ suppliedHead, event, attempt }));
+      }
+    }
+  }
+});
+
+test('missing provenance preserves known failures and intentional NOT RUN', t => {
+  for (const scenario of ['failure', 'cancelled', 'step-failure', 'docs-only', 'build-only']) {
+    for (const missing of ['--head', 'event', 'attempt']) {
+      const run = validRun();
+      const job = run.jobs[0];
+      let expected;
+      if (scenario === 'failure' || scenario === 'cancelled') {
+        job.conclusion = scenario;
+        expected = `| app-tests | FAIL | ${head} | App tests ${scenario} ${run.url} |\n`;
+      } else if (scenario === 'step-failure') {
+        job.steps[0].conclusion = 'failure';
+        expected = `| app-tests | FAIL | ${head} | App tests step failure ${run.url} |\n`;
+      } else if (scenario === 'docs-only') {
+        job.conclusion = 'skipped';
+        run.jobs.push(...['Native inputs', 'Walking skeleton'].map(name => ({ name, status: 'completed', conclusion: 'success' })));
+        expected = `| app-tests | NOT RUN | — | App tests skipped (no native input changed) ${run.url} |\n`;
+      } else {
+        job.steps = [
+          { name: 'Build unsigned app', status: 'completed', conclusion: 'success' },
+          { name: 'Build App tests', status: 'completed', conclusion: 'skipped' },
+          { name: 'Run App tests', status: 'completed', conclusion: 'skipped' },
+        ];
+        expected = `| app-tests | NOT RUN | — | App tests skipped (build-only dispatch, app_tests=false) ${run.url} |\n`;
+      }
+      if (missing === 'event') delete run.event;
+      if (missing === 'attempt') delete run.attempt;
+      const result = runCI(t, run, { expectedHead: missing === '--head' ? null : head });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, expected, `${scenario}: ${missing}`);
+    }
+  }
+});
+
+for (const missing of ['--head', 'event', 'attempt']) {
+  test(`combined rows preserve exact missing ${missing} evidence for real checkGates`, async t => {
+    const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+    const run = validRun();
+    if (missing === 'event') delete run.event;
+    if (missing === 'attempt') delete run.attempt;
+    const result = runCI(t, run, { summary: true, expectedHead: missing === '--head' ? null : head });
+    assert.equal(result.status, 0, result.stderr);
+    const rows = result.stdout.trim().split('\n');
+    assert.equal(rows.length, 8);
+    const reason = missing === '--head' ? '--head not supplied' : `${missing} not exported`;
+    assert.equal(rows.at(-1), `| app-tests | NOT VERIFIED | ${head} | App tests ${reason} ${run.url} |`);
+    const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling only |\n| device-smoke | N/A | — | no UI change |\n`;
+    assert.deepEqual(checkGates(body, head), { ok: true });
+  });
+}
+
+for (const event of ['workflow_dispatch\n', 'pull_request\r\n']) {
+  test(`event with trailing line ending ${JSON.stringify(event)} is invalid`, t => {
+    const run = Object.assign(validRun(), { event });
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests event invalid ${run.url} |\n`);
   });
 }

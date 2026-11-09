@@ -119,8 +119,10 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
 8. **PR & merge** — body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. Build Gates with
    `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt > run.json`, then
    `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the seven owner-gates lanes (including `design-check`) and CI
-   `app-tests`. App PASS requires a current completed run, one completed successful App job and one completed successful
-   Run App tests step. Failed/cancelled jobs cannot borrow step success. Docs-only/build-only are reasoned NOT RUN;
+   `app-tests`. App PASS requires supplied matching --head, exported event other than workflow_dispatch, exported attempt=1,
+   a completed run, one completed successful App job and one completed successful
+   Run App tests step. An otherwise successful candidate missing --head/event/attempt is NOT VERIFIED with the field named.
+   Failed/cancelled jobs cannot borrow step success. Docs-only/build-only are reasoned NOT RUN;
    filtered/repeat diagnostics are NOT VERIFIED, including dispatches whose inputs are absent from gh jobs exports.
    Preserve the generated verdict; add audit/device-smoke rows and run the real PR-body lint. Current required checks:
    Walking skeleton, PR body Gates, Agent tooling. App tests + Design check required and strict are planned by #613;
