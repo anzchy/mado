@@ -50,6 +50,7 @@ import Sparkle
          makeController: @MainActor () -> any SparkleController = { NativeSparkleController() }) {
         // Debug builds must never create Sparkle, regardless of its persisted automatic-update flags.
         // Read the build-resolved plist, not UserDefaults; reuse the missing-feed unavailable state.
+        // The Debug build setting emits the exact string "YES"; anything else keeps updates on.
         guard infoDictionary["MadoDisableUpdates"] as? String != "YES",
               let feed = infoDictionary["SUFeedURL"] as? String,
               !feed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
