@@ -353,18 +353,57 @@ test('key-window fixture failures do not authorize a retry after migration', () 
   }
 });
 
-// #609 M2: removing the unconsumed child validator cannot authorize unknown
-// failures printed by the historical child process after its parent completed.
+// #609 / audit M3: the parent must itself be retry-eligible, so the child
+// failure is the only reason this paired regression changes the retry decision.
 test('unknown historical issue521 child-process failure cannot authorize a retry (#609)', () => {
-  const child = '[issue521-child] ✘ Test unknownChildFailure() recorded an issue at UnknownChild.swift:1:1: Expectation failed: unexpected child failure\n';
-  const text = i587Fix2Golden + child;
-  assert.ok(text.includes('✘ Test run with '), 'completed parent-root evidence retained');
-  assert.equal(parseAppResult(result(text)).reliable, true);
-  denied(result(text));
-  const first = result(text, { stderr: 'unknown child-process evidence\n' });
-  const h = harness([first, pass]);
-  assert.equal(h.calls, 1);
-  assert.equal(h.status, 1);
-  assert.doesNotMatch(h.stdout, /retrying once/);
-  assert.equal(readFileSync(h.evidencePath, 'utf8'), first.stdout + '\n' + first.stderr);
+  const parent = fixtures[0];
+  eligible(result(parent));
+  const diagnostics = [
+    '✘ Test unknownChildFailure() recorded an issue at UnknownChild.swift:1:1: Expectation failed: unexpected child failure',
+    '✘ Test unknownChildFailure() failed after 0.001 seconds with 1 issue.',
+    '✘ Test run with 1 test in 0 suites failed after 0.001 seconds with 1 issue.',
+    'Fatal error: unknown child process trap',
+    'error: Exited with unexpected signal code 9',
+    'Segmentation fault: 11',
+    'Bus error: 10',
+    'Abort trap: 6',
+    "Test Suite 'child tests' crashed.",
+    'libc++abi: terminating due to uncaught exception of type ChildFailure',
+  ];
+  for (const diagnostic of diagnostics) for (const prefix of ['[issue521-child] ', '[runner] [unknown-child] ']) {
+    for (const stream of ['stdout', 'stderr']) for (const position of ['before', 'after']) {
+      for (const decorated of [false, true]) {
+        const line = prefix + diagnostic;
+        const child = (decorated ? '\x1b[31m' + line + '\x1b[0m\r' : line) + '\n';
+        const add = text => position === 'before' ? child + text : text + child;
+        const first = stream === 'stdout'
+          ? result(add(parent), { stderr: 'parent stderr metadata\n' })
+          : result(parent, { stderr: add('parent stderr metadata\n') });
+        const context = `${stream}/${position}/ANSI=${decorated}: ${line}`;
+        assert.equal(parseAppResult(first).reliable, true, context + ': parent remains complete');
+        assert.equal(classifyFlaky(first).decision, 'fail', context);
+        const h = harness([first, pass]);
+        assert.equal(h.calls, 1, context);
+        assert.equal(h.status, 1, context);
+        assert.doesNotMatch(h.stdout, /retrying once/, context);
+        assert.equal(readFileSync(h.evidencePath, 'utf8'), first.stdout + '\n' + first.stderr, context);
+      }
+    }
+  }
+});
+
+test('benign prefixed child metadata preserves an eligible parent and its one retry', () => {
+  const parent = result(fixtures[0]);
+  const metadata = '[issue521-child] metadata: crash handler ready; signal diagnostics enabled\n'
+    + '[runner] [unknown-child] ↳ Target Platform: arm64e-apple-macos14.0\n';
+  const expected = classifyFlaky(parent);
+  assert.equal(expected.decision, 'retry-eligible');
+  for (const first of [result(metadata + fixtures[0]), result(fixtures[0] + metadata), result(fixtures[0], { stderr: metadata })]) {
+    assert.deepEqual(classifyFlaky(first), expected);
+    const h = harness([first, pass]);
+    assert.equal(h.calls, 2);
+    assert.equal(h.status, 0);
+    assert.match(h.stdout, /retrying once/);
+    assert.equal(readFileSync(h.evidencePath, 'utf8'), first.stdout + '\n' + first.stderr);
+  }
 });

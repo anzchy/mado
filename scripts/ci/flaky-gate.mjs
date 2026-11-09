@@ -9,10 +9,16 @@ import path from 'node:path';
 import { parseAppResult } from '../tdd/app-lane.mjs';
 import { knownFlaky } from './known-flaky.mjs';
 
+// Remaining retry signatures cover parent assertions only. A prefixed child
+// failure has no authorization, even when its parent root completed normally.
+const prefixedFailure = /^[ \t]*(?:\[[^\]\r\n]+\][ \t]*)+(?:✘(?:[ \t]|$)|(?:[^:\r\n]+\.swift:\d+(?::\d+)?:[ \t]+)?Fatal error:(?:[ \t]|$)|error:(?:[ \t]|$)|(?:Segmentation fault|Bus error|Abort trap)(?::|[ \t]|$)|Test (?:Case|Suite) '.+' crashed(?:[ \t.(]|$)|libc\+\+abi:)/im;
+
 export function classifyFlaky(run) {
   const parsed = parseAppResult(run);
   const fail = { decision: 'fail', names: [], issues: [] };
   if (!parsed.reliable || !parsed.failed || parsed.unattributedIssues) return fail;
+  const clean = parsed.output.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r/g, '');
+  if (prefixedFailure.test(clean)) return fail;
   const entries = parsed.failureNames.map(name => knownFlaky.find(entry => entry.name === name));
   if (entries.some(entry => !entry)) return fail;
   if (parsed.issues.some(issue => !entries.some(entry => entry.name === issue.name && entry.signature.test(issue.signature)))) return fail;
