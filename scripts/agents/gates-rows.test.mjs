@@ -231,12 +231,12 @@ for (const scenario of ['docs-only', 'native', 'dispatch-app-tests-false']) {
 // Step fields are status/conclusion, not outcome; no synthetic event/inputs are needed.
 const nativeExport = JSON.parse(readFileSync(new URL('./fixtures/ci-app-tests-native.json', import.meta.url), 'utf8'));
 for (const [conclusion, jobConclusion, expected] of [
-  ['success', 'success', 'PASS'], ['success', 'failure', 'PASS'],
+  ['success', 'success', 'PASS'], ['success', 'failure', 'FAIL'], ['success', 'cancelled', 'FAIL'],
   ['failure', 'success', 'FAIL'], ['failure', 'failure', 'FAIL'],
   ['skipped', 'success', 'NOT RUN'],
   ['skipped', 'failure', 'FAIL'], ['skipped', 'cancelled', 'FAIL'],
 ]) {
-  test(`App test step ${conclusion} determines evidence when job is ${jobConclusion}`, t => {
+  test(`App test step ${conclusion} requires successful job evidence when job is ${jobConclusion}`, t => {
     const run = structuredClone(nativeExport);
     const job = run.jobs[0];
     job.conclusion = jobConclusion;
@@ -246,7 +246,8 @@ for (const [conclusion, jobConclusion, expected] of [
     assert.equal(result.status, 0, result.stderr);
     const reason = expected === 'PASS' ? run.url
       : expected === 'FAIL' ? (conclusion === 'skipped'
-        ? `App tests ${jobConclusion} (test step skipped) ${run.url}` : `App tests step failure ${run.url}`)
+        ? `App tests ${jobConclusion} (test step skipped) ${run.url}`
+        : conclusion === 'success' ? `App tests ${jobConclusion} ${run.url}` : `App tests step failure ${run.url}`)
         : `App tests skipped ${run.url}`;
     assert.equal(result.stdout, `| app-tests | ${expected} | ${expected === 'NOT RUN' ? '—' : run.headSha} | ${reason} |\n`);
   });
@@ -635,3 +636,116 @@ test('GitHub Actions pins every remote uses line to a SHA with a version comment
     }
   }
 });
+
+// Specification change authorized by #613 §3: successful steps cannot override job failure.
+for (const conclusion of ['failure', 'cancelled']) {
+  test(`successful App step in ${conclusion} job fixture is FAIL`, () => {
+    const result = runCIFixture(`step-success-job-${conclusion}`, ['--head', head]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `| app-tests | FAIL | ${head} | App tests ${conclusion} https://github.com/anzchy/picsee/actions/runs/319000001 |\n`);
+  });
+}
+
+for (const conclusion of ['', 'unknown', 'neutral', 'timed_out', 'action_required', 'stale', 'new-conclusion']) {
+  test(`successful App step with job conclusion ${JSON.stringify(conclusion)} is unverified`, t => {
+    const run = validRun();
+    run.jobs[0].conclusion = conclusion;
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
+    assert.match(result.stdout, /evidence|conclusion/);
+  });
+}
+
+const diagnosticMarkers = ['Record repeat job start', 'Validate App repeat input', 'Upload App repeat logs'];
+for (const name of diagnosticMarkers) {
+  for (const [status, conclusion] of [['completed', 'success'], ['completed', 'failure'],
+    ['completed', 'unknown'], ['in_progress', ''], ['in_progress', 'skipped']]) {
+    test(`diagnostic marker ${name} ${status}/${conclusion} cannot provide full App PASS`, t => {
+      const run = validRun();
+      run.jobs[0].steps.push({ name, status, conclusion });
+      const result = runCI(t, run);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
+      assert.match(result.stdout, /diagnostic|scope/);
+    });
+  }
+}
+
+for (const metadata of [{ event: 'workflow_dispatch' }, { attempt: 2 }, { event: 'workflow_dispatch', attempt: 2 }]) {
+  test(`diagnostic run metadata ${JSON.stringify(metadata)} cannot provide full App PASS`, t => {
+    const result = runCI(t, Object.assign(validRun(), metadata));
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\| app-tests \| NOT VERIFIED \|/);
+    assert.match(result.stdout, /diagnostic|scope/);
+  });
+}
+
+test('skipped diagnostic markers and unrelated similar names preserve full App success', t => {
+  const run = Object.assign(validRun(), { event: 'pull_request', attempt: 1 });
+  run.jobs[0].steps.push(...diagnosticMarkers.map(name => ({ name, status: 'completed', conclusion: 'skipped' })),
+    { name: 'Upload App repeat logs unrelated', status: 'completed', conclusion: 'success' });
+  const result = runCI(t, run);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `| app-tests | PASS | ${head} | ${run.url} |\n`);
+});
+
+test('build-only diagnostic dispatch still reports app_tests=false NOT RUN', t => {
+  const run = Object.assign(validRun(), { event: 'workflow_dispatch', attempt: 2 });
+  run.jobs[0].steps = [
+    { name: 'Validate App repeat input', status: 'completed', conclusion: 'success' },
+    { name: 'Build unsigned app', status: 'completed', conclusion: 'success' },
+    { name: 'Build App tests', status: 'completed', conclusion: 'skipped' },
+    { name: 'Run App tests', status: 'completed', conclusion: 'skipped' },
+  ];
+  const result = runCI(t, run);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `| app-tests | NOT RUN | — | App tests skipped (build-only dispatch, app_tests=false) ${run.url} |\n`);
+});
+
+test('S6 finite-domain evidence weakening never creates App PASS', t => {
+  const assertVerdict = (run, expected) => {
+    const result = runCI(t, run);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.includes('| app-tests | PASS |'), expected, JSON.stringify(run));
+  };
+  for (const status of ['completed', 'in_progress', 'unknown']) {
+    for (const job of ['success', 'failure', 'cancelled', 'unknown']) {
+      for (const step of ['success', 'failure', 'skipped', 'unknown']) {
+        const run = validRun();
+        run.status = status;
+        run.jobs[0].conclusion = job;
+        run.jobs[0].steps[0].conclusion = step;
+        assertVerdict(run, status === 'completed' && job === 'success' && step === 'success');
+      }
+    }
+  }
+  for (const stale of [false, true]) {
+    for (const jobs of [0, 1, 2]) {
+      for (const steps of [0, 1, 2]) {
+        for (const diagnostic of [false, true]) {
+          const run = validRun();
+          if (stale) run.headSha = 'b'.repeat(40);
+          const job = run.jobs[0];
+          job.steps = Array.from({ length: steps }, () => structuredClone(job.steps[0]));
+          if (diagnostic) job.steps.push({ name: diagnosticMarkers[0], status: 'completed', conclusion: 'success' });
+          run.jobs = Array.from({ length: jobs }, () => structuredClone(job));
+          assertVerdict(run, !stale && jobs === 1 && steps === 1 && !diagnostic);
+        }
+      }
+    }
+  }
+});
+
+for (const conclusion of ['failure', 'cancelled']) {
+  test(`one invocation preserves ${conclusion} App job for real checkGates rejection`, async t => {
+    const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+    const run = validRun();
+    run.jobs[0].conclusion = conclusion;
+    const result = runCI(t, run, { summary: true });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim().split('\n').length, 8);
+    const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling only |\n| device-smoke | N/A | — | no UI change |\n`;
+    assert.deepEqual(checkGates(body, head), { ok: false, reason: 'app-tests is a FAIL row' });
+  });
+}

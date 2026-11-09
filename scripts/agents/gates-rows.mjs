@@ -127,8 +127,17 @@ if (!valid) {
             ? job.steps : [];
           const tests = steps.filter(step => step.name === 'Run App tests');
           const result = tests.length === 1 && tests[0].status === 'completed' ? tests[0].conclusion : undefined;
-          if (result === 'success') {
-            rows.push(`| app-tests | PASS | ${headSha} | ${url} |`);
+          if (result === 'success' && job.conclusion === 'success') {
+            // gh jobs exports omit dispatch inputs. Executed dispatch/repeat steps cannot prove
+            // full-suite scope; skipped markers on ordinary PR/push runs remain valid evidence.
+            const diagnosticNames = ['Record repeat job start', 'Validate App repeat input', 'Upload App repeat logs'];
+            const diagnostic = run.event === 'workflow_dispatch' ||
+              (run.attempt !== undefined && run.attempt !== 1) ||
+              steps.some(step => diagnosticNames.includes(step.name) &&
+                (step.status !== 'completed' || step.conclusion !== 'skipped'));
+            rows.push(diagnostic
+              ? `| app-tests | NOT VERIFIED | ${headSha} | App tests diagnostic run does not prove full-suite scope ${url} |`
+              : `| app-tests | PASS | ${headSha} | ${url} |`);
           } else if (result === 'failure') {
             rows.push(`| app-tests | FAIL | ${headSha} | App tests step failure ${url} |`);
           } else if (result === 'skipped' && ['failure', 'cancelled'].includes(job.conclusion)) {
