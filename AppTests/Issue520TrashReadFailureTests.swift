@@ -107,6 +107,7 @@ func issue520UnlinkedFileGenericLoadFailureStillReconnects() async throws {
     #expect(sheetText(f.window).contains(String(localized: "Choose this image again to reconnect access.")))
 }
 
+// Unchanged-branch control: chmod 000 leaves the display path present.
 @Test(.timeLimit(.minutes(3))) @MainActor
 func issue520DeniedFileGenericLoadFailureStillReconnects() async throws {
     let f = try Issue520Fixture()
@@ -146,5 +147,54 @@ func issue520ReadableGenericLoadFailureDoesNotReconnect() async throws {
     f.controller.imageLoadFailed(CocoaError(.fileReadCorruptFile))
     await f.controller.reportFileGrantReadFailure(f.file).value
     #expect(f.controller.session.imageLoader.fileURL == f.file)
+    #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
+}
+
+// These controls never start a replacement probe: imageLoadFailed owns the async work.
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue520CallbackProbeTrashClearsWithoutSheet() async throws {
+    let f = try Issue520Fixture()
+    defer { f.clean() }
+    try await f.open()
+    try f.trash()
+    f.controller.imageLoadFailed(CocoaError(.fileReadNoSuchFile))
+    #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
+    try await waitUntil {
+        f.controller.session.imageLoader.fileURL == nil || f.window.attachedSheet != nil
+    }
+    f.clearAssertions()
+    #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue520CallbackProbeUnlinkedFileReconnects() async throws {
+    let f = try Issue520Fixture()
+    defer { f.clean() }
+    try await f.open()
+    try FileManager.default.removeItem(at: f.file)
+    f.controller.imageLoadFailed(CocoaError(.fileReadNoSuchFile))
+    try await waitUntil { f.window.attachedSheet != nil }
+    f.clearAssertions()
+    #expect(f.window.attachedSheet != nil)
+    #expect(sheetText(f.window).contains(String(localized: "Choose this image again to reconnect access.")))
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue520CallbackProbeMovedFileFollowsNewLocation() async throws {
+    let f = try Issue520Fixture()
+    defer { f.clean() }
+    try await f.open()
+    let moved = f.base.appendingPathComponent("moved.png")
+    try FileManager.default.moveItem(at: f.file, to: moved)
+    f.controller.imageLoadFailed(CocoaError(.fileReadNoSuchFile))
+    #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
+    try await waitUntil {
+        (f.controller.session.imageLoader.presented?.fileURL.standardizedFileURL == moved.standardizedFileURL
+            && f.window.representedURL?.standardizedFileURL == moved.standardizedFileURL)
+            || f.window.attachedSheet != nil
+    }
+    #expect(f.controller.session.imageLoader.fileURL?.standardizedFileURL == moved.standardizedFileURL)
+    #expect(f.controller.session.imageLoader.presented?.fileURL.standardizedFileURL == moved.standardizedFileURL)
+    #expect(f.window.representedURL?.standardizedFileURL == moved.standardizedFileURL)
     #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
 }
