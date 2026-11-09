@@ -47,16 +47,33 @@ struct AccessServices: Sendable {
         watch = WatchHub(access: files, source: FSEventSource(), scheduler: DispatchWatchScheduler())
     }
     #endif
-    func grant(_ folder: URL) async throws -> AccessRootID {
+    func grant(_ folder: URL, trace: FolderOpenStageRecorder? = nil) async throws -> AccessRootID {
+        trace?.record("accessServices.grant", .entered)
         // Retain the native selection's authority through canonical recent-folder
         // recording; a resolved path alone must not establish access.
         let started = selectionScope.start(folder)
         defer { if started { selectionScope.stop(folder) } }
-        let id = try await files.grant(folder: folder)
-        await monitor.reauthorize(id, explicitSelection: true)
-        let target = folder.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
-        try await recent.add(RecentFolder(rootID: id, url: target, displayName: target.lastPathComponent, recordedRoot: target))
-        return id
+        trace?.record("selectionScope", .completed, reason: started ? "scope-started" : "scope-not-started")
+        var stage = "fileAccess.grant"
+        do {
+            trace?.record(stage, .entered)
+            let id = try await files.grant(folder: folder)
+            trace?.record(stage, .completed)
+            stage = "monitor.reauthorize"
+            trace?.record(stage, .entered)
+            await monitor.reauthorize(id, explicitSelection: true)
+            trace?.record(stage, .completed)
+            let target = folder.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+            stage = "recents"
+            trace?.record(stage, .entered)
+            try await recent.add(RecentFolder(rootID: id, url: target, displayName: target.lastPathComponent, recordedRoot: target))
+            trace?.record(stage, .completed)
+            trace?.record("accessServices.grant", .completed)
+            return id
+        } catch {
+            trace?.record(stage, .rejected, reason: FolderOpenStageRecorder.errorReason(error))
+            throw error
+        }
     }
     func images(in folder: URL, rootID: AccessRootID) async throws -> [URL] {
         try await files.withLease(.root(rootID, file: folder)) { lease in
