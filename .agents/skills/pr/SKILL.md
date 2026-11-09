@@ -27,7 +27,7 @@ Use this template for writing the PR body:
 |---|---|---|---|
 | package-tests | PASS | <head-sha> | <owner-gates evidence> |
 | package-coverage | PASS | <head-sha> | <owner-gates evidence> |
-| app-tests | PASS | <head-sha> | <CI run or NOT RUN reason> |
+| app-tests | PASS | <head-sha> | <CI full App PASS evidence> |
 | unsigned-build | PASS | <head-sha> | <CI run> |
 | node-tooling | PASS | <head-sha> | <owner-gates evidence> |
 | ledger | PASS | <head-sha> | <check output> |
@@ -53,7 +53,16 @@ Ledger-Gardener: <the line from the gardener or from scripts/ledger/garden-gate.
 
 A `PASS` row may cite head or an ancestor SHA uniquely identifying a commit object itself (without peeling tags) whose declared lane inputs are unchanged through head; the input table lives in `scripts/agents/ui-parity-pr-body-lint.mjs`. Input paths are relative to the repository root; `package-coverage` includes coverage configuration and runner/export/aggregation scripts. A known ancestor with changed inputs fails; with CODE same present, the message identifies the SHA since which inputs changed. Non-ancestor or unresolved SHAs and lanes without reliable declared inputs still need `CODE same <40-hex>` in Source.
 
-Build owner-gate and CI `app-tests` rows with `gh run view <id> --json headSha,url,status,conclusion,jobs > run.json`, then `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>`.
+Build owner-gate and CI `app-tests` rows with `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt > run.json`, then `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>`.
+Replace the example App row with the generated row verbatim. Preserve the generated App status: PASS requires the current completed run, exactly one completed successful App job,
+and exactly one completed successful Run App tests step. A failed/cancelled job never PASSes even if its test step
+succeeded. Docs-only and build-only runs are NOT RUN with a reason. Filtered/repeat diagnostic evidence is NOT VERIFIED;
+gh jobs omits dispatch inputs, so dispatch success cannot prove full-suite scope. Export event/attempt as above; executed
+dispatch/repeat marker steps also prevent PASS, while completed/skipped markers on ordinary full runs are allowed.
+Add audit/device-smoke rows and run the real checkGates lint on the complete table.
+
+Current required checks are Walking skeleton, PR body Gates, Agent tooling. App tests + Design check required and strict
+are planned by #613 and need the owner's repository settings; Design check already runs in CI.
 
 ## Sections
 
