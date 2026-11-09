@@ -1,0 +1,28 @@
+{
+  "headSha": "3de39c6012345678901234567890123456789012",
+  "url": "https://github.com/anzchy/picsee/actions/runs/319000001",
+  "status": "completed",
+  "conclusion": "cancelled",
+  "jobs": [
+    {
+      "name": "Walking skeleton",
+      "conclusion": "success",
+      "status": "completed"
+    },
+    {
+      "name": "App tests",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [
+        {
+          "name": "Run App tests",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T07:13:03Z",
+          "completedAt": "2026-11-04T07:15:41Z"
+        }
+      ]
+    }
+  ]
+}
