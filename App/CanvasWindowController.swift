@@ -2265,11 +2265,12 @@ extension CanvasWindowController: ViewerImageHost {
         }
         if let original = standaloneGrantURL, let fileURL,
            !FileManager.default.fileExists(atPath: fileURL.path) {
-            // A decode can be the first to find the file in the Trash, before reconcile does.
+            // A missing display path does not distinguish Trash from lost access. Resolve
+            // the grant through the guarded read probe before deciding to reconnect.
             if let accessError = error as? FileAccessError, case .fileDeleted = accessError {
                 clearFolderImageForNoMatches()
             } else {
-                requestFileReconnection(original)
+                reportFileGrantReadFailure(original)
             }
             return
         }
