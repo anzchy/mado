@@ -1214,12 +1214,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     do {
                         let current = try await services.files.resolveFileGrant(grant)
                         guard operation.isCurrent, input.isCurrent else { return }
-                        let returnedEqualsChecked = current == checkedURL
-                        let returnedExists = FileManager.default.fileExists(atPath: current.path)
-                        let follows = !returnedEqualsChecked && returnedExists
-                        let failureCategory = error is FileAccessError ? "fileAccess"
-                            : (AccessReadFailure.isPermissionDenied(error) ? "permission" : "other")
-                        self.filesystemLogger.notice("[DEBUG-i610] failedRead returnedEqualsChecked=\(returnedEqualsChecked, privacy: .public) returnedExists=\(returnedExists, privacy: .public) failureCategory=\(failureCategory, privacy: .public) outcome=\(follows ? "moved" : "missing", privacy: .public)")
+                        let follows = current != checkedURL && FileManager.default.fileExists(atPath: current.path)
                         self.filesystemLogger.notice("File grant re-resolved after failed read outcome=\(follows ? "moved" : "missing", privacy: .public) file=\(grant.lastPathComponent, privacy: .private)")
                         if follows {
                             self.open(current, accessRequest: .fileGrant(grant), fromFolderScan: true)
