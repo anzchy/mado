@@ -117,8 +117,10 @@ public struct AccessProbeFactGatherer: Sendable {
         return FileResourceIdentity(volumeUUID: uuid, fileIdentifier: identifier.base64EncodedString())
     }
 
-    public init() {
-        bookmarks = SystemAccessProbeBookmarkCoding()
+    public init() { self.init(bookmarkCreation: SecurityScopedBookmarkCreation()) }
+
+    init(bookmarkCreation: SecurityScopedBookmarkCreation) {
+        bookmarks = SystemAccessProbeBookmarkCoding(bookmarkCreation: bookmarkCreation)
         scope = SystemSecurityScope()
         mountedVolumesProvider = {
             Self.mountedVolumes(at: FileManager.default.mountedVolumeURLs(
@@ -278,8 +280,10 @@ public struct AccessProbeFactGatherer: Sendable {
 }
 
 private struct SystemAccessProbeBookmarkCoding: AccessProbeBookmarkCoding {
+    var bookmarkCreation = SecurityScopedBookmarkCreation()
+
     func makeBookmark(for url: URL, includingResourceValuesForKeys keys: Set<URLResourceKey>?) throws -> Data {
-        try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: keys, relativeTo: nil)
+        try bookmarkCreation.create(for: url, keys: keys)
     }
 
     func volumeProperties(in data: Data) throws -> AccessProbeVolume {
