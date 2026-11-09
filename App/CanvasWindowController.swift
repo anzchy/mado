@@ -108,6 +108,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     private var sidebarKnownCounts: [URL: Int] = [:]
+    // A failed main read retains its parent's tree throughout Retry, until a complete main snapshot wins.
+    private var sidebarFailedReadFolder: URL?
     // The incoming/main read owns its count mask independently of sidebar selection.
     private var readingFolderOwner: URL?
     private var awaitingFolderReadStart = false
@@ -1541,10 +1543,18 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         else if preScanFailure { promptForFolder(folder, currentImage: nil, direction: .next) }
     }
 
-    private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?) {
+    private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?, failedRead: Bool = false) {
+        if failedRead { sidebarFailedReadFolder = folder }
+        else if sidebarFailedReadFolder != folder ||
+            (session.folderScan?.failure == nil && session.folderScan?.snapshot?.isComplete == true) {
+            sidebarFailedReadFolder = nil
+        }
+        let recoveringFailedRead = sidebarFailedReadFolder == folder
         cancelSidebarTree(preservingWatch: true)
         let generation = sidebarTreeGeneration
-        gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
+        if !recoveringFailedRead {
+            gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
+        }
         sidebarTreeTask = Task(priority: .utility) { [weak self, accessServices] in
             var failureContext: AccessMonitor.ReadContext?
             var monitor: AccessMonitor?
@@ -1561,7 +1571,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     access: services.files, enumerator: SystemSidebarFolderEnumerator())
                 let loader = SidebarFolderLoadSession(browser: browser)
                 self.sidebarLoader = loader
-                let watch = try await services.watch.subscribe(rootID: rootID, folder: folder,
+                let recoveryParent = recoveringFailedRead ? try await browser.parent(in: folder, rootID: rootID) : nil
+                let listingFolder = recoveryParent ?? folder
+                let watch = try await services.watch.subscribe(rootID: rootID, folder: listingFolder,
                     recursive: true, onChange: { [weak self] in
                         Task { @MainActor [weak self] in
                             guard let self, self.gridFolderURL == folder,
@@ -1577,12 +1589,19 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 self.sidebarWatchSubscription = watch
                 self.sidebarWatchGeneration = generation
                 if let previous { Task { await previous.cancel() } }
-                loader.start(folder: folder, rootID: rootID, onRows: { [weak self] children, parentURL in
+                loader.start(folder: listingFolder, rootID: rootID, onRows: { [weak self] children, parentURL in
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
-                    self.gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: self.sidebarKnownCounts[folder] ?? count),
-                        parent: parentURL.map { GridSidebarFolder(url: $0, count: self.sidebarKnownCounts[$0]) },
-                        children: children.map { GridSidebarFolder(url: $0) })
+                    let current = GridSidebarFolder(url: folder, count: self.sidebarKnownCounts[folder] ?? count)
+                    if let recoveryParent {
+                        self.gridShell.showFolderTree(current: current,
+                            parent: GridSidebarFolder(url: recoveryParent, count: self.sidebarKnownCounts[recoveryParent]),
+                            children: [], siblings: children.map { GridSidebarFolder(url: $0, count: self.sidebarKnownCounts[$0]) })
+                    } else {
+                        self.gridShell.showFolderTree(current: current,
+                            parent: parentURL.map { GridSidebarFolder(url: $0, count: self.sidebarKnownCounts[$0]) },
+                            children: children.map { GridSidebarFolder(url: $0) })
+                    }
                 }, onCount: { [weak self] child, imageCount in
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
@@ -1983,6 +2002,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         // On the reading surface only: a silent refresh failing under a shown grid keeps the grid and its footer.
         guard gridShell.isGridSurface, gridView.isHidden, let page = stateHost.readFailedView else { return }
         gridShell.setReadFailedStatus(true)
+        if let folder = gridFolderURL, let rootID = gridFolderRoot, sidebarFailedReadFolder != folder {
+            loadSidebarTree(folder, rootID: rootID, count: nil, failedRead: true)
+        }
         gridShell.linkKeyViews(from: page.retryButton, through: page.chooseOtherButton)
         _ = window?.makeFirstResponder(page.retryButton)
     }

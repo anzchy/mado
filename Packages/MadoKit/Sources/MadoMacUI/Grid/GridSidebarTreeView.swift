@@ -216,14 +216,15 @@ public struct GridSidebarFolder: Sendable, Equatable {
     public var readingFolderURL: URL? {
         didSet {
             guard oldValue != readingFolderURL else { return }
-            // show() appends parent, current, then children in this same order.
-            for (folder, row) in zip([parent, currentFolder].compactMap { $0 } + children, rows) {
+            // show() appends parent, current, then children and recovery siblings in this order.
+            for (folder, row) in zip([parent, currentFolder].compactMap { $0 } + children + siblings, rows) {
                 applyCount(folder.count, to: row)
             }
         }
     }
     public var currentAccessLossCause: AccessLossCause? { currentFolder?.accessLossCause }
     public private(set) var children: [GridSidebarFolder] = []
+    public private(set) var siblings: [GridSidebarFolder] = []
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         scroll.drawsBackground = false
@@ -276,21 +277,25 @@ public struct GridSidebarFolder: Sendable, Equatable {
             addFolderPlusButton.needsDisplay = true
         }
     }
-    public func show(current: GridSidebarFolder, parent: GridSidebarFolder?, children: [GridSidebarFolder]) {
+    public func show(current: GridSidebarFolder, parent: GridSidebarFolder?, children: [GridSidebarFolder],
+        siblings: [GridSidebarFolder] = []) {
         let visibleChildren = current.accessLossCause == nil ? children : []
         self.parent = parent; currentFolder = current; self.children = visibleChildren
+        self.siblings = current.accessLossCause == nil && parent != nil
+            ? siblings.filter { $0.url != current.url } : []
         for row in rows { row.removeFromSuperview() }
         rows = []
         if let parent { append(parent, depth: 0, current: false) }
         let depth = parent == nil ? 0 : 1
         append(current, depth: depth, current: true)
         for child in visibleChildren { append(child, depth: depth + 1, current: false) }
+        for sibling in self.siblings { append(sibling, depth: depth, current: false) }
         needsLayout = true
         layoutSubtreeIfNeeded()
         scroll.contentView.scroll(to: NSPoint(x: 0, y: max(0, document.bounds.height - scroll.contentView.bounds.height)))
     }
     public func clear() {
-        parent = nil; currentFolder = nil; children = []
+        parent = nil; currentFolder = nil; children = []; siblings = []
         for row in rows { row.removeFromSuperview() }
         rows = []
         guide.isHidden = true
@@ -339,6 +344,9 @@ public struct GridSidebarFolder: Sendable, Equatable {
         if let index = children.firstIndex(where: { $0.url == url }) {
             children[index] = GridSidebarFolder(url: url, count: count, accessLossCause: children[index].accessLossCause)
         }
+        if let index = siblings.firstIndex(where: { $0.url == url }) {
+            siblings[index] = GridSidebarFolder(url: url, count: count, accessLossCause: siblings[index].accessLossCause)
+        }
         if let row = rows.first(where: { $0.folderURL == url }) { applyCount(count, to: row) }
     }
     public override func layout() {
@@ -374,7 +382,7 @@ public struct GridSidebarFolder: Sendable, Equatable {
         addFolderBorder.frame = addFolderButton.bounds
         addFolderBorder.path = NSBezierPath(roundedRect: addFolderButton.bounds.insetBy(dx: 0.5, dy: 0.5),
             xRadius: DesignMetrics.radii["control"]!, yRadius: DesignMetrics.radii["control"]!).cgPath
-        if let firstChild = rows.firstIndex(where: { $0.depth > (parent == nil ? 0 : 1) }) {
+        if let firstChild = rows.firstIndex(where: { $0.depth > (parent == nil || !siblings.isEmpty ? 0 : 1) }) {
             guide.isHidden = false
             let lastRowY = rows[rows.count - 1].frame.minY
             guide.frame = NSRect(x: rows[firstChild].frame.minX - (compact ? 3 : 6), y: lastRowY,

@@ -307,10 +307,11 @@ import MadoCore
         folderName.setAccessibilityLabel(name ?? "")
         refreshEmptyFolder()
     }
-    public func showFolderTree(current: GridSidebarFolder, parent: GridSidebarFolder?, children: [GridSidebarFolder]) {
+    public func showFolderTree(current: GridSidebarFolder, parent: GridSidebarFolder?, children: [GridSidebarFolder],
+        siblings: [GridSidebarFolder] = []) {
         folderName.isHidden = true
         folderTree.isHidden = false
-        folderTree.show(current: current, parent: parent, children: children)
+        folderTree.show(current: current, parent: parent, children: children, siblings: siblings)
         refreshEmptyFolder()
         if mode == .viewerSidebar { onViewerSidebarKeyViewsChange?() }
     }
