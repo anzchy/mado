@@ -975,6 +975,7 @@ public actor FileAccess: AccessLeasing {
                         resource: try? resourceReader.identity(for: url))
                     Self.diagnostic610("bookmarkCreate create=ok")
                 } catch {
+                    diagnostics.emit("FileGrantBookmark stage=create outcome=failed kind=\(AccessDiagnostics.errorKind(error))")
                     Self.diagnostic610("bookmarkCreate create=failed error=\(AccessDiagnostics.errorKind(error))")
                 }
             }
