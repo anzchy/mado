@@ -205,3 +205,33 @@ test('the classification ledger and verdict jobs read the repo only and keep no 
     for (const step of checkouts) assert.match(step, /^          persist-credentials: false$/m, id);
   }
 });
+
+// #606: execute the actual routing shell with harmless node stand-ins.
+test('dispatch repeat routing leaves push, PR, default dispatch and build-only behavior intact', t => {
+  const app = jobBlock('app-tests');
+  assert.match(workflow, /app_filter:\n(?:.*\n)*?        type: string\n/);
+  assert.match(workflow, /app_repeat:\n(?:.*\n)*?        type: number\n        default: 1/);
+  assert.match(app, /timeout-minutes: \$\{\{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 && 120 \|\| 45 \}\}/);
+  const step = app.split(/^      - name: /m).find(s => s.startsWith('Run App tests\n'));
+  assert.match(step, /REPEAT_ENABLED: \$\{\{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 \}\}/);
+  assert.match(step, /APP_FILTER: \$\{\{ inputs.app_filter \}\}/);
+  assert.match(step, /APP_REPEAT: \$\{\{ inputs.app_repeat \}\}/);
+  const script = step.match(/^        run: \|\n((?:          .*\n)+)/m)?.[1].replace(/^ {10}/gm, '');
+  assert.ok(script);
+  const directory = mkdtempSync(join(tmpdir(), 'app-repeat-route-'));
+  t.after(() => rmSync(directory, {recursive:true,force:true}));
+  for (const [event, repeat, expected] of [['push',3,'scripts/tdd/app-lane.mjs'],['pull_request',3,'scripts/tdd/app-lane.mjs'],
+    ['workflow_dispatch',1,'scripts/tdd/app-lane.mjs'],['workflow_dispatch',3,'scripts/ci/app-repeat.mjs']]) {
+    const run = spawnSync('bash', ['-e', '-c', `node() { echo "$@"; };\n${script}`], {
+      cwd: directory, env: {...process.env, REPEAT_ENABLED: String(event === 'workflow_dispatch' && repeat > 1), APP_JOB_STARTED_MS:'0'}, encoding:'utf8'});
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout.trim(), expected);
+  }
+  const upload = app.split(/^      - name: /m).find(s => s.startsWith('Upload App repeat logs\n'));
+  assert.match(upload, /if: always\(\) && github.event_name == 'workflow_dispatch' && inputs.app_tests && inputs.app_repeat > 1/);
+  assert.match(upload, /name: app-repeat\n/);
+  assert.match(upload, /path: .build\/app-repeat/);
+  const originalUpload = app.split(/^      - name: /m).find(s => s.startsWith('Upload first App attempt\n'));
+  assert.match(originalUpload, /^        if: always\(\)$/m);
+  assert.match(originalUpload, /name: app-lane-attempt1\n/);
+});
