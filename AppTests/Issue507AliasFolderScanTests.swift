@@ -111,7 +111,9 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         print("[i507] Finder alias fixture unavailable: \(error)")
     }
     let timeline = Alias507Timeline()
+    let sampler = ScanLag600Sampler()
     defer { print("[i507.shared-timeline] \(timeline.report())") }
+    try await withAsyncTeardown {
     for (index, path) in paths.enumerated() {
         let events = Alias507Events()
         let adapter = Alias507SystemAccess(events: events)
@@ -125,6 +127,7 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         let observer: @Sendable (FolderOpenStageEvent) -> Void = { event in
             if event.kind == .stage { stages.append(event) }
             timeline.append(label, event)
+            sampler.observe(event)
         }
         let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
             accessServices: Task { services }, motionPolicy: MotionPolicy(source: Alias507Motion()),
@@ -155,6 +158,11 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         #expect(recent.first?.displayName == path.1.standardizedFileURL.resolvingSymlinksInPath().lastPathComponent, "\(diagnostic)")
         #expect(Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == Set(["0.png", "1.png", "2.png"]), "\(diagnostic)")
         controller.diagnosticSynchronous("test.window.close") { window.close() }
+    }
+    } teardown: {
+        let report = await sampler.finish()
+        print("[i507.main-stack] status=\(report.status) job=\(report.triggerJob?.uuidString ?? "none") attempts=\(report.attempts) joined=\(report.joined) rawRemoved=\(report.rawRemoved) queuedToEntryMs=\(report.queuedToEntryMilliseconds.map { String(format: "%.3f", $0) } ?? "unknown")")
+        if !report.text.isEmpty { print(report.text) }
     }
 }
 
