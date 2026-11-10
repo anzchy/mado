@@ -18,6 +18,10 @@ on:
         description: Run the hosted focus diagnostic job with app_tests=false
         type: boolean
         default: false
+      native_red_receipt:
+        description: Optional original i393 native RED packet for CI verification and full App validation
+        type: string
+        default: ''
       app_filter:
         description: Optional App test regex for repeat runs; empty runs the full bundle
         type: string
@@ -421,7 +425,7 @@ jobs:
     name: Hosted focus diagnostic
     if: github.event_name == 'workflow_dispatch' && inputs.hosted_focus_only && !inputs.app_tests
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.native_red_receipt != '' && 120 || 45 }}
     permissions:
       contents: read
     env:
@@ -439,9 +443,25 @@ jobs:
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
       - name: Build hosted focus diagnostic
+        env:
+          NATIVE_RED_RECEIPT_JSON: ${{ inputs.native_red_receipt }}
         run: node scripts/ci/hosted-focus-ci.mjs
+      - name: Checkout pinned tdd-guardian
+        if: inputs.native_red_receipt != ''
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: xiaolai/tdd-guardian-for-claude
+          ref: 188ee8c9df5682a0dad37d35444e40fcbe0bb8f8
+          path: .build/ci-tdd-guardian
+          persist-credentials: false
       - name: Run hosted focus diagnostic
+        if: inputs.native_red_receipt == ''
         run: node scripts/tdd/hosted-app-lane.mjs
+      - name: Verify native RED and full App lane
+        if: inputs.native_red_receipt != ''
+        env:
+          NATIVE_RED_RECEIPT_JSON: ${{ inputs.native_red_receipt }}
+        run: node scripts/ci/native-red-ci.mjs
       - name: Upload hosted focus diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -86,3 +86,52 @@ test('dispatch routing isolates hosted diagnosis and cannot supply formal App ev
   assert.match(upload,/path: \.build\/hosted-\*/);
   assert.match(upload,/include-hidden-files: true/);
 });
+function nativeBuildPacket() {
+ return JSON.stringify({schemaVersion:2,receipts:[{id:'i393-WI-1-native-prebuilt',lane:'app-prebuilt-red',
+  recorded_at:'2026-11-10T00:47:22.113Z',head_sha:'a'.repeat(40),dirty_source:[],
+  red:{red:true,kind:'assertion-failure',reason:'fixture assertion'},
+  test_files:{'AppTests/HostedAppProofTests.swift':{state:'ok',sha:'a'.repeat(64),lines:['fixture proof'],reason:''}},
+  verdict:null,verified_at:null,findings:[]}]});
+}
+function nativeBuildContext(t) {
+ const cwd=mkdtempSync(path.join(tmpdir(),'i393-ci-native-build-'));
+ t.after(()=>rmSync(cwd,{recursive:true,force:true}));
+ mkdirSync(path.join(cwd,'.claude/tdd-guardian'),{recursive:true});
+ const store=path.join(cwd,'.claude/tdd-guardian/receipts.json');writeFileSync(store,'original sentinel');
+ return {cwd,store,out:path.join(cwd,'evidence'),env:{GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',
+  GITHUB_WORKSPACE:cwd,GITHUB_RUN_ID:'123',GITHUB_RUN_ATTEMPT:'1',PICSEE_HEAVY_LOCK_HELD:'1',
+  NATIVE_RED_RECEIPT_JSON:nativeBuildPacket(),GITHUB_SHA:'a'.repeat(40),RUNNER_OS:'macOS',RUNNER_ARCH:'ARM64'}};
+}
+test('native receipt mode builds both bundles for recorded filtered inventory without changing original state',t=>{
+ const f=nativeBuildContext(t),calls=[];
+ const status=runHostedFocusBuild({...f,spawn:(cmd,args,options)=>{calls.push({cmd,args,options});return {status:0,stdout:'both bundles built',stderr:''};},stdout:()=>{},stderr:()=>{}});
+ assert.equal(status,0);assert.equal(calls.length,1);
+ assert.equal(calls[0].args.some(x=>x.startsWith('-only-testing:')),false);
+ assert.equal(calls[0].options.env.NATIVE_RED_RECEIPT_JSON,undefined);
+ const record=JSON.parse(readFileSync(path.join(f.out,'build.json'),'utf8'));
+ assert.equal(record.retainedInventory,true);assert.equal(record.formal,false);
+ assert.equal(readFileSync(f.store,'utf8'),'original sentinel');
+});
+for(const label of ['invalid packet','local context']) test('native receipt build rejects '+label+' before native work',t=>{
+ const f=nativeBuildContext(t);let calls=0;
+ const env={...f.env,...(label==='invalid packet'?{NATIVE_RED_RECEIPT_JSON:'{'}:{GITHUB_ACTIONS:'false'})};
+ const status=runHostedFocusBuild({...f,env,spawn:()=>{calls++;return {status:0};},stdout:()=>{},stderr:()=>{}});
+ assert.equal(status,64);assert.equal(calls,0);assert.equal(readFileSync(f.store,'utf8'),'original sentinel');
+});
+test('optional native receipt workflow pins the tool and keeps native verification and full validation explicit',()=>{
+ const workflow=readFileSync(new URL('../../.github/workflows/ci.yml',import.meta.url),'utf8');
+ assert.match(workflow,/native_red_receipt:\n +description:[^\n]*\n +type: string\n +default: ''/);
+ const job=workflow.split('  hosted-focus-diagnostic:\n')[1];assert.ok(job);
+ assert.match(job,/timeout-minutes: \$\{\{ inputs\.native_red_receipt != '' && 120 \|\| 45 \}\}/);
+ const steps=job.split(/^      - name: /m);
+ const tool=steps.find(x=>x.startsWith('Checkout pinned tdd-guardian\n'));
+ assert.ok(tool);assert.match(tool,/repository: xiaolai\/tdd-guardian-for-claude/);
+ assert.match(tool,/ref: 188ee8c9df5682a0dad37d35444e40fcbe0bb8f8/);
+ assert.match(tool,/path: \.build\/ci-tdd-guardian/);assert.match(tool,/persist-credentials: false/);
+ const focused=steps.find(x=>x.startsWith('Run hosted focus diagnostic\n'));
+ assert.match(focused,/if: inputs\.native_red_receipt == ''/);
+ const verification=steps.find(x=>x.startsWith('Verify native RED and full App lane\n'));
+ assert.ok(verification);assert.match(verification,/if: inputs\.native_red_receipt != ''/);
+ assert.match(verification,/NATIVE_RED_RECEIPT_JSON: \$\{\{ inputs\.native_red_receipt \}\}/);
+ assert.match(verification,/run: node scripts\/ci\/native-red-ci\.mjs/);
+});

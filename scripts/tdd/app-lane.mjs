@@ -495,6 +495,8 @@ export function runCompleteAppLane(options = {}) {
     let expression;
     try { expression = filter === undefined ? null : new RegExp(filter); }
     catch (error) { error.appUsage = true; throw error; }
+    // Reject malformed configuration before discovery can load any native code.
+    const quarantine = loadQuarantine(options.quarantinePath ?? quarantineFile);
     const selected = hostedTestNames.filter((name, index) => !expression || expression.test(hostedTestIDs[index]));
     let retained = true;
     if (expression) {
@@ -502,9 +504,8 @@ export function runCompleteAppLane(options = {}) {
       retained = inventory.some(row => expression.test(row.id));
       if (!retained && !selected.length) throw new Error('filter has no matching runnable tests');
     }
-    // Validate quarantine even when only hosted tests match. Migrated tests are not
-    // silently excluded: their quarantine requires an explicit hosted policy later.
-    const quarantine = loadQuarantine(options.quarantinePath ?? quarantineFile);
+    // Migrated tests are not silently excluded: their quarantine requires an
+    // explicit hosted policy later.
     if (!retained && quarantine.length) throw new Error('hosted-only selection does not support an unvalidated quarantine');
     status = 0;
     if (retained) {
