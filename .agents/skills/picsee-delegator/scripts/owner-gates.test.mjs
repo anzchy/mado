@@ -28,7 +28,7 @@ else{console.log('Swift started');if(process.env.MODE==='hang'){setTimeout(()=>p
 `);
   exe('node', `#!${process.execPath}
 const path=require('node:path');
-if(process.argv[2]==='scripts/tdd/unit-lane.mjs')import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:2,captureSeconds:0.2,graceSeconds:0.1,sampleSeconds:0.1,snapshotSeconds:0.05});});
+if(process.argv[2]==='scripts/tdd/unit-lane.mjs')import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1});});
 else process.exit(0);
 `);
   exe('xcrun', `#!${process.execPath}
@@ -46,7 +46,7 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
     MODE: mode, BUILD: build, EXPORT_MARKER: path.join(dir, 'exports'), PICSEE_GATES_OUT: out,
     PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
-  const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 20_000 });
+  const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
   return { dir, out, result, marker: env.EXPORT_MARKER, summary: fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8') };
 }
 

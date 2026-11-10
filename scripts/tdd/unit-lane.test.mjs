@@ -10,7 +10,7 @@ import { UNIT_LIMITS } from './unit-lane.mjs';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const launcher = path.join(root, 'scripts/tdd/unit-lane.mjs');
 const lock = path.join(root, 'scripts/heavy-lock.sh');
-const short = { timeoutSeconds: 0.5, captureSeconds: 0.2, graceSeconds: 0.1, sampleSeconds: 0.1, snapshotSeconds: 0.05 };
+const short = { timeoutSeconds: 0.5, captureSeconds: 0.2, graceSeconds: 0.1 };
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function fixture(t) {
@@ -38,10 +38,19 @@ if(process.env.MODE==='hang'){
   return { dir, env };
 }
 function run(f, extra = {}) {
-  const options = { cwd: f.dir, ...short, timeoutSeconds: 2, ...extra };
-  return spawnSync(process.execPath, ['--input-type=module', '-e',
-    `import {runUnit} from ${JSON.stringify(launcher)};process.exitCode=runUnit(${JSON.stringify(options)});`],
-  { env: f.env, encoding: 'utf8', timeout: 20_000 });
+  const { stderrFile, ...overrides } = extra;
+  const options = { cwd: f.dir, ...short, timeoutSeconds: f.env.MODE === 'hang' ? 2 : 30, ...overrides };
+  const fd = stderrFile ? fs.openSync(stderrFile, 'w') : undefined;
+  let result;
+  try {
+    result = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import {runUnit} from ${JSON.stringify(launcher)};process.exitCode=runUnit(${JSON.stringify(options)});`],
+    { env: f.env, encoding: 'utf8', timeout: 90_000, stdio: stderrFile ? ['ignore', 'pipe', fd] : undefined });
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+  if (stderrFile) result.stderr = fs.readFileSync(stderrFile, 'utf8');
+  return result;
 }
 function captures(f) { return fs.readdirSync(path.join(f.dir, '.build/unit-watchdog')).map(name => path.join(f.dir, '.build/unit-watchdog', name)); }
 
@@ -75,18 +84,64 @@ test('hung detached helper exits 124, keeps diagnostics and releases the lock', 
 
 test('queue delay does not consume the post-admission execution deadline', async t => {
   const f = fixture(t), ready = path.join(f.dir, 'ready'), released = path.join(f.dir, 'released');
-  const holder = spawn('python3', ['-c', 'import fcntl,sys,time; f=open(sys.argv[1],"w"); fcntl.flock(f,fcntl.LOCK_EX); open(sys.argv[2],"w").close(); time.sleep(3.2); open(sys.argv[3],"w").write(str(time.time()*1000)); f.close()', f.env.PICSEE_HEAVY_LOCK, ready, released]);
+  const stderrFile = path.join(f.dir, 'queued-stderr'), proofFile = path.join(f.dir, 'queue-proof.json');
+  const queueBudgetSeconds = 30, queueHoldSeconds = 32;
+  const holder = spawn('python3', ['-c', `
+import fcntl,json,os,sys,time
+lock_path,ready_path,released_path,stderr_path,proof_path,started_path=sys.argv[1:7]
+budget,hold=float(sys.argv[7]),float(sys.argv[8])
+with open(lock_path,'w') as owner:
+ fcntl.flock(owner,fcntl.LOCK_EX)
+ open(ready_path,'w').close()
+ marker='[heavy-lock] waiting for '+lock_path
+ deadline=time.monotonic()+20
+ while time.monotonic()<deadline:
+  try:
+   with open(stderr_path) as log: waiting=marker in log.read()
+  except FileNotFoundError: waiting=False
+  if waiting:
+   assert not os.path.exists(started_path),'Swift started while the holder still owns the lock'
+   queued_wall_ms=time.time()*1000
+   queued_ns=time.monotonic_ns()
+   time.sleep(hold)
+   assert not os.path.exists(started_path),'Swift started before lock release'
+   released_ns=time.monotonic_ns()
+   with open(proof_path,'w') as proof:
+    json.dump({'queuedMonotonicNs':str(queued_ns),'releasedMonotonicNs':str(released_ns),
+      'queuedWallMs':queued_wall_ms,'executionBudgetSeconds':budget,'holdSeconds':hold,
+      'waitingMarker':marker,'startedBeforeRelease':False},proof)
+   with open(released_path,'w') as release: release.write(str(time.time()*1000))
+   break
+  time.sleep(.02)
+ else: raise RuntimeError('actual heavy-lock waiting marker was not observed within twenty seconds')
+`, f.env.PICSEE_HEAVY_LOCK, ready, released, stderrFile, proofFile, f.env.STARTED,
+  String(queueBudgetSeconds), String(queueHoldSeconds)]);
+  let holderOutput = '';
+  holder.stderr.on('data', chunk => { holderOutput += chunk; });
   const ended = new Promise(resolve => holder.on('close', resolve));
   t.after(() => { if (holder.exitCode === null) holder.kill('SIGKILL'); });
-  for (let i = 0; i < 100 && !fs.existsSync(ready); i++) await delay(10);
-  assert.ok(fs.existsSync(ready));
-  const start = Date.now(), r = run(f);
-  await ended;
-  assert.equal(r.status, 0, r.stderr);
-  assert.ok(Date.now() - start > short.timeoutSeconds * 1000);
-  assert.ok(Date.now() - start > 2000, 'queue exceeds the actual two-second fixture run budget');
-  assert.ok(fs.existsSync(f.env.STARTED), 'Swift ran after lock admission');
-  assert.ok(Number(fs.readFileSync(f.env.STARTED, 'utf8')) >= Number(fs.readFileSync(released, 'utf8')));
+  try {
+    for (let i = 0; i < 2000 && !fs.existsSync(ready); i++) await delay(10);
+    assert.ok(fs.existsSync(ready));
+    const start = Date.now(), r = run(f, { stderrFile, timeoutSeconds: queueBudgetSeconds });
+    assert.equal(await ended, 0, holderOutput);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(Date.now() - start > short.timeoutSeconds * 1000);
+    assert.ok(Date.now() - start > 2000, 'queue exceeds the actual two-second fixture run budget');
+    assert.ok(fs.existsSync(f.env.STARTED), 'Swift ran after lock admission');
+    assert.ok(Number(fs.readFileSync(f.env.STARTED, 'utf8')) >= Number(fs.readFileSync(released, 'utf8')));
+    const proof = JSON.parse(fs.readFileSync(proofFile, 'utf8'));
+    assert.equal(proof.executionBudgetSeconds, queueBudgetSeconds);
+    assert.equal(proof.holdSeconds, queueHoldSeconds);
+    assert.equal(proof.startedBeforeRelease, false);
+    assert.equal(proof.waitingMarker, `[heavy-lock] waiting for ${f.env.PICSEE_HEAVY_LOCK}`);
+    assert.ok(BigInt(proof.releasedMonotonicNs) - BigInt(proof.queuedMonotonicNs) > BigInt(queueBudgetSeconds) * 1_000_000_000n,
+      'observed lock blocking exceeds the actual thirty-second execution budget');
+    assert.match(r.stderr, /deadline in 30 s/);
+  } finally {
+    if (holder.exitCode === null) holder.kill('SIGKILL');
+    await ended;
+  }
 });
 
 test('consecutive invocations keep distinct logs and earlier diagnostic evidence', t => {

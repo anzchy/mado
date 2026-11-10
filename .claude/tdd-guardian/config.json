@@ -142,7 +142,7 @@
     {
       "name": "unit-watchdog-node",
       "description": "Manual Node process/owner contract receipts for bounded local Swift runs (#632).",
-      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/unit-lane.test.mjs .agents/skills/picsee-delegator/scripts/owner-gates.test.mjs",
+      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/unit-lane.test.mjs .agents/skills/picsee-delegator/scripts/owner-gates.test.mjs scripts/tdd/unit-startup.test.mjs",
       "probeCommand": "node --version",
       "gateOn": [
         "manual"
