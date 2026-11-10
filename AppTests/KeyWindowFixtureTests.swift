@@ -74,16 +74,48 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() async throws {
     #expect(delayed.eligibilityOpenedWhileRunning)
     #expect(NSApp.isRunning)
     var readyWindowRanNativeDispatch = false
+    var readyWindowCallbackDidRun = false
     let probe = Timer(timeInterval: 0, repeats: false) { _ in
         MainActor.assumeIsolated { readyWindowRanNativeDispatch = NSApp.isRunning }
+        MainActor.assumeIsolated { readyWindowCallbackDidRun = true }
     }
     RunLoop.main.add(probe, forMode: .common)
     defer { probe.invalidate() }
     try makeFixtureWindowKey(delayed, timeout: acquisitionBudget)
     #expect(readyWindowRanNativeDispatch, "ready-window acquisition preserves live native dispatch")
+    #expect(readyWindowCallbackDidRun, "the original ready-window probe actually executes")
     #expect(NSApp.keyWindow === delayed && delayed.isKeyWindow)
     #expect(NSApp.isRunning)
     delayed.close()
+
+    // Repeat the actual delayed-to-ready transition, retaining callback entry separately
+    // from the running-state observation so an intermittent failure has a precise witness.
+    var missedReadyCallbacks = 0
+    var callbacksOutsideRunningApp = 0
+    for index in 0..<100 {
+        try autoreleasepool {
+            let candidate = DeferredKeyFixtureWindow(turns: 4, title: "ikw-ready-transition-\(index)")
+            defer { candidate.close() }
+            try makeFixtureWindowKey(candidate, timeout: acquisitionBudget)
+            var callbackDidRun = false
+            var callbackSawRunningApp = false
+            let transitionProbe = Timer(timeInterval: 0, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    callbackDidRun = true
+                    callbackSawRunningApp = NSApp.isRunning
+                }
+            }
+            RunLoop.main.add(transitionProbe, forMode: .common)
+            defer { transitionProbe.invalidate() }
+            try makeFixtureWindowKey(candidate, timeout: acquisitionBudget)
+            if !callbackDidRun { missedReadyCallbacks += 1 }
+            if callbackDidRun && !callbackSawRunningApp { callbacksOutsideRunningApp += 1 }
+            #expect(NSApp.keyWindow === candidate && candidate.isKeyWindow)
+            #expect(NSApp.isRunning)
+        }
+    }
+    #expect(missedReadyCallbacks == 0, "each delayed-to-ready acquisition services its pending native callback")
+    #expect(callbacksOutsideRunningApp == 0, "native callbacks keep the actual App event loop running")
 
     let other = NSWindow(contentRect: NSRect(x: 30, y: 30, width: 220, height: 140),
         styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -92,6 +124,33 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() async throws {
     defer { other.close() }
     try makeFixtureWindowKey(other, timeout: acquisitionBudget)
     try #require(NSApp.keyWindow === other && other.isKeyWindow)
+
+    var acquisitionEnteredUncancelled = false
+    var cancellationCallbackRan = false
+    var inFlightFailure: KeyWindowFixtureError?
+    var inFlightAcquisition: Task<Void, Error>?
+    inFlightAcquisition = Task { @MainActor in
+        acquisitionEnteredUncancelled = !Task.isCancelled
+        let cancellationProbe = Timer(timeInterval: 0, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                cancellationCallbackRan = true
+                inFlightAcquisition?.cancel()
+            }
+        }
+        RunLoop.main.add(cancellationProbe, forMode: .common)
+        defer { cancellationProbe.invalidate() }
+        try makeFixtureWindowKey(other, timeout: acquisitionBudget)
+    }
+    let acquisition = try #require(inFlightAcquisition)
+    do {
+        try await acquisition.value
+        Issue.record("native callback cancellation must prevent a ready-window success")
+    } catch let error as KeyWindowFixtureError {
+        inFlightFailure = error
+    }
+    #expect(acquisitionEnteredUncancelled)
+    #expect(cancellationCallbackRan)
+    #expect(inFlightFailure?.reason == "cancelled waiting for target window")
 
     // Zero turns means eligibility never opens. Vary the caller budget to reject a fixed wait.
     for milliseconds in [30, 90, 0] {
