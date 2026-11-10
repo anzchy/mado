@@ -20,8 +20,8 @@
     },
     {
       "name": "unit",
-      "description": "MadoKit package tests (Swift Testing) via SwiftPM; in-process, no external services. Same command as the CI 'Swift Testing' step, plus coverage.",
-      "command": "swift test --package-path Packages/MadoKit --enable-code-coverage",
+      "description": "Unchanged full parallel MadoKit tests with coverage; 600-second watchdog after heavy-lock admission. Outer bound includes up to 7200 seconds of lock waiting and diagnostic/cleanup margin (#632).",
+      "command": "node scripts/tdd/unit-lane.mjs",
       "coverageReportCommand": "sh scripts/tdd/swift-lcov.sh",
       "gateOn": [
         "taskCompleted",
@@ -30,7 +30,7 @@
       "coverage": "include",
       "coverageSummaryPath": "coverage/lcov.info",
       "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --list-tests",
-      "timeoutMs": 600000
+      "timeoutMs": 9000000
     },
     {
       "name": "integration",
@@ -132,6 +132,17 @@
     {
       "name": "release-tag-ci-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/release/check-tag-ci.test.mjs scripts/release/release-workflow.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "unit-watchdog-node",
+      "description": "Manual Node process/owner contract receipts for bounded local Swift runs (#632).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/unit-lane.test.mjs .agents/skills/picsee-delegator/scripts/owner-gates.test.mjs",
       "probeCommand": "node --version",
       "gateOn": [
         "manual"

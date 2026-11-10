@@ -29,11 +29,18 @@ lane_result() {
   (( code == 0 )) || failed=1
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
-$hl swift test --package-path Packages/MadoKit --enable-code-coverage > $o/$p-swift.log 2>&1; lane_result swift $?
+node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
+swift_code=$?
+lane_result swift $swift_code
 # swift-lcov.sh only writes coverage/lcov.info; lcov-total.py sums it and fails below 100% (an uncovered line once
 # passed as lcov=0). lcov= is that check's exit code; the next line holds the totals and any uncovered file:line.
-sh scripts/tdd/swift-lcov.sh > $o/$p-lcov.log 2>&1 && python3 $here/lcov-total.py coverage/lcov.info >> $o/$p-lcov.log 2>&1
-lane_result lcov $?
+if (( swift_code == 0 )); then
+  sh scripts/tdd/swift-lcov.sh > $o/$p-lcov.log 2>&1 && python3 $here/lcov-total.py coverage/lcov.info >> $o/$p-lcov.log 2>&1
+  lane_result lcov $?
+else
+  echo "coverage skipped: Swift run failed (exit $swift_code); prior coverage is not current evidence" > $o/$p-lcov.log
+  lane_result lcov 1
+fi
 grep -E '^(lines|uncovered|no report|empty report)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
