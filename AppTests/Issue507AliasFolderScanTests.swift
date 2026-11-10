@@ -112,7 +112,9 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     }
     let timeline = Alias507Timeline()
     let sampler = ScanLag600Sampler()
+    let mainHeartbeat = MainThread600Monitor(origin: timeline.origin)
     defer { print("[i507.shared-timeline] \(timeline.report())") }
+    defer { mainHeartbeat.finish().printLines(relativeTo: timeline.origin) }
     try await withAsyncTeardown {
     for (index, path) in paths.enumerated() {
         let events = Alias507Events()
@@ -160,6 +162,7 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
         controller.diagnosticSynchronous("test.window.close") { window.close() }
     }
     } teardown: {
+        _ = await mainHeartbeat.finish()
         let report = await sampler.finish()
         print("[i507.main-stack] status=\(report.status) job=\(report.triggerJob?.uuidString ?? "none") attempts=\(report.attempts) joined=\(report.joined) rawRemoved=\(report.rawRemoved) queuedToEntryMs=\(report.queuedToEntryMilliseconds.map { String(format: "%.3f", $0) } ?? "unknown")")
         print("[i507.sampler-target] targetPID=\(report.targetPID) childPID=\(report.childPID.map(String.init) ?? "none")")

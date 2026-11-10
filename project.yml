@@ -89,6 +89,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
         CODE_SIGNING_ALLOWED: NO
+        SWIFT_OBJC_BRIDGING_HEADER: AppTests/Issue600MainThreadCapture.h
   MadoUITests:
     type: bundle.ui-testing
     platform: macOS
