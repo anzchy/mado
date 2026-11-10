@@ -15,7 +15,7 @@ func issue393LegacyRuntimeProof() throws {
     #expect(!(NSApp?.isRunning ?? false))
     let bundle = Bundle(for: Legacy393RuntimeBundleAnchor.self)
     #expect(bundle.bundleURL.lastPathComponent == "MadoLegacy393Tests.xctest")
-    let token = try #require(environment["PICSEE_TEST_RUN_TOKEN"])
+    let token = try #require(environment["MADO_TEST_RUN_TOKEN"])
     #expect(!token.isEmpty)
     print("[issue393-legacy] pid=\(getpid()) executable=\(executable.path) process=\(ProcessInfo.processInfo.processName) bundle=\(bundle.bundleURL.lastPathComponent) mode=legacy token=\(token)")
 }

@@ -107,11 +107,11 @@ workflow completion require all of these native artifacts to be validated.
 The local legacy target built successfully after regenerating the project, and
 its real bare-`xctest` runtime proof passed 1/1. A fresh configured full-package
 unit run subsequently failed: 1787 tests, 157 issues including two known issues.
-`Packages/MadoKit` is unchanged in this slice. Its one allowed verification
-retry is queued under the shared heavy lock; the first 1800-second queue wait
-expired before starting any test, so only the queue budget was extended.
-Fresh coverage auditing stopped at that failed contributing lane. Historical
-100% coverage above is not a fresh PASS for this candidate.
+`Packages/MadoKit` is unchanged in this slice. Fresh coverage auditing stopped
+at that failed contributing lane. The first 1800-second queue wait for its one
+allowed verification retry expired before starting any test, so only the queue
+budget was extended. The eventual retry result is recorded below; the original
+failure is preserved and its cause is not established.
 
 The owner explicitly approved a WI-2 WIP commit for CI despite this blocked
 local gate. This permits a reviewable candidate, not a GREEN verdict. CI script
@@ -150,10 +150,60 @@ A diagnostic follow-up adds only sanitized transport stage/status/signal/OS
 error code/timing/byte counts and bounded failure samples, before existing real
 fixture assertions, for the next CI run to distinguish causes.
 
-The naming failure was four Apple `TEST_RUNNER_` wrappers of the deferred
-`PICSEE_TEST_RUN_TOKEN` tooling protocol. Its fix is an exact occurrence-only
-exception in the four declared CI tooling paths; neighboring live identities,
-foreign paths and near-matches remain rejected. Scanner logic and native
-assertions are unchanged. New RED receipts for this rule and query diagnostics
-held; combined local CI/name checks passed 247/247 and TDD checks 281/0/2 skipped.
-The diagnostic follow-up remains WIP with the same unit and native blockers.
+The diagnostic follow-up at `b8eddefa` added a naming exception. The owner's R1
+instruction rejects that approach; the current correction removes the exception
+and uses `MADO_TEST_RUN_TOKEN` / `TEST_RUNNER_MADO_TEST_RUN_TOKEN` and Mado names
+for the new comparison controls. Scanner logic is unchanged. Earlier receipts
+for the exception are superseded; they are retained rather than rewritten.
+
+## R1 corrections and remaining evidence
+
+The legacy/full artifacts show a concrete missing prerequisite: all five runs
+failed the retained #611 assertion because the real Debug App at
+`.build/dd-ci/Build/Products/Debug/Mado.app/Contents/Info.plist` was absent. The
+comparison builder now builds that App before building/running the complete
+legacy bundle in its separate DerivedData. It neither substitutes a plist nor
+changes the retained assertion. Runs two through five also record #454 folder
+row/count/label failures; those separate observed baseline failures remain
+visible and their tests are unchanged.
+
+Hosted/full cancellation evidence established the exact host identity, but past
+query failures permanently poisoned the tracker and the supervisor attempted
+each signal only once. The correction retains bounded diagnostic history while
+requiring a fresh complete scan to restore current ownership. Every signal still
+requires a fresh PID/birth/UID/executable/token match. The supervisor can retry
+an authorization query within the original fixed TERM/KILL phases; it does not
+reset or extend either deadline. A targeted query cannot prove global drain.
+
+Real escaped-process fixtures now inject failures independently in TERM and
+KILL authorization queries, verify recovery before the fixed drain deadline,
+preserve an unrelated same-executable process, and permit the next iteration
+only after drain. The focused ownership/cancellation suites passed 30/30.
+Original CI transport failure remains undiagnosed: the incomplete direct query
+took 1082ms against its 1000ms cap, but the reason it exceeded that cap is not
+established. Sanitized diagnostics remain for the next CI run. No query budget
+or test timeout was increased.
+
+The owner-mandated namespace fixture correction and earlier approved assertion
+corrections remain explicit separation exceptions. New R1 recovery, phase,
+prerequisite and naming regressions have genuine RED receipts. Independent
+readiness review found no open code findings. The subsequent 16-file R1 review
+returned APPROVED WITH NOTES with zero new findings, carrying seven approved
+historical separation exceptions and the opaque RED limitation on the Mado
+protocol receipt. This scoped approval does not establish native cancellation
+or overall workflow completion.
+
+Full CI Node validation acquired the shared heavy lock normally at
+2026-11-10 07:43:14 UTC. All six complete command groups passed: portable device
+17, Agent tooling 777 plus two explicit skips, Package CI 219, macOS device 3,
+name checks 44, release scripts 181. Total: 1241 passed, zero failed, two skipped.
+Raw command/status/timing records and complete logs are retained in
+`.build/i393-r1-node/`. The single allowed configured unit verification retry
+started at 07:45:40 UTC under the same lock and passed: 1787 tests in 43 suites,
+two known issues, native root duration 106.459 seconds. The subject command plus
+coverage generation took 108.710 seconds; full output and result are
+`.build/i393-unit-f-retry.log` and `.build/i393-unit-f-retry-result.json`. It used
+the exact configured command without filtering or changing package sources.
+Fresh LCOV reports 16701/16701 lines/statements and 3212/3212 functions; branches
+are not measured (configured threshold zero). All four native comparisons must
+run again at the same corrected SHA before WI-2 can be complete.

@@ -35,8 +35,8 @@ function harness(t,{mode='legacy',scope='focus',native,...options}={}) {
   const calls=[];let output='';
   assert.equal(typeof comparison.runComparisonIteration,'function','comparison iteration API must exist');
   const env={APP_COMPARE_MODE:mode,APP_COMPARE_SCOPE:scope,PICSEE_APP_LANE_NO_RETRY:'1',
-    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_TEST_RUN_TOKEN:'token-legacy',
-    PICSEE_APP_COMPARE_RESULT_PATH:path.join(dir,'comparison.json'),GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'};
+    PICSEE_HEAVY_LOCK_HELD:'1',MADO_TEST_RUN_TOKEN:'token-legacy',
+    MADO_APP_COMPARE_RESULT_PATH:path.join(dir,'comparison.json'),GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'};
   const status=comparison.runComparisonIteration({cwd:root,expectedMode:mode,env,quarantinePath,
     evidencePath:path.join(dir,'attempt.log'),stdout:s=>output+=s,stderr:s=>output+=s,
     spawn:(cmd,args,settings)=>{
@@ -58,7 +58,7 @@ function harness(t,{mode='legacy',scope='focus',native,...options}={}) {
       return result('APP_LANE_INVENTORY_BEGIN\n'+[proof,...wrappers,'issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)']
         .map(name=>'MadoAppTests.'+name).join('\n')+'\nAPP_LANE_INVENTORY_END\n');
     },...options});
-  const record=existsSync(env.PICSEE_APP_COMPARE_RESULT_PATH)?JSON.parse(readFileSync(env.PICSEE_APP_COMPARE_RESULT_PATH,'utf8')):null;
+  const record=existsSync(env.MADO_APP_COMPARE_RESULT_PATH)?JSON.parse(readFileSync(env.MADO_APP_COMPARE_RESULT_PATH,'utf8')):null;
   return {status,calls,output,record,dir,env};
 }
 
@@ -143,12 +143,12 @@ test('repeat sidecars preserve exact mode, unique tokens, timings and independen
   assert.deepEqual(rows.map(row=>row.status),[0,1,0]);
   assert.deepEqual(rows.map(row=>row.wallMilliseconds),[25,25,25]);
   assert.ok(rows.every(row=>row.mode==='hosted'&&row.scope==='focus'&&row.sha==='same-sha'&&row.runner==='macos-26'&&row.started===true));
-  assert.equal(new Set(calls.map(call=>call.settings.env.PICSEE_TEST_RUN_TOKEN)).size,3);
+  assert.equal(new Set(calls.map(call=>call.settings.env.MADO_TEST_RUN_TOKEN)).size,3);
   for(const call of calls) {
     assert.equal(call.args.at(-1),'hosted');
-    assert.equal(call.settings.env.TEST_RUNNER_PICSEE_TEST_RUN_TOKEN,call.settings.env.PICSEE_TEST_RUN_TOKEN);
-    assert.equal(call.settings.env.PICSEE_HOST_OWNERSHIP_REQUIRED,'1');
-    assert.equal(call.settings.env.PICSEE_HOST_EXECUTABLE,path.resolve('.build/dd-ci/Build/Products/Debug/Mado.app/Contents/MacOS/Mado'));
+    assert.equal(call.settings.env.TEST_RUNNER_MADO_TEST_RUN_TOKEN,call.settings.env.MADO_TEST_RUN_TOKEN);
+    assert.equal(call.settings.env.MADO_HOST_OWNERSHIP_REQUIRED,'1');
+    assert.equal(call.settings.env.MADO_HOST_EXECUTABLE,path.resolve('.build/dd-ci/Build/Products/Debug/Mado.app/Contents/MacOS/Mado'));
   }
 });
 
@@ -170,8 +170,8 @@ test('normal retained-only filtered repeat does not require a hosted process tha
     env:{PICSEE_HEAVY_LOCK_HELD:'1'},stdout:()=>{},spawn:(_cmd,args,settings)=>{
       captured=settings.env;writeFileSync(args[2],'retained-only\n');return result(JSON.stringify({status:0,drained:true}));
     }});
-  assert.equal(status,0);assert.equal(captured.PICSEE_HOST_OWNERSHIP_REQUIRED,undefined);
-  assert.equal(captured.PICSEE_HOST_EXECUTABLE,undefined);
+  assert.equal(status,0);assert.equal(captured.MADO_HOST_OWNERSHIP_REQUIRED,undefined);
+  assert.equal(captured.MADO_HOST_EXECUTABLE,undefined);
 });
 
 test('comparison coordinator requires current matching worker evidence before trusting supervisor success',t=>{
@@ -182,7 +182,7 @@ test('comparison coordinator requires current matching worker evidence before tr
       env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',PICSEE_HEAVY_LOCK_HELD:'1',GITHUB_SHA:'final-sha'},
       spawn:(_cmd,args,settings)=>{
         writeFileSync(args[2],'current worker output\n');
-        const packet={version:1,runId:settings.env.PICSEE_APP_COMPARE_RESULT_ID,complete:true,status:0,
+        const packet={version:1,runId:settings.env.MADO_APP_COMPARE_RESULT_ID,complete:true,status:0,
           mode:'hosted',scope:'focus',sha:'final-sha',diagnostic:true,formal:false,groups:{hosted:0}};
         if(variant==='stale')packet.runId='previous-run';
         if(variant==='wrong-mode')packet.mode='legacy';
@@ -190,7 +190,7 @@ test('comparison coordinator requires current matching worker evidence before tr
         if(variant==='wrong-sha')packet.sha='old-sha';
         if(variant==='wrong-status')packet.status=1;
         if(variant==='incomplete')packet.complete=false;
-        if(variant!=='missing')writeFileSync(settings.env.PICSEE_APP_COMPARE_RESULT_PATH,JSON.stringify(packet));
+        if(variant!=='missing')writeFileSync(settings.env.MADO_APP_COMPARE_RESULT_PATH,JSON.stringify(packet));
         return result(JSON.stringify({status:0,drained:true}));
       }});
     assert.equal(status,variant==='matching'?0:1,variant);

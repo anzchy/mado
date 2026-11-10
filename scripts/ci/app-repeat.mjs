@@ -67,16 +67,16 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         // deadline, TERM/KILL escalation and drain confirmation, including after a leader exits.
         previousGroupDrained = false;
         const token=randomUUID();
-        const workerEnv={...iterationEnv,PICSEE_TEST_RUN_TOKEN:token,TEST_RUNNER_PICSEE_TEST_RUN_TOKEN:token,
-          PICSEE_APP_COMPARE_RESULT_PATH:path.resolve(out,`iter-${label}.comparison.json`),
-          PICSEE_APP_COMPARE_RESULT_ID:`${env.GITHUB_RUN_ID??'local'}-${label}-${token}`};
-        if(requireComparisonEvidence&&mode!=='normal')writeFileSync(workerEnv.PICSEE_APP_COMPARE_RESULT_PATH,
-          JSON.stringify({version:1,runId:workerEnv.PICSEE_APP_COMPARE_RESULT_ID,complete:false,status:null}));
+        const workerEnv={...iterationEnv,MADO_TEST_RUN_TOKEN:token,TEST_RUNNER_MADO_TEST_RUN_TOKEN:token,
+          MADO_APP_COMPARE_RESULT_PATH:path.resolve(out,`iter-${label}.comparison.json`),
+          MADO_APP_COMPARE_RESULT_ID:`${env.GITHUB_RUN_ID??'local'}-${label}-${token}`};
+        if(requireComparisonEvidence&&mode!=='normal')writeFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,
+          JSON.stringify({version:1,runId:workerEnv.MADO_APP_COMPARE_RESULT_ID,complete:false,status:null}));
         if(needsHost&&filterCanLaunch) {
-          workerEnv.PICSEE_HOST_OWNERSHIP_REQUIRED='1';
-          workerEnv.PICSEE_HOST_EXECUTABLE=path.resolve(env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci',
+          workerEnv.MADO_HOST_OWNERSHIP_REQUIRED='1';
+          workerEnv.MADO_HOST_EXECUTABLE=path.resolve(env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci',
             'Build/Products/Debug/Mado.app/Contents/MacOS/Mado');
-        } else {delete workerEnv.PICSEE_HOST_OWNERSHIP_REQUIRED;delete workerEnv.PICSEE_HOST_EXECUTABLE;}
+        } else {delete workerEnv.MADO_HOST_OWNERSHIP_REQUIRED;delete workerEnv.MADO_HOST_EXECUTABLE;}
         row.started=true;
         const run = spawn(process.execPath, [supervisor, String(deadline), logPath,
           process.execPath, worker, quarantinePath, path.join(temporary, `attempt-${label}.log`),mode], {
@@ -92,8 +92,8 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         row.drained=previousGroupDrained;
         status = previousGroupDrained && Number.isInteger(result.status) ? result.status : 70;
         if(requireComparisonEvidence&&mode!=='normal') {
-          const evidence=JSON.parse(readFileSync(workerEnv.PICSEE_APP_COMPARE_RESULT_PATH,'utf8'));
-          if(evidence.version!==1||evidence.runId!==workerEnv.PICSEE_APP_COMPARE_RESULT_ID||evidence.complete!==true||
+          const evidence=JSON.parse(readFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,'utf8'));
+          if(evidence.version!==1||evidence.runId!==workerEnv.MADO_APP_COMPARE_RESULT_ID||evidence.complete!==true||
             evidence.mode!==mode||evidence.scope!==scope||evidence.sha!==(env.GITHUB_SHA??'unknown')||
             evidence.status!==result.status||evidence.diagnostic!==true||evidence.formal!==false)
             throw new Error('missing, stale or contradictory current comparison worker result');

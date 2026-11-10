@@ -14,20 +14,20 @@ function liveGroupMembers(group) {
 }
 
 export async function runProcessGroup({ command, args = [], env = process.env, logPath,
-  deadline, graceMs = 250, drainMs = 1500,cancelOnHostObserved=false } = {}) {
+  deadline, graceMs = 250, drainMs = 1500,cancelOnHostObserved=false,hostQuery,hostSignal } = {}) {
   if (!Number.isFinite(deadline) || deadline <= Date.now()) {
     appendFileSync(logPath, 'app-repeat: job time budget exhausted\n');
     return {status:70,drained:true};
   }
   let host,child;
   try {
-    if(env.PICSEE_HOST_OWNERSHIP_REQUIRED!==undefined&&env.PICSEE_HOST_OWNERSHIP_REQUIRED!=='1')
+    if(env.MADO_HOST_OWNERSHIP_REQUIRED!==undefined&&env.MADO_HOST_OWNERSHIP_REQUIRED!=='1')
       throw new Error('invalid hosted ownership requirement');
-    if(env.PICSEE_HOST_OWNERSHIP_REQUIRED==='1')host=createHostOwnership({token:env.PICSEE_TEST_RUN_TOKEN,executable:env.PICSEE_HOST_EXECUTABLE,excludeGroup:()=>child?.pid});
-    else if(env.PICSEE_HOST_EXECUTABLE)throw new Error('host executable requires explicit ownership policy');
+    if(env.MADO_HOST_OWNERSHIP_REQUIRED==='1')host=createHostOwnership({token:env.MADO_TEST_RUN_TOKEN,executable:env.MADO_HOST_EXECUTABLE,excludeGroup:()=>child?.pid,query:hostQuery,signal:hostSignal});
+    else if(env.MADO_HOST_EXECUTABLE)throw new Error('host executable requires explicit ownership policy');
   }catch(error){appendFileSync(logPath,`app-repeat: ${error.message}\n`);return {status:70,drained:false,hostOwnership:{observed:false,drained:false,unknown:[error.message]}};}
   const childEnv={...env};
-  if(env.PICSEE_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_PICSEE_TEST_RUN_TOKEN=env.PICSEE_TEST_RUN_TOKEN;
+  if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;
   const fd = openSync(logPath, 'a');
   try { child = spawn(command,args,{env:childEnv,detached:true,stdio:['ignore',fd,fd]}); }
   finally { closeSync(fd); }
@@ -39,7 +39,7 @@ export async function runProcessGroup({ command, args = [], env = process.env, l
   }
   const group = child.pid;
   return await new Promise(resolve => {
-    let done = false, stopping = false, poll, kill, drain,hostPoll,cancelledOnHostObserved=false;
+    let done = false, stopping = false, poll, kill, drain,hostPoll,cleanup,cancelledOnHostObserved=false;
     const log = text => appendFileSync(logPath,`app-repeat: ${text}\n`);
     const finish = (status, drained) => {
       if (done) return;
@@ -49,7 +49,7 @@ export async function runProcessGroup({ command, args = [], env = process.env, l
       child.unref();
       const hostOwnership=host?.snapshot();
       if(hostOwnership)log(`host ownership ${JSON.stringify(hostOwnership)}`);
-      resolve({status,drained,group,cancelledOnHostObserved,...(hostOwnership?{hostOwnership}:{})});
+      resolve({status,drained,group,cancelledOnHostObserved,...(cleanup?{cleanup}:{}),...(hostOwnership?{hostOwnership}:{})});
     };
     const signal = name => {
       try { process.kill(-group,name); }
@@ -66,7 +66,12 @@ export async function runProcessGroup({ command, args = [], env = process.env, l
     const check = () => {
       const members = liveGroupMembers(group);
       observeHost();
-      if (members !== null && members.length === 0&&(!host||host.snapshot().drained)) finish(70,true);
+      if (members !== null && members.length === 0&&(!host||host.snapshot().drained)){finish(70,true);return;}
+      if(done||!host||!stopping||!cleanup||Date.now()>=cleanup.drainDeadline)return;
+      const phase=Date.now()>=cleanup.graceDeadline?'SIGKILL':'SIGTERM',ownership=host.snapshot();
+      const pending=ownership.identities.some(identity=>ownership.live.includes(identity.pid)&&
+        !ownership.signals.some(sent=>sent.pid===identity.pid&&sent.birth===identity.birth&&sent.signal===phase));
+      if(pending)host.signalOwned(phase,{notAfter:phase==='SIGTERM'?cleanup.graceDeadline:cleanup.drainDeadline});
     };
     const stop = reason => {
       if (done || stopping) return;
@@ -75,8 +80,10 @@ export async function runProcessGroup({ command, args = [], env = process.env, l
       observeHost();
       signal('SIGTERM');
       host?.signalOwned('SIGTERM');
+      const graceStartedAt=Date.now();
+      cleanup=Object.freeze({graceStartedAt,graceDeadline:graceStartedAt+graceMs,drainDeadline:graceStartedAt+graceMs+drainMs});
       poll = setInterval(check,25);
-      kill = setTimeout(() => { signal('SIGKILL');host?.signalOwned('SIGKILL'); check(); },graceMs);
+      kill = setTimeout(() => { signal('SIGKILL');check(); },graceMs);
       drain = setTimeout(() => {
         const members = liveGroupMembers(group);
         observeHost();

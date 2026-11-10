@@ -70,11 +70,11 @@ test('deadline drains exact escaped host before next iteration while unrelated s
   const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');const {realpathSync}=await import('node:fs');
   const dir=directory(t),token=randomUUID();
   const launch=marker=>spawn(process.execPath,['-e','process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,PICSEE_TEST_RUN_TOKEN:marker},stdio:['ignore','ignore','ignore','ipc']});
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:marker},stdio:['ignore','ignore','ignore','ipc']});
   const host=launch(token),sentinel=launch('unrelated-'+token);
   t.after(()=>{host.kill('SIGKILL');sentinel.kill('SIGKILL');host.unref();sentinel.unref();});
   await Promise.all([host,sentinel].map(child=>new Promise(resolve=>child.once('message',resolve))));
-  const env={...process.env,PICSEE_TEST_RUN_TOKEN:token,PICSEE_HOST_EXECUTABLE:realpathSync(process.execPath),PICSEE_HOST_OWNERSHIP_REQUIRED:'1'};
+  const env={...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'};
   const result=await runProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],env,
     logPath:path.join(dir,'escaped.log'),deadline:Date.now()+1000,graceMs:80,drainMs:1000});
   t.diagnostic(JSON.stringify({escapedDeadlineAttempt:result}));
@@ -91,7 +91,7 @@ test('deadline drains exact escaped host before next iteration while unrelated s
 test('required host with no actual invocation association refuses drain even after worker success',async t=>{
   const {realpathSync}=await import('node:fs');const dir=directory(t);
   const result=await runProcessGroup({command:process.execPath,args:['-e','console.log("worker-only")'],
-    env:{...process.env,PICSEE_TEST_RUN_TOKEN:'missing-current-host',PICSEE_HOST_EXECUTABLE:realpathSync(process.execPath),PICSEE_HOST_OWNERSHIP_REQUIRED:'1'},
+    env:{...process.env,MADO_TEST_RUN_TOKEN:'missing-current-host',MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
     logPath:path.join(dir,'missing.log'),deadline:Date.now()+2000,graceMs:50,drainMs:150});
   assert.equal(result.status,70);assert.equal(result.drained,false);assert.equal(result.hostOwnership.observed,false);
 });
@@ -100,10 +100,10 @@ for(const mode of ['leader-exit','SIGTERM','SIGINT'])test(`escaped host is drain
   const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');const {realpathSync}=await import('node:fs');
   const dir=directory(t),token=randomUUID(),host=spawn(process.execPath,
     ['-e','process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,PICSEE_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
   t.after(()=>{host.kill('SIGKILL');host.unref();});await new Promise(resolve=>host.once('message',resolve));
   const logPath=path.join(dir,'registered.log');
-  const env={...process.env,PICSEE_TEST_RUN_TOKEN:token,PICSEE_HOST_EXECUTABLE:realpathSync(process.execPath),PICSEE_HOST_OWNERSHIP_REQUIRED:'1'};
+  const env={...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'};
   const supervisor=spawn(process.execPath,[new URL('./app-repeat-process.mjs',import.meta.url).pathname,String(Date.now()+5000),logPath,
     process.execPath,'-e',mode==='leader-exit'?'console.log("leader exits")':'setInterval(()=>{},1000)'],{env,stdio:['ignore','pipe','pipe']});
   t.after(()=>supervisor.kill('SIGKILL'));let output='';supervisor.stdout.on('data',chunk=>output+=chunk);
@@ -125,13 +125,13 @@ for(const mode of ['leader-exit','SIGTERM','SIGINT'])test(`escaped host is drain
 test('initial observed responsive host cancellation lets the supervisor process exit after proven drain',async t=>{
   const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');const {realpathSync}=await import('node:fs');
   const dir=directory(t),token=randomUUID(),host=spawn(process.execPath,['-e','process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,PICSEE_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
   t.after(()=>{host.kill('SIGKILL');host.unref();});await new Promise(resolve=>host.once('message',resolve));
   const options={command:process.execPath,args:['-e','setInterval(()=>{},1000)'],deadline:Date.now()+5000,
     logPath:path.join(dir,'responsive.log'),cancelOnHostObserved:true};
   const source=`import {runProcessGroup} from ${JSON.stringify(new URL('./app-repeat-process.mjs',import.meta.url).href)};console.log(JSON.stringify(await runProcessGroup(${JSON.stringify(options)})));`;
   const supervisor=spawn(process.execPath,['--input-type=module','-e',source],{env:{...process.env,
-    PICSEE_TEST_RUN_TOKEN:token,PICSEE_HOST_EXECUTABLE:realpathSync(process.execPath),PICSEE_HOST_OWNERSHIP_REQUIRED:'1'},stdio:['ignore','pipe','pipe']});
+    MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},stdio:['ignore','pipe','pipe']});
   t.after(()=>supervisor.kill('SIGKILL'));let output='',errors='';
   supervisor.stdout.on('data',chunk=>output+=chunk);supervisor.stderr.on('data',chunk=>errors+=chunk);
   let expiry;const ended=new Promise(resolve=>supervisor.once('close',(code,signal)=>resolve({code,signal})));
@@ -148,7 +148,7 @@ test('true orphan adopted outside worker group is drained while unrelated sentin
   const dir=directory(t),token=randomUUID(),executable=realpathSync(process.execPath),pidFile=path.join(dir,'orphan.json');
   const childSource=`const fs=require('node:fs');process.on('SIGTERM',()=>{});fs.writeFileSync(${JSON.stringify(pidFile)},JSON.stringify({pid:process.pid,parent:process.ppid}));process.send('ready');process.disconnect();setInterval(()=>{},1000);`;
   const middleSource=`const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(childSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});child.once('message',()=>process.exit(0));`;
-  const middle=spawn(process.execPath,['-e',middleSource],{env:{...process.env,PICSEE_TEST_RUN_TOKEN:token},stdio:'ignore'});
+  const middle=spawn(process.execPath,['-e',middleSource],{env:{...process.env,MADO_TEST_RUN_TOKEN:token},stdio:'ignore'});
   let hostPid;
   t.after(()=>{middle.kill('SIGKILL');if(hostPid){const q=queryHostProcesses({token,executable,pids:[hostPid]});
     if(q.processes.some(p=>p.pid===hostPid&&p.marker===token))try{process.kill(hostPid,'SIGKILL');}catch{}}});
@@ -160,10 +160,10 @@ test('true orphan adopted outside worker group is drained while unrelated sentin
   assert.notEqual(identity.ppid,middle.pid);if(process.platform==='darwin')assert.equal(identity.ppid,1);
   assert.equal(identity.pgid,hostPid);t.diagnostic(JSON.stringify({adoptedHost:identity,formerParent:middle.pid}));
   const sentinel=spawn(process.execPath,['-e','process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,PICSEE_TEST_RUN_TOKEN:'sentinel-'+token},stdio:['ignore','ignore','ignore','ipc']});
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:'sentinel-'+token},stdio:['ignore','ignore','ignore','ipc']});
   t.after(()=>{sentinel.kill('SIGKILL');sentinel.unref();});await new Promise(resolve=>sentinel.once('message',resolve));
   const result=await runProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],
-    env:{...process.env,PICSEE_TEST_RUN_TOKEN:token,PICSEE_HOST_EXECUTABLE:executable,PICSEE_HOST_OWNERSHIP_REQUIRED:'1'},
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:executable,MADO_HOST_OWNERSHIP_REQUIRED:'1'},
     logPath:path.join(dir,'orphan.log'),deadline:Date.now()+1000,graceMs:50,drainMs:1000});
   assert.equal(result.status,70);assert.equal(result.drained,true);assert.equal(result.hostOwnership.drained,true);
   assert.equal(result.hostOwnership.identities.some(p=>p.pid===hostPid&&p.birth===identity.birth&&p.ppid===identity.ppid),true);
@@ -172,4 +172,43 @@ test('true orphan adopted outside worker group is drained while unrelated sentin
     logPath:path.join(dir,'next-orphan.log'),deadline:Date.now()+2000});
   assert.equal(next.status,0);assert.equal(next.drained,true);assert.match(readFileSync(path.join(dir,'next-orphan.log'),'utf8'),/after-orphan-drain/);
   t.diagnostic(JSON.stringify({orphanDrain:result}));
+});
+
+for(const trace of ['first-two-targeted','first-kill-targeted'])test(`real cleanup resumes current phase after ${trace} query failures`,async t=>{
+  const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');
+  const {realpathSync}=await import('node:fs');const {queryHostProcesses}=await import('./app-host-ownership.mjs');
+  const dir=directory(t),token=randomUUID(),executable=realpathSync(process.execPath);
+  const launch=marker=>spawn(process.execPath,['-e','process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},1000)'],
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:marker},stdio:['ignore','ignore','ignore','ipc']});
+  const host=launch(token),sentinel=launch('unrelated-'+token);
+  t.after(()=>{host.kill('SIGKILL');sentinel.kill('SIGKILL');host.unref();sentinel.unref();});
+  await Promise.all([host,sentinel].map(child=>new Promise(resolve=>child.once('message',resolve))));
+  const failures=[],actualSignals=[];
+  const hostQuery=options=>{
+    const targeted=options.pids?.includes(host.pid),fail=targeted&&(trace==='first-two-targeted'?failures.length<2:
+      options.cleanupSignal==='SIGKILL'&&failures.length===0);
+    if(fail){failures.push({phase:options.cleanupSignal,at:Date.now()});
+      return {complete:false,processes:[],unknown:[{pid:host.pid,reason:'controlled external query unavailable'}],transport:{stage:'process',errorCode:'ETIMEDOUT'}};}
+    return queryHostProcesses(options);
+  };
+  const hostSignal=(pid,name)=>{actualSignals.push({pid,name,at:Date.now()});process.kill(pid,name);};
+  const result=await runProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:executable,MADO_HOST_OWNERSHIP_REQUIRED:'1'},
+    logPath:path.join(dir,'recover.log'),deadline:Date.now()+1000,graceMs:80,drainMs:1000,hostQuery,hostSignal});
+  t.diagnostic(JSON.stringify({recoveryTrace:trace,failures,actualSignals,result}));
+  assert.equal(failures.length,trace==='first-two-targeted'?2:1,'controlled current-PID failure must occur');
+  assert.equal(result.status,70);assert.equal(result.drained,true);assert.equal(result.hostOwnership.drained,true);
+  assert.equal(result.hostOwnership.queryFailures.length,failures.length);
+  assert.equal(livePids().has(host.pid),false);assert.equal(livePids().has(sentinel.pid),true);
+  assert.equal(result.cleanup.graceDeadline-result.cleanup.graceStartedAt,80);
+  assert.equal(result.cleanup.drainDeadline-result.cleanup.graceDeadline,1000);
+  assert.equal(actualSignals.some(s=>s.name==='SIGTERM'&&s.at>=result.cleanup.graceDeadline),false,'no TERM after grace');
+  assert.equal(actualSignals.some(s=>s.name==='SIGKILL'&&s.at>=failures.at(-1).at),true,'recovered KILL follows failed authorization');
+  if(trace==='first-kill-targeted'){
+    assert.equal(failures[0].phase,'SIGKILL');assert.equal(failures[0].at>=result.cleanup.graceDeadline,true);
+    assert.equal(actualSignals.filter(s=>s.name==='SIGTERM').length,1);
+  }
+  const next=await runProcessGroup({command:process.execPath,args:['-e','console.log("after-recovered-drain")'],
+    logPath:path.join(dir,'next-recover.log'),deadline:Date.now()+2000});
+  assert.equal(next.status,0);assert.equal(next.drained,true);assert.match(readFileSync(path.join(dir,'next-recover.log'),'utf8'),/after-recovered-drain/);
 });

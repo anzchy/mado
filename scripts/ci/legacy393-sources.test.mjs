@@ -81,3 +81,85 @@ test('shallow CI fetches the exact baseline object before running source-audit c
  assert.ok(ci.includes(fetch));
  assert.ok(ci.indexOf(fetch)<ci.indexOf('run: node --test scripts/ci/*.test.mjs'));
 });
+
+test('legacy full builds the authentic Debug App dependency before baseline tests and preserves both stages',t=>{
+ const cwd=temporary(t),out=temporary(t),calls=[];
+ cpSync(path.join(root,'Legacy393Tests'),path.join(cwd,'Legacy393Tests'),{recursive:true});
+ const info=path.join(cwd,'.build/dd-ci/Build/Products/Debug/Mado.app/Contents/Info.plist');
+ const fixture='<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>native-build-fixture</string></dict></plist>';
+ let clock=100;
+ const status=runComparisonBuild({cwd,out,now:()=>clock,
+  env:{GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_SHA:'current-sha',PICSEE_HEAVY_LOCK_HELD:'1',APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'full'},
+  spawn:(cmd,args,opts)=>{
+   calls.push({cmd,args,opts});
+   if(calls.length===1){
+    assert.equal(existsSync(info),false);
+    assert.ok(cmd.endsWith('heavy-lock.sh'));assert.deepEqual(args.slice(0,2),['xcodebuild','build']);
+    assert.equal(args[args.indexOf('-scheme')+1],'Mado');
+    assert.equal(args[args.indexOf('-configuration')+1],'Debug');
+    assert.equal(args[args.indexOf('-derivedDataPath')+1],'.build/dd-ci');
+    assert.equal(args.includes('build-for-testing'),false);
+    // Only the external build boundary creates this temp native-product fixture.
+    mkdirSync(path.dirname(info),{recursive:true});writeFileSync(info,fixture);clock+=30;
+    return {status:0,stdout:'Debug App build stdout\n',stderr:'Debug App build stderr\n'};
+   }
+   assert.equal(readFileSync(info,'utf8'),fixture,'baseline build starts with its fixed-path real-build product present');
+   assert.deepEqual(args.slice(0,2),['xcodebuild','build-for-testing']);
+   assert.equal(args[args.indexOf('-scheme')+1],'MadoLegacy393');
+   assert.equal(args[args.indexOf('-derivedDataPath')+1],'.build/dd-legacy393');
+   clock+=70;return {status:0,stdout:'legacy test build stdout\n',stderr:'legacy test build stderr\n'};
+  },stdout:()=>{},stderr:()=>{}});
+ assert.equal(status,0);assert.equal(calls.length,2);
+ const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+ assert.deepEqual(record.stages.map(stage=>stage.name),['debug-app-prerequisite','legacy-tests']);
+ assert.deepEqual(record.stages.map(stage=>stage.status),[0,0]);
+ assert.equal(record.complete,true);assert.equal(record.status,0);assert.equal(record.formal,false);
+ assert.equal(record.wallMilliseconds,100);assert.equal(record.sha,'current-sha');
+ assert.equal(readFileSync(path.join(out,'prerequisite.stdout.log'),'utf8'),'Debug App build stdout\n');
+ assert.equal(readFileSync(path.join(out,'prerequisite.stderr.log'),'utf8'),'Debug App build stderr\n');
+ assert.equal(readFileSync(path.join(out,'build.stdout.log'),'utf8'),'legacy test build stdout\n');
+ assert.equal(readFileSync(path.join(out,'build.stderr.log'),'utf8'),'legacy test build stderr\n');
+ assert.equal(readFileSync(info,'utf8'),fixture);
+});
+
+test('failed or abnormal Debug App prerequisite stops before legacy build and overwrites stale success evidence',t=>{
+ for(const run of [
+  {status:65,stdout:'prerequisite compilation failed\n',stderr:'compiler error\n'},
+  {status:0,signal:'SIGTERM',stdout:'partial App build\n'},
+  {status:null,error:new Error('native build unavailable'),stdout:'partial before error\n'},
+  {status:null,stdout:'missing completion\n'},
+ ]){
+  const out=temporary(t);let calls=0;
+  writeFileSync(path.join(out,'build.json'),JSON.stringify({complete:true,status:0,stages:[{status:0}]}));
+  const status=runComparisonBuild({cwd:root,out,
+   env:{GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',PICSEE_HEAVY_LOCK_HELD:'1',APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'full'},
+   spawn:()=>{calls++;return run;},stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,run.status===65?65:70);assert.equal(calls,1);
+  const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+  assert.equal(record.status,status);assert.equal(record.complete,true);assert.equal(record.formal,false);
+  assert.deepEqual(record.stages.map(stage=>stage.name),['debug-app-prerequisite']);
+  assert.equal(record.stages[0].status,status);
+  assert.equal(readFileSync(path.join(out,'prerequisite.stdout.log'),'utf8'),run.stdout);
+  assert.equal(readFileSync(path.join(out,'prerequisite.stderr.log'),'utf8'),run.stderr??'');
+ }
+});
+
+test('legacy test build failure keeps successful App prerequisite evidence while other scopes stay single-stage',t=>{
+ const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',PICSEE_HEAVY_LOCK_HELD:'1',APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'full'};
+ const out=temporary(t);let calls=0;
+ const status=runComparisonBuild({cwd:root,out,env,spawn:()=>++calls===1?{status:0,stdout:'App ready\n'}:{status:65,stdout:'legacy compile failed\n'},stdout:()=>{},stderr:()=>{}});
+ assert.equal(status,65);assert.equal(calls,2);
+ const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+ assert.deepEqual(record.stages.map(stage=>stage.status),[0,65]);
+ assert.equal(readFileSync(path.join(out,'prerequisite.stdout.log'),'utf8'),'App ready\n');
+ for(const [mode,scope] of [['legacy','focus'],['legacy',undefined],['hosted','focus'],['hosted','full']]){
+  let count=0;
+  const status=runComparisonBuild({cwd:root,out:temporary(t),env:{...env,APP_COMPARE_MODE:mode,APP_COMPARE_SCOPE:scope},
+   spawn:()=>{count++;return {status:0};},stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,0);assert.equal(count,1);
+ }
+ const damaged=temporary(t);cpSync(path.join(root,'Legacy393Tests'),path.join(damaged,'Legacy393Tests'),{recursive:true});
+ writeFileSync(path.join(damaged,'Legacy393Tests',names[0]),'broken frozen source');let count=0;
+ assert.notEqual(runComparisonBuild({cwd:damaged,out:temporary(t),env,spawn:()=>{count++;return {status:0};},stdout:()=>{},stderr:()=>{}}),0);
+ assert.equal(count,0,'frozen-source validation precedes the new App prerequisite');
+});
