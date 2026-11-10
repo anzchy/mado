@@ -1,0 +1,13 @@
+# #632 resumed verification after #635 merge
+
+Owner resumed the WI after PR636 merged toeeca5e30. The branch was rebased cleanly; owned implementation/test files were restored without semantic changes. Prior original RED and receipt remain preserved.
+
+A broader concurrent Node run before the owner paused work for the #635 documentation follow-up returned45PASS/1FAIL of46: the normal success executable fixture hit its existing2s watchdog budget and returned124. Evidence: gpt-imple-1 evidence dir: i632-resume-node.log. No test/source inputs or assertions changed to address it. On explicit resumption the same four files ran under the real shared heavy-lock with Node --test-concurrency=1:46/46PASS, zero failures/skips/cancellations,43423.002ms. Evidence: i632-resume-serial-node.log. This run is preserved separately; the earlier failure is not overwritten or relabeled. This does not establish a root cause for package hang632.
+
+Owner's standing temporary gate rule until632lands uses CI's parallel non-MacUI and serial MacUI package runs, each with its own heavy-lock invocation. Resumed acceptance uses those selections plus the existing --enable-code-coverage option. Profiles are copied after each successful run; the executable SHA256 must match before profiles are combined with llvm-profdata merge. The unchanged swift-lcov.sh exporter then reads the merged current-run profile at its original path; unchanged lcov-total.py and official coverage parser compare the unchanged100% thresholds. Raw logs/profiles and source hashes are retained under gpt-imple-1 evidence dir: i632-resume-native and i632-final-source-hashes.json.
+
+This is validation orchestration only. No permanent lane split, CI, exporter, coverage-threshold, App or Package source change is introduced. Production unit-lane.mjs retains the original full-parallel command and fixed600s post-admission deadline. Its real process/lock/cleanup behavior is exercised by the Node integration fixtures, including detached helper termination and independent follower admission.
+
+Do not claim a fresh configured full-parallel unit-lane run passed: the owner-authorized split gates replace that native package acceptance while the known local hang remains unresolved. Record their actual outcomes and fresh coverage separately. The original plan's full-parallel acceptance wording is superseded only for temporary validation by this owner decision; the implemented launcher contract remains unchanged.
+
+Independent review accepts the documented fixture timing exception with notes. I632-BOUND-WI-1 still reports SEPARATION-BROKEN; keep its original High finding visible. No RED re-record, behavioral assertion relaxation or production600 change.
