@@ -48,6 +48,72 @@ private actor ReadOwner454Scanner: FolderScanning {
     }
 }
 
+/// Hold one real filesystem count independently of the main read's lifecycle.
+private actor ReadOwner454SidebarCounter: SidebarFolderEnumerating {
+    private let system = SystemSidebarFolderEnumerator()
+    private var armed: [URL: UUID] = [:]
+    private var armedRows: [URL: UUID] = [:]
+    private var captured: [UUID: Int] = [:]
+    private var waits: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var rowWaits: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var released: Set<UUID> = []
+    private var releasingAll = false
+    private var active = 0
+    var allEnded: Bool { active == 0 }
+    func arm(_ folder: URL) -> UUID {
+        let id = UUID()
+        armed[folder.standardizedFileURL] = id
+        return id
+    }
+    func isHolding(_ id: UUID) -> Bool { waits[id] != nil }
+    func armRows(_ folder: URL) -> UUID {
+        let id = UUID()
+        armedRows[folder.standardizedFileURL] = id
+        return id
+    }
+    func capturedCount(_ id: UUID) -> Int? { captured[id] }
+    func release(_ id: UUID) {
+        released.insert(id)
+        waits.removeValue(forKey: id)?.resume()
+        rowWaits.removeValue(forKey: id)?.resume()
+    }
+    func releaseAll() {
+        releasingAll = true
+        let pending = Array(waits.values)
+        waits.removeAll()
+        for continuation in pending { continuation.resume() }
+        let pendingRows = Array(rowWaits.values)
+        rowWaits.removeAll()
+        for continuation in pendingRows { continuation.resume() }
+    }
+    func children(in folder: URL, root: URL) async throws -> [URL] {
+        active += 1
+        defer { active -= 1 }
+        if let id = armedRows.removeValue(forKey: folder.standardizedFileURL) {
+            let children = try await system.children(in: folder, root: root)
+            if !releasingAll && !released.contains(id) {
+                await withCheckedContinuation { rowWaits[id] = $0 }
+            }
+            try Task.checkCancellation()
+            return children
+        }
+        return try await system.children(in: folder, root: root)
+    }
+    func imageCount(in folder: URL, root: URL) async throws -> Int {
+        active += 1
+        defer { active -= 1 }
+        let count = try await system.imageCount(in: folder, root: root)
+        if let id = armed.removeValue(forKey: folder.standardizedFileURL) {
+            captured[id] = count
+            if !releasingAll && !released.contains(id) {
+                await withCheckedContinuation { waits[id] = $0 }
+            }
+        }
+        try Task.checkCancellation()
+        return count
+    }
+}
+
 @MainActor private final class ReadOwner454Motion: ReduceMotionSource {
     var reduceMotion = false
     var onChange: (@MainActor () -> Void)?
@@ -69,7 +135,11 @@ private actor ReadOwner454Scanner: FolderScanning {
     let controller: CanvasWindowController
     let scanner = ReadOwner454Scanner()
     let window: NSWindow
-    init() async throws {
+    private let sidebarCounter: ReadOwner454SidebarCounter?
+    private var accessForSidebar: FileAccess?
+    private var failureRowsCounter: ReadOwner454SidebarCounter?
+    init(sidebarCounter: ReadOwner454SidebarCounter? = nil) async throws {
+        self.sidebarCounter = sidebarCounter
         _ = NSApplication.shared
         let fm = FileManager.default
         base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("readOwner454-\(UUID())")
@@ -86,6 +156,7 @@ private actor ReadOwner454Scanner: FolderScanning {
         let scope = SystemSecurityScope()
         let access = try FileAccess(scope: scope, bookmarks: scope,
             store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "readOwner454")
+        accessForSidebar = access
         rootID = try await access.grant(folder: parent)
         let services = AccessServices(files: access, recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")),
             browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
@@ -94,6 +165,9 @@ private actor ReadOwner454Scanner: FolderScanning {
         controller = createdController
         window = try #require(createdController.window)
         createdController.folderScanningOverride = scanner
+        if let sidebarCounter {
+            createdController.sidebarBrowserOverride = SidebarFolderBrowser(access: access, enumerator: sidebarCounter)
+        }
         window.setContentSize(NSSize(width: 1280, height: 800))
     }
     var shell: GridShellView? { readOwner454Find(GridShellView.self, in: window.contentView) { _ in true } }
@@ -115,13 +189,47 @@ private actor ReadOwner454Scanner: FolderScanning {
         try await MadoAppTests.waitUntil(description, between: { self.present() }, condition)
         present()
     }
-    func expectCount(_ url: URL, _ count: Int?) throws {
+    func retryReady(attempt: Int) async -> Bool {
+        let holding = await scanner.isHolding(child, attempt: attempt)
+        guard row(parent)?.countLabel.stringValue == "2" else { return false }
+        return holding
+    }
+    func plainFailureReady() -> Bool {
+        let ready = controller.session.folderScan?.failure != nil && button("state.retry-folder") != nil
+            && row(child)?.countLabel.stringValue == "—"
+        guard row(parent)?.countLabel.stringValue == "2", row(grandchild)?.countLabel.stringValue == "1" else { return false }
+        return ready
+    }
+    func holdFailureRows() async throws -> UUID {
+        let access = try #require(accessForSidebar)
+        let counter = ReadOwner454SidebarCounter()
+        failureRowsCounter = counter
+        let id = await counter.armRows(parent)
+        controller.sidebarBrowserOverride = SidebarFolderBrowser(access: access, enumerator: counter)
+        return id
+    }
+    func releaseFailureRows(_ id: UUID) async {
+        await failureRowsCounter?.release(id)
+    }
+    func waitForSettledFailureRows() async throws {
+        try await wait("settled failed-read parent projection and counts") {
+            let countsEnded = await self.failureRowsCounter?.allEnded ?? true
+            return countsEnded && self.controller.session.folderScan?.failure != nil
+                && self.button("state.retry-folder") != nil
+                && self.row(self.child)?.countLabel.stringValue == "—"
+                && self.row(self.parent)?.countLabel.stringValue == "2"
+                && self.row(self.grandchild) == nil
+        }
+        #expect(!plainFailureReady())
+    }
+    func expectCount(_ url: URL, _ count: Int?, sourceLocation: SourceLocation = #_sourceLocation) throws {
         let folderRow = try #require(self.row(url))
-        #expect(folderRow.countLabel.stringValue == (count.map(String.init) ?? ""))
-        #expect(folderRow.countLabel.isHidden == (count == nil))
+        #expect(folderRow.countLabel.stringValue == (count.map(String.init) ?? ""), sourceLocation: sourceLocation)
+        #expect(folderRow.countLabel.isHidden == (count == nil), sourceLocation: sourceLocation)
         let images = count.map { String(format: String(localized: "%lld images"), Int64($0)) }
-        #expect(folderRow.accessibilityLabel() == (images.map { "\(url.lastPathComponent), \($0)" } ?? url.lastPathComponent))
-        #expect(!window.isVisible)
+        #expect(folderRow.accessibilityLabel() == (images.map { "\(url.lastPathComponent), \($0)" } ?? url.lastPathComponent),
+                sourceLocation: sourceLocation)
+        #expect(!window.isVisible, sourceLocation: sourceLocation)
     }
     func beginParent() async throws -> FolderSnapshot {
         #expect(!window.isVisible)
@@ -167,9 +275,17 @@ private actor ReadOwner454Scanner: FolderScanning {
         #expect(row(child)?.current == true)
     }
     func close() async {
+        await failureRowsCounter?.releaseAll()
+        await sidebarCounter?.releaseAll()
         await scanner.releaseAll()
         window.close()
-        try? await MadoAppTests.waitUntil("read-owner scanner teardown") { await self.scanner.allEnded }
+        try? await MadoAppTests.waitUntil("read-owner scanner and sidebar teardown") {
+            let countsEnded = await self.sidebarCounter?.allEnded ?? true
+            let scansEnded = await self.scanner.allEnded
+            let failureRowsEnded = await self.failureRowsCounter?.allEnded ?? true
+            guard failureRowsEnded else { return false }
+            return countsEnded && scansEnded
+        }
         try? FileManager.default.removeItem(at: base)
     }
 }
@@ -209,7 +325,9 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
     try await withAsyncTeardown {
         let previous = try await f.beginParent()
         try await f.beginChild(replaying: previous)
+        let failureRows = try await f.holdFailureRows()
         await f.scanner.release(f.child, attempt: 1, fail: true)
+        try await f.wait("plain failure assertion boundary") { f.plainFailureReady() }
         try await f.wait("plain child 24F") {
             f.controller.session.folderScan?.failure != nil && f.button("state.retry-folder") != nil
                 && f.row(f.child)?.countLabel.stringValue == "—"
@@ -220,8 +338,10 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
         #expect(f.field("grid.folder-count")?.stringValue == String(localized: "Read incomplete"))
         try f.expectCount(f.parent, 2)
         try f.expectCount(f.grandchild, 1)
+        await f.releaseFailureRows(failureRows)
+        try await f.waitForSettledFailureRows()
         try #require(f.button("state.retry-folder")).performClick(nil)
-        try await f.wait("held Retry child") { await f.scanner.isHolding(f.child, attempt: 2) }
+        try await f.wait("held Retry child") { await f.retryReady(attempt: 2) }
         try f.expectCount(f.child, nil)
         try f.expectCount(f.parent, 2)
         #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
@@ -233,6 +353,7 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
         #expect(f.shell?.readingFolderURL == nil)
         #expect(f.controller.session.folderScan?.isReadingFolder == false)
         #expect(f.row(f.child)?.accessibilityLabel() == "Child, \(String(localized: "Read incomplete"))")
+        try await f.wait("cancel Retry parent recount delivered") { f.row(f.parent)?.countLabel.stringValue == "2" }
         try f.expectCount(f.parent, 2)
         try #require(f.button("state.retry-folder")).performClick(nil)
         try await f.wait("second Retry child held") { await f.scanner.isHolding(f.child, attempt: 3) }
@@ -252,6 +373,59 @@ func issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() async thr
         try f.expectCount(f.child, 3)
         try f.expectCount(f.parent, 2)
         try f.expectCount(f.grandchild, 1)
+    } teardown: { await f.close() }
+}
+
+/// S5: a held Retry is not a readiness barrier for its independently recounted parent row.
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue454RetryReadinessWaitsForParentRecount() async throws {
+    let counter = ReadOwner454SidebarCounter()
+    let f = try await ReadOwner454Fixture(sidebarCounter: counter)
+    try await withAsyncTeardown {
+        let previous = try await f.beginParent()
+        try await f.beginChild(replaying: previous)
+        try await f.wait("child sidebar counts drained before arming failed-read recount") { await counter.allEnded }
+        let parentBeforeFailure = try #require(f.row(f.parent))
+        try f.expectCount(f.parent, 2)
+        let parentCount = await counter.arm(f.parent)
+        await f.scanner.release(f.child, attempt: 1, fail: true)
+        try await f.wait("failed-read replacement parent row waits for its real count") {
+            let countHeld = await counter.isHolding(parentCount)
+            return countHeld && f.controller.session.folderScan?.failure != nil
+                && f.button("state.retry-folder") != nil
+                && f.row(f.child)?.countLabel.stringValue == "—"
+                && f.row(f.parent) != nil && f.row(f.parent) !== parentBeforeFailure
+                && f.row(f.parent)?.countLabel.stringValue == ""
+                && f.row(f.grandchild) == nil
+        }
+        let failedParentRow = try #require(f.row(f.parent))
+        #expect(f.row(f.grandchild) == nil)
+        #expect(await counter.capturedCount(parentCount) == 2)
+        try f.expectCount(f.parent, nil)
+        let plainReadyBeforeCount = f.plainFailureReady()
+        #expect(!plainReadyBeforeCount)
+        if plainReadyBeforeCount { try f.expectCount(f.parent, 2) }
+        try #require(f.button("state.retry-folder")).performClick(nil)
+        try await f.wait("Retry scan held while failed-read parent recount remains pending") {
+            let countHeld = await counter.isHolding(parentCount)
+            let scanHeld = await f.scanner.isHolding(f.child, attempt: 2)
+            return countHeld && scanHeld && f.controller.session.folderScan?.isReadingFolder == true
+                && f.row(f.parent) === failedParentRow
+                && f.row(f.parent)?.countLabel.stringValue == ""
+        }
+        #expect(await counter.capturedCount(parentCount) == 2)
+        try f.expectCount(f.parent, nil)
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
+        let readyBeforeCount = await f.retryReady(attempt: 2)
+        #expect(!readyBeforeCount)
+        if readyBeforeCount { try f.expectCount(f.parent, 2) }
+
+        await counter.release(parentCount)
+        try await f.wait("Retry readiness follows delivered parent count") { await f.retryReady(attempt: 2) }
+        try f.expectCount(f.parent, 2)
+        try f.expectCount(f.child, nil)
+        #expect(f.row(f.grandchild) == nil)
+        #expect(f.shell?.readingFolderURL?.standardizedFileURL.path == f.child.path)
     } teardown: { await f.close() }
 }
 
