@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import { emptyAppcast, updateAppcast } from "./appcast.mjs";
+import { registerAppcastRCContracts } from "./appcast-rc-cases.mjs";
 
 const fixture = readFileSync(new URL("./fixtures/appcast-one-item.xml", import.meta.url), "utf8");
 const madoRelease = readFileSync(new URL("./fixtures/appcast-mado-v0.0.1.xml", import.meta.url), "utf8");
@@ -29,11 +30,15 @@ function isMadoFeed(xml) {
     const shortVersion = /<sparkle:shortVersionString>([^<]*)<\/sparkle:shortVersionString>/.exec(entry)?.[1];
     const enclosure = /<enclosure\s[^>]*\/>/.exec(entry)?.[0] ?? "";
     const attribute = (name) => new RegExp(`\\s${name}="([^"]*)"`).exec(enclosure)?.[1];
-    const expectedURL = `https://github.com/anzchy/mado/releases/download/mado-v${shortVersion}/Mado-${shortVersion}.dmg`;
+    // Match the workflow's final/RC tags; an RC appcast PR still needs the owner's rollout decision.
+    const releaseURL = /^https:\/\/github\.com\/anzchy\/mado\/releases\/download\/mado-v(\d+\.\d+\.\d+)(?:-rc\.[1-9]\d*)?\/Mado-(\d+\.\d+\.\d+)\.dmg(?![\s\S])/.exec(attribute("url") ?? "");
     return Boolean(title?.startsWith("Mado ") && version?.trim() && shortVersion?.trim() &&
-      attribute("url") === expectedURL && attribute("length")?.trim() && attribute("sparkle:edSignature")?.trim());
+      releaseURL && releaseURL[1] === shortVersion && releaseURL[2] === shortVersion &&
+      attribute("length")?.trim() && attribute("sparkle:edSignature")?.trim());
   });
 }
+
+registerAppcastRCContracts(isMadoFeed);
 
 test("the Mado feed contract accepts empty and released feeds", () => {
   assert.equal(items(madoRelease).length, 1, "fixture is the first release from #593 (0816622e)");

@@ -10,6 +10,15 @@
   "preflightCommand": "",
   "lanes": [
     {
+      "name": "release-appcast-node",
+      "description": "Manual Node contract receipts for appcast generation and final/RC feed validity (#629).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/appcast.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
       "name": "unit",
       "description": "MadoKit package tests (Swift Testing) via SwiftPM; in-process, no external services. Same command as the CI 'Swift Testing' step, plus coverage.",
       "command": "swift test --package-path Packages/MadoKit --enable-code-coverage",
