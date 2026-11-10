@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { openSync, closeSync, appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startGroupObservation } from './app-repeat-observer.mjs';
 
 function liveGroupMembers(group) {
   const ps = spawnSync('ps', ['-axo', 'pid=,pgid=,stat='], {encoding:'utf8',timeout:1000});
@@ -13,7 +14,7 @@ function liveGroupMembers(group) {
 }
 
 export async function runProcessGroup({ command, args = [], env = process.env, logPath,
-  deadline, graceMs = 250, drainMs = 1500 } = {}) {
+  deadline, graceMs = 250, drainMs = 1500, observation = {} } = {}) {
   if (!Number.isFinite(deadline) || deadline <= Date.now()) {
     appendFileSync(logPath, 'app-repeat: job time budget exhausted\n');
     return {status:70,drained:true};
@@ -29,16 +30,21 @@ export async function runProcessGroup({ command, args = [], env = process.env, l
     return {status:70,drained:true};
   }
   const group = child.pid;
+  const observer = env.APP_REPEAT_OBSERVE === '1' ? startGroupObservation({ ...observation, group,
+    write: row => appendFileSync(logPath, `[i600.supervisor] ${JSON.stringify(row)}\n`) }) : null;
   return await new Promise(resolve => {
     let done = false, stopping = false, poll, kill, drain;
     const log = text => appendFileSync(logPath,`app-repeat: ${text}\n`);
-    const finish = (status, drained) => {
+    const finish = async (status, drained) => {
       if (done) return;
       done = true;
       clearTimeout(timer); clearInterval(poll); clearTimeout(kill); clearTimeout(drain);
       process.removeListener('SIGTERM',interrupted); process.removeListener('SIGINT',interrupted);
       child.unref();
-      resolve({status,drained,group});
+      const observationResult = await observer?.stop();
+      const observerUndrained = observationResult?.drained === false;
+      resolve({status,drained:drained && !observerUndrained,group,
+        ...(observerUndrained ? {observerUndrained:true} : {})});
     };
     const signal = name => {
       try { process.kill(-group,name); }

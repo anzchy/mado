@@ -259,6 +259,7 @@ jobs:
         run: |
           if [ "$REPEAT_ENABLED" = true ]; then
             export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
+            export APP_REPEAT_OBSERVE=1
             node scripts/ci/app-repeat.mjs
           else
             node scripts/tdd/app-lane.mjs
