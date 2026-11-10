@@ -511,6 +511,8 @@ jobs:
         uses: ./.github/actions/xcode-setup
       - name: Build comparison mechanism
         run: node scripts/ci/legacy393-sources.mjs
+      - name: Host ownership integration
+        run: node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs > .build/host-ownership-integration.tap 2>&1
       - name: Verify hosted cancellation ownership
         if: inputs.app_compare_mode == 'hosted'
         run: node scripts/ci/hosted-cancel-probe.mjs
@@ -525,5 +527,6 @@ jobs:
             .build/app-compare*
             .build/app-repeat
             .build/hosted-*
+            .build/host-ownership-integration.tap
           include-hidden-files: true
           if-no-files-found: warn

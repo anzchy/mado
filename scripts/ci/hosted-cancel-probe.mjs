@@ -6,7 +6,8 @@ import {fileURLToPath} from 'node:url';
 import {runProcessGroup} from './app-repeat-process.mjs';
 
 export async function runHostedCancelProbe({env=process.env,cwd=process.cwd(),out=path.join(cwd,'.build/app-compare-cancel'),
-  command,args,token=randomUUID(),executable,deadline,graceMs,drainMs}={}){
+  command,args,token=randomUUID(),executable,deadline,graceMs,drainMs,preparedInspector,inspectorSpawn,
+  hostQuery,hostSignal,groupSignal,signal,now=Date.now}={}){
   const result={version:1,diagnostic:true,formal:false,complete:false,status:70,sha:env.GITHUB_SHA??'unknown',
     runId:env.GITHUB_RUN_ID??null,runAttempt:env.GITHUB_RUN_ATTEMPT??null,token,startedAt:new Date().toISOString()};
   const save=()=>writeFileSync(path.join(out,'result.json'),JSON.stringify(result,null,2)+'\n');
@@ -25,10 +26,11 @@ export async function runHostedCancelProbe({env=process.env,cwd=process.cwd(),ou
     delete childEnv.PICSEE_APP_FILTER;
     result.supervisor=await runProcessGroup({command:command??process.execPath,args:workerArgs,env:childEnv,
       logPath:path.join(attemptPath,'native.log'),deadline:Math.min(deadline??Infinity,Date.now()+120000),
-      graceMs,drainMs,cancelOnHostObserved:true});
+      graceMs,drainMs,cancelOnHostObserved:true,preparedInspector,inspectorSpawn,hostQuery,hostSignal,groupSignal,signal,now});
     const s=result.supervisor,h=s.hostOwnership;
     if(s.status!==70||s.drained!==true||s.cancelledOnHostObserved!==true||!h?.observed||h.drained!==true||
-      h.identities.length===0||h.signals.length===0||h.live.length!==0||h.unknown.length!==0)
+      h.identities.length===0||h.signals.length===0||h.live.length!==0||h.unknown.length!==0||
+      s.inspector?.closed!==true||s.inspector?.reaped!==true)
       throw new Error('exact observed hosted invocation was not cancelled and proven drained');
     result.status=0;
   }catch(error){result.error=error.message;}
