@@ -7,6 +7,10 @@ import Testing
 @Test(.timeLimit(.minutes(3))) @MainActor
 func issue393RunsInsideRealAppWithLiveDispatchAndActivation() async throws {
     print("[issue393-host] pid=\(getpid()) ppid=\(getppid()) pgid=\(getpgrp()) executable=\(Bundle.main.executableURL?.path ?? "nil")")
+    if let token = ProcessInfo.processInfo.environment["PICSEE_TEST_RUN_TOKEN"] {
+        #expect(!token.isEmpty)
+        print("[issue393-host-token] token=\(token) pid=\(getpid()) uid=\(getuid())")
+    }
     #expect(ProcessInfo.processInfo.environment["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] == "1")
     #expect(Bundle.main.bundleIdentifier == "io.github.anzchy.mado")
     let executable = try #require(Bundle.main.executableURL)

@@ -22,6 +22,16 @@ on:
         description: Optional original i393 native RED packet for CI verification and full App validation
         type: string
         default: ''
+      app_compare_mode:
+        description: Diagnostic same-SHA App host comparison (requires app_tests=false)
+        type: choice
+        options: [none, legacy, hosted]
+        default: none
+      app_compare_scope:
+        description: Comparison behavior set
+        type: choice
+        options: [focus, full]
+        default: focus
       app_filter:
         description: Optional App test regex for repeat runs; empty runs the full bundle
         type: string
@@ -96,6 +106,8 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Record job start
         run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      - name: Fetch frozen comparison baseline for source audit
+        run: git fetch --no-tags --depth=1 origin c5a087f5949e0f087b96f19d0f4c58a8310a8960
       - name: Watchdog script tests
         run: node --test scripts/ci/*.test.mjs
       - name: Test macOS device tools
@@ -242,7 +254,7 @@ jobs:
         id: dd-key
         env:
           MANIFEST: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
-          INPUTS: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'App/**', 'AppTests/**', 'Packages/MadoKit/Sources/**') }}
+          INPUTS: ${{ hashFiles('project.yml', '.github/actions/xcode-setup/action.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'App/**', 'AppTests/**', 'Legacy393Tests/**', 'scripts/ci/legacy393-manifest.json', 'Packages/MadoKit/Sources/**') }}
         run: node scripts/ci/cache-key.mjs dd "$MANIFEST" "$INPUTS"
       - name: Restore DerivedData
         if: github.event_name != 'push' && !inputs.cold
@@ -468,5 +480,50 @@ jobs:
         with:
           name: hosted-focus-diagnostic
           path: .build/hosted-*
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  app-host-comparison:
+    name: App host comparison
+    if: github.event_name == 'workflow_dispatch' && inputs.app_compare_mode != 'none' && !inputs.app_tests
+    runs-on: macos-26
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      PICSEE_HEAVY_LOCK_HELD: '1'
+      PICSEE_APP_LANE_NO_RETRY: '1'
+      APP_COMPARE_MODE: ${{ inputs.app_compare_mode }}
+      APP_COMPARE_SCOPE: ${{ inputs.app_compare_scope }}
+      APP_REPEAT: ${{ inputs.app_repeat }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Record comparison job start
+        run: echo "APP_JOB_STARTED_MS=$(node -p 'Date.now()')" >> "$GITHUB_ENV"
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Set up Xcode
+        uses: ./.github/actions/xcode-setup
+      - name: Build comparison mechanism
+        run: node scripts/ci/legacy393-sources.mjs
+      - name: Verify hosted cancellation ownership
+        if: inputs.app_compare_mode == 'hosted'
+        run: node scripts/ci/hosted-cancel-probe.mjs
+      - name: Run App host comparison
+        run: node scripts/ci/app-compare.mjs
+      - name: Upload App host comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-host-comparison-${{ inputs.app_compare_mode }}-${{ inputs.app_compare_scope }}
+          path: |
+            .build/app-compare*
+            .build/app-repeat
+            .build/hosted-*
           include-hidden-files: true
           if-no-files-found: warn

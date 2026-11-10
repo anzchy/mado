@@ -1,0 +1,13 @@
+{
+  "baseline": "c5a087f5949e0f087b96f19d0f4c58a8310a8960",
+  "files": {
+    "Issue521NativePanRunner.swift": "6c2d93f1464e5ef55b217f8b2afe017647d17c5954bd9f6628ba22899700a0df",
+    "Issue521CanvasToolFocusTests.swift": "8ecdbe3b876ec266f4d97360d83c864daa8e725da67ea6e341f468ad277f6690",
+    "Issue527CanvasFocusTests.swift": "ce83c99928fe7ea80fbcee4fcd4700f74cb8c9132b4e773a9c13b7292da93d6c",
+    "Issue527InactiveWindowTests.swift": "a34c9987e59ee472453f17c64e03f7928b97de78be7195d575447b008d6037ef",
+    "Issue527InspectorFocusTests.swift": "ad5b1fb1db4b613c707d0565cf7bcf74781ca2ba41394da811207cbd7fef3b3a",
+    "KeyWindowFixture.swift": "271d6092946a30449ab1c02f57b17f9b829aaa78b1ba137e7bceb4ae32aa936a",
+    "KeyWindowFixtureTests.swift": "cd2e1c3fc5be7ce34b4264e04ef27b870a1ea6fc2fbe00d1323ebe7828c4dc80",
+    "Retry442Tests.swift": "117d8591a9733c49a160ebc2b15b7ba44a30daa0e14d71c470c38a250915c0de"
+  }
+}
