@@ -1,22 +1,15 @@
 import AppKit
+@testable import Mado
 import Testing
 import MadoCore
 import MadoApplication
 import MadoMacUI
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
-      .timeLimit(.minutes(3))) @MainActor
-func issue527InactiveFirstClickPassesInIsolatedProcess() async throws {
-    try await issue521RunNativeTest(filter: "issue527InactiveFirstClickKeepsFocusConsistent\\b",
-        summary: "Test issue527InactiveFirstClickKeepsFocusConsistent() passed")
-}
-
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(3))) @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue527InactiveFirstClickKeepsFocusConsistent() async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
+    // Reserve 15 s for key acquisition within this test's existing limit.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     let tool = try scene.focusTool()
     let other = NSWindow(contentRect: NSRect(x: 40, y: 40, width: 220, height: 150),

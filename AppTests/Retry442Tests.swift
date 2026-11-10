@@ -1,111 +1,10 @@
 import AppKit
+@testable import Mado
 import Testing
 import MadoCore
 import MadoApplication
 import MadoInfrastructure
 import MadoMacUI
-import Darwin
-
-private final class Retry442BundleAnchor: NSObject {}
-
-private struct Retry442Timeout: Error, CustomStringConvertible {
-    let stage: String
-    var description: String { "Native test helper exceeded the shared deadline during \(stage)" }
-}
-
-@MainActor private func retry442Run(_ executable: URL, _ arguments: [String],
-    environment: [String: String]? = nil, log: URL,
-    deadline: ContinuousClock.Instant, stage: String) async throws -> (Int32, String) {
-    try Task.checkCancellation()
-    guard ContinuousClock.now < deadline else { throw Retry442Timeout(stage: stage) }
-    FileManager.default.createFile(atPath: log.path, contents: nil)
-    let output = try FileHandle(forWritingTo: log)
-    defer { try? output.close() }
-    let process = Process()
-    process.executableURL = executable
-    process.arguments = arguments
-    process.environment = environment
-    process.standardOutput = output
-    process.standardError = output
-    try process.run()
-    defer {
-        if process.isRunning {
-            process.terminate()
-            kill(process.processIdentifier, SIGKILL)
-            process.waitUntilExit()
-        }
-    }
-    while process.isRunning && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-    if process.isRunning {
-        // The defer terminates and reaps this stage, including swiftc or the native child,
-        // before the stage-named error leaves the helper. Cancellation takes the same path.
-        throw Retry442Timeout(stage: stage)
-    }
-    process.waitUntilExit()
-    try output.synchronize()
-    return (process.terminationStatus, try String(contentsOf: log, encoding: .utf8))
-}
-
-/// Keep NSApplication's permanent launch/menu initialization out of the shared unit-test host.
-/// The child loads this same test bundle and uses Swift Testing's public generated-runner entry point.
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_RETRY442_NATIVE_CHILD"] != "1"),
-      .timeLimit(.minutes(3))) @MainActor
-func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
-    // All three stages spend this one monotonic budget. Reserve 30 seconds inside the
-    // parent's three-minute limit for termination/reaping and failure reporting.
-    let deadline = ContinuousClock.now.advanced(by: .seconds(150))
-    let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("retry442-runner-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: temporary) }
-    let source = temporary.appendingPathComponent("NativeRunner.swift")
-    let executable = temporary.appendingPathComponent("NativeRunner")
-    try #"""
-    import Foundation
-    import Testing
-    @main enum NativeRunner {
-        static func main() {
-            guard let path = ProcessInfo.processInfo.environment["PICSEE_RETRY442_TEST_BUNDLE"],
-                  let bundle = Bundle(path: path) else { exit(70) }
-            do { try bundle.loadAndReturnError() }
-            catch { print("Native bundle load failed: \(error)"); exit(70) }
-            Task { await Testing.__swiftPMEntryPoint() as Never }
-            while true { RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01)) }
-        }
-    }
-    """#.write(to: source, atomically: true, encoding: .utf8)
-    let (selectionStatus, selection) = try await retry442Run(URL(fileURLWithPath: "/usr/bin/xcode-select"),
-        ["-p"], log: temporary.appendingPathComponent("selection.log"),
-        deadline: deadline, stage: "Xcode selection")
-    try #require(selectionStatus == 0)
-    let developer = URL(fileURLWithPath: selection.trimmingCharacters(in: .whitespacesAndNewlines))
-        .appendingPathComponent("Platforms/MacOSX.platform/Developer")
-    let frameworks = developer.appendingPathComponent("Library/Frameworks").path
-    let libraries = developer.appendingPathComponent("usr/lib").path
-    let (buildStatus, buildOutput) = try await retry442Run(URL(fileURLWithPath: "/usr/bin/xcrun"),
-        ["swiftc", "-parse-as-library", "-F", frameworks,
-         "-Xlinker", "-rpath", "-Xlinker", frameworks,
-         "-Xlinker", "-rpath", "-Xlinker", libraries, source.path, "-o", executable.path],
-        log: temporary.appendingPathComponent("build.log"), deadline: deadline, stage: "swiftc compilation")
-    if buildStatus != 0 { print(buildOutput.split(separator: "\n").map { "[retry442-build] \($0)" }.joined(separator: "\n")) }
-    try #require(buildStatus == 0, "the native test helper must compile before its assertions count")
-    var environment = ProcessInfo.processInfo.environment
-    environment["PICSEE_RETRY442_NATIVE_CHILD"] = "1"
-    environment["PICSEE_RETRY442_TEST_BUNDLE"] = Bundle(for: Retry442BundleAnchor.self).bundleURL.path
-    environment["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] = "1"
-    let (status, output) = try await retry442Run(executable, ["--filter", "retry442NativeKeyboardMatrix\\b"],
-        environment: environment, log: temporary.appendingPathComponent("native.log"),
-        deadline: deadline, stage: "native keyboard matrix")
-    // Prefix captured child records so the enclosing App lane sees exactly its own test-run root.
-    print(output.split(separator: "\n").map { "[retry442-child] \($0)" }.joined(separator: "\n"))
-    // Keep macro failure diagnostics from printing unprefixed embedded test-run records.
-    let nativePassed = output.contains("Test retry442NativeKeyboardMatrix() passed")
-    let nativeRootCompleted = output.range(of: "Test run with 1 test in [0-9]+ suites? passed after",
-        options: .regularExpression) != nil
-    #expect(status == 0, "the isolated native keyboard matrix must pass")
-    #expect(nativePassed)
-    #expect(nativeRootCompleted,
-        "a successful, nonzero completed native root is required")
-}
 
 @MainActor private final class Retry442MotionSource: ReduceMotionSource {
     var reduceMotion = false
@@ -190,7 +89,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
     var canvas: CanvasView? { retry442Find(CanvasView.self, in: window.contentView) }
 
     func wait(_ condition: () -> Bool) async throws {
-        try await MadoAppTests.waitUntil(between: { window.update() }, condition)
+        try await MadoHostedFocusTests.waitUntil(between: { window.update() }, condition)
     }
 
     func openGrid() async throws {
@@ -246,8 +145,7 @@ func retry442NativeKeyboardMatrixPassesInIsolatedProcess() async throws {
 
 /// Runs only in the isolated native child: NSApplication.run() permanently initializes AppKit's menu
 /// augmentation, so the unit-test host must not own this lifecycle.
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_RETRY442_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(3))) @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func retry442NativeKeyboardMatrix() async throws {
     // Allow 15 s per acquisition; the parent's shared 150 s deadline also covers swiftc.
     let scene = try Retry442Scene(keyWindowTimeout: .seconds(180) / 12)

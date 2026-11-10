@@ -14,6 +14,10 @@ on:
         description: Also build and run the App test bundle
         type: boolean
         default: true
+      hosted_focus_only:
+        description: Run the hosted focus diagnostic job with app_tests=false
+        type: boolean
+        default: false
       app_filter:
         description: Optional App test regex for repeat runs; empty runs the full bundle
         type: string
@@ -410,3 +414,39 @@ jobs:
           key: playwright-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Check design catalog and journeys
         run: npm run design:check
+
+  # Explicit diagnostic subset. app_tests=false keeps the existing App job build-only;
+  # this separate check never supplies formal full-App test evidence.
+  hosted-focus-diagnostic:
+    name: Hosted focus diagnostic
+    if: github.event_name == 'workflow_dispatch' && inputs.hosted_focus_only && !inputs.app_tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      PICSEE_HEAVY_LOCK_HELD: '1'
+      PICSEE_APP_LANE_NO_RETRY: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Set up Xcode
+        uses: ./.github/actions/xcode-setup
+      - name: Build hosted focus diagnostic
+        run: node scripts/ci/hosted-focus-ci.mjs
+      - name: Run hosted focus diagnostic
+        run: node scripts/tdd/hosted-app-lane.mjs
+      - name: Upload hosted focus diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hosted-focus-diagnostic
+          path: .build/hosted-*
+          include-hidden-files: true
+          if-no-files-found: warn

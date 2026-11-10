@@ -1,8 +1,8 @@
 import AppKit
+@testable import Mado
 import Testing
 
-/// Eligibility opens on later run-loop turns after an explicit stopped-host key request,
-/// following the first order-front. Automatic activation during the old pump cannot open it.
+/// Eligibility opens only on later run-loop turns after the first explicit key request.
 @MainActor private final class DeferredKeyFixtureWindow: NSWindow {
     private var eligibilityTimer: Timer?
     private var turnsRemaining: Int
@@ -26,9 +26,8 @@ import Testing
     }
 
     override func makeKey() {
-        // Initial order-front and automatic key delivery during run() cannot unlock this gate.
-        // The old fixture only arms it at its explicit post-pump makeKey(), too late to wait.
-        if firstFrontRequestCompleted && !NSApp.isRunning && turnsRemaining > 0 && eligibilityTimer == nil {
+        // Initial order-front cannot unlock this gate; later native timer turns are required.
+        if firstFrontRequestCompleted && turnsRemaining > 0 && eligibilityTimer == nil {
             eligibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
@@ -50,30 +49,20 @@ import Testing
     }
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
-      .timeLimit(.minutes(3))) @MainActor
-func issue564KeyWindowFixturePassesInIsolatedProcess() async throws {
-    try await issue521RunNativeTest(filter: "issue564KeyWindowFixtureHandlesDelayedAndNeverKey\\b",
-        summary: "Test issue564KeyWindowFixtureHandlesDelayedAndNeverKey() passed")
-}
-
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(1))) @MainActor
-func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
+@Test(.timeLimit(.minutes(1))) @MainActor
+func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() async throws {
     _ = NSApplication.shared
     let previousPolicy = NSApp.activationPolicy()
     _ = NSApp.setActivationPolicy(.regular)
     defer { _ = NSApp.setActivationPolicy(previousPolicy) }
-    try #require(!NSApp.isRunning)
-    // One quarter of this child's one-minute time limit leaves room for the negative cases.
+    try #require(NSApp.isRunning)
+    // One quarter of the existing one-minute limit leaves room for the negative cases.
     let acquisitionBudget: Duration = .seconds(60) / 4
 
-    // Keep the existing fixture order: front request, native pump, explicit key request.
-    // The gate arms after that pump, so the immediate precondition is deterministically false.
+    // The initial synchronous request cannot satisfy deferred native readiness.
     let old = DeferredKeyFixtureWindow(turns: 4, title: "ikw-old-sequence")
     NSApp.activate(ignoringOtherApps: true)
     old.makeKeyAndOrderFront(nil)
-    issue521StartNativeDispatch()
     old.makeKey()
     #expect(!(NSApp.keyWindow === old && old.isKeyWindow))
     old.close()
@@ -83,7 +72,7 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
     try makeFixtureWindowKey(delayed, timeout: acquisitionBudget)
     #expect(NSApp.keyWindow === delayed && delayed.isKeyWindow)
     #expect(delayed.eligibilityOpenedWhileRunning)
-    #expect(!NSApp.isRunning)
+    #expect(NSApp.isRunning)
     var readyWindowRanNativeDispatch = false
     let probe = Timer(timeInterval: 0, repeats: false) { _ in
         MainActor.assumeIsolated { readyWindowRanNativeDispatch = NSApp.isRunning }
@@ -91,10 +80,18 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
     RunLoop.main.add(probe, forMode: .common)
     defer { probe.invalidate() }
     try makeFixtureWindowKey(delayed, timeout: acquisitionBudget)
-    #expect(readyWindowRanNativeDispatch, "ready-window acquisition still initializes native dispatch")
+    #expect(readyWindowRanNativeDispatch, "ready-window acquisition preserves live native dispatch")
     #expect(NSApp.keyWindow === delayed && delayed.isKeyWindow)
-    #expect(!NSApp.isRunning)
+    #expect(NSApp.isRunning)
     delayed.close()
+
+    let other = NSWindow(contentRect: NSRect(x: 30, y: 30, width: 220, height: 140),
+        styleMask: [.titled, .closable], backing: .buffered, defer: false)
+    other.isReleasedWhenClosed = false
+    other.title = "ikw-other-key"
+    defer { other.close() }
+    try makeFixtureWindowKey(other, timeout: acquisitionBudget)
+    try #require(NSApp.keyWindow === other && other.isKeyWindow)
 
     // Zero turns means eligibility never opens. Vary the caller budget to reject a fixed wait.
     for milliseconds in [30, 90, 0] {
@@ -119,7 +116,8 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
         #expect(elapsed >= budget)
         #expect(elapsed < budget + .seconds(1), "caller budget must replace the historical fixed wait")
         #expect(!never.isKeyWindow && NSApp.keyWindow !== never)
-        #expect(!NSApp.isRunning)
+        #expect(NSApp.keyWindow === other && other.isKeyWindow)
+        #expect(NSApp.isRunning)
     }
 
     // Pair the short budgets above with a longer one: a fixed subsecond wait must fail
@@ -143,6 +141,19 @@ func issue564KeyWindowFixtureHandlesDelayedAndNeverKey() throws {
         #expect(elapsed >= budget)
         #expect(elapsed < budget + .milliseconds(250), "caller budget bounds the wait with 250 ms slack")
         #expect(!never.isKeyWindow && NSApp.keyWindow !== never)
-        #expect(!NSApp.isRunning)
+        #expect(NSApp.keyWindow === other && other.isKeyWindow)
+        #expect(NSApp.isRunning)
     }
+    let cancelledWindow = DeferredKeyFixtureWindow(turns: 0, title: "ikw-cancelled")
+    defer { cancelledWindow.close() }
+    let cancelled = Task { @MainActor in
+        try makeFixtureWindowKey(cancelledWindow, timeout: acquisitionBudget)
+    }
+    cancelled.cancel()
+    do { try await cancelled.value; Issue.record("cancelled acquisition must fail") }
+    catch let error as KeyWindowFixtureError {
+        #expect(error.reason == "cancelled waiting for target window")
+        #expect(NSApp.isRunning)
+    }
+
 }

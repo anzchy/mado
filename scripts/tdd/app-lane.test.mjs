@@ -807,3 +807,134 @@ test('i587 integer issue schema rejects invalid entries atomically in either ord
   }
  }
 });
+
+// #393: the hosted result must prove every selected identity completed exactly once.
+const { parseHostedResult } = await import('./hosted-app-lane.mjs');
+const hostedExpected = ['hostProof()', 'pan(tabCount:)'];
+function hostedFixture() {
+ return {
+  run: {status:0,signal:null,stdout:'** TEST EXECUTE SUCCEEDED **\n',stderr:''},
+  summary: {totalTestCount:2,passedTests:2,failedTests:0,skippedTests:0,testFailures:[],result:'Passed'},
+  tree: {testNodes:[{nodeType:'Test Plan',children:[
+   {nodeType:'Test Case',nodeIdentifier:'hostProof()',result:'Passed'},
+   {nodeType:'Test Case',nodeIdentifier:'pan(tabCount:)',result:'Passed'}]}]},
+ };
+}
+test('hosted successful results require the selected identities and complete artifact totals',()=>{
+ const f=hostedFixture();const r=parseHostedResult(f.run,f.summary,f.tree,hostedExpected);
+ assert.equal(r.status,0);assert.equal(r.reliable,true);assert.equal(r.count,2);assert.equal(r.failed,0);
+});
+test('hosted assertion failure remains a completed failure with names',()=>{
+ const f=hostedFixture();f.run.status=65;f.run.stdout='** TEST EXECUTE FAILED **\n';
+ f.summary.passedTests=1;f.summary.failedTests=1;f.summary.result='Failed';
+ f.summary.testFailures=[{testName:'pan(tabCount:)'}];f.tree.testNodes[0].children[1].result='Failed';
+ const r=parseHostedResult(f.run,f.summary,f.tree,hostedExpected);
+ assert.equal(r.status,1);assert.equal(r.reliable,true);assert.equal(r.failed,1);assert.deepEqual(r.failureNames,['pan(tabCount:)']);
+});
+for (const [name,corrupt] of [
+ ['missing summary',f=>f.summary=null], ['missing tree',f=>f.tree=null],
+ ['missing test',f=>f.tree.testNodes[0].children.pop()],
+ ['duplicate test',f=>f.tree.testNodes[0].children.push(f.tree.testNodes[0].children[0])],
+ ['wrong identity',f=>f.tree.testNodes[0].children[0].nodeIdentifier='unrelated()'],
+ ['zero tests',f=>{f.summary.totalTestCount=0;f.summary.passedTests=0;f.tree.testNodes=[];}],
+ ['skipped only',f=>{f.summary.passedTests=0;f.summary.skippedTests=2;f.tree.testNodes[0].children.forEach(n=>n.result='Skipped');}],
+ ['cancelled',f=>{f.run.status=null;f.run.signal='SIGTERM';}],
+ ['crash',f=>{f.run.status=65;f.run.stderr='error: Process exited with signal 11';}],
+ ['spawn error',f=>f.run.error=new Error('test launch unavailable')],
+ ['contradictory exit',f=>f.run.status=65],
+ ['contradictory total',f=>f.summary.totalTestCount=3],
+ ['missing completion',f=>f.run.stdout='partial output'],
+]) test(`hosted corrupt ${name} never authorizes completed counts`,()=>{
+ const f=hostedFixture();corrupt(f);const r=parseHostedResult(f.run,f.summary,f.tree,hostedExpected);
+ assert.equal(r.status,70);assert.equal(r.reliable,false);assert.equal(r.count,0);
+});
+
+const { runCompleteAppLane } = await import('./app-lane.mjs');
+const { hostedTestNames } = await import('./hosted-app-lane.mjs');
+function combinedHarness({filter,unhostedStatus=0,hostedStatus=0,missingResult=false}={}) {
+ const dir=mkdtempSync(path.join(tmpdir(),'i393-combined-'));temporaryDirectories.add(dir);
+ const quarantinePath=path.join(dir,'quarantine.json');writeFileSync(quarantinePath,'[]');
+ let stdout='',stderr='';const mechanisms=[];
+ const names=filter ? hostedTestNames.filter(n=>new RegExp(filter).test('MadoHostedFocusTests.'+n)) : hostedTestNames;
+ const spawn=(cmd,args,opts)=>{
+  if(cmd==='xcrun'&&args[0]==='--show-sdk-platform-path') return result('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n');
+  if(args.includes('swiftc')) return result('');
+  if(args.includes('xctest')) {mechanisms.push('unhosted');return {...result(baseline),status:unhostedStatus};}
+  if(args.includes('xcodebuild')) {mechanisms.push('hosted');return {status:hostedStatus,stdout:hostedStatus===0?'** TEST EXECUTE SUCCEEDED **\n':'** TEST EXECUTE FAILED **\n'};}
+  if(args.includes('xcresulttool')) {
+   if(missingResult) return {status:1,stdout:''};
+   if(args.includes('summary')) return result(JSON.stringify({totalTestCount:names.length,passedTests:hostedStatus===0?names.length:names.length-1,failedTests:hostedStatus===0?0:1,skippedTests:0}));
+   return result(JSON.stringify({testNodes:names.map((n,i)=>({nodeType:'Test Case',nodeIdentifier:n,result:hostedStatus!==0&&i===0?'Failed':'Passed'}))}));
+  }
+  return result(inventory);
+ };
+ const destination=path.join(dir,'result.json');
+ const env={PICSEE_APP_LANE_NO_RETRY:'1',PICSEE_APP_RESULT_PATH:destination,PICSEE_APP_RESULT_ID:'current',...(filter?{PICSEE_APP_FILTER:filter}:{})};
+ const status=runCompleteAppLane({spawn,env,quarantinePath,evidencePath:path.join(dir,'attempt.log'),stdout:s=>stdout+=s,stderr:s=>stderr+=s});
+ return {status,stdout,stderr,mechanisms,record:existsSync(destination)?JSON.parse(readFileSync(destination)):null};
+}
+test('complete App lane conserves both groups and only succeeds when both complete',()=>{
+ const h=combinedHarness();assert.equal(h.status,0,h.stderr);assert.deepEqual(h.mechanisms,['unhosted','hosted']);
+ assert.match(h.stdout,/Tests run: 10, Failures: 0/);assert.equal(h.record.complete,true);assert.equal(h.record.status,0);
+});
+test('focused filter runs hosted bodies exactly once without requiring retained tests',()=>{
+ const h=combinedHarness({filter:'issue521'});assert.equal(h.status,0,h.stderr);assert.deepEqual(h.mechanisms,['hosted']);
+ assert.match(h.stdout,/Tests run: 1, Failures: 0/);
+});
+test('retained-only filter does not run hosted bodies',()=>{
+ const h=combinedHarness({filter:'Probe'});assert.equal(h.status,0,h.stderr);assert.match(h.stdout,/Tests run: 7, Failures: 0/);assert.deepEqual(h.mechanisms,['unhosted']);
+});
+for(const options of [{unhostedStatus:1},{hostedStatus:65},{missingResult:true},{filter:'doesNotExist'}])
+ test('complete App lane refuses an unsuccessful or absent required group '+JSON.stringify(options),()=>{
+  const h=combinedHarness(options);assert.notEqual(h.status,0);assert.equal(h.record.status,h.status);assert.equal(h.record.complete,true);
+ });
+
+function hostedParameterizedFixture() {
+ const name='issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)';
+ return {name,run:{status:0,stdout:'** TEST EXECUTE SUCCEEDED **\n'},
+  summary:{totalTestCount:3,passedTests:3,failedTests:0,skippedTests:0},
+  tree:{testNodes:[{nodeType:'Test Case',nodeIdentifier:name,result:'Passed',children:[0,1,2].map(n=>({nodeIdentifier:`${name}/${n}`,result:'Passed'}))}]}};
+}
+test('hosted parameterized cases preserve all three distinct drag inputs',()=>{
+ const f=hostedParameterizedFixture();const r=parseHostedResult(f.run,f.summary,f.tree,[f.name]);
+ assert.equal(r.status,0);assert.equal(r.count,3);
+});
+for(const [name,corrupt] of [
+ ['missing argument with consistent totals',f=>{f.tree.testNodes[0].children.pop();f.summary.totalTestCount=2;f.summary.passedTests=2;}],
+ ['duplicate argument',f=>f.tree.testNodes[0].children[2].nodeIdentifier=f.tree.testNodes[0].children[1].nodeIdentifier],
+ ['parent contradiction',f=>f.tree.testNodes[0].result='Failed'],
+]) test(`hosted parameterized ${name} fails closed`,()=>{
+ const f=hostedParameterizedFixture();corrupt(f);const r=parseHostedResult(f.run,f.summary,f.tree,[f.name]);
+ assert.equal(r.status,70);assert.equal(r.reliable,false);
+});
+
+const { runHostedAppLane } = await import('./hosted-app-lane.mjs');
+test('hosted local derived-data override selects the available outside-Documents build',()=>{
+ const directory=mkdtempSync(path.join(tmpdir(),'i393-dd-'));temporaryDirectories.add(directory);
+ const available=path.join(directory,'dd');const selected=['hostProof()'];let launched=false;
+ const spawn=(command,args)=>{
+  if(args.includes('xcodebuild')) {
+   launched=args[args.indexOf('-derivedDataPath')+1]===available;
+   return {status:launched?0:65,stdout:launched?'** TEST EXECUTE SUCCEEDED **\n':'build not available at selected derived-data path'};
+  }
+  return result(JSON.stringify(args.includes('summary')
+   ? {totalTestCount:1,passedTests:1,failedTests:0,skippedTests:0}
+   : {testNodes:[{nodeType:'Test Case',nodeIdentifier:'hostProof()',result:'Passed'}]}));
+ };
+ let stdout='',stderr='';
+ const r=runHostedAppLane({spawn,selected,env:{PICSEE_APP_DERIVED_DATA_PATH:available},stdout:s=>stdout+=s,stderr:s=>stderr+=s,evidencePath:path.join(directory,'attempt.log')});
+ assert.equal(r.status,0,stderr);assert.equal(r.count,1);assert.equal(launched,true);
+ assert.match(stdout,/hosted-app-lane Tests run: 1, Failures: 0/);
+});
+
+test('hosted attempt persists native process outcome even when result parsing fails',()=>{
+ const directory=mkdtempSync(path.join(tmpdir(),'i393-process-'));temporaryDirectories.add(directory);
+ const r=runHostedAppLane({env:{},selected:['hostProof()'],evidencePath:path.join(directory,'attempt.log'),stdout:()=>{},stderr:()=>{},
+  spawn:(_command,args)=>args.includes('xcodebuild')?{status:0,signal:null,stdout:'** TEST EXECUTE SUCCEEDED **\n'}:{status:1,stdout:''}});
+ assert.equal(r.status,70);assert.equal(r.reliable,false);
+ const metadata=path.join(path.dirname(r.resultPath),'process.json');
+ assert.equal(existsSync(metadata),true,'native process outcome must survive an unrecognized or missing result artifact');
+ const record=JSON.parse(readFileSync(metadata,'utf8'));
+ assert.equal(record.status,0);assert.equal(record.signal,null);assert.deepEqual(record.selected,['hostProof()']);
+ assert.equal(record.derivedDataPath,'.build/dd-ci');assert.equal(record.resultPath,r.resultPath);
+});

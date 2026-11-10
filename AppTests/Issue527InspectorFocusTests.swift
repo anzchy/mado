@@ -1,22 +1,15 @@
 import AppKit
+@testable import Mado
 import Testing
 import MadoCore
 import MadoApplication
 import MadoMacUI
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
-      .timeLimit(.minutes(3))) @MainActor
-func issue527InspectorCanvasPressPassesInIsolatedProcess() async throws {
-    try await issue521RunNativeTest(filter: "issue527InspectorCloseCanvasPressPans\\b",
-        summary: "Test issue527InspectorCloseCanvasPressPans() passed")
-}
-
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(3))) @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue527InspectorCloseCanvasPressPans() async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
+    // Reserve 15 s for key acquisition within this test's existing limit.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     try #require(scene.controller.route(.inspector, from: .key))
     try await scene.wait {

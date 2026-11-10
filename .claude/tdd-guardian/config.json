@@ -14,7 +14,9 @@
       "description": "Manual Node contract receipts for appcast generation and final/RC feed validity (#629).",
       "command": "node scripts/tdd/node-lane.mjs scripts/release/appcast.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     },
@@ -148,6 +150,28 @@
         "manual"
       ],
       "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "app-prebuilt-red",
+      "description": "#393 prebuilt App lane RED. Build once via foreground heavy-lock outside receipt setup. Keep PICSEE_APP_FILTER and NO_RETRY identical for record/verify.",
+      "command": "node scripts/tdd/app-lane.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 2400000
+    },
+    {
+      "name": "ci-hosted-focus-node",
+      "description": "Manual amendment2 hosted diagnostic CI bootstrap contracts. No native work.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/hosted-focus-ci.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
       "timeoutMs": 120000
     }
   ],
