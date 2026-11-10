@@ -1014,3 +1014,22 @@ test('actual hosted null device record returns an unreliable result without thro
  assert.doesNotThrow(()=>{r=parseHostedResult(f.run,f.summary,f.tree,i393ActualProcess.selected);});
  assert.equal(r.status,70);assert.equal(r.reliable,false);assert.equal(r.count,0);
 });
+for (const [label, contents, diagnostic] of [
+ ['invalid JSON', '{', /JSON|Expected/],
+ ['non-array JSON', 'null', /quarantine must be an array/],
+ ['invalid entry', '[{"id":"bad"}]', /quarantine id/],
+]) test('combined lane rejects '+label+' quarantine before filtered native discovery',()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'i393-quarantine-order-'));temporaryDirectories.add(dir);
+ const quarantinePath=path.join(dir,'quarantine.json'),destination=path.join(dir,'result.json');
+ writeFileSync(quarantinePath,contents);
+ writeFileSync(destination,JSON.stringify({version:1,runId:'stale',complete:true,status:0}));
+ let nativeCalls=0,stdout='',stderr='';
+ const status=runCompleteAppLane({quarantinePath,
+  env:{PICSEE_APP_FILTER:'issue521',PICSEE_APP_RESULT_PATH:destination,PICSEE_APP_RESULT_ID:'current'},
+  spawn:()=>{nativeCalls++;return result('');},stdout:s=>stdout+=s,stderr:s=>stderr+=s});
+ assert.equal(status,70);assert.equal(nativeCalls,0);
+ assert.match(stderr,diagnostic);assert.doesNotMatch(stdout,/Tests run:/);
+ const record=JSON.parse(readFileSync(destination,'utf8'));
+ assert.equal(record.runId,'current');assert.equal(record.status,70);assert.equal(record.attempts,0);
+ assert.equal(record.complete,true);assert.deepEqual(record.groups,{});
+});

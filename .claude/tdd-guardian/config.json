@@ -173,6 +173,17 @@
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
+    },
+    {
+      "name": "ci-native-red-node",
+      "description": "Manual Node contracts for optional official native RED verification and full App CI validation.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/native-red-ci.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
