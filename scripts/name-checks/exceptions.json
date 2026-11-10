@@ -518,13 +518,5 @@
       "content"
     ],
     "reason": "Frozen historical release isolation and retained build-history oracles name the old DMG and preceding release explicitly; no production identity is exempt."
-  },
-  {
-    "pathRegex": "^scripts/ci/(?:app-compare\\.test|app-repeat-process|app-repeat|hosted-cancel-probe)\\.mjs$",
-    "pattern": "\\bTEST_RUNNER_PICSEE_TEST_RUN_TOKEN\\b",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#393: Xcode TEST_RUNNER_ transport prefix forwards the deferred PICSEE_TEST_RUN_TOKEN tooling protocol to the App host. Only this exact occurrence in the four declared CI transport paths is exempt; adjacent product identities remain scanned."
   }
 ]

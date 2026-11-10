@@ -36,16 +36,37 @@ export function runComparisonBuild({env=process.env,cwd=process.cwd(),out=env.AP
  const started=now(),derivedDataPath=mode==='legacy'?'.build/dd-legacy393':'.build/dd-ci';
  const record={version:1,mode,baseline:BASELINE,sha:env.GITHUB_SHA??'unknown',runner:'macos-26',
   diagnostic:true,formal:false,complete:false,status:null,derivedDataPath};
+ const needsDebugApp=mode==='legacy'&&env.APP_COMPARE_SCOPE==='full';
+ record.stages=[];
  mkdirSync(out,{recursive:true});
  const save=()=>writeFileSync(path.join(out,'build.json'),JSON.stringify(record,null,2)+'\n');save();
- let run;
- try{run=spawn(new URL('../heavy-lock.sh',import.meta.url).pathname,['xcodebuild','build-for-testing',
+ // A complete baseline retains #611's real Debug-App build-product dependency at its original path.
+ // This builds the actual App, never a copied product or synthetic Info.plist.
+ const perform=(name,args,prefix)=>{
+  const stageStarted=needsDebugApp?now():started;
+  let run;
+  try{run=spawn(new URL('../heavy-lock.sh',import.meta.url).pathname,args,
+   {cwd,env,encoding:'utf8',timeout:2100000,maxBuffer:64*1024*1024});}
+  catch(error){run={error,stdout:error.stdout,stderr:error.stderr};}
+  const status=!run?.error&&!run?.signal&&Number.isInteger(run?.status)&&run.status>=0?run.status:70;
+  const stage={name,complete:true,status,nativeStatus:run?.status??null,signal:run?.signal??null,error:run?.error?.message??null,
+   wallMilliseconds:needsDebugApp?now()-stageStarted:null};
+  record.stages.push(stage);
+  writeFileSync(path.join(out,prefix+'.stdout.log'),run?.stdout??'');
+  writeFileSync(path.join(out,prefix+'.stderr.log'),run?.stderr??'');
+  stdout(run?.stdout??'');stderr(run?.stderr??'');
+  record.status=status;record.signal=stage.signal;record.error=stage.error;save();
+  return status;
+ };
+ const finish=()=>{record.wallMilliseconds=now()-started;record.complete=true;save();return record.status;};
+ // Clear a previous main-build log before the prerequisite can fail, preserving current-run provenance.
+ writeFileSync(path.join(out,'build.stdout.log'),'');writeFileSync(path.join(out,'build.stderr.log'),'');
+ if(needsDebugApp&&perform('debug-app-prerequisite',['xcodebuild','build','-scheme','Mado','-configuration','Debug',
+  '-destination','platform=macOS','CODE_SIGNING_ALLOWED=NO','-derivedDataPath','.build/dd-ci',
+  'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'],'prerequisite')!==0)return finish();
+ perform(mode==='legacy'?'legacy-tests':'hosted-tests',['xcodebuild','build-for-testing',
   '-scheme',mode==='legacy'?'MadoLegacy393':'Mado','-destination','platform=macOS',
-  'CODE_SIGNING_ALLOWED=NO','-derivedDataPath',derivedDataPath,'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'],
-  {cwd,env,encoding:'utf8',timeout:2100000,maxBuffer:64*1024*1024});}catch(error){run={error};}
- record.status=!run?.error&&!run?.signal&&Number.isInteger(run?.status)&&run.status>=0?run.status:70;
- record.signal=run?.signal??null;record.error=run?.error?.message??null;record.wallMilliseconds=now()-started;record.complete=true;
- writeFileSync(path.join(out,'build.stdout.log'),run?.stdout??'');writeFileSync(path.join(out,'build.stderr.log'),run?.stderr??'');save();
- stdout(run?.stdout??'');stderr(run?.stderr??'');return record.status;
+  'CODE_SIGNING_ALLOWED=NO','-derivedDataPath',derivedDataPath,'OTHER_SWIFT_FLAGS=$(inherited) -enable-incremental-file-hashing'],'build');
+ return finish();
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))process.exitCode=runComparisonBuild();

@@ -10,7 +10,7 @@ import {runHostedCancelProbe} from './hosted-cancel-probe.mjs';
 test('real observed escaped host cancellation yields diagnostic success only after exact host drain',async t=>{
   const out=mkdtempSync(path.join(tmpdir(),'hosted-cancel-'));t.after(()=>rmSync(out,{recursive:true,force:true}));
   const token=randomUUID(),host=spawn(process.execPath,['-e','process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,PICSEE_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
   t.after(()=>{host.kill('SIGKILL');host.unref();});await new Promise(resolve=>host.once('message',resolve));
   const status=await runHostedCancelProbe({out,token,executable:realpathSync(process.execPath),command:process.execPath,
     args:['-e','setInterval(()=>{},1000)'],deadline:Date.now()+3000,graceMs:50,drainMs:500});

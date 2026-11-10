@@ -24,9 +24,9 @@ export function runComparisonIteration({env=process.env,expectedMode,spawn=spawn
   quarantinePath,evidencePath='.build/app-compare-attempt1.log',stdout=s=>process.stdout.write(s),
   stderr=s=>process.stderr.write(s)}={}) {
   const started=Date.now();
-  const destination=env.PICSEE_APP_COMPARE_RESULT_PATH;
+  const destination=env.MADO_APP_COMPARE_RESULT_PATH;
   const mode=env.APP_COMPARE_MODE,scope=env.APP_COMPARE_SCOPE;
-  const record={version:1,runId:env.PICSEE_APP_COMPARE_RESULT_ID??'',complete:false,status:null,mode:mode??null,scope:scope??null,
+  const record={version:1,runId:env.MADO_APP_COMPARE_RESULT_ID??'',complete:false,status:null,mode:mode??null,scope:scope??null,
     diagnostic:true,formal:false,baseline:BASELINE,sha:env.GITHUB_SHA??'unknown',
     runner:env.RUNNER_OS==='macOS'?'macos-26':'local',groups:{}};
   const save=()=>{if(destination){mkdirSync(path.dirname(destination),{recursive:true});writeFileSync(destination,JSON.stringify(record,null,2)+'\n');}};
@@ -49,7 +49,7 @@ export function runComparisonIteration({env=process.env,expectedMode,spawn=spawn
     };
     if(mode==='legacy') {
       record.legacySources=validateLegacySources({cwd});
-      const legacyBundle=path.join(env.PICSEE_LEGACY_DERIVED_DATA_PATH??'.build/dd-legacy393',
+      const legacyBundle=path.join(env.MADO_LEGACY_DERIVED_DATA_PATH??'.build/dd-legacy393',
         'Build/Products/Debug/MadoLegacy393Tests.xctest');
       // The full comparison must retain the original single-process AppKit history.
       // Keep the original unfiltered root and disabled-child metadata; their frozen parent wrappers run them as before.
@@ -58,7 +58,7 @@ export function runComparisonIteration({env=process.env,expectedMode,spawn=spawn
       status=proof.status;
       if(status===0) {
         const identity=/^\[issue393-legacy\] pid=(\d+) executable=(\S*xctest) process=xctest bundle=(\S*MadoLegacy393Tests(?:\.xctest)?) mode=legacy token=(\S+)/m.exec(proof.output);
-        if(!identity||Number(identity[1])<=0||!env.PICSEE_TEST_RUN_TOKEN||identity[4]!==env.PICSEE_TEST_RUN_TOKEN)
+        if(!identity||Number(identity[1])<=0||!env.MADO_TEST_RUN_TOKEN||identity[4]!==env.MADO_TEST_RUN_TOKEN)
           throw new Error('legacy runtime proof is missing its current bare-xctest identity');
         record.runtimeProof={pid:Number(identity[1]),executable:identity[2],bundle:identity[3],token:identity[4]};
         if(scope==='full') {

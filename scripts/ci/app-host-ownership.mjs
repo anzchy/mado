@@ -45,7 +45,7 @@ if sys.platform=='darwin':
             while offset<len(data) and data[offset]==0: offset+=1
             for i in range(argc): offset=data.index(b'\0',offset)+1
             for field in data[offset:].split(b'\0'):
-                if field.startswith(b'PICSEE_TEST_RUN_TOKEN='): marker=os.fsdecode(field.split(b'=',1)[1])
+                if field.startswith(b'MADO_TEST_RUN_TOKEN='): marker=os.fsdecode(field.split(b'=',1)[1])
         return dict(pid=pid,ppid=int(info.ppid),pgid=int(info.pgid),uid=int(info.uid),executable=exe,marker=marker,birth=str(info.startsec)+':'+str(info.startusec))
 elif sys.platform.startswith('linux'):
     def pids(): return [int(p) for p in os.listdir('/proc') if p.isdecimal()]
@@ -61,7 +61,7 @@ elif sys.platform.startswith('linux'):
             marker=None
             if uid==request['uid']:
                 for field in open(root+'/environ','rb').read().split(b'\0'):
-                    if field.startswith(b'PICSEE_TEST_RUN_TOKEN='): marker=os.fsdecode(field.split(b'=',1)[1])
+                    if field.startswith(b'MADO_TEST_RUN_TOKEN='): marker=os.fsdecode(field.split(b'=',1)[1])
             return dict(pid=pid,ppid=int(stat[1]),pgid=int(stat[2]),uid=uid,executable=exe,marker=marker,birth=stat[19]+':0')
         except FileNotFoundError: return None
 else: raise RuntimeError('host ownership inspection unsupported on this OS')
@@ -95,20 +95,24 @@ export function queryHostProcesses({token,executable,uid=process.getuid(),pids,s
   }
 }
 const same=(a,b)=>a.pid===b.pid&&a.birth===b.birth&&a.uid===b.uid&&a.executable===b.executable&&a.marker===b.marker;
-export function createHostOwnership({token,executable,uid=process.getuid(),query=queryHostProcesses,excludeGroup=()=>undefined,excludePids=[process.pid],
+export function createHostOwnership({token,executable,uid=process.getuid(),query=queryHostProcesses,excludeGroup=()=>undefined,excludePids=[process.pid],now=Date.now,
   signal=(pid,name)=>process.kill(pid,name)}={}){
   if(typeof token!=='string'||!token.trim()||typeof executable!=='string'||!path.isAbsolute(executable)||
     realpathSync(executable)!==executable||!Number.isInteger(uid)||uid<0)throw new Error('invalid hosted ownership request');
-  const identities=new Map(),signals=[],problems=[],queryFailures=[];let current=[],observed=false,complete=false;
+  const identities=new Map(),signals=[],problems=[],queryFailures=[];let current=[],observed=false,registrationCurrent=false;
   const valid=r=>r&&Number.isInteger(r.pid)&&r.pid>0&&/^\d+:\d+$/.test(r.birth??'')&&
     r.uid===uid&&r.executable===executable&&r.marker===token;
-  function inspect(pids){
-    let result;try{result=query({token,executable,uid,pids});}catch(error){result={complete:false,processes:[],unknown:[error.message]};}
+  function inspect(pids,cleanupSignal){
+    let result;try{result=query({token,executable,uid,pids,cleanupSignal});}catch(error){result={complete:false,processes:[],unknown:[error.message]};}
     const relevantUnknown=Array.isArray(result?.unknown)?result.unknown.filter(problem=>
       !Number.isInteger(problem?.uid)||problem.uid===uid||identities.has(problem.pid)):null;
-    complete=result?.complete===true&&Array.isArray(result.processes)&&relevantUnknown!==null&&relevantUnknown.length===0;
+    for(const problem of relevantUnknown??[]){
+      const original=identities.get(problem?.pid);
+      if(original&&Number.isInteger(problem.uid)&&problem.uid!==original.uid)problems.push(`identity changed for PID ${original.pid}: kernel UID mismatch`);
+    }
+    const complete=result?.complete===true&&Array.isArray(result.processes)&&relevantUnknown!==null&&relevantUnknown.length===0;
     if(!complete){
-      problems.push('OS ownership query incomplete or unreadable');
+      registrationCurrent=false;
       if(queryFailures.length<16)queryFailures.push({transport:result?.transport??null,
         unknown:relevantUnknown?.map(problem=>({pid:problem?.pid??null,reason:typeof problem?.reason==='string'?problem.reason:'unreadable OS identity'}))??[]});
       return null;
@@ -124,21 +128,25 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
   return {
     observe(){
       const records=inspect();if(records===null)return;
+      registrationCurrent=true;
       current=records.filter(valid);
       for(const record of current){if(!identities.has(record.pid))identities.set(record.pid,{...record});observed=true;}
     },
-    signalOwned(name){
+    signalOwned(name,{notAfter=Infinity}={}){
       for(const original of identities.values()){
+        if(!registrationCurrent||problems.length)break;
         // Re-query immediately before each signal; a prior observation never authorizes PID reuse.
-        const records=inspect([original.pid]);if(records===null)continue;
+        const records=inspect([original.pid],name);if(records===null)continue;
         const actual=records.find(r=>r.pid===original.pid);
         if(!actual)continue;
         if(!valid(actual)||!same(original,actual)||problems.length)continue;
+        current=[...current.filter(record=>record.pid!==actual.pid),actual];
+        if(now()>=notAfter)continue;
         try{signal(actual.pid,name);signals.push({pid:actual.pid,birth:actual.birth,signal:name});}
         catch(error){if(error.code!=='ESRCH')problems.push(`cannot signal owned PID ${actual.pid}: ${error.message}`);}
       }
     },
-    snapshot(){return {token,executable,uid,observed,drained:observed&&complete&&current.length===0&&problems.length===0,
-      identities:[...identities.values()],signals:[...signals],unknown:[...problems],queryFailures:[...queryFailures],live:current.map(r=>r.pid)};}
+    snapshot(){return {token,executable,uid,observed,drained:observed&&registrationCurrent&&current.length===0&&problems.length===0,
+      identities:[...identities.values()],signals:[...signals],unknown:[...problems,...(!registrationCurrent&&queryFailures.length?['OS ownership query incomplete or unreadable']:[])],queryFailures:[...queryFailures],live:current.map(r=>r.pid)};}
   };
 }
