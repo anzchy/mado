@@ -21,6 +21,33 @@ function file(root, path, content, tracked = true) {
 const scan = (root, expectedName = 'Picsee', exceptions = []) => scanRepository({ root, expectedName, exceptions });
 const cli = (root, extra = []) => spawnSync(process.execPath, [script, '--root', root, ...extra], { encoding: 'utf8' });
 
+test('Xcode token transport exception covers only the exact reviewed tooling occurrence', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  for (const path of ['scripts/ci/app-compare.test.mjs', 'scripts/ci/app-repeat-process.mjs',
+    'scripts/ci/app-repeat.mjs', 'scripts/ci/hosted-cancel-probe.mjs']) {
+    const root = repo();
+    file(root, path, 'const marker = TEST_RUNNER_PICSEE_TEST_RUN_TOKEN; const app = PicseeApp();\n');
+    const problems = scan(root, 'Mado', exceptions);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.ok(problems[0].includes('Picsee'));
+  }
+});
+
+test('Xcode transport exception rejects foreign paths, near matches and neighboring live names', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  for (const path of ['App/live.swift', 'scripts/ci/unrelated.mjs']) {
+    const root = repo();
+    file(root, path, 'let marker = TEST_RUNNER_PICSEE_TEST_RUN_TOKEN\n');
+    assert.equal(scan(root, 'Mado', exceptions).length, 1, path);
+  }
+  for (const token of ['TEST_RUNNER_PICSEE_OTHER', 'PRE_TEST_RUNNER_PICSEE_TEST_RUN_TOKEN',
+    'TEST_RUNNER_PICSEE_TEST_RUN_TOKEN_EXTRA', 'TEST_RUNNER_picsee_TEST_RUN_TOKEN']) {
+    const root = repo();
+    file(root, 'scripts/ci/app-repeat.mjs', 'const marker = '+token+';\n');
+    assert.equal(scan(root, 'Mado', exceptions).length, 1, token);
+  }
+});
+
 test('tracked paths and every text occurrence are reported in both directions; binary paths still count', () => {
   for (const [expected, other] of [['Picsee', 'Mado'], ['Mado', 'Picsee']]) {
     const root = repo();

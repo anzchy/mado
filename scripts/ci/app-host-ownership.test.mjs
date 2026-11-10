@@ -46,6 +46,7 @@ test('real kernel query observes escaped process birth uid executable and actual
   t.after(()=>{host.kill('SIGKILL');host.unref();});
   await new Promise(resolve=>host.once('message',resolve));
   const snapshot=queryHostProcesses({token,executable,uid,pids:[host.pid]});
+  t.diagnostic(JSON.stringify({kernelQuery:snapshot}));
   assert.equal(snapshot.complete,true);assert.equal(snapshot.processes.length,1);
   const actual=snapshot.processes[0];assert.equal(actual.pid,host.pid);assert.equal(actual.uid,uid);
   t.diagnostic(JSON.stringify({kernelHost:actual}));
@@ -65,4 +66,29 @@ test('unreadable unrelated uid does not poison drain but a known PID with change
   tracker.observe();records=[];tracker.observe();assert.equal(tracker.snapshot().drained,true);
   unknown=[{pid:12345,uid:uid+1,reason:'known PID changed uid'}];tracker.observe();
   assert.equal(tracker.snapshot().drained,false);
+});
+
+test('OS query failures expose bounded transport facts without leaking child output or environment',()=>{
+  const cases=[
+    {run:{status:null,signal:'SIGTERM',error:{code:'ETIMEDOUT'},stdout:'secret stdout',stderr:'secret stderr'},stage:'process',code:'ETIMEDOUT'},
+    {run:{status:1,stdout:'',stderr:'private traceback'},stage:'process',code:null},
+    {run:{status:0,stdout:'malformed private payload',stderr:''},stage:'json',code:null},
+    {run:{status:0,stdout:'{}',stderr:''},stage:'schema',code:null}
+  ];
+  for(const c of cases){let time=100;
+    const result=queryHostProcesses({token:'invocation-A',executable,uid,now:()=>{time+=25;return time;},spawn:()=>c.run});
+    assert.equal(result.complete,false);assert.equal(result.transport?.stage,c.stage);
+    assert.equal(result.transport.errorCode,c.code);assert.equal(result.transport.elapsedMilliseconds,25);
+    assert.equal(result.transport.timeoutMilliseconds,1000);assert.equal(result.transport.status,c.run.status);
+    assert.equal(result.transport.signal,c.run.signal??null);
+    assert.equal(result.transport.stdoutBytes,Buffer.byteLength(c.run.stdout));assert.equal(result.transport.stderrBytes,Buffer.byteLength(c.run.stderr));
+    assert.equal(JSON.stringify(result).includes('secret'),false);assert.equal(JSON.stringify(result).includes('private'),false);
+  }
+});
+
+test('failed query transport facts survive ownership refusal for diagnosis',()=>{
+  const transport={stage:'process',status:null,signal:'SIGTERM',errorCode:'ETIMEDOUT',elapsedMilliseconds:1002,timeoutMilliseconds:1000,stdoutBytes:0,stderrBytes:0};
+  const tracker=createHostOwnership({token:'invocation-A',executable,uid,query:()=>({complete:false,processes:[],unknown:[{reason:'OS ownership inspection failed'}],transport})});
+  tracker.observe();const result=tracker.snapshot();assert.equal(result.drained,false);
+  assert.deepEqual(result.queryFailures?.[0].transport,transport);
 });

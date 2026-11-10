@@ -214,6 +214,16 @@
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
+    },
+    {
+      "name": "ci-code-name-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/code-name.test.mjs scripts/name-checks/module-name.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {

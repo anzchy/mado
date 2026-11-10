@@ -77,6 +77,7 @@ test('deadline drains exact escaped host before next iteration while unrelated s
   const env={...process.env,PICSEE_TEST_RUN_TOKEN:token,PICSEE_HOST_EXECUTABLE:realpathSync(process.execPath),PICSEE_HOST_OWNERSHIP_REQUIRED:'1'};
   const result=await runProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],env,
     logPath:path.join(dir,'escaped.log'),deadline:Date.now()+1000,graceMs:80,drainMs:1000});
+  t.diagnostic(JSON.stringify({escapedDeadlineAttempt:result}));
   assert.equal(result.drained,true);assert.equal(result.status,70);
   const live=livePids();assert.equal(live.has(host.pid),false,'escaped owned host must be gone before next');
   assert.equal(live.has(sentinel.pid),true,'unrelated same executable must survive');
