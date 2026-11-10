@@ -58,8 +58,8 @@
     },
     {
       "name": "app-red",
-      "description": "Compiled MadoAppTests. Optional PICSEE_APP_FILTER selects runtime test IDs; keep the same filter for record and verify (env is not stored in receipts). Set PICSEE_APP_LANE_NO_RETRY=1 for RED. Build-for-testing before RED record.",
-      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci -only-testing:MadoAppTests",
+      "description": "Combined retained MadoAppTests and hosted focus App tests; setup builds both bundles. Keep identical PICSEE_APP_FILTER for record/verify and NO_RETRY=1 for RED.",
+      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath \"${PICSEE_APP_DERIVED_DATA_PATH:-.build/dd-ci}\"",
       "command": "node scripts/tdd/app-lane.mjs",
       "gateOn": [
         "manual"
@@ -178,6 +178,36 @@
       "name": "ci-native-red-node",
       "description": "Manual Node contracts for optional official native RED verification and full App CI validation.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/native-red-ci.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-host-ownership-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs scripts/ci/app-repeat-process.test.mjs scripts/ci/hosted-cancel-probe.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-app-compare-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-compare.test.mjs scripts/ci/app-repeat.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-legacy393-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/legacy393-sources.test.mjs",
       "gateOn": [
         "manual"
       ],

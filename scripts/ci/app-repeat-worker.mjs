@@ -3,7 +3,8 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runAppLane } from '../tdd/app-lane.mjs';
+import { runAppLane, runCompleteAppLane } from '../tdd/app-lane.mjs';
+import { runComparisonIteration } from './app-compare.mjs';
 export function runAppIteration(options = {}) {
   const nativeSpawn = options.spawn ?? spawnSync;
   const env = options.env ?? process.env;
@@ -16,7 +17,22 @@ export function runAppIteration(options = {}) {
     return nativeSpawn(command,args,settings);
   }});
 }
+
+/** CLI semantics include the hosted group; keep the legacy exported helper above for existing consumers. */
+export function runAppWorker(options={}) {
+  const env=options.env??process.env;
+  const expectedMode=options.expectedMode??'normal';
+  const mode=!env.APP_COMPARE_MODE||env.APP_COMPARE_MODE==='none'?'normal':env.APP_COMPARE_MODE;
+  if(!['normal','legacy','hosted'].includes(mode)||mode!==expectedMode) {
+    (options.stderr??(s=>process.stderr.write(s)))('app-repeat worker: missing or contradictory expected comparison mode\n');
+    return 70;
+  }
+  const nativeSpawn=options.spawn??spawnSync;
+  const spawn=(command,args,settings)=>nativeSpawn(command,args,env.PICSEE_HEAVY_LOCK_HELD==='1'&&command.endsWith('heavy-lock.sh')?
+    {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}}:settings);
+  return mode==='normal'?runCompleteAppLane({...options,env,spawn}):runComparisonIteration({...options,env,spawn,expectedMode});
+}
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [quarantinePath,evidencePath] = process.argv.slice(2);
-  process.exitCode = runAppIteration({quarantinePath,evidencePath});
+  const [quarantinePath,evidencePath,expectedMode='normal'] = process.argv.slice(2);
+  process.exitCode = runAppWorker({quarantinePath,evidencePath,expectedMode});
 }

@@ -1033,3 +1033,20 @@ for (const [label, contents, diagnostic] of [
  assert.equal(record.runId,'current');assert.equal(record.status,70);assert.equal(record.attempts,0);
  assert.equal(record.complete,true);assert.deepEqual(record.groups,{});
 });
+test('configured App RED setup supplies both groups needed by the combined native command',()=>{
+ const config=JSON.parse(readFileSync(new URL('../../.claude/tdd-guardian/config.json',import.meta.url),'utf8'));
+ const setup=config.lanes.find(lane=>lane.name==='app-red').setupCommand;
+ const only=[...setup.matchAll(/-only-testing:([^\s]+)/g)].map(match=>match[1]);
+ const hasHosted=only.length===0||only.includes('MadoHostedFocusTests');
+ const dir=mkdtempSync(path.join(tmpdir(),'i393-red-setup-'));temporaryDirectories.add(dir);
+ const quarantinePath=path.join(dir,'quarantine.json');writeFileSync(quarantinePath,'[]');
+ let output='';
+ const status=runCompleteAppLane({quarantinePath,env:{PICSEE_APP_LANE_NO_RETRY:'1'},stdout:s=>output+=s,stderr:()=>{},
+  spawn:(_command,args)=>{
+   if(args.includes('xctest'))return result(baseline);
+   if(args.includes('xcodebuild'))return hasHosted?result('** TEST EXECUTE SUCCEEDED **\n'):{status:65,stdout:'hosted test bundle unavailable'};
+   if(args.includes('xcresulttool'))return hasHosted?result(JSON.stringify(args.includes('summary')?i393ProtocolSubset(hostedTestNames).summary:i393ProtocolSubset(hostedTestNames).tree)):{status:1,stdout:''};
+   return result('');
+  }});
+ assert.equal(status,0);assert.match(output,/Tests run: 10, Failures: 0/);
+});
