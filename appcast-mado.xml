@@ -6,6 +6,14 @@
         <description>Mado updates</description>
         <language>en</language>
         <item>
+            <title>Mado 0.0.1 (1740)</title>
+            <pubDate>Tue, 10 Nov 2026 00:22:13 +0000</pubDate>
+            <sparkle:version>1740</sparkle:version>
+            <sparkle:shortVersionString>0.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/anzchy/mado/releases/download/mado-v0.0.1-rc.2/Mado-0.0.1.dmg" length="5359209" type="application/octet-stream" sparkle:edSignature="uOZihrq0QE3s7B20dIWgRrAPY81l+c45siKm0RO3y7S/F9Qcs+kthaHbaJ6eOHWAEBXf2++txYXxta6nfg95Dw=="/>
+        </item>
+        <item>
             <title>Mado 0.0.1 (1691)</title>
             <pubDate>Sun, 08 Nov 2026 03:37:14 +0000</pubDate>
             <sparkle:version>1691</sparkle:version>
