@@ -119,14 +119,14 @@ const describe = (what, result) => `${what} failed (status ${result.status ?? 'n
  * tree it found and the captures it skipped. `known` holds processes seen by earlier snapshots; one is kept only
  * while `ps` still lists it with the same command, so a reused pid is never signalled.
  */
-export function captureDiagnostics({ root, known = [], out, sampleSeconds, captureSeconds, spindump = true, match,
-  log, run = defaultRun, now = Date.now }) {
+function* diagnosticSteps({ root, known = [], out, sampleSeconds, captureSeconds, spindump = true, match,
+  log, now = Date.now, onTree }) {
   const started = now();
   const left = () => captureSeconds * 1000 - (now() - started);
   const dir = path.join(out, 'stacks');
   fs.mkdirSync(dir, { recursive: true });
   const written = [], skipped = [], notes = [];
-  const listing = run('ps', LIST, { timeout: 10_000 });
+  const listing = yield ['ps', LIST, { timeout: 10_000 }];
   let tree;
   if (failed(listing)) {
     // Without a process list only the command's own group can be signalled.
@@ -140,10 +140,11 @@ export function captureDiagnostics({ root, known = [], out, sampleSeconds, captu
     for (const p of known)
       if (!tree.some(t => t.pid === p.pid) && current.get(p.pid)?.command === p.command) tree.push(p);
   }
+  onTree?.(tree);
   const psFile = path.join(dir, 'ps.txt');
   const rows = [];
   for (const p of tree) {
-    const row = run('ps', ['-o', 'pid=,ppid=,%cpu=,rss=,etime=,state=,command=', '-p', String(p.pid)], { timeout: 10_000 });
+    const row = yield ['ps', ['-o', 'pid=,ppid=,%cpu=,rss=,etime=,state=,command=', '-p', String(p.pid)], { timeout: 10_000 }];
     if (!failed(row) && row.stdout.trim()) rows.push(row.stdout.trim());
   }
   fs.writeFileSync(psFile, ['PID PPID %CPU RSS(KB) ELAPSED STATE COMMAND', ...rows, ...notes.map(n => `# ${n}`)].join('\n') + '\n');
@@ -151,28 +152,81 @@ export function captureDiagnostics({ root, known = [], out, sampleSeconds, captu
 
   const targets = sampleTargets(tree, match);
   // A capture starts only when its whole sampling duration fits in what is left, and is cut off at that budget.
-  const capture = (label, cmd, args, file, start) => {
+  function* capture(label, cmd, args, file, start) {
     if (left() < (sampleSeconds + 1) * 1000) { skipped.push(label); return; }
     log(`watchdog: ${start}`);
-    const result = run(cmd, args, { timeout: Math.min((sampleSeconds + REPORT_SECONDS) * 1000, left()) });
+    const result = yield [cmd, args, { timeout: Math.min((sampleSeconds + REPORT_SECONDS) * 1000, left()) }];
     if (fs.existsSync(file)) written.push(file);
     else log(`watchdog: ${describe(label, result)}, no report written`);
-  };
+  }
   for (const { pid, command } of targets) {
     const file = path.join(dir, `sample-${pid}.txt`);
-    capture(`sample ${pid}`, 'sample', [String(pid), String(sampleSeconds), '-file', file], file,
+    yield* capture(`sample ${pid}`, 'sample', [String(pid), String(sampleSeconds), '-file', file], file,
       `sampling ${pid} for ${sampleSeconds} s: ${command}`);
   }
   if (!spindump) log('watchdog: spindump disabled');
   else if (left() < (sampleSeconds + 1) * 1000) skipped.push(...targets.map(({ pid }) => `spindump ${pid}`));
-  else if (failed(run('sudo', ['-n', 'true'], { timeout: 5_000 }))) log('watchdog: no passwordless sudo, spindump skipped');
+  else if (failed(yield ['sudo', ['-n', 'true'], { timeout: 5_000 }])) log('watchdog: no passwordless sudo, spindump skipped');
   else for (const { pid } of targets) {
     const file = path.join(dir, `spindump-${pid}.txt`);
-    capture(`spindump ${pid}`, 'sudo', ['-n', 'spindump', String(pid), String(sampleSeconds), '-file', file], file,
+    yield* capture(`spindump ${pid}`, 'sudo', ['-n', 'spindump', String(pid), String(sampleSeconds), '-file', file], file,
       `spindump of ${pid} for ${sampleSeconds} s`);
   }
   if (skipped.length) log(`watchdog: capture budget of ${captureSeconds} s spent; skipped ${skipped.join(', ')}`);
   return { written, tree, skipped };
+}
+
+// Retain the synchronous API used by the pure diagnostic tests. Runtime capture
+// drives the same steps asynchronously so signals can interrupt ps/sample too.
+export function captureDiagnostics(options) {
+  const steps = diagnosticSteps(options), run = options.run ?? defaultRun;
+  let step = steps.next();
+  while (!step.done) step = steps.next(run(...step.value));
+  return step.value;
+}
+
+function runAsync(cmd, args, { timeout, signal } = {}) {
+  if (signal?.aborted) return Promise.resolve({ status: null, error: Error('diagnostic operation interrupted') });
+  return new Promise(resolve => {
+    // A diagnostic command has its own group so abort also stops any subprocess
+    // it started, without signalling the watchdog supervising the Swift group.
+    const child = spawn(cmd, args, { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '', error, timer;
+    const stop = () => {
+      error ??= Error('diagnostic operation interrupted or timed out');
+      if (child.pid !== undefined) {
+        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
+        try { process.kill(child.pid, 'SIGKILL'); } catch { /* already gone */ }
+      }
+    };
+    for (const [stream, append] of [[child.stdout, chunk => { stdout += chunk; }], [child.stderr, chunk => { stderr += chunk; }]])
+      stream.on('data', chunk => {
+        append(chunk);
+        if (stdout.length + stderr.length > 64 * 1024 * 1024) stop();
+      });
+    child.once('error', reason => { error = reason; });
+    child.once('close', (status, childSignal) => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
+      resolve({ status, signal: childSignal, error, stdout, stderr });
+    });
+    signal?.addEventListener('abort', stop, { once: true });
+    if (signal?.aborted) stop();
+    if (timeout) timer = setTimeout(stop, timeout);
+  });
+}
+
+async function captureAsync(options, run, signal) {
+  const steps = diagnosticSteps(options);
+  let step = steps.next();
+  while (!step.done) {
+    if (signal.aborted) return null;
+    const [cmd, args, opts] = step.value;
+    const result = await run(cmd, args, { ...opts, signal });
+    if (signal.aborted) return null;
+    step = steps.next(result);
+  }
+  return step.value;
 }
 
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -187,57 +241,128 @@ export async function watch(options, { log = line => process.stderr.write(`${lin
   const child = spawn(options.command[0], options.command.slice(1), { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   for (const [stream, sink] of [[child.stdout, process.stdout], [child.stderr, process.stderr]])
     stream.on('data', chunk => { sink.write(chunk); logFile.write(chunk); });
-  let timedOut = false, pids = [], killTimer;
-  const known = [];
+  const runtimeRun = run === defaultRun ? runAsync : async (...args) => run(...args);
+  const background = new AbortController();
+  let timedOut = false, interrupted, timeoutCleanup, interruptCleanup, snapshotPending;
+  const known = new Map(), owned = new Map();
+  const remember = tree => { for (const p of tree) if (p.pid !== child.pid) known.set(p.pid, p); };
   const snapshot = setInterval(() => {
-    const listing = run('ps', LIST, { timeout: 10_000 });
-    if (failed(listing) || child.pid === undefined) return;
-    for (const p of processTree(listing.stdout, child.pid))
-      if (p.pid !== child.pid && !known.some(k => k.pid === p.pid)) known.push(p);
+    if (snapshotPending || background.signal.aborted || child.pid === undefined) return;
+    snapshotPending = runtimeRun('ps', LIST, { timeout: 10_000, signal: background.signal }).then(listing => {
+      if (!failed(listing) && !background.signal.aborted) remember(processTree(listing.stdout, child.pid));
+    }).finally(() => { snapshotPending = null; });
   }, options.snapshotSeconds * 1000);
-  const signal = name => {
-    for (const target of [-child.pid, ...pids]) { try { process.kill(target, name); } catch { /* already gone */ } }
+  const pids = () => [...owned.keys()];
+  const signalOwned = name => {
+    if (child.pid === undefined) return;
+    for (const target of [-child.pid, ...pids()]) { try { process.kill(target, name); } catch { /* already gone */ } }
   };
+  const workAlive = () => pids().some(alive) || (child.pid !== undefined && (alive(child.pid) || alive(-child.pid)));
   const kill = () => {
-    if (!pids.some(alive) && !alive(child.pid) && !alive(-child.pid)) return;
+    if (!workAlive()) return;
     log('watchdog: sending KILL');
-    signal('SIGKILL');
+    signalOwned('SIGKILL');
+  };
+  const terminate = async (graceSeconds, interruptedPath = false) => {
+    log('watchdog: sending TERM');
+    signalOwned('SIGTERM');
+    const until = Date.now() + graceSeconds * 1000;
+    while (workAlive() && Date.now() < until) {
+      if (interrupted && !interruptedPath) return;
+      await sleep(25);
+    }
+    if (interrupted && !interruptedPath) return;
+    kill();
+    // Reaping is asynchronous on macOS. Keep ownership until the observed
+    // processes disappear, with one second reserved inside the parent grace.
+    const reapedBy = Date.now() + 1000;
+    while (workAlive() && Date.now() < reapedBy) await sleep(25);
+    const survivors = pids().filter(alive);
+    if (survivors.length) log(`watchdog: still alive after KILL: ${survivors.join(', ')}`);
   };
   const timer = setTimeout(() => {
+    if (interrupted) return;
     timedOut = true;
     clearInterval(snapshot);
     log(`watchdog: deadline passed after ${Math.round(budget / 1000)} s; capturing diagnostics`);
-    const { written, tree } = captureDiagnostics({ root: child.pid, known, out: options.out,
-      sampleSeconds: options.sampleSeconds, captureSeconds: options.captureSeconds, spindump: options.spindump,
-      match: options.match, log, run, now });
-    pids = tree.map(p => p.pid).filter(pid => pid !== child.pid);
-    log(`watchdog: wrote ${written.join(', ')}`);
-    log('watchdog: sending TERM');
-    signal('SIGTERM');
-    killTimer = setTimeout(kill, options.graceSeconds * 1000);
+    timeoutCleanup = (async () => {
+      const capture = await captureAsync({ root: child.pid, known: [...known.values()], out: options.out,
+        sampleSeconds: options.sampleSeconds, captureSeconds: options.captureSeconds, spindump: options.spindump,
+        match: options.match, log, now, onTree: remember }, runtimeRun, background.signal);
+      if (!capture || interrupted) return;
+      for (const p of capture.tree) if (p.pid !== child.pid) owned.set(p.pid, p);
+      log(`watchdog: wrote ${capture.written.join(', ')}`);
+      await terminate(options.graceSeconds);
+    })();
   }, budget);
+
+  const handlers = new Map();
+  for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    const handler = () => {
+      if (interrupted) return; // First signal commits the status and one cleanup.
+      interrupted = name;
+      clearTimeout(timer);
+      clearInterval(snapshot);
+      background.abort();
+      log(`watchdog: received ${name}; terminating owned work`);
+      interruptCleanup = (async () => {
+        // Enumerate before TERM can orphan a detached helper. This independent
+        // bounded query is not cancelled with the interrupted diagnostic work.
+        // Ownership collection must not re-enter a slow PATH diagnostic wrapper
+        // that was just aborted. macOS and the CI Unix hosts provide /bin/ps.
+        const listing = await runtimeRun('/bin/ps', LIST, { timeout: 1000 });
+        if (!failed(listing) && child.pid !== undefined) {
+          const current = parseProcesses(listing.stdout);
+          for (const p of processTree(listing.stdout, child.pid))
+            if (p.pid !== child.pid) owned.set(p.pid, p);
+          for (const p of [...known.values(), ...owned.values()]) {
+            if (current.get(p.pid)?.command === p.command) owned.set(p.pid, p);
+            else owned.delete(p.pid);
+          }
+        } else {
+          // The full process table can fail while per-PID access still works.
+          // Validate all remembered identities in one bounded batch, never one
+          // timeout per process, so interruption stays inside the parent grace.
+          const candidates = new Map([...known, ...owned]);
+          owned.clear();
+          if (candidates.size) {
+            const perPid = await runtimeRun('/bin/ps', ['-p', [...candidates.keys()].join(','),
+              '-o', 'pid=,ppid=,command='], { timeout: 1000 });
+            if (!failed(perPid)) {
+              const current = parseProcesses(perPid.stdout);
+              for (const p of candidates.values())
+                if (current.get(p.pid)?.command === p.command) owned.set(p.pid, p);
+              log('watchdog: full interrupt process query failed; validated remembered descendants by PID');
+            } else log('watchdog: unverified ownership after full and per-PID query failures; terminating root group only');
+          } else log('watchdog: unverified ownership after process query failure; no remembered descendants, terminating root group only');
+        }
+        // The heavy-lock parent allows ten seconds after forwarding TERM. Its
+        // interrupt path must not wait the ordinary fifteen-second timeout grace.
+        await terminate(Math.min(options.graceSeconds, 2), true);
+      })();
+    };
+    handlers.set(name, handler);
+    process.on(name, handler);
+  }
   const result = await new Promise(resolve => {
     child.on('error', error => resolve({ code: 127, error }));
     child.on('close', (code, signal) => resolve({ code, signal }));
   });
   clearTimeout(timer);
   clearInterval(snapshot);
-  if (timedOut) {
-    // The leader can exit on TERM while the test helper, in its own group, keeps running: give it the grace period.
-    const until = Date.now() + options.graceSeconds * 1000;
-    while (pids.some(alive) && Date.now() < until) await sleep(200);
-    clearTimeout(killTimer);
-    kill();
-    const survivors = pids.filter(alive);
-    if (survivors.length) log(`watchdog: still alive after KILL: ${survivors.join(', ')}`);
-  } else if (child.pid !== undefined && alive(-child.pid)) {
+  if (timeoutCleanup) await timeoutCleanup;
+  if (interruptCleanup) await interruptCleanup;
+  background.abort();
+  if (snapshotPending) await snapshotPending;
+  if (!timedOut && !interrupted && child.pid !== undefined && alive(-child.pid)) {
     // The command finished but left members of its process group behind; they must not outlive the step.
     log('watchdog: command exited; killing what is left of its process group');
     try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
   }
   await new Promise(resolve => logFile.end(resolve));
+  for (const [name, handler] of handlers) process.removeListener(name, handler);
   if (result.error) log(`watchdog: cannot start ${options.command[0]}: ${result.error.message}`);
-  const status = exitStatus({ timedOut, ...result });
+  const status = exitStatus({ timedOut, ...result, ...(interrupted ? { signal: interrupted } : {}) });
   log(`watchdog: exit ${status}${timedOut ? ' (timed out)' : ''}`);
   return status;
 }
