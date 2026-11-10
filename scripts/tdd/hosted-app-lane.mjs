@@ -16,46 +16,78 @@ export const hostedTestNames = [
 ];
 export const hostedTestIDs = hostedTestNames.map(name => `MadoHostedFocusTests.${name}`);
 
-/** Trust both xcresult's completed tree and totals, never the command's exit code alone. */
+const expectedArguments = new Map([
+  ['issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)', ['0', '1', '2']],
+  ['issue527NonCanvasPressPreservesFocusAndImage(target:)', ['"chromeGap"', '"inspector"', '"overlay"', '"sidebar"']],
+]);
+const resultState = values => values.includes('Failed') ? 'Failed' : values.includes('Skipped') ? 'Skipped' : 'Passed';
+const validState = value => ['Passed', 'Failed', 'Skipped'].includes(value);
+
+/** xcresult counts functions at the root and argument executions per device.
+ * Validate both levels, including every fixed argument identity, rather than
+ * comparing the twelve execution cases to the seven function-test summary. */
 export function parseHostedResult(run, summary, tree, expected) {
-  const bad = () => ({ status: 70, reliable: false, count: 0, failed: 0, skipped: 0, failureNames: [] });
+  const bad = () => ({status:70, reliable:false, count:0, failed:0, skipped:0,
+    caseCount:0, caseFailed:0, failureNames:[]});
   const output = `${run?.stdout ?? ''}\n${run?.stderr ?? ''}`;
-  if (!run || run.error || run.signal || ![0, 65].includes(run.status) ||
+  if (!run || run.error || run.signal || ![0,65].includes(run.status) ||
       /(?:crashed|exited with[^\n]*signal|Fatal error:|TEST EXECUTE CANCELLED)/i.test(output) ||
-      !summary || !tree || !expected?.length || new Set(expected).size !== expected.length) return bad();
-  const names = [], failures = [];
-  let invalid = false, passed = 0, failed = 0, skipped = 0;
+      !summary || !tree || !Array.isArray(expected) || !expected.length ||
+      expected.some(name => typeof name !== 'string') || new Set(expected).size !== expected.length) return bad();
+  const functions = [], executions = [], names = new Set(), failureNames = [];
+  let invalid = false;
   const walk = node => {
-    if (!node || typeof node !== 'object') { invalid = true; return; }
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {invalid=true; return [];}
     if (node.nodeType === 'Test Case') {
       const id = node.nodeIdentifier;
-      const name = expected.find(name => id === name || id?.endsWith('/' + name) || id?.endsWith('.' + name));
-      if (!name || names.includes(name)) { invalid = true; return; }
-      names.push(name);
-      // Parameterized children are execution cases; the parent is the selected test identity.
-      const results = node.children?.length ? node.children.map(child => child.result) : [node.result];
-      for (const result of results) {
-        if (result === 'Passed') passed++;
-        else if (result === 'Failed') { failed++; failures.push(name); }
-        else if (result === 'Skipped') skipped++;
-        else invalid = true;
-      }
-      return;
+      const name = typeof id === 'string' ? expected.find(name => id === name || id.endsWith('/'+name) || id.endsWith('.'+name)) : null;
+      if (!name || names.has(name) || !validState(node.result)) {invalid=true; return [];}
+      names.add(name);
+      if (node.nodeIdentifierURL !== undefined &&
+          node.nodeIdentifierURL !== `test://com.apple.xcode/Mado/MadoHostedFocusTests/${name}`) invalid=true;
+      const children = node.children ?? [];
+      if (!Array.isArray(children)) {invalid=true; return [];}
+      const arguments_ = children.filter(child => child?.nodeType === 'Arguments');
+      if (children.some(child => !['Arguments','Failure Message'].includes(child?.nodeType))) invalid=true;
+      const domain = expectedArguments.get(name);
+      if (domain) {
+        const argumentNames = arguments_.map(child => child.name);
+        if (argumentNames.length !== domain.length || new Set(argumentNames).size !== domain.length ||
+            argumentNames.some(value => !domain.includes(value))) invalid=true;
+      } else if (arguments_.length) invalid=true;
+      const states = domain ? arguments_.map(child => child.result) : [node.result];
+      if (!states.length || states.some(value => !validState(value)) || resultState(states) !== node.result) invalid=true;
+      functions.push(node.result); executions.push(...states);
+      if (node.result === 'Failed') failureNames.push(name);
+      return [node.result];
     }
-    if (node.children) {
-      if (!Array.isArray(node.children)) invalid = true;
-      else node.children.forEach(walk);
-    }
+    const children = node.children ?? [];
+    if (!Array.isArray(children)) {invalid=true; return [];}
+    const states = children.flatMap(walk);
+    if (node.result !== undefined && states.length && node.result !== resultState(states)) invalid=true;
+    return states;
   };
   if (!Array.isArray(tree.testNodes)) return bad();
   tree.testNodes.forEach(walk);
-  const total = passed + failed + skipped;
-  if (invalid || names.length !== expected.length || skipped || !total ||
-      ![summary.totalTestCount, summary.passedTests, summary.failedTests, summary.skippedTests].every(Number.isSafeInteger) ||
-      summary.totalTestCount !== total || summary.passedTests !== passed || summary.failedTests !== failed ||
-      summary.skippedTests !== skipped || (run.status === 0) !== (failed === 0) ||
-      !output.includes(failed ? '** TEST EXECUTE FAILED **' : '** TEST EXECUTE SUCCEEDED **')) return bad();
-  return { status: failed ? 1 : 0, reliable: true, count: total, failed, skipped, failureNames: [...new Set(failures)] };
+  const totals = values => ({passed:values.filter(value => value === 'Passed').length,
+    failed:values.filter(value => value === 'Failed').length, skipped:values.filter(value => value === 'Skipped').length});
+  const top = totals(functions), cases = totals(executions);
+  const matches = (record, totals) => record !== null && typeof record === 'object' && !Array.isArray(record) &&
+    ['passed','failed','skipped'].every(key =>
+    Number.isSafeInteger(record[`${key}Tests`]) && record[`${key}Tests`] === totals[key]) &&
+    (record.expectedFailures === undefined || record.expectedFailures === 0);
+  const configurations = summary.devicesAndConfigurations;
+  if (configurations !== undefined && (!Array.isArray(configurations) || configurations.length !== 1 ||
+      !matches(configurations[0],cases))) invalid=true;
+  if (summary.result !== undefined && summary.result !== resultState(functions)) invalid=true;
+  if (summary.testFailures !== undefined && (!Array.isArray(summary.testFailures) ||
+      (summary.testFailures.length > 0) !== (top.failed > 0))) invalid=true;
+  if (invalid || names.size !== expected.length || functions.length !== expected.length || top.skipped || cases.skipped ||
+      !executions.length || !Number.isSafeInteger(summary.totalTestCount) || summary.totalTestCount !== functions.length ||
+      !matches(summary,top) || (run.status === 0) !== (top.failed === 0) ||
+      !output.includes(top.failed ? '** TEST EXECUTE FAILED **' : '** TEST EXECUTE SUCCEEDED **')) return bad();
+  return {status:top.failed ? 1 : 0, reliable:true, count:functions.length, ...top,
+    caseCount:executions.length, caseFailed:cases.failed, failureNames};
 }
 
 export function runHostedAppLane({ spawn = spawnSync, env = process.env, selected = hostedTestNames,

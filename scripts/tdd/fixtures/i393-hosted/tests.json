@@ -1,0 +1,152 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "99d0f360437bd0268c8e3c64b50469525fd102dc",
+      "deviceName": "My Mac",
+      "modelName": "Apple Virtual Machine 1",
+      "osBuildNumber": "25G332",
+      "osVersion": "26.7.2",
+      "platform": "macOS"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "duration": "0.06s",
+              "durationInSeconds": 0.06018710136413574,
+              "name": "issue393RunsInsideRealAppWithLiveDispatchAndActivation()",
+              "nodeIdentifier": "issue393RunsInsideRealAppWithLiveDispatchAndActivation()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue393RunsInsideRealAppWithLiveDispatchAndActivation()",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "1s",
+                  "durationInSeconds": 1.8622300624847412,
+                  "name": "0",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "1s",
+                  "durationInSeconds": 1.6450421810150146,
+                  "name": "1",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "1s",
+                  "durationInSeconds": 1.581732988357544,
+                  "name": "2",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                }
+              ],
+              "duration": "1s",
+              "durationInSeconds": 1.6963350772857666,
+              "name": "issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)",
+              "nodeIdentifier": "issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "0.94s",
+                  "durationInSeconds": 0.9429619312286377,
+                  "name": "\"chromeGap\"",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "1s",
+                  "durationInSeconds": 1.049515962600708,
+                  "name": "\"inspector\"",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.97s",
+                  "durationInSeconds": 0.9712159633636475,
+                  "name": "\"overlay\"",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "1s",
+                  "durationInSeconds": 1.052367925643921,
+                  "name": "\"sidebar\"",
+                  "nodeType": "Arguments",
+                  "result": "Passed"
+                }
+              ],
+              "duration": "1s",
+              "durationInSeconds": 1.0040154457092285,
+              "name": "issue527NonCanvasPressPreservesFocusAndImage(target:)",
+              "nodeIdentifier": "issue527NonCanvasPressPreservesFocusAndImage(target:)",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue527NonCanvasPressPreservesFocusAndImage(target:)",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "duration": "0.48s",
+              "durationInSeconds": 0.483720064163208,
+              "name": "issue527InactiveFirstClickKeepsFocusConsistent()",
+              "nodeIdentifier": "issue527InactiveFirstClickKeepsFocusConsistent()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue527InactiveFirstClickKeepsFocusConsistent()",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "duration": "1s",
+              "durationInSeconds": 1.3254039287567139,
+              "name": "issue527InspectorCloseCanvasPressPans()",
+              "nodeIdentifier": "issue527InspectorCloseCanvasPressPans()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue527InspectorCloseCanvasPressPans()",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "duration": "1s",
+              "durationInSeconds": 1.8212611675262451,
+              "name": "issue564KeyWindowFixtureHandlesDelayedAndNeverKey()",
+              "nodeIdentifier": "issue564KeyWindowFixtureHandlesDelayedAndNeverKey()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/issue564KeyWindowFixtureHandlesDelayedAndNeverKey()",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            },
+            {
+              "duration": "1s",
+              "durationInSeconds": 1.1641268730163574,
+              "name": "retry442NativeKeyboardMatrix()",
+              "nodeIdentifier": "retry442NativeKeyboardMatrix()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests/retry442NativeKeyboardMatrix()",
+              "nodeType": "Test Case",
+              "result": "Passed"
+            }
+          ],
+          "name": "MadoHostedFocusTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/Mado/MadoHostedFocusTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        }
+      ],
+      "name": "Mado",
+      "nodeType": "Test Plan",
+      "result": "Passed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}
