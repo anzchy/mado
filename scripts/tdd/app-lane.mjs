@@ -519,7 +519,8 @@ export function runCompleteAppLane(options = {}) {
     }
     if (selected.length && status === 0) {
       record.attempts = Math.max(record.attempts, 1);
-      const hosted = runHostedAppLane({...options, env, selected, stdout, stderr});
+      const hosted = runHostedAppLane({...options, env, selected,
+        stdout:s => stdout(s.replace(/^hosted-app-lane Tests run:[^\n]*\n/gm, '')), stderr});
       record.groups.hosted = hosted.status;
       count += hosted.count; failed += hosted.failed ?? 0; skipped += hosted.skipped ?? 0;
       status = hosted.status;

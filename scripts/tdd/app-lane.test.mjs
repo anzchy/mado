@@ -863,8 +863,8 @@ function combinedHarness({filter,unhostedStatus=0,hostedStatus=0,missingResult=f
   if(args.includes('xcodebuild')) {mechanisms.push('hosted');return {status:hostedStatus,stdout:hostedStatus===0?'** TEST EXECUTE SUCCEEDED **\n':'** TEST EXECUTE FAILED **\n'};}
   if(args.includes('xcresulttool')) {
    if(missingResult) return {status:1,stdout:''};
-   if(args.includes('summary')) return result(JSON.stringify({totalTestCount:names.length,passedTests:hostedStatus===0?names.length:names.length-1,failedTests:hostedStatus===0?0:1,skippedTests:0}));
-   return result(JSON.stringify({testNodes:names.map((n,i)=>({nodeType:'Test Case',nodeIdentifier:n,result:hostedStatus!==0&&i===0?'Failed':'Passed'}))}));
+   if(args.includes('summary')) return result(JSON.stringify(i393ProtocolSubset(names,hostedStatus!==0).summary));
+   return result(JSON.stringify(i393ProtocolSubset(names,hostedStatus!==0).tree));
   }
   return result(inventory);
  };
@@ -892,16 +892,16 @@ for(const options of [{unhostedStatus:1},{hostedStatus:65},{missingResult:true},
 function hostedParameterizedFixture() {
  const name='issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)';
  return {name,run:{status:0,stdout:'** TEST EXECUTE SUCCEEDED **\n'},
-  summary:{totalTestCount:3,passedTests:3,failedTests:0,skippedTests:0},
-  tree:{testNodes:[{nodeType:'Test Case',nodeIdentifier:name,result:'Passed',children:[0,1,2].map(n=>({nodeIdentifier:`${name}/${n}`,result:'Passed'}))}]}};
+  summary:{totalTestCount:1,passedTests:1,failedTests:0,skippedTests:0,devicesAndConfigurations:[{passedTests:3,failedTests:0,skippedTests:0}]},
+  tree:{testNodes:[{nodeType:'Test Case',nodeIdentifier:name,result:'Passed',children:[0,1,2].map(n=>({nodeType:'Arguments',name:String(n),result:'Passed'}))}]}};
 }
 test('hosted parameterized cases preserve all three distinct drag inputs',()=>{
  const f=hostedParameterizedFixture();const r=parseHostedResult(f.run,f.summary,f.tree,[f.name]);
- assert.equal(r.status,0);assert.equal(r.count,3);
+ assert.equal(r.status,0);assert.equal(r.count,1);assert.equal(r.caseCount,3);
 });
 for(const [name,corrupt] of [
- ['missing argument with consistent totals',f=>{f.tree.testNodes[0].children.pop();f.summary.totalTestCount=2;f.summary.passedTests=2;}],
- ['duplicate argument',f=>f.tree.testNodes[0].children[2].nodeIdentifier=f.tree.testNodes[0].children[1].nodeIdentifier],
+ ['missing argument with consistent totals',f=>{f.tree.testNodes[0].children.pop();f.summary.devicesAndConfigurations[0].passedTests=2;}],
+ ['duplicate argument',f=>f.tree.testNodes[0].children[2].name=f.tree.testNodes[0].children[1].name],
  ['parent contradiction',f=>f.tree.testNodes[0].result='Failed'],
 ]) test(`hosted parameterized ${name} fails closed`,()=>{
  const f=hostedParameterizedFixture();corrupt(f);const r=parseHostedResult(f.run,f.summary,f.tree,[f.name]);
@@ -937,4 +937,80 @@ test('hosted attempt persists native process outcome even when result parsing fa
  const record=JSON.parse(readFileSync(metadata,'utf8'));
  assert.equal(record.status,0);assert.equal(record.signal,null);assert.deepEqual(record.selected,['hostProof()']);
  assert.equal(record.derivedDataPath,'.build/dd-ci');assert.equal(record.resultPath,r.resultPath);
+});
+
+test('combined App lane emits one unambiguous generic completion summary',()=>{
+ const h=combinedHarness();assert.equal(h.status,0,h.stderr);
+ assert.equal((h.stdout.match(/Tests run: \d+, Failures:/g)??[]).length,1);
+ assert.match(h.stdout,/Tests run: 10, Failures: 0/);
+});
+
+const i393ActualProcess=JSON.parse(readFileSync(new URL('./fixtures/i393-hosted/process.json',import.meta.url),'utf8'));
+const i393ActualSummary=JSON.parse(readFileSync(new URL('./fixtures/i393-hosted/summary.json',import.meta.url),'utf8'));
+const i393ActualTests=JSON.parse(readFileSync(new URL('./fixtures/i393-hosted/tests.json',import.meta.url),'utf8'));
+function i393ActualFixture() {
+ return {run:{...structuredClone(i393ActualProcess),stdout:'** TEST EXECUTE SUCCEEDED **\n',stderr:''},
+  summary:structuredClone(i393ActualSummary),tree:structuredClone(i393ActualTests)};
+}
+function i393ActualCases(f) {return f.tree.testNodes[0].children[0].children;}
+test('actual CI hosted artifact reports seven functions and twelve distinct executions',()=>{
+ const f=i393ActualFixture();const r=parseHostedResult(f.run,f.summary,f.tree,i393ActualProcess.selected);
+ assert.equal(r.status,0);assert.equal(r.reliable,true);assert.equal(r.count,7);assert.equal(r.caseCount,12);
+ assert.equal(r.failed,0);assert.equal(r.caseFailed,0);
+});
+for(const [name,corrupt] of [
+ ['missing drag argument',f=>{i393ActualCases(f)[1].children.pop();f.summary.devicesAndConfigurations[0].passedTests=11;}],
+ ['all drag arguments missing',f=>{delete i393ActualCases(f)[1].children;f.summary.devicesAndConfigurations[0].passedTests=10;}],
+ ['duplicate drag argument',f=>i393ActualCases(f)[1].children[2].name='1'],
+ ['foreign drag argument',f=>i393ActualCases(f)[1].children[2].name='3'],
+ ['foreign non-canvas argument',f=>i393ActualCases(f)[2].children[0].name='"foreign"'],
+ ['parameter parent contradicts passing children',f=>i393ActualCases(f)[1].result='Failed'],
+ ['device totals contradict executions',f=>f.summary.devicesAndConfigurations[0].passedTests=11],
+ ['function totals contradict test identities',f=>{f.summary.totalTestCount=12;f.summary.passedTests=12;}],
+ ['duplicate configuration',f=>f.summary.devicesAndConfigurations.push(structuredClone(f.summary.devicesAndConfigurations[0]))],
+ ['plan result contradicts descendants',f=>f.tree.testNodes[0].result='Failed'],
+ ['summary result contradicts descendants',f=>f.summary.result='Failed'],
+]) test(`actual hosted evidence corruption ${name} fails closed`,()=>{
+ const f=i393ActualFixture();corrupt(f);const r=parseHostedResult(f.run,f.summary,f.tree,i393ActualProcess.selected);
+ assert.equal(r.status,70);assert.equal(r.reliable,false);assert.equal(r.count,0);
+});
+test('actual hosted parameter failure preserves function and execution counts separately',()=>{
+ const f=i393ActualFixture();f.run.status=65;f.run.stdout='** TEST EXECUTE FAILED **\n';
+ const drag=i393ActualCases(f)[1];drag.result='Failed';drag.children[1].result='Failed';
+ f.tree.testNodes[0].result='Failed';f.tree.testNodes[0].children[0].result='Failed';
+ f.summary.result='Failed';f.summary.passedTests=6;f.summary.failedTests=1;
+ f.summary.devicesAndConfigurations[0].passedTests=11;f.summary.devicesAndConfigurations[0].failedTests=1;
+ f.summary.testFailures=[{testName:drag.name,targetName:'MadoHostedFocusTests',failureText:'assertion failed'}];
+ const r=parseHostedResult(f.run,f.summary,f.tree,i393ActualProcess.selected);
+ assert.equal(r.status,1);assert.equal(r.count,7);assert.equal(r.caseCount,12);assert.equal(r.failed,1);assert.equal(r.caseFailed,1);
+ assert.deepEqual(r.failureNames,[drag.name]);
+});
+
+// User approved real-format fixture correction (Report-Task i393-20261110-e).
+// Subsets preserve xcresult's function/argument levels independently of parser code.
+function i393ProtocolSubset(names,failed) {
+ const tree=JSON.parse(readFileSync(new URL('./fixtures/i393-hosted/tests.json',import.meta.url),'utf8'));
+ const summary=JSON.parse(readFileSync(new URL('./fixtures/i393-hosted/summary.json',import.meta.url),'utf8'));
+ const rows=tree.testNodes[0].children[0].children.filter(row=>names.includes(row.nodeIdentifier));
+ let cases=0,failedCases=0;
+ for(const row of rows) {
+  const isFailed=failed&&row.nodeIdentifier===names[0];row.result=isFailed?'Failed':'Passed';
+  if(row.children) for(const child of row.children) {child.result=row.result;cases++;if(isFailed)failedCases++;}
+  else {cases++;if(isFailed)failedCases++;}
+ }
+ tree.testNodes[0].children[0].children=rows;
+ tree.testNodes[0].result=tree.testNodes[0].children[0].result=failed?'Failed':'Passed';
+ summary.totalTestCount=names.length;summary.failedTests=failed?1:0;summary.passedTests=names.length-summary.failedTests;
+ summary.result=failed?'Failed':'Passed';
+ summary.devicesAndConfigurations[0].failedTests=failedCases;summary.devicesAndConfigurations[0].passedTests=cases-failedCases;
+ summary.testFailures=failed?[{testName:names[0],targetName:'MadoHostedFocusTests',failureText:'assertion failed'}]:[];
+ const parameters=rows.filter(row=>row.children?.length);
+ summary.statistics=parameters.length?[{title:`${parameters.length} tests ran with dynamic parameters`,subtitle:`${parameters.reduce((sum,row)=>sum+row.children.length,0)} test runs`}]:[];
+ return {summary,tree};
+}
+
+test('actual hosted null device record returns an unreliable result without throwing',()=>{
+ const f=i393ActualFixture();f.summary.devicesAndConfigurations=[null];let r;
+ assert.doesNotThrow(()=>{r=parseHostedResult(f.run,f.summary,f.tree,i393ActualProcess.selected);});
+ assert.equal(r.status,70);assert.equal(r.reliable,false);assert.equal(r.count,0);
 });
