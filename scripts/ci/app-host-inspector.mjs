@@ -1,4 +1,4 @@
-/** One isolated OS inspector: startup and each correlated observation have separate bounds. */
+/** One isolated OS inspector: logical query expiry never destroys the physical slot. */
 import {spawn as nativeSpawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 
@@ -117,15 +117,17 @@ export function prepareHostInspector({deadline,env=process.env,spawn=nativeSpawn
   const note=(stage,extra={})=>{events.push({stage,elapsedMilliseconds:Math.max(0,now()-started),...extra});if(events.length>16)events.shift();};
   const facts=(stage,request=pending)=>({stage,generation,requestId:request?.id??null,cleanupSignal:request?.cleanupSignal??null,
     elapsedMilliseconds:request?Math.max(0,now()-request.started):0,timeoutMilliseconds:request?.budget??0,
-    physicalTimeoutMilliseconds:request?1000:0,
     status:Number.isInteger(child?.exitCode)?child.exitCode:null,signal:child?.signalCode??null,
     errorCode:null,stdoutBytes,stderrBytes});
   const failure=(stage,request=pending)=>({complete:false,processes:[],unknown:[{reason:'inspector '+stage}],transport:facts(stage,request)});
-  function finishQuery(value){if(!pending)return;const old=pending;pending=null;timers.clearTimeout(old.timer);timers.clearTimeout(old.hardTimer);old.resolve?.(value);}
+  function finishQuery(value){if(!pending)return;const old=pending;pending=null;timers.clearTimeout(old.timer);old.resolve?.(value);}
   function expireQuery(){
     if(!live||!pending||pending.expired)return;
     const value=failure('timeout');pending.expired=true;timers.clearTimeout(pending.timer);
     const resolve=pending.resolve;pending.resolve=null;note('timeout',{requestId:pending.id,budgetMilliseconds:pending.budget});
+    // Keep one occupied physical slot. Its late correlated frame is discarded;
+    // only a new phase-current query may authorize ownership. The supervisor
+    // closes/kills this process by its unchanged cleanup drain deadline.
     resolve?.(value);
   }
   function detachStreams(){child?.stdout?.removeListener('data',stdout);child?.stderr?.removeListener('data',stderr);buffer=Buffer.alloc(0);}
@@ -167,7 +169,6 @@ export function prepareHostInspector({deadline,env=process.env,spawn=nativeSpawn
     const snapshot=message.snapshot;
     if(!ready||!pending||message.type!=='result'||message.requestId!==pending.id||
       !snapshot||typeof snapshot.complete!=='boolean'||!Array.isArray(snapshot.processes)||!Array.isArray(snapshot.unknown)){invalidate('protocol');return;}
-    if(now()>=pending.started+1000){invalidate('timeout');return;}
     if(pending.expired||now()>=pending.notAfter){
       expireQuery();
       note('expired-reply',{requestId:pending.id,processingMilliseconds:Number.isFinite(message.processingMilliseconds)?message.processingMilliseconds:null});
@@ -201,8 +202,7 @@ export function prepareHostInspector({deadline,env=process.env,spawn=nativeSpawn
       return new Promise(resolve=>{
         pending={id,resolve,started:requestStart,budget,notAfter:Math.min(notAfter,requestStart+budget),cleanupSignal:options.cleanupSignal,expired:false};
         pending.timer=timers.setTimeout(expireQuery,Math.max(0,pending.notAfter-now()));
-        pending.hardTimer=timers.setTimeout(()=>invalidate('timeout'),Math.max(0,requestStart+1000-now()));
-        note('request',{requestId:id,budgetMilliseconds:budget,physicalTimeoutMilliseconds:1000,cleanupSignal:options.cleanupSignal??null});
+        note('request',{requestId:id,budgetMilliseconds:budget,cleanupSignal:options.cleanupSignal??null});
         try{child.stdin.write(encoded,error=>{if(error)invalidate('process');});}catch{invalidate('process');}
       });
     }};

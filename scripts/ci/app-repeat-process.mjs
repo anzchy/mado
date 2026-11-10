@@ -139,7 +139,10 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       }else{
         await observe();if(stopping)continue;
         if(required&&!inspector.ready){stop('ownership inspector unavailable');continue;}
-        if(childExit){
+        // A logically expired query can still occupy the one physical slot.
+        // Await its disposal and a fresh observation before judging leader exit;
+        // uncertainty alone must not latch 70 before the existing run deadline.
+        if(childExit&&!inspector?.busy){
           const groupState=await members();if(stopping)continue;
           if(groupState!==null&&groupState.length===0&&(!host||host.snapshot().drained))
             return await finish(childExit.signal||childExit.code===null?70:childExit.code,true);
@@ -147,6 +150,9 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
             host.snapshot().live.length===0&&host.snapshot().unknown.length===0){
             log('host registration missing after worker/group exit');return await finish(70,false);
           }
+          // A failed observation is uncertainty, not proof of a live host.
+          // Let another current query recover within the original run budget.
+          if(host&&inspector?.ready&&host.snapshot().unknown.length){await idle();continue;}
           stop('iteration leader exited with live descendants or unknown host');continue;
         }
       }

@@ -236,6 +236,23 @@ test('expired reply clears only its physical slot and a fresh correlated request
   f.advance(started+80);assert.equal((await stuck).complete,false);assert.equal(session.ready,true);
   assert.equal((await session.query({notAfter:started+2000})).transport.stage,'busy');
   f.advance(started+999);assert.equal(session.ready,true);
-  f.advance(started+1000);assert.equal(session.ready,false,'physical processing cap stays fixed from original request start');
+  f.advance(started+1000);assert.equal(session.ready,true,'logical expiry retains the single physical slot until reply or supervisor teardown');
+  assert.equal(session.busy,true);
   assert.deepEqual(await session.close(),{closed:true,reaped:true});
+});
+
+
+test('1003ms reply is discarded without destroying its generation; only fresh observation authorizes success',async t=>{
+  const {f,session}=await ready(t),pending=session.query({notAfter:5000}),request=await f.next();
+  f.advance(1003);const expired=await pending;
+  assert.equal(expired.complete,false);assert.deepEqual(expired.processes,[]);
+  assert.equal(expired.transport.stage,'timeout');assert.equal(session.ready,true);assert.equal(session.busy,true);
+  assert.equal((await session.query({notAfter:5000})).transport.stage,'busy');
+  f.reply(request,{snapshot:{complete:true,processes:[],unknown:[]}});
+  while(session.ready&&session.busy)await turn();
+  assert.equal(session.ready,true);assert.equal(session.busy,false);assert.equal(expired.complete,false);
+  const fresh=session.query({notAfter:5000}),current=await f.next();
+  assert.equal(current.generation,request.generation);assert.equal(current.requestId>request.requestId,true);
+  f.reply(current);const actual=await fresh;
+  assert.equal(actual.complete,true);assert.deepEqual(actual.processes,[owned]);
 });
