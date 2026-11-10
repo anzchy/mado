@@ -337,13 +337,13 @@ Mado 只支持 macOS，没有跨平台差异表，但同一能力在不同硬件
 |---|---|---|---|
 | 打开与输入 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 查看与画布 | 2026-11-06 | doc-gardener | c812184..c45749c |
-| C 沉浸界面 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| C 沉浸界面 | 2026-11-11 | doc-gardener | c5a087f..2653f9c |
 | 外观与显示偏好 | 2026-11-06 | doc-gardener | c812184..c45749c |
-| 文件夹浏览 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 文件夹浏览 | 2026-11-11 | doc-gardener | c5a087f..2653f9c |
 | Filmstrip | 2026-11-03 | doc-gardener | 4ca72f8..81e693b |
 | 网格、选择与菜单 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 信息与元数据 | 2026-11-06 | doc-gardener | c812184..c45749c |
-| 授权与文件访问 | 2026-11-06 | doc-gardener | c812184..c45749c |
+| 授权与文件访问 | 2026-11-11 | doc-gardener | c5a087f..2653f9c |
 | 缓存与资源 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 命令与键盘 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
