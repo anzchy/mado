@@ -314,3 +314,58 @@ Before final validation, the eight-commit stack was rebased from00f2e46f onto `0
 Fresh local validation on the rebased candidate: seven complete Node CI command groups **1316passed executions,0failed,2explicit skips** (command totals, not unique test identities); exact unfiltered configured Swift unit **1787tests/43suites,2known issues**, native84.623s; command plus fresh coverage reporter86.704s. Independent fresh exact single-LCOV audit passed147package files: L/S16701/16701,F3212/3212=100%. Branches unmeasured with threshold0, criticalPaths none, mutation disabled; App/Node coverage NOT CONFIGURED. Ledger HTML check passed. Independent R3 code/test-quality review APPROVED WITH NOTES, no new High/Medium/Low code findings; raw receipt Medium/history retained. Commit-gate refresh is recorded separately in the handoff.
 
 This is local evidence only. Broader corrected-SHA App cancellation and all four same-SHA comparison dispatches remain required; no full-App or whole-task GREEN, billing-minute figure or performance improvement is claimed. No production entrypoint, sandbox/entitlement, frozen legacy source, quarantine or time-limit-policy change was made. Ledger context VIEW-04/FOLDER-01 is test architecture only; no capability status upgrade.
+
+## Round k: a late inspector reply must not poison its generation
+
+CI on `973c519a` completed hosted-focus iterations1–16, then iteration17 failed
+with inspector timeout1003ms/1000ms and repeated closed/SIGKILL responses.
+Iterations18–20 refused overlap. No test assertion failed. The CI artifact does
+not prove whether the reported host PID was still alive.
+
+Before changing source, a local real Python/kernel inspector and real detached
+Node host reproduced successful host registration followed by one delayed
+response, persistent closed queries and70/drained=false. The injected delay
+changed only response delivery after real kernel inspection, not the supervisor.
+The reproduction first needed its selector corrected to exclude the worker;
+that preliminary attempt is not evidence of registration-before-timeout.
+
+The fatal start+1000ms timer and late-frame check both invalidated the whole
+persistent inspector and killed it. Subsequent queries could only return closed.
+The owner/delegator explicitly approved retaining1000ms as an observation's
+validity limit while allowing its physical execution to continue, bounded by
+the supervisor's unchanged drain deadline. Logical expiry still immediately
+makes ownership uncertain. Exactly one physical slot remains busy; its matching
+late reply is discarded, then only a fresh, phase-current query can authorize
+a signal or drain proof. No inspector restart or test retry was added. Worker
+exit while busy/uncertain no longer latches70 before that fresh proof or the
+original run deadline. Run, grace and drain deadlines remain unchanged.
+
+The official round-k RED was6/84 assertion failures, with no source changes
+present at record. The original reproduction after the fix returned0/drained=true
+while still recording a1003ms query timeout. Regression cases cover exact1003ms
+late data, same-generation recovery, worker exit while busy, permanently hung
+queries, live and exited-but-unverifiable hosts, actual physical inspector death
+at drain, and real failed-drain results blocking the coordinator's next iteration.
+Test cleanup freshly verifies full kernel identity before signaling a PID.
+
+One new recorded assertion mistakenly demanded that the final16-entry diagnostic
+history still contain an earlier expired-reply event. The owner/delegator
+explicitly accepted replacing it with actual Python journal evidence of a newer
+query after timeout. The original RED and official SEPARATION-BROKEN verdict
+remain retained; this is an accepted exception, not HELD. No other round-k
+recorded assertion was changed. Independent review approved the final source
+with this accepted note and no new unresolved findings.
+
+This is Node test-infrastructure evidence only (VIEW-04/FOLDER-01 context).
+No capability status upgrade, fresh native coverage, native/App pass, CI rerun
+result or performance improvement is claimed. Corrected-SHA hosted-focus×20
+remains the delegator's required next dispatch.
+
+Final local Node gates: six complete CI command groups passed1298 test executions,
+zero failed, two explicit skips (portable device17, Agent tooling789+2skip,
+Package CI258, macOS device3, names44, release187). The final targeted ownership
+lane separately passed84/84, including all real process regressions and review
+additions. These command groups overlap; they are not a unique-test total.
+Ledger HTML synchronization and whitespace checks passed. Node coverage remains
+unconfigured; Swift/App and native coverage/commit lanes were deliberately not
+rerun under this round's explicit scope.
