@@ -369,3 +369,80 @@ additions. These command groups overlap; they are not a unique-test total.
 Ledger HTML synchronization and whitespace checks passed. Node coverage remains
 unconfigured; Swift/App and native coverage/commit lanes were deliberately not
 rerun under this round's explicit scope.
+
+## Rounds l–m: controlled recovery oracle and explicit grace exhaustion
+
+Round l reproduced the original line225 TERM-count failure before edits on both
+973c519a and330d4a84, alternating versions. Baseline:20/20 each. Under20 real
+concurrent CPU burners:973c519a32pass/8fail;330d4a8434pass/6fail. Every failure
+was the reported outcome: zero TERM, one actual SIGKILL, first targeted KILL
+query deliberately unavailable, status70/drained=true, unchanged80ms grace and
+1000ms drain. These samples establish pre-existence, not a latency improvement.
+
+The owner approved astra's decision: “yes, change the test synchronization only,
+per the decision.” Grace includes authorization work and does not promise TERM
+delivery. Round m changes no supervisor, ownership policy or inspector production
+module, and does not restart/extend grace or bypass fresh authorization.
+
+Authorized amendment, old versus new synchronization:
+
+- Previously the recovery test depended on completing TERM authorization within
+ 80ms of wall time after a real run deadline, without a successful-TERM barrier.
+- The recovery fixture now controls logical time/timers and uses the existing
+ cancel-on-observed hook to enter cleanup after actual kernel registration. It
+ holds logical time during real query I/O, dispatches an actual TERM, then advances
+ the original80ms grace. Only after that barrier can the first targeted KILL
+ authorization fail. A newer actual targeted request and matching reply must
+ precede the actual KILL. All11 original assertion-bearing lines are retained
+ verbatim, including exactly1 TERM strictly before grace,80/1000ms phases,
+ controlled failure counts, status70, both drains, real host death, live unrelated
+ sentinel and successful next iteration after drain.
+- A separate test holds actual correlated inspector frames: expire a late run
+ observation, retain the occupied slot, discard its late frame; expire the cleanup
+ observation at the fixed grace deadline, again retain/discard; then require fresh
+ targeted KILL authorization, exactly0 TERM and verified drain. The run frame must
+ carry a successful real host observation. The cleanup frame may be incomplete
+ from the Python inspector's real physical budget; its logical expiry and discard
+ are required regardless. This adds no promise of80ms wall-clock delivery.
+
+The test-only clock wraps actual Python inspector transport for explicit delivery
+barriers and checks at most1 outstanding physical request. Kernel observations,
+PID identity checks, real host/sentinel processes and signals remain real. Actual
+`ps` group proofs are synchronous in this controlled harness so logical time does
+not race group I/O. Real startup/driver watchdogs and cancellation bound fixture
+failure cleanup. Mocks are restored before the next iteration's original real-time
+supervision. Existing1003ms stale-result, permanently hung query and unproven-drain
+no-overlap tests remain unchanged.
+
+This pure oracle synchronization correction has no meaningful new implementation
+RED: production is unchanged and the old assertion failed on valid behavior.
+Round l's14 original failures remain the before evidence. No new official RED is
+manufactured, and prior receipts/separation exceptions are not rewritten.
+Independent Standards/Spec review resolved four Medium test-harness findings and
+reported no remaining blocking code findings. Baseline for both revised scenarios
+passed2/2. CPU stress and full gate results are recorded below after execution.
+
+Final round-m evidence: each scenario passed40/40 under20 ready-acknowledged real
+CPU burners, alternating scenario order, zero failures/skips/retries/quarantine.
+All80 raw TAP files, per-execution real elapsed times and process-load counts are
+retained under `.build/i393-m/`; `audit-stress.py` independently checks the recorded
+signal counts, status70, both drain proofs and80/1000ms logical phases. These are
+controlled-time scenarios exercised under actual CPU contention. They do not prove
+TERM delivery within80ms of real time; round l's separate real-time stress remains
+the evidence that zero TERM can be valid. All burners were killed/reaped before
+full gates. Two shared-lock waits ended normally; no lock bypass/reclaim occurred.
+
+Seven complete Node CI groups passed1334 executions, zero failed, two explicit
+skips: portable device17; Agent tooling801+2skip; Package CI258; macOS device3;
+names44; release187; host ownership integration24. Integration used the exact
+`node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs` wrapper. Existing
+stale-query, physical single-slot, permanent-hang and failed-drain/no-next-iteration
+regressions passed within these full groups. Gate executions and80 stress runs
+are separate evidence, not a unique-test total. Ledger HTML synchronization and
+whitespace checks passed. Node coverage is unconfigured; mutation is disabled;
+no native/Swift/App rerun or fresh Swift coverage claim. No ledger acceptance or
+status changed (VIEW-04/P1-03 and FOLDER-01/P2-02/P3-17b infrastructure context).
+
+The final candidate still needs the delegator's four cold same-SHA CI comparisons:
+legacy/hosted focus×20 and legacy/hosted full×5. No push or dispatch was performed
+by round m, and no CI performance improvement is claimed here.
