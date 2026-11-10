@@ -1167,9 +1167,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         filesystemLogger.warning("File grant vnode watch unavailable; foreground reconciliation remains active file=\(grant.lastPathComponent, privacy: .private)")
     }
 
-    func reconcileStandaloneImage() {
-        guard let grant = standaloneGrantURL else { return }
-        if standaloneReconcileTask != nil { standaloneReconcilePending = true; return }
+    @discardableResult func reconcileStandaloneImage() -> Task<Void, Never>? {
+        guard let grant = standaloneGrantURL else { return nil }
+        if let task = standaloneReconcileTask { standaloneReconcilePending = true; return task }
         let operation = accessIntent.current
         let input = inputIntent.current
         standaloneReconcileTask = Task { [weak self, accessServices, pipeline] in
@@ -1211,8 +1211,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             } catch {
                 guard operation.isCurrent, input.isCurrent else { return }
                 var error = error
-                // The file can move or reach the Trash between resolving the grant and reading it.
-                if !(error is FileAccessError), !FileManager.default.fileExists(atPath: checkedURL.path) {
+                // Native access failures can also predate a move or Trash event. A missing
+                // display path needs current bookmark classification before choosing recovery.
+                if !FileManager.default.fileExists(atPath: checkedURL.path) {
                     do {
                         let current = try await services.files.resolveFileGrant(grant)
                         guard operation.isCurrent, input.isCurrent else { return }
@@ -1238,6 +1239,16 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     self.open(checkedURL, accessRequest: .fileGrant(grant), fromFolderScan: true)
                 }
             }
+        }
+        return standaloneReconcileTask
+    }
+
+    /// Observes the existing watch installation and reconciliation work, including pending successors.
+    func waitForStandaloneReconciliation() async {
+        await standaloneWatchTask?.value
+        while let task = standaloneReconcileTask {
+            await task.value
+            await standaloneWatchTask?.value
         }
     }
 

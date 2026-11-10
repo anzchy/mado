@@ -63,6 +63,18 @@ private final class Issue520Pipeline: ImagePipeline, @unchecked Sendable {
         try #require(controller.session.imageLoader.presented != nil)
         try #require(window.attachedSheet == nil)
     }
+    // Keep the existing failure/report sequence in one fixture completion boundary.
+    // A later loader callback can replace the report that this boundary is awaiting.
+    func reconnectAfterDeniedFailure(overlappingCallback: Bool = false) async throws {
+        controller.imageLoadFailed(CocoaError(.fileReadNoPermission))
+        let observed = controller.reportFileGrantReadFailure(file)
+        if overlappingCallback {
+            controller.imageLoadFailed(CocoaError(.fileReadNoPermission))
+            try #require(observed.isCancelled)
+        }
+        await observed.value
+        try await waitUntil { self.window.attachedSheet != nil }
+    }
     func trash() throws { try FileManager.default.trashItem(at: file, resultingItemURL: &trashed) }
     func clearAssertions() {
         #expect(controller.session.imageLoader.fileURL == nil)
@@ -115,8 +127,7 @@ func issue520DeniedFileGenericLoadFailureStillReconnects() async throws {
     try await f.open()
     try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: f.file.path)
     #expect(throws: (any Error).self) { try FileHandle(forReadingFrom: f.file).close() }
-    f.controller.imageLoadFailed(CocoaError(.fileReadNoPermission))
-    await f.controller.reportFileGrantReadFailure(f.file).value
+    try await f.reconnectAfterDeniedFailure()
     f.clearAssertions()
     #expect(f.window.attachedSheet != nil)
     #expect(sheetText(f.window).contains(String(localized: "Choose this image again to reconnect access.")))
@@ -197,4 +208,24 @@ func issue520CallbackProbeMovedFileFollowsNewLocation() async throws {
     #expect(f.controller.session.imageLoader.presented?.fileURL.standardizedFileURL == moved.standardizedFileURL)
     #expect(f.window.representedURL?.standardizedFileURL == moved.standardizedFileURL)
     #expect(f.window.attachedSheet == nil, "sheet: \(sheetText(f.window))")
+}
+
+// Control the callback replacement order without changing any filesystem outcome.
+// The fixture must return only when the recovery observed by its caller is ready.
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue630DeniedFixtureWaitsForOverlappingFailureRecovery() async throws {
+    for _ in 0..<20 {
+        let f = try Issue520Fixture()
+        defer { f.clean() }
+        try await f.open()
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: f.file.path)
+        #expect(throws: (any Error).self) { try FileHandle(forReadingFrom: f.file).close() }
+        try await f.reconnectAfterDeniedFailure(overlappingCallback: true)
+        f.clearAssertions()
+        #expect(f.window.attachedSheet != nil)
+        #expect(sheetText(f.window).contains(String(localized: "Choose this image again to reconnect access.")))
+        // Drain the actual recovery even when the fixture returned too early, so the
+        // following iteration cannot cancel the operation that demonstrates the race.
+        try await waitUntil { f.window.attachedSheet != nil }
+    }
 }
