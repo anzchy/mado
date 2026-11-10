@@ -73,22 +73,33 @@ for pid in (wanted if wanted is not None else pids()):
 print(json.dumps(dict(complete=True,processes=records,unknown=unknown)))
 `;
 
-export function queryHostProcesses({token,executable,uid=process.getuid(),pids,spawn=spawnSync}={}){
+export function queryHostProcesses({token,executable,uid=process.getuid(),pids,spawn=spawnSync,now=Date.now}={}){
+  const started=now();let run,stage='spawn',reason='OS ownership inspector could not start';
+  const transport=()=>({stage,elapsedMilliseconds:Math.max(0,now()-started),timeoutMilliseconds:1000,
+    status:Number.isInteger(run?.status)?run.status:null,signal:run?.signal??null,
+    errorCode:typeof run?.error?.code==='string'?run.error.code:null,
+    stdoutBytes:Buffer.byteLength(run?.stdout??''),stderrBytes:Buffer.byteLength(run?.stderr??'')});
   try{
-    const run=spawn('/usr/bin/python3',['-c',inspector,JSON.stringify({token,executable,uid,pids})],
+    run=spawn('/usr/bin/python3',['-c',inspector,JSON.stringify({token,executable,uid,pids})],
       {encoding:'utf8',timeout:1000,maxBuffer:4*1024*1024});
-    if(run.error||run.signal||run.status!==0)throw new Error('OS ownership inspection failed');
+    stage='process';reason='OS ownership inspection failed';
+    if(run.error||run.signal||run.status!==0)throw new Error(reason);
+    stage='json';reason='OS ownership response is not JSON';
     const result=JSON.parse(run.stdout);
-    if(result.complete!==true||!Array.isArray(result.processes)||!Array.isArray(result.unknown))throw new Error('incomplete OS ownership response');
-    return result;
-  }catch(error){return {complete:false,processes:[],unknown:[{reason:error.message}]};}
+    stage='schema';reason='incomplete OS ownership response';
+    if(result.complete!==true||!Array.isArray(result.processes)||!Array.isArray(result.unknown))throw new Error(reason);
+    stage='complete';return {...result,transport:transport()};
+  }catch(error){
+    if(stage==='spawn')run={error};
+    return {complete:false,processes:[],unknown:[{reason}],transport:transport()};
+  }
 }
 const same=(a,b)=>a.pid===b.pid&&a.birth===b.birth&&a.uid===b.uid&&a.executable===b.executable&&a.marker===b.marker;
 export function createHostOwnership({token,executable,uid=process.getuid(),query=queryHostProcesses,excludeGroup=()=>undefined,excludePids=[process.pid],
   signal=(pid,name)=>process.kill(pid,name)}={}){
   if(typeof token!=='string'||!token.trim()||typeof executable!=='string'||!path.isAbsolute(executable)||
     realpathSync(executable)!==executable||!Number.isInteger(uid)||uid<0)throw new Error('invalid hosted ownership request');
-  const identities=new Map(),signals=[],problems=[];let current=[],observed=false,complete=false;
+  const identities=new Map(),signals=[],problems=[],queryFailures=[];let current=[],observed=false,complete=false;
   const valid=r=>r&&Number.isInteger(r.pid)&&r.pid>0&&/^\d+:\d+$/.test(r.birth??'')&&
     r.uid===uid&&r.executable===executable&&r.marker===token;
   function inspect(pids){
@@ -96,7 +107,12 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
     const relevantUnknown=Array.isArray(result?.unknown)?result.unknown.filter(problem=>
       !Number.isInteger(problem?.uid)||problem.uid===uid||identities.has(problem.pid)):null;
     complete=result?.complete===true&&Array.isArray(result.processes)&&relevantUnknown!==null&&relevantUnknown.length===0;
-    if(!complete){problems.push('OS ownership query incomplete or unreadable');return null;}
+    if(!complete){
+      problems.push('OS ownership query incomplete or unreadable');
+      if(queryFailures.length<16)queryFailures.push({transport:result?.transport??null,
+        unknown:relevantUnknown?.map(problem=>({pid:problem?.pid??null,reason:typeof problem?.reason==='string'?problem.reason:'unreadable OS identity'}))??[]});
+      return null;
+    }
     const outside=result.processes.filter(record=>record.pgid!==excludeGroup()&&!excludePids.includes(record.pid));
     for(const record of outside){
       const original=identities.get(record.pid);
@@ -123,6 +139,6 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
       }
     },
     snapshot(){return {token,executable,uid,observed,drained:observed&&complete&&current.length===0&&problems.length===0,
-      identities:[...identities.values()],signals:[...signals],unknown:[...problems],live:current.map(r=>r.pid)};}
+      identities:[...identities.values()],signals:[...signals],unknown:[...problems],queryFailures:[...queryFailures],live:current.map(r=>r.pid)};}
   };
 }

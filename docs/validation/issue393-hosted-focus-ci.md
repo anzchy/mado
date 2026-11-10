@@ -86,8 +86,8 @@ signal. Unknown ownership refuses overlap. Real OS fixtures cover deadline,
 leader exit, SIGTERM/SIGINT, a PID-1-adopted orphan, unrelated-token preservation
 and a subsequent iteration after drain. A reproduced interval leak during early
 cancel completion has a regression and fix. Hosted comparison CI first runs a
-controlled cancellation probe using the same worker/supervisor; actual Mado
-token forwarding and cancellation still require CI evidence.
+controlled cancellation probe using the same worker/supervisor. Actual token
+forwarding is established below; owned cancellation still needs CI evidence.
 
 The four requested owner dispatches use a frozen branch head; verify every run's
 `head_sha` equals the final implementation SHA before comparing results:
@@ -101,8 +101,8 @@ gh workflow run ci.yml --repo anzchy/mado --ref ci/393-hosted-focus-tests -f app
 
 Artifacts are named `app-host-comparison-MODE-SCOPE`. They retain build logs,
 repeat/worker timing and provenance, cancellation evidence and hosted raw
-xcresult even when the job fails. No repeated comparison result or overall
-workflow completion is claimed until these native artifacts are validated.
+xcresult even when the job fails. A complete four-part comparison and overall
+workflow completion require all of these native artifacts to be validated.
 
 The local legacy target built successfully after regenerating the project, and
 its real bare-`xctest` runtime proof passed 1/1. A fresh configured full-package
@@ -116,5 +116,44 @@ Fresh coverage auditing stopped at that failed contributing lane. Historical
 The owner explicitly approved a WI-2 WIP commit for CI despite this blocked
 local gate. This permits a reviewable candidate, not a GREEN verdict. CI script
 contracts passed 205/205; TDD script checks passed 281 with zero failures and
-two explicit skips. Actual Mado cancellation/token forwarding, real comparison
-worker execution and the four repeated before/after runs remain pending.
+two explicit skips. These local results do not establish the pending native
+comparison or override the failed unit gate.
+
+
+## First WI-2 CI results at 1730decf
+
+[Legacy focus run 42763854475](https://github.com/anzchy/mado/actions/runs/42763854475)
+completed all 20 iterations successfully through the real frozen worker path.
+The comparison job succeeded; the workflow failed its separate name/Node checks.
+Artifact SHA-256 `1e066c8d849c8ad89ff91894ce7e5397aaf61b92eca983fcab5bc8497806f67d`
+was checked before extraction. Repeats took 528.839 seconds; full comparison job
+elapsed 732 seconds = 12.2 observed runner minutes, not billing. Its reported
+job-start-to-summary window was 717.815 seconds. Every row has status zero,
+unique invocation identity, actual bare-xctest proof and matching baseline hashes.
+This is partial evidence at this WIP SHA, not a completed final-SHA comparison.
+
+[Hosted focus run 42763864720](https://github.com/anzchy/mado/actions/runs/42763864720)
+failed the cancellation bootstrap before starting the requested repeats.
+Artifact SHA-256 `0dd92834f6bcec3e0b052540458754276622b5e08c8d3e481483217c1f6e7588`
+was checked. The actual Mado host PID5714, PPID1, UID501 printed exactly the
+invocation token, proving Xcode forwarding. Seven functions/twelve executions
+passed (Swift Testing root 20.582 seconds), and the worker returned status zero.
+But the supervisor never established a kernel host identity: repeated generic
+query failures, no owned signals, observed=false/drained=false, probe exit70.
+It correctly did not claim cancellation success or start later iterations.
+
+The same first workflow's Node job passed 203/205: one real direct-PID query
+returned incomplete and one escaped-host deadline could not prove drain. Cold
+Python transport exceeding its 1000ms cap is a hypothesis, not a demonstrated
+cause. No query budget, test timeout, retry or cleanup authority was changed.
+A diagnostic follow-up adds only sanitized transport stage/status/signal/OS
+error code/timing/byte counts and bounded failure samples, before existing real
+fixture assertions, for the next CI run to distinguish causes.
+
+The naming failure was four Apple `TEST_RUNNER_` wrappers of the deferred
+`PICSEE_TEST_RUN_TOKEN` tooling protocol. Its fix is an exact occurrence-only
+exception in the four declared CI tooling paths; neighboring live identities,
+foreign paths and near-matches remain rejected. Scanner logic and native
+assertions are unchanged. New RED receipts for this rule and query diagnostics
+held; combined local CI/name checks passed 247/247 and TDD checks 281/0/2 skipped.
+The diagnostic follow-up remains WIP with the same unit and native blockers.
