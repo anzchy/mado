@@ -1,4 +1,5 @@
 import baseTest from 'node:test';
+import {controlledHostClock} from './controlled-host-clock.mjs';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {prepareHostInspector} from '../app-host-inspector.mjs';
 import {queryHostProcesses as emergencyQuery} from '../app-host-ownership.mjs';
@@ -190,7 +191,7 @@ test('true orphan adopted outside worker group is drained while unrelated sentin
   t.diagnostic(JSON.stringify({orphanDrain:result}));
 });
 
-for(const trace of ['first-two-targeted','first-kill-targeted'])test(`real cleanup resumes current phase after ${trace} query failures`,async t=>{
+for(const trace of ['first-two-targeted','first-kill-targeted'])(trace==='first-kill-targeted'?baseTest:test)(`real cleanup resumes current phase after ${trace} query failures`,async t=>{
   const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');
   const {realpathSync}=await import('node:fs');
   const dir=directory(t),token=randomUUID(),executable=realpathSync(process.execPath);
@@ -200,17 +201,27 @@ for(const trace of ['first-two-targeted','first-kill-targeted'])test(`real clean
   t.after(()=>{host.kill('SIGKILL');sentinel.kill('SIGKILL');host.unref();sentinel.unref();});
   await Promise.all([host,sentinel].map(child=>new Promise(resolve=>child.once('message',resolve))));
   const failures=[],actualSignals=[];
+  const clock=trace==='first-kill-targeted'?await controlledHostClock(t):undefined;
+  const timestamp=clock?.now??Date.now;
+  let termEstablished=false,failedKillAfterRequest;
   const hostQuery=options=>{
     const targeted=options.pids?.includes(host.pid),fail=targeted&&(trace==='first-two-targeted'?failures.length<2:
       options.cleanupSignal==='SIGKILL'&&failures.length===0);
-    if(fail){failures.push({phase:options.cleanupSignal,at:Date.now()});
+    if(fail){if(clock){assert.equal(termEstablished,true,'TERM barrier precedes injected KILL failure');failedKillAfterRequest=clock.requests.at(-1).requestId;}failures.push({phase:options.cleanupSignal,at:timestamp()});
       return {complete:false,processes:[],unknown:[{pid:host.pid,reason:'controlled external query unavailable'}],transport:{stage:'process',errorCode:'ETIMEDOUT'}};}
-    return queryHostProcesses(options);
+    return clock?clock.inspector.query(options):queryHostProcesses(options);
   };
-  const hostSignal=(pid,name)=>{actualSignals.push({pid,name,at:Date.now()});process.kill(pid,name);};
-  const result=await runProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],
+  const hostSignal=(pid,name)=>{actualSignals.push({pid,name,at:timestamp()});process.kill(pid,name);
+    if(clock&&name==='SIGKILL'){const fresh=clock.requests.at(-1);
+      assert.equal(fresh.request.cleanupSignal,'SIGKILL');assert.deepEqual(fresh.request.pids,[host.pid]);
+      assert.ok(fresh.requestId>failedKillAfterRequest,'fresh targeted KILL follows failed authorization');
+      assert.equal(clock.inspector.diagnostics.events.some(e=>e.stage==='reply'&&e.requestId===fresh.requestId),true);}
+    if(clock&&name==='SIGTERM'){termEstablished=true;clock.advanceTo(clock.now()+80);}};
+  const pending=(clock?realRunProcessGroup:runProcessGroup)({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],
     env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:executable,MADO_HOST_OWNERSHIP_REQUIRED:'1'},
-    logPath:path.join(dir,'recover.log'),deadline:Date.now()+1000,graceMs:80,drainMs:1000,hostQuery,hostSignal});
+    logPath:path.join(dir,'recover.log'),deadline:timestamp()+1000,graceMs:80,drainMs:1000,hostQuery,hostSignal,
+    ...(clock?{now:clock.now,signal:clock.signal,preparedInspector:clock.inspector,groupQuery:clock.groupQuery,cancelOnHostObserved:true}:{})});
+  const result=clock?await clock.drive(pending):await pending;
   t.diagnostic(JSON.stringify({recoveryTrace:trace,failures,actualSignals,result}));
   assert.equal(failures.length,trace==='first-two-targeted'?2:1,'controlled current-PID failure must occur');
   assert.equal(result.status,70);assert.equal(result.drained,true);assert.equal(result.hostOwnership.drained,true);
@@ -223,8 +234,77 @@ for(const trace of ['first-two-targeted','first-kill-targeted'])test(`real clean
   if(trace==='first-kill-targeted'){
     assert.equal(failures[0].phase,'SIGKILL');assert.equal(failures[0].at>=result.cleanup.graceDeadline,true);
     assert.equal(actualSignals.filter(s=>s.name==='SIGTERM').length,1);
+    assert.equal(clock.maxOutstanding,1);
+    assert.equal(termEstablished,true);
   }
-  const next=await runProcessGroup({command:process.execPath,args:['-e','console.log("after-recovered-drain")'],
+  if(clock)t.mock.restoreAll();
+  const nextPending=(clock?realRunProcessGroup:runProcessGroup)({command:process.execPath,args:['-e','console.log("after-recovered-drain")'],
     logPath:path.join(dir,'next-recover.log'),deadline:Date.now()+2000});
+  const next=await nextPending;
   assert.equal(next.status,0);assert.equal(next.drained,true);assert.match(readFileSync(path.join(dir,'next-recover.log'),'utf8'),/after-recovered-drain/);
+});
+
+baseTest('expired run and cleanup observations discard late replies and drain with zero TERM',async t=>{
+  const {spawn}=await import('node:child_process');const {randomUUID}=await import('node:crypto');
+  const {realpathSync}=await import('node:fs');
+  const dir=directory(t),token=randomUUID(),executable=realpathSync(process.execPath);
+  const launch=marker=>spawn(process.execPath,['-e','process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},1000)'],
+    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:marker},stdio:['ignore','ignore','ignore','ipc']});
+  const host=launch(token),sentinel=launch('unrelated-'+token);
+  t.after(()=>{host.kill('SIGKILL');sentinel.kill('SIGKILL');host.unref();sentinel.unref();});
+  await Promise.all([host,sentinel].map(child=>new Promise(resolve=>child.once('message',resolve))));
+  const clock=await controlledHostClock(t),deadline=clock.now()+1000,actualSignals=[],expired=[];
+  let observations=0;
+  clock.onHeld=async message=>{
+    const stage=expired.length===0?'run':'cleanup',limit=stage==='run'?deadline:deadline+80;
+    if(stage==='run'){
+      assert.equal(message.snapshot.complete,true,'run barrier holds an actual successful OS observation');
+      assert.equal(message.snapshot.processes.some(p=>p.pid===host.pid&&p.marker===token),true);
+    }
+    const count=clock.requests.length;
+    assert.equal(clock.inspector.busy,true);
+    clock.advanceTo(limit);
+    await clock.turn();
+    assert.equal(clock.inspector.busy,true,'logical expiry must retain the physical slot');
+    assert.equal(clock.requests.length,count,'no physical query can be queued behind the held reply');
+    assert.deepEqual(actualSignals,[],'expired evidence cannot authorize any signal');
+    clock.release();await clock.turn();
+    const discarded=clock.inspector.diagnostics.events.find(e=>e.stage==='expired-reply'&&e.requestId===message.requestId);
+    assert.ok(discarded,'matching late reply must be discarded before fresh authorization');
+    expired.push({stage,requestId:message.requestId,limit,discarded});
+  };
+  const hostQuery=options=>{
+    if(!options.pids){observations++;if(observations===2||observations===3)clock.holdNext=true;}
+    if(options.cleanupSignal==='SIGKILL'){
+      assert.equal(expired.length,2,'fresh KILL authorization follows both discarded observations');
+      assert.equal(clock.now()>=deadline+80,true);
+    }
+    return clock.inspector.query(options);
+  };
+  const hostSignal=(pid,name)=>{actualSignals.push({pid,name,at:clock.now()});process.kill(pid,name);};
+  const pending=realRunProcessGroup({command:process.execPath,args:['-e','setInterval(()=>{},1000)'],
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:executable,MADO_HOST_OWNERSHIP_REQUIRED:'1'},
+    logPath:path.join(dir,'expired.log'),deadline,graceMs:80,drainMs:1000,
+    preparedInspector:clock.inspector,now:clock.now,signal:clock.signal,groupQuery:clock.groupQuery,hostQuery,hostSignal});
+  const result=await clock.drive(pending);
+  t.diagnostic(JSON.stringify({expiryTrace:expired,actualSignals,requests:clock.requests,result}));
+  assert.deepEqual(expired.map(e=>e.stage),['run','cleanup']);
+  assert.equal(actualSignals.filter(s=>s.name==='SIGTERM').length,0);
+  assert.equal(actualSignals.filter(s=>s.name==='SIGKILL').length,1);
+  const authorization=clock.requests.find(q=>q.request.cleanupSignal==='SIGKILL');
+  assert.ok(authorization.requestId>expired[1].requestId,'KILL uses a fresh correlated query');
+  assert.deepEqual(authorization.request.pids,[host.pid]);
+  assert.equal(authorization.at>=result.cleanup.graceDeadline,true);
+  assert.equal(clock.maxOutstanding,1);
+  assert.equal(result.status,70);assert.equal(result.drained,true);assert.equal(result.hostOwnership.drained,true);
+  assert.equal(result.hostOwnership.observed,true);assert.deepEqual(result.hostOwnership.unknown,[]);
+  assert.equal(result.cleanup.graceStartedAt,deadline);
+  assert.equal(result.cleanup.graceDeadline-result.cleanup.graceStartedAt,80);
+  assert.equal(result.cleanup.drainDeadline-result.cleanup.graceDeadline,1000);
+  assert.equal(livePids().has(host.pid),false);assert.equal(livePids().has(sentinel.pid),true);
+  t.mock.restoreAll();
+  const next=await realRunProcessGroup({command:process.execPath,args:['-e','console.log("after-expired-drain")'],
+    logPath:path.join(dir,'next-expired.log'),deadline:Date.now()+2000});
+  assert.equal(next.status,0);assert.equal(next.drained,true);
+  assert.match(readFileSync(path.join(dir,'next-expired.log'),'utf8'),/after-expired-drain/);
 });
