@@ -518,13 +518,13 @@ export function runCompleteAppLane(options = {}) {
       if (totals) { count += Number(totals[1]); failed += Number(totals[2]); skipped += Number(totals[3]); }
       if (unhosted !== 0) status = unhosted;
     }
-    if (selected.length && status === 0) {
+    if (selected.length && (status === 0 || status === 1)) {
       record.attempts = Math.max(record.attempts, 1);
       const hosted = runHostedAppLane({...options, env, selected,
         stdout:s => stdout(s.replace(/^hosted-app-lane Tests run:[^\n]*\n/gm, '')), stderr});
       record.groups.hosted = hosted.status;
       count += hosted.count; failed += hosted.failed ?? 0; skipped += hosted.skipped ?? 0;
-      status = hosted.status;
+      if (hosted.status !== 0) status = hosted.status;
     }
     if (status === 0 || status === 1) {
       if (filter !== undefined) stdout(`app-lane filter=${JSON.stringify(filter).slice(1,-1)}\n`);

@@ -1050,3 +1050,67 @@ test('configured App RED setup supplies both groups needed by the combined nativ
   }});
  assert.equal(status,0);assert.match(output,/Tests run: 10, Failures: 0/);
 });
+
+// R3: completed assertion failures retain ownership of the remaining selected group.
+function r3CompletedGroups({retainedStatus=0,hostedStatus=0,retainedOutput,filter}={}) {
+ const directory=mkdtempSync(path.join(tmpdir(),'i393-r3-groups-'));temporaryDirectories.add(directory);
+ const quarantinePath=path.join(directory,'quarantine.json');writeFileSync(quarantinePath,'[]');
+ const destination=path.join(directory,'result.json'),evidencePath=path.join(directory,'attempt.log');
+ let expression;try{expression=filter?new RegExp(filter):null;}catch{}
+ const selectedNames=filter?hostedTestNames.filter(name=>expression?.test('MadoHostedFocusTests.'+name)):hostedTestNames;
+ const transcript=[];let stdout='',stderr='';
+ const retained=retainedOutput??readFileSync(new URL(`./fixtures/swift-${retainedStatus===1?'fail':'pass'}.txt`,import.meta.url),'utf8');
+ const status=runCompleteAppLane({quarantinePath,evidencePath,
+  env:{PICSEE_APP_LANE_NO_RETRY:'1',PICSEE_APP_RESULT_ID:'r3-current',PICSEE_APP_RESULT_PATH:destination,...(filter?{PICSEE_APP_FILTER:filter}:{})},
+  stdout:s=>stdout+=s,stderr:s=>stderr+=s,
+  spawn:(command,args)=>{
+   if(command==='xcrun'&&args[0]==='--show-sdk-platform-path')return result('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform\n');
+   if(args.includes('swiftc'))return result('');
+   if(args.includes('xctest')){transcript.push('unhosted');return {...result(retained),status:retainedStatus===70?1:retainedStatus};}
+   if(args.includes('xcodebuild')){transcript.push('hosted');return {status:hostedStatus===0?0:65,stdout:hostedStatus===0?'** TEST EXECUTE SUCCEEDED **\n':'** TEST EXECUTE FAILED **\n'};}
+   if(args.includes('xcresulttool'))return hostedStatus===70?{status:1,stdout:''}:result(JSON.stringify(args.includes('summary')?
+    i393ProtocolSubset(selectedNames,hostedStatus===1).summary:i393ProtocolSubset(selectedNames,hostedStatus===1).tree));
+   return result(inventory);
+  }});
+ return {status,transcript,stdout,stderr,record:JSON.parse(readFileSync(destination,'utf8')),evidence:existsSync(evidencePath)?readFileSync(evidencePath,'utf8'):null};
+}
+for(const retainedStatus of [0,1])for(const hostedStatus of [0,1])test(`R3 completed retained ${retainedStatus} and hosted ${hostedStatus} conserve both outcomes`,()=>{
+ const h=r3CompletedGroups({retainedStatus,hostedStatus}),failures=retainedStatus+hostedStatus;
+ assert.equal(h.status,failures?1:0,h.stderr);assert.deepEqual(h.transcript,['unhosted','hosted']);
+ assert.deepEqual(h.record.groups,{unhosted:retainedStatus,hosted:hostedStatus});assert.equal(h.record.complete,true);
+ assert.equal(h.record.status,h.status);assert.equal(h.record.attempts,1);assert.equal(h.record.retryEnabled,false);
+ assert.match(h.stdout,new RegExp(`Tests run: 10, Failures: ${failures}, Errors: 0, Skipped: 1`));
+ assert.equal((h.stdout.match(/^Tests run:/gm)??[]).length,1);
+ if(retainedStatus===1){assert.match(h.stdout,/failing\(\) failed/);assert.match(h.stdout,/Expectation failed: 1 == 0/);}
+ if(hostedStatus===1)assert.ok((h.stdout+h.stderr).includes(hostedTestNames[0]),'hosted failing function survives alongside prior retained failure');
+});
+for(const retainedStatus of [0,1])test(`R3 hosted environment failure outranks completed retained ${retainedStatus}`,()=>{
+ const h=r3CompletedGroups({retainedStatus,hostedStatus:70});
+ assert.equal(h.status,70);assert.deepEqual(h.transcript,['unhosted','hosted']);assert.deepEqual(h.record.groups,{unhosted:retainedStatus,hosted:70});
+ assert.equal(h.record.status,70);assert.equal(h.record.complete,true);assert.doesNotMatch(h.stdout,/^Tests run:/m);
+ if(retainedStatus===1)assert.match(h.stdout,/Expectation failed: 1 == 0/);
+});
+for(const [name,retainedOutput] of [
+ ['incomplete','◇ Test run started.\n◇ Test pending() started.\n'],
+ ['crash','error: Process exited with signal 11\n'],
+ ['zero',"Test Suite 'All tests' started at now.\nTest Suite 'All tests' passed at now.\nExecuted 0 tests, with 0 failures (0 unexpected) in 0.001 seconds\n◇ Test run started.\n✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.\n"],
+])test(`R3 retained ${name} environment failure never starts hosted`,()=>{
+ const h=r3CompletedGroups({retainedStatus:70,retainedOutput});assert.equal(h.status,70);
+ assert.deepEqual(h.transcript,['unhosted']);assert.deepEqual(h.record.groups,{unhosted:70});assert.equal(h.record.complete,true);
+ assert.doesNotMatch(h.stdout,/^Tests run:/m);
+});
+test('R3 hosted-only filter runs exactly its selected parameterized function',()=>{
+ const h=r3CompletedGroups({filter:'issue521'});assert.equal(h.status,0,h.stderr);assert.deepEqual(h.transcript,['hosted']);
+ assert.deepEqual(h.record.groups,{hosted:0});assert.match(h.stdout,/Tests run: 1, Failures: 0, Errors: 0, Skipped: 0/);
+});
+test('R3 invalid and unmatched selection cannot claim either group completed',()=>{
+ for(const filter of ['[','no-such-i393-function']){
+  const h=r3CompletedGroups({filter});assert.notEqual(h.status,0);assert.deepEqual(h.transcript,[]);
+  assert.deepEqual(h.record.groups,{});assert.equal(h.record.complete,true);assert.doesNotMatch(h.stdout,/^Tests run:/m);
+ }
+});
+test('R3 retained-only filter preserves exact selected execution without a hosted launch',()=>{
+ const h=r3CompletedGroups({filter:'Probe',retainedOutput:baseline});assert.equal(h.status,0,h.stderr);
+ assert.deepEqual(h.transcript,['unhosted']);assert.deepEqual(h.record.groups,{unhosted:0});
+ assert.match(h.stdout,/Tests run: 7, Failures: 0, Errors: 0, Skipped: 0/);
+});
