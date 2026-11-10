@@ -79,6 +79,16 @@ targets:
           - Info.plist
           - Resources
       - path: AppTests
+        excludes:
+          - HostedAppProofTests.swift
+          - Issue521CanvasToolFocusTests.swift
+          - Issue521NativePanRunner.swift
+          - Issue527CanvasFocusTests.swift
+          - Issue527InspectorFocusTests.swift
+          - Issue527InactiveWindowTests.swift
+          - Retry442Tests.swift
+          - KeyWindowFixture.swift
+          - KeyWindowFixtureTests.swift
     dependencies:
       - package: MadoKit
         product: MadoCore
@@ -93,6 +103,38 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
+        CODE_SIGNING_ALLOWED: NO
+  MadoHostedFocusTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AppTests/HostedAppProofTests.swift
+      - path: AppTests/Issue521CanvasToolFocusTests.swift
+      - path: AppTests/Issue527CanvasFocusTests.swift
+      - path: AppTests/Issue527InspectorFocusTests.swift
+      - path: AppTests/Issue527InactiveWindowTests.swift
+      - path: AppTests/Retry442Tests.swift
+      - path: AppTests/KeyWindowFixture.swift
+      - path: AppTests/KeyWindowFixtureTests.swift
+      - path: AppTests/ConditionWait.swift
+      - path: AppTests/ConditionWaitState.swift
+    dependencies:
+      - target: MadoApp
+      - package: MadoKit
+        product: MadoCore
+      - package: MadoKit
+        product: MadoApplication
+      - package: MadoKit
+        product: MadoInfrastructure
+      - package: MadoKit
+        product: MadoMacUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.hosted-focus-tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Mado.app/Contents/MacOS/Mado
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_TARGET_NAME: MadoApp
         CODE_SIGNING_ALLOWED: NO
   MadoUITests:
     type: bundle.ui-testing
@@ -118,8 +160,12 @@ schemes:
       targets:
         MadoApp: all
     test:
+      environmentVariables:
+        SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1"
       targets:
         - MadoAppTests
+        - name: MadoHostedFocusTests
+          parallelizable: false
     run:
       config: Debug
   MadoFixtureUI:
@@ -130,5 +176,17 @@ schemes:
     test:
       targets:
         - MadoUITests
+    run:
+      config: Debug
+  MadoHostedFocus:
+    build:
+      targets:
+        MadoApp: all
+    test:
+      environmentVariables:
+        SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1"
+      targets:
+        - name: MadoHostedFocusTests
+          parallelizable: false
     run:
       config: Debug

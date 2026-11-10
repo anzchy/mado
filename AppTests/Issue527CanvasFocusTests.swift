@@ -1,4 +1,5 @@
 import AppKit
+@testable import Mado
 import Observation
 import Testing
 import MadoCore
@@ -79,7 +80,7 @@ import MadoMacUI
     }
     func layout() { window.contentView?.layoutSubtreeIfNeeded(); window.update() }
     func wait(_ condition: () -> Bool) async throws {
-        try await MadoAppTests.waitUntil(between: { self.layout() }, condition)
+        try await MadoHostedFocusTests.waitUntil(between: { self.layout() }, condition)
     }
     func focusTool() throws -> ChromeToolView {
         let tool = try #require(overlay.tools.first { $0.accessibilityIdentifier() == "chrome.returnToGrid.button" })
@@ -109,19 +110,11 @@ import MadoMacUI
     }
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] != "1"),
-      .timeLimit(.minutes(3))) @MainActor
-func issue527NonCanvasPressesPassInIsolatedProcess() async throws {
-    try await issue521RunNativeTest(filter: "issue527NonCanvasPressPreservesFocusAndImage\\b",
-        summary: "Test issue527NonCanvasPressPreservesFocusAndImage(target:) with 4 test cases passed")
-}
-
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(3)), arguments: ["inspector", "sidebar", "chromeGap", "overlay"]) @MainActor
+@Test(.timeLimit(.minutes(3)), arguments: ["inspector", "sidebar", "chromeGap", "overlay"]) @MainActor
 func issue527NonCanvasPressPreservesFocusAndImage(target: String) async throws {
     let scene = try Issue527Scene()
     defer { scene.close() }
-    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
+    // Reserve 15 s for key acquisition within this test's existing limit.
     try await scene.open(keyWindowTimeout: .seconds(180) / 12)
     let content = try #require(scene.window.contentView)
     var addedOverlay: NSView?

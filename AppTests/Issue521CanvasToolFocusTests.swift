@@ -1,4 +1,5 @@
 import AppKit
+@testable import Mado
 import Testing
 import MadoCore
 import MadoApplication
@@ -38,8 +39,7 @@ import MadoMacUI
     return CGPoint(x: minX, y: minY)
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_ISSUE521_NATIVE_CHILD"] == "1"),
-      .timeLimit(.minutes(3)), arguments: [0, 1, 2]) @MainActor
+@Test(.timeLimit(.minutes(3)), arguments: [0, 1, 2]) @MainActor
 func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async throws {
     _ = NSApplication.shared
     _ = NSApp.setActivationPolicy(.regular)
@@ -73,13 +73,13 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     defer { window.close() }
     window.setContentSize(NSSize(width: 800, height: 500))
     controller.showWindow(nil)
-    // Allow 15 s for key acquisition; the parent's shared 150 s deadline also covers swiftc.
+    // Reserve 15 s for key acquisition within this test's existing limit.
     try makeFixtureWindowKey(window, timeout: .seconds(180) / 12)
     try #require(window.isKeyWindow, "native mouse dispatch requires the fixture window to be key")
     controller.openGrantedFolder(folder)
-    try await MadoAppTests.waitUntil(between: { window.update() }) { controller.gridSearchAvailable }
+    try await MadoHostedFocusTests.waitUntil(between: { window.update() }) { controller.gridSearchAvailable }
     try #require(controller.route(.preview, from: .key))
-    try await MadoAppTests.waitUntil(between: { window.update() }) {
+    try await MadoHostedFocusTests.waitUntil(between: { window.update() }) {
         controller.session.mode == .viewing && controller.hasImage && controller.session.imageLoader.phase == .settled
     }
     let canvas = try #require(issue521Find(CanvasView.self, in: window.contentView))
@@ -87,7 +87,7 @@ func issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount: Int) async thr
     try #require(!canvas.isHiddenOrHasHiddenAncestor)
     try #require(window.firstResponder === canvas)
     try #require(controller.route(.actualPixels, from: .key))
-    try await MadoAppTests.waitUntil(between: { window.update() }) { controller.session.imageLoader.phase == .settled }
+    try await MadoHostedFocusTests.waitUntil(between: { window.update() }) { controller.session.imageLoader.phase == .settled }
     window.contentView?.layoutSubtreeIfNeeded()
     try #require(controller.session.zoomMode == .actualPixels)
     try #require(2400 / window.backingScaleFactor > canvas.bounds.width + 100)

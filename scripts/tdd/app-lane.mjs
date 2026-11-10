@@ -9,6 +9,7 @@ import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 import { knownFlaky } from "../ci/known-flaky.mjs";
+import { hostedTestNames, hostedTestIDs, runHostedAppLane } from "./hosted-app-lane.mjs";
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
 const bundle = ".build/dd-ci/Build/Products/Debug/MadoAppTests.xctest";
@@ -365,7 +366,9 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
 function runAppLaneBody({ spawn = spawnSync, env = process.env, argv = [], recordAttempt = () => {},
-  evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile, bundlePath = bundle, stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
+  evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile,
+  derivedDataPath = env.PICSEE_APP_DERIVED_DATA_PATH ?? '.build/dd-ci',
+  bundlePath = path.join(derivedDataPath, 'Build/Products/Debug/MadoAppTests.xctest'), stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
   const filter = argv[0] ?? env.PICSEE_APP_FILTER;
   let expression;
   try {
@@ -464,4 +467,71 @@ export function runAppLane(options = {}) {
   catch (error) { errorOut(`app-lane: cannot finalize structured result evidence: ${error.message}\n`); return 70; }
   return status;
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runAppLane({ argv: process.argv.slice(2) });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runCompleteAppLane({ argv: process.argv.slice(2) });
+
+/** Combined public CLI lane: retained tests plus focused hosted integration tests. */
+export function runCompleteAppLane(options = {}) {
+  const env = options.env ?? process.env;
+  const stdout = options.stdout ?? (s => process.stdout.write(s));
+  const stderr = options.stderr ?? (s => process.stderr.write(s));
+  const spawn = options.spawn ?? spawnSync;
+  const filter = options.argv?.[0] ?? env.PICSEE_APP_FILTER;
+  const derivedDataPath = options.derivedDataPath ?? env.PICSEE_APP_DERIVED_DATA_PATH ?? '.build/dd-ci';
+  const bundlePath = options.bundlePath ?? path.join(derivedDataPath, 'Build/Products/Debug/MadoAppTests.xctest');
+  const record = { version: 1, runId: env.PICSEE_APP_RESULT_ID ?? '', complete: false,
+    attempts: 0, status: null, filter: filter ?? null, retryEnabled: env.PICSEE_APP_LANE_NO_RETRY !== '1',
+    defaultQuarantine: path.resolve(options.quarantinePath ?? quarantineFile) === path.resolve(quarantineFile),
+    groups: {} };
+  const save = () => {
+    if (!env.PICSEE_APP_RESULT_PATH) return;
+    mkdirSync(path.dirname(env.PICSEE_APP_RESULT_PATH), {recursive:true});
+    writeFileSync(env.PICSEE_APP_RESULT_PATH, JSON.stringify(record) + '\n');
+  };
+  let status = 70, count = 0, failed = 0, skipped = 0;
+  try {
+    save();
+    if ((options.argv?.length ?? 0) > 1 || (filter !== undefined && !filter.trim()))
+      throw Object.assign(new Error('expected one nonblank filter'), {appUsage:true});
+    let expression;
+    try { expression = filter === undefined ? null : new RegExp(filter); }
+    catch (error) { error.appUsage = true; throw error; }
+    const selected = hostedTestNames.filter((name, index) => !expression || expression.test(hostedTestIDs[index]));
+    let retained = true;
+    if (expression) {
+      const inventory = discoverInventory(spawn, env, bundlePath);
+      retained = inventory.some(row => expression.test(row.id));
+      if (!retained && !selected.length) throw new Error('filter has no matching runnable tests');
+    }
+    // Validate quarantine even when only hosted tests match. Migrated tests are not
+    // silently excluded: their quarantine requires an explicit hosted policy later.
+    const quarantine = loadQuarantine(options.quarantinePath ?? quarantineFile);
+    if (!retained && quarantine.length) throw new Error('hosted-only selection does not support an unvalidated quarantine');
+    status = 0;
+    if (retained) {
+      const childEnv = {...env}; delete childEnv.PICSEE_APP_RESULT_PATH;
+      let output = '';
+      const unhosted = runAppLane({...options, env:childEnv, bundlePath,
+        recordAttempt:() => {record.attempts++;}, stdout:s => {output += s; stdout(s.replace(/^Tests run:.*\n/gm,''));}});
+      record.groups.unhosted = unhosted;
+      const totals = /Tests run: (\d+), Failures: (\d+), Errors: 0, Skipped: (\d+)/.exec(output);
+      if (totals) { count += Number(totals[1]); failed += Number(totals[2]); skipped += Number(totals[3]); }
+      if (unhosted !== 0) status = unhosted;
+    }
+    if (selected.length && status === 0) {
+      record.attempts = Math.max(record.attempts, 1);
+      const hosted = runHostedAppLane({...options, env, selected, stdout, stderr});
+      record.groups.hosted = hosted.status;
+      count += hosted.count; failed += hosted.failed ?? 0; skipped += hosted.skipped ?? 0;
+      status = hosted.status;
+    }
+    if (status === 0 || status === 1) {
+      if (filter !== undefined) stdout(`app-lane filter=${JSON.stringify(filter).slice(1,-1)}\n`);
+      stdout(`Tests run: ${count}, Failures: ${failed}, Errors: 0, Skipped: ${skipped}\n`);
+    }
+  } catch (error) {
+    stderr(`${error.appUsage ? 'usage: node scripts/tdd/app-lane.mjs [filter]' : 'app-lane combined'}: ${error.message}\n`); status = error.appUsage ? 64 : 70;
+  }
+  record.complete = true; record.status = status;
+  try { save(); } catch (error) {stderr(`app-lane: cannot save combined evidence: ${error.message}\n`); return 70;}
+  return status;
+}
