@@ -1,4 +1,44 @@
 /** Exact invocation ownership for App hosts launched outside xcodebuild's process group. */
+export function createAsyncHostOwnership({query,now=Date.now,...options}={}){
+  if(typeof query!=='function')throw new Error('async ownership requires a prepared OS query');
+  let busy=false,fresh;
+  // The same policy consumes exactly one freshly awaited reply. It never queries
+  // the compatibility cold inspector, queues work, or reuses a prior reply.
+  const state=createHostOwnership({...options,now,query:request=>{
+    if(!fresh||JSON.stringify(request.pids)!==JSON.stringify(fresh.pids))return {complete:false,processes:[],unknown:[{reason:'no current observation'}]};
+    const result=fresh.result;fresh=null;return result;
+  }});
+  const request=async(pids,operation,cleanupSignal)=>{
+    const notAfter=operation.notAfter??Infinity;
+    if(now()>=notAfter)return {complete:false,processes:[],unknown:[{reason:'ownership phase expired'}]};
+    try{return await query({token:options.token,executable:options.executable,uid:options.uid??process.getuid(),pids,
+      cleanupSignal,notAfter});}
+    catch{return {complete:false,processes:[],unknown:[{reason:'OS observation unavailable'}]};}
+  };
+  return {
+    snapshot:()=>({...state.snapshot(),drained:!busy&&state.snapshot().drained}),
+    async observe(operation={}){
+      if(busy)return;busy=true;state.invalidateCurrent('pending');
+      try{
+        const result=await request(undefined,operation);
+        if(operation.isCurrent&&!operation.isCurrent()){state.invalidateCurrent('superseded');return;}
+        if(result.complete&&now()>=(operation.notAfter??Infinity)){state.invalidateCurrent('expired');return;}
+        fresh={pids:undefined,result};state.observe();
+      }finally{fresh=null;busy=false;}
+    },
+    async signalOwned(name,operation={}){
+      if(busy)return;busy=true;
+      try{
+        for(const identity of state.snapshot().identities){
+          if(state.snapshot().unknown.length)break;
+          const result=await request([identity.pid],operation,name);
+          if(operation.isCurrent&&!operation.isCurrent()){state.invalidateCurrent('superseded');return;}
+          fresh={pids:[identity.pid],result};state.signalOwned(name,{notAfter:operation.notAfter??Infinity,onlyPid:identity.pid});
+        }
+      }finally{fresh=null;busy=false;}
+    }
+  };
+}
 import {spawnSync} from 'node:child_process';
 import {realpathSync} from 'node:fs';
 import path from 'node:path';
@@ -95,13 +135,28 @@ export function queryHostProcesses({token,executable,uid=process.getuid(),pids,s
   }
 }
 const same=(a,b)=>a.pid===b.pid&&a.birth===b.birth&&a.uid===b.uid&&a.executable===b.executable&&a.marker===b.marker;
+const identityKeys=['pid','birth','uid','executable','marker','ppid','pgid'];
+const copyIdentity=record=>Object.fromEntries(identityKeys.map(key=>[key,record[key]]));
+const codes=new Set(['ETIMEDOUT','ENOENT','EACCES','EPERM','ENOBUFS','ESRCH','EPIPE','ECONNRESET','ECANCELED','ERR_CHILD_PROCESS_STDIO_MAXBUFFER','ABORT_ERR']);
+const stages=new Set(['spawn','process','json','schema','complete','busy','protocol','timeout','expired','closed','overflow','deadline','cancelled','superseded']);
+function transportFacts(value){
+  if(!value||typeof value!=='object')return null;const result={};
+  for(const key of ['status','elapsedMilliseconds','timeoutMilliseconds','physicalTimeoutMilliseconds','stdoutBytes','stderrBytes','processingMilliseconds','requestId'])
+    if(Object.hasOwn(value,key)&&(value[key]===null||Number.isFinite(value[key])))result[key]=value[key];
+  if(Object.hasOwn(value,'stage'))result.stage=stages.has(value.stage)?value.stage:'unknown';
+  if(Object.hasOwn(value,'errorCode'))result.errorCode=value.errorCode===null?null:codes.has(value.errorCode)?value.errorCode:'UNKNOWN';
+  for(const key of ['signal','cleanupSignal'])if(Object.hasOwn(value,key))
+    result[key]=value[key]===null?null:['SIGTERM','SIGKILL','SIGINT','SIGHUP','SIGQUIT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE','SIGILL'].includes(value[key])?value[key]:'UNKNOWN';
+  if(typeof value.generation==='string'&&/^[a-zA-Z0-9_.:-]{1,256}$/.test(value.generation))result.generation=value.generation;
+  return result;
+}
 export function createHostOwnership({token,executable,uid=process.getuid(),query=queryHostProcesses,excludeGroup=()=>undefined,excludePids=[process.pid],now=Date.now,
   signal=(pid,name)=>process.kill(pid,name)}={}){
   if(typeof token!=='string'||!token.trim()||typeof executable!=='string'||!path.isAbsolute(executable)||
     realpathSync(executable)!==executable||!Number.isInteger(uid)||uid<0)throw new Error('invalid hosted ownership request');
-  const identities=new Map(),signals=[],problems=[],queryFailures=[];let current=[],observed=false,registrationCurrent=false;
-  const valid=r=>r&&Number.isInteger(r.pid)&&r.pid>0&&/^\d+:\d+$/.test(r.birth??'')&&
-    r.uid===uid&&r.executable===executable&&r.marker===token;
+  const identities=new Map(),signals=[],problems=[],queryFailures=[];let current=[],observed=false,registrationCurrent=false,uncertainty=null;
+  const valid=r=>r&&Number.isInteger(r.pid)&&r.pid>0&&typeof r.birth==='string'&&/^\d+:\d+$/.test(r.birth)&&
+    r.uid===uid&&r.executable===executable&&r.marker===token&&Number.isInteger(r.ppid)&&r.ppid>=0&&Number.isInteger(r.pgid)&&r.pgid>0;
   function inspect(pids,cleanupSignal){
     let result;try{result=query({token,executable,uid,pids,cleanupSignal});}catch(error){result={complete:false,processes:[],unknown:[error.message]};}
     const relevantUnknown=Array.isArray(result?.unknown)?result.unknown.filter(problem=>
@@ -112,9 +167,9 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
     }
     const complete=result?.complete===true&&Array.isArray(result.processes)&&relevantUnknown!==null&&relevantUnknown.length===0;
     if(!complete){
-      registrationCurrent=false;
-      if(queryFailures.length<16)queryFailures.push({transport:result?.transport??null,
-        unknown:relevantUnknown?.map(problem=>({pid:problem?.pid??null,reason:typeof problem?.reason==='string'?problem.reason:'unreadable OS identity'}))??[]});
+      registrationCurrent=false;uncertainty='OS ownership query incomplete or unreadable';
+      if(queryFailures.length<16)queryFailures.push({transport:transportFacts(result?.transport),
+        unknown:relevantUnknown?.map(problem=>({pid:Number.isInteger(problem?.pid)?problem.pid:null,reason:'OS identity unavailable'}))??[]});
       return null;
     }
     const outside=result.processes.filter(record=>record.pgid!==excludeGroup()&&!excludePids.includes(record.pid));
@@ -126,14 +181,16 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
     return outside;
   }
   return {
+    invalidateCurrent(kind){registrationCurrent=false;uncertainty=kind==='expired'?'ownership observation expired':kind==='superseded'?'ownership observation superseded':'ownership observation pending';},
     observe(){
       const records=inspect();if(records===null)return;
-      registrationCurrent=true;
+      registrationCurrent=true;uncertainty=null;
       current=records.filter(valid);
-      for(const record of current){if(!identities.has(record.pid))identities.set(record.pid,{...record});observed=true;}
+      for(const record of current){if(!identities.has(record.pid))identities.set(record.pid,copyIdentity(record));observed=true;}
     },
-    signalOwned(name,{notAfter=Infinity}={}){
+    signalOwned(name,{notAfter=Infinity,onlyPid}={}){
       for(const original of identities.values()){
+        if(onlyPid!==undefined&&original.pid!==onlyPid)continue;
         if(!registrationCurrent||problems.length)break;
         // Re-query immediately before each signal; a prior observation never authorizes PID reuse.
         const records=inspect([original.pid],name);if(records===null)continue;
@@ -143,10 +200,10 @@ export function createHostOwnership({token,executable,uid=process.getuid(),query
         current=[...current.filter(record=>record.pid!==actual.pid),actual];
         if(now()>=notAfter)continue;
         try{signal(actual.pid,name);signals.push({pid:actual.pid,birth:actual.birth,signal:name});}
-        catch(error){if(error.code!=='ESRCH')problems.push(`cannot signal owned PID ${actual.pid}: ${error.message}`);}
+        catch(error){if(error.code!=='ESRCH')problems.push(`cannot signal owned PID ${actual.pid}: ${codes.has(error.code)?error.code:'UNKNOWN'}`);}
       }
     },
     snapshot(){return {token,executable,uid,observed,drained:observed&&registrationCurrent&&current.length===0&&problems.length===0,
-      identities:[...identities.values()],signals:[...signals],unknown:[...problems,...(!registrationCurrent&&queryFailures.length?['OS ownership query incomplete or unreadable']:[])],queryFailures:[...queryFailures],live:current.map(r=>r.pid)};}
+      identities:[...identities.values()],signals:[...signals],unknown:[...problems,...(!registrationCurrent&&uncertainty?[uncertainty]:[])],queryFailures:[...queryFailures],live:current.map(r=>r.pid)};}
   };
 }

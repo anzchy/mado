@@ -207,3 +207,95 @@ the exact configured command without filtering or changing package sources.
 Fresh LCOV reports 16701/16701 lines/statements and 3212/3212 functions; branches
 are not measured (configured threshold zero). All four native comparisons must
 run again at the same corrected SHA before WI-2 can be complete.
+
+## Second WI-2 CI results at d810b12c
+
+All four runs independently match full SHA
+`d810b12c01328de83c486bff21ef18bfb1441772`, workflow_dispatch, attempt 1,
+macos-26. Legacy focus run42778838008 completed20/20: repeated supervision
+467.766s, complete comparison job590s=9.8333 observed runner minutes. Legacy
+full run42778866027 completed4PASS/1FAIL, iteration02 #454; repeated supervision
+902.764s, complete job1128s=18.8 observed minutes. The real Debug App prerequisite
+worked. The #454 failure remains baseline data, without a retry.
+
+Hosted focus run42778851885 failed cancellation before repeats: native tests
+passed, but the observer never registered the host. Hosted full run42778879453
+registered its actual host and finally proved drain, but recorded no direct
+host signal. Both probes correctly returned70. Complete comparison jobs took
+208s and215s respectively; these are elapsed time, not billing. All four
+required Package Node jobs failed real-kernel timing probes; Walking skeleton
+failed as a consequence. Naming checks no longer failed.
+
+The new diagnostics prove repeated1000ms transport expiration with SIGTERM,
+ETIMEDOUT and zero output. They do not distinguish Python startup, imports,
+enumeration or kernel calls. A local controlled sitecustomize delay reproduces
+this startup dependency, but does not prove that hook exists on CI. Local
+isolated starts were slower, so isolation is not described as a measured speed
+improvement. The concrete design defect is executing repeated synchronous
+interpreter launches on the supervisor thread, where one query's cap exceeds
+the250ms grace and consumes most1500ms drain. A second race kills the worker/Xcode
+session before trying a direct host signal; a coupled host may exit first.
+
+The owner approved preserving the real process assertions in a distinct
+**Host ownership integration** step on all four comparison dispatches. Required
+Package Node tests retain deterministic identity, protocol, deadline and cleanup
+ordering cases. Actual App cancellation remains required. The R2 design prepares
+one isolated inspector before the worker under the existing absolute deadline,
+uses asynchronous correlated queries capped by1000ms and remaining phase time,
+and signals a freshly verified owned host before tearing down its control group.
+No query cap or App time-limit policy increase is proposed.
+
+R2 implementation began only after two genuine official REDs: CI integration
+step8/35 failed and prepared-inspector/supervisor54/69 failed. Compiling fail
+stubs and documentation were present at record time and remain disclosed.
+One new recorded coupled-process assertion incorrectly demanded a worker
+SIGTERM handler journal, excluding valid KILL and handler-scheduling outcomes.
+The owner explicitly approved replacing that oracle with the real external
+group-signal call journal, still requiring a verified direct-host signal before
+any control-group teardown. Original REDs remain immutable; any BROKEN verdict
+will be retained as this accepted exception. All160preexisting assertion
+statements remain unchanged through the approved lane relocation.
+
+The corrected R2 source passed79/79 targeted cases and an independent official
+verification rerun. The actual short-budget failure was reproduced before its
+fix: a global query with8ms of logical time remaining needed22–23ms of processing;
+terminal expiry killed the healthy inspector. Logical expiry now rejects that
+reply's authority while retaining one physical busy slot. Its matching late
+reply is discarded, then a fresh request can proceed. The original physical
+start+1000ms hard deadline is never extended. Three strict birth-type cases and
+this recovery case produced4/4 focused assertion failures before those fixes;
+six privacy/stale-drain cases likewise failed before their fixes.
+
+Full local CI validation acquired the shared lock normally at12:08:25 UTC on
+2026-11-10. Every complete command group passed: portable device17, Agent
+tooling777 plus2explicit skips, Package CI257, macOS device3, names44, release181,
+and real Host ownership integration19. Across those seven CI command executions:
+1298 passed, zero failed, two skipped. Complete logs and records are in
+`.build/i393-r2-node/`; the report distinguishes repeated command executions
+from unique test identities.
+
+The exact configured unfiltered package command then passed1787 tests in43
+suites with2known issues, native root119.357s. Subject plus fresh coverage
+generation took122.035s, ending12:13:28 UTC. Current LCOV reports147 files,
+16701/16701 lines/statements and3212/3212 functions; branches are unmeasured with
+configured threshold0. Node/App coverage remains unconfigured. Earlier local
+unit failure and its successful R1 retry remain historical evidence; this R2
+run is a separate fresh verification, not another retry or a reused report.
+
+The CI-step lane also passes35/35. Its helpers needed two real runner fixes:
+remove inherited NODE_TEST_CONTEXT from a new runner, and use a genuine empty
+shard plus interruption of the fixture's own runner for zero/crash outcomes.
+The actual unchanged strict wrapper returns0/1/70/70 for pass/fail/zero/crash.
+Independent statement audit preserves all86original CI assertions exactly and
+adds2stronger report checks. Its official receipt nevertheless retains BROKEN
+and a High finding because it fingerprints all recorded lines, including the
+changed non-assert helpers. This finding is retained for final review; the
+coupled-oracle approval does not cover this second file. No receipt was reset
+or re-recorded to hide either verdict, and no overall workflow GREEN is claimed.
+
+After the complete local gates and formal review, the owner separately
+accepted this CI helper recorded-line exception (「接受此分离例外」). Both current
+official BROKEN verdicts and High findings remain intact; review records the
+two explicit acceptances rather than rewriting separation history. The fresh
+coverage audit passes100% package lines/functions/statements. Actual corrected-
+SHA App cancellation and four native comparison waves remain outstanding.

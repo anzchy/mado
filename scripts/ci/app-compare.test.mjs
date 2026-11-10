@@ -6,6 +6,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runAppRepeat} from './app-repeat.mjs';
 import * as worker from './app-repeat-worker.mjs';
+import {spawnSync} from 'node:child_process';
+import {mkdirSync} from 'node:fs';
 
 const moduleURL=new URL('./app-compare.mjs',import.meta.url);
 const comparison=existsSync(moduleURL)?await import(moduleURL.href):{};
@@ -19,6 +21,52 @@ const wrappers=[
   'retry442NativeKeyboardMatrixPassesInIsolatedProcess()',
 ];
 const proof='issue393LegacyRuntimeProof()';
+
+// Owner-approved real-OS lane placement must execute the actual strict runner,
+// propagate its status and retain its report for every comparison mode.
+for(const mode of ['legacy','hosted'])for(const outcome of ['pass','fail','zero','crash'])
+test(`ownership integration ${mode} step preserves ${outcome} runner outcome and report`,t=>{
+  const yaml=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
+  const job=yaml.slice(yaml.indexOf('\n  app-host-comparison:'));
+  assert.match(job,/^    if: github\.event_name == 'workflow_dispatch' && inputs\.app_compare_mode != 'none' && !inputs\.app_tests$/m,
+    'comparison routing accepts both legacy and hosted dispatches');
+  const block=/      - name: Host ownership integration\n([\s\S]*?)(?=\n      - name:|$)/.exec(job)?.[1];
+  assert.ok(block,'every comparison must have a distinct real ownership integration step');
+  assert.doesNotMatch(block,/\bif:|continue-on-error|\|\|\s*true/,'integration cannot be conditional or permissive');
+  const command=/^        run: (.+)$/m.exec(block)?.[1];
+  assert.ok(command,'the integration step has an executable command');
+  assert.ok(job.indexOf('name: Build comparison mechanism')<job.indexOf('name: Host ownership integration'));
+  assert.ok(job.indexOf('name: Host ownership integration')<job.indexOf('name: Verify hosted cancellation ownership'));
+  const upload=job.slice(job.indexOf('name: Upload App host comparison'));
+  assert.match(upload,/if: always\(\)/);assert.match(upload,/\.build\/host-ownership-integration\.tap/);
+  const dir=mkdtempSync(path.join(tmpdir(),'i393-integration-step-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  for(const d of ['.build','scripts/tdd','scripts/ci/integration'])mkdirSync(path.join(dir,d),{recursive:true});
+  writeFileSync(path.join(dir,'scripts/tdd/node-lane.mjs'),readFileSync(path.join(root,'scripts/tdd/node-lane.mjs')));
+  writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
+    `import test from 'node:test';import assert from 'node:assert/strict';test('external integration fixture',()=>assert.equal(1,${outcome==='fail'?2:1}));\n`);
+  if(outcome==='crash')writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
+    'process.kill(process.ppid,"SIGTERM");process.exit(0);\n'); // Interrupt only this fixture's own test-runner parent.
+  const env={...process.env,APP_COMPARE_MODE:mode};delete env.NODE_OPTIONS;
+  delete env.NODE_TEST_CONTEXT; // This subprocess is a new runner, not an outer test worker.
+  if(outcome==='zero'){
+    // An empty shard produces a genuine zero-test root. An empty test file
+    // can count as one file-level test, and test-worker preloads run too late.
+    const hook=path.join(dir,'runner-outcome.mjs');
+    writeFileSync(hook,"if(process.argv[1]?.endsWith('node-lane.mjs'))process.argv.splice(2,0,'--test-shard=2/2');\n");
+    env.NODE_OPTIONS=`--import=${hook}`;
+  }
+  const run=spawnSync('/bin/sh',['-c',command],{cwd:dir,env,encoding:'utf8',timeout:10000});
+  assert.equal(run.error,undefined);assert.equal(run.signal,null);
+  assert.equal(run.status,outcome==='pass'?0:outcome==='fail'?1:70);
+  const report=readFileSync(path.join(dir,'.build/host-ownership-integration.tap'),'utf8');
+  if(outcome==='pass'||outcome==='fail'){
+    assert.match(report,/Tests run: 1, Failures: [01], Errors: 0, Skipped: 0/);
+    assert.match(report,outcome==='pass'?/Failures: 0/:/Failures: 1/);
+  }else assert.match(report,/node-lane: no reliable completed test result; environment failure/);
+  if(outcome==='zero')assert.match(report,/^# tests 0$/m,'the zero fixture must reach the actual runner boundary');
+  if(outcome==='crash')assert.doesNotMatch(report,/^# tests \d+$/m,'the interrupted runner must not claim a completed root');
+});
 const baseline=readFileSync(new URL('../tdd/fixtures/i411-baseline.txt',import.meta.url),'utf8');
 const hostedSummary=readFileSync(new URL('../tdd/fixtures/i393-hosted/summary.json',import.meta.url),'utf8');
 const hostedTests=readFileSync(new URL('../tdd/fixtures/i393-hosted/tests.json',import.meta.url),'utf8');

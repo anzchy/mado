@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {realpathSync} from 'node:fs';
-import {queryHostProcesses,createHostOwnership} from './app-host-ownership.mjs';
+import {queryHostProcesses,createHostOwnership,createAsyncHostOwnership} from './app-host-ownership.mjs';
 
 const executable=realpathSync(process.execPath),uid=process.getuid();
 const identity=(overrides={})=>({pid:12345,birth:'100:123456',uid,executable,marker:'invocation-A',ppid:1,pgid:12345,...overrides});
@@ -39,19 +39,7 @@ test('same executable sentinel with another marker remains untouched throughout 
   assert.deepEqual(h.signals,[{pid:12345,name:'SIGTERM'},{pid:12345,name:'SIGKILL'}]);
   h.set([sentinel]);h.tracker.observe();assert.equal(h.tracker.snapshot().drained,true);
 });
-test('real kernel query observes escaped process birth uid executable and actual environment marker',async t=>{
-  const token=randomUUID();
-  const host=spawn(process.execPath,['-e','process.send("ready");setInterval(()=>{},1000)'],
-    {detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:token},stdio:['ignore','ignore','ignore','ipc']});
-  t.after(()=>{host.kill('SIGKILL');host.unref();});
-  await new Promise(resolve=>host.once('message',resolve));
-  const snapshot=queryHostProcesses({token,executable,uid,pids:[host.pid]});
-  t.diagnostic(JSON.stringify({kernelQuery:snapshot}));
-  assert.equal(snapshot.complete,true);assert.equal(snapshot.processes.length,1);
-  const actual=snapshot.processes[0];assert.equal(actual.pid,host.pid);assert.equal(actual.uid,uid);
-  t.diagnostic(JSON.stringify({kernelHost:actual}));
-  assert.equal(actual.executable,executable);assert.equal(actual.marker,token);assert.match(actual.birth,/^\d+:\d+$/);
-});
+
 
 test('PID birth changed between TERM and KILL is never signaled again',()=>{
   const h=harness();h.tracker.observe();h.tracker.signalOwned('SIGTERM');
@@ -166,4 +154,102 @@ test('TERM authorization that crosses the fixed grace boundary does not send an 
   tracker.observe();tracker.signalOwned('SIGTERM',{notAfter:80});
   assert.deepEqual(signals,[],'the current PID query finished after TERM phase ended');
   tracker.signalOwned('SIGKILL');assert.deepEqual(signals,[{pid:12345,name:'SIGKILL'}]);
+});
+
+test('async authority preserves exact identity mutations, recovery history and global drain semantics',async()=>{
+  for(const change of [{birth:'100:2'},{uid:uid+1},{executable:'/other'},{marker:'other'}]){
+    let records=[identity()],complete=true;const signals=[];
+    const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,
+      query:async()=>({complete,processes:records,unknown:complete?[]:[{reason:'unreadable'}]}),signal:(pid,name)=>signals.push({pid,name})});
+    await tracker.observe();assert.equal(tracker.snapshot().observed,true);
+    records=[identity(change)];await tracker.signalOwned('SIGTERM');records=[identity()];await tracker.observe();
+    await tracker.signalOwned('SIGKILL');records=[];await tracker.observe();
+    assert.deepEqual(signals,[]);assert.equal(tracker.snapshot().drained,false);
+  }
+  let records=[identity()],complete=false;const signals=[];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,
+    query:async()=>({complete,processes:records,unknown:complete?[]:[{reason:'transport'}]}),signal:(pid,name)=>signals.push({pid,name})});
+  await tracker.observe();complete=true;await tracker.observe();await tracker.signalOwned('SIGTERM');
+  records=[];await tracker.signalOwned('SIGKILL');assert.equal(tracker.snapshot().drained,false);
+  await tracker.observe();assert.equal(tracker.snapshot().drained,true);assert.equal(tracker.snapshot().queryFailures.length,1);
+  assert.deepEqual(signals,[{pid:12345,name:'SIGTERM'}]);
+});
+
+test('async pending observation cannot apply expired epoch authority or overlap a second operation',async()=>{
+  let release,requests=0,epoch=0;const signals=[];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,
+    query:()=>{requests++;return new Promise(resolve=>release=resolve);},signal:(pid,name)=>signals.push({pid,name})});
+  const pending=tracker.observe({notAfter:Date.now()+1000,isCurrent:()=>epoch===0});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(typeof release,'function');
+  await tracker.signalOwned('SIGTERM');assert.equal(requests,1);assert.deepEqual(signals,[]);
+  epoch++;release({complete:true,processes:[identity()],unknown:[]});await pending;
+  assert.equal(tracker.snapshot().observed,false);assert.equal(tracker.snapshot().drained,false);
+});
+
+test('async before-signal authorization obeys fixed expiry after await and never signals sentinel',async()=>{
+  let time=0,records=[identity(),identity({pid:54321,marker:'sentinel'})];const signals=[];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,now:()=>time,
+    query:async({pids})=>{if(pids)time=80;return {complete:true,processes:records,unknown:[]};},signal:(pid,name)=>signals.push({pid,name})});
+  await tracker.observe();assert.equal(tracker.snapshot().observed,true);
+  await tracker.signalOwned('SIGTERM',{notAfter:80});assert.deepEqual(signals,[]);
+  await tracker.signalOwned('SIGKILL',{notAfter:1080});assert.deepEqual(signals,[{pid:12345,name:'SIGKILL'}]);
+  records=[identity({pid:54321,marker:'sentinel'})];await tracker.observe();assert.equal(tracker.snapshot().drained,true);
+});
+
+test('async adapter retains at most sixteen failed-query diagnostics through recovery',async()=>{
+  let complete=false,records=[identity()];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,
+    query:async()=>({complete,processes:records,unknown:complete?[]:[{reason:'unreadable'}]}),signal:()=>{}});
+  for(let i=0;i<20;i++)await tracker.observe();assert.equal(tracker.snapshot().queryFailures.length,16);
+  complete=true;await tracker.observe();await tracker.signalOwned('SIGTERM');records=[];await tracker.observe();
+  assert.equal(tracker.snapshot().drained,true);assert.equal(tracker.snapshot().queryFailures.length,16);
+});
+
+test('async current unreadable PID reply cannot authorize matching-looking identities or targeted-only recovery',async()=>{
+  let complete=true,reads=0;const signals=[];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,
+    query:async()=>{reads++;return {complete,processes:[identity()],unknown:[]};},signal:(pid,name)=>signals.push({pid,name})});
+  await tracker.observe();assert.equal(tracker.snapshot().observed,true);
+  complete=false;await tracker.signalOwned('SIGTERM');await tracker.signalOwned('SIGKILL');
+  assert.deepEqual(signals,[]);assert.equal(tracker.snapshot().drained,false);
+  complete=true;await tracker.signalOwned('SIGKILL');assert.deepEqual(signals,[],'a targeted success cannot restore full registration');
+  await tracker.observe();await tracker.signalOwned('SIGKILL');assert.deepEqual(signals,[{pid:12345,name:'SIGKILL'}]);
+  assert.equal(reads>=4,true);assert.equal(tracker.snapshot().queryFailures.length>=1,true);
+});
+
+for(const mode of ['expired','superseded'])test(`async ${mode} observation invalidates prior successful drain while held and after late reply`,async()=>{
+  let records=[identity()],holding=false,release,time=0,epoch=0;const signals=[];
+  const tracker=createAsyncHostOwnership({token:'invocation-A',executable,uid,now:()=>time,
+    query:async()=>holding?await new Promise(resolve=>release=resolve):{complete:true,processes:records,unknown:[]},signal:(pid,name)=>signals.push({pid,name})});
+  await tracker.observe();records=[];await tracker.observe();assert.equal(tracker.snapshot().drained,true);
+  holding=true;const pending=tracker.observe({notAfter:80,isCurrent:()=>epoch===0});await new Promise(resolve=>setImmediate(resolve));
+  try{
+    assert.equal(typeof release,'function');assert.equal(tracker.snapshot().drained,false,'pending required observation invalidates older drain');
+    if(mode==='expired')time=80;else epoch++;
+    holding=false;records=[identity()];release({complete:true,processes:records,unknown:[]});await pending;
+    assert.equal(tracker.snapshot().drained,false);
+    await tracker.signalOwned('SIGKILL');assert.deepEqual(signals,[],'late data cannot restore current registration');
+    await tracker.observe();await tracker.signalOwned('SIGKILL');assert.deepEqual(signals,[{pid:12345,name:'SIGKILL'}]);
+  }finally{holding=false;release?.({complete:true,processes:[],unknown:[]});await pending;}
+});
+
+for(const kind of ['sync','async'])test(`correlated privacy fields cannot escape through the ${kind} ownership policy`,async()=>{
+  let complete=true,records=[{...identity(),extra:'PRIVATE_ENV_CONTENT'}];
+  const result=()=>({complete,processes:records,unknown:complete?[]:[{pid:12345,reason:'PRIVATE_ENV_CONTENT'}],
+    transport:{stage:'process',status:null,signal:null,errorCode:'ETIMEDOUT',elapsedMilliseconds:1000,timeoutMilliseconds:1000,
+      stdoutBytes:0,stderrBytes:0,stdout:'PRIVATE_ENV_CONTENT',env:{payload:'PRIVATE_ENV_CONTENT'}}});
+  const tracker=(kind==='sync'?createHostOwnership:createAsyncHostOwnership)({token:'invocation-A',executable,uid,
+    query:kind==='sync'?result:async()=>result(),signal:()=>{}});
+  await tracker.observe();assert.equal(JSON.stringify(tracker.snapshot()).includes('PRIVATE_ENV_CONTENT'),false);
+  complete=false;records=[];await tracker.observe();assert.equal(JSON.stringify(tracker.snapshot()).includes('PRIVATE_ENV_CONTENT'),false);
+});
+
+for(const kind of ['sync','async'])test(`non-string birth cannot register or prove drain in ${kind} ownership`,async()=>{
+  let records=[identity({birth:['100:123456']})];const signals=[];
+  const result=()=>({complete:true,processes:records,unknown:[]});
+  const tracker=(kind==='sync'?createHostOwnership:createAsyncHostOwnership)({token:'invocation-A',executable,uid,
+    query:kind==='sync'?result:async()=>result(),signal:(pid,name)=>signals.push({pid,name})});
+  await tracker.observe();assert.equal(tracker.snapshot().observed,false);
+  await tracker.signalOwned('SIGTERM');records=[];await tracker.observe();
+  assert.equal(tracker.snapshot().drained,false);assert.deepEqual(signals,[]);
 });
