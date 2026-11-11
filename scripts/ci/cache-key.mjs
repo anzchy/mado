@@ -16,6 +16,7 @@ import { appendFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
 
 export const FORMAT = 1;
 const FAMILIES = new Set(['spm', 'spm-coverage', 'dd']);
@@ -33,7 +34,8 @@ export function cacheKey({ family, manifest, inputs, os, arch, xcodeVersion, swi
   if (typeof workspace !== 'string' || !path.isAbsolute(workspace)) throw new Error('absolute workspace path is required');
   const checkout = createHash('sha256').update(workspace).digest('hex').slice(0, 16);
   const toolchain = createHash('sha256').update(swift.trim()).digest('hex').slice(0, 16);
-  const prefix = `${family}-v${FORMAT}-${os}-${arch}-xcode${build}-swift${toolchain}-workspace${checkout}-${manifest}-`;
+  const atomic = family === 'spm-coverage' ? `-atomic${ATOMIC_COVERAGE_FLAG_ID}` : '';
+  const prefix = `${family}-v${FORMAT}${atomic}-${os}-${arch}-xcode${build}-swift${toolchain}-workspace${checkout}-${manifest}-`;
   return { prefix, key: `${prefix}${inputs}` };
 }
 

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
 
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -75,7 +76,7 @@ export function exportShard(options) {
     throw new Error(`output directory already contains a coverage artifact: ${out}`);
   }
   const packagePath = path.join(root, 'Packages/MadoKit');
-  const bin = readVersion('swift', ['build', '--package-path', packagePath, '--show-bin-path'], { cwd: root });
+  const bin = readVersion('swift', ['build', '--package-path', packagePath, '--scratch-path', path.join(root, coverageAtomicScratchPath), '--show-bin-path'], { cwd: root });
   if (!path.isAbsolute(bin)) throw new Error(`swift returned non-absolute binary path: ${bin}`);
   const profilePath = path.join(bin, 'codecov/default.profdata');
   const profileStat = regularNonempty(profilePath, 'profile');
@@ -103,6 +104,7 @@ export function exportShard(options) {
       !/^end_of_record$/m.test(contents)) throw new Error('LLVM export contained no complete LCOV production mapping');
   const metadata = {
     version: 1, shard, commit, runId, runAttempt, toolchain,
+    instrumentation: { swiftArgs: coverageAtomicSwiftArgs, scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID },
     binary: { path: binaryPath, sha256: sha256(readFileSync(binaryPath)) },
     profile: { path: profilePath, sha256: sha256(readFileSync(profilePath)) },
     lcovSha256: sha256(lcov), sourceInventory: sourceInventoryHashes,

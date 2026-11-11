@@ -6,6 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, ut
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
 
 const script = fileURLToPath(new URL('./package-coverage-export.mjs', import.meta.url));
 const digest = path => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -63,6 +64,7 @@ test('successful shard export records matched binary, profile, source inventory 
   assert.match(metadata.toolchain.xcode, /17F113/);
   assert.match(metadata.toolchain.swift, /6\.3\.3/);
   assert.match(metadata.toolchain.llvmCov, /21\.0\.0/);
+  assert.deepEqual(metadata.instrumentation, { swiftArgs: coverageAtomicSwiftArgs, scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID });
 });
 
 test('stale or missing profile and missing binary cannot publish a complete artifact', t => {

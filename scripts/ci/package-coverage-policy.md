@@ -35,6 +35,17 @@ eligible artifact for that run. The reported local/owner-gate wrapped counters
 remain a blocker for the hosted acceptance batch; #358 tracks investigation,
 not a waiver.
 
+Coverage builds use `-Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all`
+under Xcode 26.6 (17F113), Swift 6.3.3, with a separate
+`Packages/MadoKit/.build-coverage-atomic` scratch path and flag-identified
+`spm-coverage` cache key. The CI shards and local unit lane probe emitted IR
+for an `atomicrmw add` on a `__profc` counter before testing; unsupported or
+ineffective instrumentation fails the run. Shard metadata and reports record
+the effective Swift arguments and scratch-path identity. This mitigates a
+possible parallel counter race; three valid preflight runs are needed before
+acceptance and do not prove that a race was the cause or give a performance
+guarantee. Non-coverage builds retain their ordinary arguments and cache.
+
 To refresh a source or toolchain pin, the implementer supplies the source diff,
 old and new digest, mapping identity and location, toolchain, and fresh coverage
 evidence. An independent reviewer rechecks the exception rationale, unchanged

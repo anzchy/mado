@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { UNIT_LIMITS } from './unit-lane.mjs';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath } from '../ci/coverage-atomic.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const launcher = path.join(root, 'scripts/tdd/unit-lane.mjs');
@@ -21,6 +22,8 @@ function fixture(t) {
   fs.copyFileSync(path.join(root, 'scripts/tdd/unit-locked.mjs'), path.join(dir, 'scripts/tdd/unit-locked.mjs'));
   fs.mkdirSync(path.join(dir, 'scripts/ci'), { recursive: true });
   fs.copyFileSync(path.join(root, 'scripts/ci/test-watchdog.mjs'), path.join(dir, 'scripts/ci/test-watchdog.mjs'));
+  fs.copyFileSync(path.join(root, 'scripts/ci/coverage-atomic.mjs'), path.join(dir, 'scripts/ci/coverage-atomic.mjs'));
+  fs.writeFileSync(path.join(dir, 'scripts/ci/coverage-atomic-verify.mjs'), "import fs from 'node:fs'; if(process.env.ORDER)fs.appendFileSync(process.env.ORDER,'verify\\n');");
   fs.writeFileSync(path.join(bin, 'swift'), `#!${process.execPath}
 const fs=require('node:fs'), cp=require('node:child_process');
 fs.appendFileSync(process.env.ATTEMPTS,JSON.stringify(process.argv.slice(2))+'\\n');
@@ -66,12 +69,12 @@ test('full unit success and ordinary failure preserve output, status and single 
     assert.equal(r.status, status, r.stderr);
     assert.match(r.stdout, /normal-output/); assert.match(r.stderr, /normal-stderr/);
     assert.deepEqual(fs.readFileSync(f.env.ATTEMPTS, 'utf8').trim().split('\n').map(JSON.parse),
-      [['test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']]);
+      [['test', '--package-path', 'Packages/MadoKit', '--scratch-path', coverageAtomicScratchPath, '--enable-code-coverage', ...coverageAtomicSwiftArgs]]);
     assert.match(fs.readFileSync(path.join(captures(f)[0], 'test.log'), 'utf8'), /7 tests/);
   }
 });
 
-test('fresh profile cleanup, the unchanged Swift command and strict evaluation share one lock admission', t => {
+test('atomic probe, fresh profile cleanup, Swift coverage command and strict evaluation share one lock admission', t => {
   const f = fixture(t);
   f.env.ORDER = path.join(f.dir, 'order');
   for (const [name, marker] of [['package-coverage-clear.mjs', 'clear'], ['package-coverage-local.mjs', 'evaluate']]) {
@@ -80,9 +83,9 @@ test('fresh profile cleanup, the unchanged Swift command and strict evaluation s
   }
   const r = run(f, { verifyCoverage: true });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(fs.readFileSync(f.env.ORDER, 'utf8').trim().split('\n'), ['clear', 'swift', 'evaluate']);
+  assert.deepEqual(fs.readFileSync(f.env.ORDER, 'utf8').trim().split('\n'), ['verify', 'clear', 'swift', 'evaluate']);
   assert.deepEqual(fs.readFileSync(f.env.ATTEMPTS, 'utf8').trim().split('\n').map(JSON.parse),
-    [['test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']]);
+    [['test', '--package-path', 'Packages/MadoKit', '--scratch-path', coverageAtomicScratchPath, '--enable-code-coverage', ...coverageAtomicSwiftArgs]]);
 });
 
 test('coverage rejection has a distinct status after the Swift tests pass', t => {
