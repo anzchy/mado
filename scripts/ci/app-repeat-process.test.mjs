@@ -150,7 +150,8 @@ test('stop notification freezes cleanup journal before a later held query reply 
 test('stale pre-host observation cannot declare registration missing after leader exit',async t=>{
   const f=externalInspectorFixture(t),o=options(t);
   o.args=['-e',`require('node:fs').writeFileSync(${JSON.stringify(o.marker)},String(process.pid))`];
-  let releaseFirst,queries=0,groupQueries=0;
+  let releaseFirst,leaderExited,queries=0,groupQueries=0;
+  const exitObserved=new Promise(resolve=>leaderExited=resolve);
   const hostQuery=async()=>{
     queries++;
     if(queries===1)return await new Promise(resolve=>releaseFirst=resolve);
@@ -158,14 +159,18 @@ test('stale pre-host observation cannot declare registration missing after leade
     return {complete:true,processes:[],unknown:[]};
   };
   const groupQuery=async()=>{groupQueries++;return [];};
-  const pending=runProcessGroup({...o,inspectorSpawn:f.spawn,hostQuery,groupQuery});finish(t,pending,o);
+  const pending=runProcessGroup({...o,inspectorSpawn:f.spawn,hostQuery,groupQuery,onLeaderExit:leaderExited});finish(t,pending,o);
   const until=Date.now()+3000;
   while((!releaseFirst||!existsSync(o.marker))&&Date.now()<until)await turn();
   assert.equal(typeof releaseFirst,'function','the ownership query starts before the leader exits');
   assert.equal(existsSync(o.marker),true,'the leader starts and exits while the first query is held');
-  const leaderPid=Number(readFileSync(o.marker,'utf8'));
-  while(Date.now()<until){try{process.kill(leaderPid,0);}catch{break;}await turn();}
-  await turn();
+  let exitTimer;
+  try{await Promise.race([exitObserved,new Promise((_,reject)=>{
+    exitTimer=setTimeout(()=>reject(new Error('leader exit was not observed')),3000);
+  })]);}finally{clearTimeout(exitTimer);}
+  // Release only after the supervisor has stored childExit. A host first seen
+  // after the fresh snapshot, or born and gone between snapshots, still fails
+  // closed with 70; this test covers the stale first snapshot ordering only.
   releaseFirst({complete:true,processes:[],unknown:[]});
   const result=await pending;
   assert.equal(result.status,0,readFileSync(o.logPath,'utf8'));

@@ -9,7 +9,7 @@ import {createAsyncHostOwnership} from './app-host-ownership.mjs';
 
 export async function runProcessGroup({command,args=[],env=process.env,logPath,deadline,graceMs=250,drainMs=1500,
   cancelOnHostObserved=false,hostQuery,hostSignal,groupSignal,groupQuery,preparedInspector,inspectorSpawn,
-  signal,now=Date.now}={}){
+  signal,now=Date.now,onLeaderExit}={}){
   const required=env.MADO_HOST_OWNERSHIP_REQUIRED==='1';
   const log=text=>appendFileSync(logPath,'app-repeat: '+text+'\n');
   let inspector=preparedInspector,host,child,group,childExit,cleanup,stopping=false,done=false,epoch=0,
@@ -115,7 +115,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     const childEnv={...env};if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;
     const fd=openSync(logPath,'a');try{child=spawn(command,args,{env:childEnv,detached:true,stdio:['ignore',fd,fd]});}finally{closeSync(fd);}
     child.once('error',()=>{childExit={code:70,signal:null};if(workerStarted)stop('iteration startup failed');wake();});
-    child.once('exit',(code,termination)=>{childExit={code,signal:termination};wake();});
+    // The optional test hook fires only after the supervisor records the exit.
+    child.once('exit',(code,termination)=>{childExit={code,signal:termination};onLeaderExit?.();wake();});
     if(!child.pid){await new Promise(resolve=>child.once('error',resolve));return await finish(70,true);}
     group=child.pid;workerStarted=true;
     while(!done){
@@ -151,6 +152,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
             // The previous ownership query may have started before the host
             // existed, then completed after the leader exited. Reobserve after
             // the empty group result before treating registration as missing.
+            // A host appearing only after this fresh snapshot, or born and gone
+            // between snapshots, remains unobserved and fails closed with 70.
             await observe();if(stopping)continue;
             const refreshed=host.snapshot();
             if(refreshed.drained)return await finish(childExit.signal||childExit.code===null?70:childExit.code,true);
