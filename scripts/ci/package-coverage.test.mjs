@@ -11,6 +11,7 @@ const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const pathOf = (module) => module === 'MadoInfrastructure'
   ? 'Packages/MadoKit/Sources/MadoInfrastructure/Images/ImageSourceHeader.swift'
+  : module === 'MadoMacUI' ? 'Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift'
   : `Packages/MadoKit/Sources/${module}/A.swift`;
 const source = module => module === 'MadoInfrastructure'
   ? 'func header() {\n  while false { break }\n  // end chunk\n  throw ImageDecodeError.unreadableImage\n}\n'
@@ -33,6 +34,7 @@ function fixture(t, { left = {}, right = {} } = {}) {
   }
   mkdirSync(join(root, 'scripts/ci'), { recursive: true });
   writeFileSync(join(root, 'scripts/ci/package-coverage-exceptions.json'), '[]\n');
+  writeFileSync(join(root, 'scripts/ci/package-coverage-function-exceptions.json'), '[]\n');
   for (const [shard, hits] of [['non-ui', left], ['macui', right]]) {
     const directory = join(input, shard);
     mkdirSync(directory, { recursive: true });
@@ -160,6 +162,19 @@ test('uncovered function alone fails and names its source and function', t => {
   assert.match(readFileSync(f.out, 'utf8'), /MadoCore\/A.swift:1 function MadoCore.fn/);
 });
 
+test('a new zero-hit FNDA fails even when FNF and FNH summaries still claim 100 percent', t => {
+  const f = fixture(t);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+    lcov: lcov.replace('FN:1,MadoCore.fn', 'FN:1,MadoCore.fn\nFN:1,MadoCore.newCallback\nFNDA:0,MadoCore.newCallback'),
+  }));
+  const run = f.run();
+  assert.equal(run.status, 1, run.stderr);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /MadoCore:.*raw functions 1\/2.*eligible functions 1\/2/);
+  assert.match(report, /MadoCore\.newCallback/);
+  assert.match(report, /Coverage gate: FAIL/);
+});
+
 test('reviewed declaration-only source is listed, while an empty module denominator fails', t => {
   const f = fixture(t);
   const extra = 'Packages/MadoKit/Sources/MadoCore/Declarations.swift';
@@ -231,4 +246,98 @@ test('CLI appends complete passing and failing reports to GitHub step summary', 
   const text = readFileSync(summary, 'utf8');
   assert.match(text, /Coverage gate: PASS[\s\S]*Coverage gate: FAIL/);
   assert.match(text, /ImageSourceHeader.swift:4/);
+});
+
+test('raw FNDA denominator stays strict while a pinned uncovered function is disclosed separately', t => {
+  const f = fixture(t);
+  const file = pathOf('MadoMacUI');
+  const symbol = JSON.parse(readFileSync(new URL('./package-coverage-function-exceptions.json', import.meta.url), 'utf8'))[0].symbol;
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+    lcov: lcov.replace(`FN:1,MadoMacUI.fn`, `FN:1,MadoMacUI.fn\nFN:198,${symbol}\nFNDA:0,${symbol}`)
+      .replace('FNF:1', 'FNF:1'),
+  }));
+  const exception = { path: file, symbol, start: 198, sourceSha256: f.inventory[file],
+    toolchain: { xcode: 'Xcode 26.6\nBuild version 17F113', swift: 'Swift 6.3.3', llvmCov: 'LLVM 21' },
+    reason: 'Only a temporary label is read.', decision: 'i631-fn-astra.md B' };
+  const manifest = join(f.root, 'scripts/ci/package-coverage-function-exceptions.json');
+  writeFileSync(manifest, JSON.stringify([exception]));
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /MadoMacUI.*raw functions 1\/2.*exceptions 1.*eligible functions 1\/1/);
+  assert.match(report, /Package.*raw functions 4\/5.*exceptions 1.*eligible functions 4\/4/);
+  assert.ok(report.includes(symbol));
+  const eligible = join(f.root, 'eligible.lcov');
+  const guardian = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'true', '--eligible-out', eligible],
+  { encoding: 'utf8' });
+  assert.equal(guardian.status, 0, guardian.stderr);
+  const derived = readFileSync(eligible, 'utf8');
+  assert.ok(!derived.includes(symbol), 'guardian eligible LCOV omits only the pinned exception');
+  assert.match(derived, /SF:Packages\/MadoKit\/Sources\/MadoMacUI\/Chrome\/ViewerChromeOverlay.swift[\s\S]*FNF:1\nFNH:1/);
+  const local = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'false', '--shards', 'non-ui'],
+  { encoding: 'utf8' });
+  assert.equal(local.status, 0, local.stderr);
+  const localReport = readFileSync(f.out, 'utf8');
+  for (const count of ['raw functions 4/5', 'exceptions 1', 'eligible functions 4/4']) {
+    assert.ok(report.includes(count) && localReport.includes(count), `same LCOV yields ${count} in CI and local layouts`);
+  }
+
+  writeFileSync(manifest, JSON.stringify([exception, exception]));
+  assert.match(f.run().stderr, /duplicate/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, symbol: '*' }]));
+  assert.match(f.run().stderr, /wildcard|symbol|unmatched/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, start: 2 }]));
+  assert.match(f.run().stderr, /unapproved|stale|location|unmatched/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, sourceSha256: hash('changed') }]));
+  assert.match(f.run().stderr, /digest|source/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, toolchain: { ...exception.toolchain, swift: 'Swift 7' } }]));
+  assert.match(f.run().stderr, /toolchain/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, symbol: 'missing' }]));
+  assert.match(f.run().stderr, /unapproved|unmatched/i);
+  writeFileSync(manifest, JSON.stringify([{ ...exception, path: pathOf('MadoCore'), sourceSha256: f.inventory[pathOf('MadoCore')] }]));
+  assert.match(f.run().stderr, /unapproved/i);
+  writeFileSync(manifest, JSON.stringify([exception]));
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+    lcov: lcov.replace(`FNDA:0,${symbol}`, `FNDA:1,${symbol}`),
+  }));
+  assert.match(f.run().stderr, /covered/i);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+    lcov: lcov.replace(`FN:198,${symbol}\nFNDA:1,${symbol}\n`, ''),
+  }));
+  assert.match(f.run().stderr, /unmatched/i);
+});
+
+test('missing function exception manifest fails closed', t => {
+  const f = fixture(t);
+  rmSync(join(f.root, 'scripts/ci/package-coverage-function-exceptions.json'));
+  assert.match(f.run().stderr, /function exception.*missing/i);
+});
+
+test('local single full-suite artifact uses the CI evaluator and the same denominator', t => {
+  const f = fixture(t);
+  rmSync(join(f.input, 'macui'), { recursive: true });
+  const run = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'false', '--shards', 'non-ui'],
+  { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(readFileSync(f.out, 'utf8'), /Package: lines 5\/5; functions 4\/4; raw functions 4\/4; exceptions 0; eligible functions 4\/4/);
+  const formal = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'true', '--shards', 'non-ui'],
+  { encoding: 'utf8' });
+  assert.equal(formal.status, 1);
+  assert.match(formal.stderr, /formal.*two shards/i);
+});
+
+test('guardian-facing LCOV is derived from strict eligible mappings rather than LLVM summaries', t => {
+  const f = fixture(t);
+  const eligible = join(f.root, 'eligible.lcov');
+  const run = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'true', '--eligible-out', eligible],
+  { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const summary = readFileSync(eligible, 'utf8');
+  assert.match(summary, /SF:Packages\/MadoKit\/Sources\/MadoCore\/A.swift[\s\S]*FNF:1\nFNH:1[\s\S]*LF:1\nLH:1/);
+  assert.match(summary, /SF:Packages\/MadoKit\/Sources\/MadoInfrastructure\/Images\/ImageSourceHeader.swift[\s\S]*LF:2\nLH:2/);
 });
