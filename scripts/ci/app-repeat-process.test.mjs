@@ -147,6 +147,35 @@ test('stop notification freezes cleanup journal before a later held query reply 
   assert.equal(result.status,70);assert.equal(result.drained,false);
 });
 
+test('stale pre-host observation cannot declare registration missing after leader exit',async t=>{
+  const f=externalInspectorFixture(t),o=options(t);
+  o.args=['-e',`require('node:fs').writeFileSync(${JSON.stringify(o.marker)},String(process.pid))`];
+  let releaseFirst,queries=0,groupQueries=0;
+  const hostQuery=async()=>{
+    queries++;
+    if(queries===1)return await new Promise(resolve=>releaseFirst=resolve);
+    if(queries===2)return {complete:true,processes:[identity(o.env.MADO_TEST_RUN_TOKEN)],unknown:[]};
+    return {complete:true,processes:[],unknown:[]};
+  };
+  const groupQuery=async()=>{groupQueries++;return [];};
+  const pending=runProcessGroup({...o,inspectorSpawn:f.spawn,hostQuery,groupQuery});finish(t,pending,o);
+  const until=Date.now()+3000;
+  while((!releaseFirst||!existsSync(o.marker))&&Date.now()<until)await turn();
+  assert.equal(typeof releaseFirst,'function','the ownership query starts before the leader exits');
+  assert.equal(existsSync(o.marker),true,'the leader starts and exits while the first query is held');
+  const leaderPid=Number(readFileSync(o.marker,'utf8'));
+  while(Date.now()<until){try{process.kill(leaderPid,0);}catch{break;}await turn();}
+  await turn();
+  releaseFirst({complete:true,processes:[],unknown:[]});
+  const result=await pending;
+  assert.equal(result.status,0,readFileSync(o.logPath,'utf8'));
+  assert.equal(result.hostOwnership.observed,true,'a fresh post-exit query registers the host');
+  assert.equal(result.drained,true);
+  assert.equal(result.cleanup,undefined,'natural drain needs no forced cleanup');
+  assert.ok(groupQueries>=1,'the empty leader group is observed');
+  assert.ok(queries>=3,'the host is observed and then proven drained');
+});
+
 test('owned host may exit shortly after its iteration leader without forced cleanup',async t=>{
   const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid'),release=path.join(dir,'release');
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
