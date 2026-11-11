@@ -7,9 +7,11 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, 'issue637-ax.js'), 'utf8');
 
 function fixture({ sliderStuck = false, directAssignmentIgnored = false, wrongLabel = false,
-                   renameOnPress = false, invalidateOnSliderSet = false, throwAfterPress = false } = {}) {
+                   renameOnPress = false, invalidateOnSliderSet = false,
+                   throwAfterPress = false, staleReadAfterStep = false } = {}) {
   let windowName = 'Display';
   let generation = 0;
+  let staleNextRead = false;
   const values = new Map([
     ['settings.section.general', 0],
     ['settings.section.display', 1],
@@ -27,6 +29,7 @@ function fixture({ sliderStuck = false, directAssignmentIgnored = false, wrongLa
       return { exists: () => true, perform: () => {
         if (name !== 'AXPress') {
           if (!sliderStuck) values.set(id, values.get(id) + (name === 'AXIncrement' ? 1 : -1));
+          if (staleReadAfterStep) staleNextRead = true;
           return;
         }
         values.set(id, values.get(id) ? 0 : 1);
@@ -40,6 +43,10 @@ function fixture({ sliderStuck = false, directAssignmentIgnored = false, wrongLa
   }, {
     get(target, key) {
       if (key === 'value') return () => {
+        if (staleNextRead && id === 'settings.display.tool-opacity') {
+          staleNextRead = false;
+          throw Error("Can't get object (-1728)");
+        }
         if (boundGeneration !== generation) throw Error("Can't get object (-1728)");
         if (id === 'settings.display.tool-opacity.value') {
           return wrongLabel ? '50%' : values.get('settings.display.tool-opacity') + '%';
@@ -129,6 +136,12 @@ test('JXA steps a slider when direct assignment is ignored, then checks the labe
   const badLabel = fixture({ directAssignmentIgnored: true, wrongLabel: true });
   assert.throws(() => badLabel.run('set-slider', 'settings.display.tool-opacity', 30),
     /opacity label did not reach 30/);
+});
+
+test('JXA re-resolves after transient stale slider read during a long step sequence', () => {
+  const ax = fixture({ directAssignmentIgnored: true, staleReadAfterStep: true });
+  assert.equal(ax.run('set-slider', 'settings.display.tool-opacity', 30),
+    'PASS slider settings.display.tool-opacity=30');
 });
 
 test('JXA missing identifier names the scoped Settings window', () => {

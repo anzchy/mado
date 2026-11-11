@@ -52,8 +52,16 @@ function run(argv) {
         throw Error('AXIdentifier not found in Settings window: ' + targetIdentifier +
                     '; window=' + description(window));
     }
+    function readFresh(targetIdentifier) {
+        var lastError;
+        for (var attempt = 0; attempt < 3; attempt++) {
+            try { return findElement(targetIdentifier).value(); }
+            catch (error) { lastError = error; delay(0.1); }
+        }
+        throw Error('AX read remained stale for ' + targetIdentifier + ': ' + lastError);
+    }
     var element = findElement(identifier);
-    if (operation === 'value') return String(element.value());
+    if (operation === 'value') return String(readFresh(identifier));
     if (operation === 'press') {
         var before = String(element.value());
         var action = element.actions.byName('AXPress');
@@ -62,7 +70,7 @@ function run(argv) {
         try { action.perform(); }
         catch (error) { pressError = error; }
         delay(0.15);
-        var after = String(findElement(identifier).value());
+        var after = String(readFresh(identifier));
         if (pressError && after === before) throw pressError;
         if (after === before && before !== '1' && before !== 'true') {
             throw Error('AXPress made no progress: ' + identifier + ' value=' + after);
@@ -75,13 +83,18 @@ function run(argv) {
         if (!Number.isInteger(desired) || desired < 30 || desired > 100) {
             throw Error('opacity outside 30...100');
         }
+        var deadline = Date.now() + 75000;
         var assignmentError = null;
-        try { element.value = desired; }
-        catch (error) { assignmentError = error; }
-        delay(0.6);
-        var current = Number(findElement(identifier).value());
+        var current = Number(readFresh(identifier));
+        for (var attempt = 0; current !== desired && attempt < 2; attempt++) {
+            try { findElement(identifier).value = desired; }
+            catch (error) { assignmentError = error; }
+            delay(0.4);
+            current = Number(readFresh(identifier));
+        }
         if (!Number.isFinite(current)) throw Error('slider has nonnumeric value: ' + current);
         for (var step = 0; current !== desired && step < 71; step++) {
+            if (Date.now() >= deadline) throw Error('slider step deadline at ' + current + ' of ' + desired);
             var direction = current < desired ? 'AXIncrement' : 'AXDecrement';
             var action = findElement(identifier).actions.byName(direction);
             if (!action.exists()) throw Error(direction + ' unavailable: ' + identifier);
@@ -89,10 +102,10 @@ function run(argv) {
             try { action.perform(); }
             catch (error) { actionError = error; }
             delay(0.1);
-            var next = Number(findElement(identifier).value());
+            var next = Number(readFresh(identifier));
             if (next === current) {
                 delay(0.2);
-                next = Number(findElement(identifier).value());
+                next = Number(readFresh(identifier));
             }
             if (!Number.isFinite(next) || next === current) {
                 if (actionError) throw actionError;
@@ -106,8 +119,8 @@ function run(argv) {
         if (current !== desired) throw Error('slider did not reach ' + desired + ': ' + current +
                                              (assignmentError ? ' assignment=' + assignmentError : ''));
         delay(0.6);
-        current = Number(findElement(identifier).value());
-        var label = String(findElement('settings.display.tool-opacity.value').value());
+        current = Number(readFresh(identifier));
+        var label = String(readFresh('settings.display.tool-opacity.value'));
         var percentage = label.match(/([0-9]{2,3})\s*%/);
         if (current !== desired) throw Error('slider did not settle at ' + desired + ': ' + current);
         if (!percentage || Number(percentage[1]) !== desired) {
