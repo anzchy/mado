@@ -1,6 +1,6 @@
 # mado-verify：实现者「做完之前」的统一验证 skill（计划）
 
-状态：草案，待 owner 决定 §7 的问题。
+状态：草案。§7 第 2 项 owner 已决定（2026-11-11）；其余待决定。
 日期：2026-11-11
 起因：owner 要求参考 clay 项目的 `clay-verify`，为 Mado（原 picsee）设计一个 verify skill，覆盖 Swift App 的最佳验证实践，包括 UI 和 bug。
 
@@ -168,7 +168,14 @@ clay-verify（Go 项目）的骨架可以直接借用：
 | 性能敏感路径 | 只报本机签名 Release + signpost 测得的数字，否则写 NOT VERIFIED | 数字 + 构建配置 + 机器 |
 | 只有真 App 才能验证的（沙盒授权、重启恢复、菜单快捷键、窗口） | 实现者只做 dry-run（例如 AX 控件能否找到、脚本离线测试）；真机运行交给 delegator 在 picsee-dtrack 里执行 | 交回可直接运行的命令和输出目录 |
 
-**第 4 步 · 证据。** 写成固定格式（下方），贴到 ticket 的 issue 评论，handoff 里放评论链接和它覆盖的 head SHA。贴之前扫描：不含 `/Users/`、`/private/`、`/var/folders/`、密钥。证据必须对应 handoff 的最终 head；之后再提交就再贴一条。
+**第 4 步 · 证据。** owner 决定（2026-11-11）：「verify相关的证据要提交到对应github ticket(issue)中comment，如果涉及到UI修改，要在comment中上传修复前后的截图。」
+
+- 写成固定格式（下方），作为评论贴到对应 ticket 的 GitHub issue；handoff 里放评论链接和它覆盖的 head SHA。
+- 证据必须对应 handoff 的最终 head；之后再提交就再贴一条新评论。
+- **涉及 UI 修改时**，评论里必须上传修复前、修复后的截图：同一状态、同一窗口尺寸、同一外观（浅色/深色）和缩放，修复前用 base SHA 的构建，修复后用 head SHA 的构建；每张图注明状态名、SHA 和机器（@1x / @2x）。截图只上传到 issue 评论，不进仓库（「不入库」规则不变）。
+- 贴之前扫描：文字不含 `/Users/`、`/private/`、`/var/folders/`、密钥；截图里不出现个人文件名、私人照片、通知、其他 App 的窗口——只用 `TestAssets` 里的素材，截取 App 窗口而不是整个桌面。
+- 截图的产生方式：签名构建只能在桌面会话里运行，所以 UI 截图由能操作桌面的一方（delegator 在 picsee-dtrack 里，或 owner）拍摄；实现者交回可直接运行的截图命令。实现者自己贴的文字证据和 delegator 补贴的截图可以是同一 issue 的两条评论。
+- 上传方式待 V2 确定：`gh` CLI 不能给评论上传附件，候选是通过浏览器（`/browse`）在评论框里上传，或其他不把图片放进 git 历史的方式。
 
 ```markdown
 <!-- mado-verify issue=<N> task=<Report-Task> head=<40 位 SHA> -->
@@ -185,6 +192,11 @@ clay-verify（Go 项目）的骨架可以直接借用：
 #### 按类型加跑
 | 行为（brief / 账簿行） | 预期 | 实际 | 结果 |
 |---|---|---|---|
+
+#### 截图（仅 UI 修改）
+| 状态 | 修复前（base `<sha7>`） | 修复后（head `<sha7>`） | 机器 |
+|---|---|---|---|
+| … | <上传的图> | <上传的图> | @1x / @2x |
 
 #### NOT VERIFIED
 - <项>：<原因>（或「无」）
@@ -212,7 +224,7 @@ V1–V3 是工具改动，走正常 PR + 双审计；V5 涉及新的门禁或依
 ## 7. 需要 owner 决定的事
 
 1. **命名**：用 `mado-verify`（推荐，避免覆盖 Claude Code 自带的 `/verify`），还是有意接管 `verify`？
-2. **证据贴在哪**：像 clay 一样贴到 ticket 的 GitHub issue 评论（审计员和 PR 都能链接），还是只放在本机 `~/.picsee/herdr/<impl>/`？贴 issue 更透明，但仓库公开，扫描必须严格。
+2. ~~证据贴在哪~~ **已决定**（2026-11-11）：贴到对应 ticket 的 GitHub issue 评论；UI 修改要在评论里上传修复前后的截图。见 §5.2 第 4 步。
 3. **强制程度**：第一版只靠 brief + delegator 检查，还是一开始就加 Stop hook？
 4. **TSan / 快照测试**：要不要作为 V5 引入？TSan 在 16 GiB mini 上内存开销大；快照测试要新增 pointfreeco 依赖。
 5. **与 Device-Smoke 的关系**：mado-verify 只做实现者自证，Device-Smoke 仍由 delegator 做（推荐，不改现有验收），还是让实现者的 dry-run 证据部分替代？
