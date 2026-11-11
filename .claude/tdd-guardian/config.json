@@ -183,6 +183,26 @@
       "timeoutMs": 120000
     },
     {
+      "name": "ci-642-removal-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/remove-393.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-642-hosted-build-node",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/hosted-build.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
       "name": "ci-package-coverage-node",
       "description": "Manual #631 Package coverage CI Node contracts.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/package-coverage.test.mjs",
