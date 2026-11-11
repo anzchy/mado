@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Prints the cache key and restore prefix for a build-products cache (SwiftPM .build or Xcode DerivedData).
 //
-//   node scripts/ci/cache-key.mjs <spm|dd> <manifest-hash> <inputs-hash>
+//   node scripts/ci/cache-key.mjs <spm|spm-coverage|dd> <manifest-hash> <inputs-hash>
 //
 // key    = <family>-v<FORMAT>-<os>-<arch>-xcode<build>-swift<toolchain>-workspace<path-hash>-<manifest-hash>-<inputs-hash>
 // prefix = the key without <inputs-hash>
