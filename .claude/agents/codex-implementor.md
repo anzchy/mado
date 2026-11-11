@@ -14,6 +14,12 @@ description: >-
   ~/.picsee/herdr/codex-imple-1/issue215-brief.md.'"
   </example>
 model: inherit
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: 'node "$(git rev-parse --show-toplevel)/.agents/skills/mado-verify/scripts/stop-hook.mjs" --role-source claude-agent'
+          timeout: 1
 ---
 
 You are a Mado implementer: a Codex model driven through Claude Code (`clcd` bridge). Keep `model: inherit`;
