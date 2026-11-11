@@ -263,6 +263,16 @@ def open_fixture(source, run, path):
     raise EnvironmentFailure(f'fixture did not appear in owned viewer: {path}')
 
 
+def prepare_flat_fixture(source, run, path):
+    open_fixture(source, run, path)
+    time.sleep(.35)
+    # A same-size replacement may retain the previous zoom. Reset, then enlarge
+    # enough to put the flat image beneath the Inspector-state pods as well.
+    for shortcut in ('0', '+', '+'):
+        key(source, run, shortcut)
+    time.sleep(.35)
+
+
 def sample_points(image, page='14'):
     width, height, _channels, _rows = image
     if width < 800 or height < 550 or width / height < 1.1:
@@ -275,7 +285,7 @@ def sample_points(image, page='14'):
     y = height - 48 * s
     # The bottom 16 px of the real 960x640 window is outside the decoded image.
     # Sample the flat image above the tools, away from chrome and titlebar.
-    xs = {'14': (36, 480, 790), '16': (36, 328, 595)}
+    xs = {'14': (80, 480, 790), '16': (80, 328, 595)}
     if page not in xs:
         raise EnvironmentFailure(f'unsupported viewer page for sample points: {page}')
     return {group: (round(x * s), y) for group, x in zip(GROUPS, xs[page])}, (round(250 * s), height - 80 * s), s
@@ -290,7 +300,7 @@ def analyze(manifest, partial=False):
     if missing:
         raise EnvironmentFailure('missing captures: ' + ', '.join(missing))
     images = {key: png(captures[key]) for key in expected_keys}
-    rows, failures = [], []
+    rows, failures, uncovered = [], [], []
     for page in PAGES:
         for theme in THEMES:
             for grey in GREYS:
@@ -309,13 +319,21 @@ def analyze(manifest, partial=False):
                         observed = pixel(image, *point)
                         panel = pixel(baseline, *point)
                         target = .5 + .5 * opacity / 100
-                        stable = [(channel, (observed[i] - backdrop[i]) / (panel[i] - backdrop[i]))
-                                  for i, channel in enumerate('rgb') if abs(panel[i] - backdrop[i]) > 30]
+                        probe_point = (point[0], point[1] - 22 * scale)
+                        probe = pixel(image, *probe_point)
+                        backed = all(abs(channel - grey) <= 2 for channel in probe)
+                        if not backed:
+                            uncovered.append(f'{key}/{group}: probe {probe} at {probe_point} is not grey {grey}')
+                        stable = ([(channel, (observed[i] - backdrop[i]) / (panel[i] - backdrop[i]))
+                                   for i, channel in enumerate('rgb') if abs(panel[i] - backdrop[i]) > 30]
+                                  if backed else [])
                         reasons = []
                         if opacity == 100:
                             design = (255, 255, 255) if theme == 'light' else (20, 24, 33)
                             if any(abs(observed[i] - design[i]) > 2 for i in range(3)):
                                 reasons.append(f'opaque RGB {observed} differs from design {design} by >2/255')
+                        elif not backed:
+                            pass  # A pixel over canvas margin cannot prove grey-backed coverage.
                         elif stable:
                             if any(abs(value - target) > .05 for _, value in stable):
                                 reasons.append(f'coverage {stable} outside {target:.2f}±0.05')
@@ -324,7 +342,9 @@ def analyze(manifest, partial=False):
                         row = dict(page=page, appearance=theme, grey=grey, preference=opacity,
                                    group=group, point=point, backdrop=backdrop, pill=observed,
                                    panelRGB=panel, stableCoverage=stable, expectedCoverage=target,
-                                   omitted='unstable—coverage omitted' if not stable else None,
+                                   omitted=('backdrop not grey under pod' if not backed else
+                                            'unstable—coverage omitted' if not stable else None),
+                                   backingProbe=probe, backingProbePoint=probe_point,
                                    scale=scale, failures=reasons)
                         rows.append(row)
                         failures.extend(f'{key}/{group}: {reason}' for reason in reasons)
@@ -336,9 +356,9 @@ def analyze(manifest, partial=False):
     if partial:
         missing_extras = [extra for extra in extras if extra not in captures]
         return dict(status='FAIL' if failures else 'INCOMPLETE',
-                    matrixStatus='FAIL' if failures else 'PASS',
+                    matrixStatus='FAIL' if failures else 'INCOMPLETE' if uncovered else 'PASS',
                     scope='implemented viewer pages 14 and 16; flat matrix only',
-                    notVerified=[f'{extra}: capture absent' for extra in missing_extras] +
+                    notVerified=uncovered + [f'{extra}: capture absent' for extra in missing_extras] +
                         ['pattern, zoom, replacement, window activity and auto-hide not evaluated in partial mode',
                          'page 33 Filmstrip is unimplemented (PREF-04)'],
                     sampleCount=len(rows), samples=rows, failures=failures,
@@ -390,8 +410,10 @@ def analyze(manifest, partial=False):
         if max(abs(woken[i] - hidden[i]) for i in range(3)) < 8:
             failures.append(f'auto-hide/{group}: Tab did not restore tool pod pixels')
         auto_hide.append(dict(group=group, hidden=hidden, woken=woken, backdrop=backdrop))
-    return dict(status='FAIL' if failures else 'PASS', scope='implemented viewer pages 14 and 16',
-                notVerified=['page 33 Filmstrip is unimplemented (PREF-04)',
+    return dict(status='FAIL' if failures else 'INCOMPLETE' if uncovered else 'PASS',
+                matrixStatus='FAIL' if failures else 'INCOMPLETE' if uncovered else 'PASS',
+                scope='implemented viewer pages 14 and 16',
+                notVerified=uncovered + ['page 33 Filmstrip is unimplemented (PREF-04)',
                              'macOS 14 and other display scale require separate signed device runs',
                              'pan gesture and control contrast need separate device evidence',
                              'active/inactive captures need independent visual review'],
@@ -471,7 +493,7 @@ def capture(source, run, dry_ax=False):
         for theme in THEMES:
             set_theme(source / 'scripts/device', run, pid, theme)
             for grey in GREYS:
-                open_fixture(source, run, fixtures / f'flat-{grey:03}.png')
+                prepare_flat_fixture(source / 'scripts/device', run, fixtures / f'flat-{grey:03}.png')
                 for opacity in TIERS:
                     set_opacity(source / 'scripts/device', run, pid, opacity)
                     time.sleep(.25)
