@@ -153,39 +153,6 @@
       "timeoutMs": 120000
     },
     {
-      "name": "app-prebuilt-red",
-      "description": "#393 prebuilt App lane RED. Build once via foreground heavy-lock outside receipt setup. Keep PICSEE_APP_FILTER and NO_RETRY identical for record/verify.",
-      "command": "node scripts/tdd/app-lane.mjs",
-      "gateOn": [
-        "manual"
-      ],
-      "coverage": "none",
-      "probeCommand": "node --version",
-      "timeoutMs": 2400000
-    },
-    {
-      "name": "ci-hosted-focus-node",
-      "description": "Manual amendment2 hosted diagnostic CI bootstrap contracts. No native work.",
-      "command": "node scripts/tdd/node-lane.mjs scripts/ci/hosted-focus-ci.test.mjs",
-      "gateOn": [
-        "manual"
-      ],
-      "coverage": "none",
-      "probeCommand": "node --version",
-      "timeoutMs": 120000
-    },
-    {
-      "name": "ci-native-red-node",
-      "description": "Manual Node contracts for optional official native RED verification and full App CI validation.",
-      "command": "node scripts/tdd/node-lane.mjs scripts/ci/native-red-ci.test.mjs",
-      "gateOn": [
-        "manual"
-      ],
-      "coverage": "none",
-      "probeCommand": "node --version",
-      "timeoutMs": 120000
-    },
-    {
       "name": "ci-host-ownership-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs scripts/ci/app-repeat-process.test.mjs scripts/ci/hosted-cancel-probe.test.mjs scripts/ci/app-host-inspector.test.mjs scripts/ci/integration/*.test.mjs",
       "gateOn": [
@@ -198,16 +165,6 @@
     {
       "name": "ci-app-compare-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-compare.test.mjs scripts/ci/app-repeat.test.mjs",
-      "gateOn": [
-        "manual"
-      ],
-      "coverage": "none",
-      "probeCommand": "node --version",
-      "timeoutMs": 120000
-    },
-    {
-      "name": "ci-legacy393-node",
-      "command": "node scripts/tdd/node-lane.mjs scripts/ci/legacy393-sources.test.mjs",
       "gateOn": [
         "manual"
       ],
