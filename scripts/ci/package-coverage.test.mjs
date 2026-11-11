@@ -157,7 +157,7 @@ test('missing and malformed profile metadata, LCOV digest and summary fail befor
 
 test('uncovered function alone fails and names its source and function', t => {
   const f = fixture(t);
-  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({
     lcov: lcov.replace('FNDA:1,MadoCore.fn', 'FNDA:0,MadoCore.fn').replace('FNH:1', 'FNH:0') }));
   const run = f.run();
   assert.equal(run.status, 1, run.stderr);
@@ -283,14 +283,18 @@ test('CLI appends complete passing and failing reports to GitHub step summary', 
 test('raw FNDA denominator stays strict while a pinned uncovered function is disclosed separately', t => {
   const f = fixture(t);
   const file = pathOf('MadoMacUI');
+  const reviewedSource = readFileSync(new URL('../../Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift', import.meta.url));
+  writeFileSync(join(f.root, file), reviewedSource);
+  f.inventory[file] = hash(reviewedSource);
   const symbol = JSON.parse(readFileSync(new URL('./package-coverage-function-exceptions.json', import.meta.url), 'utf8'))[0].symbol;
-  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({
+    metadata: { ...metadata, sourceInventory: { ...metadata.sourceInventory, [file]: f.inventory[file] } },
     lcov: lcov.replace(`FN:1,MadoMacUI.fn`, `FN:1,MadoMacUI.fn\nFN:198,${symbol}\nFNDA:0,${symbol}`)
       .replace('FNF:1', 'FNF:1'),
   }));
   const exception = { path: file, symbol, start: 198, sourceSha256: f.inventory[file],
     toolchain: { xcode: 'Xcode 26.6\nBuild version 17F113', swift: 'Swift 6.3.3', llvmCov: 'LLVM 21' },
-    reason: 'Only a temporary label is read.', decision: 'i631-fn-astra.md B' };
+    reason: 'Only a temporary label is read.', decision: 'i631-pin-refresh.md M6' };
   const manifest = join(f.root, 'scripts/ci/package-coverage-function-exceptions.json');
   writeFileSync(manifest, JSON.stringify([exception]));
   const result = f.run();
