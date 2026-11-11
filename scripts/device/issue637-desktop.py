@@ -152,7 +152,8 @@ def normalized_shot(run, source_script, label):
 
 
 def ax(pid, operation, identifier, value=None):
-    args = ['/usr/bin/osascript', HERE / 'issue637-ax.applescript', pid, operation, identifier]
+    args = ['/usr/bin/osascript', '-l', 'JavaScript', HERE / 'issue637-ax.js',
+            pid, operation, identifier]
     if value is not None:
         args.append(value)
     started = time.monotonic()
@@ -163,8 +164,8 @@ def ax(pid, operation, identifier, value=None):
         windows = 'unavailable'
         if operation != 'window-list':
             try:
-                windows = invoke(['/usr/bin/osascript', HERE / 'issue637-ax.applescript',
-                                  pid, 'window-list', 'window'], timeout=5)
+                windows = invoke(['/usr/bin/osascript', '-l', 'JavaScript',
+                                  HERE / 'issue637-ax.js', pid, 'window-list', 'window'], timeout=5)
             except (EnvironmentFailure, subprocess.TimeoutExpired) as diagnostic:
                 windows = f'unavailable ({diagnostic})'
         raise EnvironmentFailure(f'AX {operation} identifier={identifier} elapsed={elapsed:.2f}s '
@@ -409,6 +410,9 @@ def capture(source, run, dry_ax=False):
         settings(source / 'scripts/device', run, pid)
         ax(pid, 'press', 'settings.section.display')
         original_opacity = int(float(ax(pid, 'value', 'settings.display.tool-opacity')))
+        if dry_ax:
+            # Exercise the writable AXSlider path without changing the preference.
+            ax(pid, 'set-slider', 'settings.display.tool-opacity', original_opacity)
         ax(pid, 'press', 'settings.section.general')
         original = dict(opacity=original_opacity,
                         appearance=next((name for name in ('system', 'light', 'dark')
