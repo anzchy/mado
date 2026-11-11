@@ -65,7 +65,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    writing fences. Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
    `SHARED` code file with an in-flight branch means sequence the two items, or base the new branch on the other one
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
-   Codex uses `$tdd-guardian-workflow`;
+   Before dispatch, write the briefed worktree's absolute path as one line in the pane-home git root's `.build/mado-verify/target-worktree` (create its parent directory). Pane homes must be on a branch containing `.codex/hooks.json` after merge; trust the Codex project hook with `/hooks`, and accept Claude implementer pane workspace trust so agent-frontmatter hooks run. Codex uses `$tdd-guardian-workflow`;
    Kimi needs the hand-written test-first steps. Dispatch: `herdr agent prompt <impl> 'New task: … Read and follow <brief>…'`.
 3. **Watch** — mandatory after every dispatch and rearm for every fix/audit round: attach
    `$SK/scripts/listen-notify.py start` with a fresh event/round ID, agent, expected handoff/report path, and an

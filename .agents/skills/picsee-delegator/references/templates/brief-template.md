@@ -2,6 +2,7 @@
 
 You are **<implementer>**. New task, fresh session. Worktree `~/Documents/mac-app/picsee-wt/<implementer>`.
 Branch: `git fetch origin && git switch -c <branch> origin/main` (main ≥ <sha7>). Issue #<n>.
+Target marker: write this brief's absolute worktree path as one line to `<session-cwd git toplevel>/.build/mado-verify/target-worktree` at task start (create its parent directory); the delegator writes it before dispatch too.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first

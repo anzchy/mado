@@ -131,3 +131,45 @@ test('Claude implementer agent frontmatter registers Stop before skill invocatio
     assert.match(content, /--role-source claude-agent/);
   }
 });
+
+test('Stop accepts only a top-level first-line BLOCKED and a final top-level question', t => {
+  const f = fixture(t); role(f.dir);
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testTwo() {}\n'); f.commit();
+  for (const message of [
+    'DONE\n> BLOCKED',
+    'DONE\n```text\nBLOCKED\n```',
+    'DONE\n```text\nCan I stop?\n```',
+    'DONE\n> Can I stop?',
+  ]) assert.match(hook(f, { last_assistant_message: message }).stdout, /"decision":"block"/, message);
+  assert.equal(hook(f, { last_assistant_message: '\nBLOCKED: scope needs an amendment' }).stdout, '');
+  assert.equal(hook(f, { last_assistant_message: 'BLOCKED\nDetails follow.' }).stdout, '');
+  assert.equal(hook(f, { last_assistant_message: 'DONE\nCan I continue？' }).stdout, '');
+});
+
+test('pane-home marker checks briefed worktree and its own complete record', t => {
+  const f = fixture(t), target = `${f.dir}-target`;
+  t.after(() => fs.rmSync(target, { recursive: true, force: true }));
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  role(f.dir);
+  fs.writeFileSync(path.join(target, 'sample.test.swift'), 'func changed() {}\n');
+  run('git', ['add', 'sample.test.swift'], target); run('git', ['commit', '-qm', 'feature'], target);
+  const marker = path.join(f.dir, '.build/mado-verify/target-worktree');
+  fs.mkdirSync(path.dirname(marker), { recursive: true }); fs.writeFileSync(marker, `${target}\n`);
+  assert.match(hook(f).stdout, /"decision":"block"/);
+  const targetHead = run('git', ['rev-parse', 'HEAD'], target).stdout.trim();
+  const record = path.join(target, '.build/mado-verify', `${targetHead}.json`);
+  fs.mkdirSync(path.dirname(record), { recursive: true });
+  fs.writeFileSync(record, JSON.stringify({ head: targetHead, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-123', gates: gates() }));
+  assert.equal(hook(f).stdout, '');
+  fs.unlinkSync(record); fs.unlinkSync(path.join(f.dir, '.codex/rules/picsee-role.rules')); role(target);
+  assert.match(hook(f).stdout, /"decision":"block"/, 'target overlay alone selects implementor role');
+});
+
+test('invalid target marker blocks implementor but allows auditor; absent marker keeps cwd behavior', t => {
+  const f = fixture(t); role(f.dir);
+  const marker = path.join(f.dir, '.build/mado-verify/target-worktree');
+  fs.mkdirSync(path.dirname(marker), { recursive: true }); fs.writeFileSync(marker, '/tmp/no-such-mado-worktree\n');
+  assert.match(hook(f).stdout, /target worktree/i);
+  role(f.dir, 'auditor'); assert.equal(hook(f).stdout, '');
+  fs.unlinkSync(marker); assert.equal(hook(f).stdout, '');
+});
