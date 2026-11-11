@@ -9,7 +9,7 @@ Run before an implementer handoff. Claude invokes `/mado-verify`; Codex follows 
 
 ## 0. Define scope
 
-Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. At task start, write the briefed worktree's absolute path as one line in `<session-cwd git toplevel>/.build/mado-verify/target-worktree` (create the parent directory first); the delegator writes the same marker before dispatch. The Stop hook checks both the session checkout and that target worktree. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
+Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. The delegator writes `<session-cwd git toplevel>/.build/mado-verify/target-worktree` before dispatch with `scripts/mark-target.mjs`; check its JSON `{worktree, branch, issue, task}` against the brief, and do not rewrite it as an implementer. The old one-line format is invalid. The Stop hook checks both the session checkout and that target worktree, including branch, issue and handoff identity. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
 
 ## 1. Gate ladder
 

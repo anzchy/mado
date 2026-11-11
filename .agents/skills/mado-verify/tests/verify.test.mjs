@@ -21,6 +21,7 @@ function fixture(t) {
   run('git', ['add', 'sample.test.swift'], dir); run('git', ['commit', '-qm', 'base'], dir);
   const base = run('git', ['rev-parse', 'HEAD'], dir).stdout.trim();
   run('git', ['update-ref', 'refs/remotes/origin/main', base], dir);
+  marker(dir, dir, run('git', ['symbolic-ref', '-q', '--short', 'HEAD'], dir).stdout.trim(), 648, 'i648');
   return { dir, base, head: () => run('git', ['rev-parse', 'HEAD'], dir).stdout.trim(), commit: () => { run('git', ['add', 'sample.test.swift'], dir); run('git', ['commit', '-qm', 'change'], dir); } };
 }
 function role(dir, name = 'implementor') {
@@ -29,6 +30,12 @@ function role(dir, name = 'implementor') {
 }
 function hook(f, input = {}, extra = []) {
   return run('node', [script('stop-hook.mjs'), ...extra], f.dir, JSON.stringify({ hook_event_name: 'Stop', cwd: f.dir, ...input }));
+}
+function marker(home, worktree, branch, issue = 651, task = 'i651-20261111-a') {
+  const file = path.join(home, '.build/mado-verify/target-worktree');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ worktree, branch, issue, task }) + '\n');
+  return file;
 }
 
 test('integrity scan reports assertion removal, skips, retry, timeout, exit and counts', t => {
@@ -77,9 +84,9 @@ test('Stop hook allows unchanged and non-repo; blocks stale, missing, dirty; all
   fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testTwo() {}\n'); f.commit();
   assert.match(runHook().stdout, /"decision":"block"/);
   const old = path.join(f.dir, '.build/mado-verify'); fs.mkdirSync(old, { recursive: true });
-  fs.writeFileSync(path.join(old, `${f.base}.json`), JSON.stringify({ head: f.base, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-1', gates: [] }));
+  fs.writeFileSync(path.join(old, `${f.base}.json`), JSON.stringify({ head: f.base, issue: 648, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-1', gates: [] }));
   assert.match(runHook().stdout, /"decision":"block"/);
-  fs.writeFileSync(path.join(old, `${f.head()}.json`), JSON.stringify({ head: f.head(), commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-2', gates: gates() }));
+  fs.writeFileSync(path.join(old, `${f.head()}.json`), JSON.stringify({ head: f.head(), issue: 648, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-2', gates: gates() }));
   assert.equal(runHook().status, 0); assert.equal(runHook().stdout, '');
   fs.appendFileSync(path.join(f.dir, 'sample.test.swift'), '// dirty\n');
   assert.match(runHook().stdout, /"decision":"block"/);
@@ -119,6 +126,7 @@ test('detached clean feature checkout allows read-only Stop; Claude agent flag s
   fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testTwo() {}\n'); f.commit();
   assert.equal(run('git', ['checkout', '--detach', '-q', 'HEAD'], f.dir).status, 0);
   role(f.dir);
+  fs.unlinkSync(path.join(f.dir, '.build/mado-verify/target-worktree'));
   assert.equal(hook(f).stdout, '');
   assert.match(hook(f, {}, ['--role-source', 'claude-agent']).stdout, /"decision":"block"/);
 });
@@ -153,13 +161,12 @@ test('pane-home marker checks briefed worktree and its own complete record', t =
   role(f.dir);
   fs.writeFileSync(path.join(target, 'sample.test.swift'), 'func changed() {}\n');
   run('git', ['add', 'sample.test.swift'], target); run('git', ['commit', '-qm', 'feature'], target);
-  const marker = path.join(f.dir, '.build/mado-verify/target-worktree');
-  fs.mkdirSync(path.dirname(marker), { recursive: true }); fs.writeFileSync(marker, `${target}\n`);
+  marker(f.dir, target, 'feature', 648, 'i648');
   assert.match(hook(f).stdout, /"decision":"block"/);
   const targetHead = run('git', ['rev-parse', 'HEAD'], target).stdout.trim();
   const record = path.join(target, '.build/mado-verify', `${targetHead}.json`);
   fs.mkdirSync(path.dirname(record), { recursive: true });
-  fs.writeFileSync(record, JSON.stringify({ head: targetHead, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-123', gates: gates() }));
+  fs.writeFileSync(record, JSON.stringify({ head: targetHead, issue: 648, commentUrl: 'https://github.com/anzchy/mado/issues/648#issuecomment-123', gates: gates() }));
   assert.equal(hook(f).stdout, '');
   fs.unlinkSync(record); fs.unlinkSync(path.join(f.dir, '.codex/rules/picsee-role.rules')); role(target);
   assert.match(hook(f).stdout, /"decision":"block"/, 'target overlay alone selects implementor role');
@@ -167,9 +174,56 @@ test('pane-home marker checks briefed worktree and its own complete record', t =
 
 test('invalid target marker blocks implementor but allows auditor; absent marker keeps cwd behavior', t => {
   const f = fixture(t); role(f.dir);
-  const marker = path.join(f.dir, '.build/mado-verify/target-worktree');
-  fs.mkdirSync(path.dirname(marker), { recursive: true }); fs.writeFileSync(marker, '/tmp/no-such-mado-worktree\n');
+  const markerFile = path.join(f.dir, '.build/mado-verify/target-worktree');
+  marker(f.dir, '/tmp/no-such-mado-worktree', 'feature');
   assert.match(hook(f).stdout, /target worktree/i);
   role(f.dir, 'auditor'); assert.equal(hook(f).stdout, '');
-  fs.unlinkSync(marker); assert.equal(hook(f).stdout, '');
+  fs.unlinkSync(markerFile); role(f.dir); assert.match(hook(f).stdout, /target worktree/i);
+  fs.writeFileSync(markerFile, `${f.dir}\n`);
+  assert.match(hook(f).stdout, /Legacy one-line markers are invalid/);
+});
+
+test('dispatch marker rejects sibling, pane-home self-reference, stale branch and issue, and missing marker', t => {
+  const f = fixture(t), target = `${f.dir}-target`, sibling = `${f.dir}-sibling`;
+  for (const dir of [target, sibling]) t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'sibling', sibling], f.dir).status, 0);
+  role(f.dir);
+  const file = marker(f.dir, target, 'feature');
+  assert.match(hook(f, { last_assistant_message: `Worktree: ${sibling}` }).stdout, /"decision":"block"/);
+  marker(f.dir, f.dir, 'feature');
+  assert.match(hook(f).stdout, /"decision":"block"/);
+  marker(f.dir, target, 'sibling');
+  assert.match(hook(f).stdout, /"decision":"block"/);
+  marker(f.dir, target, 'feature', 650);
+  const head = run('git', ['rev-parse', 'HEAD'], target).stdout.trim();
+  const record = path.join(target, '.build/mado-verify', `${head}.json`);
+  fs.mkdirSync(path.dirname(record), { recursive: true });
+  fs.writeFileSync(record, JSON.stringify({ head, issue: 651, commentUrl: 'https://github.com/anzchy/mado/issues/651#issuecomment-123', gates: gates() }));
+  assert.match(hook(f).stdout, /"decision":"block"/);
+  fs.unlinkSync(file);
+  assert.match(hook(f).stdout, /"decision":"block"/);
+  role(f.dir, 'auditor'); assert.equal(hook(f).stdout, '');
+});
+
+test('matching target and fresh complete record allows handoff; mismatched named HEAD blocks', t => {
+  const f = fixture(t), target = `${f.dir}-target`;
+  t.after(() => fs.rmSync(target, { recursive: true, force: true }));
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  role(f.dir); marker(f.dir, target, 'feature');
+  const head = run('git', ['rev-parse', 'HEAD'], target).stdout.trim();
+  const record = path.join(target, '.build/mado-verify', `${head}.json`);
+  fs.mkdirSync(path.dirname(record), { recursive: true });
+  fs.writeFileSync(record, JSON.stringify({ head, issue: 651, commentUrl: 'https://github.com/anzchy/mado/issues/651#issuecomment-123', gates: gates() }));
+  assert.equal(hook(f, { last_assistant_message: `Worktree: ${target}\nBranch: feature\nHEAD: ${head}` }).stdout, '');
+  assert.match(hook(f, { last_assistant_message: `Worktree: ${target}\nBranch: feature\nHEAD: ${f.base.replace(/^./, '0')}` }).stdout, /"decision":"block"/);
+});
+
+test('mark-target writes complete dispatch identity', t => {
+  const f = fixture(t), target = `${f.dir}-target`;
+  t.after(() => fs.rmSync(target, { recursive: true, force: true }));
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-20261111-a'], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'feature', issue: 651, task: 'i651-20261111-a' });
 });
