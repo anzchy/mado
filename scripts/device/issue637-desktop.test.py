@@ -73,6 +73,11 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
     replacement = folder / 'replacement-light-69.png'
     synthetic_png(replacement, 69, {})
     captures['replacement-light-69'] = str(replacement)
+    for key in ('active-light-69', 'inactive-light-69', 'hidden-light-69', 'wake-light-69'):
+        path = folder / f'{key}.png'
+        marks = {point: (190, 190, 190) for point in points} if key == 'wake-light-69' else {}
+        synthetic_png(path, 69, marks)
+        captures[key] = str(path)
     manifest = folder / 'capture-manifest.json'
     manifest.write_text(json.dumps(dict(captures=captures, source='synthetic', build={'sha': 'fixture'})))
     return manifest

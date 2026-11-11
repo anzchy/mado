@@ -199,6 +199,18 @@ def set_opacity(source, run, pid, opacity):
     close_settings(source, run)
 
 
+def set_always_show(source, run, pid, desired):
+    settings(source, run, pid)
+    ax(pid, 'press', 'settings.section.general')
+    current = ax(pid, 'value', 'settings.always-show-tools').lower() in ('1', 'true', 'on')
+    if current != desired:
+        ax(pid, 'press', 'settings.always-show-tools')
+    actual = ax(pid, 'value', 'settings.always-show-tools').lower() in ('1', 'true', 'on')
+    if actual != desired:
+        raise EnvironmentFailure(f'Always Show Image Tools did not become {desired}')
+    close_settings(source, run)
+
+
 def open_fixture(source, run, path):
     app = Path((run / 'bundle.path').read_text().strip())
     invoke(['/usr/bin/open', '-a', app, path], timeout=15)
@@ -278,14 +290,18 @@ def analyze(manifest):
                         failures.extend(f'{key}/{group}: {reason}' for reason in reasons)
     if len(rows) != 72:
         raise EnvironmentFailure(f'incomplete sample matrix: {len(rows)} of 72')
-    for extra in ('pattern-light-30', 'pattern-light-100', 'pattern-light-zoom', 'replacement-light-69'):
+    for extra in ('pattern-light-30', 'pattern-light-100', 'pattern-light-zoom',
+                  'replacement-light-69', 'active-light-69', 'inactive-light-69',
+                  'hidden-light-69', 'wake-light-69'):
         if extra not in captures:
             raise EnvironmentFailure(f'missing capture: {extra}')
     pattern = png(captures['pattern-light-30'])
     pattern_opaque = png(captures['pattern-light-100'])
     zoomed = png(captures['pattern-light-zoom'])
     replacement = png(captures['replacement-light-69'])
-    if any(image[:2] != pattern[:2] for image in (pattern_opaque, zoomed, replacement)):
+    dynamic = {key: png(captures[key]) for key in
+               ('active-light-69', 'inactive-light-69', 'hidden-light-69', 'wake-light-69')}
+    if any(image[:2] != pattern[:2] for image in (pattern_opaque, zoomed, replacement, *dynamic.values())):
         raise EnvironmentFailure('pattern/zoom/replacement window dimensions changed')
     positions, background, scale = sample_points(pattern)
     smoothing = []
@@ -313,12 +329,24 @@ def analyze(manifest):
     total = len(range(100 * scale, width - 100 * scale, 8 * scale))
     if total == 0 or changed / total < .05:
         failures.append('zoom did not change the canvas pattern')
+    auto_hide = []
+    for group, point in positions.items():
+        hidden = pixel(dynamic['hidden-light-69'], *point)
+        woken = pixel(dynamic['wake-light-69'], *point)
+        backdrop = pixel(dynamic['hidden-light-69'], *background)
+        if any(abs(hidden[i] - backdrop[i]) > 2 for i in range(3)):
+            failures.append(f'auto-hide/{group}: hidden pixel {hidden} differs from canvas {backdrop}')
+        if max(abs(woken[i] - hidden[i]) for i in range(3)) < 8:
+            failures.append(f'auto-hide/{group}: Tab did not restore tool pod pixels')
+        auto_hide.append(dict(group=group, hidden=hidden, woken=woken, backdrop=backdrop))
     return dict(status='FAIL' if failures else 'PASS', scope='implemented viewer pages 14 and 16',
                 notVerified=['page 33 Filmstrip is unimplemented (PREF-04)',
                              'macOS 14 and other display scale require separate signed device runs',
-                             'pan gesture, active/inactive appearance and control contrast need separate device evidence'],
+                             'pan gesture and control contrast need separate device evidence',
+                             'active/inactive captures need independent visual review'],
                 sampleCount=len(rows), samples=rows, failures=failures,
                 smoothing=smoothing, zoomChanged=changed, zoomSampleCount=total,
+                autoHide=auto_hide, activeInactiveCaptured=True,
                 captures=captures, source=record.get('source'), build=record.get('build'))
 
 
@@ -393,6 +421,17 @@ def capture(source, run):
         captures['pattern-light-zoom'] = normalized_shot(run, source / 'scripts/device', 'pattern-light-zoom')
         open_fixture(source, run, fixtures / 'flat-069.png')
         captures['replacement-light-69'] = normalized_shot(run, source / 'scripts/device', 'replacement-light-69')
+        set_opacity(source / 'scripts/device', run, pid, 30)
+        captures['active-light-69'] = normalized_shot(run, source / 'scripts/device', 'active-light-69')
+        invoke(['/usr/bin/osascript', '-e', 'tell application "Finder" to activate'])
+        captures['inactive-light-69'] = normalized_shot(run, source / 'scripts/device', 'inactive-light-69')
+        ax(pid, 'window-title', 'window')  # Restore the owned app's active window.
+        set_always_show(source / 'scripts/device', run, pid, False)
+        time.sleep(3)
+        captures['hidden-light-69'] = normalized_shot(run, source / 'scripts/device', 'hidden-light-69')
+        invoke([source / 'scripts/device/kc.sh', run, 48], timeout=15)  # Tab wakes the tools.
+        captures['wake-light-69'] = normalized_shot(run, source / 'scripts/device', 'wake-light-69')
+        set_always_show(source / 'scripts/device', run, pid, True)
         record = dict(source=str(source), build=json.loads((run / 'build.json').read_text()),
                       captures=captures, notVerified=['page 33 Filmstrip unimplemented'])
         manifest = run / 'capture-manifest.json'
