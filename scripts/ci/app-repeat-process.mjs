@@ -11,6 +11,12 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   cancelOnHostObserved=false,hostQuery,hostSignal,groupSignal,groupQuery,preparedInspector,inspectorSpawn,
   signal,now=Date.now}={}){
   const required=env.MADO_HOST_OWNERSHIP_REQUIRED==='1';
+  const diagnosticPath=env.APP_REPEAT_DIAG_FILE;
+  const trace=(event,details={})=>{
+    if(!diagnosticPath)return;
+    try{appendFileSync(diagnosticPath,JSON.stringify({monoNs:process.hrtime.bigint().toString(),event,
+      remainingMilliseconds:deadline-now(),...details})+'\n');}catch{}
+  };
   const log=text=>appendFileSync(logPath,'app-repeat: '+text+'\n');
   let inspector=preparedInspector,host,child,group,childExit,cleanup,stopping=false,done=false,epoch=0,
     startupStopped=false,graceExpired=false,drainExpired=false,cancelledOnHostObserved=false,wakeResolve,
@@ -22,6 +28,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   const phaseDeadline=()=>!stopping?deadline:phase()==='SIGTERM'?cleanup.graceDeadline:cleanup.drainDeadline;
   function stop(reason){
     if(done||stopping||startupStopped)return;
+    if(diagnosticPath)trace('stop-requested',{reason,leaderExit:childExit??null,workerStarted});
     epoch++;
     if(!workerStarted){startupStopped=true;startupAbort.abort();log('startup stopped: '+reason);wake();return;}
     stopping=true;const at=now();cleanup=Object.freeze({graceStartedAt:at,graceDeadline:at+graceMs,drainDeadline:at+graceMs+drainMs});
@@ -66,13 +73,24 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   async function members(){
     if(!group)return [];
     const current=scope();
-    try{const result=await (groupQuery??nativeGroupQuery)(group,{notAfter:current.notAfter,now});return current.isCurrent()?result:null;}
-    catch{return null;}
+    if(diagnosticPath)trace('group-query-start',{group,phase:phase(),notAfter:current.notAfter});
+    try{const result=await (groupQuery??nativeGroupQuery)(group,{notAfter:current.notAfter,now});
+      const isCurrent=current.isCurrent(),currentResult=isCurrent?result:null;
+      if(diagnosticPath)trace('group-query-complete',{group,current:isCurrent,complete:currentResult!==null,
+        members:Array.isArray(currentResult)?currentResult.map(row=>({pid:Number(row[0]),pgid:Number(row[1]),state:row[2]})):null});
+      return currentResult;}
+    catch(error){if(diagnosticPath)trace('group-query-error',{group,errorName:error?.name??'unknown'});return null;}
   }
   async function observe(){
     if(!host||inspector?.busy)return;
-    const count=host.snapshot().identities.length;await host.observe(scope());
+    const before=host.snapshot();const count=before.identities.length;
+    if(diagnosticPath)trace('ownership-before-observe',{observed:before.observed,drained:before.drained,
+      identityPids:before.identities.map(value=>value.pid),livePids:before.live,unknown:before.unknown.length});
+    await host.observe(scope());
     const state=host.snapshot();if(state.identities.length>count)log('owned host registered '+JSON.stringify(state.identities.slice(count)));
+    if(diagnosticPath)trace('ownership-after-observe',{observed:state.observed,drained:state.drained,
+      identityPids:state.identities.map(value=>value.pid),livePids:state.live,
+      unknown:state.unknown.length,queryFailures:state.queryFailures.length});
     if(cancelOnHostObserved&&state.observed&&!stopping&&!startupStopped){cancelledOnHostObserved=true;stop('owned host observed; cancelling requested probe');}
   }
   async function authorize(){
@@ -82,6 +100,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     if(pending)await host.signalOwned(current,scope());
   }
   async function finish(status,proven){
+    if(diagnosticPath)trace('supervisor-finish-start',{status,proven,leaderExit:childExit??null,group:group??null,
+      hostObserved:host?.snapshot().observed??null});
     done=true;wake();clearTimeout(deadlineTimer);clearTimeout(graceTimer);clearTimeout(drainTimer);
     process.removeListener('SIGTERM',interrupted);process.removeListener('SIGINT',interrupted);signal?.removeEventListener('abort',aborted);
     const notAfter=cleanup?.drainDeadline??Math.min(deadline,now()+drainMs);
@@ -90,6 +110,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     if(inspector){try{closed=await inspector.close({notAfter});}catch{closed={closed:false,reaped:false};}}
     const inspectorState=inspector?{...closed,pid:inspector.pid,diagnostics:inspector.diagnostics}:undefined;
     const hostOwnership=host?.snapshot();if(hostOwnership)log('host ownership '+JSON.stringify(hostOwnership));
+    if(diagnosticPath)trace('supervisor-finish-complete',{status,proven,inspectorClosed:closed.closed,
+      inspectorReaped:closed.reaped,hostObserved:hostOwnership?.observed??null,hostDrained:hostOwnership?.drained??null});
     child?.unref();
     return {status:closed.closed&&closed.reaped?status:70,drained:proven&&closed.closed&&closed.reaped&&psChildren.size===0,
       ...(group?{group}:{}),cancelledOnHostObserved,...(cleanup?{cleanup}:{}),...(hostOwnership?{hostOwnership}:{}),
@@ -97,6 +119,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   }
   process.on('SIGTERM',interrupted);process.on('SIGINT',interrupted);signal?.addEventListener('abort',aborted,{once:true});
   try{
+    if(diagnosticPath)trace('supervisor-start',{required});
     if(!Number.isFinite(deadline)||deadline<=now()){
       log('job time budget exhausted');return await finish(70,!required);
     }
@@ -106,18 +129,34 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     deadlineTimer=setTimeout(()=>stop('job time budget exhausted; terminating iteration process group'),Math.max(0,deadline-now()));
     if(required){
       log('inspector startup '+JSON.stringify({deadline,remainingMilliseconds:Math.max(0,deadline-now())}));
+      if(diagnosticPath)trace('inspector-startup-start');
       if(!inspector)inspector=await prepareHostInspector({deadline,env,spawn:inspectorSpawn,now,signal:startupAbort.signal});
+      if(diagnosticPath)trace('inspector-startup-complete',{ready:inspector.ready,pid:inspector.pid??null});
       if(startupStopped||now()>=deadline||!inspector.ready)return await finish(70,false);
+      const ownershipQuery=hostQuery??(request=>inspector.query(request));
+      const tracedQuery=diagnosticPath?async request=>{
+        trace('ownership-query-start',{pids:request.pids??null,cleanupSignal:request.cleanupSignal??null,
+          notAfter:request.notAfter});
+        try{const result=await ownershipQuery(request);
+          trace('ownership-query-complete',{complete:result?.complete??false,
+            processPids:Array.isArray(result?.processes)?result.processes.map(value=>value.pid):[],
+            unknown:result?.unknown?.length??null});
+          return result;}
+        catch(error){trace('ownership-query-error',{errorName:error?.name??'unknown'});throw error;}
+      }:ownershipQuery;
       host=createAsyncHostOwnership({token:env.MADO_TEST_RUN_TOKEN,executable:env.MADO_HOST_EXECUTABLE,now,
-        excludeGroup:()=>group,query:hostQuery??(request=>inspector.query(request)),signal:hostSignal});
+        excludeGroup:()=>group,query:tracedQuery,signal:hostSignal});
     }
     if(startupStopped||now()>=deadline)return await finish(70,false);
     const childEnv={...env};if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;
     const fd=openSync(logPath,'a');try{child=spawn(command,args,{env:childEnv,detached:true,stdio:['ignore',fd,fd]});}finally{closeSync(fd);}
-    child.once('error',()=>{childExit={code:70,signal:null};if(workerStarted)stop('iteration startup failed');wake();});
-    child.once('exit',(code,termination)=>{childExit={code,signal:termination};wake();});
+    child.once('error',error=>{childExit={code:70,signal:null};if(diagnosticPath)trace('leader-error',{errorName:error.name});
+      if(workerStarted)stop('iteration startup failed');wake();});
+    child.once('exit',(code,termination)=>{childExit={code,signal:termination};
+      if(diagnosticPath)trace('leader-exit',{pid:child.pid,code,signal:termination});wake();});
     if(!child.pid){await new Promise(resolve=>child.once('error',resolve));return await finish(70,true);}
     group=child.pid;workerStarted=true;
+    if(diagnosticPath)trace('leader-spawned',{pid:child.pid,group});
     while(!done){
       if(stopping){
         if(phase()==='expired'){signalGroup('SIGKILL');return await finish(70,false);}
@@ -148,6 +187,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
             return await finish(childExit.signal||childExit.code===null?70:childExit.code,true);
           if(groupState!==null&&groupState.length===0&&host&&!host.snapshot().observed&&
             host.snapshot().live.length===0&&host.snapshot().unknown.length===0){
+            if(diagnosticPath)trace('host-registration-missing',{leaderExit:childExit,groupMembers:0});
             log('host registration missing after worker/group exit');return await finish(70,false);
           }
           // A live owned host or group member may finish after its leader.
@@ -156,6 +196,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
           if(groupState?.length||host&&inspector?.ready&&
             (host.snapshot().live.length||host.snapshot().unknown.length)){
             if(liveCount&&!leaderWaitLogged){
+              if(diagnosticPath)trace('leader-waiting-for-descendants',{liveCount,groupMembers:groupState?.length??null,
+                hostLive:host?.snapshot().live.length??null});
               log(`iteration leader exited; waiting for ${liveCount} live owned/group processes`);
               leaderWaitLogged=true;
             }

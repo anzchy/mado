@@ -1,7 +1,7 @@
 // Deterministic R2 orchestration regressions follow; real OS assertions moved intact to integration/.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,writeFileSync,existsSync,rmSync,realpathSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,existsSync,rmSync,realpathSync,mkdirSync,copyFileSync,appendFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -148,18 +148,34 @@ test('stop notification freezes cleanup journal before a later held query reply 
 });
 
 test('owned host may exit shortly after its iteration leader without forced cleanup',async t=>{
-  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid'),release=path.join(dir,'release');
-  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid'),release=path.join(dir,'release'),
+    logPath=path.join(dir,'iteration.log'),diagDir=process.env.APP_REPEAT_DIAG_DIR,
+    diagPath=diagDir?path.join(diagDir,`owned-host-${token}.jsonl`):null;
+  if(diagPath)mkdirSync(diagDir,{recursive:true});
+  let outcome='failed';
+  const testTrace=(event,details={})=>appendFileSync(diagPath,JSON.stringify({monoNs:process.hrtime.bigint().toString(),
+    event,pid:process.pid,...details})+'\n');
+  t.after(()=>{if(diagPath){testTrace('test-finished',{outcome});
+    if(existsSync(logPath))copyFileSync(logPath,path.join(diagDir,`owned-host-${token}.log`));}
+    rmSync(dir,{recursive:true,force:true});});
   const inspector=await prepareHostInspector({deadline:Date.now()+10000});
   assert.equal(inspector.ready,true);t.after(()=>inspector.close());
-  const hostSource=`const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(poll);setTimeout(()=>process.exit(0),500);}},10);`;
-  const leaderSource=`const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
-  const logPath=path.join(dir,'iteration.log');
+  const childTrace=(event,details='')=>`fs.appendFileSync(${JSON.stringify(diagPath)},JSON.stringify({monoNs:process.hrtime.bigint().toString(),event:${JSON.stringify(event)},pid:process.pid${details?','+details:''}})+'\\n');`;
+  const hostSource=diagPath
+    ? `const fs=require('node:fs');${childTrace('host-created')}fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));${childTrace('host-ready')}process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){${childTrace('host-release-seen')}clearInterval(poll);setTimeout(()=>{${childTrace('host-natural-exit')}process.exit(0);},500);}},10);`
+    : `const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(poll);setTimeout(()=>process.exit(0),500);}},10);`;
+  const leaderSource=diagPath
+    ? `const fs=require('node:fs');const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});${childTrace('leader-spawned-host','hostPid:host.pid')}host.once('message',()=>{${childTrace('leader-received-host-ready','hostPid:host.pid')}process.exit(0);});`
+    : `const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
   const pending=runProcessGroup({command:process.execPath,args:['-e',leaderSource],preparedInspector:inspector,
-    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1',
+      ...(diagPath?{APP_REPEAT_DIAG_FILE:diagPath}:{})},
     logPath,deadline:Date.now()+4000,graceMs:80,drainMs:1000});
+  if(diagPath)testTrace('test-wait-start');
   await waitForFileText(logPath,'iteration leader exited; waiting for 1 live owned/group processes',pending);
+  if(diagPath)testTrace('test-wait-complete');
   writeFileSync(release,'go');
+  if(diagPath)testTrace('test-release-written');
   const result=await pending;
   assert.equal(existsSync(marker),true,'the host must start before its leader exits');
   assert.equal(result.hostOwnership.observed,true,'the real inspector must observe the owned host');
@@ -167,6 +183,7 @@ test('owned host may exit shortly after its iteration leader without forced clea
   assert.equal(result.drained,true);
   assert.equal(result.cleanup,undefined,'natural host exit should not enter cleanup');
   assert.match(readFileSync(logPath,'utf8'),/iteration leader exited; waiting for 1 live owned\/group processes/);
+  outcome='passed';
 });
 
 test('owned host that outlives the run deadline is killed and proven drained',async t=>{

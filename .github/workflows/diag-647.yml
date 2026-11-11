@@ -1,0 +1,40 @@
+# #647 scratch hosted diagnostic only. No acceptance credit; this branch is never merged.
+name: Diagnose #647 owned host
+on:
+  push:
+    branches: [diag/647-hosted]
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-reproduction:
+    name: Full Node suite diagnostic ${{ matrix.execution }}/10
+    runs-on: macos-26
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        execution: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Prepare diagnostic directory
+        run: mkdir -p diag-647
+      - name: Full CI Node suite with observation-only diagnostics
+        env:
+          APP_REPEAT_DIAG_DIR: diag-647
+        run: node --test scripts/ci/*.test.mjs
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: diag-647-${{ matrix.execution }}
+          path: diag-647/
+          if-no-files-found: error
