@@ -134,7 +134,8 @@ private final class AccessMonitorNotification: @unchecked Sendable {
         case .unmounted(let volume):
             files.diagnostics.emit("AccessVolume event=unmount outcome=received volume=\(volume.uuid ?? "unknown")", path: volume.url)
             guard let uuid = volume.uuid else { return }
-            for id in Array(recoveryTasks.keys) where state.snapshot(for: id)?.volumeUUID == uuid {
+            for id in Array(recoveryTasks.keys) {
+                guard state.snapshot(for: id)?.volumeUUID == uuid else { continue }
                 cancelRecovery(id)
             }
             if let name = volume.name { volumeNames[uuid] = name }
@@ -505,7 +506,8 @@ private final class AccessMonitorNotification: @unchecked Sendable {
             state.snapshot(for: id).map { (id, $0) }
         })
         let persisted = Set(await files.records().map(\.id))
-        for (id, snapshot) in captured where !persisted.contains(id) && state.snapshot(for: id) == snapshot {
+        for (id, snapshot) in captured {
+            guard !persisted.contains(id) && state.snapshot(for: id) == snapshot else { continue }
             beginReplacement(id)
             if snapshot.availability == .readable {
                 _ = state.reportRootFailure(id, cause: .notFound, from: state.stamp(for: id))

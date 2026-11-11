@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findForWhere, scanTree } from './for-where-ban.mjs';
+import { findForWhere, scanTree, scanProductionTrees } from './for-where-ban.mjs';
 
 test('Swift source has no for-where loops (issue #358)', () => {
-  const root = process.env.PICSEE_FOR_WHERE_SOURCE_ROOT ?? new URL('../../Packages/MadoKit/Sources/', import.meta.url).pathname;
-  const hits = scanTree(root);
+  const root = process.env.PICSEE_FOR_WHERE_REPO_ROOT ?? new URL('../../', import.meta.url).pathname;
+  const hits = scanProductionTrees(root);
   assert.deepEqual(hits, [], `issue #358: replace for … where with a leading guard: ${hits.join(', ')}`);
 });
 
@@ -28,5 +28,16 @@ test('gate discovers a loop in a newly added source file', () => {
     mkdirSync(join(root, 'New'));
     writeFileSync(join(root, 'New', 'Code.swift'), '// for x in xs where false {}\nfor x in xs\nwhere x > 0 { use(x) }\n');
     assert.deepEqual(scanTree(root), ['New/Code.swift:2']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('gate scans App production sources as well as package sources', () => {
+  const root = mkdtempSync(join(tmpdir(), 'issue358-app-ban-'));
+  try {
+    mkdirSync(join(root, 'App'));
+    mkdirSync(join(root, 'Packages', 'MadoKit', 'Sources'), { recursive: true });
+    writeFileSync(join(root, 'App', 'New.swift'), 'for id in ids where id.isReady { use(id) }\n');
+    writeFileSync(join(root, 'Packages', 'MadoKit', 'Sources', 'AlsoNew.swift'), 'for x in xs where x > 0 { use(x) }\n');
+    assert.deepEqual(scanProductionTrees(root), ['Packages/MadoKit/Sources/AlsoNew.swift:1', 'App/New.swift:1']);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
