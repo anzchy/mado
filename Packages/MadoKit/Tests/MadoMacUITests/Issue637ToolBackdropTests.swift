@@ -74,6 +74,33 @@ import MadoApplication
     }
 }
 
+@Test @MainActor func issue637BackdropKeepsPreviousBlurUntilNewGenerationCompletes() async throws {
+    _ = NSApplication.shared
+    let first = try issue637ToolImage(grey: 69.0 / 255)
+    let second = try issue637ToolImage(grey: 226.0 / 255)
+    let presentation = ChromeBackdropPresentation()
+    presentation.request(generation: 1)
+    presentation.complete(first, generation: 1)
+    presentation.request(generation: 2)
+    #expect(presentation.visibleImage === first)
+    presentation.complete(second, generation: 1)
+    #expect(presentation.visibleImage === first)
+    presentation.complete(second, generation: 2)
+    #expect(presentation.visibleImage === second)
+
+    let overlay = ViewerChromeOverlay(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), session: ViewerSession())
+    overlay.setToolBackgroundOpacity(30)
+    overlay.setBackdropFrame(issue637ToolFrame(first, generation: 1, background: 69.0 / 255))
+    await issue637NextMainTurn()
+    let surface = try issue637ToolSurface(overlay.groups[0])
+    overlay.setBackdropFrame(issue637ToolFrame(second, generation: 2, background: 226.0 / 255))
+    let pending = try issue637RawSRGB(issue637ToolRaster(surface), x: 10, y: 19)
+    #expect(abs(pending.redComponent - 69.0 / 255) < 2.0 / 255)
+    await issue637NextMainTurn()
+    let updated = try issue637RawSRGB(issue637ToolRaster(surface), x: 10, y: 19)
+    #expect(abs(updated.redComponent - 226.0 / 255) < 2.0 / 255)
+}
+
 @Test @MainActor func issue637ToolBackdropFlatGreyCoverageAllGroupsThemesAndTiers() async throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), session: ViewerSession())
@@ -109,6 +136,14 @@ import MadoApplication
                     let components = [(composite.redComponent, nominalPanel.redComponent),
                         (composite.greenComponent, nominalPanel.greenComponent),
                         (composite.blueComponent, nominalPanel.blueComponent)]
+                    if percent < 100 {
+                        for (observed, panelRGB) in components {
+                            let separation = abs(panelRGB - backdropGrey)
+                            let expected = backdropGrey + target * (panelRGB - backdropGrey)
+                            #expect(separation > 0 && abs(observed - expected) <= 0.05 * separation,
+                                    "every low-opacity channel must satisfy the ±0.05 coverage target")
+                        }
+                    }
                     let stable = components.filter { abs($0.1 - backdropGrey) > 0.12 }
                     // White over grey 226 has too little channel separation for a stable ratio.
                     if stable.isEmpty {
