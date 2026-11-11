@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { gateVerdict } from './gate-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
 function privacyHits(body) {
@@ -35,10 +36,10 @@ try {
   }
   if (mode === 'record') {
     if (!new RegExp(`^https://github\\.com/[^/]+/[^/]+/issues/${d.issue}#issuecomment-\\d+$`).test(d.commentUrl || '')) throw new Error('record requires evidence comment URL for this issue');
-    if (d.gates.some(g => !Number.isInteger(g.exitCode))) throw new Error('every gate needs an exit code');
+    const verdict = gateVerdict(d.gates);
     const target = path.join(process.cwd(), '.build/mado-verify', `${d.head}.json`);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, JSON.stringify({ head: d.head, gates: d.gates, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() }, null, 2) + '\n');
+    fs.writeFileSync(target, JSON.stringify({ head: d.head, gates: d.gates, complete: verdict.complete, problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() }, null, 2) + '\n');
     console.log(target);
   }
 } catch (error) { console.error(error.message); process.exitCode = 1; }
