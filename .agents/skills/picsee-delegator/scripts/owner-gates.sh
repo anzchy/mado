@@ -1,6 +1,6 @@
 #!/bin/zsh
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
-# implementer's head; never trust a reported "all green". Writes <out>/<prefix>-summary.txt (out defaults to
+# implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
 # ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
 #   head=<full sha> / swift= / lcov= (0 only at 100%) / lines a/b functions c/d [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
 #   / the Swift "Test run with N tests" line / DONE
@@ -49,7 +49,12 @@ $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALL
 node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
-$hl npm run design:check > $o/$p-design.log 2>&1; lane_result design $?
+if [[ ! -d node_modules ]]; then
+  echo "design: missing node_modules in $wt; run npm ci --ignore-scripts in this worktree" > $o/$p-design.log
+  lane_result design 1
+else
+  $hl npm run design:check > $o/$p-design.log 2>&1; lane_result design $?
+fi
 grep -E 'Test run with .* tests' $o/$p-swift.log | tail -1 >> $s || summary_error
 echo DONE >> $s || summary_error
 cat "$s" || summary_error

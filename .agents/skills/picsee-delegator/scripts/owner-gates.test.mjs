@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../../..', import.meta.url));
 const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
-function fixture(t, mode = 'pass', covered = 2) {
+function fixture(t, mode = 'pass', covered = 2, npmInstalled = true) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/swift-lcov.sh']) {
@@ -17,6 +17,7 @@ function fixture(t, mode = 'pass', covered = 2) {
   for (const group of ['agents', 'tdd', 'ledger']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
   const bin = path.join(dir, 'bin'), build = path.join(dir, 'build'), out = path.join(dir, 'out');
   fs.mkdirSync(bin); fs.mkdirSync(path.join(build, 'codecov'), { recursive: true });
+  if (npmInstalled) fs.mkdirSync(path.join(dir, 'node_modules'));
   fs.mkdirSync(path.join(build, 'MadoKitPackageTests.xctest/Contents/MacOS'), { recursive: true });
   fs.writeFileSync(path.join(build, 'codecov/default.profdata'), 'old profile');
   fs.mkdirSync(path.join(dir, 'coverage')); fs.writeFileSync(path.join(dir, 'coverage/lcov.info'), 'old passing report');
@@ -62,6 +63,13 @@ test('owner reports failure and timeout, rejects old coverage and completes late
     assert.equal(f.summary.match(/^DONE$/gm)?.length, 1);
     if (mode === 'hang') assert.match(fs.readFileSync(path.join(f.out, 'run-swift.log'), 'utf8'), /exit 124 \(timed out\)/);
   }
+});
+
+test('missing npm dependencies report an actionable design failure', t => {
+  const f = fixture(t, 'pass', 2, false);
+  assert.equal(f.result.status, 1, f.result.stderr);
+  assert.match(f.summary, /^design=1$/m);
+  assert.match(fs.readFileSync(path.join(f.out, 'run-design.log'), 'utf8'), /npm ci --ignore-scripts/);
 });
 
 test('owner normal pass keeps full-suite evidence and unchanged 100 percent coverage check', t => {
