@@ -34,29 +34,34 @@ function run(argv) {
         if (!all.length) throw Error('viewer window absent');
         return String(all[0].name());
     }
-    var window = settingsWindow();
-    if (operation === 'settings-window') return 'PASS settings-window ' + description(window);
-    var allElements = window.entireContents();
-    var element = null;
-    for (var i = 0; i < allElements.length; i++) {
-        try {
-            if (allElements[i].attributes.byName('AXIdentifier').value() === identifier) {
-                element = allElements[i];
-                break;
-            }
-        } catch (_error) {}
+    if (operation === 'settings-window') return 'PASS settings-window ' + description(settingsWindow());
+    function findElement() {
+        // A sidebar press renames Settings (Display -> General), invalidating
+        // every element specifier captured from the old window name.
+        var window = settingsWindow();
+        var allElements = window.entireContents();
+        for (var i = 0; i < allElements.length; i++) {
+            try {
+                if (allElements[i].attributes.byName('AXIdentifier').value() === identifier) {
+                    return allElements[i];
+                }
+            } catch (_error) {}
+        }
+        throw Error('AXIdentifier not found in Settings window: ' + identifier +
+                    '; window=' + description(window));
     }
-    if (!element) throw Error('AXIdentifier not found in Settings window: ' + identifier +
-                             '; window=' + description(window));
+    var element = findElement();
     if (operation === 'value') return String(element.value());
     if (operation === 'press') {
         var before = String(element.value());
         var action = element.actions.byName('AXPress');
         if (!action.exists()) throw Error('AXPress unavailable: ' + identifier);
+        var pressError = null;
         try { action.perform(); }
-        catch (_error) { se.perform(action); }
+        catch (error) { pressError = error; }
         delay(0.15);
-        var after = String(element.value());
+        var after = String(findElement().value());
+        if (pressError && after === before) throw pressError;
         if (after === before && before !== '1' && before !== 'true') {
             throw Error('AXPress made no progress: ' + identifier + ' value=' + after);
         }
@@ -70,7 +75,7 @@ function run(argv) {
         }
         element.value = desired;
         delay(0.6);
-        var current = Number(element.value());
+        var current = Number(findElement().value());
         if (current !== desired) throw Error('slider did not reach ' + desired + ': ' + current);
         return 'PASS slider ' + identifier + '=' + current;
     }
