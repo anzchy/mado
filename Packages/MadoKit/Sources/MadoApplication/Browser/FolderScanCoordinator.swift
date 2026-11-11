@@ -663,8 +663,8 @@ struct FolderScanFailedRead {
         guard metadataReader != nil,
               conditions.sort == .captureDate || conditions.sort == .pixelDimensions,
               let sourceSnapshot else { return }
-        for entry in candidates ?? sourceSnapshot.navigationEntries
-            where metadata[entry.itemID] == nil && !pendingMetadataIDs.contains(entry.itemID) {
+        for entry in candidates ?? sourceSnapshot.navigationEntries {
+            guard metadata[entry.itemID] == nil && !pendingMetadataIDs.contains(entry.itemID) else { continue }
             pendingMetadataIDs.insert(entry.itemID)
             metadataQueue.append(entry)
         }

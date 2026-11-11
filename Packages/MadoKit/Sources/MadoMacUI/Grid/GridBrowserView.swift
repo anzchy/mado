@@ -554,7 +554,8 @@ private enum GridPageMove {
         // The flow layout is installed in init and remains this view's layout.
         let attributes = collectionView.collectionViewLayout!.layoutAttributesForElements(in: collectionView.visibleRect)
         var visible: Set<Int> = []
-        for attribute in attributes where attribute.representedElementCategory == .item {
+        for attribute in attributes {
+            guard attribute.representedElementCategory == .item else { continue }
             if let index = attribute.indexPath?.item { visible.insert(index) }
         }
         return visible

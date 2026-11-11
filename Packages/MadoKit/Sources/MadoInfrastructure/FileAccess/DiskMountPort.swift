@@ -59,7 +59,8 @@ public protocol DiskMountPort: Sendable {
         // A notification without the URL still has a useful before/after UUID diff.
         let current = provider()
         let mountedUUIDs = Set(current.compactMap(\.uuid))
-        for (path, volume) in knownByPath where volume.uuid.map({ !mountedUUIDs.contains($0) }) == true {
+        for (path, volume) in knownByPath {
+            guard volume.uuid.map({ !mountedUUIDs.contains($0) }) == true else { continue }
             knownByPath.removeValue(forKey: path)
             continuation.yield(.unmounted(volume))
         }

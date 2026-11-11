@@ -69,3 +69,13 @@ private let snapshotVersion = SnapshotVersion(rootID: snapshotRoot.id, folder: s
     #expect(final.entries.dropFirst().first?.itemID == current)
     #expect(first.entries.map(\.relativePath) == ["img2.png", "img10.png"])
 }
+
+@Test func issue358FolderSnapshotKeepsFirstNavigationEntryForDuplicateID() {
+    let first = snapshotEntry("first.jpg")
+    let second = snapshotEntry("second.jpg")
+    let snapshot = FolderSnapshot(version: snapshotVersion, entries: [first, first, second], isComplete: true)
+    #expect(snapshot.entries.count == 3)
+    #expect(snapshot.navigationEntries.map(\.itemID) == [first.itemID, second.itemID])
+    #expect(snapshot.navigationIndex(for: first.itemID) == 0)
+    #expect(snapshot.navigationIndex(for: second.itemID) == 1)
+}

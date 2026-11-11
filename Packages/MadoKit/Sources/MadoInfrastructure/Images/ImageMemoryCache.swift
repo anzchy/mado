@@ -304,7 +304,8 @@ public actor ImageMemoryCache {
         // rather than assuming either mtimes or request-start order identify the newest header.
         if let observation { observations[observation]?.itemID = key.itemID }
         recordRevision(key.revision, for: key.itemID)
-        for index in entries.indices where entries[index].key.itemID == key.itemID {
+        for index in entries.indices {
+            guard entries[index].key.itemID == key.itemID else { continue }
             entries[index].stale = entries[index].stale || entries[index].key.revision != key.revision
         }
         while let index = entries.firstIndex(where: { $0.stale && $0.pins == 0 }) {
@@ -376,7 +377,8 @@ public actor ImageMemoryCache {
         var preview = 0, detail = 0, pinnedBytes = 0
         // A shared buffer is attributed to detail while any detail key retains it.
         for isPreview in [false, true] {
-            for entry in entries where entry.key.isPreview == isPreview {
+            for entry in entries {
+                guard entry.key.isPreview == isPreview else { continue }
                 for image in [entry.image] + entry.variants {
                     let id = ObjectIdentifier(image.image), cost = image.image.bytesPerRow * image.image.height
                     if seen.insert(id).inserted { if isPreview { preview += cost } else { detail += cost } }

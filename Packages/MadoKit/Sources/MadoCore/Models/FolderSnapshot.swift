@@ -66,7 +66,8 @@ public struct FolderSnapshot: Equatable, Sendable {
     init(version: SnapshotVersion, orderedEntries: [FolderEntry], isComplete: Bool) {
         self.version = version; entries = orderedEntries; self.isComplete = isComplete
         var unique: [FolderEntry] = [], indices: [ItemID: Int] = [:]
-        for entry in orderedEntries where indices[entry.itemID] == nil {
+        for entry in orderedEntries {
+            guard indices[entry.itemID] == nil else { continue }
             indices[entry.itemID] = unique.count
             unique.append(entry)
         }

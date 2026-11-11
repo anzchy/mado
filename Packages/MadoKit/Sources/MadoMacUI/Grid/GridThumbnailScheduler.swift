@@ -93,7 +93,8 @@ enum GridThumbnailPixelSizing {
         let lower = max(0, first - margin)
         let upper = min(snapshot.navigationEntries.count - 1, last + margin)
         let desired = underPressure ? visible.filter { (lower...upper).contains($0) } : Set(lower...upper)
-        for index in Array(records.keys) where !desired.contains(index) {
+        for index in Array(records.keys) {
+            guard !desired.contains(index) else { continue }
             drop(records.removeValue(forKey: index))
         }
         // Visible requests enter admission first; prefetch may use remaining non-current slots.

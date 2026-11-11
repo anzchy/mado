@@ -141,7 +141,8 @@ public enum AccessStateChange: Equatable, Sendable {
         for observer in Array(observers.values) { observer(change) }
     }
     public func diskUnmounted(volumeUUID: String) {
-        for (id, var entry) in entries where entry.volumeUUID == volumeUUID && entry.mounted {
+        for (id, var entry) in entries {
+            guard entry.volumeUUID == volumeUUID && entry.mounted else { continue }
             entry.mounted = false
             entry.counter += 1
             entry.availability = .lost(.diskNotConnected)
@@ -152,7 +153,8 @@ public enum AccessStateChange: Equatable, Sendable {
     }
     public func diskMounted(volumeUUID: String) -> [AccessRecoveryAttempt] {
         var attempts: [AccessRecoveryAttempt] = []
-        for (id, var entry) in entries where entry.volumeUUID == volumeUUID && !entry.mounted {
+        for (id, var entry) in entries {
+            guard entry.volumeUUID == volumeUUID && !entry.mounted else { continue }
             entry.mounted = true
             entries[id] = entry
             if case .lost = entry.availability {

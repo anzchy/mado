@@ -125,3 +125,28 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
         #expect(events.allSatisfy { if case .lost(_, let counter) = $0 { counter == 1 } else { false } })
     }
 }
+
+@MainActor @Test func issue358MixedVolumesRejectUnrelatedUnmountAndRemount() {
+    let state = AccessState()
+    let first = AccessRootID(), second = AccessRootID(), other = AccessRootID()
+    state.register(first, volumeUUID: "111")
+    state.register(second, volumeUUID: "111")
+    state.register(other, volumeUUID: "222")
+    var events: [AccessStateChange] = []
+    _ = state.observe { events.append($0) }
+
+    state.diskUnmounted(volumeUUID: "111")
+    #expect(state.snapshot(for: first)?.availability == .lost(.diskNotConnected))
+    #expect(state.snapshot(for: second)?.availability == .lost(.diskNotConnected))
+    #expect(state.snapshot(for: other)?.availability == .readable)
+    #expect(state.snapshot(for: other)?.counter == 0)
+    #expect(events.count == 2)
+    state.diskUnmounted(volumeUUID: "111")
+    #expect(events.count == 2, "already-unmounted entries must be rejected")
+
+    let attempts = state.diskMounted(volumeUUID: "111")
+    #expect(Set(attempts.map(\.rootID)) == [first, second])
+    #expect(state.snapshot(for: other)?.availability == .readable)
+    #expect(state.diskMounted(volumeUUID: "111").isEmpty, "already-mounted entries must be rejected")
+    #expect(state.diskMounted(volumeUUID: "222").isEmpty, "the other volume is mounted already")
+}
