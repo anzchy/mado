@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import SwiftUI
 import MadoCore
 import MadoApplication
@@ -564,5 +565,142 @@ public final class ViewerChromeOverlay: NSView {
         for tool in tools { tool.refresh() }
         updateAccessibilityChildren(visible: shown)
         relinkKeyViews()
+    }
+}
+
+/// Snapshot contract shared by the canvas and the tool backdrop.
+public struct CanvasBackdropFrame {
+    public let image: CGImage?
+    public let sourceSize: CGSize
+    public let transform: CanvasTransform
+    public let canvasSize: CGSize
+    public let background: NSColor
+    public let generation: UInt64
+
+    public init(image: CGImage?, sourceSize: CGSize, transform: CanvasTransform,
+                canvasSize: CGSize, background: NSColor, generation: UInt64) {
+        self.image = image
+        self.sourceSize = sourceSize
+        self.transform = transform
+        self.canvasSize = canvasSize
+        self.background = background
+        self.generation = generation
+    }
+}
+
+/// Uses the same flipped NSView/AppKit drawing path as CanvasView, while limiting
+/// rasterization to the padded pill region rather than the full image or window.
+private final class ChromeBackdropRasterView: NSView {
+    let source: CanvasBackdropFrame
+
+    init(source: CanvasBackdropFrame) {
+        self.source = source
+        super.init(frame: CGRect(origin: .zero, size: source.canvasSize))
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        source.background.setFill()
+        bounds.fill()
+        guard let image = source.image, source.sourceSize.width > 0, source.sourceSize.height > 0 else { return }
+        let origin = source.transform.imageToView(.zero)
+        let end = source.transform.imageToView(CGPoint(x: source.sourceSize.width, y: source.sourceSize.height))
+        let destination = CGRect(x: origin.x, y: origin.y, width: end.x - origin.x, height: end.y - origin.y)
+        NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+            .draw(in: destination, from: .zero, operation: .sourceOver, fraction: 1,
+                  respectFlipped: true, hints: [.interpolation: NSImageInterpolation.none])
+    }
+}
+
+@MainActor enum ChromeBackdropRenderer {
+    private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    private static let context = CIContext(options: [
+        .useSoftwareRenderer: false,
+        .workingColorSpace: colorSpace
+    ])
+
+    static func render(_ frame: CanvasBackdropFrame, pillRect: CGRect,
+                       backingScale: CGFloat, blurRadius: CGFloat, saturation: CGFloat) -> CGImage? {
+        guard pillRect.width > 0, pillRect.height > 0, pillRect.width.isFinite, pillRect.height.isFinite,
+              backingScale > 0, backingScale.isFinite, blurRadius >= 0, blurRadius.isFinite,
+              saturation >= 0, saturation.isFinite else { return nil }
+        let width = Int((pillRect.width * backingScale).rounded())
+        let height = Int((pillRect.height * backingScale).rounded())
+        guard width > 0, height > 0, width <= 8192, height <= 8192 else { return nil }
+        let padding = Int(ceil(blurRadius * backingScale * 3))
+        let rasterWidth = width + padding * 2
+        let rasterHeight = height + padding * 2
+        guard rasterWidth <= 8192, rasterHeight <= 8192 else { return nil }
+        let region = CGRect(x: pillRect.minX - CGFloat(padding) / backingScale,
+                            y: pillRect.minY - CGFloat(padding) / backingScale,
+                            width: CGFloat(rasterWidth) / backingScale,
+                            height: CGFloat(rasterHeight) / backingScale)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rasterWidth,
+            pixelsHigh: rasterHeight, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = region.size
+        rep.setProperty(.colorSyncProfileData, withValue: NSColorSpace.sRGB.iccProfileData)
+        ChromeBackdropRasterView(source: frame).cacheDisplay(in: region, to: rep)
+        guard let raster = rep.cgImage else { return nil }
+
+        let source = CIImage(cgImage: raster)
+        let filtered: CIImage
+        if blurRadius > 0 {
+            guard let gaussian = CIFilter(name: "CIGaussianBlur") else { return nil }
+            gaussian.setValue(source, forKey: kCIInputImageKey)
+            gaussian.setValue(blurRadius * backingScale, forKey: kCIInputRadiusKey)
+            guard let blurred = gaussian.outputImage,
+                  let colors = CIFilter(name: "CIColorControls") else { return nil }
+            colors.setValue(blurred, forKey: kCIInputImageKey)
+            colors.setValue(saturation, forKey: kCIInputSaturationKey)
+            guard let result = colors.outputImage else { return nil }
+            filtered = result
+        } else {
+            filtered = source
+        }
+        let crop = CGRect(x: padding, y: padding, width: width, height: height)
+        guard let cropped = context.createCGImage(filtered, from: crop),
+              let masked = CGContext(data: nil, width: width, height: height,
+                  bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        masked.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: width, height: height),
+            cornerWidth: min(6 * backingScale, CGFloat(width) / 2),
+            cornerHeight: min(6 * backingScale, CGFloat(height) / 2), transform: nil))
+        masked.clip()
+        masked.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return masked.makeImage()
+    }
+}
+
+@MainActor final class ChromeBackdropPresentation {
+    private(set) var visibleImage: CGImage?
+    private(set) var visibleGeneration: UInt64 = 0
+    private var requestedGeneration: UInt64 = 0
+    private var hidden = false
+    private var pendingGeneration: UInt64?
+    func takePendingGeneration() -> UInt64? {
+        guard !hidden else { return nil }
+        defer { pendingGeneration = nil }
+        return pendingGeneration
+    }
+    func request(generation: UInt64) {
+        guard generation > requestedGeneration else { return }
+        requestedGeneration = generation
+        visibleImage = nil
+        pendingGeneration = hidden ? nil : generation
+    }
+    func complete(_ image: CGImage, generation: UInt64) {
+        guard !hidden, generation == requestedGeneration else { return }
+        visibleImage = image
+        visibleGeneration = generation
+    }
+    func setHidden(_ hidden: Bool) {
+        self.hidden = hidden
+        if hidden {
+            visibleImage = nil
+            pendingGeneration = nil
+        }
     }
 }
