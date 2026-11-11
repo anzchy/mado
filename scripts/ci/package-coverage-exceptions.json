@@ -1,0 +1,19 @@
+[
+  {"path":"Packages/MadoKit/Sources/MadoApplication/Access/ViewerSessionNavigationHost.swift","reason":"Protocol requirements only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoApplication/MadoApplication.swift","reason":"Module marker import only."},
+  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/FirstPreviewTracing.swift","reason":"Enum cases and protocol requirements only."},
+  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerChromeScheduler.swift","reason":"Protocol requirement only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerImageHost.swift","reason":"Protocol requirements only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSingleImageReturnHost.swift","reason":"Protocol requirements only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Canvas/CanvasZoomMode.swift","reason":"Enum case declarations only."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Commands/FocusContext.swift","reason":"Enum case declarations only."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/MadoCore.swift","reason":"Module marker import only."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/CacheMaintenance.swift","reason":"Protocol requirements only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/FolderMetadataReading.swift","reason":"Protocol requirement only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/FolderWatching.swift","reason":"Enum cases and protocol requirements only."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/ImagePresentationPinning.swift","reason":"Protocol requirements only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/PrefetchResuming.swift","reason":"Protocol requirement only; no implementation body."},
+  {"path":"Packages/MadoKit/Sources/MadoInfrastructure/MadoInfrastructure.swift","reason":"Module marker import only."},
+  {"path":"Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Tokens/DesignRegistry.swift","reason":"Static literal constants only; LLVM emits no executable mapping."},
+  {"path":"Packages/MadoKit/Sources/MadoMacUI/MadoMacUI.swift","reason":"Module marker imports only."}
+]
