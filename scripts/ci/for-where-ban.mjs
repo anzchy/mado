@@ -63,3 +63,10 @@ export function scanTree(root) {
   visit(root);
   return hits;
 }
+
+// Both SwiftPM sources and the native App target compile into the product.
+export function scanProductionTrees(repoRoot) {
+  const roots = ['Packages/MadoKit/Sources', 'App'];
+  return roots.flatMap((relative) => scanTree(path.join(repoRoot, relative))
+    .map((hit) => `${relative}/${hit}`));
+}
