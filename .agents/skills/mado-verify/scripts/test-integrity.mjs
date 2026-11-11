@@ -13,6 +13,7 @@ function git(...argv) {
 function count(text) {
   return (text.match(/\b(?:func\s+test\w+\s*\(|@Test\b|test\s*\()/g) || []).length;
 }
+const isTestFile = file => /(?:^|\/)(?:[^/]+\.test\.[cm]?js|[^/]+\.test\.swift|test_[^/]+\.py|[^/]+Tests?\.swift|[^/]+Spec\.swift|app-quarantine\.json)$/i.test(file);
 const rules = [
   ['skip', /(?:\.disabled\b|XCTSkip\b|\bskip\b|quarantine)/i],
   ['retry', /\bretr(?:y|ies)\b|retry-tests-on-failure/i],
@@ -20,10 +21,9 @@ const rules = [
   ['exit-zero', /\b(?:process\.)?exit\s*\(\s*0\s*\)|sys\.exit\s*\(\s*0\s*\)/i],
 ];
 try {
-  const files = git('diff', '--name-only', '-z', `${base}..HEAD`).split('\0').filter(Boolean)
-    .filter(f => /(?:test|spec|quarantine)/i.test(f));
+  const files = git('diff', '--name-only', '-z', `${base}..HEAD`).split('\0').filter(Boolean).filter(isTestFile);
   function countTree(ref) {
-    return git('ls-tree', '-r', '--name-only', '-z', ref).split('\0').filter(f => /(?:test|spec)/i.test(f))
+    return git('ls-tree', '-r', '--name-only', '-z', ref).split('\0').filter(isTestFile)
       .reduce((total, file) => {
         const shown = spawnSync('git', ['show', `${ref}:${file}`], { encoding: 'utf8', maxBuffer: 10_000_000 });
         return total + (shown.status === 0 ? count(shown.stdout) : 0);

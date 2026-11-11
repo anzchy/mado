@@ -34,6 +34,15 @@ test('integrity scan reports assertion removal, skips, retry, timeout, exit and 
   assert.ok(report.receipts.some(x => x.status === 'MISSING-RED'));
 });
 
+test('integrity scan ignores a non-test script whose name contains test', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'test-integrity.mjs'), 'const retry = 1;\n');
+  run('git', ['add', 'test-integrity.mjs'], f.dir); run('git', ['commit', '-qm', 'script'], f.dir);
+  const r = run('node', [script('test-integrity.mjs'), '--base', f.base], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).hits.length, 0);
+});
+
 test('evidence renderer scans privacy and record writer requires a real comment URL', t => {
   const f = fixture(t);
   const data = { issue: 648, task: 'i648', branch: 'test', head: f.base, gates: [{ command: 'node --test', exitCode: 0, keyLine: '2 tests' }], integrity: 'none', byType: [{ behavior: 'tool', expected: 'pass', actual: 'pass', result: 'PASS' }], notVerified: ['none'] };
