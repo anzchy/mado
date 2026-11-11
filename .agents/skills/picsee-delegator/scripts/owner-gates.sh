@@ -2,7 +2,7 @@
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
 # implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
 # ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
-#   head=<full sha> / swift= / lcov= (0 only at 100%) / lines a/b functions c/d [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
+#   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
 #   / the Swift "Test run with N tests" line / DONE
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree or head mismatch.
@@ -32,16 +32,16 @@ echo "head=$(git rev-parse HEAD)" > $s || summary_error
 node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
 swift_code=$?
 lane_result swift $swift_code
-# swift-lcov.sh only writes coverage/lcov.info; lcov-total.py sums it and fails below 100% (an uncovered line once
-# passed as lcov=0). lcov= is that check's exit code; the next line holds the totals and any uncovered file:line.
+# Re-evaluate the fresh local unit artifact with the same strict evaluator as CI.
+# lcov= is that check's exit code; the next line holds raw and eligible totals.
 if (( swift_code == 0 )); then
-  sh scripts/tdd/swift-lcov.sh > $o/$p-lcov.log 2>&1 && python3 $here/lcov-total.py coverage/lcov.info >> $o/$p-lcov.log 2>&1
+  node scripts/ci/package-coverage-local.mjs --reuse > $o/$p-lcov.log 2>&1
   lane_result lcov $?
 else
   echo "coverage skipped: Swift run failed (exit $swift_code); prior coverage is not current evidence" > $o/$p-lcov.log
   lane_result lcov 1
 fi
-grep -E '^(lines|uncovered|no report|empty report)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
+grep -E '^(Package:|Coverage gate:|Uncovered locations:|- Packages/)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \

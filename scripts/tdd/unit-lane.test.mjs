@@ -17,11 +17,16 @@ function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const bin = path.join(dir, 'bin'); fs.mkdirSync(bin);
+  fs.mkdirSync(path.join(dir, 'scripts/tdd'), { recursive: true });
+  fs.copyFileSync(path.join(root, 'scripts/tdd/unit-locked.mjs'), path.join(dir, 'scripts/tdd/unit-locked.mjs'));
+  fs.mkdirSync(path.join(dir, 'scripts/ci'), { recursive: true });
+  fs.copyFileSync(path.join(root, 'scripts/ci/test-watchdog.mjs'), path.join(dir, 'scripts/ci/test-watchdog.mjs'));
   fs.writeFileSync(path.join(bin, 'swift'), `#!${process.execPath}
 const fs=require('node:fs'), cp=require('node:child_process');
 fs.appendFileSync(process.env.ATTEMPTS,JSON.stringify(process.argv.slice(2))+'\\n');
 if(process.env.PICSEE_HEAVY_LOCK_HELD!=='1')process.exit(23);
 fs.writeFileSync(process.env.STARTED,String(Date.now()));
+if(process.env.ORDER)fs.appendFileSync(process.env.ORDER,'swift\\n');
 if(process.env.MODE==='hang'){
  fs.writeFileSync(process.env.LEADER,String(process.pid));
  cp.spawn(process.execPath,['-e',"require('fs').writeFileSync(process.env.HELPER,String(process.pid));process.on('SIGTERM',()=>{});setTimeout(()=>process.exit(0),5000);setInterval(()=>{},100);"],{detached:true,stdio:'inherit'});
@@ -39,7 +44,7 @@ if(process.env.MODE==='hang'){
 }
 function run(f, extra = {}) {
   const { stderrFile, ...overrides } = extra;
-  const options = { cwd: f.dir, ...short, timeoutSeconds: f.env.MODE === 'hang' ? 2 : 30, ...overrides };
+  const options = { cwd: f.dir, ...short, timeoutSeconds: f.env.MODE === 'hang' ? 2 : 30, verifyCoverage: false, ...overrides };
   const fd = stderrFile ? fs.openSync(stderrFile, 'w') : undefined;
   let result;
   try {
@@ -64,6 +69,20 @@ test('full unit success and ordinary failure preserve output, status and single 
       [['test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']]);
     assert.match(fs.readFileSync(path.join(captures(f)[0], 'test.log'), 'utf8'), /7 tests/);
   }
+});
+
+test('fresh profile cleanup, the unchanged Swift command and strict evaluation share one lock admission', t => {
+  const f = fixture(t);
+  f.env.ORDER = path.join(f.dir, 'order');
+  for (const [name, marker] of [['package-coverage-clear.mjs', 'clear'], ['package-coverage-local.mjs', 'evaluate']]) {
+    fs.writeFileSync(path.join(f.dir, 'scripts/ci', name),
+      `import fs from 'node:fs';if(process.env.PICSEE_HEAVY_LOCK_HELD!=='1')process.exit(23);fs.appendFileSync(process.env.ORDER,${JSON.stringify(marker + '\n')});`);
+  }
+  const r = run(f, { verifyCoverage: true });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(fs.readFileSync(f.env.ORDER, 'utf8').trim().split('\n'), ['clear', 'swift', 'evaluate']);
+  assert.deepEqual(fs.readFileSync(f.env.ATTEMPTS, 'utf8').trim().split('\n').map(JSON.parse),
+    [['test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']]);
 });
 
 test('hung detached helper exits 124, keeps diagnostics and releases the lock', async t => {
@@ -165,8 +184,8 @@ test('guardian fixes the production deadline and preserves coverage policy', () 
   assert.equal(unit.command, 'node scripts/tdd/unit-lane.mjs');
   assert.equal(unit.timeoutMs, 9000000);
   assert.deepEqual(UNIT_LIMITS, { timeoutSeconds: 600, captureSeconds: 90, graceSeconds: 15, lockWaitSeconds: 7200 });
-  assert.equal(unit.coverageReportCommand, 'sh scripts/tdd/swift-lcov.sh');
-  assert.equal(unit.coverageSummaryPath, 'coverage/lcov.info');
+  assert.equal(unit.coverageReportCommand, 'node scripts/ci/package-coverage-local.mjs --reuse');
+  assert.equal(unit.coverageSummaryPath, 'coverage/package-eligible.lcov');
   assert.deepEqual(config.coverageThresholds, { lines: 100, functions: 100, branches: 0, statements: 100 });
   const lane = config.lanes.find(l => l.name === 'unit-watchdog-node');
   assert.deepEqual(lane.gateOn, ['manual']); assert.equal(lane.coverage, 'none');
