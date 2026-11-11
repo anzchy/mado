@@ -391,7 +391,8 @@ public actor FileAccess: AccessLeasing {
     /// Match fresh bookmark resolution under its own scope, including a persisted
     /// destination whose published location was dropped by an earlier failed read.
     private func persistedDestination(_ destination: URL, excluding id: AccessRootID) -> AccessRootID? {
-        for record in saved where record.id != id {
+        for record in saved {
+            guard record.id != id else { continue }
             guard let resolution = try? bookmarks.resolve(record.bookmark),
                   let session = try? ScopeSession(scope: scope, url: resolution.url, rootID: record.id) else { continue }
             defer { session.stop() }
