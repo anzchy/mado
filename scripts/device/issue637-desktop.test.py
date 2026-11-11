@@ -155,6 +155,31 @@ class DesktopParserTests(unittest.TestCase):
             self.assertTrue(capture.call_args.kwargs['dry_ax'])
             self.assertEqual(json.loads((output / 'verdict.json').read_text())['status'], 'PASS')
 
+    def test_dry_ax_moves_slider_to_different_tier_and_restores_original(self):
+        for original, expected in ((50, [30, 50]), (30, [50, 30])):
+            with self.subTest(original=original):
+                changes = []
+                def fake_ax(_pid, operation, identifier, value=None):
+                    if operation == 'set-slider':
+                        changes.append(value)
+                        return f'PASS slider {identifier}={value}'
+                    return f'{changes[-1]}%'
+                with patch.object(desktop, 'ax', side_effect=fake_ax):
+                    desktop.dry_probe_opacity(123, original)
+                self.assertEqual(changes, expected)
+
+    def test_dry_ax_restores_after_probe_label_failure(self):
+        changes = []
+        def fake_ax(_pid, operation, _identifier, value=None):
+            if operation == 'set-slider':
+                changes.append(value)
+                return 'PASS'
+            return '50%'  # Wrong after the probe changed the slider to 30.
+        with patch.object(desktop, 'ax', side_effect=fake_ax):
+            with self.assertRaisesRegex(desktop.EnvironmentFailure, 'opacity label'):
+                desktop.dry_probe_opacity(123, 50)
+        self.assertEqual(changes, [30, 50])
+
 
 if __name__ == '__main__':
     unittest.main()

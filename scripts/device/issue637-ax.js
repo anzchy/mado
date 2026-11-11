@@ -26,7 +26,9 @@ function run(argv) {
         if (candidates.length !== 1) {
             throw Error('Settings window not uniquely present; windows=[' + windowList() + ']');
         }
-        return candidates[0];
+        // The working desktop helper used a window-by-name specifier for
+        // writable AXSlider.value, rather than the index-bound list element.
+        return proc.windows.byName(String(candidates[0].name()));
     }
     if (operation === 'window-list') return windowList();
     if (operation === 'window-title') {
@@ -35,22 +37,22 @@ function run(argv) {
         return String(all[0].name());
     }
     if (operation === 'settings-window') return 'PASS settings-window ' + description(settingsWindow());
-    function findElement() {
+    function findElement(targetIdentifier) {
         // A sidebar press renames Settings (Display -> General), invalidating
         // every element specifier captured from the old window name.
         var window = settingsWindow();
         var allElements = window.entireContents();
         for (var i = 0; i < allElements.length; i++) {
             try {
-                if (allElements[i].attributes.byName('AXIdentifier').value() === identifier) {
+                if (allElements[i].attributes.byName('AXIdentifier').value() === targetIdentifier) {
                     return allElements[i];
                 }
             } catch (_error) {}
         }
-        throw Error('AXIdentifier not found in Settings window: ' + identifier +
+        throw Error('AXIdentifier not found in Settings window: ' + targetIdentifier +
                     '; window=' + description(window));
     }
-    var element = findElement();
+    var element = findElement(identifier);
     if (operation === 'value') return String(element.value());
     if (operation === 'press') {
         var before = String(element.value());
@@ -60,7 +62,7 @@ function run(argv) {
         try { action.perform(); }
         catch (error) { pressError = error; }
         delay(0.15);
-        var after = String(findElement().value());
+        var after = String(findElement(identifier).value());
         if (pressError && after === before) throw pressError;
         if (after === before && before !== '1' && before !== 'true') {
             throw Error('AXPress made no progress: ' + identifier + ' value=' + after);
@@ -73,10 +75,44 @@ function run(argv) {
         if (!Number.isInteger(desired) || desired < 30 || desired > 100) {
             throw Error('opacity outside 30...100');
         }
-        element.value = desired;
+        var assignmentError = null;
+        try { element.value = desired; }
+        catch (error) { assignmentError = error; }
         delay(0.6);
-        var current = Number(findElement().value());
-        if (current !== desired) throw Error('slider did not reach ' + desired + ': ' + current);
+        var current = Number(findElement(identifier).value());
+        if (!Number.isFinite(current)) throw Error('slider has nonnumeric value: ' + current);
+        for (var step = 0; current !== desired && step < 71; step++) {
+            var direction = current < desired ? 'AXIncrement' : 'AXDecrement';
+            var action = findElement(identifier).actions.byName(direction);
+            if (!action.exists()) throw Error(direction + ' unavailable: ' + identifier);
+            var actionError = null;
+            try { action.perform(); }
+            catch (error) { actionError = error; }
+            delay(0.1);
+            var next = Number(findElement(identifier).value());
+            if (next === current) {
+                delay(0.2);
+                next = Number(findElement(identifier).value());
+            }
+            if (!Number.isFinite(next) || next === current) {
+                if (actionError) throw actionError;
+                throw Error(direction + ' made no progress at ' + current);
+            }
+            if ((current < desired && next > desired) || (current > desired && next < desired)) {
+                throw Error(direction + ' overshot ' + desired + ': ' + next);
+            }
+            current = next;
+        }
+        if (current !== desired) throw Error('slider did not reach ' + desired + ': ' + current +
+                                             (assignmentError ? ' assignment=' + assignmentError : ''));
+        delay(0.6);
+        current = Number(findElement(identifier).value());
+        var label = String(findElement('settings.display.tool-opacity.value').value());
+        var percentage = label.match(/([0-9]{2,3})\s*%/);
+        if (current !== desired) throw Error('slider did not settle at ' + desired + ': ' + current);
+        if (!percentage || Number(percentage[1]) !== desired) {
+            throw Error('opacity label did not reach ' + desired + ': ' + label);
+        }
         return 'PASS slider ' + identifier + '=' + current;
     }
     throw Error('unknown operation: ' + operation);
