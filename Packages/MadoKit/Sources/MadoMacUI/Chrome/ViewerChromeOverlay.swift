@@ -293,7 +293,7 @@ private final class ChromeFloatingGroupView: NSView {
         requestedFrame = frame
         requestedRect = rect
         requestedScale = scale
-        mayRender = visible && panel.opacity < 100
+        mayRender = visible && panel.opacity < 100 && frame != nil
         presentation.setHidden(!mayRender)
         backdrop.isHidden = !mayRender
         if !mayRender {
@@ -307,7 +307,6 @@ private final class ChromeFloatingGroupView: NSView {
                 signpostID: OSSignpostID(log: Self.perfLog, object: self),
                 "ticket=%{public}llu frame=%{public}llu", requestTicket, frame.generation)
         }
-        backdrop.image = nil
         guard !renderScheduled else { return }
         renderScheduled = true
         DispatchQueue.main.async { [weak self] in self?.renderPendingBackdrop() }
@@ -778,7 +777,6 @@ final class ChromeBackdropRasterView: NSView {
     func request(generation: UInt64) {
         guard generation > requestedGeneration else { return }
         requestedGeneration = generation
-        visibleImage = nil
         pendingGeneration = hidden ? nil : generation
     }
     func complete(_ image: CGImage, generation: UInt64) {
