@@ -8,12 +8,12 @@ import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLA
 
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const prefix = 'Packages/MadoKit/Sources/';
-// Reviewed identities from i631-fn-astra.md B. The manifest supplies the full
-// readable symbol and all provenance; these hashes prevent adding another
-// symbol at either approved source location by editing only the manifest.
+// Reviewed identities from i631-fn-astra.md B and the pending M6 refresh.
+// The manifest supplies readable symbols and provenance; these pins prevent
+// replacing the approved symbol or source by editing only the manifest.
 const approvedFunctionIdentities = new Map([
-  [`${prefix}MadoMacUI/Chrome/ViewerChromeOverlay.swift:198`, '0d760c77616e860a9bc85999c00fc95ffaff7fac32df2f45b221310e00f0cdcd'],
-  [`${prefix}MadoMacUI/Inspector/InspectorPanel.swift:191`, 'e55dd121048c133d38dd7d11d9ec25d52df5048ba7b5bf3dd2bd91718532ff6f'],
+  [`${prefix}MadoMacUI/Chrome/ViewerChromeOverlay.swift:198`, { symbolSha256: '0d760c77616e860a9bc85999c00fc95ffaff7fac32df2f45b221310e00f0cdcd', sourceSha256: 'a1e985e2de3bf574033337383db0daeec08eec043126fd0d7a00bd05f41d9a18', decision: 'i631-pin-refresh.md M6' }],
+  [`${prefix}MadoMacUI/Inspector/InspectorPanel.swift:191`, { symbolSha256: 'e55dd121048c133d38dd7d11d9ec25d52df5048ba7b5bf3dd2bd91718532ff6f', sourceSha256: '5ca22be215ecad2f711546e1569c959e5f41eacc0dd632332788e8d085b41477', decision: 'i631-fn-astra.md B' }],
 ]);
 // The review decision freezes all 17 declaration-only paths. The canonical
 // manifest digest also pins each whole-source SHA, rationale, toolchain and
@@ -172,11 +172,13 @@ function functionExceptions(root, sources, toolchain) {
     number(entry.start, `${entry.path} function exception start`, true);
     const location = `${entry.path}:${entry.start}`;
     if (!approvedFunctionIdentities.has(location)) fatal(`unapproved function exception location ${location}`);
-    if (digest(symbol) !== approvedFunctionIdentities.get(location)) fatal(`unapproved function exception symbol ${location}`);
+    const approved = approvedFunctionIdentities.get(location);
+    if (digest(symbol) !== approved.symbolSha256) fatal(`unapproved function exception symbol ${location}`);
+    if (entry.sourceSha256 !== approved.sourceSha256) fatal(`unapproved function exception source pin ${location}`);
     if (locations.has(location)) fatal(`duplicate function exception location ${location}`);
     locations.add(location);
     nonempty(entry.reason, `${entry.path} reason`);
-    if (entry.decision !== 'i631-fn-astra.md B') fatal(`${entry.path}: function exception decision reference drift`);
+    if (entry.decision !== approved.decision) fatal(`${entry.path}: function exception decision reference drift`);
     const key = `${entry.path}\u0000${symbol}`;
     if (result.has(key)) fatal(`duplicate function exception ${entry.path}:${symbol}`);
     result.set(key, entry);
