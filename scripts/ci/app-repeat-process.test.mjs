@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {PassThrough} from 'node:stream';
+import {randomUUID} from 'node:crypto';
 import {runProcessGroup} from './app-repeat-process.mjs';
 import {externalInspectorFixture} from './fixtures/host-inspector-process.mjs';
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
@@ -135,4 +136,39 @@ test('stop notification freezes cleanup journal before a later held query reply 
   now=1100;release({complete:true,processes:[identity(o.env.MADO_TEST_RUN_TOKEN)],unknown:[]});await turn();now=2080;
   const result=await pending;assert.deepEqual(result.cleanup,frozen);assert.equal(result.hostOwnership.signals.length,0);
   assert.equal(result.status,70);assert.equal(result.drained,false);
+});
+
+test('owned host may exit shortly after its iteration leader without forced cleanup',async t=>{
+  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid');
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const hostSource=`require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');setTimeout(()=>process.exit(0),500);`;
+  const leaderSource=`const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
+  const logPath=path.join(dir,'iteration.log');
+  const result=await runProcessGroup({command:process.execPath,args:['-e',leaderSource],
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
+    logPath,deadline:Date.now()+4000,graceMs:80,drainMs:1000});
+  assert.equal(existsSync(marker),true,'the host must start before its leader exits');
+  assert.equal(result.hostOwnership.observed,true,'the real inspector must observe the owned host');
+  assert.equal(result.status,0,readFileSync(logPath,'utf8'));
+  assert.equal(result.drained,true);
+  assert.equal(result.cleanup,undefined,'natural host exit should not enter cleanup');
+});
+
+test('owned host that outlives the run deadline is killed and proven drained',async t=>{
+  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid');
+  t.after(()=>{if(existsSync(marker))try{process.kill(Number(readFileSync(marker,'utf8')),'SIGKILL');}catch{}rmSync(dir,{recursive:true,force:true});});
+  const hostSource=`require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));process.on('SIGTERM',()=>{});process.send('ready');setInterval(()=>{},1000);`;
+  const leaderSource=`const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
+  const logPath=path.join(dir,'iteration.log'),deadline=Date.now()+900;
+  const result=await runProcessGroup({command:process.execPath,args:['-e',leaderSource],
+    env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
+    logPath,deadline,graceMs:80,drainMs:1000});
+  assert.equal(existsSync(marker),true);
+  assert.equal(result.hostOwnership.observed,true);
+  assert.equal(result.status,70);
+  assert.equal(result.drained,true);
+  assert.equal(result.hostOwnership.drained,true);
+  assert.equal(result.hostOwnership.signals.some(sent=>sent.signal==='SIGKILL'),true);
+  assert.equal(result.cleanup.graceStartedAt>=deadline-2,true,
+    'cleanup begins at the original run deadline, allowing timer rounding\n'+readFileSync(logPath,'utf8'));
 });

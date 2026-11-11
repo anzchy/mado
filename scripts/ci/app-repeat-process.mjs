@@ -150,9 +150,10 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
             host.snapshot().live.length===0&&host.snapshot().unknown.length===0){
             log('host registration missing after worker/group exit');return await finish(70,false);
           }
-          // A failed observation is uncertainty, not proof of a live host.
-          // Let another current query recover within the original run budget.
-          if(host&&inspector?.ready&&host.snapshot().unknown.length){await idle();continue;}
+          // A live owned host or group member may finish after its leader.
+          // Keep observing on the original run budget, including uncertain queries.
+          if(groupState?.length||host&&inspector?.ready&&
+            (host.snapshot().live.length||host.snapshot().unknown.length)){await idle();continue;}
           stop('iteration leader exited with live descendants or unknown host');continue;
         }
       }
