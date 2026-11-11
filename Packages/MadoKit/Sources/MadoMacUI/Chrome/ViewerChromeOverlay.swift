@@ -1,5 +1,7 @@
 import AppKit
 import CoreImage
+import Darwin
+import os
 import SwiftUI
 import MadoCore
 import MadoApplication
@@ -260,6 +262,12 @@ private final class ChromeToolPanelView: NSView {
 }
 
 private final class ChromeFloatingGroupView: NSView {
+    private static let perfLog = OSLog(subsystem: "io.github.anzchy.mado", category: "chrome-backdrop")
+    private static func threadCPUNanoseconds() -> UInt64? {
+        var value = timespec()
+        guard clock_gettime(CLOCK_THREAD_CPUTIME_ID, &value) == 0 else { return nil }
+        return UInt64(value.tv_sec) * 1_000_000_000 + UInt64(value.tv_nsec)
+    }
     private let backdrop = ChromeToolBackdropView()
     private let panel = ChromeToolPanelView()
     private let presentation = ChromeBackdropPresentation()
@@ -294,6 +302,11 @@ private final class ChromeFloatingGroupView: NSView {
         }
         requestTicket &+= 1
         presentation.request(generation: requestTicket)
+        if let frame {
+            os_signpost(.event, log: Self.perfLog, name: "ChromeBackdropRequest",
+                signpostID: OSSignpostID(log: Self.perfLog, object: self),
+                "ticket=%{public}llu frame=%{public}llu", requestTicket, frame.generation)
+        }
         backdrop.image = nil
         guard !renderScheduled else { return }
         renderScheduled = true
@@ -303,11 +316,26 @@ private final class ChromeFloatingGroupView: NSView {
         renderScheduled = false
         guard mayRender, let frame = requestedFrame,
               let ticket = presentation.takePendingGeneration() else { return }
+        let signpost = OSSignpostID(log: Self.perfLog, object: self)
+        let cpuStart = Self.threadCPUNanoseconds()
+        os_signpost(.begin, log: Self.perfLog, name: "ChromeBackdropRender", signpostID: signpost,
+            "ticket=%{public}llu frame=%{public}llu", ticket, frame.generation)
         let image = ChromeBackdropRenderer.render(frame, pillRect: requestedRect,
             backingScale: requestedScale, blurRadius: 20, saturation: 1.6)
+        let cpuEnd = Self.threadCPUNanoseconds()
+        let cpuText = if let cpuStart, let cpuEnd, cpuEnd >= cpuStart {
+            String(cpuEnd - cpuStart)
+        } else { "unknown" }
+        os_signpost(.end, log: Self.perfLog, name: "ChromeBackdropRender", signpostID: signpost,
+            "ticket=%{public}llu frame=%{public}llu cpu_ns=%{public}s outcome=%{public}s",
+            ticket, frame.generation, cpuText, image == nil ? "failed" : "rendered")
         if let image {
             presentation.complete(image, generation: ticket)
             backdrop.image = presentation.visibleImage
+            if backdrop.image != nil {
+                os_signpost(.event, log: Self.perfLog, name: "ChromeBackdropPresent", signpostID: signpost,
+                    "ticket=%{public}llu frame=%{public}llu", ticket, frame.generation)
+            }
         }
     }
     func updateOpacity(_ opacity: Double) {
