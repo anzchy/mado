@@ -4,6 +4,16 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
+@Test @MainActor func issue637BackdropRasterRejectsArchivedConstruction() {
+    #expect(ChromeBackdropRasterView(coder: NSKeyedArchiver(requiringSecureCoding: false)) == nil)
+}
+
+@Test @MainActor func issue637ScaleAccessibilityLabelsMatchVisibleModes() {
+    #expect(ScaleIndicator.modeLabel(actualPixels: false, customZoom: nil) == "Fit window")
+    #expect(ScaleIndicator.modeLabel(actualPixels: true, customZoom: nil) == "1:1 · 100%")
+    #expect(ScaleIndicator.modeLabel(actualPixels: false, customZoom: 1.25) == "125%")
+}
+
 @MainActor private func issue637ToolImage(grey: CGFloat, stripes: Bool = false, size: CGSize = CGSize(width: 1280, height: 800)) throws -> CGImage {
     let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
     let context = try #require(CGContext(data: nil, width: Int(size.width), height: Int(size.height),

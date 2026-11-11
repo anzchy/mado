@@ -198,7 +198,7 @@ public final class ChromeToolView: NSView {
         case .command(.actualPixels):
             guard let session else { return super.accessibilityValue() }
             let custom: Double? = if case .custom(let value) = session.zoomMode { value } else { nil }
-            return ScaleIndicator(actualPixels: session.zoomMode == .actualPixels, customZoom: custom, action: activate).label
+            return ScaleIndicator.modeLabel(actualPixels: session.zoomMode == .actualPixels, customZoom: custom)
         case .intent(.toggleSidebar): return NSNumber(value: sidebarShown ? 1 : 0)
         default: return super.accessibilityValue()
         }
@@ -675,7 +675,7 @@ public struct CanvasBackdropFrame {
 
 /// Uses the same flipped NSView/AppKit drawing path as CanvasView, while limiting
 /// rasterization to the padded pill region rather than the full image or window.
-private final class ChromeBackdropRasterView: NSView {
+final class ChromeBackdropRasterView: NSView {
     let source: CanvasBackdropFrame
 
     init(source: CanvasBackdropFrame, region: CGRect) {

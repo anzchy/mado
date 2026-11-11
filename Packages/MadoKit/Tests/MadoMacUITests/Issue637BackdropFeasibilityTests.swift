@@ -178,7 +178,12 @@ import MadoInfrastructure
     canvas.viewDidChangeBackingProperties()
     let backing = canvas.backdropFrame
     #expect(initial.generation < dark.generation && dark.generation < resized.generation && resized.generation < backing.generation)
-    #expect(dark.background.usingColorSpace(.sRGB) != initial.background.usingColorSpace(.sRGB))
+    let lightRGB = try #require(initial.background.usingColorSpace(.sRGB))
+    let darkRGB = try #require(dark.background.usingColorSpace(.sRGB))
+    #expect([lightRGB.redComponent, lightRGB.greenComponent, lightRGB.blueComponent].allSatisfy { abs($0 - 1) < 0.001 })
+    #expect(abs(darkRGB.redComponent - 15.0 / 255) < 0.001)
+    #expect(abs(darkRGB.greenComponent - 17.0 / 255) < 0.001)
+    #expect(abs(darkRGB.blueComponent - 21.0 / 255) < 0.001)
     #expect(resized.canvasSize == CGSize(width: 180, height: 140))
 }
 
