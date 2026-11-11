@@ -1,5 +1,7 @@
 # Issue 393: first hosted focus-test slice
 
+2026-11-10 — #642 removed legacy mode, `hosted_focus_only`, and `native_red_receipt`; legacy dispatch commands below are historical.
+
 WI-1 uses a separate `MadoHostedFocusTests` target with `TEST_HOST` and
 `BUNDLE_LOADER` pointing at the production Mado executable. The normal retained
 bundle excludes the migrated group, so the combined lane runs each behavior once.
