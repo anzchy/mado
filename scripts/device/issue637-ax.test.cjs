@@ -6,8 +6,8 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, 'issue637-ax.js'), 'utf8');
 
-function fixture({ sliderStuck = false, renameOnPress = false,
-                   invalidateOnSliderSet = false, throwAfterPress = false } = {}) {
+function fixture({ sliderStuck = false, directAssignmentIgnored = false, wrongLabel = false,
+                   renameOnPress = false, invalidateOnSliderSet = false, throwAfterPress = false } = {}) {
   let windowName = 'Display';
   let generation = 0;
   const values = new Map([
@@ -23,8 +23,12 @@ function fixture({ sliderStuck = false, renameOnPress = false,
       return { value: () => id };
     } },
     actions: { byName(name) {
-      assert.equal(name, 'AXPress');
+      assert.ok(['AXPress', 'AXIncrement', 'AXDecrement'].includes(name));
       return { exists: () => true, perform: () => {
+        if (name !== 'AXPress') {
+          if (!sliderStuck) values.set(id, values.get(id) + (name === 'AXIncrement' ? 1 : -1));
+          return;
+        }
         values.set(id, values.get(id) ? 0 : 1);
         if (renameOnPress && id === 'settings.section.general') {
           windowName = 'General';
@@ -37,12 +41,15 @@ function fixture({ sliderStuck = false, renameOnPress = false,
     get(target, key) {
       if (key === 'value') return () => {
         if (boundGeneration !== generation) throw Error("Can't get object (-1728)");
+        if (id === 'settings.display.tool-opacity.value') {
+          return wrongLabel ? '50%' : values.get('settings.display.tool-opacity') + '%';
+        }
         return values.get(id);
       };
       return target[key];
     },
     set(_target, key, value) {
-      if (key === 'value' && !sliderStuck) {
+      if (key === 'value' && !sliderStuck && !directAssignmentIgnored) {
         values.set(id, value);
         if (invalidateOnSliderSet) generation += 1;
       }
@@ -52,7 +59,7 @@ function fixture({ sliderStuck = false, renameOnPress = false,
   };
   const settings = {
     name: () => windowName, size: () => [760, 514],
-    entireContents: () => [...values.keys()].map(element),
+    entireContents: () => [...values.keys(), 'settings.display.tool-opacity.value'].map(element),
   };
   const viewer = {
     name: () => 'Mado', size: () => [960, 640],
@@ -60,7 +67,10 @@ function fixture({ sliderStuck = false, renameOnPress = false,
   };
   const process = {
     exists: () => true,
-    windows: () => [settings, viewer],
+    windows: Object.assign(() => [settings, viewer], { byName: (name) => {
+      assert.equal(name, windowName);
+      return settings;
+    } }),
     frontmost: false,
   };
   const se = { processes: { whose: ({ unixId }) => {
@@ -105,10 +115,20 @@ test('JXA sets slider value and verifies readback', () => {
   assert.equal(ax.values.get('settings.display.tool-opacity'), 30);
   const stuck = fixture({ sliderStuck: true });
   assert.throws(() => stuck.run('set-slider', 'settings.display.tool-opacity', 30),
-    /slider did not reach 30: 50/);
+    /no progress|did not reach/);
   const rebuilt = fixture({ invalidateOnSliderSet: true });
   assert.equal(rebuilt.run('set-slider', 'settings.display.tool-opacity', 30),
     'PASS slider settings.display.tool-opacity=30');
+});
+
+test('JXA steps a slider when direct assignment is ignored, then checks the label', () => {
+  const ax = fixture({ directAssignmentIgnored: true });
+  assert.equal(ax.run('set-slider', 'settings.display.tool-opacity', 30),
+    'PASS slider settings.display.tool-opacity=30');
+  assert.equal(ax.values.get('settings.display.tool-opacity'), 30);
+  const badLabel = fixture({ directAssignmentIgnored: true, wrongLabel: true });
+  assert.throws(() => badLabel.run('set-slider', 'settings.display.tool-opacity', 30),
+    /opacity label did not reach 30/);
 });
 
 test('JXA missing identifier names the scoped Settings window', () => {

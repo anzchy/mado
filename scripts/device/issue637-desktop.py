@@ -158,7 +158,7 @@ def ax(pid, operation, identifier, value=None):
         args.append(value)
     started = time.monotonic()
     try:
-        return invoke(args, timeout=12)
+        return invoke(args, timeout=90 if operation == 'set-slider' else 12)
     except (EnvironmentFailure, subprocess.TimeoutExpired) as error:
         elapsed = time.monotonic() - started
         windows = 'unavailable'
@@ -220,6 +220,20 @@ def set_opacity(source, run, pid, opacity):
     if str(opacity) not in value:
         raise EnvironmentFailure(f'opacity label did not update to {opacity}: {value}')
     close_settings(source, run)
+
+
+def dry_probe_opacity(pid, original):
+    probe = 30 if original != 30 else 50
+    try:
+        ax(pid, 'set-slider', 'settings.display.tool-opacity', probe)
+        label = ax(pid, 'value', 'settings.display.tool-opacity.value')
+        if label.strip() != f'{probe}%':
+            raise EnvironmentFailure(f'opacity label did not update to {probe}: {label}')
+    finally:
+        ax(pid, 'set-slider', 'settings.display.tool-opacity', original)
+        label = ax(pid, 'value', 'settings.display.tool-opacity.value')
+        if label.strip() != f'{original}%':
+            raise EnvironmentFailure(f'opacity label did not restore to {original}: {label}')
 
 
 def set_always_show(source, run, pid, desired):
@@ -411,8 +425,7 @@ def capture(source, run, dry_ax=False):
         ax(pid, 'press', 'settings.section.display')
         original_opacity = int(float(ax(pid, 'value', 'settings.display.tool-opacity')))
         if dry_ax:
-            # Exercise the writable AXSlider path without changing the preference.
-            ax(pid, 'set-slider', 'settings.display.tool-opacity', original_opacity)
+            dry_probe_opacity(pid, original_opacity)
         ax(pid, 'press', 'settings.section.general')
         original = dict(opacity=original_opacity,
                         appearance=next((name for name in ('system', 'light', 'dark')
