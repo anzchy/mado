@@ -133,13 +133,27 @@ class DesktopParserTests(unittest.TestCase):
 
     def test_ax_timeout_names_identifier_window_list_and_elapsed(self):
         timeout = subprocess.TimeoutExpired(['/usr/bin/osascript'], 12)
-        with patch.object(desktop, 'invoke', side_effect=[timeout, 'Display 760x514; Mado 960x640;']):
+        with patch.object(desktop, 'invoke', side_effect=[timeout, 'Display 760x514; Mado 960x640;']) as invoker:
             with self.assertRaises(desktop.EnvironmentFailure) as caught:
                 desktop.ax(123, 'value', 'settings.display.tool-opacity')
+        self.assertEqual(invoker.call_args_list[0].args[0][1:3], ['-l', 'JavaScript'])
+        self.assertEqual(Path(invoker.call_args_list[0].args[0][3]).name, 'issue637-ax.js')
         message = str(caught.exception)
         self.assertIn('identifier=settings.display.tool-opacity', message)
         self.assertIn('windows=[Display 760x514; Mado 960x640;]', message)
         self.assertRegex(message, r'elapsed=\d+\.\d+s')
+
+    def test_dry_ax_cli_routes_to_short_ax_path_and_writes_verdict(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'dry-ax'
+            result = dict(status='PASS', scope='Settings AX only', sampleCount=0,
+                          samples=[], failures=[], notVerified=['desktop pixel matrix was not run'])
+            with patch.object(desktop, 'capture', return_value=result) as capture, \
+                 patch.object(sys, 'argv', ['issue637-desktop.py', 'dry-ax',
+                                           '--source', str(Path(temp) / 'base'), '--out', str(output)]):
+                self.assertEqual(desktop.main(), 0)
+            self.assertTrue(capture.call_args.kwargs['dry_ax'])
+            self.assertEqual(json.loads((output / 'verdict.json').read_text())['status'], 'PASS')
 
 
 if __name__ == '__main__':
