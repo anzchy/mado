@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 
 RUNNER = Path(__file__).with_name('issue637-desktop.py')
@@ -117,6 +118,28 @@ class DesktopParserTests(unittest.TestCase):
             verdict = desktop.analyze(build_manifest(Path(temp), unstable=True))
             self.assertEqual(verdict['status'], 'FAIL')
             self.assertTrue(any('unstable' in reason for reason in verdict['failures']))
+
+    def test_settings_window_is_checked_before_sidebar_identifier(self):
+        calls = []
+        def fake_ax(_pid, operation, identifier):
+            calls.append((operation, identifier))
+            if operation == 'settings-window':
+                return 'PASS settings-window Display'
+            raise desktop.EnvironmentFailure('AXIdentifier not found in Settings window')
+        with patch.object(desktop, 'key'), patch.object(desktop, 'ax', side_effect=fake_ax):
+            with self.assertRaisesRegex(desktop.EnvironmentFailure, 'Settings sidebar lookup failed'):
+                desktop.settings(Path('/unused'), Path('/unused'), 123)
+        self.assertEqual(calls, [('settings-window', 'window'), ('value', 'settings.section.general')])
+
+    def test_ax_timeout_names_identifier_window_list_and_elapsed(self):
+        timeout = subprocess.TimeoutExpired(['/usr/bin/osascript'], 12)
+        with patch.object(desktop, 'invoke', side_effect=[timeout, 'Display 760x514; Mado 960x640;']):
+            with self.assertRaises(desktop.EnvironmentFailure) as caught:
+                desktop.ax(123, 'value', 'settings.display.tool-opacity')
+        message = str(caught.exception)
+        self.assertIn('identifier=settings.display.tool-opacity', message)
+        self.assertIn('windows=[Display 760x514; Mado 960x640;]', message)
+        self.assertRegex(message, r'elapsed=\d+\.\d+s')
 
 
 if __name__ == '__main__':
