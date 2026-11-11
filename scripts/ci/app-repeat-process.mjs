@@ -148,7 +148,15 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
             return await finish(childExit.signal||childExit.code===null?70:childExit.code,true);
           if(groupState!==null&&groupState.length===0&&host&&!host.snapshot().observed&&
             host.snapshot().live.length===0&&host.snapshot().unknown.length===0){
-            log('host registration missing after worker/group exit');return await finish(70,false);
+            // The previous ownership query may have started before the host
+            // existed, then completed after the leader exited. Reobserve after
+            // the empty group result before treating registration as missing.
+            await observe();if(stopping)continue;
+            const refreshed=host.snapshot();
+            if(refreshed.drained)return await finish(childExit.signal||childExit.code===null?70:childExit.code,true);
+            if(!refreshed.observed&&refreshed.live.length===0&&refreshed.unknown.length===0){
+              log('host registration missing after worker/group exit');return await finish(70,false);
+            }
           }
           // A live owned host or group member may finish after its leader.
           // Keep observing on the original run budget, including uncertain queries.
