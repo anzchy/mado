@@ -29,7 +29,8 @@ def synthetic_png(path, grey, marks):
         desktop.chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + desktop.chunk(b'IEND', b''))
 
 
-def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unstable=False):
+def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unstable=False,
+                   light226_zero=False, focus_ring_only=False):
     captures = {}
     points = ((80, 592), (480, 592), (790, 592))
     for page in desktop.PAGES:
@@ -45,6 +46,8 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
                         coverage = .96
                     color = tuple(round(grey + (p - grey) * coverage) for p in panel)
                     marks = {point: color for point in page_points}
+                    if light226_zero and (page, theme, grey, opacity) == ('14', 'light', 226, 30):
+                        marks[page_points[0]] = (226, 226, 226)
                     if wrong_image and (page, theme, grey, opacity) == ('14', 'light', 69, 30):
                         marks[(250, 560)] = (80, 80, 80)
                     if unstable and (page, theme, grey, opacity) == ('14', 'dark', 69, 100):
@@ -78,6 +81,10 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
     for key in ('active-light-69', 'inactive-light-69', 'hidden-light-69', 'wake-light-69'):
         path = folder / f'{key}.png'
         marks = {point: (190, 190, 190) for point in points} if key == 'wake-light-69' else {}
+        if key == 'wake-light-69':
+            marks[(105, 592)] = (69, 69, 69) if focus_ring_only else (190, 190, 190)
+            if focus_ring_only:
+                marks[(80, 592)] = (97, 148, 219)
         synthetic_png(path, 69, marks)
         captures[key] = str(path)
     manifest = folder / 'capture-manifest.json'
@@ -86,6 +93,18 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
 
 
 class DesktopParserTests(unittest.TestCase):
+    def test_light_226_zero_coverage_fails_even_without_a_stable_ratio(self):
+        with tempfile.TemporaryDirectory() as temp:
+            verdict = desktop.analyze(build_manifest(Path(temp), light226_zero=True))
+            self.assertEqual(verdict['status'], 'FAIL')
+            self.assertTrue(any('14-light-226-30/left' in reason for reason in verdict['failures']))
+
+    def test_wake_focus_ring_alone_does_not_prove_pod_returned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            verdict = desktop.analyze(build_manifest(Path(temp), focus_ring_only=True))
+            self.assertEqual(verdict['status'], 'FAIL')
+            self.assertTrue(any('auto-hide/left' in reason for reason in verdict['failures']))
+
     def test_backdrop_probe_is_inside_the_image_above_the_bottom_window_margin(self):
         image = (960, 640, 3, [])
         self.assertEqual(desktop.sample_points(image)[1], (250, 560))
@@ -104,7 +123,8 @@ class DesktopParserTests(unittest.TestCase):
             self.assertEqual(len(verdict['smoothing']), 3)
             self.assertTrue(any('page 33' in item for item in verdict['notVerified']))
             omitted = [row for row in verdict['samples'] if row['omitted']]
-            self.assertEqual(len(omitted), 18)  # light/grey226, 2 pages × 3 tiers × 3 groups
+            self.assertEqual(omitted, [])
+            self.assertTrue(all(row['expectedRGB'] for row in verdict['samples']))
             matrix = json.loads(manifest.read_text())
             matrix['captures'] = {key: value for key, value in matrix['captures'].items()
                                   if key.count('-') == 3 and key.split('-')[0] in desktop.PAGES}
@@ -144,11 +164,11 @@ class DesktopParserTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 70)
                 self.assertEqual(json.loads(verdict.read_text())['status'], 'ENVIRONMENT')
 
-    def test_unstable_only_nonexempt_cell_is_failure(self):
+    def test_wrong_opaque_cell_is_failure(self):
         with tempfile.TemporaryDirectory() as temp:
             verdict = desktop.analyze(build_manifest(Path(temp), unstable=True))
             self.assertEqual(verdict['status'], 'FAIL')
-            self.assertTrue(any('unstable' in reason for reason in verdict['failures']))
+            self.assertTrue(any('opaque RGB' in reason for reason in verdict['failures']))
 
     def test_settings_window_is_checked_before_sidebar_identifier(self):
         calls = []
