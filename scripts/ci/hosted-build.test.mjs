@@ -30,3 +30,45 @@ test('hosted build failure remains a complete nonzero diagnostic record',t=>{
   assert.equal(record.complete,true);assert.equal(record.status,65);
   assert.equal(readFileSync(path.join(out,'build.stdout.log'),'utf8'),'failed\n');
 });
+
+test('hosted build record is diagnostic and identifies its mode',t=>{
+  const out=temporary(t);
+  assert.equal(runHostedBuild({env,out,spawn:()=>({status:0}),stdout:()=>{},stderr:()=>{}}),0);
+  const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+  assert.equal(record.formal,false);
+  assert.equal(record.mode,'hosted');
+});
+
+test('hosted build rejects execution outside CI before spawning',t=>{
+  const out=temporary(t);let spawned=0;
+  const status=runHostedBuild({env:{...env,GITHUB_ACTIONS:'false'},out,
+    spawn:()=>{spawned++;return {status:0};},stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,64);
+  assert.equal(spawned,0);
+});
+
+test('signalled hosted build records status 70 and complete current logs',t=>{
+  const out=temporary(t);
+  const status=runHostedBuild({env,out,spawn:()=>({status:0,signal:'SIGTERM',stdout:'interrupted\n',stderr:'terminated\n'}),
+    stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,70);
+  const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+  assert.equal(record.complete,true);
+  assert.equal(record.status,70);
+  assert.equal(record.signal,'SIGTERM');
+  assert.equal(readFileSync(path.join(out,'build.stdout.log'),'utf8'),'interrupted\n');
+  assert.equal(readFileSync(path.join(out,'build.stderr.log'),'utf8'),'terminated\n');
+});
+
+test('spawn-error hosted build records status 70 and complete current logs',t=>{
+  const out=temporary(t);
+  const status=runHostedBuild({env,out,spawn:()=>({status:0,error:new Error('spawn failed'),stdout:'partial\n',stderr:'spawn stderr\n'}),
+    stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,70);
+  const record=JSON.parse(readFileSync(path.join(out,'build.json'),'utf8'));
+  assert.equal(record.complete,true);
+  assert.equal(record.status,70);
+  assert.equal(record.error,'spawn failed');
+  assert.equal(readFileSync(path.join(out,'build.stdout.log'),'utf8'),'partial\n');
+  assert.equal(readFileSync(path.join(out,'build.stderr.log'),'utf8'),'spawn stderr\n');
+});
