@@ -13,14 +13,23 @@ const pointer = path.join(root, 'coverage/local-unit-current.json');
 const publicReport = path.join(root, 'coverage/package-report.md');
 const guardianLCOV = path.join(root, 'coverage/package-eligible.lcov');
 const sha = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const invalidate = () => {
+  for (const file of [pointer, publicReport, guardianLCOV]) if (existsSync(file)) unlinkSync(file);
+};
 
 export function runLocal({ out, notBefore, reuse = false }) {
   let state;
   if (reuse) {
-    state = JSON.parse(readFileSync(pointer, 'utf8'));
-    if (state.commit !== sha()) throw new Error('local coverage pointer commit drift');
+    try {
+      state = JSON.parse(readFileSync(pointer, 'utf8'));
+      if (state.commit !== sha()) throw new Error('local coverage pointer commit drift');
+    } catch (error) {
+      invalidate();
+      throw error;
+    }
   } else {
     if (!path.isAbsolute(out) || !Number.isSafeInteger(notBefore) || notBefore <= 0) throw new Error('absolute out and positive notBefore required');
+    invalidate();
     state = { input: path.join(out, 'coverage'), commit: sha(), runId: String(Date.now()), attempt: 1 };
     exportShard({ root, shard: 'non-ui', out: path.join(state.input, 'non-ui'), commit: state.commit,
       runId: state.runId, runAttempt: state.attempt, notBefore });
@@ -28,12 +37,17 @@ export function runLocal({ out, notBefore, reuse = false }) {
   const report = path.join(state.input, 'report.md');
   mkdirSync(path.dirname(publicReport), { recursive: true });
   if (existsSync(guardianLCOV)) unlinkSync(guardianLCOV);
-  const result = evaluateCoverage({ root, input: state.input, out: report, sha: state.commit,
-    runId: state.runId, attempt: state.attempt, formal: false, shards: ['non-ui'], eligibleOut: guardianLCOV });
-  copyFileSync(report, publicReport);
-  if (!reuse) writeFileSync(pointer, JSON.stringify(state, null, 2) + '\n');
-  process.stdout.write(result.report);
-  return result.pass ? 0 : 1;
+  try {
+    const result = evaluateCoverage({ root, input: state.input, out: report, sha: state.commit,
+      runId: state.runId, attempt: state.attempt, formal: false, shards: ['non-ui'], eligibleOut: guardianLCOV });
+    copyFileSync(report, publicReport);
+    if (!reuse) writeFileSync(pointer, JSON.stringify(state, null, 2) + '\n');
+    process.stdout.write(result.report);
+    return result.pass ? 0 : 1;
+  } catch (error) {
+    invalidate();
+    throw error;
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

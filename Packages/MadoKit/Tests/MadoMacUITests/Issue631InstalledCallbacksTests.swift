@@ -109,7 +109,7 @@ import Testing
     var handler: ((Bool) -> Void)?
 }
 
-@Test @MainActor func issue631InstalledHoverChangesVisibleComponentSurface() throws {
+@Test @MainActor func issue631InstalledSuppliedHoverClosureChangesVisibleSurface() throws {
     let iconBox = HoverHandlerBox631()
     var icon = IconCommandButton(symbol: .sidebar, state: [], theme: .light) {}
     icon.receiveHoverHandler = { iconBox.handler = $0 }
@@ -125,15 +125,15 @@ import Testing
         let (window, host) = installed631(content.environment(\.designReduceMotion, true))
         defer { window.close() }
         for _ in 0..<20 { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
-        let handler = try #require(box.handler, "installed onHover handler must be exposed on appear")
+        let handler = try #require(box.handler, "the supplied hover closure must be exposed on appear")
         let before = try pixels631(host)
         #expect(try pixels631(host).elementsEqual(before), "surface is stable before hover")
         handler(true)
         for _ in 0..<20 { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
         let after = try pixels631(host)
-        #expect(!after.elementsEqual(before), "installed onHover must change the component surface")
+        #expect(!after.elementsEqual(before), "the supplied hover closure must change the component surface")
         handler(false)
         for _ in 0..<20 { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
-        #expect(try pixels631(host).elementsEqual(before), "installed onHover exit restores the surface")
+        #expect(try pixels631(host).elementsEqual(before), "the supplied hover closure restores the surface on exit")
     }
 }

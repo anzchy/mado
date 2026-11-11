@@ -499,7 +499,7 @@ class OwnerGatesDesignTests(unittest.TestCase):
                 git(work, "init", "-q", "-b", "main", env=env)
                 git(work, "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "fixture", env=env)
                 source = Path(__file__).parent
-                for name in ("owner-gates.sh", "lcov-total.py"):
+                for name in ("owner-gates.sh",):
                     (tools / name).write_text((source / name).read_text())
 
                 def executable(path, text):
@@ -556,9 +556,6 @@ class OwnerGatesExitTests(unittest.TestCase):
                 path.write_text("#!/bin/sh\n" + text)
                 path.chmod(0o755)
             executable(work / "scripts/heavy-lock.sh", 'exec "$@"\n')
-            (work / "scripts/tdd/swift-lcov.sh").write_text(
-                '[ "$FAIL_LANE" = lcov ] && exit 7\n'
-                "echo 'LF:1\nLH:1\nFNF:1\nFNH:1' > coverage/lcov.info\n")
             for directory in ("agents", "tdd", "ledger"):
                 folder = work / "scripts" / directory
                 folder.mkdir(exist_ok=True)
@@ -566,13 +563,13 @@ class OwnerGatesExitTests(unittest.TestCase):
             for command, lane in (("swift", "swift"), ("xcodegen", "xcodegen"), ("xcodebuild", "xcodebuild"),
                                   ("npm", "design"), ("node", "node")):
                 executable(first / command, f'''lane={lane}
-[ "$lane" = node ] && [ "$1" != --test ] && lane=ledger
+[ "$lane" = node ] && [ "$1" = scripts/ci/package-coverage-local.mjs ] && lane=lcov
+[ "$lane" = node ] && [ "$1" != --test ] && [ "$lane" != lcov ] && lane=ledger
 [ "$FAIL_LANE" = "$lane" ] && exit 7
 [ "$FAIL_LANE" = missing ] && [ "$lane" = xcodegen ] && exec picsee_missing_tool_423
 [ "$lane" = swift ] && echo 'Test run with 1 tests passed'
 exit 0
 ''')
-            executable(first / "python3", '[ "$FAIL_LANE" = lcov-total ] && exit 7\nexit 0\n')
             real_git = subprocess.check_output(["which", "git"], text=True).strip()
             executable(first / "git", f'''[ "$FAIL_LANE" = diffcheck ] && [ "$1" = diff ] && exit 7
 exec "{real_git}" "$@"
@@ -586,7 +583,7 @@ exec "{real_git}" "$@"
             self.assertIn("cannot write summary", result.stderr)
             self.assertEqual(list(out.iterdir()), [blocked])
             lanes = ("swift", "lcov", "xcodegen", "xcodebuild", "node", "ledger", "diffcheck", "design")
-            for fail in ("", *lanes, "lcov-total", "missing", ""):
+            for fail in ("", *lanes, "missing", ""):
                 with self.subTest(fail=fail):
                     result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "t", "HEAD"],
                                             env={**env, "FAIL_LANE": fail}, capture_output=True, text=True, timeout=20)
@@ -594,7 +591,7 @@ exec "{real_git}" "$@"
                     statuses = [line for line in summary if line.split("=")[0] in lanes]
                     expected = {lane: 0 for lane in lanes}
                     if fail:
-                        expected[{"missing": "xcodegen", "lcov-total": "lcov"}.get(fail, fail)] = 127 if fail == "missing" else 7
+                        expected[{"missing": "xcodegen"}.get(fail, fail)] = 127 if fail == "missing" else 7
                     self.assertEqual(statuses, [f"{lane}={expected[lane]}" for lane in lanes])
                     self.assertEqual(result.returncode, 1 if fail else 0, result.stdout + result.stderr)
                     self.assertEqual(summary[-1], "DONE")
