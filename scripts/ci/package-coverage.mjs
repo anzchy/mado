@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate and merge two independent SwiftPM LCOV exports before evaluating exact coverage.
 import { createHash } from 'node:crypto';
-import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +14,30 @@ const approvedFunctionIdentities = new Map([
   [`${prefix}MadoMacUI/Chrome/ViewerChromeOverlay.swift:198`, '0d760c77616e860a9bc85999c00fc95ffaff7fac32df2f45b221310e00f0cdcd'],
   [`${prefix}MadoMacUI/Inspector/InspectorPanel.swift:191`, 'e55dd121048c133d38dd7d11d9ec25d52df5048ba7b5bf3dd2bd91718532ff6f'],
 ]);
+// The review decision freezes all 17 declaration-only paths. The canonical
+// manifest digest also pins each whole-source SHA, rationale, toolchain and
+// portable decision reference.
+const approvedFileExceptionPaths = new Set([
+  'Packages/MadoKit/Sources/MadoApplication/Access/ViewerSessionNavigationHost.swift',
+  'Packages/MadoKit/Sources/MadoApplication/MadoApplication.swift',
+  'Packages/MadoKit/Sources/MadoApplication/Viewer/FirstPreviewTracing.swift',
+  'Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerChromeScheduler.swift',
+  'Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerImageHost.swift',
+  'Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSingleImageReturnHost.swift',
+  'Packages/MadoKit/Sources/MadoCore/Canvas/CanvasZoomMode.swift',
+  'Packages/MadoKit/Sources/MadoCore/Commands/FocusContext.swift',
+  'Packages/MadoKit/Sources/MadoCore/MadoCore.swift',
+  'Packages/MadoKit/Sources/MadoCore/Ports/CacheMaintenance.swift',
+  'Packages/MadoKit/Sources/MadoCore/Ports/FolderMetadataReading.swift',
+  'Packages/MadoKit/Sources/MadoCore/Ports/FolderWatching.swift',
+  'Packages/MadoKit/Sources/MadoCore/Ports/ImagePresentationPinning.swift',
+  'Packages/MadoKit/Sources/MadoCore/Ports/PrefetchResuming.swift',
+  'Packages/MadoKit/Sources/MadoInfrastructure/MadoInfrastructure.swift',
+  'Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Tokens/DesignRegistry.swift',
+  'Packages/MadoKit/Sources/MadoMacUI/MadoMacUI.swift',
+]);
+const approvedFileExceptionManifestDigest = '3e41c20a0907264134a384b00b0d6f731b2a13ad8bc0946e64710ab5979d24c7';
+const wrappedCounterFloor = 1n << 63n;
 const fatal = message => { throw new Error(message); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const object = (value, label) => value && typeof value === 'object' && !Array.isArray(value) ? value : fatal(`${label}: expected object`);
@@ -104,16 +128,27 @@ function inventory(root) {
   if (!Object.keys(values).length) fatal('production source inventory empty');
   return values;
 }
-function exceptions(root) {
+function exceptions(root, sources) {
   let list;
   try { list = JSON.parse(readFileSync(path.join(root, 'scripts/ci/package-coverage-exceptions.json'), 'utf8')); }
   catch (error) { fatal(`exception list missing or malformed: ${error.message}`); }
   if (!Array.isArray(list)) fatal('exception list must be array');
+  const presentApproved = [...approvedFileExceptionPaths].filter(name => name in sources);
+  if (presentApproved.length && presentApproved.length !== approvedFileExceptionPaths.size) fatal('reviewed file exception source set incomplete');
+  if (list.length !== presentApproved.length) fatal('file exception count drift from reviewed source set');
+  if (list.length && digest(JSON.stringify(list)) !== approvedFileExceptionManifestDigest) fatal('file exception manifest pin drift');
   const result = new Map();
   for (const entry of list) {
-    object(entry, 'exception'); const name = sourcePath(root, entry.path);
+    object(entry, 'exception');
+    if (JSON.stringify(Object.keys(entry).sort()) !== JSON.stringify(['path', 'reason', 'sourceSha256', 'toolchain', 'decision'].sort())) fatal('file exception has missing or unexpected fields');
+    const name = sourcePath(root, entry.path);
+    if (entry.path !== name || !approvedFileExceptionPaths.has(name)) fatal(`unapproved file exception ${entry.path}`);
+    if (hash(entry.sourceSha256, `${name} source digest`) !== sources[name]) fatal(`${name}: file exception source digest drift`);
+    if (entry.decision !== 'i631-audit-astra.md 2') fatal(`${name}: file exception decision drift`);
+    object(entry.toolchain, `${name} file exception toolchain`);
+    nonempty(entry.reason, `${name} reason`);
     if (result.has(name)) fatal(`duplicate exception ${name}`);
-    result.set(name, nonempty(entry.reason, `${name} reason`));
+    result.set(name, entry);
   }
   return result;
 }
@@ -172,6 +207,18 @@ function mapping(record) {
   return JSON.stringify({ lines: [...record.lines].map(([n, v]) => [n, v.checksum]).sort((a, b) => a[0] - b[0]),
     functions: [...record.functions].sort(([a], [b]) => a.localeCompare(b)) });
 }
+function invalidCounters(artifact) {
+  const invalid = [];
+  const { meta, files } = artifact;
+  const provenance = `commit=${meta.commit} run=${meta.runId} attempt=${meta.runAttempt} binary=${meta.binary.sha256} profile=${meta.profile.sha256} lcov=${meta.lcovSha256}`;
+  for (const [name, record] of files) {
+    for (const [line, data] of record.lines) if (data.hits >= wrappedCounterFloor)
+      invalid.push(`- shard=${meta.shard} path=${name}:${line} kind=DA raw=${data.hits}; ${provenance}; reason=count >= 2^63, possible wrapped counter`);
+    for (const [symbol, count] of record.functionHits) if (count >= wrappedCounterFloor)
+      invalid.push(`- shard=${meta.shard} path=${name}:${record.functions.get(symbol).start} function=${symbol} kind=FNDA raw=${count}; ${provenance}; reason=count >= 2^63, possible wrapped counter`);
+  }
+  return invalid;
+}
 function loopExit(root, merged) {
   const name = prefix + 'MadoInfrastructure/Images/ImageSourceHeader.swift';
   if (!merged.has(name)) return 'ImageSourceHeader.swift loop-exit throw: source absent';
@@ -190,16 +237,28 @@ function loopExit(root, merged) {
 export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, attempt, formal, shards = ['non-ui', 'macui'] }) {
   if (![root, input, out].every(x => typeof x === 'string' && path.isAbsolute(x))) fatal('root/input/out must be absolute');
   if (eligibleOut !== undefined && (typeof eligibleOut !== 'string' || !path.isAbsolute(eligibleOut))) fatal('eligibleOut must be absolute');
+  if (existsSync(out)) unlinkSync(out);
+  if (eligibleOut !== undefined && existsSync(eligibleOut)) unlinkSync(eligibleOut);
   if (!/^[0-9a-f]{40}$/.test(sha ?? '')) fatal('expected commit SHA malformed');
   if (!/^[1-9][0-9]*$/.test(String(runId))) fatal('expected run ID malformed');
   if (typeof formal !== 'boolean') fatal('formal must be boolean');
   if (JSON.stringify(shards) !== JSON.stringify(['non-ui', 'macui']) && JSON.stringify(shards) !== JSON.stringify(['non-ui'])) fatal('invalid shard selection');
   if (formal && shards.length !== 2) fatal('formal coverage requires two shards');
   const expected = { sha, runId: String(runId), attempt: number(attempt, 'expected attempt', true) };
-  const sources = inventory(root), exempt = exceptions(root);
+  const sources = inventory(root), exempt = exceptions(root, sources);
   for (const name of exempt.keys()) if (!(name in sources)) fatal(`exception source missing: ${name}`);
   const [left, right] = shards.map(shard => artifact(root, input, shard, expected, sources));
   if (right && JSON.stringify(left.meta.toolchain) !== JSON.stringify(right.meta.toolchain)) fatal('toolchain mismatch');
+  for (const [name, entry] of exempt) if (JSON.stringify(entry.toolchain) !== JSON.stringify(left.meta.toolchain)) fatal(`${name}: file exception toolchain drift`);
+  const invalid = [left, right].filter(Boolean).flatMap(invalidCounters);
+  if (invalid.length) {
+    const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; invalid evidence`,
+      `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, 'Invalid coverage evidence:', ...invalid,
+      'Uncovered locations: not evaluated because evidence is invalid',
+      'Coverage gate: FAIL (invalid counter evidence; no eligible artifact)'].join('\n') + '\n';
+    writeFileSync(out, report);
+    return { pass: false, report, total: null, invalid };
+  }
   const functionExempt = functionExceptions(root, sources, left.meta.toolchain);
   const names = [...left.files.keys()].sort();
   if (right && JSON.stringify(names) !== JSON.stringify([...right.files.keys()].sort())) fatal('shard mapping inventory mismatch');
@@ -213,13 +272,12 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
     const functionHits = new Map([...a.functionHits].map(([fn, count]) => [fn, count + (b?.functionHits.get(fn) ?? 0n)]));
     merged.set(name, { lines, functions: a.functions, functionHits });
   }
-  for (const [key, entry] of functionExempt) {
+  for (const entry of functionExempt.values()) {
     const file = merged.get(entry.path);
     const location = file?.functions.get(entry.symbol);
     if (!location) fatal(`unmatched function exception ${entry.path}:${entry.symbol}`);
     if (location.start !== entry.start) fatal(`stale function exception location ${entry.path}:${entry.symbol}`);
     if (file.functionHits.get(entry.symbol) > 0n) fatal(`covered function exception ${entry.path}:${entry.symbol}`);
-    if (!key.startsWith(entry.path + '\u0000')) fatal('function exception identity mismatch');
   }
   // Guardian consumes LCOV, so derive a second LCOV view from the exact DA and
   // FNDA mappings already validated here. Its summaries are now the strict
@@ -260,7 +318,7 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   report.push(`Package: lines ${total.coveredLines}/${total.lines}; functions ${total.coveredFunctions}/${total.functions}; raw functions ${total.coveredFunctions}/${total.functions}; exceptions ${total.exceptions}; eligible functions ${total.coveredFunctions}/${total.functions - total.exceptions}`);
   report.push(loopExit(root, merged));
   report.push('Reviewed no-executable-code exclusions:');
-  report.push(...([...exempt].map(([name, reason]) => `- ${name}: ${reason}`)));
+  report.push(...([...exempt].map(([name, entry]) => `- ${name}: ${entry.reason}; source sha256 ${entry.sourceSha256}; toolchain ${JSON.stringify(entry.toolchain)}; decision ${entry.decision}`)));
   if (!exempt.size) report.push('- none');
   report.push('Reviewed function exceptions (uncovered, excluded only from eligible denominator):');
   report.push(...[...functionExempt.values()].map(entry => `- ${entry.path}:${entry.start} function ${entry.symbol}; source sha256 ${entry.sourceSha256}; toolchain ${JSON.stringify(entry.toolchain)}; ${entry.reason}; decision ${entry.decision}`));
