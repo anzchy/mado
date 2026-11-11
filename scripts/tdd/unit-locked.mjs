@@ -4,11 +4,13 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath } from '../ci/coverage-atomic.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const watchdog = fileURLToPath(new URL('../ci/test-watchdog.mjs', import.meta.url));
 const clear = fileURLToPath(new URL('../ci/package-coverage-clear.mjs', import.meta.url));
 const coverage = fileURLToPath(new URL('../ci/package-coverage-local.mjs', import.meta.url));
+const atomicVerify = fileURLToPath(new URL('../ci/coverage-atomic-verify.mjs', import.meta.url));
 const args = process.argv.slice(2);
 if (args.length !== 10 || args[0] !== '--out' || args[2] !== '--timeout-seconds' ||
     args[4] !== '--capture-seconds' || args[6] !== '--grace-seconds' ||
@@ -22,11 +24,12 @@ if (args.length !== 10 || args[0] !== '--out' || args[2] !== '--timeout-seconds'
     if (result.error) process.stderr.write(`unit-locked: ${result.error.message}\n`);
     return result.status ?? 1;
   };
-  let status = verify ? run(clear, []) : 0;
+  let status = verify ? run(atomicVerify, []) : 0;
+  if (status === 0 && verify) status = run(clear, []);
   const notBefore = Math.floor(Date.now() / 1000);
   if (status === 0) status = run(watchdog, ['--out', out, '--timeout-seconds', timeout,
     '--capture-seconds', capture, '--grace-seconds', grace, '--',
-    'swift', 'test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']);
+    'swift', 'test', '--package-path', 'Packages/MadoKit', '--scratch-path', coverageAtomicScratchPath, '--enable-code-coverage', ...coverageAtomicSwiftArgs]);
   if (status === 0 && verify) {
     const coverageStatus = run(coverage, ['--out', out, '--not-before', String(notBefore)]);
     if (coverageStatus !== 0) {

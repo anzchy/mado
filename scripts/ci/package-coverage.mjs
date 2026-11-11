@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
 
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const prefix = 'Packages/MadoKit/Sources/';
@@ -193,6 +194,8 @@ function artifact(root, input, shard, expected, sources) {
   if (meta.runAttempt !== expected.attempt) fatal(`${shard} attempt provenance mismatch`);
   const tc = object(meta.toolchain, `${shard} toolchain`);
   for (const key of ['xcode', 'swift', 'llvmCov']) nonempty(tc[key], `${shard} toolchain.${key}`);
+  const expectedInstrumentation = { swiftArgs: coverageAtomicSwiftArgs, scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID };
+  if (JSON.stringify(meta.instrumentation) !== JSON.stringify(expectedInstrumentation)) fatal(`${shard} coverage instrumentation mismatch`);
   for (const key of ['binary', 'profile']) {
     const item = object(meta[key], `${shard} ${key}`);
     nonempty(item.path, `${shard} ${key} path`); hash(item.sha256, `${shard} ${key}`);
@@ -253,7 +256,7 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   const invalid = [left, right].filter(Boolean).flatMap(invalidCounters);
   if (invalid.length) {
     const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; invalid evidence`,
-      `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, 'Invalid coverage evidence:', ...invalid,
+      `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, `Coverage instrumentation: ${JSON.stringify(left.meta.instrumentation)}`, 'Invalid coverage evidence:', ...invalid,
       'Uncovered locations: not evaluated because evidence is invalid',
       'Coverage gate: FAIL (invalid counter evidence; no eligible artifact)'].join('\n') + '\n';
     writeFileSync(out, report);
@@ -295,7 +298,7 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   }
   const eligibleLCOV = eligibleRecords.join('\n') + '\n';
   const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; ${formal ? 'formal full-package evidence' : 'diagnostic, not formal full-package evidence'}`,
-    `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, 'Statements: statement proxy = LCOV executable lines; independent Swift statements unmeasured.',
+    `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, `Coverage instrumentation: ${JSON.stringify(left.meta.instrumentation)}`, 'Statements: statement proxy = LCOV executable lines; independent Swift statements unmeasured.',
     'LCOV LF/LH summaries may count regions; unique DA rows are the executable-line denominator.',
     'branches unmeasured', 'App/ excluded', ''];
   const total = { lines: 0, coveredLines: 0, functions: 0, coveredFunctions: 0, exceptions: 0 };

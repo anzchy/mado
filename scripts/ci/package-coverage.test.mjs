@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
 
 const script = new URL('./package-coverage.mjs', import.meta.url).pathname;
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
@@ -47,6 +48,7 @@ function fixture(t, { left = {}, right = {} } = {}) {
     writeFileSync(join(directory, 'metadata.json'), JSON.stringify({
       version: 1, shard, commit: 'a'.repeat(40), runId: '1234', runAttempt: 1,
       toolchain: { xcode: 'Xcode 26.6\nBuild version 17F113', swift: 'Swift 6.3.3', llvmCov: 'LLVM 21' },
+      instrumentation: { swiftArgs: coverageAtomicSwiftArgs, scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID },
       binary: { path: `/tmp/${shard}/Tests.xctest`, sha256: hash(`binary-${shard}`) },
       profile: { path: `/tmp/${shard}/default.profdata`, sha256: hash(`profile-${shard}`) },
       lcovSha256: hash(lcov), sourceInventory: inventory,
@@ -411,4 +413,15 @@ test('all 17 reviewed file pins reject source, manifest, toolchain and mapping d
     lcov: lcov + record(first.path, [[1, 1]], [[1, 'unexpected.executable', 1]]),
   }));
   assert.match(f.run().stderr, /mapping missing or unexpected/i);
+});
+
+test('missing or changed coverage instrumentation provenance fails before aggregation', t => {
+  for (const mutation of [undefined, { swiftArgs: [], scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID },
+    { swiftArgs: coverageAtomicSwiftArgs, scratchPath: 'Packages/MadoKit/.build', flagId: ATOMIC_COVERAGE_FLAG_ID }]) {
+    const f = fixture(t);
+    f.edit('non-ui', ({ metadata }) => ({ metadata: { ...metadata, instrumentation: mutation } }));
+    const run = f.run();
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.match(run.stderr, /coverage instrumentation mismatch/);
+  }
 });

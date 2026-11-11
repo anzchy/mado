@@ -115,3 +115,11 @@ test('CLI reads GITHUB_WORKSPACE for both cache families and rejects missing or 
       }
     }
   });
+
+test('coverage cache key includes the exact atomic instrumentation identity', () => {
+  const regular = cacheKey(base);
+  const atomic = cacheKey({ ...base, family: 'spm-coverage' });
+  assert.match(atomic.prefix, /^spm-coverage-v1-atomic[0-9a-f]{16}-/);
+  assert.notEqual(atomic.prefix, regular.prefix);
+  assert.equal(atomic.key, atomic.prefix + base.inputs);
+});

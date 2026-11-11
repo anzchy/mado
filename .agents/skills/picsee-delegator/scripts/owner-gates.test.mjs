@@ -11,7 +11,7 @@ const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
 function fixture(t, mode = 'pass', covered = 2, npmInstalled = true) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
+  for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
     const dest = path.join(dir, rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(root, rel), dest);
   }
   for (const group of ['agents', 'tdd', 'ledger']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }

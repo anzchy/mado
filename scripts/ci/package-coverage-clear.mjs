@@ -3,6 +3,7 @@
 // remain available for incremental compilation; old counters never do.
 import { existsSync, readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
+import { coverageAtomicScratchPath } from './coverage-atomic.mjs';
 
 const root = process.argv.length === 4 && process.argv[2] === '--root'
   ? path.resolve(process.argv[3])
@@ -10,7 +11,7 @@ const root = process.argv.length === 4 && process.argv[2] === '--root'
 if (!root) throw new Error('usage: package-coverage-clear.mjs [--root <checkout>]');
 
 const packageDir = path.join(root, 'Packages/MadoKit');
-const buildDir = path.join(packageDir, '.build');
+const buildDir = path.join(root, coverageAtomicScratchPath);
 if (existsSync(buildDir)) {
   for (const architecture of readdirSync(buildDir, { withFileTypes: true })) {
     if (!architecture.isDirectory()) continue;

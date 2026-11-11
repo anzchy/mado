@@ -118,6 +118,8 @@ jobs:
         run: node --test scripts/device/tests/macos.test.cjs
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: Verify coverage atomic instrumentation
+        run: node scripts/ci/coverage-atomic-verify.mjs
       - name: SwiftPM cache key
         id: spm-key
         env:
@@ -129,7 +131,7 @@ jobs:
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/MadoKit/.build
+          path: Packages/MadoKit/.build-coverage-atomic
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Report SwiftPM cache restore
@@ -144,7 +146,7 @@ jobs:
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/MadoKit --enable-code-coverage --skip 'MadoMacUITests\.' -Xswiftc -enable-incremental-file-hashing
+          swift test --package-path Packages/MadoKit --scratch-path Packages/MadoKit/.build-coverage-atomic --enable-code-coverage -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --skip 'MadoMacUITests\.' -Xswiftc -enable-incremental-file-hashing
           --xunit-output ci-logs/package-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Export Package coverage
         run: >-
@@ -171,7 +173,7 @@ jobs:
         if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.cold && inputs.coverage_cache_seed && inputs.swift_filter == ''))
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/MadoKit/.build
+          path: Packages/MadoKit/.build-coverage-atomic
           key: ${{ steps.spm-key.outputs.key }}
 
   package-macui-tests:
@@ -187,6 +189,8 @@ jobs:
         run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
+      - name: Verify coverage atomic instrumentation
+        run: node scripts/ci/coverage-atomic-verify.mjs
       - name: SwiftPM cache key
         id: spm-key
         env:
@@ -198,7 +202,7 @@ jobs:
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: Packages/MadoKit/.build
+          path: Packages/MadoKit/.build-coverage-atomic
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
       - name: Report SwiftPM cache restore
@@ -213,7 +217,7 @@ jobs:
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-macui-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/MadoKit --no-parallel --enable-code-coverage -Xswiftc -enable-incremental-file-hashing
+          swift test --package-path Packages/MadoKit --scratch-path Packages/MadoKit/.build-coverage-atomic --no-parallel --enable-code-coverage -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all -Xswiftc -enable-incremental-file-hashing
           --skip '(MadoCoreTests|MadoApplicationTests|MadoInfrastructureTests)\.'
           --xunit-output ci-logs/package-macui-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
       - name: Export Package coverage
