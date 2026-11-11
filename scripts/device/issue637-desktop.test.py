@@ -33,6 +33,7 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
     captures = {}
     points = ((36, 592), (480, 592), (790, 592))
     for page in desktop.PAGES:
+        page_points = points if page == '14' else ((36, 592), (328, 592), (595, 592))
         for theme in desktop.THEMES:
             panel = (255, 255, 255) if theme == 'light' else (20, 24, 33)
             for grey in desktop.GREYS:
@@ -43,18 +44,18 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
                     if base and opacity == 30:
                         coverage = .96
                     color = tuple(round(grey + (p - grey) * coverage) for p in panel)
-                    marks = {point: color for point in points}
+                    marks = {point: color for point in page_points}
                     if wrong_image and (page, theme, grey, opacity) == ('14', 'light', 69, 30):
-                        marks[(250, 632)] = (80, 80, 80)
+                        marks[(250, 560)] = (80, 80, 80)
                     if unstable and (page, theme, grey, opacity) == ('14', 'dark', 69, 100):
-                        marks.update({point: (69, 69, 69) for point in points})
+                        marks.update({point: (69, 69, 69) for point in page_points})
                     key = f'{page}-{theme}-{grey}-{opacity}'
                     path = folder / f'{key}.png'
                     synthetic_png(path, grey, marks)
                     captures[key] = str(path)
     for key in ('pattern-light-30', 'pattern-light-100', 'pattern-light-zoom'):
         marks = {}
-        for y in (592, 632):
+        for y in (592, 560):
             for x in range(16, 820):
                 value = 0 if x // 4 % 2 else 255
                 if y == 592 and key == 'pattern-light-30':
@@ -85,6 +86,13 @@ def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unst
 
 
 class DesktopParserTests(unittest.TestCase):
+    def test_backdrop_probe_is_inside_the_image_above_the_bottom_window_margin(self):
+        image = (960, 640, 3, [])
+        self.assertEqual(desktop.sample_points(image)[1], (250, 560))
+        inspector_points, _, _ = desktop.sample_points(image, page='16')
+        self.assertEqual(inspector_points['middle'], (328, 592))
+        self.assertEqual(inspector_points['right'], (595, 592))
+
     def test_complete_candidate_passes_and_reports_matrix(self):
         with tempfile.TemporaryDirectory() as temp:
             manifest = build_manifest(Path(temp))
@@ -95,12 +103,25 @@ class DesktopParserTests(unittest.TestCase):
             self.assertTrue(any('page 33' in item for item in verdict['notVerified']))
             omitted = [row for row in verdict['samples'] if row['omitted']]
             self.assertEqual(len(omitted), 18)  # light/grey226, 2 pages × 3 tiers × 3 groups
+            matrix = json.loads(manifest.read_text())
+            matrix['captures'] = {key: value for key, value in matrix['captures'].items()
+                                  if key.count('-') == 3 and key.split('-')[0] in desktop.PAGES}
+            partial = desktop.analyze(matrix, partial=True)
+            self.assertEqual(partial['status'], 'INCOMPLETE')
+            self.assertEqual(partial['matrixStatus'], 'PASS')
+            self.assertEqual(partial['sampleCount'], 72)
+            self.assertTrue(any('pattern-light-30' in item for item in partial['notVerified']))
 
     def test_known_solid_base_fails_30_percent_cells(self):
         with tempfile.TemporaryDirectory() as temp:
             verdict = desktop.analyze(build_manifest(Path(temp), base=True))
             self.assertEqual(verdict['status'], 'FAIL')
             self.assertTrue(any('30/left' in reason for reason in verdict['failures']))
+            matrix = dict(captures={key: value for key, value in verdict['captures'].items()
+                                    if key.count('-') == 3 and key.split('-')[0] in desktop.PAGES})
+            partial = desktop.analyze(matrix, partial=True)
+            self.assertEqual(partial['status'], 'FAIL')
+            self.assertEqual(partial['matrixStatus'], 'FAIL')
 
     def test_incomplete_and_wrong_frame_are_environment_results(self):
         for defect in ('missing', 'wrong_image'):

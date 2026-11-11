@@ -263,7 +263,7 @@ def open_fixture(source, run, path):
     raise EnvironmentFailure(f'fixture did not appear in owned viewer: {path}')
 
 
-def sample_points(image):
+def sample_points(image, page='14'):
     width, height, _channels, _rows = image
     if width < 800 or height < 550 or width / height < 1.1:
         raise EnvironmentFailure(f'wrong window capture dimensions: {width}x{height}')
@@ -273,13 +273,16 @@ def sample_points(image):
     s = round(scale)
     # Full-size-content window, clear of controls, labels, border and rounded corners.
     y = height - 48 * s
-    return {group: (round(x * s), y) for group, x in
-            (('left', 36), ('middle', 480), ('right', 790))}, (round(250 * s), height - 8 * s), s
+    # The bottom 16 px of the real 960x640 window is outside the decoded image.
+    # Sample the flat image above the tools, away from chrome and titlebar.
+    xs = {'14': (36, 480, 790), '16': (36, 328, 595)}
+    if page not in xs:
+        raise EnvironmentFailure(f'unsupported viewer page for sample points: {page}')
+    return {group: (round(x * s), y) for group, x in zip(GROUPS, xs[page])}, (round(250 * s), height - 80 * s), s
 
 
-def analyze(manifest):
-    manifest = Path(manifest)
-    record = json.loads(manifest.read_text())
+def analyze(manifest, partial=False):
+    record = manifest if isinstance(manifest, dict) else json.loads(Path(manifest).read_text())
     captures = record.get('captures', {})
     expected_keys = [f'{page}-{theme}-{grey}-{opacity}' for page in PAGES
                      for theme in THEMES for grey in GREYS for opacity in TIERS]
@@ -292,7 +295,7 @@ def analyze(manifest):
         for theme in THEMES:
             for grey in GREYS:
                 baseline = images[f'{page}-{theme}-{grey}-100']
-                positions, background, scale = sample_points(baseline)
+                positions, background, scale = sample_points(baseline, page=page)
                 for opacity in TIERS:
                     key = f'{page}-{theme}-{grey}-{opacity}'
                     image = images[key]
@@ -327,9 +330,20 @@ def analyze(manifest):
                         failures.extend(f'{key}/{group}: {reason}' for reason in reasons)
     if len(rows) != 72:
         raise EnvironmentFailure(f'incomplete sample matrix: {len(rows)} of 72')
-    for extra in ('pattern-light-30', 'pattern-light-100', 'pattern-light-zoom',
-                  'replacement-light-69', 'active-light-69', 'inactive-light-69',
-                  'hidden-light-69', 'wake-light-69'):
+    extras = ('pattern-light-30', 'pattern-light-100', 'pattern-light-zoom',
+              'replacement-light-69', 'active-light-69', 'inactive-light-69',
+              'hidden-light-69', 'wake-light-69')
+    if partial:
+        missing_extras = [extra for extra in extras if extra not in captures]
+        return dict(status='FAIL' if failures else 'INCOMPLETE',
+                    matrixStatus='FAIL' if failures else 'PASS',
+                    scope='implemented viewer pages 14 and 16; flat matrix only',
+                    notVerified=[f'{extra}: capture absent' for extra in missing_extras] +
+                        ['pattern, zoom, replacement, window activity and auto-hide not evaluated in partial mode',
+                         'page 33 Filmstrip is unimplemented (PREF-04)'],
+                    sampleCount=len(rows), samples=rows, failures=failures,
+                    captures=captures, source=record.get('source'), build=record.get('build'))
+    for extra in extras:
         if extra not in captures:
             raise EnvironmentFailure(f'missing capture: {extra}')
     pattern = png(captures['pattern-light-30'])
@@ -385,6 +399,16 @@ def analyze(manifest):
                 smoothing=smoothing, zoomChanged=changed, zoomSampleCount=total,
                 autoHide=auto_hide, activeInactiveCaptured=True,
                 captures=captures, source=record.get('source'), build=record.get('build'))
+
+
+def partial_record(run_dir):
+    run_dir = Path(run_dir).expanduser().resolve()
+    srgb = run_dir / 'srgb'
+    build = run_dir / 'build.json'
+    if not srgb.is_dir() or not build.is_file():
+        raise EnvironmentFailure('partial run needs srgb/ captures and build.json')
+    return dict(source=str(run_dir), build=json.loads(build.read_text()),
+                captures={path.stem: str(path) for path in sorted(srgb.glob('*.png'))})
 
 
 def capture(source, run, dry_ax=False):
@@ -524,7 +548,9 @@ def main():
     dry.add_argument('--out', type=Path, required=True)
     dry.add_argument('--source', type=Path, default=HERE.parent.parent)
     review = sub.add_parser('analyze')
-    review.add_argument('--manifest', type=Path, required=True)
+    review.add_argument('--manifest', type=Path)
+    review.add_argument('--partial', action='store_true')
+    review.add_argument('--run-dir', type=Path)
     review.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     output = args.out.expanduser().resolve()
@@ -536,7 +562,14 @@ def main():
             result = capture(source, output, dry_ax=args.mode == 'dry-ax')
             verdict_path = output / 'verdict.json'
         else:
-            result = analyze(args.manifest)
+            if args.partial:
+                if args.manifest or not args.run_dir:
+                    raise EnvironmentFailure('analyze --partial requires --run-dir and no --manifest')
+                result = analyze(partial_record(args.run_dir), partial=True)
+            else:
+                if not args.manifest or args.run_dir:
+                    raise EnvironmentFailure('analyze requires --manifest unless --partial --run-dir is used')
+                result = analyze(args.manifest)
             verdict_path = output
         code = 0 if result['status'] == 'PASS' else 1
     except Exception as error:
