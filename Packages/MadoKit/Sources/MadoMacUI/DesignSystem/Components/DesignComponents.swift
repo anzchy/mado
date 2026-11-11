@@ -32,17 +32,20 @@ public struct IconCommandButton: View {
         return .handled
     }
     let symbol: DesignSymbol; let state: ComponentState; let theme: DesignTheme; let input: ComponentInput; let action: () -> Void
+    var receiveHoverHandler: ((@escaping (Bool) -> Void) -> Void)?
     @State private var hover = false
     @FocusState private var focused: Bool
     var current: ComponentState { input.state(state, hover: hover, focused: focused) }
     func updateHover(_ value: Bool) { hover = value }
     public var body: some View {
+        let hoverHandler = updateHover
         Button(action: activate) {
             Image(nsImage: symbol.image()).resizable().scaledToFit().frame(width: 16, height: 16)
                 .frame(width: DesignMetrics.hitArea[0]-12, height: DesignMetrics.hitArea[1]-12)
         }
         .buttonStyle(DesignCommandStyle(kind: .icon, state: current, theme: theme, input: input))
-        .disabled(state.contains(.disabled)).allowsHitTesting(input == .live).focusable(input == .live).focused($focused).focusEffectDisabled(input == .forced).onHover(perform: updateHover)
+        .disabled(state.contains(.disabled)).allowsHitTesting(input == .live).focusable(input == .live).focused($focused).focusEffectDisabled(input == .forced).onHover(perform: hoverHandler)
+        .onAppear { receiveHoverHandler?(hoverHandler) }
         .onKeyPress(.space, action: activateFromKeyboard)
         .accessibilityLabel(Text(String(localized: String.LocalizationValue(symbol.label)))).help(Text(String(localized: String.LocalizationValue(symbol.label))))
     }
@@ -74,11 +77,13 @@ public struct FolderNavigationRow: View {
     }
     let nodeID: String; let name: String; let count: Int?; let expanded: Bool
     let state: ComponentState; let theme: DesignTheme; let input: ComponentInput; let onSelect: () -> Void; let onExpand: () -> Void
+    var receiveHoverHandler: ((@escaping (Bool) -> Void) -> Void)?
     @State private var hover = false
     @FocusState private var focused: Bool
     var current: ComponentState { input.state(state, hover: hover, focused: focused) }
     func updateHover(_ value: Bool) { hover = value }
     public var body: some View {
+        let hoverHandler = updateHover
         HStack(spacing: 4) {
             Button(expanded ? "▾" : "▸", action: expand).focusable(input == .live).focusEffectDisabled(input == .forced)
                 .onKeyPress(.space, action: expandFromKeyboard)
@@ -92,7 +97,8 @@ public struct FolderNavigationRow: View {
             }.focusable(input == .live).focused($focused).focusEffectDisabled(input == .forced).onKeyPress(.space, action: selectFromKeyboard).accessibilityLabel(name).help(name)
         }
         .buttonStyle(DesignCommandStyle(kind: .folder, state: current, theme: theme, input: input))
-        .disabled(state.contains(.disabled)).allowsHitTesting(input == .live).onHover(perform: updateHover).id(nodeID)
+        .disabled(state.contains(.disabled)).allowsHitTesting(input == .live).onHover(perform: hoverHandler).id(nodeID)
+        .onAppear { receiveHoverHandler?(hoverHandler) }
         .accessibilityAddTraits(state.contains(.selected) ? .isSelected : [])
     }
 }
@@ -169,6 +175,7 @@ public struct ScaleIndicator: View {
     /// Receives the installed `onHover` handler; tests drive hover without a real pointer.
     var receiveHoverHandler: ((@escaping (Bool) -> Void) -> Void)?
     public var body: some View {
+        let hoverHandler = updateHover
         Button(action: activate) {
             Text(label)
                 .font(Font(DesignMetrics.font("uiSmall")))
@@ -181,8 +188,8 @@ public struct ScaleIndicator: View {
         .focusable(input == .live)
         .focused($focused)
         .focusEffectDisabled(input == .forced)
-        .onHover(perform: updateHover)
-        .onAppear { receiveHoverHandler?(updateHover) }
+        .onHover(perform: hoverHandler)
+        .onAppear { receiveHoverHandler?(hoverHandler) }
         .allowsHitTesting(input == .live)
     }
 }
