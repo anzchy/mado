@@ -93,7 +93,7 @@ export function exportShard(options) {
   };
   // llvm-cov itself rejects a profile that does not match this binary.
   const exported = spawnSync('xcrun', ['llvm-cov', 'export', '-format=lcov', '-instr-profile', profilePath, binaryPath,
-    '-ignore-filename-regex=(\\.build/|/Tests/)'], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+    '-ignore-filename-regex=(\\.build[^/]*/|/Tests/)'], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
   if (exported.error || exported.status !== 0 || exported.signal || exported.stderr?.length) {
     const diagnostic = exported.stderr?.toString('utf8').trim() || exported.error?.message || `exit=${exported.status} signal=${exported.signal}`;
     throw new Error(`LLVM export failed or reported a warning: ${diagnostic}`);

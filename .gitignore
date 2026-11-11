@@ -54,6 +54,7 @@ design/competence-report/*.zip
 # Generated native projects and build products
 *.xcodeproj/
 .build/
+.build-coverage-atomic/
 DerivedData/
 
 # tdd-guardian generated artifacts
