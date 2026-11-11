@@ -9,6 +9,7 @@ test('removed legacy mode is rejected before native work at each entry point', (
   let launched=0;
   const env={APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1'};
   assert.notEqual(runAppRepeat({env,spawn:()=>{launched++;return {status:0};},stdout:()=>{}}),0);
+  assert.notEqual(runAppRepeat({env,validateOnly:true,spawn:()=>{launched++;return {status:0};},stdout:()=>{}}),0);
   assert.notEqual(runAppWorker({env,expectedMode:'legacy',spawn:()=>{launched++;return {status:0};},stderr:()=>{}}),0);
   assert.notEqual(runAppCompare({env,spawn:()=>{launched++;return {status:0};},stdout:()=>{}}),0);
   assert.equal(launched,0);
