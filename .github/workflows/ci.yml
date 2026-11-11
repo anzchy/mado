@@ -237,6 +237,46 @@ jobs:
           path: ci-logs/package-macui-tests
           if-no-files-found: warn
 
+  package-coverage:
+    name: Package coverage
+    needs: [changes, package-tests, package-macui-tests]
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Download non-UI Package coverage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: package-coverage-non-ui
+          path: ci-coverage/non-ui
+      - name: Download MacUI Package coverage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: package-coverage-macui
+          path: ci-coverage/macui
+      - name: Merge and gate Package coverage
+        run: >-
+          node scripts/ci/package-coverage.mjs --root . --input ci-coverage --out ci-coverage/report.md
+          --sha "${{ github.sha }}" --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
+          --formal "${{ github.event_name != 'workflow_dispatch' || inputs.swift_filter == '' }}"
+      - name: Upload Package coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-coverage-report
+          path: ci-coverage/report.md
+          if-no-files-found: warn
+
   # Ledger and identity checks, plus release regressions, run on every event and are required by Walking skeleton.
   # Release regressions exercise the macOS workflow shell (Bash 3.2 and BSD tools), so this job uses macOS too.
   ledger-check:
@@ -385,7 +425,7 @@ jobs:
   walking-skeleton:
     name: Walking skeleton
     if: always()
-    needs: [changes, ledger-check, package-tests, package-macui-tests, app-tests]
+    needs: [changes, ledger-check, package-tests, package-macui-tests, package-coverage, app-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -404,6 +444,9 @@ jobs:
           LEDGER: ${{ needs.ledger-check.result }}
           PACKAGE: ${{ needs.package-tests.result }}
           MACUI: ${{ needs.package-macui-tests.result }}
+          COVERAGE: ${{ needs.package-coverage.result }}
+          COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs
+          SWIFT_FILTER: ${{ inputs.swift_filter }}
           APP_JOB: ${{ needs.app-tests.result }}
           UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}
           APP_TEST_STEP: ${{ needs.app-tests.outputs.app_test_step }}
@@ -415,6 +458,21 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           APP_TESTS: ${{ inputs.app_tests }}
         run: |
+          if [ "$NATIVE" = true ]; then
+            if [ "$COVERAGE_ENFORCE" = true ] && { [ "$EVENT_NAME" != workflow_dispatch ] || [ -z "$SWIFT_FILTER" ]; }; then
+              if [ "$COVERAGE" != success ]; then
+                echo "walking-skeleton: FAIL (Package coverage minimum: job=${COVERAGE:-(none)}; success required)"
+                exit 1
+              fi
+            elif [ "$COVERAGE_ENFORCE" = false ]; then
+              echo "walking-skeleton: Package coverage pending ten accepted cold runs (job=${COVERAGE:-(none)})"
+            else
+              echo 'walking-skeleton: filtered dispatch is diagnostic Package coverage evidence'
+            fi
+          elif [ "$NATIVE" = false ] && [ "$COVERAGE" != skipped ]; then
+            echo "walking-skeleton: FAIL (Package coverage must skip for trusted docs-only input: job=${COVERAGE:-(none)})"
+            exit 1
+          fi
           # Enforce the new App minimum even while the trusted base still has the old permissive verdict.
           if [ "$NATIVE" = true ] && { [ "$EVENT_NAME" = pull_request ] || [ "$EVENT_NAME" = push ]; }; then
             if [ "$APP_JOB" != success ] || [ "$APP_TEST_STEP" != success ]; then
