@@ -19,12 +19,12 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
   if (String(repeat).trim() === '' || !Number.isInteger(count) || count < 1 || count > 50) {
     stdout('app-repeat: app_repeat must be an integer from 1 to 50\n'); return 64;
   }
-  if (validateOnly) return 0;
   const mode=!env.APP_COMPARE_MODE||env.APP_COMPARE_MODE==='none'?'normal':env.APP_COMPARE_MODE;
   const scope=mode==='normal'?null:env.APP_COMPARE_SCOPE;
   if(!['normal','hosted'].includes(mode)||(mode!=='normal'&&!['focus','full'].includes(scope))) {
     stdout('app-repeat: invalid comparison mode or scope\n');return 64;
   }
+  if (validateOnly) return 0;
   if (env.PICSEE_HEAVY_LOCK_HELD !== '1') {
     stdout('app-repeat: repeat execution requires PICSEE_HEAVY_LOCK_HELD=1 (CI machine ownership)\n'); return 64;
   }
