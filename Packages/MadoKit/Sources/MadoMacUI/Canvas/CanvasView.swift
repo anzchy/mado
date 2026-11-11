@@ -22,10 +22,9 @@ open class CanvasView: NSView {
     public var onResolutionNeeded: ((Int) -> Void)?
     public var onBackdropChange: ((CanvasBackdropFrame) -> Void)?
     public var backdropFrame: CanvasBackdropFrame {
-        var background = NSColor.clear
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            background = DesignColor.canvasBackground.nsColor.usingColorSpace(.sRGB) ?? DesignColor.canvasBackground.nsColor
-        }
+        let theme: DesignTheme = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+        let components = DesignColor.canvasBackground.components(theme)
+        let background = NSColor(srgbRed: components[0], green: components[1], blue: components[2], alpha: components[3])
         return CanvasBackdropFrame(image: decodedFrame, sourceSize: sourceSize, transform: transform,
             canvasSize: bounds.size, background: background, generation: backdropGeneration)
     }

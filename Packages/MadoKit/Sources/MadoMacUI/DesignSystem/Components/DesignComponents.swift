@@ -141,6 +141,11 @@ public struct SearchFilterField: View {
     }
 }
 public struct ScaleIndicator: View {
+    static func modeLabel(actualPixels: Bool, customZoom: Double?) -> String {
+        if actualPixels { return "1:1 · 100%" }
+        if let customZoom { return customZoom.formatted(.percent.precision(.fractionLength(0...2))) }
+        return String(localized: "Fit window")
+    }
     /// Own the complete label appearance so disabled ink is dimmed exactly once.
     private struct LabelStyle: ButtonStyle {
         let state: ComponentState
@@ -157,11 +162,7 @@ public struct ScaleIndicator: View {
         self.actualPixels = actualPixels; self.customZoom = customZoom; self.state = state; self.theme = theme; self.input = input; self.action = action
     }
     func activate() { guard input == .live else { return }; action() }
-    public var label: String {
-        if actualPixels { return "1:1 · 100%" }
-        if let customZoom { return customZoom.formatted(.percent.precision(.fractionLength(0...2))) }
-        return String(localized: "Fit window")
-    }
+    public var label: String { Self.modeLabel(actualPixels: actualPixels, customZoom: customZoom) }
     let state: ComponentState; let theme: DesignTheme
     let actualPixels: Bool; let customZoom: Double?; let input: ComponentInput; let action: () -> Void
     @State private var hover = false
