@@ -27,6 +27,12 @@ if (args.length !== 10 || args[0] !== '--out' || args[2] !== '--timeout-seconds'
   if (status === 0) status = run(watchdog, ['--out', out, '--timeout-seconds', timeout,
     '--capture-seconds', capture, '--grace-seconds', grace, '--',
     'swift', 'test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']);
-  if (status === 0 && verify) status = run(coverage, ['--out', out, '--not-before', String(notBefore)]);
+  if (status === 0 && verify) {
+    const coverageStatus = run(coverage, ['--out', out, '--not-before', String(notBefore)]);
+    if (coverageStatus !== 0) {
+      process.stderr.write('unit-locked: coverage verification failed after Swift tests passed\n');
+      status = 65;
+    }
+  }
   process.exitCode = status;
 }

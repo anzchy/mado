@@ -85,6 +85,18 @@ test('fresh profile cleanup, the unchanged Swift command and strict evaluation s
     [['test', '--package-path', 'Packages/MadoKit', '--enable-code-coverage']]);
 });
 
+test('coverage rejection has a distinct status after the Swift tests pass', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'scripts/ci/package-coverage-clear.mjs'), '');
+  fs.writeFileSync(path.join(f.dir, 'scripts/ci/package-coverage-local.mjs'),
+    "console.log('Coverage gate: FAIL (invalid evidence)'); process.exitCode = 1;\n");
+  const r = run(f, { verifyCoverage: true });
+  assert.equal(r.status, 65, r.stderr + r.stdout);
+  assert.match(r.stdout, /Test run with 7 tests/);
+  assert.match(r.stdout, /Coverage gate: FAIL/);
+  assert.match(r.stderr, /coverage verification failed after Swift tests passed/i);
+});
+
 test('hung detached helper exits 124, keeps diagnostics and releases the lock', async t => {
   const f = fixture(t); f.env.MODE = 'hang';
   const started = Date.now(), r = run(f);

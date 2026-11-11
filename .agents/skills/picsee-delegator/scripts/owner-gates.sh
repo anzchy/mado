@@ -31,17 +31,26 @@ lane_result() {
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
 node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
 swift_code=$?
-lane_result swift $swift_code
+if (( swift_code == 65 )); then
+  lane_result swift 0
+else
+  lane_result swift $swift_code
+fi
 # Re-evaluate the fresh local unit artifact with the same strict evaluator as CI.
 # lcov= is that check's exit code; the next line holds raw and eligible totals.
-if (( swift_code == 0 )); then
+if (( swift_code == 65 )); then
+  echo 'coverage failed after Swift tests passed; reevaluating retained evidence' > $o/$p-lcov.log
+  node scripts/ci/package-coverage-local.mjs --reuse >> $o/$p-lcov.log 2>&1
+  lane_result lcov 1
+elif (( swift_code == 0 )); then
   node scripts/ci/package-coverage-local.mjs --reuse > $o/$p-lcov.log 2>&1
   lane_result lcov $?
 else
   echo "coverage skipped: Swift run failed (exit $swift_code); prior coverage is not current evidence" > $o/$p-lcov.log
   lane_result lcov 1
 fi
-grep -E '^(Package:|Coverage gate:|Uncovered locations:|- Packages/)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
+grep -E '^(coverage failed after|Package:|Coverage gate:|Invalid coverage evidence:|- shard=|Uncovered locations:)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
+awk '/^Uncovered locations:/{section=1;next} /^Large LLVM counters/{section=0} section && /^- /{print}' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
