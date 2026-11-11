@@ -1,13 +1,34 @@
--- PID-bound Accessibility actions for issue637-desktop.py. No UI element is chosen by screen coordinate.
-on findElement(proc, identifier)
+-- PID-bound Accessibility actions. Search only the Settings window, never the entire process.
+on settingsWindow(proc)
     tell application "System Events"
-        repeat with elementRef in (entire contents of proc)
+        repeat with windowRef in (windows of proc)
+            set dimensions to size of windowRef
+            if (item 1 of dimensions) is greater than or equal to 730 and (item 1 of dimensions) is less than or equal to 790 and (item 2 of dimensions) is greater than or equal to 460 and (item 2 of dimensions) is less than or equal to 550 then return windowRef
+        end repeat
+    end tell
+    error "Settings window not present"
+end settingsWindow
+
+on windowList(proc)
+    set summary to ""
+    tell application "System Events"
+        repeat with windowRef in (windows of proc)
+            set dimensions to size of windowRef
+            set summary to summary & (name of windowRef as text) & " " & (item 1 of dimensions as text) & "x" & (item 2 of dimensions as text) & "; "
+        end repeat
+    end tell
+    return summary
+end windowList
+
+on findElement(windowRef, identifier)
+    tell application "System Events"
+        repeat with elementRef in (entire contents of windowRef)
             try
                 if (value of attribute "AXIdentifier" of elementRef as text) is identifier then return elementRef
             end try
         end repeat
     end tell
-    error "AXIdentifier not found: " & identifier
+    error "AXIdentifier not found in Settings window: " & identifier
 end findElement
 
 on run argv
@@ -19,7 +40,9 @@ on run argv
         set proc to first application process whose unix id is targetPID
         set frontmost of proc to true
         if operation is "window-title" then return name of window 1 of proc
-        set targetElement to my findElement(proc, identifier)
+        if operation is "window-list" then return my windowList(proc)
+        if operation is "settings-window" then return "PASS settings-window " & (name of my settingsWindow(proc))
+        set targetElement to my findElement(my settingsWindow(proc), identifier)
         if operation is "press" then
             perform action "AXPress" of targetElement
             return "PASS press " & identifier

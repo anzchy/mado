@@ -155,7 +155,20 @@ def ax(pid, operation, identifier, value=None):
     args = ['/usr/bin/osascript', HERE / 'issue637-ax.applescript', pid, operation, identifier]
     if value is not None:
         args.append(value)
-    return invoke(args, timeout=60)
+    started = time.monotonic()
+    try:
+        return invoke(args, timeout=12)
+    except (EnvironmentFailure, subprocess.TimeoutExpired) as error:
+        elapsed = time.monotonic() - started
+        windows = 'unavailable'
+        if operation != 'window-list':
+            try:
+                windows = invoke(['/usr/bin/osascript', HERE / 'issue637-ax.applescript',
+                                  pid, 'window-list', 'window'], timeout=5)
+            except (EnvironmentFailure, subprocess.TimeoutExpired) as diagnostic:
+                windows = f'unavailable ({diagnostic})'
+        raise EnvironmentFailure(f'AX {operation} identifier={identifier} elapsed={elapsed:.2f}s '
+                                 f'windows=[{windows}]: {error}') from error
 
 
 def key(source, run, character, *modifiers):
@@ -168,13 +181,22 @@ def escape(source, run):
 
 def settings(source, run, pid):
     key(source, run, ',', 'command')
-    for _ in range(30):
+    deadline = time.monotonic() + 8
+    last_error = None
+    while time.monotonic() < deadline:
         try:
-            ax(pid, 'value', 'settings.section.general')
-            return
-        except EnvironmentFailure:
+            window = ax(pid, 'settings-window', 'window')
+            break
+        except EnvironmentFailure as error:
+            last_error = error
             time.sleep(.2)
-    raise EnvironmentFailure('Settings window or opacity slider did not appear')
+    else:
+        raise EnvironmentFailure(f'Settings window did not open within 8s: {last_error}')
+    try:
+        ax(pid, 'value', 'settings.section.general')
+    except EnvironmentFailure as error:
+        raise EnvironmentFailure(f'{window}; Settings sidebar lookup failed: {error}') from error
+    return window
 
 
 def close_settings(source, run):
@@ -350,15 +372,17 @@ def analyze(manifest):
                 captures=captures, source=record.get('source'), build=record.get('build'))
 
 
-def capture(source, run):
+def capture(source, run, dry_ax=False):
     if not SRGB_PROFILE.exists():
         raise EnvironmentFailure('system sRGB profile unavailable')
     ax_framework = ctypes.CDLL('/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices')
     cg_framework = ctypes.CDLL('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics')
     ax_framework.AXIsProcessTrusted.restype = ctypes.c_bool
     cg_framework.CGPreflightScreenCaptureAccess.restype = ctypes.c_bool
-    if not ax_framework.AXIsProcessTrusted() or not cg_framework.CGPreflightScreenCaptureAccess():
-        raise EnvironmentFailure('Terminal.app lacks Accessibility or Screen Recording; no captures made')
+    if not ax_framework.AXIsProcessTrusted():
+        raise EnvironmentFailure('Terminal.app lacks Accessibility; no AX actions made')
+    if not dry_ax and not cg_framework.CGPreflightScreenCaptureAccess():
+        raise EnvironmentFailure('Terminal.app lacks Screen Recording; no captures made')
     run.mkdir(parents=True, exist_ok=False)
     fixtures = run / 'fixtures'
     fixtures.mkdir()
@@ -393,6 +417,12 @@ def capture(source, run):
         (run / 'original-preferences.json').write_text(json.dumps(original, indent=2) + '\n')
         if original['appearance'] is None:
             raise EnvironmentFailure('cannot identify original appearance preference')
+        if dry_ax:
+            close_settings(source / 'scripts/device', run)
+            return dict(status='PASS', scope='Settings AX only', settingsWindow='present',
+                        opacity=original_opacity, appearance=original['appearance'],
+                        alwaysShow=original['alwaysShow'], sampleCount=0, samples=[], failures=[],
+                        notVerified=['desktop pixel matrix was not run'])
         if original['alwaysShow'] not in ('1', 'true'):
             ax(pid, 'press', 'settings.always-show-tools')
         close_settings(source / 'scripts/device', run)
@@ -444,13 +474,14 @@ def capture(source, run):
                 if (run / 'original-preferences.json').exists():
                     original = json.loads((run / 'original-preferences.json').read_text())
                     pid = int((run / 'picsee.pid').read_text())
-                    set_theme(source / 'scripts/device', run, pid, original['appearance'])
-                    set_opacity(source / 'scripts/device', run, pid, original['opacity'])
-                    if original['alwaysShow'] not in ('1', 'true'):
-                        settings(source / 'scripts/device', run, pid)
-                        ax(pid, 'press', 'settings.section.general')
-                        ax(pid, 'press', 'settings.always-show-tools')
-                        close_settings(source / 'scripts/device', run)
+                    if not dry_ax:
+                        set_theme(source / 'scripts/device', run, pid, original['appearance'])
+                        set_opacity(source / 'scripts/device', run, pid, original['opacity'])
+                        if original['alwaysShow'] not in ('1', 'true'):
+                            settings(source / 'scripts/device', run, pid)
+                            ax(pid, 'press', 'settings.section.general')
+                            ax(pid, 'press', 'settings.always-show-tools')
+                            close_settings(source / 'scripts/device', run)
             except Exception as error:
                 (run / 'preference-restore-error.txt').write_text(str(error) + '\n')
                 cleanup_error = f'preference restore failed: {error}'
@@ -472,17 +503,20 @@ def main():
     run = sub.add_parser('run')
     run.add_argument('--out', type=Path, required=True)
     run.add_argument('--source', type=Path, default=HERE.parent.parent)
+    dry = sub.add_parser('dry-ax')
+    dry.add_argument('--out', type=Path, required=True)
+    dry.add_argument('--source', type=Path, default=HERE.parent.parent)
     review = sub.add_parser('analyze')
     review.add_argument('--manifest', type=Path, required=True)
     review.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     output = args.out.expanduser().resolve()
     try:
-        if args.mode == 'run':
+        if args.mode in ('run', 'dry-ax'):
             source = args.source.expanduser().resolve()
             if output == source or output.is_relative_to(source):
                 raise EnvironmentFailure('run evidence must be outside source worktree')
-            result = capture(source, output)
+            result = capture(source, output, dry_ax=args.mode == 'dry-ax')
             verdict_path = output / 'verdict.json'
         else:
             result = analyze(args.manifest)
@@ -491,7 +525,7 @@ def main():
     except Exception as error:
         result = dict(status='ENVIRONMENT', reason=str(error), sampleCount=0, samples=[], failures=[],
                       notVerified=['device run incomplete'])
-        verdict_path = output / 'verdict.json' if args.mode == 'run' else output
+        verdict_path = output / 'verdict.json' if args.mode in ('run', 'dry-ax') else output
         code = 70
     verdict_path.parent.mkdir(parents=True, exist_ok=True)
     verdict_path.write_text(json.dumps(result, indent=2) + '\n')
