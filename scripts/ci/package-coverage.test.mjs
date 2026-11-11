@@ -175,7 +175,42 @@ test('a new zero-hit FNDA fails even when FNF and FNH summaries still claim 100 
   assert.match(report, /Coverage gate: FAIL/);
 });
 
-test('reviewed declaration-only source is listed, while an empty module denominator fails', t => {
+test('wrapped DA and FNDA in one shard invalidate evidence before merge', t => {
+  const f = fixture(t);
+  const wrapped = '9223372036854775808';
+  f.edit('non-ui', ({ metadata, lcov }) => ({ metadata, lcov: lcov
+    .replace('FNDA:1,MadoCore.fn', `FNDA:${wrapped},MadoCore.fn`)
+    .replace(`DA:1,1`, `DA:1,${wrapped}`) }));
+  const eligible = join(f.root, 'eligible.lcov');
+  const run = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+    '--eligible-out', eligible, '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'true'],
+  { encoding: 'utf8' });
+  assert.equal(run.status, 1, run.stderr + run.stdout);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /Invalid coverage evidence/);
+  assert.match(report, /non-ui.*MadoCore\/A\.swift:1.*DA.*9223372036854775808/);
+  assert.match(report, /non-ui.*MadoCore\/A\.swift.*MadoCore\.fn.*FNDA.*9223372036854775808/);
+  assert.match(report, /commit.*aaaa|run.*1234/i);
+  assert.match(report, /Coverage gate: FAIL/);
+  assert.equal(existsSync(eligible), false);
+});
+
+test('a new exception cannot conceal an omitted executable source', t => {
+  const f = fixture(t);
+  const extra = 'Packages/MadoKit/Sources/MadoCore/Omitted.swift';
+  const contents = 'func omitted() {}\n';
+  writeFileSync(join(f.root, extra), contents);
+  writeFileSync(join(f.root, 'scripts/ci/package-coverage-exceptions.json'),
+    JSON.stringify([{ path: extra, reason: 'Declaration only.' }]));
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: {
+    ...metadata, sourceInventory: { ...metadata.sourceInventory, [extra]: hash(contents) },
+  } }));
+  const run = f.run();
+  assert.equal(run.status, 1, run.stderr + run.stdout);
+  assert.match(run.stderr, /unapproved|exception/i);
+});
+
+test('new declaration-only exception also requires a reviewed pin', t => {
   const f = fixture(t);
   const extra = 'Packages/MadoKit/Sources/MadoCore/Declarations.swift';
   const contents = 'protocol EmptyPort { func read() }\n';
@@ -185,14 +220,9 @@ test('reviewed declaration-only source is listed, while an empty module denomina
   for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: {
     ...metadata, sourceInventory: { ...metadata.sourceInventory, [extra]: hash(contents) },
   } }));
-  assert.equal(f.run().status, 0);
-  assert.match(readFileSync(f.out, 'utf8'), /Declarations.swift: Protocol requirement only/);
-  // Exempting every mapped file in a module cannot make its zero denominator pass.
-  writeFileSync(join(f.root, 'scripts/ci/package-coverage-exceptions.json'),
-    JSON.stringify([{ path: extra, reason: 'Protocol requirement only.' }, { path: pathOf('MadoCore'), reason: 'Fixture declaration.' }]));
-  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
-    lcov: lcov.replace(new RegExp(`SF:${pathOf('MadoCore')}[\\s\\S]*?end_of_record\\n`), '') }));
-  assert.match(f.run().stderr, /MadoCore: zero denominator/);
+  const run = f.run();
+  assert.equal(run.status, 1, run.stderr);
+  assert.match(run.stderr, /unapproved|exception/i);
 });
 
 test('toolchain mismatch and missing source digest fail independently of coverage', t => {
@@ -340,4 +370,45 @@ test('guardian-facing LCOV is derived from strict eligible mappings rather than 
   const summary = readFileSync(eligible, 'utf8');
   assert.match(summary, /SF:Packages\/MadoKit\/Sources\/MadoCore\/A.swift[\s\S]*FNF:1\nFNH:1[\s\S]*LF:1\nLH:1/);
   assert.match(summary, /SF:Packages\/MadoKit\/Sources\/MadoInfrastructure\/Images\/ImageSourceHeader.swift[\s\S]*LF:2\nLH:2/);
+});
+
+test('all 17 reviewed file pins reject source, manifest, toolchain and mapping drift', t => {
+  const f = fixture(t);
+  const repository = join(dirname(script), '../..');
+  const manifestFile = join(f.root, 'scripts/ci/package-coverage-exceptions.json');
+  const reviewed = JSON.parse(readFileSync(join(repository, 'scripts/ci/package-coverage-exceptions.json'), 'utf8'));
+  const reviewedText = JSON.stringify(reviewed);
+  assert.equal(reviewed.length, 17);
+  writeFileSync(manifestFile, reviewedText);
+  for (const entry of reviewed) {
+    const contents = readFileSync(join(repository, entry.path));
+    mkdirSync(dirname(join(f.root, entry.path)), { recursive: true });
+    writeFileSync(join(f.root, entry.path), contents);
+    f.inventory[entry.path] = hash(contents);
+  }
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: {
+    ...metadata, toolchain: reviewed[0].toolchain, sourceInventory: { ...metadata.sourceInventory, ...f.inventory },
+  } }));
+  assert.equal(f.run().status, 0, 'the exact reviewed set is accepted');
+  const first = reviewed[0];
+  writeFileSync(join(f.root, first.path), readFileSync(join(f.root, first.path), 'utf8') + '\n');
+  assert.match(f.run().stderr, /source digest drift/i);
+  writeFileSync(join(f.root, first.path), readFileSync(join(repository, first.path)));
+  writeFileSync(manifestFile, JSON.stringify([{ ...first, sourceSha256: hash('changed') }, ...reviewed.slice(1)]));
+  assert.match(f.run().stderr, /manifest pin drift|source digest drift/i);
+  writeFileSync(manifestFile, reviewedText);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: {
+    ...metadata, toolchain: { ...metadata.toolchain, swift: 'Swift 7' },
+  } }));
+  assert.match(f.run().stderr, /toolchain drift/i);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: {
+    ...metadata, toolchain: reviewed[0].toolchain,
+  } }));
+  writeFileSync(manifestFile, JSON.stringify([...reviewed, reviewed[0]]));
+  assert.match(f.run().stderr, /exception count drift|duplicate/i);
+  writeFileSync(manifestFile, reviewedText);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
+    lcov: lcov + record(first.path, [[1, 1]], [[1, 'unexpected.executable', 1]]),
+  }));
+  assert.match(f.run().stderr, /mapping missing or unexpected/i);
 });

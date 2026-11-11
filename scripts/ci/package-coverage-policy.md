@@ -1,9 +1,9 @@
 # Package coverage policy for #631 (P0-02 tooling)
 
-This records the 2026-11-10 delegated decision by gpt-6-astra (high),
-`/Users/jack/.picsee/herdr/delegator/ci-p02/i631-fn-astra.md`. It clarifies D2/D3
-and amends D4 of `~/.picsee/herdr/delegator/ci-p02/decision.md`. It is a
-delegated design decision, not owner approval to enable enforcement.
+The repository copies of the 2026-11-10 and 2026-11-11 gpt-6-astra (high)
+delegated decisions are [i631-fn-astra.md](i631-fn-astra.md) and
+[i631-audit-astra.md](i631-audit-astra.md). They are delegated design calls,
+not owner approvals to enable enforcement.
 
 The exact 100% gate measures each emitted, normalized `FN`/`FNDA` identity once
 across compatible shards. Executable lines are unique `DA` locations. LLVM's
@@ -13,14 +13,38 @@ counter. Source inventories, provenance, toolchain and mapping compatibility
 must match before the gate considers any count.
 
 The 17 declaration-only file exceptions live in
-`package-coverage-exceptions.json`. The separate
+`package-coverage-exceptions.json`. Each entry pins an exact repository-relative
+path, whole-source SHA-256, reviewed rationale, toolchain and the durable audit
+decision. The evaluator pins the complete 17-entry manifest independently,
+rejects additions, substitutions, duplicates and digest drift, and rejects any
+executable mapping in an excluded source. The separate
 `package-coverage-function-exceptions.json` permits exactly the two functions
 named in the delegated decision: `ViewerChromeOverlay.swift:198` and
 `InspectorPanel.swift:191`. Each entry pins the full source path, mangled symbol,
 start line, source SHA-256, Xcode/Swift/LLVM toolchain, rationale and decision.
 The evaluator rejects stale, covered, duplicate, wildcard and unmatched entries.
-Adding or replacing one requires another explicit reviewed decision. There is
+Adding or replacing any file or function exception requires another explicit
+reviewed decision. There is
 no general exception for SwiftUI closures.
+
+An individual DA or FNDA counter at or above 2^63 is invalid evidence, even
+if another shard or a neighbouring mapping has positive hits. The evaluator
+checks each shard before aggregation, reports every invalid identity, raw count
+and provenance separately from uncovered code and exceptions, and emits no
+eligible artifact for that run. The reported local/owner-gate wrapped counters
+remain a blocker for the hosted acceptance batch; #358 tracks investigation,
+not a waiver.
+
+To refresh a source or toolchain pin, the implementer supplies the source diff,
+old and new digest, mapping identity and location, toolchain, and fresh coverage
+evidence. An independent reviewer rechecks the exception rationale, unchanged
+symbol identity, zero valid hits and absence of newly exempted behaviour. The
+owner or an explicitly delegated owner-decider approves the refresh. Record the
+reviewer and approver in the decision, then update the manifest, evaluator pins
+and portable decision reference together. A symbol, rationale or toolchain
+change needs a fresh explicit exception decision. Re-run drift rejection tests
+and local/CI parity before freezing a candidate. #637 must follow this process
+for ViewerChromeOverlay.swift.
 
 Reports disclose raw functions, each exception and eligible functions
 separately. For the prior two-shard mapping, raw was 3224/3238; after twelve

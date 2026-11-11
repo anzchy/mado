@@ -1,19 +1,189 @@
 [
-  {"path":"Packages/MadoKit/Sources/MadoApplication/Access/ViewerSessionNavigationHost.swift","reason":"Protocol requirements only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoApplication/MadoApplication.swift","reason":"Module marker import only."},
-  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/FirstPreviewTracing.swift","reason":"Enum cases and protocol requirements only."},
-  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerChromeScheduler.swift","reason":"Protocol requirement only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerImageHost.swift","reason":"Protocol requirements only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSingleImageReturnHost.swift","reason":"Protocol requirements only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Canvas/CanvasZoomMode.swift","reason":"Enum case declarations only."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Commands/FocusContext.swift","reason":"Enum case declarations only."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/MadoCore.swift","reason":"Module marker import only."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/CacheMaintenance.swift","reason":"Protocol requirements only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/FolderMetadataReading.swift","reason":"Protocol requirement only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/FolderWatching.swift","reason":"Enum cases and protocol requirements only."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/ImagePresentationPinning.swift","reason":"Protocol requirements only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoCore/Ports/PrefetchResuming.swift","reason":"Protocol requirement only; no implementation body."},
-  {"path":"Packages/MadoKit/Sources/MadoInfrastructure/MadoInfrastructure.swift","reason":"Module marker import only."},
-  {"path":"Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Tokens/DesignRegistry.swift","reason":"Static literal constants only; LLVM emits no executable mapping."},
-  {"path":"Packages/MadoKit/Sources/MadoMacUI/MadoMacUI.swift","reason":"Module marker imports only."}
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/Access/ViewerSessionNavigationHost.swift",
+    "reason": "Protocol requirements only; no implementation body.",
+    "sourceSha256": "9a54805bca1b5c942cb8bf7f234f65fce44623756758debfb76e2f5b55bb1bba",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/MadoApplication.swift",
+    "reason": "Module marker import only.",
+    "sourceSha256": "acf8ed9470f9b6c2b91f1d515d8218534e32f6cc638a8f67c44d4a3a539858e1",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/Viewer/FirstPreviewTracing.swift",
+    "reason": "Enum cases and protocol requirements only.",
+    "sourceSha256": "1e8fbcd077139cb6f504897c902648e02e26447d11fd9ac3f06b4d9f125c9efd",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerChromeScheduler.swift",
+    "reason": "Protocol requirement only; no implementation body.",
+    "sourceSha256": "e2d4a82505163560368879f6c8a711373400c2f071c794971189de7e5cc83334",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerImageHost.swift",
+    "reason": "Protocol requirements only; no implementation body.",
+    "sourceSha256": "231f3117381cd8ff9377638511d23814eeeb00760691f0ca80bd6aea1fea4f1e",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoApplication/Viewer/ViewerSingleImageReturnHost.swift",
+    "reason": "Protocol requirements only; no implementation body.",
+    "sourceSha256": "213a68164ea5af18631d4a3fa5223ceed7cfd75746d00abbb63814b65f93ad26",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Canvas/CanvasZoomMode.swift",
+    "reason": "Enum case declarations only.",
+    "sourceSha256": "b29b568c31a7a7d82ceb839e6729003d2f9912c4df1042ca96b3fc2a92f3b134",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Commands/FocusContext.swift",
+    "reason": "Enum case declarations only.",
+    "sourceSha256": "eb0bf8159d1f75d1c12bbbf797f3b76addad50b63d35d5ba61df2422eb203614",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/MadoCore.swift",
+    "reason": "Module marker import only.",
+    "sourceSha256": "4c1a152e24c2a12c88c942c6f284245206471223f861ff1c53532ed613d38879",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Ports/CacheMaintenance.swift",
+    "reason": "Protocol requirements only; no implementation body.",
+    "sourceSha256": "26ad8866b4d57a9480e4d556c64ae18dcca424cd74d7499ac9716406baf52962",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Ports/FolderMetadataReading.swift",
+    "reason": "Protocol requirement only; no implementation body.",
+    "sourceSha256": "ba7d3ce5b70fd7fe764220541c21026c54714f091c2f011efda14342d5dae073",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Ports/FolderWatching.swift",
+    "reason": "Enum cases and protocol requirements only.",
+    "sourceSha256": "1357fc808029a32212b896eb374cf488182aa696b4b86e281144a2ca37d507d6",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Ports/ImagePresentationPinning.swift",
+    "reason": "Protocol requirements only; no implementation body.",
+    "sourceSha256": "45438d5beafb361c917a2f1770ad137c04cdb97df9e0a78ceff40dab2ae93208",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoCore/Ports/PrefetchResuming.swift",
+    "reason": "Protocol requirement only; no implementation body.",
+    "sourceSha256": "fa420d3ef74ae48a13355981a2d9307189d93ce32973bf07514c7a6fafff6450",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoInfrastructure/MadoInfrastructure.swift",
+    "reason": "Module marker import only.",
+    "sourceSha256": "acf8ed9470f9b6c2b91f1d515d8218534e32f6cc638a8f67c44d4a3a539858e1",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Tokens/DesignRegistry.swift",
+    "reason": "Static literal constants only; LLVM emits no executable mapping.",
+    "sourceSha256": "3857254dfd9121c5a08920cc88b27068f7aadb051f2930cf048426e59828dde8",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  },
+  {
+    "path": "Packages/MadoKit/Sources/MadoMacUI/MadoMacUI.swift",
+    "reason": "Module marker imports only.",
+    "sourceSha256": "56af0108d693febe867d60469dc33a80f788674ec76f9a010a4600fe1614e62c",
+    "toolchain": {
+      "xcode": "Xcode 26.6\nBuild version 17F113",
+      "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+      "llvmCov": "Apple LLVM version 21.0.0\n  Optimized build."
+    },
+    "decision": "i631-audit-astra.md 2"
+  }
 ]
