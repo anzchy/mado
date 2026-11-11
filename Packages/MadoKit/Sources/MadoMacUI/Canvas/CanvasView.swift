@@ -11,6 +11,8 @@ open class CanvasView: NSView {
     private var previousOpeningGeneration: UUID?
     private var transform = CanvasTransform(backingScale: 1)
     private var image: NSImage?
+    private var decodedFrame: CGImage?
+    private var backdropGeneration: UInt64 = 0
     private var sourceSize = CGSize.zero
     private var message: String?
     private var dragPoint: CGPoint?
@@ -18,6 +20,20 @@ open class CanvasView: NSView {
     private var showsKeyboardFocusRing = false
     private var preserveKeyboardFocusRingForOpening = false
     public var onResolutionNeeded: ((Int) -> Void)?
+    public var onBackdropChange: ((CanvasBackdropFrame) -> Void)?
+    public var backdropFrame: CanvasBackdropFrame {
+        var background = NSColor.clear
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            background = DesignColor.canvasBackground.nsColor.usingColorSpace(.sRGB) ?? DesignColor.canvasBackground.nsColor
+        }
+        return CanvasBackdropFrame(image: decodedFrame, sourceSize: sourceSize, transform: transform,
+            canvasSize: bounds.size, background: background, generation: backdropGeneration)
+    }
+
+    private func publishBackdrop() {
+        backdropGeneration &+= 1
+        onBackdropChange?(backdropFrame)
+    }
 
     public init(frame frameRect: NSRect, session: ViewerSession) {
         self.session = session
@@ -63,6 +79,7 @@ open class CanvasView: NSView {
     public func beginOpening() {
         if !preserveKeyboardFocusRingForOpening { hideKeyboardFocusRing() }
         image = nil
+        decodedFrame = nil
         dragPoint = nil
         let generation = openingGeneration?() ?? UUID()
         if generation != previousOpeningGeneration {
@@ -72,20 +89,24 @@ open class CanvasView: NSView {
         previousOpeningGeneration = generation
         message = nil
         needsDisplay = true
+        publishBackdrop()
     }
 
     public func showFailure() {
         dragPoint = nil
         image = nil
+        decodedFrame = nil
         sourceSize = .zero
         message = nil
         needsDisplay = true
+        publishBackdrop()
     }
 
     public func install(_ result: DecodedImage) {
         let changedSize = sourceSize != result.sourcePixelSize
         sourceSize = result.sourcePixelSize
         image = NSImage(cgImage: result.image, size: NSSize(width: result.image.width, height: result.image.height))
+        decodedFrame = result.image
         message = nil
         if changedSize {
             session.beginCanvasImage()
@@ -95,6 +116,12 @@ open class CanvasView: NSView {
         }
         previousViewport = bounds.size
         needsDisplay = true
+        publishBackdrop()
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        publishBackdrop()
     }
 
     public override func viewDidChangeBackingProperties() {
@@ -115,6 +142,7 @@ open class CanvasView: NSView {
             backingScale: Double(window?.backingScaleFactor ?? 1), mode: session.zoomMode)
         needsDisplay = true
         requestDetail()
+        publishBackdrop()
     }
 
     public var onCommand: ((CommandID) -> Bool)?
@@ -167,6 +195,7 @@ open class CanvasView: NSView {
             source: sourceSize, viewport: bounds.size, snap: session.zoomMode == .actualPixels)
         dragPoint = point
         needsDisplay = true
+        publishBackdrop()
     }
 
     public override func mouseUp(with event: NSEvent) { dragPoint = nil }
@@ -196,6 +225,7 @@ open class CanvasView: NSView {
         }
         needsDisplay = true
         requestDetail()
+        publishBackdrop()
         return transform.zoom
     }
 
@@ -212,6 +242,7 @@ open class CanvasView: NSView {
         session.reportCanvasZoom(transform.zoom)
         needsDisplay = true
         requestDetail()
+        publishBackdrop()
     }
 
     private var centre: CGPoint { CGPoint(x: bounds.midX, y: bounds.midY) }
