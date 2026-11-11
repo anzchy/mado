@@ -14,7 +14,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   const log=text=>appendFileSync(logPath,'app-repeat: '+text+'\n');
   let inspector=preparedInspector,host,child,group,childExit,cleanup,stopping=false,done=false,epoch=0,
     startupStopped=false,graceExpired=false,drainExpired=false,cancelledOnHostObserved=false,wakeResolve,
-    deadlineTimer,graceTimer,drainTimer,lastGroupPhase,workerStarted=false;
+    deadlineTimer,graceTimer,drainTimer,lastGroupPhase,workerStarted=false,leaderWaitLogged=false;
   const startupAbort=new AbortController(),psChildren=new Set();
   const wake=()=>{const resolve=wakeResolve;wakeResolve=null;resolve?.();};
   const phase=()=>!stopping?'running':drainExpired||now()>=cleanup.drainDeadline?'expired':
@@ -152,8 +152,15 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
           }
           // A live owned host or group member may finish after its leader.
           // Keep observing on the original run budget, including uncertain queries.
+          const liveCount=(groupState?.length??0)+(host?.snapshot().live.length??0);
           if(groupState?.length||host&&inspector?.ready&&
-            (host.snapshot().live.length||host.snapshot().unknown.length)){await idle();continue;}
+            (host.snapshot().live.length||host.snapshot().unknown.length)){
+            if(liveCount&&!leaderWaitLogged){
+              log(`iteration leader exited; waiting for ${liveCount} live owned/group processes`);
+              leaderWaitLogged=true;
+            }
+            await idle();continue;
+          }
           stop('iteration leader exited with live descendants or unknown host');continue;
         }
       }

@@ -37,13 +37,14 @@ function fixture(dir, exitLeader) {
   const root = `const fs=require('node:fs');fs.appendFileSync(${JSON.stringify(pids)},process.pid+'\\n');process.on('SIGTERM',()=>{});const c=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(middle)}],{stdio:['ignore','ignore','ignore','ipc']});c.on('message',()=>{console.log('grandchild ready');${exitLeader ? 'process.exit(0)' : ''}});setInterval(()=>{},1000);`;
   return {pids, command:process.execPath,args:['-e',root]};
 }
-for (const exitLeader of [false,true]) test(`process group drains TERM-resistant descendants when ${exitLeader ? 'leader exits early' : 'deadline expires'}`, async t => {
+for (const exitLeader of [false,true]) test(`process group drains TERM-resistant descendants when ${exitLeader ? 'deadline expires after leader exit' : 'deadline expires with leader alive'}`, async t => {
   const dir = directory(t), logPath = path.join(dir,'iteration.log');
   const f = fixture(dir,exitLeader);
-  const started = Date.now();
-  const result = await runProcessGroup({...f,logPath,deadline:Date.now()+1200,graceMs:80,drainMs:1000});
+  const started = Date.now(),deadline=Date.now()+1200;
+  const result = await runProcessGroup({...f,logPath,deadline,graceMs:80,drainMs:1000});
   assert.equal(result.drained,true);
   assert.equal(result.status,70);
+  assert.ok(result.cleanup.graceStartedAt>=deadline-2,'TERM-resistant descendants wait until the original run deadline');
   assert.ok(existsSync(f.pids),'fixture must start before the cleanup claim can pass');
   const pids = readFileSync(f.pids,'utf8').trim().split('\n').map(Number);
   assert.equal(pids.length,3,'the fixture includes a grandchild');
