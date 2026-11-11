@@ -728,7 +728,8 @@ public actor FileAccess: AccessLeasing {
         var candidates = previousRoots[id] ?? []
         if let currentRoot = roots[id] { candidates.append(currentRoot) }
         var oldRoot: URL?
-        for candidate in candidates where folder.standardizedFileURL.pathComponents.starts(with: candidate.standardizedFileURL.pathComponents) {
+        for candidate in candidates {
+            guard folder.standardizedFileURL.pathComponents.starts(with: candidate.standardizedFileURL.pathComponents) else { continue }
             if let current = oldRoot, current.pathComponents.count >= candidate.pathComponents.count { continue }
             oldRoot = candidate
         }
@@ -786,7 +787,8 @@ public actor FileAccess: AccessLeasing {
     }
     /// Canonicalizing another root may inspect metadata: hold its own scope too.
     private func matchingRoot(_ folder: URL, excluding id: AccessRootID? = nil) -> AccessRootID? {
-        for record in saved where record.id != id {
+        for record in saved {
+            guard record.id != id else { continue }
             guard let url = roots[record.id] else { continue }
             if url.standardizedFileURL.pathComponents == folder.pathComponents { return record.id }
             guard let session = try? ScopeSession(scope: scope, url: url, rootID: record.id) else { continue }

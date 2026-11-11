@@ -9,7 +9,8 @@ public enum ViewerInput: Equatable, Sendable {
         var seen = Set<String>()
         var unique: [URL] = [], images: [URL] = [], folders: [URL] = []
         var excluded = 0
-        for url in urls where url.isFileURL {
+        for url in urls {
+            guard url.isFileURL else { continue }
             guard seen.insert(url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path).inserted else { continue }
             unique.append(url)
             if url.hasDirectoryPath { folders.append(url) }

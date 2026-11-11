@@ -446,6 +446,8 @@ private actor P305WaitRegistration {
     await gate.release()
     _ = try await pending.value
     #expect(await cache.deferredClearFailure() != nil)
+    let unrelated = ThumbnailDiskCache(directory: rootURL.appendingPathComponent("other-cache"))
+    #expect(await unrelated.deferredClearFailure() == nil, "another cache must ignore this directory's failure")
     #expect(FileManager.default.fileExists(atPath: payload.path))
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cacheURL.path)
     try await cache.clear()

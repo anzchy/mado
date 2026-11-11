@@ -436,7 +436,8 @@ import MadoCore
         // a zero-width grid would ask AppKit for a zero item size.
         if mode == .grid { mainContent.frame = main }
         footer.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 40)
-        for content in mainContent.subviews where mode == .grid {
+        for content in mainContent.subviews {
+            guard mode == .grid else { continue }
             if let grid = content as? GridBrowserView {
                 grid.onThumbnailSizeChange = { [weak self] size in
                     guard let self, self.isGridSurface else { return }

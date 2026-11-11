@@ -141,7 +141,8 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
             guard FileManager.default.fileExists(atPath: directory.path) else { return 0 }
             let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
             var total: Int64 = 0
-            for name in names where Self.isOwnedName(name) {
+            for name in names {
+                guard Self.isOwnedName(name) else { continue }
                 let url = directory.appendingPathComponent(name)
                 let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
                 guard attributes[.type] as? FileAttributeType == .typeRegular else { continue }
@@ -192,7 +193,8 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
             try requireSafeDirectory()
             CacheIndexLocks.shared.advanceGeneration(for: directory)
             guard FileManager.default.fileExists(atPath: directory.path) else { return }
-            for name in try FileManager.default.contentsOfDirectory(atPath: directory.path) where Self.isOwnedName(name) {
+            for name in try FileManager.default.contentsOfDirectory(atPath: directory.path) {
+                guard Self.isOwnedName(name) else { continue }
                 let url = directory.appendingPathComponent(name)
                 guard url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL,
                       (try? FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType) == .typeRegular,
@@ -635,13 +637,15 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
         await afterOrphanSnapshot?()
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
         var deferred = false
-        for name in names where name.hasPrefix(".tmp-") {
+        for name in names {
+            guard name.hasPrefix(".tmp-") else { continue }
             let temporary = directory.appendingPathComponent(name)
             guard let modified = (try? FileManager.default.attributesOfItem(atPath: temporary.path)[.modificationDate] as? Date),
                   modified < Self.tempSweepCutoff else { continue }
             if !withIndexLock({ removeStaleTemp(temporary) }) { deferred = true }
         }
-        for name in names where name.hasSuffix(".png") && name.count == 68 && !referenced.contains(name) {
+        for name in names {
+            guard name.hasSuffix(".png") && name.count == 68 && !referenced.contains(name) else { continue }
             guard let payload = payloadURL(forKey: String(name.dropLast(4))) else { continue }
             if !withIndexLock({ removeOrphanIfUnindexed(payload) }) { deferred = true }
         }
@@ -707,7 +711,8 @@ public actor ThumbnailDiskCache: ThumbnailCaching, CacheMaintenance {
         }
         sqlite3_finalize(statement)
         guard total > highWaterBytes else { return }
-        for row in rows where total > lowWaterBytes {
+        for row in rows {
+            guard total > lowWaterBytes else { continue }
             guard let payload = payloadURL(forKey: row.key), row.path == payload.lastPathComponent else {
                 // An index row cannot authorize deletion of a filesystem path.
                 if deleteIndexRow(row.key, using: db) { total -= row.bytes }
@@ -929,7 +934,10 @@ private final class PayloadLeaseRegistry: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let prefix = directory.standardizedFileURL.path + "/"
-        for (path, message) in failedDeletions where path.hasPrefix(prefix) { return message }
+        for (path, message) in failedDeletions {
+            guard path.hasPrefix(prefix) else { continue }
+            return message
+        }
         return nil
     }
 
@@ -948,7 +956,8 @@ private final class PayloadLeaseRegistry: @unchecked Sendable {
     }
 
     private func resumeDrainedWaiters() {
-        for prefix in Array(drainWaiters.keys) where !pendingDeletion.contains(where: { $0.hasPrefix(prefix) }) {
+        for prefix in Array(drainWaiters.keys) {
+            guard !pendingDeletion.contains(where: { $0.hasPrefix(prefix) }) else { continue }
             let ready = drainWaiters.removeValue(forKey: prefix)!
             for continuation in ready { continuation.resume() }
         }
