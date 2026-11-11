@@ -7,6 +7,13 @@ import { fileURLToPath } from 'node:url';
 
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const prefix = 'Packages/MadoKit/Sources/';
+// Reviewed identities from i631-fn-astra.md B. The manifest supplies the full
+// readable symbol and all provenance; these hashes prevent adding another
+// symbol at either approved source location by editing only the manifest.
+const approvedFunctionIdentities = new Map([
+  [`${prefix}MadoMacUI/Chrome/ViewerChromeOverlay.swift:198`, '0d760c77616e860a9bc85999c00fc95ffaff7fac32df2f45b221310e00f0cdcd'],
+  [`${prefix}MadoMacUI/Inspector/InspectorPanel.swift:191`, 'e55dd121048c133d38dd7d11d9ec25d52df5048ba7b5bf3dd2bd91718532ff6f'],
+]);
 const fatal = message => { throw new Error(message); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const object = (value, label) => value && typeof value === 'object' && !Array.isArray(value) ? value : fatal(`${label}: expected object`);
@@ -110,6 +117,36 @@ function exceptions(root) {
   }
   return result;
 }
+function functionExceptions(root, sources, toolchain) {
+  let list;
+  try { list = JSON.parse(readFileSync(path.join(root, 'scripts/ci/package-coverage-function-exceptions.json'), 'utf8')); }
+  catch (error) { fatal(`function exception manifest missing or malformed: ${error.message}`); }
+  if (!Array.isArray(list)) fatal('function exception manifest must be array');
+  const result = new Map();
+  const locations = new Set();
+  for (const entry of list) {
+    object(entry, 'function exception');
+    if (JSON.stringify(Object.keys(entry).sort()) !== JSON.stringify(['decision', 'path', 'reason', 'sourceSha256', 'start', 'symbol', 'toolchain'].sort())) fatal('function exception has missing or unexpected fields');
+    if (entry.path !== sourcePath(root, entry.path)) fatal(`function exception path is not exact: ${entry.path}`);
+    if (!(entry.path in sources)) fatal(`function exception source missing: ${entry.path}`);
+    if (hash(entry.sourceSha256, `${entry.path} source digest`) !== sources[entry.path]) fatal(`${entry.path}: function exception source digest drift`);
+    if (JSON.stringify(entry.toolchain) !== JSON.stringify(toolchain)) fatal(`${entry.path}: function exception toolchain drift`);
+    const symbol = nonempty(entry.symbol, `${entry.path} symbol`);
+    if (symbol.includes('*') || symbol.includes('?')) fatal(`${entry.path}: function exception wildcard symbol`);
+    number(entry.start, `${entry.path} function exception start`, true);
+    const location = `${entry.path}:${entry.start}`;
+    if (!approvedFunctionIdentities.has(location)) fatal(`unapproved function exception location ${location}`);
+    if (digest(symbol) !== approvedFunctionIdentities.get(location)) fatal(`unapproved function exception symbol ${location}`);
+    if (locations.has(location)) fatal(`duplicate function exception location ${location}`);
+    locations.add(location);
+    nonempty(entry.reason, `${entry.path} reason`);
+    if (entry.decision !== 'i631-fn-astra.md B') fatal(`${entry.path}: function exception decision reference drift`);
+    const key = `${entry.path}\u0000${symbol}`;
+    if (result.has(key)) fatal(`duplicate function exception ${entry.path}:${symbol}`);
+    result.set(key, entry);
+  }
+  return result;
+}
 function artifact(root, input, shard, expected, sources) {
   let raw, meta;
   try { raw = readFileSync(path.join(input, shard, 'coverage.lcov')); meta = JSON.parse(readFileSync(path.join(input, shard, 'metadata.json'), 'utf8')); }
@@ -150,33 +187,60 @@ function loopExit(root, merged) {
   return `ImageSourceHeader.swift:${n} loop-exit throw hit count ${hit.hits}`;
 }
 
-export function evaluateCoverage({ root, input, out, sha, runId, attempt, formal }) {
+export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, attempt, formal, shards = ['non-ui', 'macui'] }) {
   if (![root, input, out].every(x => typeof x === 'string' && path.isAbsolute(x))) fatal('root/input/out must be absolute');
+  if (eligibleOut !== undefined && (typeof eligibleOut !== 'string' || !path.isAbsolute(eligibleOut))) fatal('eligibleOut must be absolute');
   if (!/^[0-9a-f]{40}$/.test(sha ?? '')) fatal('expected commit SHA malformed');
   if (!/^[1-9][0-9]*$/.test(String(runId))) fatal('expected run ID malformed');
   if (typeof formal !== 'boolean') fatal('formal must be boolean');
+  if (JSON.stringify(shards) !== JSON.stringify(['non-ui', 'macui']) && JSON.stringify(shards) !== JSON.stringify(['non-ui'])) fatal('invalid shard selection');
+  if (formal && shards.length !== 2) fatal('formal coverage requires two shards');
   const expected = { sha, runId: String(runId), attempt: number(attempt, 'expected attempt', true) };
   const sources = inventory(root), exempt = exceptions(root);
   for (const name of exempt.keys()) if (!(name in sources)) fatal(`exception source missing: ${name}`);
-  const [left, right] = ['non-ui', 'macui'].map(shard => artifact(root, input, shard, expected, sources));
-  if (JSON.stringify(left.meta.toolchain) !== JSON.stringify(right.meta.toolchain)) fatal('toolchain mismatch');
+  const [left, right] = shards.map(shard => artifact(root, input, shard, expected, sources));
+  if (right && JSON.stringify(left.meta.toolchain) !== JSON.stringify(right.meta.toolchain)) fatal('toolchain mismatch');
+  const functionExempt = functionExceptions(root, sources, left.meta.toolchain);
   const names = [...left.files.keys()].sort();
-  if (JSON.stringify(names) !== JSON.stringify([...right.files.keys()].sort())) fatal('shard mapping inventory mismatch');
+  if (right && JSON.stringify(names) !== JSON.stringify([...right.files.keys()].sort())) fatal('shard mapping inventory mismatch');
   const required = Object.keys(sources).filter(name => !exempt.has(name)).sort();
   if (JSON.stringify(names) !== JSON.stringify(required)) fatal(`production source mapping missing or unexpected: ${required.filter(x => !left.files.has(x)).join(', ')}`);
   const merged = new Map();
   for (const name of names) {
-    const a = left.files.get(name), b = right.files.get(name);
-    if (mapping(a) !== mapping(b)) fatal(`${name}: incompatible mapping`);
-    const lines = new Map([...a.lines].map(([n, data]) => [n, { hits: data.hits + b.lines.get(n).hits }]));
-    const functionHits = new Map([...a.functionHits].map(([fn, count]) => [fn, count + b.functionHits.get(fn)]));
+    const a = left.files.get(name), b = right?.files.get(name);
+    if (b && mapping(a) !== mapping(b)) fatal(`${name}: incompatible mapping`);
+    const lines = new Map([...a.lines].map(([n, data]) => [n, { hits: data.hits + (b?.lines.get(n).hits ?? 0n) }]));
+    const functionHits = new Map([...a.functionHits].map(([fn, count]) => [fn, count + (b?.functionHits.get(fn) ?? 0n)]));
     merged.set(name, { lines, functions: a.functions, functionHits });
   }
+  for (const [key, entry] of functionExempt) {
+    const file = merged.get(entry.path);
+    const location = file?.functions.get(entry.symbol);
+    if (!location) fatal(`unmatched function exception ${entry.path}:${entry.symbol}`);
+    if (location.start !== entry.start) fatal(`stale function exception location ${entry.path}:${entry.symbol}`);
+    if (file.functionHits.get(entry.symbol) > 0n) fatal(`covered function exception ${entry.path}:${entry.symbol}`);
+    if (!key.startsWith(entry.path + '\u0000')) fatal('function exception identity mismatch');
+  }
+  // Guardian consumes LCOV, so derive a second LCOV view from the exact DA and
+  // FNDA mappings already validated here. Its summaries are now the strict
+  // eligible counts, never LLVM's different FNF/FNH summary population.
+  const eligibleRecords = [];
+  for (const [name, data] of merged) {
+    const functions = [...data.functions].filter(([symbol]) => !functionExempt.has(`${name}\u0000${symbol}`));
+    const lines = [...data.lines];
+    eligibleRecords.push(`SF:${name}`);
+    for (const [symbol, location] of functions) eligibleRecords.push(`FN:${location.start},${symbol}`);
+    for (const [symbol] of functions) eligibleRecords.push(`FNDA:${data.functionHits.get(symbol)},${symbol}`);
+    eligibleRecords.push(`FNF:${functions.length}`, `FNH:${functions.filter(([symbol]) => data.functionHits.get(symbol) > 0n).length}`);
+    for (const [line, hit] of lines) eligibleRecords.push(`DA:${line},${hit.hits}`);
+    eligibleRecords.push(`LF:${lines.length}`, `LH:${lines.filter(([, hit]) => hit.hits > 0n).length}`, 'end_of_record');
+  }
+  const eligibleLCOV = eligibleRecords.join('\n') + '\n';
   const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; ${formal ? 'formal full-package evidence' : 'diagnostic, not formal full-package evidence'}`,
     `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, 'Statements: statement proxy = LCOV executable lines; independent Swift statements unmeasured.',
     'LCOV LF/LH summaries may count regions; unique DA rows are the executable-line denominator.',
     'branches unmeasured', 'App/ excluded', ''];
-  const total = { lines: 0, coveredLines: 0, functions: 0, coveredFunctions: 0 };
+  const total = { lines: 0, coveredLines: 0, functions: 0, coveredFunctions: 0, exceptions: 0 };
   const uncovered = [];
   for (const module of modules) {
     const entries = [...merged].filter(([name]) => name.startsWith(prefix + module + '/'));
@@ -184,19 +248,23 @@ export function evaluateCoverage({ root, input, out, sha, runId, attempt, formal
     const coveredLines = entries.reduce((n, [, data]) => n + [...data.lines.values()].filter(x => x.hits > 0n).length, 0);
     const functions = entries.reduce((n, [, data]) => n + data.functions.size, 0);
     const coveredFunctions = entries.reduce((n, [, data]) => n + [...data.functionHits.values()].filter(x => x > 0n).length, 0);
+    const exceptionCount = [...functionExempt.values()].filter(entry => entry.path.startsWith(prefix + module + '/')).length;
     if (!lines || !functions) fatal(`${module}: zero denominator`);
-    total.lines += lines; total.coveredLines += coveredLines; total.functions += functions; total.coveredFunctions += coveredFunctions;
-    report.push(`${module}: lines ${coveredLines}/${lines}; functions ${coveredFunctions}/${functions}`);
+    total.lines += lines; total.coveredLines += coveredLines; total.functions += functions; total.coveredFunctions += coveredFunctions; total.exceptions += exceptionCount;
+    report.push(`${module}: lines ${coveredLines}/${lines}; functions ${coveredFunctions}/${functions}; raw functions ${coveredFunctions}/${functions}; exceptions ${exceptionCount}; eligible functions ${coveredFunctions}/${functions - exceptionCount}`);
     for (const [name, data] of entries) {
       for (const [n, hit] of data.lines) if (!hit.hits) uncovered.push(`${name}:${n} line`);
-      for (const [fn, hit] of data.functionHits) if (!hit) uncovered.push(`${name}:${data.functions.get(fn).start} function ${fn}`);
+      for (const [fn, hit] of data.functionHits) if (!hit && !functionExempt.has(`${name}\u0000${fn}`)) uncovered.push(`${name}:${data.functions.get(fn).start} function ${fn}`);
     }
   }
-  report.push(`Package: lines ${total.coveredLines}/${total.lines}; functions ${total.coveredFunctions}/${total.functions}`);
+  report.push(`Package: lines ${total.coveredLines}/${total.lines}; functions ${total.coveredFunctions}/${total.functions}; raw functions ${total.coveredFunctions}/${total.functions}; exceptions ${total.exceptions}; eligible functions ${total.coveredFunctions}/${total.functions - total.exceptions}`);
   report.push(loopExit(root, merged));
   report.push('Reviewed no-executable-code exclusions:');
   report.push(...([...exempt].map(([name, reason]) => `- ${name}: ${reason}`)));
   if (!exempt.size) report.push('- none');
+  report.push('Reviewed function exceptions (uncovered, excluded only from eligible denominator):');
+  report.push(...[...functionExempt.values()].map(entry => `- ${entry.path}:${entry.start} function ${entry.symbol}; source sha256 ${entry.sourceSha256}; toolchain ${JSON.stringify(entry.toolchain)}; ${entry.reason}; decision ${entry.decision}`));
+  if (!functionExempt.size) report.push('- none');
   report.push('Uncovered locations:', ...(uncovered.length ? uncovered.map(x => `- ${x}`) : ['- none']));
   const unusual = [];
   for (const [name, data] of merged) {
@@ -204,27 +272,29 @@ export function evaluateCoverage({ root, input, out, sha, runId, attempt, formal
     for (const [fn, value] of data.functionHits) if (value > BigInt(Number.MAX_SAFE_INTEGER)) unusual.push(`${name} function ${fn} hit count ${value}`);
   }
   report.push('Large LLVM counters (raw, not clamped):', ...(unusual.length ? unusual.map(x => `- ${x}`) : ['- none']));
-  for (const { meta } of [left, right]) {
+  for (const { meta } of [left, right].filter(Boolean)) {
     report.push(`${meta.shard} binary ${meta.binary.path} sha256 ${meta.binary.sha256}`);
     report.push(`${meta.shard} profile ${meta.profile.path} sha256 ${meta.profile.sha256}`);
     report.push(`${meta.shard} LCOV sha256 ${meta.lcovSha256}`);
   }
-  const pass = total.coveredLines === total.lines && total.coveredFunctions === total.functions;
+  const pass = total.coveredLines === total.lines && total.coveredFunctions === total.functions - total.exceptions;
   report.push(`Coverage gate: ${pass ? 'PASS' : 'FAIL'} (exact 100% executable lines and functions per module and Package)`);
   const output = report.join('\n') + '\n'; writeFileSync(out, output);
-  return { pass, report: output, total };
+  if (eligibleOut !== undefined) writeFileSync(eligibleOut, eligibleLCOV);
+  return { pass, report: output, total, eligibleLCOV };
 }
 
 function cli(args) {
   const values = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!/^--(root|input|out|sha|run-id|attempt|formal)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
+    if (!/^--(root|input|out|eligible-out|sha|run-id|attempt|formal|shards)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
     values[args[i]] = args[i + 1];
   }
   for (const key of ['--root', '--input', '--out', '--sha', '--run-id', '--attempt', '--formal']) if (!(key in values)) fatal(`missing ${key}`);
   if (!['true', 'false'].includes(values['--formal'])) fatal('invalid --formal');
-  return { root: path.resolve(values['--root']), input: path.resolve(values['--input']), out: path.resolve(values['--out']), sha: values['--sha'], runId: values['--run-id'],
-    attempt: values['--attempt'], formal: values['--formal'] === 'true' };
+  return { root: path.resolve(values['--root']), input: path.resolve(values['--input']), out: path.resolve(values['--out']),
+    eligibleOut: values['--eligible-out'] === undefined ? undefined : path.resolve(values['--eligible-out']), sha: values['--sha'], runId: values['--run-id'],
+    attempt: values['--attempt'], formal: values['--formal'] === 'true', shards: values['--shards'] === undefined ? ['non-ui', 'macui'] : values['--shards'].split(',') };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
