@@ -18,12 +18,12 @@ export function runAppIteration(options = {}) {
   }});
 }
 
-/** CLI semantics include the hosted group; keep the legacy exported helper above for existing consumers. */
+/** CLI semantics include the hosted group; keep the exported helper above for existing consumers. */
 export function runAppWorker(options={}) {
   const env=options.env??process.env;
   const expectedMode=options.expectedMode??'normal';
   const mode=!env.APP_COMPARE_MODE||env.APP_COMPARE_MODE==='none'?'normal':env.APP_COMPARE_MODE;
-  if(!['normal','legacy','hosted'].includes(mode)||mode!==expectedMode) {
+  if(!['normal','hosted'].includes(mode)||mode!==expectedMode) {
     (options.stderr??(s=>process.stderr.write(s)))('app-repeat worker: missing or contradictory expected comparison mode\n');
     return 70;
   }

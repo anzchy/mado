@@ -104,43 +104,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
         CODE_SIGNING_ALLOWED: NO
-  MadoLegacy393Tests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: App
-        excludes:
-          - MadoApp.swift
-          - Info.plist
-          - Resources
-      - path: AppTests
-        excludes:
-          - HostedAppProofTests.swift
-          - Issue521CanvasToolFocusTests.swift
-          - Issue521NativePanRunner.swift
-          - Issue527CanvasFocusTests.swift
-          - Issue527InspectorFocusTests.swift
-          - Issue527InactiveWindowTests.swift
-          - Retry442Tests.swift
-          - KeyWindowFixture.swift
-          - KeyWindowFixtureTests.swift
-      - path: Legacy393Tests
-    dependencies:
-      - package: MadoKit
-        product: MadoCore
-      - package: MadoKit
-        product: MadoApplication
-      - package: MadoKit
-        product: MadoInfrastructure
-      - package: MadoKit
-        product: MadoMacUI
-      - package: Sparkle
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.legacy393-tests
-        PRODUCT_MODULE_NAME: MadoAppTests
-        CODE_SIGNING_ALLOWED: NO
   MadoHostedFocusTests:
     type: bundle.unit-test
     platform: macOS
@@ -225,14 +188,5 @@ schemes:
       targets:
         - name: MadoHostedFocusTests
           parallelizable: false
-    run:
-      config: Debug
-  MadoLegacy393:
-    build:
-      targets:
-        MadoApp: all
-    test:
-      targets:
-        - MadoLegacy393Tests
     run:
       config: Debug

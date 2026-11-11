@@ -22,7 +22,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
   if (validateOnly) return 0;
   const mode=!env.APP_COMPARE_MODE||env.APP_COMPARE_MODE==='none'?'normal':env.APP_COMPARE_MODE;
   const scope=mode==='normal'?null:env.APP_COMPARE_SCOPE;
-  if(!['normal','legacy','hosted'].includes(mode)||(mode!=='normal'&&!['focus','full'].includes(scope))) {
+  if(!['normal','hosted'].includes(mode)||(mode!=='normal'&&!['focus','full'].includes(scope))) {
     stdout('app-repeat: invalid comparison mode or scope\n');return 64;
   }
   if (env.PICSEE_HEAVY_LOCK_HELD !== '1') {
