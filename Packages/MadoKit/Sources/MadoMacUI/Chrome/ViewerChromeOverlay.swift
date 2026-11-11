@@ -230,8 +230,14 @@ public final class ChromeToolView: NSView {
 }
 
 /// Visual-only surfaces do not add hit targets or accessibility elements to the tool pods.
-private final class ChromeToolMaterialView: NSVisualEffectView {
+private final class ChromeToolBackdropView: NSView {
+    var image: CGImage? { didSet { needsDisplay = true } }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        guard let image, let context = NSGraphicsContext.current?.cgContext else { return }
+        context.interpolationQuality = .high
+        context.draw(image, in: bounds)
+    }
 }
 
 private final class ChromeToolPanelView: NSView {
@@ -254,38 +260,71 @@ private final class ChromeToolPanelView: NSView {
 }
 
 private final class ChromeFloatingGroupView: NSView {
-    private let material = ChromeToolMaterialView()
+    private let backdrop = ChromeToolBackdropView()
     private let panel = ChromeToolPanelView()
+    private let presentation = ChromeBackdropPresentation()
+    private var requestedFrame: CanvasBackdropFrame?
+    private var requestedRect: CGRect = .zero
+    private var requestedScale: CGFloat = 1
+    private var requestTicket: UInt64 = 0
+    private var renderScheduled = false
+    private var mayRender = true
     convenience init(toolFrame: NSRect) {
         self.init(frame: toolFrame)
-        material.material = .popover
-        material.blendingMode = .withinWindow
-        material.state = .active
-        material.wantsLayer = true
-        material.layer?.cornerRadius = 6
-        material.layer?.masksToBounds = true
-        for surface in [material, panel] {
+        for surface in [backdrop, panel] {
             surface.frame = bounds
             surface.autoresizingMask = [.width, .height]
             surface.setAccessibilityElement(false)
             surface.setAccessibilityHidden(true)
             addSubview(surface)
         }
+        backdrop.setAccessibilityIdentifier("chrome.tool-blur")
         panel.setAccessibilityIdentifier("chrome.tool-background")
+    }
+    func setBackdrop(_ frame: CanvasBackdropFrame?, rect: CGRect, scale: CGFloat, visible: Bool) {
+        requestedFrame = frame
+        requestedRect = rect
+        requestedScale = scale
+        mayRender = visible && panel.opacity < 100
+        presentation.setHidden(!mayRender)
+        backdrop.isHidden = !mayRender
+        if !mayRender {
+            backdrop.image = nil
+            return
+        }
+        requestTicket &+= 1
+        presentation.request(generation: requestTicket)
+        backdrop.image = nil
+        guard !renderScheduled else { return }
+        renderScheduled = true
+        DispatchQueue.main.async { [weak self] in self?.renderPendingBackdrop() }
+    }
+    private func renderPendingBackdrop() {
+        renderScheduled = false
+        guard mayRender, let frame = requestedFrame,
+              let ticket = presentation.takePendingGeneration() else { return }
+        let image = ChromeBackdropRenderer.render(frame, pillRect: requestedRect,
+            backingScale: requestedScale, blurRadius: 20, saturation: 1.6)
+        if let image {
+            presentation.complete(image, generation: ticket)
+            backdrop.image = presentation.visibleImage
+        }
     }
     func updateOpacity(_ opacity: Double) {
         panel.opacity = opacity
-        // The original opaque layer remains at 100%; below it the material samples the image,
-        // without a second panel-colour contribution beneath the effect.
+        // Preserve the opaque endpoint and the fixed 0.5 inner backing.
         layer?.backgroundColor = DesignColor.popoverBackground.nsColor.withAlphaComponent(opacity == 100 ? 1 : 0).cgColor
-        // An opaque panel fully covers the effect; omitting it also preserves the original edge raster.
-        material.isHidden = opacity == 100
         panel.needsDisplay = true
     }
 }
 
 public final class ViewerChromeOverlay: NSView {
     private var toolBackgroundOpacity: Double = 50
+    private var currentBackdropFrame: CanvasBackdropFrame?
+    public func setBackdropFrame(_ frame: CanvasBackdropFrame) {
+        currentBackdropFrame = frame
+        updateBackdrops()
+    }
     public func setToolBackgroundOpacity(_ percent: Double) {
         let normalized = DisplayPreferences.normalizedToolBackgroundOpacity(percent)
         guard toolBackgroundOpacity != normalized else { return }
@@ -357,6 +396,11 @@ public final class ViewerChromeOverlay: NSView {
     public override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         updateGroupColors()
+        updateBackdrops()
+    }
+    public override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateBackdrops()
     }
     private func updateGroupColors() {
         needsDisplay = true
@@ -374,6 +418,7 @@ public final class ViewerChromeOverlay: NSView {
                 group.needsDisplay = true
             }
         }
+        updateBackdrops()
     }
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
@@ -406,6 +451,17 @@ public final class ViewerChromeOverlay: NSView {
             group.layer?.shadowPath = CGPath(roundedRect: group.bounds, cornerWidth: 6, cornerHeight: 6, transform: nil)
         }
         needsDisplay = true
+        updateBackdrops()
+    }
+    private func updateBackdrops() {
+        for group in groups {
+            guard let pod = group as? ChromeFloatingGroupView else { continue }
+            // The canvas is flipped; this overlay uses bottom-left AppKit coordinates.
+            let rect = CGRect(x: group.frame.minX, y: bounds.height - group.frame.maxY,
+                              width: group.frame.width, height: group.frame.height)
+            pod.setBackdrop(currentBackdropFrame, rect: rect,
+                scale: window?.backingScaleFactor ?? 1, visible: shown)
+        }
     }
     /// The 缩放模式 menu lists page 14's two modes; each routes its own existing command (VIEW-01 / VIEW-02).
     func makeZoomModeMenu() -> NSMenu {
@@ -510,6 +566,7 @@ public final class ViewerChromeOverlay: NSView {
         }
         let visible = shown
         for view in groups + tools { view.isHidden = !visible }
+        updateBackdrops()
         needsDisplay = true
         updateAccessibilityChildren(visible: visible)
         relinkKeyViews()
@@ -593,9 +650,11 @@ public struct CanvasBackdropFrame {
 private final class ChromeBackdropRasterView: NSView {
     let source: CanvasBackdropFrame
 
-    init(source: CanvasBackdropFrame) {
+    init(source: CanvasBackdropFrame, region: CGRect) {
         self.source = source
-        super.init(frame: CGRect(origin: .zero, size: source.canvasSize))
+        let extent = CGRect(origin: .zero, size: source.canvasSize).union(region)
+        super.init(frame: extent)
+        bounds = extent
     }
 
     required init?(coder: NSCoder) { nil }
@@ -605,6 +664,9 @@ private final class ChromeBackdropRasterView: NSView {
         source.background.setFill()
         bounds.fill()
         guard let image = source.image, source.sourceSize.width > 0, source.sourceSize.height > 0 else { return }
+        NSGraphicsContext.current?.cgContext.saveGState()
+        NSGraphicsContext.current?.cgContext.clip(to: CGRect(origin: .zero, size: source.canvasSize))
+        defer { NSGraphicsContext.current?.cgContext.restoreGState() }
         let origin = source.transform.imageToView(.zero)
         let end = source.transform.imageToView(CGPoint(x: source.sourceSize.width, y: source.sourceSize.height))
         let destination = CGRect(x: origin.x, y: origin.y, width: end.x - origin.x, height: end.y - origin.y)
@@ -642,7 +704,7 @@ private final class ChromeBackdropRasterView: NSView {
             isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
         rep.size = region.size
         rep.setProperty(.colorSyncProfileData, withValue: NSColorSpace.sRGB.iccProfileData)
-        ChromeBackdropRasterView(source: frame).cacheDisplay(in: region, to: rep)
+        ChromeBackdropRasterView(source: frame, region: region).cacheDisplay(in: region, to: rep)
         guard let raster = rep.cgImage else { return nil }
 
         let source = CIImage(cgImage: raster)
