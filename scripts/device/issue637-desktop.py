@@ -327,6 +327,8 @@ def analyze(manifest, partial=False):
                         stable = ([(channel, (observed[i] - backdrop[i]) / (panel[i] - backdrop[i]))
                                    for i, channel in enumerate('rgb') if abs(panel[i] - backdrop[i]) > 30]
                                   if backed else [])
+                        expected = tuple(backdrop[i] + target * (panel[i] - backdrop[i]) for i in range(3))
+                        measurable = any(panel[i] != backdrop[i] for i in range(3))
                         reasons = []
                         if opacity == 100:
                             design = (255, 255, 255) if theme == 'light' else (20, 24, 33)
@@ -334,16 +336,17 @@ def analyze(manifest, partial=False):
                                 reasons.append(f'opaque RGB {observed} differs from design {design} by >2/255')
                         elif not backed:
                             pass  # A pixel over canvas margin cannot prove grey-backed coverage.
-                        elif stable:
-                            if any(abs(value - target) > .05 for _, value in stable):
-                                reasons.append(f'coverage {stable} outside {target:.2f}±0.05')
-                        elif not (theme == 'light' and grey == 226):
-                            reasons.append('all RGB channels numerically unstable')
+                        elif not measurable:
+                            uncovered.append(f'{key}/{group}: panel and backdrop have no channel separation')
+                        elif any(abs(observed[i] - expected[i]) > .05 * abs(panel[i] - backdrop[i])
+                                 for i in range(3) if panel[i] != backdrop[i]):
+                            reasons.append(f'RGB {observed} differs from expected {expected} at {target:.2f}±0.05 coverage')
                         row = dict(page=page, appearance=theme, grey=grey, preference=opacity,
                                    group=group, point=point, backdrop=backdrop, pill=observed,
                                    panelRGB=panel, stableCoverage=stable, expectedCoverage=target,
+                                   expectedRGB=expected,
                                    omitted=('backdrop not grey under pod' if not backed else
-                                            'unstable—coverage omitted' if not stable else None),
+                                            'panel and backdrop indistinguishable' if opacity < 100 and not measurable else None),
                                    backingProbe=probe, backingProbePoint=probe_point,
                                    scale=scale, failures=reasons)
                         rows.append(row)
@@ -401,7 +404,9 @@ def analyze(manifest, partial=False):
     if total == 0 or changed / total < .05:
         failures.append('zoom did not change the canvas pattern')
     auto_hide = []
-    for group, point in positions.items():
+    wake_positions = dict(positions)
+    wake_positions['left'] = (round(105 * scale), positions['left'][1])  # Clear of the left pod's blue focus ring.
+    for group, point in wake_positions.items():
         hidden = pixel(dynamic['hidden-light-69'], *point)
         woken = pixel(dynamic['wake-light-69'], *point)
         backdrop = pixel(dynamic['hidden-light-69'], *background)
@@ -409,7 +414,9 @@ def analyze(manifest, partial=False):
             failures.append(f'auto-hide/{group}: hidden pixel {hidden} differs from canvas {backdrop}')
         if max(abs(woken[i] - hidden[i]) for i in range(3)) < 8:
             failures.append(f'auto-hide/{group}: Tab did not restore tool pod pixels')
-        auto_hide.append(dict(group=group, hidden=hidden, woken=woken, backdrop=backdrop))
+        if max(woken) - min(woken) > 2:
+            failures.append(f'auto-hide/{group}: wake pixel {woken} is not neutral pod background')
+        auto_hide.append(dict(group=group, point=point, hidden=hidden, woken=woken, backdrop=backdrop))
     return dict(status='FAIL' if failures else 'INCOMPLETE' if uncovered else 'PASS',
                 matrixStatus='FAIL' if failures else 'INCOMPLETE' if uncovered else 'PASS',
                 scope='implemented viewer pages 14 and 16',
