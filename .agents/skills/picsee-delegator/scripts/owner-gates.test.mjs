@@ -11,7 +11,7 @@ const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
 function fixture(t, mode = 'pass', covered = 2, npmInstalled = true) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/swift-lcov.sh']) {
+  for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
     const dest = path.join(dir, rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(root, rel), dest);
   }
   for (const group of ['agents', 'tdd', 'ledger']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
@@ -29,7 +29,8 @@ else{console.log('Swift started');if(process.env.MODE==='hang'){setTimeout(()=>p
 `);
   exe('node', `#!${process.execPath}
 const path=require('node:path');
-if(process.argv[2]==='scripts/tdd/unit-lane.mjs')import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1});});
+if(process.argv[2]==='scripts/tdd/unit-lane.mjs')import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1,verifyCoverage:false});});
+else if(process.argv[2]==='scripts/ci/package-coverage-local.mjs'){require('fs').appendFileSync(process.env.EXPORT_MARKER,'evaluate\\n');console.log('Package: lines ${covered}/2; functions ${covered}/2; raw functions ${covered}/2; exceptions 0; eligible functions ${covered}/2');console.log('Coverage gate: ${covered === 2 ? 'PASS' : 'FAIL'}');process.exit(${covered === 2 ? 0 : 1});}
 else process.exit(0);
 `);
   exe('xcrun', `#!${process.execPath}
@@ -72,14 +73,14 @@ test('missing npm dependencies report an actionable design failure', t => {
   assert.match(fs.readFileSync(path.join(f.out, 'run-design.log'), 'utf8'), /npm ci --ignore-scripts/);
 });
 
-test('owner normal pass keeps full-suite evidence and unchanged 100 percent coverage check', t => {
+test('owner normal pass keeps full-suite evidence and applies the strict shared coverage verdict', t => {
   for (const covered of [2, 1]) {
     const f = fixture(t, 'pass', covered);
     assert.equal(f.result.status, covered === 2 ? 0 : 1, f.result.stderr);
     assert.match(f.summary, /^swift=0$/m);
     assert.match(f.summary, new RegExp(`^lcov=${covered === 2 ? 0 : 1}$`, 'm'));
-    assert.match(f.summary, new RegExp(`lines ${covered}/2 functions ${covered}/2`));
+    assert.match(f.summary, new RegExp(`lines ${covered}/2; functions ${covered}/2`));
     assert.match(f.summary, /Test run with 7 tests/); assert.match(f.summary, /^DONE$/m);
-    assert.equal(fs.readFileSync(f.marker, 'utf8'), 'discovery\nexport\n');
+    assert.equal(fs.readFileSync(f.marker, 'utf8'), 'evaluate\n');
   }
 });

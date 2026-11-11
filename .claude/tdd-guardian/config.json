@@ -22,15 +22,15 @@
     },
     {
       "name": "unit",
-      "description": "Unchanged full parallel MadoKit tests with coverage; 600-second watchdog after heavy-lock admission. Outer bound includes up to 7200 seconds of lock waiting and diagnostic/cleanup margin (#632).",
+      "description": "Full parallel MadoKit tests with coverage; 600-second watchdog after heavy-lock admission (#632). The lane exports fresh coverage and uses the #631 exact DA/FNDA evaluator before returning success; guardian consumes LCOV derived from those eligible mappings. Outer bound includes up to 7200 seconds of lock waiting and diagnostic/cleanup margin.",
       "command": "node scripts/tdd/unit-lane.mjs",
-      "coverageReportCommand": "sh scripts/tdd/swift-lcov.sh",
+      "coverageReportCommand": "node scripts/ci/package-coverage-local.mjs --reuse",
       "gateOn": [
         "taskCompleted",
         "commit"
       ],
       "coverage": "include",
-      "coverageSummaryPath": "coverage/lcov.info",
+      "coverageSummaryPath": "coverage/package-eligible.lcov",
       "probeCommand": "scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --list-tests",
       "timeoutMs": 9000000
     },
