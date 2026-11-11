@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const FORMAT = 1;
-const FAMILIES = new Set(['spm', 'dd']);
+const FAMILIES = new Set(['spm', 'spm-coverage', 'dd']);
 
 export function cacheKey({ family, manifest, inputs, os, arch, xcodeVersion, swiftVersion, workspace }) {
   if (!FAMILIES.has(family)) throw new Error(`unknown cache family ${family}`);

@@ -89,7 +89,7 @@ const runVerdict = (t, env, { trustedScript = false, baseFixture = false } = {})
       join(directory, 'trusted/scripts/ci/walking-skeleton.mjs'));
   }
   return spawnSync('bash', ['-e', '-c', verdictScript()],
-    { cwd: directory, env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' });
+    { cwd: directory, env: { PATH: process.env.PATH, COVERAGE: env.NATIVE === 'false' ? 'skipped' : 'success', COVERAGE_ENFORCE: 'false', ...env }, encoding: 'utf8' });
 };
 
 test('Walking skeleton runs the verdict from a checkout of the trusted base, never from the pull request head', () => {
@@ -169,7 +169,7 @@ test('native jobs run only on the classifier saying so; Walking skeleton always 
   assert.doesNotMatch(workflow, /paths-ignore:|^\s+paths:/m, 'no workflow-level path filters: required checks must report');
 });
 
-test('build caches: restored on pull requests and dispatches (unless cold), saved only by a passing main push', () => {
+test('build caches: restored except on cold runs; saved by main push or explicit cold coverage seed', () => {
   const restores = [...workflow.matchAll(/^      - name: (Restore [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
   const saves = [...workflow.matchAll(/^      - name: (Save [^\n]+)\n([\s\S]*?)(?=^      - name: |^  [a-z]|(?![\s\S]))/gm)];
   assert.deepEqual(restores.map(match => match[1]),
@@ -188,12 +188,12 @@ test('build caches: restored on pull requests and dispatches (unless cold), save
     assert.match(body, /^          restore-keys: \$\{\{ steps\.(spm|dd)-key\.outputs\.prefix \}\}$/m);
   }
   for (const [, , body] of saves) {
-    assert.match(body, /^        if: success\(\) && github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'$/m);
+    assert.match(body, /^        if: success\(\) && (?:\(\(github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\) \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.cold && inputs\.coverage_cache_seed && inputs\.swift_filter == ''\)\)|github\.event_name == 'push' && github\.ref == 'refs\/heads\/main')$/m);
     assert.match(body, /uses: actions\/cache\/save@[0-9a-f]{40} # v/);
   }
   assert.ok(jobBlock('package-tests').includes('Save SwiftPM build'), 'only the non-UI job saves the shared .build');
   assert.ok(!jobBlock('package-macui-tests').includes('Save SwiftPM build'));
-  assert.equal([...workflow.matchAll(/run: node scripts\/ci\/cache-key\.mjs (spm|dd) "\$MANIFEST" "\$INPUTS"$/gm)].length, 3);
+  assert.equal([...workflow.matchAll(/run: node scripts\/ci\/cache-key\.mjs (spm-coverage|dd) "\$MANIFEST" "\$INPUTS"$/gm)].length, 3);
   assert.doesNotMatch(workflow, /actions\/cache@/, 'no combined restore-and-save cache action in ci.yml');
 });
 

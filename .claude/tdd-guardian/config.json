@@ -224,6 +224,50 @@
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
+    },
+    {
+      "name": "ci-package-coverage-node",
+      "description": "Manual #631 Package coverage CI Node contracts.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/package-coverage.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-package-coverage-export-node",
+      "description": "Manual #631 Package coverage CI Node contracts.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/package-coverage-export.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-package-coverage-workflow-node",
+      "description": "Manual #631 Package coverage CI Node contracts.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/package-coverage-workflow.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-package-coverage-clear-node",
+      "description": "Manual #631 cache profile cleanup contract.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/package-coverage-clear.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {

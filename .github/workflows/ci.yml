@@ -44,6 +44,10 @@ on:
         description: Build from scratch, without restoring the SwiftPM or DerivedData cache
         type: boolean
         default: false
+      coverage_cache_seed:
+        description: Seed the coverage build cache from one cold full-package dispatch
+        type: boolean
+        default: false
 
 # A pull request keeps one group per PR and cancels its older runs. Every push to main and every dispatch gets a group
 # of its own (the run id): a shared group would let GitHub replace an older pending main run, leaving that commit
@@ -119,22 +123,42 @@ jobs:
         env:
           MANIFEST: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
           INPUTS: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'Packages/MadoKit/Sources/**', 'Packages/MadoKit/Tests/**') }}
-        run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
+        run: node scripts/ci/cache-key.mjs spm-coverage "$MANIFEST" "$INPUTS"
       - name: Restore SwiftPM build
+        id: spm-restore
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: Packages/MadoKit/.build
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
+      - name: Report SwiftPM cache restore
+        run: echo "SwiftPM coverage cache hit=${{ steps.spm-restore.outputs.cache-hit || 'none' }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Clear stale coverage profile
+        run: node scripts/ci/package-coverage-clear.mjs
+      - name: Record coverage test start
+        run: echo "COVERAGE_TEST_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - name: Swift Testing (Core, Application, Infrastructure)
         env:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/MadoKit --skip 'MadoMacUITests\.' -Xswiftc -enable-incremental-file-hashing
+          swift test --package-path Packages/MadoKit --enable-code-coverage --skip 'MadoMacUITests\.' -Xswiftc -enable-incremental-file-hashing
           --xunit-output ci-logs/package-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
+      - name: Export Package coverage
+        run: >-
+          node scripts/ci/package-coverage-export.mjs --shard non-ui --out ci-coverage/non-ui
+          --commit "${{ github.sha }}" --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
+          --not-before "$COVERAGE_TEST_STARTED"
+      - name: Upload Package coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-coverage-non-ui
+          path: |
+            ci-coverage/non-ui/coverage.lcov
+            ci-coverage/non-ui/metadata.json
+          if-no-files-found: error
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -142,9 +166,9 @@ jobs:
           name: package-tests-logs
           path: ci-logs/package-tests
           if-no-files-found: warn
-      # Only a passing main build seeds the cache; pull requests restore it and never save.
+      # A cold full-package dispatch may seed one branch-scoped cache for same-SHA restored validation.
       - name: Save SwiftPM build
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.cold && inputs.coverage_cache_seed && inputs.swift_filter == ''))
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: Packages/MadoKit/.build
@@ -168,23 +192,43 @@ jobs:
         env:
           MANIFEST: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved') }}
           INPUTS: ${{ hashFiles('Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved', 'Packages/MadoKit/Sources/**', 'Packages/MadoKit/Tests/**') }}
-        run: node scripts/ci/cache-key.mjs spm "$MANIFEST" "$INPUTS"
+        run: node scripts/ci/cache-key.mjs spm-coverage "$MANIFEST" "$INPUTS"
       - name: Restore SwiftPM build
+        id: spm-restore
         if: github.event_name != 'push' && !inputs.cold
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: Packages/MadoKit/.build
           key: ${{ steps.spm-key.outputs.key }}
           restore-keys: ${{ steps.spm-key.outputs.prefix }}
+      - name: Report SwiftPM cache restore
+        run: echo "SwiftPM coverage cache hit=${{ steps.spm-restore.outputs.cache-hit || 'none' }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Clear stale coverage profile
+        run: node scripts/ci/package-coverage-clear.mjs
+      - name: Record coverage test start
+        run: echo "COVERAGE_TEST_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - name: Swift Testing (MacUI, serial)
         env:
           SWIFT_FILTER: ${{ inputs.swift_filter }}
         run: >-
           node scripts/ci/test-watchdog.mjs --out ci-logs/package-macui-tests --timeout-seconds 1500
           --deadline-epoch $((JOB_STARTED + 1560)) --
-          swift test --package-path Packages/MadoKit --no-parallel -Xswiftc -enable-incremental-file-hashing
+          swift test --package-path Packages/MadoKit --no-parallel --enable-code-coverage -Xswiftc -enable-incremental-file-hashing
           --skip '(MadoCoreTests|MadoApplicationTests|MadoInfrastructureTests)\.'
           --xunit-output ci-logs/package-macui-tests/xunit.xml ${SWIFT_FILTER:+--filter "$SWIFT_FILTER"}
+      - name: Export Package coverage
+        run: >-
+          node scripts/ci/package-coverage-export.mjs --shard macui --out ci-coverage/macui
+          --commit "${{ github.sha }}" --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
+          --not-before "$COVERAGE_TEST_STARTED"
+      - name: Upload Package coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-coverage-macui
+          path: |
+            ci-coverage/macui/coverage.lcov
+            ci-coverage/macui/metadata.json
+          if-no-files-found: error
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
