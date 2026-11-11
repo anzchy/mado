@@ -446,3 +446,22 @@ status changed (VIEW-04/P1-03 and FOLDER-01/P2-02/P3-17b infrastructure context)
 The final candidate still needs the delegator's four cold same-SHA CI comparisons:
 legacy/hosted focus×20 and legacy/hosted full×5. No push or dispatch was performed
 by round m, and no CI performance improvement is claimed here.
+
+## Final-SHA comparison at 4991fa85
+
+The delegator ran all four comparisons at the same landing SHA
+`4991fa8540c1dd7aa0dec31000aecfa5c86d1dfa`: `workflow_dispatch`, attempt 1,
+`cold=true`, retry off, on the macOS hosted runner. This is the landing-SHA
+evidence for acceptance row F.
+
+| Run | Mode | Scope | Result | Supervised iterations | Observed job elapsed |
+|---|---|---|---|---:|---:|
+| [42907034191](https://github.com/anzchy/mado/actions/runs/42907034191) | legacy | focus ×20 | 20 PASS, 0 FAIL | 555735 ms | 12.610483333333333 runner minutes |
+| [42907047211](https://github.com/anzchy/mado/actions/runs/42907047211) | hosted | focus ×20 | 20 PASS, 0 FAIL | 738027 ms | 15.8072 runner minutes |
+| [42907060919](https://github.com/anzchy/mado/actions/runs/42907060919) | legacy | full ×5 | 5 PASS, 0 FAIL | 1002135 ms | 21.994666666666667 runner minutes |
+| [42907074230](https://github.com/anzchy/mado/actions/runs/42907074230) | hosted | full ×5 | 5 PASS, 0 FAIL | 1040266 ms | 21.496816666666668 runner minutes |
+
+The hosted/legacy focus supervised-iteration ratio is
+`738027 / 555735 = 1.328019649653162`. The hosted focus suite includes the
+100-transition regression loop described above, so this comparison is not a
+pure measure of host-launch overhead. Billing minutes are unavailable.
