@@ -31,9 +31,9 @@ def synthetic_png(path, grey, marks):
 
 def build_manifest(folder, *, base=False, missing=False, wrong_image=False, unstable=False):
     captures = {}
-    points = ((36, 592), (480, 592), (790, 592))
+    points = ((80, 592), (480, 592), (790, 592))
     for page in desktop.PAGES:
-        page_points = points if page == '14' else ((36, 592), (328, 592), (595, 592))
+        page_points = points if page == '14' else ((80, 592), (328, 592), (595, 592))
         for theme in desktop.THEMES:
             panel = (255, 255, 255) if theme == 'light' else (20, 24, 33)
             for grey in desktop.GREYS:
@@ -89,7 +89,9 @@ class DesktopParserTests(unittest.TestCase):
     def test_backdrop_probe_is_inside_the_image_above_the_bottom_window_margin(self):
         image = (960, 640, 3, [])
         self.assertEqual(desktop.sample_points(image)[1], (250, 560))
+        self.assertEqual(desktop.sample_points(image)[0]['left'], (80, 592))
         inspector_points, _, _ = desktop.sample_points(image, page='16')
+        self.assertEqual(inspector_points['left'], (80, 592))
         self.assertEqual(inspector_points['middle'], (328, 592))
         self.assertEqual(inspector_points['right'], (595, 592))
 
@@ -111,6 +113,14 @@ class DesktopParserTests(unittest.TestCase):
             self.assertEqual(partial['matrixStatus'], 'PASS')
             self.assertEqual(partial['sampleCount'], 72)
             self.assertTrue(any('pattern-light-30' in item for item in partial['notVerified']))
+            # A page-16 pod drawn over the canvas margin cannot claim grey-backed coverage.
+            off_image = Path(temp) / '16-light-69-30.png'
+            synthetic_png(off_image, 69, {
+                (80, 592): (190, 190, 190), (328, 592): (190, 190, 190),
+                (595, 592): (190, 190, 190), (328, 570): (255, 255, 255)})
+            uncovered = desktop.analyze(manifest)
+            self.assertEqual(uncovered['status'], 'INCOMPLETE')
+            self.assertTrue(any('16-light-69-30/middle' in item for item in uncovered['notVerified']))
 
     def test_known_solid_base_fails_30_percent_cells(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -200,6 +210,14 @@ class DesktopParserTests(unittest.TestCase):
             with self.assertRaisesRegex(desktop.EnvironmentFailure, 'opacity label'):
                 desktop.dry_probe_opacity(123, 50)
         self.assertEqual(changes, [30, 50])
+
+    def test_flat_fixture_is_fitted_then_zoomed_twice_before_capture(self):
+        calls = []
+        with patch.object(desktop, 'open_fixture', side_effect=lambda *_: calls.append('open')), \
+             patch.object(desktop, 'key', side_effect=lambda _source, _run, key: calls.append(key)), \
+             patch.object(desktop.time, 'sleep'):
+            desktop.prepare_flat_fixture(Path('/source'), Path('/run'), Path('/fixture.png'))
+        self.assertEqual(calls, ['open', '0', '+', '+'])
 
 
 if __name__ == '__main__':
