@@ -87,16 +87,16 @@ private final class Issue351PanelReference: NSView {
                     #expect(group.layer?.shadowOpacity == Float(shadows[1].color.alpha))
                     #expect(group.layer?.shadowRadius == CGFloat(shadows[1].blur / 2))
                     #expect(group.layer?.shadowOffset.height == CGFloat(-shadows[1].y))
-                    let material = try #require(group.subviews.compactMap { $0 as? NSVisualEffectView }.first)
-                    #expect(material.material == .popover && material.blendingMode == .withinWindow && material.state == .active)
-                    if percent < 100 { #expect(!material.isHidden) }
-                    #expect(material.frame == group.bounds)
-                    #expect(material.layer?.cornerRadius == CGFloat(radius) && material.layer?.masksToBounds == true)
-                    let materialIndex = try #require(group.subviews.firstIndex(of: material))
+                    // #637 replaces the platform popover material with a visual-only sampled backdrop.
+                    #expect(group.subviews.allSatisfy { !($0 is NSVisualEffectView) })
+                    let backdrop = try #require(group.subviews.first { $0.accessibilityIdentifier() == "chrome.tool-blur" })
+                    #expect(backdrop.isHidden == (percent == 100))
+                    #expect(backdrop.frame == group.bounds)
+                    let materialIndex = try #require(group.subviews.firstIndex(of: backdrop))
                     let surfaceIndex = try #require(group.subviews.firstIndex(of: surface))
                     #expect(materialIndex < surfaceIndex)
-                    #expect(!material.acceptsFirstResponder && !surface.acceptsFirstResponder)
-                    #expect(material.hitTest(NSPoint(x: 20, y: 20)) == nil)
+                    #expect(!backdrop.acceptsFirstResponder && !surface.acceptsFirstResponder)
+                    #expect(backdrop.hitTest(NSPoint(x: 20, y: 20)) == nil)
                     #expect(surface.hitTest(NSPoint(x: 20, y: 20)) == nil)
                     // Composite the actual group with the platform material and foreground hidden:
                     // this observes any accidental opaque root underlay below the independent panel.

@@ -253,6 +253,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             return owner.makeViewerMoreMenu(fileName: self.session.imageLoader.fileURL?.lastPathComponent)
         }
         content.addSubview(chromeOverlay)
+        canvas.onBackdropChange = { [weak self] frame in self?.chromeOverlay?.setBackdropFrame(frame) }
+        chromeOverlay.setBackdropFrame(canvas.backdropFrame)
         gridShell = GridShellView(frame: NSRect(x: 0, y: 0, width: content.bounds.width,
                                                 height: content.bounds.height - 28), preferencesStore: preferencesStore)
         gridShell.autoresizingMask = [.width, .height]

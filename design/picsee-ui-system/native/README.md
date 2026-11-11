@@ -28,12 +28,12 @@ canonical 来源：[`../tokens/viewer-grid.css`](../tokens/viewer-grid.css)。�
 | Token / 规则 | 原生映射 |
 | --- | --- |
 | `--tool-background-opacity:50%` | Tool Background Opacity 默认0.50，外层 panel 按此比例混合；slider 的含义不变 |
-| `--tool-background-blur:20px`、`--tool-background-saturation:1.6` | 浏览器外观参考，原生使用平台 blur material，不照抄 CSS 数字 |
-| #351 原生材质与不透明度 | `NSVisualEffectView` 使用 `.popover`、`.withinWindow`、`.active`，裁到 6 pt 圆角；上方独立颜色表面按偏好的 30–100% 绘制 panel（默认 50%），内部仍叠加 inset 2 pt / radius 4 pt / panel 50%。100% 时颜色层与外层实色底板保留原外观，并暂停绘制被遮住的材质，避免材质影响抗锯齿边缘；低于 100% 时外层底板保持 panel RGB、alpha 为 0，阴影仍在外层容器。Mado 不读取 Reduce Transparency；系统可将材质回落为实色，独立 panel 颜色层仍按偏好绘制。离屏颜色/几何测试不证明 WindowServer 模糊或设备视觉效果，后两者留待真机。 |
+| `--tool-background-blur:20px`、`--tool-background-saturation:1.6` | 浏览器外观参考；#637 从当前已解码画面与 `CanvasTransform` 截取各工具组背后的区域，先补足模糊边距并合成画布底色，再用复用的 Core Image context 模糊、饱和与裁切。CI 半径须以窗口合成像素对照校准，不能把 CSS 数字直接当作 CI 半径。 |
+| #637 原生背景与不透明度 | 不再使用带固有着色的 `.popover` 材质。透明的自绘背景表面在 panel 颜色表面与控件之下，裁到 6 pt 圆角；panel 外层仍按偏好的 30–100% 绘制（默认 50%），内部仍叠加 inset 2 pt / radius 4 pt / panel 50%。画面、平移/缩放、布局、外观与显示倍率变化会请求新背景；同一主线程轮次合并请求，旧代结果不呈现。隐藏工具或 100% 时不渲染背景，100% 的实色底板、边缘与阴影保留。Mado 不读取 Reduce Transparency，也不覆盖偏好；自绘背景不再获得系统材质的自动不透明回落。离屏颜色/几何及 App 自动测试不证明 WindowServer 合成、CSS 模糊一致或设备视觉效果，须另行测量。 |
 | `--tool-content-backing-opacity:50%`、inset2px、radius4px | 工具内部额外 panel 衬底，外层仍50%；原生以可测量的等效处理保证对比度 |
 | `--tool-foreground-halo`、`--tool-glyph-ink` | 图标、计数、zoom label 用 text 色+halo；glyph 同位文字色叠印保留原线宽。两种外观、平白/平黑底图：实际 glyph ≥3:1，文字 ≥4.5:1。33 的计数也包含在内 |
 | `--thumbnail-size-min/default/max` =140/220/280 | >720pt 的最小列宽，列均分余宽；不是固定 cell 宽 |
 | `--thumbnail-height-base` 与 wide200/medium165 | 默认高 clamp(135pt,窗口宽×.147,225pt)，≥1600为200，≤1050为165；>720时乘 size/220 |
 | compact track145 / height150；≤480一列 | 窄窗优先，三档尺寸都遵守，Thumbnail Size 只在 >720pt 影响几何 |
 
-Tool fill 以状态稿14/16/33为准；13/25/27/28/34的solid-tool填充已被取代。220默认几何保持既有 Swift parity 值（1280时188.16pt），尺寸变体留给#349；native blur、可读性和设备对照留给#351。HTML/原生字体栅格差异需独立设备验证，不以网页通过代替。
+Tool fill 以状态稿14/16/33为准；13/25/27/28/34的solid-tool填充已被取代。220默认几何保持既有 Swift parity 值（1280时188.16pt），尺寸变体留给#349；#637 自绘模糊的 WindowServer 合成、可读性和设备对照仍待验。HTML/原生字体栅格差异需独立设备验证，不以网页通过代替。
