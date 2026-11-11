@@ -2,7 +2,7 @@
 
 You are **<implementer>**. New task, fresh session. Worktree `~/Documents/mac-app/picsee-wt/<implementer>`.
 Branch: `git fetch origin && git switch -c <branch> origin/main` (main ≥ <sha7>). Issue #<n>.
-Target marker: write this brief's absolute worktree path as one line to `<session-cwd git toplevel>/.build/mado-verify/target-worktree` at task start (create its parent directory); the delegator writes it before dispatch too.
+Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task>` before dispatch. This writes JSON `{worktree, branch, issue, task}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first
