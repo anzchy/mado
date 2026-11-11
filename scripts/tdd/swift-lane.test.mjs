@@ -136,11 +136,11 @@ pluginTest('a started Swift Testing stream must finish even when XCTest finished
 test('all discovery probes share the heavy lock and issue-specific integration stays manual', () => {
   const config=JSON.parse(readFileSync('.claude/tdd-guardian/config.json','utf8'));
   // Pure Node lanes run light tests only, so their discovery stays outside the heavy lock.
-  const manualCI=['ci-app-compare-node','ci-code-name-node','ci-host-ownership-node'];
+  const manualCI=['ci-app-compare-node','ci-code-name-node','ci-host-ownership-node','ci-642-removal-node','ci-642-hosted-build-node'];
   const manual631=['ci-package-coverage-clear-node','ci-package-coverage-export-node','ci-package-coverage-node','ci-package-coverage-workflow-node'];
   const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node',...manualCI,...manual631].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);
-  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-flaky-node', 'ci-host-ownership-node', ...manual631, 'docs-node', 'integration', 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-tag-ci-node', 'swift-red', 'unit', 'unit-watchdog-node'].sort());
+  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-flaky-node', 'ci-host-ownership-node', ...manual631, 'docs-node', 'integration', 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-tag-ci-node', 'swift-red', 'unit', 'unit-watchdog-node'].sort());
   for(const name of [...manualCI,...manual631]){
     const lane=config.lanes.find(l=>l.name===name);
     assert.deepEqual(lane.gateOn,['manual']);
