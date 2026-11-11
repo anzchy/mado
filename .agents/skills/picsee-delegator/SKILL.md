@@ -85,7 +85,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    See [the listener procedure](references/guide.md#durable-listener-notification). Scope stops → approve minimal hunks in an amendment file.
    Fixture-only test mistakes → approve. Network hang → `herdr pane send-keys <pane> Escape`, then "resume…".
    Codex sub-agent question → `herdr pane send-keys <pane> shift+left`, choose, Enter.
-4. **Audit** — every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
+4. **Audit** — before dispatch, check the handoff's mado-verify issue comment link covers its final head SHA. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
