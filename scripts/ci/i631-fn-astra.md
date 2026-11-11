@@ -24,3 +24,15 @@ Report **raw coverage, each exception, and eligible coverage separately**. With 
 4. Complete the previously mandated **ten predeclared cold runs plus cache-restored validation**: all tests pass, thresholds pass, loop-exit throw hit ≥1 each run, complete artifacts and measured overhead. No discarded runs, retries-to-green, exclusions added during the batch or batch restart. Only then review the enforcement switch.
 
 **Product source changes are allowed only when demonstrably necessary for meaningful tests**, using minimal behavior-preserving seams. Do not reshape production code merely to remove coverage mappings or manufacture hits.
+
+## Measurement note (2026-11-11; decision-time figures above retained)
+
+The figures in A and B describe the 2026-11-10 mapping and projection. After
+the #358 source workarounds and #631 atomic coverage build, three complete
+local CI-layout preflights on `2ed16fbe` measured Package lines 13403/13403,
+raw functions 3235/3237 and eligible functions 3235/3235 with the same two
+disclosed exceptions. The substantive exception authorization in B is
+unchanged. For ViewerChrome, `i631-pin-refresh.md M6` records the reviewed
+whole-source digest refresh and is the manifest's provenance reference; it
+does not authorize a different exception. Hosted acceptance and enforcement
+remain open.

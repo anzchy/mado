@@ -13,3 +13,25 @@ Recorded from gpt-6-astra (high) under the owner's delegation. This is a delegat
 4. **This fix round:** F1/F2; M1–M6, including durable decision text and corrected failure-injection fixtures; L1 wording, L2 dead check, and L4 stale-pointer invalidation. Use RED-first regression tests for behavioural fixes.
 
    **Still open:** M7’s two historical broken receipts, accepted only with full disclosure; L3 legacy-helper cleanup; M5’s two baseline failures; L5 overhead evidence until the hosted batch completes. No receipt rewriting or clean-TDD claim.
+
+## Resolution note (2026-11-11; original decision above retained)
+
+The M1 instruction to block the acceptance batch described the invalid
+owner-gate evidence then available. The evaluator now rejects every invalid
+production DA/FNDA count before aggregation. Three consecutive complete local
+CI-layout preflights on `2ed16fbe` passed with exact Package lines 13403/13403,
+eligible functions 3235/3235, two disclosed function exceptions, positive
+loop-exit hits and no invalid production counters. The **preflight blocker is
+resolved**. This does not authorize enforcement or count as the hosted ten cold
++ one restored acceptance batch. Four wrapped test-source counts remain in an
+unfiltered atomic export and are absent from evaluated production LCOV; any
+invalid production counter in the hosted batch still fails that run.
+
+The ViewerChrome M6 digest refresh was independently approved by gpt-auditor
+and opus-auditor on `2ed16fbe` and approved by gpt-6-astra as delegated
+owner-decider, subject to recording approvals, clarifying the B/M6 reference,
+correcting stale status/counts, and reconfirming drift rejection and local/CI
+parity before freeze. The portable record is `i631-pin-refresh.md`. The two M7
+historical SEPARATION-BROKEN receipts, the round-c broken receipt, nonblocking
+audit findings, L3 legacy helpers, M5 baseline failures and L5 hosted overhead
+remain disclosed. `COVERAGE_ENFORCE=false`.
