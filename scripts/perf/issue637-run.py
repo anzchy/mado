@@ -122,18 +122,6 @@ def launch(app, image):
     raise RuntimeError('Mado did not open a visible window within 30 seconds')
 
 
-def add_second_window(app, image, pid):
-    checked(['/usr/bin/open', '-a', app, image], timeout=30)
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        if device.running() != [pid]:
-            raise RuntimeError('opening second image started another Mado process; do not measure mixed processes')
-        if len(device.windows(pid)) >= 2:
-            return
-        time.sleep(0.25)
-    raise RuntimeError('second viewer window did not appear')
-
-
 def drive(pid, index, iterations, rss):
     rect = window_geometry(pid, index)
     argv = ['/usr/bin/osascript', '-l', 'JavaScript', HERE / 'issue637-drive.js',
@@ -165,6 +153,18 @@ def collect_log(pid, start):
         timeout=180)
 
 
+def vmmap_snapshot(pid, out, name):
+    """Save raw allocator-region evidence; no allocation count is inferred from RSS."""
+    try:
+        result = subprocess.run(['/usr/bin/vmmap', '-summary', str(pid)], capture_output=True,
+                                text=True, timeout=60)
+        (out / f'vmmap-{name}.txt').write_text(result.stdout + result.stderr)
+        return 'available' if result.returncode == 0 else 'unknown (vmmap exit ' + str(result.returncode) + ')'
+    except Exception as error:
+        (out / f'vmmap-{name}.txt').write_text('unavailable: ' + str(error) + '\n')
+        return 'unknown (' + str(error) + ')'
+
+
 def retire_owned(record):
     if record is None:
         return
@@ -185,7 +185,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--image', required=True, type=Path)
-    parser.add_argument('--second-image', type=Path)
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--run-id', required=True)
     parser.add_argument('--gui-acquisition-id', required=True)
@@ -201,30 +200,30 @@ def main():
         verify_gui_lock(options.run_id, options.gui_acquisition_id)
         sha = verify_app(app)
         image_meta = verify_image(image)
-        second_meta = verify_image(options.second_image.resolve()) if options.second_image else None
         out.mkdir(parents=True)
         start = datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S')
         record = launch(app, image)
         pid = record['pid']
         ready = time.monotonic() + 30
-        while time.monotonic() < ready and not device.windows(pid):
+        while time.monotonic() < ready and not any(
+                window['title'] == image.name for window in device.windows(pid)):
             time.sleep(0.2)
-        if not device.windows(pid):
-            raise RuntimeError('Mado did not open an Accessibility-visible window within 30 seconds')
+        if not any(window['title'] == image.name for window in device.windows(pid)):
+            raise RuntimeError('Mado did not open a window titled with the requested image within 30 seconds')
         rss = [rss_sample(pid)]
+        vmmap_before = vmmap_snapshot(pid, out, 'before')
         runs = [drive(pid, 1, options.iterations, rss)]
-        if options.second_image:
-            add_second_window(app, options.second_image.resolve(), pid)
-            runs.append(drive(pid, 1, options.iterations, rss))
-            runs.append(drive(pid, 2, options.iterations, rss))
         time.sleep(2)
         rss.append(rss_sample(pid))
+        vmmap_after = vmmap_snapshot(pid, out, 'after')
         (out / 'rss.ndjson').write_text(''.join(json.dumps(row) + '\n' for row in rss))
         (out / 'signposts.ndjson').write_text(collect_log(pid, start) + '\n')
         meta = {'buildSHA': sha, 'configuration': 'Release (bundle in Build/Products/Release)',
                 'signedTeam': 'GRT84NAK4T', 'sandbox': True, 'app': str(app),
-                'machine': device.machine(), 'image': image_meta, 'secondImage': second_meta,
+                'machine': device.machine(), 'image': image_meta,
                 'windowsMeasured': len(runs), 'drives': runs, 'pid': pid, 'start': start,
+                'multipleWindowCost': 'unknown — current viewer is single-window (P4-01)',
+                'vmmapBefore': vmmap_before, 'vmmapAfter': vmmap_after,
                 'inputToStateFeedback': 'unknown — not instrumented by this run'}
         (out / 'meta.json').write_text(json.dumps(meta, indent=2) + '\n')
         result = subprocess.run(['node', str(HERE / 'issue637-parse.mjs'),

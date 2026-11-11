@@ -110,7 +110,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         requestToPresentMs: 'ChromeBackdropRequest signpost to ChromeBackdropPresent at NSView bitmap assignment; not WindowServer display or input feedback',
         retainedRssBytes: 'last observed process RSS minus first observed RSS; process-wide, not a leak proof',
         gpuTimeMs: 'unknown unless an external GPU trace is supplied',
-        allocations: 'unknown; RSS does not count allocations',
+        allocations: 'unknown; vmmap before/after raw allocator-region summaries are saved separately but do not count allocations per update',
         inputToStateFeedbackP95Ms: 'unknown; this run does not instrument plan section 10.2 input-to-state feedback',
         frameAndHitchDistribution: 'unknown; inter-presentation intervals are updates, not display frames',
       } };
