@@ -206,28 +206,36 @@ clay-verify（Go 项目）的骨架可以直接借用：
 
 ### 5.3 强制方式
 
-- 第一版：靠 brief 要求 + delegator 检查 handoff 里有证据链接（delegator 本来就复跑 owner-gates）。
-- 第二版（可选）：附带脚本生成机器可读记录（`.build/mado-verify/<sha>.json`）；Claude 的 `Stop` / `SubagentStop` command hook 和 Codex 的 `Stop` hook 检查当前 HEAD 有新记录，否则不让结束。注意 Claude 连续 8 次阻止后会放行，hook 只是兜底，审计员仍是最终把关。
+owner 决定（2026-11-11）：「add a Stop hook from the start」。所以第一版就带 hook，不等试跑之后：
+
+- 附带脚本在第 4 步生成机器可读记录（`.build/mado-verify/<sha>.json`，不入库），写明 head SHA、每级门禁结果、证据评论的 URL。
+- Claude 的 `Stop` / `SubagentStop` command hook 和 Codex 的 `Stop` hook 检查：当前 HEAD 相对 `main` 有改动时，必须有这个 HEAD 的新记录，否则不让结束，并提示先跑 mado-verify。没有改动（纯问答、只读审计）直接放行。
+- Codex 的项目 hook 要先被信任才会运行；装 role overlay 时一并检查，缺了算 setup 错误。
+- Claude 连续 8 次阻止后会放行，所以 hook 只是兜底；delegator 仍检查 handoff 里的证据链接，审计员仍是最终把关。
 
 ## 6. 分步落地
 
 | 步骤 | 内容 | 依赖 |
 |---|---|---|
 | V1 | `owner-gates.sh`：缺 npm 依赖时给出明确提示（不是只报 design=1）；提醒从被测分支自己的副本运行 | 无 |
-| V2 | 写 `mado-verify` SKILL.md + 证据模板 + 测试完整性扫描脚本（带 RED-first 的 fixture 测试） | V1 |
-| V3 | brief 模板加「Done when：mado-verify 证据链接」；delegator skill 里写明检查 | V2 |
-| V4 | 在下一个真实 ticket 上试跑，按结果修 skill | V3 |
-| V5（可选） | Stop hook 强制；TSan lane；快照测试基础设施 | V4 + owner 决定 |
+| V2 | 写 `mado-verify` SKILL.md + 证据模板 + 测试完整性扫描脚本 + 记录脚本（带 RED-first 的 fixture 测试） | V1 |
+| V3 | Stop hook（Claude `Stop`/`SubagentStop`，Codex `Stop`）检查 HEAD 记录，带放行/阻止两类 fixture 测试；brief 模板加「Done when：mado-verify 证据链接」；delegator skill 里写明检查 | V2 |
+| V4 | 在下一个真实 ticket 上试跑，按结果修 skill 和 hook | V3 |
+| V5（按需） | TSan lane：只在并发改动时跑，见 §7 第 4 条 | V4 |
 
-V1–V3 是工具改动，走正常 PR + 双审计；V5 涉及新的门禁或依赖，先问 owner。
+V1–V4 是工具改动，走正常 PR + 双审计。
 
 ## 7. 需要 owner 决定的事
 
-1. **命名**：用 `mado-verify`（推荐，避免覆盖 Claude Code 自带的 `/verify`），还是有意接管 `verify`？
-2. ~~证据贴在哪~~ **已决定**（2026-11-11）：贴到对应 ticket 的 GitHub issue 评论；UI 修改要在评论里上传修复前后的截图。见 §5.2 第 4 步。
-3. **强制程度**：第一版只靠 brief + delegator 检查，还是一开始就加 Stop hook？
-4. **TSan / 快照测试**：要不要作为 V5 引入？TSan 在 16 GiB mini 上内存开销大；快照测试要新增 pointfreeco 依赖。
-5. **与 Device-Smoke 的关系**：mado-verify 只做实现者自证，Device-Smoke 仍由 delegator 做（推荐，不改现有验收），还是让实现者的 dry-run 证据部分替代？
+owner 2026-11-11 原话：「2.name: mado-verify, 3. add a Stop hook from the start 4. you decide 5. keep it with you」。
+
+1. **命名**：**已决定**，用 `mado-verify`。
+2. **证据贴在哪**：**已决定**，贴到对应 ticket 的 GitHub issue 评论；UI 修改要在评论里上传修复前后的截图。见 §5.2 第 4 步。
+3. **强制程度**：**已决定**，一开始就加 Stop hook。见 §5.3、§6 V3。
+4. **TSan / 快照测试**：owner 交给 delegator 决定。delegator 的决定：
+   - TSan 不进每个 PR 的门禁，只作为 §5.2「并发、取消、扫描、缓存、监听」改动的按类型加跑，单独 lane、经 heavy-lock（V5）。理由：16 GiB mini 有过 OOM，TSan 内存多 5–10 倍。
+   - 暂不引入快照测试（不加 pointfreeco 依赖）。理由：UI 已有 design-derived 断言、Device-Smoke 和第 4 步的前后截图；快照参考图跨机器不稳，还要管参考图。等 design-derived 断言漏掉真实回归时再提。
+5. **与 Device-Smoke 的关系**：**已决定**，Device-Smoke 仍由 delegator 做；mado-verify 只做实现者自证，不替代它，现有验收不变。
 
 ## 8. 来源
 
