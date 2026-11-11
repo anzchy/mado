@@ -1,17 +1,26 @@
 // Deterministic R2 orchestration regressions follow; real OS assertions moved intact to integration/.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,existsSync,rmSync,realpathSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,existsSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {PassThrough} from 'node:stream';
 import {randomUUID} from 'node:crypto';
+import {prepareHostInspector} from './app-host-inspector.mjs';
 import {runProcessGroup} from './app-repeat-process.mjs';
 import {externalInspectorFixture} from './fixtures/host-inspector-process.mjs';
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
 function directory(t){return mkdtempSync(path.join(tmpdir(),'r2-supervisor-'));}
 function finish(t,pending,o){t.after(async()=>{process.emit('SIGTERM');await pending;rmSync(path.dirname(o.logPath),{recursive:true,force:true});});}
+async function waitForFileText(file,needle,pending){
+  const until=Date.now()+5000;
+  while(Date.now()<until){
+    if(existsSync(file)&&readFileSync(file,'utf8').includes(needle))return;
+    if(await Promise.race([pending.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),10))]))break;
+  }
+  assert.fail(`expected ${needle} before supervisor settled; log: ${existsSync(file)?readFileSync(file,'utf8'):'missing'}`);
+}
 const identity=token=>({pid:43210,birth:'100:1',uid:process.getuid(),executable:realpathSync(process.execPath),marker:token,ppid:1,pgid:43210});
 function options(t,extra={}){
   const dir=directory(t),token='r2-'+path.basename(dir),marker=path.join(dir,'worker');
@@ -139,28 +148,36 @@ test('stop notification freezes cleanup journal before a later held query reply 
 });
 
 test('owned host may exit shortly after its iteration leader without forced cleanup',async t=>{
-  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid');
+  const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid'),release=path.join(dir,'release');
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
-  const hostSource=`require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');setTimeout(()=>process.exit(0),500);`;
+  const inspector=await prepareHostInspector({deadline:Date.now()+10000});
+  assert.equal(inspector.ready,true);t.after(()=>inspector.close());
+  const hostSource=`const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(poll);setTimeout(()=>process.exit(0),500);}},10);`;
   const leaderSource=`const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
   const logPath=path.join(dir,'iteration.log');
-  const result=await runProcessGroup({command:process.execPath,args:['-e',leaderSource],
+  const pending=runProcessGroup({command:process.execPath,args:['-e',leaderSource],preparedInspector:inspector,
     env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
     logPath,deadline:Date.now()+4000,graceMs:80,drainMs:1000});
+  await waitForFileText(logPath,'iteration leader exited; waiting for 1 live owned/group processes',pending);
+  writeFileSync(release,'go');
+  const result=await pending;
   assert.equal(existsSync(marker),true,'the host must start before its leader exits');
   assert.equal(result.hostOwnership.observed,true,'the real inspector must observe the owned host');
   assert.equal(result.status,0,readFileSync(logPath,'utf8'));
   assert.equal(result.drained,true);
   assert.equal(result.cleanup,undefined,'natural host exit should not enter cleanup');
+  assert.match(readFileSync(logPath,'utf8'),/iteration leader exited; waiting for 1 live owned\/group processes/);
 });
 
 test('owned host that outlives the run deadline is killed and proven drained',async t=>{
   const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid');
   t.after(()=>{if(existsSync(marker))try{process.kill(Number(readFileSync(marker,'utf8')),'SIGKILL');}catch{}rmSync(dir,{recursive:true,force:true});});
+  const inspector=await prepareHostInspector({deadline:Date.now()+10000});
+  assert.equal(inspector.ready,true);t.after(()=>inspector.close());
   const hostSource=`require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));process.on('SIGTERM',()=>{});process.send('ready');setInterval(()=>{},1000);`;
   const leaderSource=`const {spawn}=require('node:child_process');const host=spawn(process.execPath,['-e',${JSON.stringify(hostSource)}],{detached:true,stdio:['ignore','ignore','ignore','ipc']});host.once('message',()=>process.exit(0));`;
-  const logPath=path.join(dir,'iteration.log'),deadline=Date.now()+900;
-  const result=await runProcessGroup({command:process.execPath,args:['-e',leaderSource],
+  const logPath=path.join(dir,'iteration.log'),deadline=Date.now()+1500;
+  const result=await runProcessGroup({command:process.execPath,args:['-e',leaderSource],preparedInspector:inspector,
     env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
     logPath,deadline,graceMs:80,drainMs:1000});
   assert.equal(existsSync(marker),true);
@@ -171,4 +188,23 @@ test('owned host that outlives the run deadline is killed and proven drained',as
   assert.equal(result.hostOwnership.signals.some(sent=>sent.signal==='SIGKILL'),true);
   assert.equal(result.cleanup.graceStartedAt>=deadline-2,true,
     'cleanup begins at the original run deadline, allowing timer rounding\n'+readFileSync(logPath,'utf8'));
+  assert.equal(result.cleanup.graceStartedAt<=deadline+250,true,
+    'cleanup must not extend the original run deadline\n'+readFileSync(logPath,'utf8'));
+});
+
+test('leader group member that exits shortly later completes without cleanup',async t=>{
+  const dir=directory(t),marker=path.join(dir,'member-pid'),release=path.join(dir,'release'),logPath=path.join(dir,'iteration.log');
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const memberSource=`const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(poll);setTimeout(()=>process.exit(0),400);}},10);`;
+  const leaderSource=`const {spawn}=require('node:child_process');const member=spawn(process.execPath,['-e',${JSON.stringify(memberSource)}],{stdio:['ignore','ignore','ignore','ipc']});member.once('message',()=>process.exit(0));`;
+  const pending=runProcessGroup({command:process.execPath,args:['-e',leaderSource],logPath,deadline:Date.now()+4000});
+  await waitForFileText(logPath,'iteration leader exited; waiting for 1 live owned/group processes',pending);
+  writeFileSync(release,'go');
+  const result=await pending;
+  assert.equal(existsSync(marker),true);
+  assert.equal(result.status,0,readFileSync(logPath,'utf8'));
+  assert.equal(result.drained,true);
+  assert.equal(result.cleanup,undefined,'a short-lived group member should finish naturally');
+  const log=readFileSync(logPath,'utf8');
+  assert.equal(log.match(/iteration leader exited; waiting for 1 live owned\/group processes/g)?.length,1);
 });
