@@ -148,7 +148,7 @@ clay-verify（Go 项目）的骨架可以直接借用：
 7. 改了设计 / 原型：`npm run design:check`（先确认 `npm ci --ignore-scripts` 已装依赖）；
 8. 改了 App target：相关 App 测试过滤器（经 `scripts/ui-tests.sh` / App lane）。
 
-最省事的做法：附带脚本直接调用 `owner-gates.sh`，让实现者和 delegator 跑的是同一套命令（`owner-gates.sh` 本身要先修：主 checkout 那份还是旧的 PicseeKit / Picsee 名字）。
+最省事的做法：附带脚本直接调用 `owner-gates.sh`，让实现者和 delegator 跑的是同一套命令（注意：要调用当前分支里的那份；2026-11-11 用一份过期的本地主 checkout 里的副本时，因为还是改名前的包名和 scheme 名，门禁假失败了一次）。
 
 **第 2 步 · 测试完整性检查**（每个改动都跑，脚本化）：
 
@@ -201,7 +201,7 @@ clay-verify（Go 项目）的骨架可以直接借用：
 
 | 步骤 | 内容 | 依赖 |
 |---|---|---|
-| V1 | 修 `owner-gates.sh` 的旧名字（PicseeKit / Picsee），让它在所有 worktree 都能用；缺 npm 依赖时给出明确提示 | 无 |
+| V1 | `owner-gates.sh`：缺 npm 依赖时给出明确提示（不是只报 design=1）；提醒从被测分支自己的副本运行 | 无 |
 | V2 | 写 `mado-verify` SKILL.md + 证据模板 + 测试完整性扫描脚本（带 RED-first 的 fixture 测试） | V1 |
 | V3 | brief 模板加「Done when：mado-verify 证据链接」；delegator skill 里写明检查 | V2 |
 | V4 | 在下一个真实 ticket 上试跑，按结果修 skill | V3 |
