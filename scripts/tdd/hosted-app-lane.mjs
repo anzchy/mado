@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runAttestedSync } from './status-channel.mjs';
 
 const lock = fileURLToPath(new URL('../heavy-lock.sh', import.meta.url));
 function inheritedControlStdio(env){
@@ -117,7 +118,8 @@ export function runHostedAppLane({ spawn = spawnSync, env = process.env, selecte
   const processStarted = Date.now();
   let run;
   try {
-    run = spawn(lock, ['xcodebuild', 'test-without-building', '-scheme', 'Mado',
+    const launch=spawn===spawnSync?runAttestedSync:spawn;
+    run = launch(lock, ['xcodebuild', 'test-without-building', '-scheme', 'Mado',
       '-destination', 'platform=macOS', '-derivedDataPath', derivedDataPath,
       '-parallel-testing-enabled', 'NO', '-resultBundlePath', resultPath,
       ...(selected.length === hostedTestNames.length && selected.every(name => hostedTestNames.includes(name))

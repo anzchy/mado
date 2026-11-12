@@ -138,6 +138,19 @@ function reraise(signal) {
   process.kill(process.pid, /** @type {NodeJS.Signals} */ (signal));
 }
 
+function supervisedStdio(env) {
+  const stdio=['inherit','pipe','pipe'];
+  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return stdio;
+  for(const name of ['PICSEE_HEAVY_CONTROL_FD','PICSEE_HEAVY_FLOCK_FD']){
+    if(name==='PICSEE_HEAVY_FLOCK_FD'&&!env[name])continue;
+    const fd=Number(env[name]);
+    if(!Number.isInteger(fd)||fd<3||fd>64)throw new Error(`invalid inherited ${name}`);
+    while(stdio.length<=fd)stdio.push('ignore');
+    stdio[fd]=fd;
+  }
+  return stdio;
+}
+
 /** argv is only a filter, never shell code or arbitrary runner arguments. */
 function main(argv) {
   const filter = argv[0] ?? process.env.PICSEE_SWIFT_FILTER;
@@ -147,7 +160,15 @@ function main(argv) {
     return;
   }
   const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
-  const {child,finished} = spawnAttested(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: ["inherit", "pipe", "pipe"] });
+  let attempt;
+  try {
+    attempt=spawnAttested(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: supervisedStdio(process.env) });
+  } catch(error) {
+    process.stderr.write(`swift-lane: ${error.message}\n`);
+    process.exitCode=70;
+    return;
+  }
+  const {child,finished}=attempt;
   const stdoutDetector = createDetector();
   const stderrDetector = createDetector();
   pipeThrough(child.stdout, process.stdout, stdoutDetector);

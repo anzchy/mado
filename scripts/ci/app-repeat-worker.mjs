@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAppLane, runCompleteAppLane } from '../tdd/app-lane.mjs';
 import { runComparisonIteration } from './app-compare.mjs';
+import { runAttestedSync } from '../tdd/status-channel.mjs';
 export function runAppIteration(options = {}) {
   const nativeSpawn = options.spawn ?? spawnSync;
   const env = options.env ?? process.env;
@@ -14,7 +15,8 @@ export function runAppIteration(options = {}) {
     // so the discovery compiler/probe cannot escape the iteration's group.
     if (env.PICSEE_HEAVY_LOCK_HELD === '1' && command.endsWith('heavy-lock.sh'))
       settings = {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}};
-    return nativeSpawn(command,args,settings);
+    return nativeSpawn===spawnSync&&command.endsWith('heavy-lock.sh')?
+      runAttestedSync(command,args,settings):nativeSpawn(command,args,settings);
   }});
 }
 
@@ -28,8 +30,12 @@ export function runAppWorker(options={}) {
     return 70;
   }
   const nativeSpawn=options.spawn??spawnSync;
-  const spawn=(command,args,settings)=>nativeSpawn(command,args,env.PICSEE_HEAVY_LOCK_HELD==='1'&&command.endsWith('heavy-lock.sh')?
-    {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}}:settings);
+  const spawn=(command,args,settings)=>{
+    const prepared=env.PICSEE_HEAVY_LOCK_HELD==='1'&&command.endsWith('heavy-lock.sh')?
+      {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}}:settings;
+    return nativeSpawn===spawnSync&&command.endsWith('heavy-lock.sh')?
+      runAttestedSync(command,args,prepared):nativeSpawn(command,args,prepared);
+  };
   return mode==='normal'?runCompleteAppLane({...options,env,spawn}):runComparisonIteration({...options,env,spawn,expectedMode});
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

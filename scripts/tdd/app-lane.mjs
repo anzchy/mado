@@ -253,8 +253,9 @@ deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(proces
     const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
     const workerEnv = { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25',
       PICSEE_HEAVY_LOCK_EXEC_SECS: '300' };
+    const launch=spawn===realSpawnSync?runAttestedSync:spawn;
     const run = locked
-      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv,
+      ? launch(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv,
           ...(workerEnv.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(workerEnv)}:{}) })
       : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
