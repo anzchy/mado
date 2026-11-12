@@ -10,6 +10,34 @@ import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLA
 const script = new URL('./package-coverage.mjs', import.meta.url).pathname;
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const functionManifest = () => JSON.parse(readFileSync(new URL('./package-coverage-function-exceptions.json', import.meta.url), 'utf8'));
+
+test('current function exception policy retains only InspectorPanel', () => {
+  const entries = functionManifest();
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].path, 'Packages/MadoKit/Sources/MadoMacUI/Inspector/InspectorPanel.swift');
+  assert.equal(entries[0].start, 191);
+});
+
+test('retired ViewerChromeOverlay closure cannot be reintroduced for the current source', t => {
+  const f = fixture(t);
+  const path = 'Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift';
+  const current = readFileSync(new URL('../../Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift', import.meta.url));
+  writeFileSync(join(f.root, path), current);
+  f.inventory[path] = hash(current);
+  const retired = {
+    path, symbol: '$s9MadoMacUI14ChromeToolViewC18accessibilityValueypSgyFyyYbScMYccACYbcfu_yyYbScMYccfu0_',
+    start: 198, sourceSha256: f.inventory[path],
+    toolchain: { xcode: 'Xcode 26.6\nBuild version 17F113', swift: 'Swift 6.3.3', llvmCov: 'LLVM 21' },
+    reason: 'Retired temporary label callback.', decision: 'i631-pin-refresh.md M6',
+  };
+  writeFileSync(join(f.root, 'scripts/ci/package-coverage-function-exceptions.json'), JSON.stringify([retired]));
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({
+    metadata: { ...metadata, sourceInventory: { ...metadata.sourceInventory, [path]: f.inventory[path] } },
+    lcov: lcov.replace('FN:1,MadoMacUI.fn', `FN:1,MadoMacUI.fn\nFN:198,${retired.symbol}\nFNDA:0,${retired.symbol}`),
+  }));
+  assert.match(f.run().stderr, /unapproved function exception location/);
+});
 const pathOf = (module) => module === 'MadoInfrastructure'
   ? 'Packages/MadoKit/Sources/MadoInfrastructure/Images/ImageSourceHeader.swift'
   : module === 'MadoMacUI' ? 'Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift'
@@ -22,13 +50,14 @@ function record(file, lineHits, functionHits, sf = file) {
   const fns = functionHits.map(([line, name, hits]) => `FN:${line},${name}\nFNDA:${hits},${name}`).join('\n');
   return `SF:${sf}\n${fns}\nFNF:${functionHits.length}\nFNH:${functionHits.filter(x => x[2] > 0).length}\n${lines}\nLF:${lineHits.length}\nLH:${lineHits.filter(x => x[1] > 0).length}\nend_of_record\n`;
 }
-function fixture(t, { left = {}, right = {} } = {}) {
+function fixture(t, { left = {}, right = {}, macuiPath = pathOf('MadoMacUI') } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'package-coverage-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const input = join(root, 'artifacts');
   const inventory = {};
+  const fileFor = module => module === 'MadoMacUI' ? macuiPath : pathOf(module);
   for (const module of modules) {
-    const file = pathOf(module), contents = source(module);
+    const file = fileFor(module), contents = source(module);
     mkdirSync(dirname(join(root, file)), { recursive: true });
     writeFileSync(join(root, file), contents);
     inventory[file] = hash(contents);
@@ -40,7 +69,7 @@ function fixture(t, { left = {}, right = {} } = {}) {
     const directory = join(input, shard);
     mkdirSync(directory, { recursive: true });
     const lcov = modules.map(module => {
-      const file = pathOf(module);
+      const file = fileFor(module);
       const count = hits[module] ?? 1;
       return record(file, [[1, count], ...(module === 'MadoInfrastructure' ? [[4, count]] : [])], [[1, `${module}.fn`, count]]);
     }).join('');
@@ -281,20 +310,19 @@ test('CLI appends complete passing and failing reports to GitHub step summary', 
 });
 
 test('raw FNDA denominator stays strict while a pinned uncovered function is disclosed separately', t => {
-  const f = fixture(t);
-  const file = pathOf('MadoMacUI');
-  const reviewedSource = readFileSync(new URL('../../Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift', import.meta.url));
+  const file = 'Packages/MadoKit/Sources/MadoMacUI/Inspector/InspectorPanel.swift';
+  const f = fixture(t, { macuiPath: file });
+  const reviewedSource = readFileSync(new URL('../../Packages/MadoKit/Sources/MadoMacUI/Inspector/InspectorPanel.swift', import.meta.url));
   writeFileSync(join(f.root, file), reviewedSource);
   f.inventory[file] = hash(reviewedSource);
-  const symbol = JSON.parse(readFileSync(new URL('./package-coverage-function-exceptions.json', import.meta.url), 'utf8'))[0].symbol;
+  const symbol = functionManifest()[0].symbol;
   for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({
     metadata: { ...metadata, sourceInventory: { ...metadata.sourceInventory, [file]: f.inventory[file] } },
-    lcov: lcov.replace(`FN:1,MadoMacUI.fn`, `FN:1,MadoMacUI.fn\nFN:198,${symbol}\nFNDA:0,${symbol}`)
-      .replace('FNF:1', 'FNF:1'),
+    lcov: lcov.replace(`FN:1,MadoMacUI.fn`, `FN:1,MadoMacUI.fn\nFN:191,${symbol}\nFNDA:0,${symbol}`),
   }));
-  const exception = { path: file, symbol, start: 198, sourceSha256: f.inventory[file],
+  const exception = { path: file, symbol, start: 191, sourceSha256: f.inventory[file],
     toolchain: { xcode: 'Xcode 26.6\nBuild version 17F113', swift: 'Swift 6.3.3', llvmCov: 'LLVM 21' },
-    reason: 'Only a temporary label is read.', decision: 'i631-pin-refresh.md M6' };
+    reason: 'Empty initializer callback is replaced on view update.', decision: 'i631-fn-astra.md B' };
   const manifest = join(f.root, 'scripts/ci/package-coverage-function-exceptions.json');
   writeFileSync(manifest, JSON.stringify([exception]));
   const result = f.run();
@@ -310,7 +338,7 @@ test('raw FNDA denominator stays strict while a pinned uncovered function is dis
   assert.equal(guardian.status, 0, guardian.stderr);
   const derived = readFileSync(eligible, 'utf8');
   assert.ok(!derived.includes(symbol), 'guardian eligible LCOV omits only the pinned exception');
-  assert.match(derived, /SF:Packages\/MadoKit\/Sources\/MadoMacUI\/Chrome\/ViewerChromeOverlay.swift[\s\S]*FNF:1\nFNH:1/);
+  assert.match(derived, /SF:Packages\/MadoKit\/Sources\/MadoMacUI\/Inspector\/InspectorPanel.swift[\s\S]*FNF:1\nFNH:1/);
   const local = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
     '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'false', '--shards', 'non-ui'],
   { encoding: 'utf8' });
@@ -340,7 +368,7 @@ test('raw FNDA denominator stays strict while a pinned uncovered function is dis
   }));
   assert.match(f.run().stderr, /covered/i);
   for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata, lcov }) => ({ metadata,
-    lcov: lcov.replace(`FN:198,${symbol}\nFNDA:1,${symbol}\n`, ''),
+    lcov: lcov.replace(`FN:191,${symbol}\nFNDA:1,${symbol}\n`, ''),
   }));
   assert.match(f.run().stderr, /unmatched/i);
 });

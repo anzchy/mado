@@ -18,12 +18,11 @@ path, whole-source SHA-256, reviewed rationale, toolchain and the durable audit
 decision. The evaluator pins the complete 17-entry manifest independently,
 rejects additions, substitutions, duplicates and digest drift, and rejects any
 executable mapping in an excluded source. The separate
-`package-coverage-function-exceptions.json` permits exactly the two functions
-named in the delegated decision: `ViewerChromeOverlay.swift:198` and
-`InspectorPanel.swift:191`. Each entry pins the full source path, mangled symbol,
+`package-coverage-function-exceptions.json` permits exactly one function:
+`InspectorPanel.swift:191`. Its entry pins the full source path, mangled symbol,
 start line, source SHA-256, Xcode/Swift/LLVM toolchain, rationale and decision.
-For ViewerChrome, `i631-fn-astra.md B` authorizes the exception; the manifest's
-`i631-pin-refresh.md M6` reference records its approved source-digest refresh.
+The former `ViewerChromeOverlay.swift:198` callback was removed in `01b1e516`;
+the delegated #637 decision retired its stale exception and evaluator pin.
 The evaluator rejects stale, covered, duplicate, wildcard and unmatched entries.
 Adding or replacing any file or function exception requires another explicit
 reviewed decision. There is
@@ -61,15 +60,18 @@ owner or an explicitly delegated owner-decider approves the refresh. Record the
 reviewer and approver in the decision, then update the manifest, evaluator pins
 and portable decision reference together. A symbol, rationale or toolchain
 change needs a fresh explicit exception decision. Re-run drift rejection tests
-and local/CI parity before freezing a candidate. #637 must follow this process
-for ViewerChromeOverlay.swift.
+and local/CI parity before freezing a candidate. The #637 retirement record is
+[i637-exception-retire.md](i637-exception-retire.md).
 
 Reports disclose raw functions, each exception and eligible functions
 separately. On the three complete `2ed16fbe` local preflights, Package lines
 were 13403/13403; raw functions 3235/3237; two disclosed exceptions; eligible
-functions 3235/3235. The older 3224/3238 raw and 3236/3236 projected eligible
-figures in `i631-fn-astra.md B` are historical decision-time measurements, not
-the current mapping. `COVERAGE_ENFORCE` remains `false`. The predeclared ten
+functions 3235/3235. Those figures predate #637. The older 3224/3238 raw and
+3236/3236 projected eligible figures in `i631-fn-astra.md B` are historical
+decision-time measurements, not the current mapping. The #637 fresh local unit
+run at `2cc99ff9` reports
+Package lines 13614/13614, raw functions 3269/3270, one disclosed exception,
+and eligible functions 3269/3269. `COVERAGE_ENFORCE` remains `false`. The predeclared ten
 cold runs and one cache-restored hosted validation, including measured
 overhead, remain open; no failed run may be discarded or retried to green.
 
