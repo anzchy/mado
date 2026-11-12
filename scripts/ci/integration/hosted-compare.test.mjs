@@ -80,7 +80,7 @@ test('hostedCompareRejectsContradictoryRealWorkerBeforeSecondIteration',t=>{
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
     APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),PICSEE_HEAVY_LOCK_HELD:'1',
     PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'15'};
+    PICSEE_HEAVY_LOCK_EXEC_SECS:'15',PICSEE_HEAVY_STATUS_PATH:path.join(dir,'cleanup-status.json')};
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
   assert.equal(run.status,70,run.stdout+run.stderr);
