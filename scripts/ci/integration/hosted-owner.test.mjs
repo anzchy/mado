@@ -11,6 +11,8 @@ const lock=fileURLToPath(new URL('../../heavy-lock.sh',import.meta.url));
 const owner=fileURLToPath(new URL('../../tdd/hosted-xcode-owner.mjs',import.meta.url));
 const alive=pid=>{const probe=spawnSync('/bin/ps',['-p',String(pid),'-o','stat='],{encoding:'utf8'});
   return probe.status===0&&probe.stdout.trim()&&!probe.stdout.trim().startsWith('Z');};
+const ownerEvents=(stderr,kind)=>stderr.split('\n').filter(line=>line.startsWith(`hosted-owner: ${kind} `))
+  .map(line=>JSON.parse(line.slice(`hosted-owner: ${kind} `.length)));
 test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
   if(!['darwin','linux'].includes(process.platform)){
     t.skip('host ownership inspector supports macOS and Linux process APIs');return;
@@ -43,7 +45,7 @@ test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
     {env,encoding:'utf8',timeout:8000});
   assert.match(run.stderr,/transient unrelated unreadable PID/,run.stdout+run.stderr);
   assert.equal(run.status,0,run.stdout+run.stderr);
-  assert.match(run.stderr,/hosted-owner: registered host pid=/);
+  assert.ok(ownerEvents(run.stderr,'registration').some(event=>event.result==='registered'));
   assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
 });
 test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
@@ -60,7 +62,8 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
     PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
     PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
-    MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath,MADO_HOST_QUERY_DIAGNOSTICS:'1'};
+    MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
+  delete env.MADO_HOST_QUERY_DIAGNOSTICS;
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
@@ -71,8 +74,22 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   assert.equal(run.status,0,run.stdout+run.stderr);
   const pid=Number(readFileSync(pidPath,'utf8'));
   assert.ok(Number.isInteger(pid)&&pid>0);
-  assert.match(run.stderr,/hosted-owner: registered host pid=/);
+  assert.ok(ownerEvents(run.stderr,'registration').some(event=>event.result==='registered'&&event.pid===pid));
   assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
+  const queries=ownerEvents(run.stderr,'query');
+  const registrations=ownerEvents(run.stderr,'registration');
+  const [decision]=ownerEvents(run.stderr,'decision');
+  assert.ok(queries.length>=2,'real lane emits every query without a diagnostic flag');
+  assert.ok(registrations.some(event=>event.result==='registered'&&event.pid===pid));
+  assert.equal(decision?.result,'complete');
+  assert.equal(decision.observed,true);
+  assert.deepEqual(decision.registeredPids,[pid]);
+  assert.equal(decision.lastSnapshot.complete,true);
+  assert.deepEqual(decision.lastSnapshot.unknown,[]);
+  assert.equal(decision.hostAlive,false);
+  assert.equal(decision.child.code,0);
+  assert.equal(decision.child.signal,null);
+  assert.deepEqual(decision.refusedBy,[]);
 });
 
 test('hostedAppLaunchServicesMissingRegistrationFailsClosed',async t=>{
@@ -90,6 +107,11 @@ test('hostedAppLaunchServicesMissingRegistrationFailsClosed',async t=>{
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.match(run.stderr,/host cleanup incomplete or unregistered/);
+  const [decision]=ownerEvents(run.stderr,'decision');
+  assert.equal(decision?.result,'refused');
+  assert.equal(decision.observed,false);
+  assert.deepEqual(decision.registeredPids,[]);
+  assert.ok(decision.refusedBy.includes('host-never-observed'));
   assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'incomplete');
   const guardians=readdirSync(dir).filter(name=>name.includes('.guardian-')&&name.endsWith('.owner'));
   assert.equal(guardians.length,1,'expected one guardian owner record');
