@@ -48,6 +48,53 @@ test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
   assert.ok(ownerEvents(run.stderr,'registration').some(event=>event.result==='registered'));
   assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
 });
+for(const failure of [
+  {name:'unrelated PID',reply:'{...snapshot,unknown:[...snapshot.unknown,{pid:999999,reason:"unreadable kernel birth identity"}]}'},
+  {name:'PID-free transport timeout',reply:'{complete:false,processes:[],unknown:[{reason:"OS ownership inspection failed"}],transport:{stage:"process",status:null,signal:"SIGTERM",errorCode:"ETIMEDOUT"}}'}
+])test(`hostedOwnerRequeriesAfterPostDrain${failure.name.replace(/[^A-Za-z]/g,'')}Uncertainty`,t=>{
+  if(!['darwin','linux'].includes(process.platform)){
+    t.skip('host ownership inspector supports macOS and Linux process APIs');return;
+  }
+  const dir=mkdtempSync(path.join(tmpdir(),'hosted-owner-post-drain-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const runner=path.join(dir,'runner.mjs'),loader=path.join(dir,'loader.mjs');
+  const ownershipURL=new URL('../app-host-ownership.mjs',import.meta.url).href;
+  writeFileSync(loader,`export async function load(url,context,nextLoad){
+    if(url!==${JSON.stringify(ownershipURL)})return nextLoad(url,context);
+    return {format:'module',shortCircuit:true,source:
+      'import {queryHostProcesses as real} from '+JSON.stringify(url+'?real')+';'+
+      'let seen=false,injected=false; export function queryHostProcesses(options){const snapshot=real(options);'+
+      'const hosts=snapshot.processes.filter(p=>p.marker===options.token&&p.ppid===1);'+
+      'if(hosts.length)seen=true;'+
+      'if(seen&&!injected&&snapshot.complete&&hosts.length===0){injected=true;return '+
+      ${JSON.stringify(failure.reply)}+';}return snapshot;}'};
+  }\n`);
+  writeFileSync(runner,`import {spawn} from 'node:child_process';\n`+
+    `const host=spawn(process.execPath,['-e','setTimeout(()=>{},850)'],`+
+    `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
+    `host.unref();setTimeout(()=>{},250);\n`);
+  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
+    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
+    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+    MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
+  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MDPRO_HEAVY_LOCK_HELD;
+  const run=spawnSync(lock,[process.execPath,'--loader',loader,owner,process.execPath,runner],
+    {env,encoding:'utf8',timeout:8000});
+  const queries=ownerEvents(run.stderr,'query');
+  const uncertain=queries.find(event=>event.snapshot.unknown.some(item=>item.reason===
+    (failure.name==='unrelated PID'?'unreadable kernel birth identity':'OS ownership inspection failed')));
+  assert.ok(uncertain,run.stderr);
+  assert.equal(uncertain.child.exited,true,'the child has exited before this post-drain uncertainty');
+  assert.equal(run.status,0,run.stdout+run.stderr);
+  const registered=ownerEvents(run.stderr,'registration').find(event=>event.result==='registered');
+  assert.ok(registered);
+  assert.equal(uncertain.matching.some(row=>row.pid===registered.pid),false,'registered host has drained');
+  const [decision]=ownerEvents(run.stderr,'decision');
+  assert.equal(decision?.result,'complete');
+  assert.deepEqual(decision.lastSnapshot.unknown,[]);
+  assert.equal(decision.hostAlive,false);
+});
 test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   if(!['darwin','linux'].includes(process.platform)){
     t.skip('host ownership inspector supports macOS and Linux process APIs');return;
