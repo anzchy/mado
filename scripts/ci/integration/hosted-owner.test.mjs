@@ -11,6 +11,41 @@ const lock=fileURLToPath(new URL('../../heavy-lock.sh',import.meta.url));
 const owner=fileURLToPath(new URL('../../tdd/hosted-xcode-owner.mjs',import.meta.url));
 const alive=pid=>{const probe=spawnSync('/bin/ps',['-p',String(pid),'-o','stat='],{encoding:'utf8'});
   return probe.status===0&&probe.stdout.trim()&&!probe.stdout.trim().startsWith('Z');};
+test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
+  if(!['darwin','linux'].includes(process.platform)){
+    t.skip('host ownership inspector supports macOS and Linux process APIs');return;
+  }
+  const dir=mkdtempSync(path.join(tmpdir(),'hosted-owner-transient-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const runner=path.join(dir,'runner.mjs'),hostPath=path.join(dir,'host.pid');
+  const loader=path.join(dir,'loader.mjs');
+  const ownershipURL=new URL('../app-host-ownership.mjs',import.meta.url).href;
+  writeFileSync(loader,`export async function load(url,context,nextLoad){
+    if(url!==${JSON.stringify(ownershipURL)})return nextLoad(url,context);
+    return {format:'module',shortCircuit:true,source:
+      'import {queryHostProcesses as real} from '+JSON.stringify(url+'?real')+';'+
+      'let injected=false; export function queryHostProcesses(options){const snapshot=real(options);'+
+      'if(!injected&&snapshot.complete&&snapshot.processes.some(p=>p.marker===options.token)){' +
+      'injected=true; return {...snapshot,unknown:[...snapshot.unknown,{pid:999999,reason:"transient unrelated unreadable PID"}]};}'+
+      'return snapshot;}'};
+  }\n`);
+  writeFileSync(runner,`import {spawn} from 'node:child_process';import {writeFileSync} from 'node:fs';\n`+
+    `const host=spawn(process.execPath,['-e','setTimeout(()=>{},850)'],`+
+    `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
+    `writeFileSync(${JSON.stringify(hostPath)},String(host.pid));host.unref();setTimeout(()=>{},250);\n`);
+  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
+    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
+    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+    MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath,MADO_HOST_QUERY_DIAGNOSTICS:'1'};
+  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MDPRO_HEAVY_LOCK_HELD;
+  const run=spawnSync(lock,[process.execPath,'--loader',loader,owner,process.execPath,runner],
+    {env,encoding:'utf8',timeout:8000});
+  assert.match(run.stderr,/transient unrelated unreadable PID/,run.stdout+run.stderr);
+  assert.equal(run.status,0,run.stdout+run.stderr);
+  assert.match(run.stderr,/hosted-owner: registered host pid=/);
+  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
+});
 test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   if(!['darwin','linux'].includes(process.platform)){
     t.skip('host ownership inspector supports macOS and Linux process APIs');return;
