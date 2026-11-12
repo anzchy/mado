@@ -10,6 +10,16 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runProcessGroup as realRunProcessGroup } from '../app-repeat-process.mjs';
 import {fileURLToPath} from 'node:url';
+import {countControlledFailures} from './query-failure-proof.mjs';
+
+baseTest('query failure proof accepts unrelated churn but rejects uncertain owned host',()=>{
+  const owned=431;
+  const injected={transport:{stage:'process',errorCode:'ETIMEDOUT'},unknown:[{pid:owned}]};
+  const churn={transport:{stage:'complete',errorCode:null},unknown:[{pid:997}]};
+  assert.equal(countControlledFailures([churn,injected,injected],owned),2);
+  assert.throws(()=>countControlledFailures([{...churn,unknown:[{pid:owned}]},injected,injected],owned));
+  assert.throws(()=>countControlledFailures([{...churn,transport:{stage:'timeout'}},injected,injected],owned));
+});
 
 
 const sessions=new AsyncLocalStorage();
@@ -230,16 +240,32 @@ for(const trace of ['first-two-targeted','first-kill-targeted'])(trace==='first-
   const host=launch(token),sentinel=launch('unrelated-'+token);
   t.after(()=>{host.kill('SIGKILL');sentinel.kill('SIGKILL');host.unref();sentinel.unref();});
   await Promise.all([host,sentinel].map(child=>new Promise(resolve=>child.once('message',resolve))));
+  // Model a same-UID short-lived Node candidate that disappears after PID
+  // enumeration but before the inspector can establish its identity.
+  const churn=spawn(process.execPath,['-e','process.exit(0)'],{env:{...process.env,MADO_TEST_RUN_TOKEN:'unrelated-'+token}});
+  const churnExit=await new Promise(resolve=>churn.once('close',resolve));
+  assert.equal(churnExit,0);assert.notEqual(churn.pid,host.pid);
+  assert.equal(livePids().has(churn.pid),false,'unrelated candidate has exited before the modeled incomplete lookup');
   const failures=[],actualSignals=[];
   const clock=trace==='first-kill-targeted'?await controlledHostClock(t):undefined;
   const timestamp=clock?.now??Date.now;
   let termEstablished=false,failedKillAfterRequest;
+  let fullQueries=0,churnRecorded=false;
   const hostQuery=options=>{
     const targeted=options.pids?.includes(host.pid),fail=targeted&&(trace==='first-two-targeted'?failures.length<2:
       options.cleanupSignal==='SIGKILL'&&failures.length===0);
     if(fail){if(clock){assert.equal(termEstablished,true,'TERM barrier precedes injected KILL failure');failedKillAfterRequest=clock.requests.at(-1).requestId;}failures.push({phase:options.cleanupSignal,at:timestamp()});
       return {complete:false,processes:[],unknown:[{pid:host.pid,reason:'controlled external query unavailable'}],transport:{stage:'process',errorCode:'ETIMEDOUT'}};}
-    return clock?clock.inspector.query(options):queryHostProcesses(options);
+    const observed=clock?clock.inspector.query(options):queryHostProcesses(options);
+    if(trace==='first-two-targeted'&&!targeted&&++fullQueries===2)
+      return Promise.resolve(observed).then(snapshot=>{
+        if(snapshot.complete&&snapshot.transport?.stage==='complete'){
+          churnRecorded=true;
+          return {...snapshot,unknown:[...snapshot.unknown,{pid:churn.pid,reason:'OS identity unavailable'}]};
+        }
+        return snapshot;
+      });
+    return observed;
   };
   const hostSignal=(pid,name)=>{actualSignals.push({pid,name,at:timestamp()});process.kill(pid,name);
     if(clock&&name==='SIGKILL'){const fresh=clock.requests.at(-1);
@@ -254,8 +280,9 @@ for(const trace of ['first-two-targeted','first-kill-targeted'])(trace==='first-
   const result=clock?await clock.drive(pending):await pending;
   t.diagnostic(JSON.stringify({recoveryTrace:trace,failures,actualSignals,result}));
   assert.equal(failures.length,trace==='first-two-targeted'?2:1,'controlled current-PID failure must occur');
+  if(trace==='first-two-targeted')assert.equal(churnRecorded,true,'completed OS snapshot includes unrelated churn');
   assert.equal(result.status,70);assert.equal(result.drained,true);assert.equal(result.hostOwnership.drained,true);
-  assert.equal(result.hostOwnership.queryFailures.length,failures.length);
+  assert.equal(countControlledFailures(result.hostOwnership.queryFailures,host.pid),failures.length);
   assert.equal(livePids().has(host.pid),false);assert.equal(livePids().has(sentinel.pid),true);
   assert.equal(result.cleanup.graceDeadline-result.cleanup.graceStartedAt,80);
   assert.equal(result.cleanup.drainDeadline-result.cleanup.graceDeadline,1000);
