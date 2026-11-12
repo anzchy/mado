@@ -1,4 +1,4 @@
-"""Deterministic OS fault injection; all paths supplied by the Node test."""
+"""Deterministic faults for the current process registry and mdpro acquisition."""
 import importlib.util
 import os
 from pathlib import Path
@@ -11,45 +11,31 @@ spec = importlib.util.spec_from_file_location('launcher', sys.argv[1])
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 mode = sys.argv[2]
-sys.argv = ['heavy-lock.py', 'fake-job']
+lock = Path(os.environ['PICSEE_MDPRO_LOCK'])
+
 if mode == 'survivors':
     class Child:
-        pid = 123456789
-        def poll(self):
-            os.kill(os.getpid(), signal.SIGTERM)
-            return None
-        def wait(self):
-            return 0
+        def poll(self): return 3
     ticks = [0]
-    checks = [0]
+    signals = []
     def clock():
         ticks[0] += 1
         return ticks[0]
-    def alive(pid):
-        checks[0] += 1
-        return checks[0] < 100  # baseline also terminates, avoiding a hung RED
-    original_popen = launcher.subprocess.Popen
-    def popen(command, *args, **kwargs):
-        return Child() if command == ['fake-job'] else original_popen(command, *args, **kwargs)
-    with patch.object(launcher.subprocess, 'Popen', side_effect=popen), \
-         patch.object(launcher.time, 'monotonic', side_effect=clock), \
+    with patch.object(launcher.time, 'monotonic', side_effect=clock), \
          patch.object(launcher.time, 'sleep'), \
-         patch.object(launcher, 'group_alive', side_effect=alive), \
-         patch.object(launcher.os, 'killpg'), \
-         patch.object(launcher, 'reraise', return_value=143):
-        status = launcher.main()
-    assert status == 143, status
-    assert Path(os.environ['PICSEE_MDPRO_LOCK']).is_dir(), 'survivors require retained directory'
-    assert checks[0] < 20, 'post-KILL wait must be bounded'
+         patch.object(launcher, 'owned_state', return_value=[(123456789, 123456789)]), \
+         patch.object(launcher, 'signal_owned', side_effect=lambda rows, sig: signals.append(sig)):
+        assert launcher.stop_owned(Child(), 123456789, set(), set(), 0, None, 0) is False
+    assert signals[:2] == [signal.SIGTERM, signal.SIGKILL], signals
+    assert ticks[0] < 20, 'post-KILL observation must be bounded'
 elif mode == 'publication':
     original = Path.write_text
     def fail_owner(path, *args, **kwargs):
-        if path.name == 'owner':
-            raise FileNotFoundError('peer reclaimed before publication')
+        if path.name == 'owner': raise FileNotFoundError('peer reclaimed before publication')
         return original(path, *args, **kwargs)
     with patch.object(Path, 'write_text', fail_owner):
-        assert launcher.main() == 75
-    assert Path(os.environ['PICSEE_MDPRO_LOCK']).is_dir()
+        assert launcher.acquire_shared(lock, launcher.time.monotonic(), [], ['fake-job']) is False
+    assert lock.is_dir()
 elif mode == 'heartbeat':
     ticks = [0]
     def clock():
@@ -57,98 +43,32 @@ elif mode == 'heartbeat':
         return ticks[0]
     with patch.object(launcher.time, 'monotonic', side_effect=clock), \
          patch.object(launcher.time, 'sleep'):
-        assert launcher.main() == 75
+        assert launcher.acquire_shared(lock, 100, [], ['fake-job']) is False
 elif mode == 'vanished':
-    lock = Path(os.environ['PICSEE_MDPRO_LOCK'])
     original_mkdir = launcher.os.mkdir
     raced = [False]
     def mkdir(path, *args, **kwargs):
         if Path(path) == lock and not raced[0]:
             raced[0] = True
-            assert not lock.exists(), 'path absent when FileExistsError is handled'
-            raise FileExistsError('peer moved lock away after mkdir collision')
+            assert not lock.exists()
+            raise FileExistsError('peer moved lock after collision')
         return original_mkdir(path, *args, **kwargs)
-    ticks = [0]
-    def clock():
-        ticks[0] += 0.1
-        return ticks[0]
-    sys.argv = ['heavy-lock.py', 'true']
     with patch.object(launcher.os, 'mkdir', side_effect=mkdir), \
-         patch.object(launcher.time, 'monotonic', side_effect=clock), \
          patch.object(launcher.time, 'sleep'):
-        assert launcher.main() == 0, 'vanished path must retry and launch'
+        assert launcher.acquire_shared(lock, launcher.time.monotonic()+1, [], ['true']) is True
     assert raced[0]
-elif mode in ('drain-message', 'drain-bound'):
-    class Child:
-        pid = 123456789
-        def poll(self):
-            return 3
-        def wait(self):
-            return 3
-    ticks = [0]
-    checks = [0]
-    def clock():
-        ticks[0] += 1
-        return ticks[0]
-    def alive(pid):
-        checks[0] += 1
-        return checks[0] < (80 if mode == 'drain-message' else 100)
-    signals = []
-    original_popen = launcher.subprocess.Popen
-    def popen(command, *args, **kwargs):
-        return Child() if command == ['fake-job'] else original_popen(command, *args, **kwargs)
-    with patch.object(launcher.subprocess, 'Popen', side_effect=popen), \
-         patch.object(launcher.time, 'monotonic', side_effect=clock), \
-         patch.object(launcher.time, 'sleep'), \
-         patch.object(launcher, 'group_alive', side_effect=alive), \
-         patch.object(launcher.os, 'killpg', side_effect=lambda pid, sig: signals.append(sig)), \
-         patch.object(launcher, 'group_survivors', return_value='123456789 fake-worker'):
-        assert launcher.main() == 3, 'preserve direct child status'
-    if mode == 'drain-bound':
-        assert signals == [signal.SIGTERM, signal.SIGKILL], signals
-        assert checks[0] < 30, 'post-KILL wait must be bounded'
-        assert Path(os.environ['PICSEE_MDPRO_LOCK']).is_dir(), 'retain shared lock when group survives KILL'
-    else:
-        assert not Path(os.environ['PICSEE_MDPRO_LOCK']).exists(), 'release when group empties'
-
+    launcher.release_shared(lock)
 elif mode == 'zombie-group':
-    # EOF establishes exit without wait/poll: the child stays our unreaped zombie.
     child = launcher.subprocess.Popen(['sleep', '0.1'], start_new_session=True,
                                       stdout=launcher.subprocess.PIPE)
     try:
         assert child.stdout.read() == b''
-        assert launcher.group_alive(child.pid) is True
-        assert launcher.stop_group(child, 0) is False
+        assert launcher.owned_state(child.pid, set(), set()) == []
     finally:
         child.wait()
         child.stdout.close()
-elif mode in ('eperm-drain', 'eperm-signal'):
-    class Child:
-        pid = 123456789
-        def poll(self):
-            if mode == 'eperm-signal':
-                os.kill(os.getpid(), signal.SIGTERM)
-            return 3
-        def wait(self):
-            return 3
-    probes = []
-    sends = []
-    def killpg(pid, sig):
-        assert pid == Child.pid
-        if sig == 0:
-            probes.append(sig)
-            if len(probes) == 1:
-                raise PermissionError(1, 'zombie group')
-            assert sends == ([signal.SIGTERM, signal.SIGKILL] if mode == 'eperm-signal' else []), sends
-            raise ProcessLookupError(3, 'group reaped')
-        sends.append(sig)
-        raise PermissionError(1, 'zombie group')
-    with patch.object(launcher.subprocess, 'Popen', return_value=Child()), \
-         patch.object(launcher.os, 'killpg', side_effect=killpg):
-        status = launcher.main()
-    assert probes == [0, 0], probes
-    assert not Path(os.environ['PICSEE_MDPRO_LOCK']).exists()
-    assert mode != 'eperm-drain' or sends == [], sends
-    # Signal mode really re-raises SIGTERM inside main; reaching here is a failure.
-    assert mode == 'eperm-drain', 'SIGTERM must be re-raised'
-    sys.exit(status)
+elif mode == 'eperm-signal':
+    with patch.object(launcher.os, 'kill', side_effect=PermissionError(1, 'no permission')):
+        launcher.signal_owned([(123456789, 123456789)], signal.SIGTERM)
+else:
+    raise ValueError(mode)

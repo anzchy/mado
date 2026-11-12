@@ -48,6 +48,20 @@ function harness(entries = [], options = {}) {
 }
 const nativeCalls = h => h.calls.filter(c=>c.args[0]==='xcrun'&&c.args[1]==='xctest');
 
+test('ciHeldQuarantineCleanRunPreservesCounts',()=>{
+ const h=harness(quarantine,{env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',PICSEE_APP_LANE_NO_RETRY:'1'}});
+ assert.equal(h.status,0,h.stderr);
+ assert.match(h.stdout,/Tests run: 5, Failures: 0, Errors: 0, Skipped: 0/);
+ assert.match(h.stdout,/quarantine skip=ProbeTests\/testSkip/);
+ assert.match(h.stdout,/quarantine skip=Probe\.swiftSkip\(\)/);
+ const locked=h.calls.filter(call=>call.cmd.endsWith('heavy-lock.sh'));
+ assert.ok(locked.length>=3,'discovery and App execution use nested supervision');
+ for(const call of locked){
+  assert.equal(call.opts.env.PICSEE_HEAVY_LOCK_HELD,'1');
+  assert.equal(call.opts.stdio?.[5],5,'control FD reaches every nested wrapper');
+ }
+});
+
 test('empty quarantine keeps exact native argv/env and prints none before results',()=>{
  const h=harness();assert.equal(h.status,0,h.stderr);assert.equal(h.calls.length,1);
  assert.deepEqual(h.calls[0].args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
@@ -383,10 +397,11 @@ const status=runAppLane({quarantinePath:${JSON.stringify(h.quarantinePath)},env:
 process.exitCode=status;
 `);
  const lockEnv={...process.env,PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
- if(nested) lockEnv.PICSEE_HEAVY_LOCK_HELD='1';else delete lockEnv.PICSEE_HEAVY_LOCK_HELD;
+ if(nested){lockEnv.PICSEE_HEAVY_LOCK_HELD='1';lockEnv.PICSEE_HEAVY_CI_TOP_LEVEL='1';lockEnv.GITHUB_ACTIONS='true';}
+ else delete lockEnv.PICSEE_HEAVY_LOCK_HELD;
  delete lockEnv.MDPRO_HEAVY_LOCK_HELD;delete lockEnv.NODE_TEST_CONTEXT;
  const realLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
- const runner=spawn(callerDeath?realLock:process.execPath,callerDeath?[process.execPath,script]:[script],{env:lockEnv,detached:true,stdio:['ignore','pipe','pipe']});
+ const runner=spawn(callerDeath||nested?realLock:process.execPath,callerDeath||nested?[process.execPath,script]:[script],{env:lockEnv,detached:true,stdio:['ignore','pipe','pipe']});
  let stderr='';runner.stdout.resume();runner.stderr.on('data',s=>stderr+=s);
  const known=()=>[supervisorFile,nativeFile,callerFile].filter(existsSync).map(p=>Number(readFileSync(p,'utf8')));
  const cleanup=()=>{for(const pid of [...known(),runner.pid])for(const target of [-pid,pid])try{process.kill(target,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}};
@@ -410,6 +425,46 @@ process.exitCode=status;
   assert.equal(processExists(native),false,'checked discovery must clean native task after supervisor hard death');
   assert.ok(Date.now()-start<3500,'hard-death cleanup must use bounded discovery drain');
  } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
+});
+
+test('discoveryOuterCancelAndTimeoutDrainRegisteredGroup', {timeout:15000}, async t=>{
+ for(const action of ['timeout','cancel']){
+  const dir=mkdtempSync(path.join(tmpdir(),'i657-discovery-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const pidPath=path.join(dir,'native-pid'),quarantinePath=path.join(dir,'quarantine.json'),script=path.join(dir,'run.mjs');
+  writeFileSync(quarantinePath,JSON.stringify(quarantine));
+  const native=`process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(pidPath)},String(process.pid));setInterval(()=>{},1000);`;
+  writeFileSync(script,`
+import {spawnSync} from 'node:child_process';
+import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
+const env={...process.env,PICSEE_HEAVY_LOCK_EXEC_SECS:'5'};
+process.exitCode=runAppLane({quarantinePath:${JSON.stringify(quarantinePath)},env,
+ spawn:(cmd,args,opts)=>cmd==='xcrun'?{status:0,stdout:'/platform\\n',stderr:''}:
+ spawnSync(cmd,[args[0],'-e',args[2],args[3],process.execPath,'-e',${JSON.stringify(native)}],opts)});
+`);
+  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',
+    PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:action==='timeout'?'0.5':'5',
+    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  delete env.NODE_TEST_CONTEXT;
+  const wrapper=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+  const outer=spawn(wrapper,[process.execPath,script],{env,stdio:'ignore'});
+  const ended=new Promise(resolve=>outer.once('exit',(code,signal)=>resolve({code,signal})));
+  let pid=0;
+  try{
+   const until=Date.now()+2500;
+   while(!existsSync(pidPath)&&Date.now()<until)await pause(10);
+   assert.ok(existsSync(pidPath),`${action}: registered discovery started`);
+   pid=Number(readFileSync(pidPath,'utf8'));
+   if(action==='cancel')outer.kill('SIGTERM');
+   const outcome=await ended;
+   assert.equal(action==='timeout'?outcome.code:outcome.signal,action==='timeout'?124:'SIGTERM');
+   for(let retry=0;retry<50&&processExists(pid);retry++)await pause(10);
+   assert.equal(processExists(pid),false,`${action}: outer boundary drained discovery PID ${pid}`);
+  } finally {
+   if(pid&&processExists(pid))try{process.kill(pid,'SIGKILL');}catch{}
+   if(outer.exitCode===null&&outer.signalCode===null)outer.kill('SIGKILL');
+  }
+ }
 });
 
 // Fix round1: thrown errors are XCTest test failures (unexpected is a subset

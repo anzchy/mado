@@ -5,6 +5,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const lock = fileURLToPath(new URL('../heavy-lock.sh', import.meta.url));
+function inheritedControlStdio(env){
+  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return undefined;
+  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(!Number.isInteger(control)||control<3||control>64)throw new Error('missing inherited heavy-lock control FD');
+  const fds=[control];
+  if(env.PICSEE_HEAVY_FLOCK_FD){
+    const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+    if(!Number.isInteger(flock)||flock<3||flock>64)throw new Error('invalid inherited heavy-lock flock FD');
+    fds.push(flock);
+  }
+  const stdio=['ignore','pipe','pipe'];
+  for(const fd of fds){while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;}
+  return stdio;
+}
 export const hostedTestNames = [
   'issue393RunsInsideRealAppWithLiveDispatchAndActivation()',
   'issue521WindowDragPansFromCanvasAndTabFocusedTools(tabCount:)',
@@ -98,7 +112,8 @@ export function runHostedAppLane({ spawn = spawnSync, env = process.env, selecte
   const resultPath = path.join(directory, 'result.xcresult');
   const settings = { encoding:'utf8', maxBuffer:32 * 1024 * 1024, timeout:2100000,
     env:{...env, TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1',
-      SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1'} };
+      SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1'},
+    ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
   const processStarted = Date.now();
   let run;
   try {

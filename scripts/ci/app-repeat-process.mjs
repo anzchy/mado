@@ -1,11 +1,28 @@
 #!/usr/bin/env node
 /** Serialized async ownership control; timers only notify immutable phase transitions. */
-import {spawn} from 'node:child_process';
-import {openSync,closeSync,appendFileSync} from 'node:fs';
+import {spawn,spawnSync} from 'node:child_process';
+import {openSync,closeSync,appendFileSync,writeFileSync,renameSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {prepareHostInspector} from './app-host-inspector.mjs';
 import {createAsyncHostOwnership} from './app-host-ownership.mjs';
+const heavyLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+
+function inheritedStdio(env,base){
+  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(env.PICSEE_HEAVY_LOCK_HELD==='1'&&(!Number.isInteger(control)||control<3||control>64))
+    throw new Error('missing inherited supervision control FD');
+  const passed=[env.PICSEE_HEAVY_CONTROL_FD,env.PICSEE_HEAVY_FLOCK_FD]
+    .filter(value=>value!==undefined&&value!=='').map(Number);
+  const stdio=[...base];
+  for(const fd of passed){
+    if(!Number.isInteger(fd)||fd<3||fd>64)throw new Error('invalid inherited supervision FD');
+    while(stdio.length<=fd)stdio.push('ignore');
+    stdio[fd]=fd;
+  }
+  return stdio;
+}
 
 export async function runProcessGroup({command,args=[],env=process.env,logPath,deadline,graceMs=250,drainMs=1500,
   cancelOnHostObserved=false,hostQuery,hostSignal,groupSignal,groupQuery,preparedInspector,inspectorSpawn,
@@ -72,7 +89,15 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
   async function observe(){
     if(!host||inspector?.busy)return;
     const count=host.snapshot().identities.length;await host.observe(scope());
-    const state=host.snapshot();if(state.identities.length>count)log('owned host registered '+JSON.stringify(state.identities.slice(count)));
+    const state=host.snapshot();if(state.identities.length>count){
+      const added=state.identities.slice(count);
+      log('owned host registered '+JSON.stringify(added));
+      if(env.PICSEE_HEAVY_LOCK_HELD==='1')for(const identity of added){
+        const registered=spawnSync(heavyLock,['--register-host',String(identity.pid)],
+          {env,stdio:inheritedStdio(env,['ignore','ignore','ignore']),timeout:2000});
+        if(registered.status!==0||registered.error)stop('outer supervisor host registration failed');
+      }
+    }
     if(cancelOnHostObserved&&state.observed&&!stopping&&!startupStopped){cancelledOnHostObserved=true;stop('owned host observed; cancelling requested probe');}
   }
   async function authorize(){
@@ -91,7 +116,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     const inspectorState=inspector?{...closed,pid:inspector.pid,diagnostics:inspector.diagnostics}:undefined;
     const hostOwnership=host?.snapshot();if(hostOwnership)log('host ownership '+JSON.stringify(hostOwnership));
     child?.unref();
-    return {status:closed.closed&&closed.reaped?status:70,drained:proven&&closed.closed&&closed.reaped&&psChildren.size===0,
+    const drained=proven&&closed.closed&&closed.reaped&&psChildren.size===0;
+    return {status:closed.closed&&closed.reaped?status:70,drained,cleanupStatus:drained?'complete':'incomplete',
       ...(group?{group}:{}),cancelledOnHostObserved,...(cleanup?{cleanup}:{}),...(hostOwnership?{hostOwnership}:{}),
       ...(inspectorState?{inspector:inspectorState}:{})};
   }
@@ -113,7 +139,12 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     }
     if(startupStopped||now()>=deadline)return await finish(70,false);
     const childEnv={...env};if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;
-    const fd=openSync(logPath,'a');try{child=spawn(command,args,{env:childEnv,detached:true,stdio:['ignore',fd,fd]});}finally{closeSync(fd);}
+    delete childEnv.PICSEE_REPEAT_ATTEST_FD;delete childEnv.PICSEE_REPEAT_STATUS_DIR;
+    const held=env.PICSEE_HEAVY_LOCK_HELD==='1';
+    const fd=openSync(logPath,'a');try{
+      child=spawn(held?heavyLock:command,held?[command,...args]:args,{env:childEnv,
+        detached:!held,stdio:inheritedStdio(env,['ignore',fd,fd])});
+    }finally{closeSync(fd);}
     child.once('error',()=>{childExit={code:70,signal:null};if(workerStarted)stop('iteration startup failed');wake();});
     // The optional test hook fires only after the supervisor records the exit.
     child.once('exit',(code,termination)=>{childExit={code,signal:termination};onLeaderExit?.();wake();});
@@ -189,6 +220,21 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const [deadline,logPath,command,...args]=process.argv.slice(2);
-  try{process.stdout.write(JSON.stringify(await runProcessGroup({deadline:Number(deadline),logPath,command,args})));}
+  try{
+    const held=process.env.PICSEE_HEAVY_LOCK_HELD==='1';
+    const attestFd=Number(process.env.PICSEE_REPEAT_ATTEST_FD);
+    const statusDir=process.env.PICSEE_REPEAT_STATUS_DIR;
+    if(held&&(!Number.isInteger(attestFd)||attestFd<3||!statusDir))throw new Error('missing private repeat status channel');
+    const id=held?randomBytes(16).toString('hex'):null;
+    const statusPath=held?path.join(statusDir,`${id}.json`):null;
+    if(held)writeFileSync(attestFd,JSON.stringify({id,statusPath,supervisor:process.pid})+'\n');
+    const result=await runProcessGroup({deadline:Number(deadline),logPath,command,args});
+    if(held){
+      const temp=path.join(statusDir,`${id}.tmp`);
+      writeFileSync(temp,JSON.stringify({id,supervisor:process.pid,cleanup:result.cleanupStatus,commandExit:result.status})+'\n',{flag:'wx',mode:0o600});
+      renameSync(temp,statusPath);
+    }
+    process.stdout.write(JSON.stringify(result));
+  }
   catch{process.stderr.write('app-repeat supervisor failed\n');process.exitCode=70;}
 }

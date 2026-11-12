@@ -5,8 +5,17 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {runHostedBuild} from './hosted-build.mjs';
 
-const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',PICSEE_HEAVY_LOCK_HELD:'1',APP_COMPARE_MODE:'hosted',GITHUB_SHA:'current-sha'};
+const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',APP_COMPARE_MODE:'hosted',GITHUB_SHA:'current-sha'};
 const temporary=t=>{const dir=mkdtempSync(path.join(tmpdir(),'hosted-build-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return dir;};
+test('hostedBuildPassesInheritedSupervisionDescriptor',t=>{
+  const out=temporary(t),calls=[];
+  const status=runHostedBuild({env:{...env,PICSEE_HEAVY_CONTROL_FD:'5'},out,
+    spawn:(command,args,settings)=>{calls.push({command,args,settings});return {status:0,stdout:'built\n',stderr:''};},
+    stdout:()=>{},stderr:()=>{}});
+  assert.equal(status,0);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].settings.stdio?.[5],5);
+});
 test('hosted build uses current Mado scheme and records current SHA without baseline metadata',t=>{
   const out=temporary(t),calls=[];
   const status=runHostedBuild({env,out,spawn:(command,args)=>{calls.push({command,args});return {status:0,stdout:'built\n',stderr:''};},stdout:()=>{},stderr:()=>{}});

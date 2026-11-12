@@ -356,6 +356,8 @@ jobs:
         # The runner is the only job on its machine, so the local heavy lock is not needed.
         env:
           PICSEE_HEAVY_LOCK_HELD: '1'
+          PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_STATUS_PATH: .build/app-heavy-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
           PICSEE_APP_RESULT_PATH: .build/app-result.json
           PICSEE_APP_RESULT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           REPEAT_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 }}
@@ -367,9 +369,9 @@ jobs:
           {
             if [ "$REPEAT_ENABLED" = true ]; then
               export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
-              node scripts/ci/app-repeat.mjs
+              scripts/heavy-lock.sh node scripts/ci/app-repeat.mjs
             else
-              node scripts/tdd/app-lane.mjs
+              scripts/heavy-lock.sh node scripts/tdd/app-lane.mjs
             fi
           } 2>&1 | tee .build/app-tests.log
       - name: Report App test evidence
@@ -554,13 +556,25 @@ jobs:
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
       - name: Build comparison mechanism
-        run: node scripts/ci/hosted-build.mjs
+        env:
+          PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_STATUS_PATH: .build/host-build-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: scripts/heavy-lock.sh node scripts/ci/hosted-build.mjs
       - name: Host ownership integration
-        run: node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs > .build/host-ownership-integration.tap 2>&1
+        env:
+          PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_STATUS_PATH: .build/host-integration-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: scripts/heavy-lock.sh env -u PICSEE_HEAVY_LOCK_HELD -u PICSEE_HEAVY_CONTROL_FD -u PICSEE_HEAVY_FLOCK_FD node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs > .build/host-ownership-integration.tap 2>&1
       - name: Verify hosted cancellation ownership
-        run: node scripts/ci/hosted-cancel-probe.mjs
+        env:
+          PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_STATUS_PATH: .build/host-cancel-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: scripts/heavy-lock.sh node scripts/ci/hosted-cancel-probe.mjs
       - name: Run App host comparison
-        run: node scripts/ci/app-compare.mjs
+        env:
+          PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_STATUS_PATH: .build/host-compare-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: scripts/heavy-lock.sh node scripts/ci/app-compare.mjs
       - name: Upload App host comparison
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

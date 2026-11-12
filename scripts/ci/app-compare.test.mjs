@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {chmodSync,existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -8,6 +8,15 @@ import {runAppRepeat} from './app-repeat.mjs';
 import * as worker from './app-repeat-worker.mjs';
 import {spawnSync} from 'node:child_process';
 import {mkdirSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
+
+function attestedResult(settings,status,details={}){
+  const id=randomBytes(16).toString('hex');
+  const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+  writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:status})+'\n');
+  const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+  return {...result(JSON.stringify({status,...details})),output};
+}
 
 const moduleURL=new URL('./app-compare.mjs',import.meta.url);
 const comparison=existsSync(moduleURL)?await import(moduleURL.href):{};
@@ -33,11 +42,16 @@ test(`ownership integration ${mode} step preserves ${outcome} runner outcome and
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   for(const d of ['.build','scripts/tdd','scripts/ci/integration'])mkdirSync(path.join(dir,d),{recursive:true});
   writeFileSync(path.join(dir,'scripts/tdd/node-lane.mjs'),readFileSync(path.join(root,'scripts/tdd/node-lane.mjs')));
+  writeFileSync(path.join(dir,'scripts/tdd/heavy-lock.py'),readFileSync(path.join(root,'scripts/tdd/heavy-lock.py')));
+  writeFileSync(path.join(dir,'scripts/heavy-lock.sh'),readFileSync(path.join(root,'scripts/heavy-lock.sh')));
+  chmodSync(path.join(dir,'scripts/heavy-lock.sh'),0o755);
   writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
     `import test from 'node:test';import assert from 'node:assert/strict';test('external integration fixture',()=>assert.equal(1,${outcome==='fail'?2:1}));\n`);
   if(outcome==='crash')writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
     'process.kill(process.ppid,"SIGTERM");process.exit(0);\n'); // Interrupt only this fixture's own test-runner parent.
-  const env={...process.env,APP_COMPARE_MODE:mode};delete env.NODE_OPTIONS;
+  const env={...process.env,APP_COMPARE_MODE:mode,GITHUB_ACTIONS:'true',
+    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_MDPRO_LOCK:'off',
+    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'.build','cleanup.json')};delete env.NODE_OPTIONS;
   delete env.NODE_TEST_CONTEXT; // This subprocess is a new runner, not an outer test worker.
   if(outcome==='zero'){
     // An empty shard produces a genuine zero-test root. An empty test file
@@ -67,7 +81,7 @@ function harness(t,{mode='hosted',scope='focus',native,...options}={}) {
   const calls=[];let output='';
   assert.equal(typeof comparison.runComparisonIteration,'function','comparison iteration API must exist');
   const env={APP_COMPARE_MODE:mode,APP_COMPARE_SCOPE:scope,PICSEE_APP_LANE_NO_RETRY:'1',
-    PICSEE_HEAVY_LOCK_HELD:'1',MADO_TEST_RUN_TOKEN:'token-hosted',
+    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',MADO_TEST_RUN_TOKEN:'token-hosted',
     MADO_APP_COMPARE_RESULT_PATH:path.join(dir,'comparison.json'),GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'};
   const status=comparison.runComparisonIteration({cwd:root,expectedMode:mode,env,quarantinePath,
     evidencePath:path.join(dir,'attempt.log'),stdout:s=>output+=s,stderr:s=>output+=s,
@@ -90,6 +104,15 @@ test('hosted focus executes hosted mechanism without unhosted runs',t=>{
   assert.equal(h.calls.filter(call=>call.args.includes('test-without-building')).length,1);
   assert.equal(h.calls.filter(call=>call.args.includes('xctest')).length,0);
   assert.equal(h.record.mode,'hosted');assert.equal(h.record.formal,false);
+});
+
+test('hostedAppLaunchPassesSupervisionDescriptor',t=>{
+  const h=harness(t,{mode:'hosted',env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',
+    PICSEE_APP_LANE_NO_RETRY:'1',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',
+    MADO_TEST_RUN_TOKEN:'token-hosted',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'}});
+  const call=h.calls.find(entry=>entry.args.includes('test-without-building'));
+  assert.ok(call,'hosted native command launched');
+  assert.equal(call.settings.stdio?.[5],5,'nested wrapper receives the parent control FD');
 });
 
 test('mode/scope/forwarding and retry/quarantine violations fail before native work',t=>{
@@ -116,10 +139,10 @@ test('repeat sidecars preserve exact mode, unique tokens, timings and independen
   const dir=mkdtempSync(path.join(tmpdir(),'i393-repeat-timing-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   let clock=100;const calls=[];
   const status=runAppRepeat({repeat:3,filter:'',out:dir,now:()=>clock,deadline:10000,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'},
     stdout:()=>{},spawn:(_cmd,args,settings)=>{
       calls.push({args,settings});clock+=25;writeFileSync(args[2],'native evidence\n');
-      return result(JSON.stringify({status:calls.length===2?1:0,drained:true}));
+      return attestedResult(settings,calls.length===2?1:0,{drained:true});
     }});
   assert.equal(status,1);
   for(const number of [1,2,3])assert.equal(existsSync(path.join(dir,`iter-0${number}.json`)),true,'every iteration has timing evidence');
@@ -139,9 +162,9 @@ test('repeat sidecars preserve exact mode, unique tokens, timings and independen
 test('repeat records unstarted refused iterations without fabricated execution durations',t=>{
   const dir=mkdtempSync(path.join(tmpdir(),'i393-repeat-refused-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const status=runAppRepeat({repeat:2,filter:'',out:dir,now:()=>100,deadline:10000,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1'},stdout:()=>{},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
     spawn:(_cmd,args)=>{writeFileSync(args[2],'undrained\n');return result(JSON.stringify({status:70,drained:false}));}});
-  assert.equal(status,1);
+  assert.equal(status,70);
   assert.equal(existsSync(path.join(dir,'iter-02.json')),true,'refused iteration has explicit evidence');
   const refused=JSON.parse(readFileSync(path.join(dir,'iter-02.json'),'utf8'));
   assert.equal(refused.started,false);assert.equal(refused.nativeWallMilliseconds,null);assert.notEqual(refused.status,0);
@@ -151,8 +174,8 @@ test('normal retained-only filtered repeat does not require a hosted process tha
   const dir=mkdtempSync(path.join(tmpdir(),'i393-retained-filter-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   let captured;
   const status=runAppRepeat({repeat:1,filter:'^MadoAppTests\\.retainedOnly\\(\\)$',out:dir,deadline:10000,now:()=>100,
-    env:{PICSEE_HEAVY_LOCK_HELD:'1'},stdout:()=>{},spawn:(_cmd,args,settings)=>{
-      captured=settings.env;writeFileSync(args[2],'retained-only\n');return result(JSON.stringify({status:0,drained:true}));
+    env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},spawn:(_cmd,args,settings)=>{
+      captured=settings.env;writeFileSync(args[2],'retained-only\n');return attestedResult(settings,0,{drained:true});
     }});
   assert.equal(status,0);assert.equal(captured.MADO_HOST_OWNERSHIP_REQUIRED,undefined);
   assert.equal(captured.MADO_HOST_EXECUTABLE,undefined);
@@ -163,7 +186,7 @@ test('comparison coordinator requires current matching worker evidence before tr
   for(const variant of ['missing','stale','wrong-mode','wrong-scope','wrong-sha','wrong-status','incomplete','matching']) {
     const dir=mkdtempSync(path.join(tmpdir(),'i393-current-record-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
     const status=comparison.runAppCompare({out:dir,now:()=>100,deadline:10000,stdout:()=>{},
-      env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',PICSEE_HEAVY_LOCK_HELD:'1',GITHUB_SHA:'final-sha'},
+      env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'final-sha'},
       spawn:(_cmd,args,settings)=>{
         writeFileSync(args[2],'current worker output\n');
         const packet={version:1,runId:settings.env.MADO_APP_COMPARE_RESULT_ID,complete:true,status:0,
@@ -175,9 +198,9 @@ test('comparison coordinator requires current matching worker evidence before tr
         if(variant==='wrong-status')packet.status=1;
         if(variant==='incomplete')packet.complete=false;
         if(variant!=='missing')writeFileSync(settings.env.MADO_APP_COMPARE_RESULT_PATH,JSON.stringify(packet));
-        return result(JSON.stringify({status:0,drained:true}));
+        return attestedResult(settings,0,{drained:true});
       }});
-    assert.equal(status,variant==='matching'?0:1,variant);
+    assert.equal(status,variant==='matching'?0:70,variant);
   }
 });
 
@@ -186,8 +209,8 @@ test('comparison rows preserve ownership proof and label supervised duration wit
   let clock=100;
   const hostOwnership={observed:true,drained:true,identities:[{pid:123,birth:'1:2'}],signals:[],unknown:[],live:[]};
   const status=runAppRepeat({repeat:1,filter:'',out:dir,deadline:10000,now:()=>clock,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1'},stdout:()=>{},
-    spawn:(_cmd,args)=>{clock+=25;writeFileSync(args[2],'owned host gone\n');return result(JSON.stringify({status:0,drained:true,group:456,hostOwnership}));}});
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
+    spawn:(_cmd,args,settings)=>{clock+=25;writeFileSync(args[2],'owned host gone\n');return attestedResult(settings,0,{drained:true,group:456,hostOwnership});}});
   assert.equal(status,0);
   const row=JSON.parse(readFileSync(path.join(dir,'iter-01.json'),'utf8'));
   assert.deepEqual(row.hostOwnership,hostOwnership);assert.equal(row.group,456);

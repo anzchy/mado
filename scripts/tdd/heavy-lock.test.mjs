@@ -23,6 +23,176 @@ function run(args, env) {
     child.on('close', (code, signal) => resolve({ code, signal, output }));
   });
 }
+const redOnly = process.env.PICSEE_HEAVY_TEST_FILTER;
+function redTest(name, fn, options = {}) {
+  test(name, {...options, skip: redOnly ? redOnly !== name : name.includes('BLOCKED-upstream')}, fn);
+}
+
+redTest('hugeFiniteDeadlineRejectedBeforeLockOrLaunch', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '1e308'};
+  const marker = path.join(env.HOME, 'launched');
+  const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
+  assert.ifError(result.error);
+  assert.equal(result.status, 70, result.stderr);
+  assert.equal(existsSync(marker), false);
+  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK), false, 'preflight precedes lock acquisition');
+});
+
+redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_HELD:'1'};
+  const marker = path.join(env.HOME, 'launched');
+  const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
+  assert.ifError(result.error);
+  assert.equal(result.status, 70, result.stderr);
+  assert.equal(existsSync(marker), false);
+});
+
+redTest('reverseMdproMissingHandoffRefusesBeforeLaunch — BLOCKED-upstream RED', () => {
+  const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1'};
+  const marker = path.join(env.HOME, 'launched');
+  const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
+  assert.ifError(result.error);
+  assert.equal(result.status, 70, result.stderr);
+  assert.equal(existsSync(marker), false);
+});
+
+redTest('reverseMdproDeadlineAndCancelReachWorkload — BLOCKED-upstream RED', async () => {
+  const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1', PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};
+  const pidFile = path.join(env.HOME, 'worker-pid');
+  const supervisorPidFile = path.join(env.HOME, 'supervisor-pid');
+  const parent = spawn('bash', ['-c',
+    '"$1" python3 -c "import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)" "$2" & echo $! > "$3"; wait',
+    '_', lock, pidFile, supervisorPidFile], {env, cwd:root, stdio:'ignore'});
+  try {
+    await until(()=>existsSync(pidFile),'reverse nested workload launched');
+    parent.kill('SIGKILL');
+    await new Promise(resolve=>parent.once('close',resolve));
+    await new Promise(resolve=>setTimeout(resolve,200));
+    assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'},
+      'mdpro parent cancellation must reach its picsee workload');
+  } finally {
+    const supervisorPid=Number(readFileSync(supervisorPidFile,'utf8'));
+    try {process.kill(supervisorPid,'SIGTERM');} catch(error) {if(error.code!=='ESRCH')throw error;}
+    await new Promise(resolve=>setTimeout(resolve,300));
+  }
+}, {timeout:7000});
+
+redTest('postLaunchSupervisorExceptionCancelsBeforeRelease', async () => {
+  const env = {...environment(), PICSEE_HEAVY_FAULT_AFTER_LAUNCH:'1', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const pidFile = path.join(env.HOME, 'pid');env.PICSEE_HEAVY_FAULT_READY_PATH=pidFile;
+  const result = await run(['python3','-c',
+    'import os,pathlib,time,sys; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(1)',pidFile],env);
+  assert.equal(result.code, 70, result.output);
+  assert.ok(existsSync(pidFile));
+  assert.throws(() => process.kill(Number(readFileSync(pidFile,'utf8')),0), {code:'ESRCH'});
+  const competitorEnv={...env};delete competitorEnv.PICSEE_HEAVY_FAULT_AFTER_LAUNCH;
+  delete competitorEnv.PICSEE_HEAVY_FAULT_READY_PATH;
+  assert.equal((await run(['true'],competitorEnv)).code,0);
+});
+
+redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS:'0.4', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
+    PICSEE_HEAVY_INNER_GRACE_SECS:'5', PICSEE_MDPRO_LOCK:'off'};
+  const pidFile = path.join(env.HOME,'nested-pid');
+  const script = `"$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)' "$2"; :`;
+  const result = await run(['bash','-c',script,'_',lock,pidFile],env);
+  assert.equal(result.code,124,result.output);
+  assert.ok(existsSync(pidFile),'nested descendant launched');
+  assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
+  assert.equal((await run(['true'],env)).code,0);
+});
+
+redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_HEAVY_INNER_GRACE_SECS:'5', PICSEE_MDPRO_LOCK:'off'};
+  const pidFile = path.join(env.HOME,'nested-pid'), outerGroup=path.join(env.HOME,'outer-group');
+  const script = `ps -o pgid= -p $$ > "$3"; "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"`;
+  const holder = start(['bash','-c',script,'_',lock,pidFile,outerGroup],env);
+  await until(()=>existsSync(pidFile),'nested descendant launched');
+  const [nestedPid,nestedGroup]=readFileSync(pidFile,'utf8').split(' ').map(Number);
+  assert.notEqual(nestedGroup,Number(readFileSync(outerGroup,'utf8').trim()),'nested work registers a separate same-session subgroup');
+  const began=Date.now();holder.child.kill('SIGTERM');
+  await holder.done;
+  assert.ok(Date.now()-began<1500,'outer grace governs nested cleanup');
+  assert.throws(()=>process.kill(nestedPid,0),{code:'ESRCH'});
+}, {timeout:7000});
+
+redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const status=path.join(env.HOME,'nested-status.json'), sibling=path.join(env.HOME,'sibling');
+  const script='PICSEE_HEAVY_STATUS_PATH="$1" "$2" true; touch "$3"; sleep 1';
+  const holder=start(['bash','-c',script,'_',status,lock,sibling],env);
+  try {
+    await until(()=>existsSync(sibling),'nested completed while ancestor is alive');
+    process.kill(holder.child.pid,0);
+    assert.ok(existsSync(status),'nested supervisor must publish local cleanup before ancestor exits');
+    assert.equal(JSON.parse(readFileSync(status,'utf8')).cleanup,'complete');
+  } finally {await holder.done;}
+}, {timeout:7000});
+
+redTest('realRunProcessGroupNeverReportsDrainedWithSurvivors', async () => {
+  const env={...environment(),PICSEE_HEAVY_FAULT_QUERY:'1',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.1',PICSEE_MDPRO_LOCK:'off'};
+  const pidFile=path.join(env.HOME,'survivor-pid');
+  const status=path.join(env.HOME,'status.json');
+  env.PICSEE_HEAVY_STATUS_PATH=status;
+  const result=await run(['bash','-c',
+    'python3 -c "import os,pathlib,signal,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)" "$1" </dev/null >/dev/null 2>&1 & while ! test -f "$1"; do sleep 0.01; done; exit 1',
+    '_',pidFile],env);
+  assert.equal(result.code,70,result.output);
+  assert.ok(existsSync(pidFile),'real descendant was launched');
+  assert.equal(JSON.parse(readFileSync(status,'utf8')).cleanup,'incomplete');
+  assert.match(result.output,/unknown|incomplete/i);
+  const contenderEnv={...env};delete contenderEnv.PICSEE_HEAVY_FAULT_QUERY;
+  delete contenderEnv.PICSEE_HEAVY_STATUS_PATH;
+  assert.equal((await run(['true'],contenderEnv)).code,0);
+  assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
+});
+
+redTest('nestedExecutionKeepsLockUntilLastProtectedDescendantExits', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const hostPid=path.join(env.HOME,'host-pid'),hostDone=path.join(env.HOME,'host-done'),commandDone=path.join(env.HOME,'command-done');
+  const script=`python3 -c 'import os,pathlib,sys,time; p=os.fork();
+if p==0:
+ os.setsid(); os.closerange(3,256); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(1); pathlib.Path(sys.argv[2]).touch(); os._exit(0)
+os.waitpid(p,0) if False else None' "$1" "$2"; while ! test -f "$1"; do sleep 0.02; done; "$3" --register-host "$(cat "$1")"; result=$?; touch "$4"; exit $result`;
+  const holder=start(['bash','-c',script,'_',hostPid,hostDone,lock,commandDone],env);
+  await until(()=>existsSync(hostPid),'out-of-group host launched');
+  await until(()=>existsSync(commandDone),'worker command completed');
+  const contender=await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'});
+  assert.equal(contender.code,75,contender.output);
+  assert.equal((await holder.done).code,0,'host registration succeeded');
+  assert.ok(existsSync(hostDone));
+  assert.equal((await run(['true'],env)).code,0);
+}, {timeout:7000});
+
+redTest('guardianRetainsLockAfterSupervisorDeathWithOutOfGroupHost', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_WAIT_SECS:'2'};
+  const hostPid=path.join(env.HOME,'host-pid'), registered=path.join(env.HOME,'registered');
+  const script=`python3 -c 'import os,pathlib,sys,time; p=os.fork();
+if p==0:
+ os.setsid(); null=os.open("/dev/null",os.O_RDWR); os.dup2(null,0); os.dup2(null,1); os.dup2(null,2); os.closerange(3,256); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2); os._exit(0)
+' "$1"; while ! test -f "$1"; do sleep 0.02; done; "$2" --register-host "$(cat "$1")"; touch "$3"`;
+  const holder=start(['bash','-c',script,'_',hostPid,lock,registered],env);
+  await until(()=>existsSync(registered),'host registered before parent death');
+  const pid=Number(readFileSync(hostPid,'utf8'));
+  holder.child.kill('SIGKILL');
+  await holder.done;
+  const probe=await run(['bash','-c','if kill -0 "$1" 2>/dev/null; then exit 23; fi','_',String(pid)],env);
+  assert.equal(probe.code,0,'competitor may enter only after host is absent');
+  assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
+}, {timeout:7000});
+
+redTest('ciAppInvocationPreservesHeldSupervision', async () => {
+  const env={...environment(),PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
+    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off'};
+  const statusPath=path.join(env.HOME,'ci-status.json');env.PICSEE_HEAVY_STATUS_PATH=statusPath;
+  const result=await run(['bash','-c','test -n "$PICSEE_HEAVY_CONTROL_FD" && test "$PICSEE_HEAVY_LOCK_HELD" = 1'],env);
+  assert.equal(result.code,0,result.output);
+  assert.equal(JSON.parse(readFileSync(statusPath,'utf8')).cleanup,'complete');
+  const workflow=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
+  const step=workflow.slice(workflow.indexOf('- name: Run App tests'),workflow.indexOf('- name: Report App test evidence'));
+  assert.match(step,/PICSEE_HEAVY_CI_TOP_LEVEL/);
+  assert.match(step,/scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+});
 test('uses picsee machine-wide default and exports nesting flag', () => {
   const env = environment();
   const r = spawnSync(lock, ['bash', '-c', 'test "$PICSEE_HEAVY_LOCK_HELD" = 1 && test -f "$HOME/.picsee/locks/heavy.lock"'], { env });
@@ -87,7 +257,7 @@ function start(args, env) {
   });
   return {child,done,output:()=>output};
 }
-test('SIGKILLed holder leaves inherited lock held until its child exits, with two waiters', {timeout:25000}, async () => {
+test('SIGKILLed supervisor drains its child before admitting two waiters', {timeout:25000}, async () => {
   const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
   const events=path.join(env.HOME,'events');
   const release=path.join(env.HOME,'release');
@@ -100,16 +270,17 @@ test('SIGKILLed holder leaves inherited lock held until its child exits, with tw
     const exited=new Promise(resolve=>holder.child.on('exit',(code,signal)=>resolve({code,signal})));
     holder.child.kill('SIGKILL');
     assert.equal((await exited).signal,'SIGKILL');
-    // The old mkdir implementation polls at five seconds. Cover that boundary.
-    await new Promise(r=>setTimeout(r,5500));
-    assert.equal(readFileSync(events,'utf8'),'holder-start\n','no waiter enters while inherited descriptor remains open');
+    await until(()=>readFileSync(events,'utf8').includes('start\nend\nstart\nend\n'),
+      'guardian drains the holder and admits both waiters');
+    assert.equal(readFileSync(events,'utf8').includes('holder-end'),false,
+      'the killed supervisor does not leave the holder running');
   } finally {
     writeFileSync(release,'release');
     await holder.done;
     const result=await Promise.all(waiters.map(w=>w.done));
     assert.deepEqual(result.map(r=>r.code),[0,0]);
   }
-  assert.equal(readFileSync(events,'utf8'),'holder-start\nholder-end\nstart\nend\nstart\nend\n');
+  assert.equal(readFileSync(events,'utf8'),'holder-start\nstart\nend\nstart\nend\n');
 });
 test('three-way contention never overlaps', {timeout:25000}, async () => {
   const env=environment();
@@ -220,15 +391,15 @@ test('AC-5 shared timeout exits 75 and releases picsee flock', async () => {
     assert.ok(existsSync(env.PICSEE_MDPRO_LOCK),'live peer never reclaimed');
   } finally { releaseFake(env); }
 });
-test('AC-6 opt-out and direct nesting do not invent mdpro ownership', async () => {
+test('AC-6 opt-out does not invent mdpro ownership; direct HELD needs a credential', async () => {
   for(const direct of [false,true]) {
     const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:direct?'1':''};
     const result=await run(['bash','-c','test -z "$MDPRO_HEAVY_LOCK_HELD"'],env);
-    assert.equal(result.code,0,result.output);
+    assert.equal(result.code,direct?70:0,result.output);
     assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),!direct);
   }
   assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],environment())).code,0);
-  assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],{...environment(),PICSEE_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'})).code,0);
+  assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],{...environment(),PICSEE_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'})).code,70);
 });
 const mdproLock=process.env.PICSEE_MDPRO_SCRIPT;
 test('AC-7 real mdpro script serializes in both directions', {timeout:30000}, async t => {
@@ -298,7 +469,7 @@ for (const mode of ['survivors','publication','heartbeat']) {
     assert.ifError(result.error);
     assert.equal(result.status,0,result.stderr);
     assert.doesNotMatch(result.stderr,/Traceback/);
-    if(mode==='survivors') assert.match(result.stderr,/WARNING.*survivors.*123456789/);
+    if(mode==='survivors') assert.match(result.stderr,/WARNING.*incomplete cleanup.*123456789/);
     if(mode==='publication') assert.match(result.stderr,/owner publication failed/);
     if(mode==='heartbeat') assert.match(result.stderr,/still waiting \(\d+s\)/);
   });
@@ -324,17 +495,13 @@ test('R1 contended reverse nesting fails promptly without disturbing the flock h
   assert.ok(existsSync(entered),'P completes after M releases S');
 });
 
-for (const mode of ['vanished','drain-message','drain-bound']) {
+for (const mode of ['vanished']) {
   test(`R2/R3 fault injection: ${mode}`, () => {
     const env={...environment(),PICSEE_HEAVY_LOCK_DRAIN_SECS:mode==='drain-message'?'100':'0.2',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0'};
     const result=spawnSync('python3',['scripts/tdd/fixtures/heavy-lock-faults.py','scripts/tdd/heavy-lock.py',mode],{env,encoding:'utf8',timeout:5000});
     assert.ifError(result.error);
     assert.equal(result.status,0,result.stderr);
     if(mode==='vanished') assert.doesNotMatch(result.stderr,/not a directory/);
-    if(mode==='drain-message') {
-      assert.ok((result.stderr.match(/job exited \(3\); waiting for group survivors: 123456789 fake-worker/g)||[]).length>=2,result.stderr);
-    }
-    if(mode==='drain-bound') assert.match(result.stderr,/WARNING.*survivors.*123456789 fake-worker/);
   });
 }
 
@@ -368,21 +535,19 @@ test('F4 drain bound stops worker before real mdpro waiter enters and preserves 
   }
 });
 
-// F5: exercise the real liveness guard rather than replacing group_alive.
+// F5: exercise the real process listing with an unreaped zombie.
 test('F5 real-kernel unreaped zombie group drains without exception', {skip: process.platform !== 'darwin'}, () => {
   const r = spawnSync('python3', ['scripts/tdd/fixtures/heavy-lock-faults.py', 'scripts/tdd/heavy-lock.py', 'zombie-group'], {env: environment(), timeout: 5000});
   assert.equal(r.status, 0, r.stderr.toString());
   assert.doesNotMatch(r.stderr.toString(), /Traceback/);
 });
-for (const mode of ['eperm-drain', 'eperm-signal']) {
-  test(`F5 launcher ${mode} preserves exit or signal after EPERM then ESRCH`, () => {
+for (const mode of ['eperm-signal']) {
+  test(`F5 supervisor ignores EPERM while signalling a verified PID`, () => {
     const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
     const r = spawnSync('python3', ['scripts/tdd/fixtures/heavy-lock-faults.py', 'scripts/tdd/heavy-lock.py', mode], {
       env, timeout: 5000,
     });
     assert.doesNotMatch(r.stderr.toString(), /Traceback/);
-    assert.equal(r.status, mode === 'eperm-drain' ? 3 : null, r.stderr.toString());
-    assert.equal(r.signal, mode === 'eperm-signal' ? 'SIGTERM' : null);
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false, 'release after group disappears');
+    assert.equal(r.status,0,r.stderr.toString());
   });
 }
