@@ -27,5 +27,5 @@ test('removed dispatch inputs and one-shot job are unavailable', () => {
   assert.match(yaml,/options: \[none, hosted\]/);
   assert.doesNotMatch(yaml,/hosted_focus_only:|native_red_receipt:|hosted-focus-diagnostic:/);
   assert.match(yaml,/inputs\.app_compare_mode == 'hosted'/);
-  assert.match(yaml,/run: node scripts\/ci\/hosted-build\.mjs/);
+  assert.match(yaml,/run: scripts\/heavy-lock\.sh node scripts\/ci\/hosted-build\.mjs/);
 });

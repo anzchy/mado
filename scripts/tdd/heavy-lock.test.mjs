@@ -72,7 +72,7 @@ redTest('ciTopLevelRejectsUnverifiedMdproHandoffBeforeLaunch', () => {
   assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
 });
 
-redTest('picseeParentSharedOwnershipAuthenticatesNestedMdproFlag', async () => {
+redTest('madoParentSharedOwnershipAuthenticatesNestedMdproFlag', async () => {
   const env=environment();
   const marker=path.join(env.HOME,'nested-launched');
   const result=await run(['bash','-c','"$1" touch "$2"; exit $?','_',lock,marker],env);
@@ -139,7 +139,9 @@ redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
 redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid'), outerGroup=path.join(env.HOME,'outer-group');
-  const script = `ps -o pgid= -p $$ > "$3"; PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"`;
+  // Keep Bash alive as the session leader: Linux can tail-exec a final command,
+  // making the nested supervisor a session leader that cannot call setpgid.
+  const script = `ps -o pgid= -p $$ > "$3"; PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"; :`;
   const holder = start(['bash','-c',script,'_',lock,pidFile,outerGroup],env);
   await until(()=>existsSync(pidFile),'nested descendant launched');
   const [nestedPid,nestedGroup]=readFileSync(pidFile,'utf8').split(' ').map(Number);
@@ -391,7 +393,8 @@ test('two independent invocations serialize command lifetimes', async () => {
 });
 test('nested use shares held flag without deadlock', () => {
   const env = environment();
-  const r = spawnSync(lock, ['bash', '-c', 'test "$PICSEE_HEAVY_LOCK_HELD" = 1 && "$1" true', '_', lock], { env, timeout: 5000 });
+  // The explicit exit keeps Bash as parent on Linux while preserving nested status.
+  const r = spawnSync(lock, ['bash', '-c', 'test "$PICSEE_HEAVY_LOCK_HELD" = 1 && "$1" true; status=$?; exit "$status"', '_', lock], { env, timeout: 5000 });
   assert.equal(r.status, 0, r.stderr.toString());
 });
 test('preserves child exit code', () => {

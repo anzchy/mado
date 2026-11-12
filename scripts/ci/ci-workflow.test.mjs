@@ -236,7 +236,7 @@ test('dispatch repeat routing leaves push, PR, default dispatch and build-only b
   t.after(() => rmSync(directory, {recursive:true,force:true}));
   for (const [event, repeat, expected] of [['push',3,'scripts/tdd/app-lane.mjs'],['pull_request',3,'scripts/tdd/app-lane.mjs'],
     ['workflow_dispatch',1,'scripts/tdd/app-lane.mjs'],['workflow_dispatch',3,'scripts/ci/app-repeat.mjs']]) {
-    const run = spawnSync('bash', ['-e', '-c', `node() { echo "$@"; };\n${script}`], {
+    const run = spawnSync('bash', ['-e', '-c', `scripts/heavy-lock.sh() { "$@"; }; node() { echo "$@"; };\n${script}`], {
       cwd: directory, env: {...process.env, REPEAT_ENABLED: String(event === 'workflow_dispatch' && repeat > 1), APP_JOB_STARTED_MS:'0'}, encoding:'utf8'});
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout.trim(), expected);
@@ -304,13 +304,13 @@ test('actual App run and report shells preserve exit status, logs, quarantine an
   const retry = 'app-lane: known flaky fixture (#425); retrying once\n';
   for (const [status, retried] of [[0, false], [0, true], [1, false], [70, false], [1, true]]) {
     const output = quarantine + (retried ? retry : '') + 'Tests run: 1, Failures: ' + (status ? '1' : '0') + ', Errors: 0, Skipped: 0\n';
-    const env = { PATH: process.env.PATH, REPEAT_ENABLED: 'false', APP_JOB_STARTED_MS: '0',
+    const env = { PATH: process.env.PATH, HOME: process.env.HOME, REPEAT_ENABLED: 'false', APP_JOB_STARTED_MS: '0',
       FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status), FIXTURE_ATTEMPTS: retried?'2':'1', APP_RESULT_PATH:join(directory,'.build/app-result.json'), PICSEE_APP_RESULT_PATH:join(directory,'.build/app-result.json'), APP_RESULT_ID:'workflow-fixture', PICSEE_APP_RESULT_ID:'workflow-fixture',
       GITHUB_OUTPUT: join(directory, 'outputs'), GITHUB_STEP_SUMMARY: join(directory, 'summary'),
       EVENT_NAME: 'push', APP_TESTS: '', APP_TEST_STEP: status ? 'failure' : 'success' };
     writeFileSync(env.GITHUB_OUTPUT, ''); writeFileSync(env.GITHUB_STEP_SUMMARY, '');
     // A real Node process stands in for the native runner; all shell/filesystem transport is real.
-    const standIn = `node() { command node -e 'require("node:fs").writeFileSync(process.env.PICSEE_APP_RESULT_PATH,JSON.stringify({version:1,runId:process.env.PICSEE_APP_RESULT_ID,complete:true,attempts:Number(process.env.FIXTURE_ATTEMPTS),status:Number(process.env.FIXTURE_STATUS),filter:null,retryEnabled:true,defaultQuarantine:true})); process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
+    const standIn = `scripts/heavy-lock.sh() { "$@"; }; node() { command node -e 'require("node:fs").writeFileSync(process.env.PICSEE_APP_RESULT_PATH,JSON.stringify({version:1,runId:process.env.PICSEE_APP_RESULT_ID,complete:true,attempts:Number(process.env.FIXTURE_ATTEMPTS),status:Number(process.env.FIXTURE_STATUS),filter:null,retryEnabled:true,defaultQuarantine:true})); process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
     const run = spawnSync('bash', ['-e', '-c', standIn + runScript], { cwd: directory, env, encoding: 'utf8' });
     assert.equal(run.status, status, run.stdout + run.stderr);
     assert.equal(run.stdout, output);
