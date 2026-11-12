@@ -229,7 +229,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       await idle();
     }
   }catch(error){
-    log('supervision failed');
+    log('supervision failed '+String(error?.stack??error));
     if(error.inspector&&!inspector){
       const result=await finish(70,false);return {...result,inspector:error.inspector};
     }

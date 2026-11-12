@@ -26,7 +26,7 @@ test('real observed escaped host cancellation yields diagnostic success only aft
   const status=await runHostedCancelProbe({out,token,executable:realpathSync(process.execPath),command:process.execPath,
     args:['-e','setInterval(()=>{},1000)'],deadline:Date.now()+3000,graceMs:50,drainMs:500});
   const result=JSON.parse(readFileSync(path.join(out,'result.json'),'utf8'));
-  t.diagnostic(JSON.stringify({cancelProbe:result}));
+  t.diagnostic(JSON.stringify({cancelProbe:result,nativeLog:readFileSync(path.join(result.attemptPath,'native.log'),'utf8')}));
   assert.equal(status,0);assert.equal(existsSync(path.join(out,'result.json')),true,'current cancellation evidence required');
   assert.equal(result.diagnostic,true);assert.equal(result.formal,false);assert.equal(result.complete,true);
   assert.equal(result.status,0);assert.equal(result.supervisor.status,70);assert.equal(result.supervisor.drained,true);
