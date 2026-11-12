@@ -112,14 +112,40 @@ def guardian_main(read_fd, ready_fd):
     """Hold the acquiring FD and finish cleanup if its supervisor disappears."""
     for caught in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
         signal.signal(caught, signal.SIG_IGN)
+    owner_path = os.environ.get('PICSEE_HEAVY_GUARDIAN_OWNER')
+    if owner_path:
+        with os.fdopen(os.open(owner_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as owner:
+            owner.write(f'pid={os.getpid()}\n'
+                        f'cmd={sys.executable} {Path(__file__).resolve()} --guardian {read_fd} {ready_fd}\n'
+                        f'started={time.strftime("%Y-%m-%dT%H:%M:%S%z")}\n'
+                        f'supervisor={os.environ.get("PICSEE_HEAVY_GUARDIAN_SUPERVISOR", "unknown")}\n'
+                        f'job={os.environ.get("PICSEE_HEAVY_GUARDIAN_COMMAND", "unknown")}\n')
     os.write(ready_fd, b'R')
     os.close(ready_fd)
     root = None
     groups = set()
     hosts = set()
     complete = False
-    with os.fdopen(read_fd, 'r') as updates:
-        for line in updates:
+    # Before root publication the supervisor is the only holder that can
+    # launch work. Bound that handoff even if the pipe remains open forever.
+    publish_deadline = time.monotonic() + 2
+    pending = b''
+    while True:
+        if root is None:
+            remaining = publish_deadline - time.monotonic()
+            if remaining <= 0:
+                print('[heavy-lock] guardian: root was never published before deadline',
+                      file=sys.stderr, flush=True)
+                return 0
+            readable, _, _ = select.select([read_fd], [], [], remaining)
+            if not readable:
+                continue
+        chunk = os.read(read_fd, 4096)
+        if not chunk:
+            break
+        pending += chunk
+        while b'\n' in pending:
+            line, pending = pending.split(b'\n', 1)
             try:
                 message = json.loads(line)
                 kind, pid = message['kind'], int(message['pid'])
@@ -134,15 +160,16 @@ def guardian_main(read_fd, ready_fd):
                     break
             except (ValueError, KeyError, TypeError, json.JSONDecodeError):
                 continue
+        if complete:
+            break
     if complete:
         return 0
     print('[heavy-lock] guardian: supervisor disappeared; draining owned workload',
           file=sys.stderr, flush=True)
     if root is None:
-        # No verifiable workload identity was published. Keep flock exclusion
-        # alive for manual recovery rather than claim an empty process set.
-        while True:
-            time.sleep(60)
+        print('[heavy-lock] guardian: root was never published; no workload launched',
+              file=sys.stderr, flush=True)
+        return 0
     started = time.monotonic()
     while True:
         rows = owned_state(root, groups, hosts)
@@ -510,13 +537,21 @@ def supervised_main():
             ready_read, ready_write = os.pipe()
             guardian_env = {**os.environ}
             guardian_env.pop('PICSEE_HEAVY_FAULT_QUERY', None)
-            guardian = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
-                                         '--guardian', str(guardian_read), str(ready_write)],
-                                        env=guardian_env,
-                                        pass_fds=(guardian_read, ready_write, fd) if fd is not None else (guardian_read, ready_write),
-                                        start_new_session=True,
-                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+            guardian_owner = lock.parent / f'heavy.lock.guardian-{invocation}.owner'
+            guardian_log = lock.parent / f'heavy.lock.guardian-{invocation}.log'
+            guardian_env['PICSEE_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
+            guardian_env['PICSEE_HEAVY_GUARDIAN_SUPERVISOR'] = str(os.getpid())
+            guardian_env['PICSEE_HEAVY_GUARDIAN_COMMAND'] = ' '.join(command)
+            lock.parent.mkdir(parents=True, exist_ok=True)
+            with os.fdopen(os.open(guardian_log, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600),
+                           'wb', buffering=0) as guardian_error:
+                guardian = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                                             '--guardian', str(guardian_read), str(ready_write)],
+                                            env=guardian_env,
+                                            pass_fds=(guardian_read, ready_write, fd) if fd is not None else (guardian_read, ready_write),
+                                            start_new_session=True,
+                                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                            stderr=guardian_error)
             os.close(guardian_read)
             os.close(ready_write)
             try:
@@ -540,14 +575,24 @@ def supervised_main():
         else:
             child_env.pop('PICSEE_HEAVY_FLOCK_FD', None)
         passed = [worker_control.fileno()]
+        if guardian_write is not None:
+            passed.append(guardian_write)
         if fd is not None:
             passed.append(fd)
         elif inherited_flock:
             passed.append(int(inherited_flock))
         launched = time.monotonic()
         execution_deadline = min(launched + budget, parent_deadline) if nested else launched + budget
+        def publish_root_before_exec():
+            # A supervisor killed during Popen cannot strand an unidentified
+            # worker. This child writes its own PID before exec, then closes
+            # the guardian pipe so parent death still triggers cleanup.
+            if not guardian_send(guardian_write, 'root', os.getpid()):
+                os._exit(70)
+            os.close(guardian_write)
         child = subprocess.Popen(command, env=child_env, pass_fds=tuple(passed),
-                                 start_new_session=not nested)
+                                 start_new_session=not nested,
+                                 preexec_fn=publish_root_before_exec if guardian_write is not None else None)
         guardian_send(guardian_write, 'root', child.pid)
         worker_control.close()
         worker_control = None
@@ -628,6 +673,12 @@ def supervised_main():
                 return 70
             if guardian.returncode != 0:
                 return 70
+            try:
+                guardian_owner.unlink(missing_ok=True)
+                guardian_log.unlink(missing_ok=True)
+            except OSError as error:
+                print(f'[heavy-lock] diagnostic cleanup failed: {error}',
+                      file=sys.stderr, flush=True)
     except BaseException as error:
         print(f'[heavy-lock] supervisor exception: {error}', file=sys.stderr, flush=True)
         if child is not None:

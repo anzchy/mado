@@ -251,6 +251,75 @@ if p==0:
   assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
 }, {timeout:7000});
 
+redTest('orphanedGuardianWithoutRootReleasesFlockAndLeavesDiagnostics', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const pidFile=path.join(env.HOME,'guardian-pid');
+  const fixture=`import fcntl,os,pathlib,subprocess,sys,time
+lock=pathlib.Path(os.environ['PICSEE_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
+fd=os.open(str(lock),os.O_CREAT|os.O_RDWR,0o600);fcntl.flock(fd,fcntl.LOCK_EX)
+updates_r,updates_w=os.pipe();ready_r,ready_w=os.pipe()
+owner=lock.parent/'heavy.lock.guardian-repro.owner'
+log=lock.parent/'heavy.lock.guardian-repro.log'
+with open(log,'ab',buffering=0) as error:
+ guardian_env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_COMMAND='fixture-job')
+ guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(updates_r),str(ready_w)],env=guardian_env,pass_fds=(updates_r,ready_w,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
+os.close(updates_r);os.close(ready_w)
+assert os.read(ready_r,1)==b'R'
+pathlib.Path(sys.argv[1]).write_text(str(guardian.pid))
+time.sleep(30)`;
+  const supervisor=spawn('python3',['-c',fixture,pidFile],{env,cwd:root,stdio:'ignore'});
+  let guardianPid;
+  try {
+    await until(()=>existsSync(pidFile),'guardian ready');
+    guardianPid=Number(readFileSync(pidFile,'utf8'));
+    supervisor.kill('SIGKILL');
+    await new Promise(resolve=>supervisor.once('close',resolve));
+    const contender=await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'1'});
+    assert.equal(contender.code,0,'orphaned guardian must release flock within one second');
+    const owner=readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-repro.owner'),'utf8');
+    assert.match(owner,new RegExp(`^pid=${guardianPid}$`,'m'));
+    assert.match(owner,/^cmd=.+heavy-lock.py --guardian/m);
+    assert.match(owner,/^started=.+/m);
+    assert.match(readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-repro.log'),'utf8'),/root was never published/);
+  } finally {
+    supervisor.kill('SIGKILL');
+    if(guardianPid) try {process.kill(guardianPid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+  }
+}, {timeout:7000});
+
+redTest('guardianRootPublicationHasDeadlineWhileSupervisorLives', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const ready=path.join(env.HOME,'ready');
+  const fixture=`import fcntl,os,pathlib,subprocess,sys,time
+lock=pathlib.Path(os.environ['PICSEE_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
+fd=os.open(str(lock),os.O_CREAT|os.O_RDWR,0o600);fcntl.flock(fd,fcntl.LOCK_EX)
+r,w=os.pipe();rr,rw=os.pipe()
+owner=lock.parent/'heavy.lock.guardian-deadline.owner';log=lock.parent/'heavy.lock.guardian-deadline.log'
+with open(log,'ab',buffering=0) as error:
+ env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_COMMAND='deadline-fixture')
+ guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(r),str(rw)],env=env,pass_fds=(r,rw,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
+os.close(r);os.close(rw);assert os.read(rr,1)==b'R'
+pathlib.Path(sys.argv[1]).write_text(str(guardian.pid))
+time.sleep(30)`;
+  const supervisor=spawn('python3',['-c',fixture,ready],{env,cwd:root,stdio:'ignore'});
+  let guardianPid;
+  try {
+    await until(()=>existsSync(ready),'guardian ready');
+    guardianPid=Number(readFileSync(ready,'utf8'));
+    const log=path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-deadline.log');
+    await until(()=>readFileSync(log,'utf8').includes('root was never published before deadline'),
+      'guardian publication deadline');
+    assert.equal(supervisor.exitCode,null,'supervisor is still alive at guardian deadline');
+    assert.match(readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-deadline.owner'),'utf8'),
+      new RegExp(`^pid=${guardianPid}$`,'m'));
+  } finally {
+    supervisor.kill('SIGKILL');
+    await new Promise(resolve=>supervisor.once('close',resolve));
+    if(guardianPid) try {process.kill(guardianPid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+  }
+  assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'1'})).code,0);
+}, {timeout:7000});
+
 redTest('ciAppInvocationPreservesHeldSupervision', async () => {
   const env={...environment(),PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
     PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off'};
