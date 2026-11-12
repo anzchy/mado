@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {writeHostedCompareXcodebuild} from './hosted-compare-fixture.mjs';
 
 const lock=fileURLToPath(new URL('../../heavy-lock.sh',import.meta.url));
 const comparison=new URL('../app-compare.mjs',import.meta.url).href;
@@ -15,13 +16,10 @@ test('hostedCompareRealProcessesRequireHostDrainBeforeSecondIteration',t=>{
   }
   const dir=mkdtempSync(path.join(tmpdir(),'hosted-compare-native-'));
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
-  const out=path.join(dir,'out'),wrapper=path.join(dir,'compare.mjs');
+  const out=path.join(dir,'out'),wrapper=path.join(dir,'compare.mjs'),hostPids=path.join(dir,'host-pids');
   const summary=fileURLToPath(new URL('../../tdd/fixtures/i393-hosted/summary.json',import.meta.url));
   const tests=fileURLToPath(new URL('../../tdd/fixtures/i393-hosted/tests.json',import.meta.url));
-  writeFileSync(path.join(dir,'xcodebuild'),`#!${process.execPath}\n`+
-    `const {spawn}=require('node:child_process');const h=spawn(process.execPath,['-e','setTimeout(()=>{},450)'],`+
-    `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
-    `h.unref();setTimeout(()=>console.log('** TEST EXECUTE SUCCEEDED **'),150);\n`,{mode:0o755});
+  writeHostedCompareXcodebuild(dir,hostPids);
   writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\n`+
     `const fs=require('node:fs');process.stdout.write(fs.readFileSync(process.argv.includes('summary')?`+
     `${JSON.stringify(summary)}:${JSON.stringify(tests)},'utf8'));\n`,{mode:0o755});
@@ -36,7 +34,7 @@ test('hostedCompareRealProcessesRequireHostDrainBeforeSecondIteration',t=>{
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
-  t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),deadline:env.APP_REPEAT_DEADLINE_MS,
+  if(process.env.PICSEE_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),deadline:env.APP_REPEAT_DEADLINE_MS,
     status:run.status,signal:run.signal,error:run.error?.message??null,stdout:run.stdout,stderr:run.stderr,
     files:existsSync(out)?readdirSync(out).sort().map(name=>({name,content:readFileSync(path.join(out,name),'utf8')})):[],
     heavyStatus:existsSync(env.PICSEE_HEAVY_STATUS_PATH)?readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8'):null},null,2));
@@ -44,6 +42,9 @@ test('hostedCompareRealProcessesRequireHostDrainBeforeSecondIteration',t=>{
   const report=JSON.parse(readFileSync(path.join(out,'summary.json'),'utf8'));
   assert.equal(report.iterations.length,2);
   assert.deepEqual(report.iterations.map(row=>row.status),[0,0]);
+  const launched=readFileSync(hostPids,'utf8').trim().split('\n').map(Number);
+  assert.deepEqual(report.iterations.map(row=>row.hostOwnership.identities.map(identity=>identity.pid)),
+    launched.map(pid=>[pid]),'only the detached host is registered for each iteration');
   assert.ok(report.iterations.every(row=>row.drained===true&&row.hostOwnership?.drained===true));
   assert.ok(report.iterations[1].startedAt>=report.iterations[0].endedAt);
 });

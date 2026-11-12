@@ -29,7 +29,7 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
-  t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),status:run.status,signal:run.signal,
+  if(process.env.PICSEE_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),status:run.status,signal:run.signal,
     error:run.error?.message??null,stdout:run.stdout,stderr:run.stderr,
     files:readdirSync(dir).sort().filter(name=>name==='status.json'||name==='host.pid'||
       name.includes('.guardian-')).map(name=>({name,content:readFileSync(path.join(dir,name),'utf8')}))},null,2));
