@@ -96,6 +96,23 @@ class Regressions(unittest.TestCase):
         resource.write_text('after')
         self.assertNotEqual(d.input_inventory(repo),baseline)
 
+    def test_ignored_build_cache_is_not_input_but_untracked_source_is(self):
+        repo=self.run/'build-cache-repo';repo.mkdir()
+        def git(*args):return subprocess.check_output(['git','-C',str(repo),*args],text=True)
+        git('init','-q');git('config','user.email','test@example.invalid');git('config','user.name','Test')
+        (repo/'Packages/MadoKit').mkdir(parents=True)
+        (repo/'Packages/MadoKit/Source.swift').write_text('committed')
+        (repo/'.gitignore').write_text('.build-coverage-*/\n')
+        git('add','.gitignore','Packages/MadoKit/Source.swift');git('commit','-qm','fixture')
+        baseline=d.assert_clean_inputs(repo)
+        cache=repo/'Packages/MadoKit/.build-coverage-x/cache.bin'
+        cache.parent.mkdir();cache.write_bytes(b'generated cache')
+        self.assertTrue(git('check-ignore','Packages/MadoKit/.build-coverage-x/cache.bin'))
+        self.assertEqual(d.assert_clean_inputs(repo),baseline)
+        (repo/'Packages/MadoKit/New.swift').write_text('untracked source')
+        with self.assertRaisesRegex(RuntimeError,'untracked or missing build inputs'):
+            d.assert_clean_inputs(repo)
+
     def test_doctor_replaces_stale_pass_with_twelve_fail_closed_results(self):
         for failure in ['missing-bundle','missing-plist','malformed-record']:
             with self.subTest(failure=failure):

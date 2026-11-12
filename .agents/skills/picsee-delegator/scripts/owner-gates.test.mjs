@@ -14,7 +14,9 @@ function fixture(t, mode = 'pass', covered = 2, npmInstalled = true) {
   for (const rel of ['scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
     const dest = path.join(dir, rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(root, rel), dest);
   }
-  for (const group of ['agents', 'tdd', 'ledger']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
+  for (const group of ['agents', 'tdd', 'ledger', 'name-checks']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
+  fs.mkdirSync(path.join(dir, 'scripts', 'ci'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'name-checks-ci.test.mjs'), '');
   const bin = path.join(dir, 'bin'), build = path.join(dir, 'build'), out = path.join(dir, 'out');
   fs.mkdirSync(bin); fs.mkdirSync(path.join(build, 'codecov'), { recursive: true });
   if (npmInstalled) fs.mkdirSync(path.join(dir, 'node_modules'));
@@ -34,6 +36,7 @@ if(process.argv[2]==='scripts/tdd/unit-lane.mjs'){
  else import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1,verifyCoverage:false});});
 }
 else if(process.argv[2]==='scripts/ci/package-coverage-local.mjs'){require('fs').appendFileSync(process.env.EXPORT_MARKER,'evaluate\\n');console.log('Package: lines ${covered}/2; functions ${covered}/2; raw functions ${covered}/2; exceptions 0; eligible functions ${covered}/2');console.log('Coverage gate: ${covered === 2 ? 'PASS' : 'FAIL'}');process.exit(${covered === 2 ? 0 : 1});}
+else if(process.argv[2]==='--test'){require('fs').writeFileSync(process.env.NODE_MARKER,process.argv.slice(2).join('\\n'));}
 else process.exit(0);
 `);
   exe('xcrun', `#!${process.execPath}
@@ -48,12 +51,22 @@ xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: owner,
-    MODE: mode, BUILD: build, EXPORT_MARKER: path.join(dir, 'exports'), PICSEE_GATES_OUT: out,
+    MODE: mode, BUILD: build, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), PICSEE_GATES_OUT: out,
     PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
-  return { dir, out, result, marker: env.EXPORT_MARKER, summary: fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8') };
+  return { dir, out, result, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary: fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8') };
 }
+
+test('owner node lane runs the name-check tests required by CI', t => {
+  const ci = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(ci, /run: node --test scripts\/name-checks\/\*\.test\.mjs scripts\/ci\/name-checks-ci\.test\.mjs/);
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr);
+  const args = fs.readFileSync(f.nodeMarker, 'utf8').split('\n');
+  assert.ok(args.includes('scripts/name-checks/fixture.test.mjs'), args.join('\n'));
+  assert.ok(args.includes('scripts/ci/name-checks-ci.test.mjs'), args.join('\n'));
+});
 
 test('owner reports failure and timeout, rejects old coverage and completes later lanes', t => {
   for (const [mode, status] of [['fail', 1], ['hang', 124]]) {
