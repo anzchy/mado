@@ -116,6 +116,42 @@ redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
   assert.throws(()=>process.kill(nestedPid,0),{code:'ESRCH'});
 }, {timeout:7000});
 
+redTest('outerTimeoutAfterIntermediateSupervisorDeathKillsGrandchild', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
+    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const middle=path.join(env.HOME,'middle.sh'),inner=path.join(env.HOME,'inner.sh');
+  const middlePid=path.join(env.HOME,'middle-supervisor-pid'),workerPid=path.join(env.HOME,'grandchild-pid');
+  writeFileSync(middle,'"$1" bash "$2" "$1" "$4" &\necho $! > "$3"\nwait\nsleep 8\n');
+  writeFileSync(inner,'"$1" python3 -c \'import os,pathlib,signal,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(10)\' "$2" </dev/null >/dev/null 2>&1\n:');
+  const holder=start(['bash',middle,lock,inner,middlePid,workerPid],env);
+  let pid;
+  try {
+    try {await until(()=>existsSync(workerPid)&&existsSync(middlePid),'grandchild launches under middle supervisor');}
+    catch(error) {throw new Error(`${error.message}: ${holder.output()}`);}
+    pid=Number(readFileSync(workerPid,'utf8'));
+    process.kill(Number(readFileSync(middlePid,'utf8').trim()),'SIGKILL');
+    const result=await holder.done;
+    assert.equal(result.code,124,result.output);
+    assert.throws(()=>process.kill(pid,0),{code:'ESRCH'},'outer owns grandchild after middle dies');
+    assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'})).code,0,
+      'outer releases only after grandchild drain');
+  } finally {
+    if(pid)try{process.kill(pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}
+    await holder.done;
+  }
+}, {timeout:18000});
+
+redTest('nestedFlockCredentialSurvivesThreeLevels', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const middle=path.join(env.HOME,'middle.sh'),inner=path.join(env.HOME,'inner.sh');
+  const marker=path.join(env.HOME,'launched');
+  writeFileSync(middle,'"$1" bash "$2" "$1" "$3"\nexit $?');
+  writeFileSync(inner,'"$1" touch "$2"\nexit $?');
+  const result=await run(['bash',middle,lock,inner,marker],env);
+  assert.equal(result.code,0,result.output);
+  assert.ok(existsSync(marker),'third level receives inherited flock authority');
+}, {timeout:7000});
+
 redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
   const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
   const status=path.join(env.HOME,'nested-status.json'), sibling=path.join(env.HOME,'sibling');
