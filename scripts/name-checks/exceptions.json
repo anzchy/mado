@@ -133,6 +133,14 @@
     ]
   },
   {
+    "prefix": ".agents/skills/mado-verify/",
+    "reason": "#556/#648: the Stop hook reads the deferred Codex role overlay written by scripts/codex-rules/install-role.py; only that overlay filename and its header token are deferred.",
+    "pattern": "picsee-role\\.rules|(?<=Local )picsee(?= role)",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
     "prefix": "scripts/git-hooks/",
     "reason": "#556: roster hook paths and role identity remain until tooling migration. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
     "pattern": "picsee-(?:hook-snapshots|pre-push-installer-v1|pre-push\\.)",
