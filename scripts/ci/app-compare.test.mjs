@@ -27,12 +27,21 @@ test('CI Host ownership lane refuses cleared inherited supervision before tests 
   const marker=path.join(dir,'ran');
   const fixture=path.join(dir,'fixture.test.mjs');
   writeFileSync(fixture,`import test from 'node:test';import {writeFileSync} from 'node:fs';test('must not run',()=>writeFileSync(${JSON.stringify(marker)},'ran'));\n`);
-  const env={...process.env,PICSEE_HEAVY_CI_BOUNDARY_REQUIRED:'1',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CONTROL_FD:''};
+  const env={...process.env,PICSEE_HEAVY_CI_BOUNDARY_REQUIRED:'1',PICSEE_HEAVY_LOCK_HELD:'1',
+    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off'};
+  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;
   delete env.NODE_TEST_CONTEXT;
-  const run=spawnSync(process.execPath,[path.join(root,'scripts/tdd/node-lane.mjs'),fixture],{
+  const lock=path.join(root,'scripts/heavy-lock.sh');
+  const lane=path.join(root,'scripts/tdd/node-lane.mjs');
+  const run=spawnSync(lock,['env','-u','PICSEE_HEAVY_LOCK_HELD',process.execPath,lane,fixture],{
     env,
-    encoding:'utf8',timeout:5000});
+    encoding:'utf8',timeout:10000});
   assert.equal(run.status,70,run.stdout+run.stderr);
+  assert.match(run.stderr,/CI Host ownership boundary missing/);
+  const noTop=spawnSync(lock,[process.execPath,lane,fixture],{
+    env:{...env,PICSEE_HEAVY_CI_TOP_LEVEL:''},encoding:'utf8',timeout:10000});
+  assert.equal(noTop.status,70,noTop.stdout+noTop.stderr);
+  assert.match(noTop.stderr,/HELD needs one parent control FD or CI top-level input/);
   assert.equal(existsSync(marker),false);
 });
 // Owner-approved real-OS lane placement must execute the actual strict runner,
