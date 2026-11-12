@@ -132,7 +132,8 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
             throw new Error('missing, stale or contradictory current comparison worker result');
           row.comparisonResult=evidence;
         }
-      } catch (error) { status=70;invalidCleanup=true;log += `app-repeat: ${error.message}\n`; }
+      } catch (error) { status=70;invalidCleanup=true;previousGroupDrained=false;
+        log += `app-repeat: ${error.message}\n`; }
       row.endedAt=now();row.wallMilliseconds=Math.max(0,row.endedAt-iterationStarted);
       // Native process execution time is recorded by the actual lane, not inferred from supervision overhead.
       row.nativeWallMilliseconds=null;row.status=status;
