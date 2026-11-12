@@ -244,6 +244,8 @@ def publish_status(path, invocation, cleanup, result, timed_out):
     destination = Path(path)
     temporary = destination.with_name(destination.name + '.' + invocation + '.tmp')
     try:
+        if os.environ.get('PICSEE_HEAVY_FAULT_STATUS_WRITE') == '1':
+            raise OSError('injected status publication failure')
         with os.fdopen(os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as output:
             json.dump({'id': invocation, 'supervisor': os.getpid(), 'cleanup': cleanup,
                        'commandExit': result, 'timedOut': timed_out}, output)
@@ -476,6 +478,21 @@ def supervised_main():
             print(f'[heavy-lock] nested admission refused: {error}', file=sys.stderr, flush=True)
             return 70
     status_path = os.environ.get('PICSEE_HEAVY_STATUS_PATH')
+    private_dir = os.environ.get('PICSEE_HEAVY_STATUS_DIR')
+    private_fd_text = os.environ.get('PICSEE_HEAVY_ATTEST_FD')
+    private_fd = None
+    if private_dir or private_fd_text:
+        try:
+            if not private_dir or not private_fd_text or status_path:
+                raise ValueError('invalid private status channel')
+            private_fd = int(private_fd_text)
+            os.fstat(private_fd)
+            directory = Path(private_dir)
+            if not directory.is_dir() or directory.stat().st_mode & 0o077:
+                raise ValueError('private status directory is not owner-only')
+        except (OSError, ValueError) as error:
+            print(f'[heavy-lock] private status refused: {error}', file=sys.stderr, flush=True)
+            return 70
     if status_path and Path(status_path).exists():
         print('[heavy-lock] status destination already exists', file=sys.stderr, flush=True)
         return 70
@@ -507,6 +524,8 @@ def supervised_main():
     groups = set()
     hosts = set()
     invocation = secrets.token_hex(16)
+    if private_dir:
+        status_path = str(Path(private_dir) / f'{invocation}.json')
     flock_required = fd is not None or bool(inherited_flock)
     guardian = None
     guardian_write = None
@@ -573,6 +592,9 @@ def supervised_main():
                      'PICSEE_HEAVY_CONTROL_FD': str(worker_control.fileno())}
         child_env.pop('PICSEE_HEAVY_CI_TOP_LEVEL', None)
         child_env.pop('PICSEE_HEAVY_STATUS_PATH', None)
+        child_env.pop('PICSEE_HEAVY_STATUS_DIR', None)
+        child_env.pop('PICSEE_HEAVY_ATTEST_FD', None)
+        child_env.pop('PICSEE_HEAVY_FAULT_STATUS_WRITE', None)
         if acquired:
             child_env['MDPRO_HEAVY_LOCK_HELD'] = '1'
         if fd is not None:
@@ -669,6 +691,15 @@ def supervised_main():
             child.wait()
         if not publish_status(status_path, invocation, cleanup, result, timed_out):
             return 70
+        if private_fd is not None:
+            try:
+                notice = json.dumps({'id': invocation, 'path': status_path,
+                                     'supervisor': os.getpid()}) + '\n'
+                if os.write(private_fd, notice.encode()) != len(notice.encode()):
+                    raise OSError('short private status notice')
+            except OSError as error:
+                print(f'[heavy-lock] private status notice failed: {error}', file=sys.stderr, flush=True)
+                return 70
         if cleanup == 'complete' and guardian_write is not None:
             guardian_send(guardian_write, 'complete')
             os.close(guardian_write)
