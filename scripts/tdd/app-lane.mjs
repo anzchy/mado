@@ -10,6 +10,9 @@ import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 import { knownFlaky } from "../ci/known-flaky.mjs";
 import { hostedTestNames, hostedTestIDs, runHostedAppLane } from "./hosted-app-lane.mjs";
+import { runAttestedSync } from './status-channel.mjs';
+
+const realSpawnSync=spawnSync;
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
 function inheritedControlStdio(env){
@@ -367,8 +370,9 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
   const options = { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
     env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" },
     ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
-  if (inclusion !== null) return spawnSync(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
-  return spawnSync(lock, ["xcrun", "xctest", bundlePath], options);
+  const launch=spawnSync===realSpawnSync?runAttestedSync:spawnSync;
+  if (inclusion !== null) return launch(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
+  return launch(lock, ["xcrun", "xctest", bundlePath], options);
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */

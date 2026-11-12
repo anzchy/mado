@@ -48,6 +48,27 @@ function harness(entries = [], options = {}) {
 }
 const nativeCalls = h => h.calls.filter(c=>c.args[0]==='xcrun'&&c.args[1]==='xctest');
 
+test('heldAndUnheldLanesPreservePassAndAssertionFailure App',()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'i657-app-native-'));temporaryDirectories.add(dir);
+ const fake=path.join(dir,'xcrun');
+ writeFileSync(fake,`#!${process.execPath}\nconst fs=require('node:fs');process.stdout.write(fs.readFileSync(process.env.APP_FIXTURE));process.exitCode=Number(process.env.APP_EXIT);\n`,{mode:0o755});
+ const launcher=path.join(dir,'lane.mjs');
+ writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
+ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ for(const held of [false,true]) for(const fault of [false,true]){
+  const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),APP_EXIT:'0',
+   APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',
+   PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',APP_STATUS_FAULT:fault?'1':'0'};
+  writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nif(process.env.APP_STATUS_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
+  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):
+    spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+  assert.ifError(r.error);
+  assert.equal(r.status,fault?70:0,`${held}/${fault}: ${r.stderr}`);
+  if(fault)assert.doesNotMatch(r.stdout,/^Tests run:/m);
+  else assert.match(r.stdout,/^Tests run: 3, Failures: 0/m);
+ }
+});
+
 test('ciHeldQuarantineCleanRunPreservesCounts',()=>{
  const h=harness(quarantine,{env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',PICSEE_APP_LANE_NO_RETRY:'1'}});
  assert.equal(h.status,0,h.stderr);

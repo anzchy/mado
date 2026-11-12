@@ -18,6 +18,11 @@ if(process.env.TRUNCATE_ROOT) text=Buffer.from(text.toString().split("Test Suite
 // Feed uneven byte chunks (including multibyte checkmarks), across both streams.
 const stream = process.env.ON_STDERR ? process.stderr : process.stdout;
 for(let i=0;i<text.length;i+=17) stream.write(text.subarray(i,i+17));
+if(process.env.SPAWN_DESCENDANT){
+  const child=require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore','ignore','inherit']});
+  fs.writeFileSync(process.env.DESCENDANT_PID,String(child.pid));
+  process.stderr.write('[heavy-lock] WARNING: incomplete cleanup');
+}
 if(process.env.SPLIT) process.stderr.write(text);
 if(process.env.CRASH_STDERR) process.stderr.write(fs.readFileSync(process.env.CRASH_STDERR_FIXTURE,'utf8').split('\\n').filter(l=>/Fatal error|exited with unexpected signal/.test(l)).join('\\n'));
 if(process.env.INCOMPLETE_SWIFT) process.stderr.write(fs.readFileSync(process.env.SWIFT_START_FIXTURE,'utf8').split('\\n').filter(l=>l.includes('Test run started')).join('\\n')); 
@@ -40,17 +45,37 @@ function pluginTest(name, fn) {
     return fn({ exec, classifyRedRun });
   });
 }
-function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false } = {}) {
+function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false, extraEnv = {} } = {}) {
   const argvFile = path.join(temp, 'argv.json');
   const env = { ...process.env, PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
     PICSEE_HEAVY_LOCK: path.join(temp, 'heavy.lock'), PICSEE_HEAVY_LOCK_HELD: '',
     PICSEE_MDPRO_LOCK: path.join(temp, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
     SWIFT_START_FIXTURE: path.join(root,'scripts/tdd/fixtures/swift-pass.txt'), TRUNCATE_ROOT: truncateRoot ? '1' : '', INCOMPLETE_SWIFT: incompleteSwift ? '1' : '', CRASH_STDERR_FIXTURE: path.join(root,'scripts/tdd/fixtures/xctest-partial-crash.txt'), ARGV_FILE: argvFile, FIXTURE: path.join(root, 'scripts/tdd/fixtures', fixture + '.txt'),
-    SWIFT_EXIT: String(code), ON_STDERR: stderr ? '1' : '', SPLIT: split ? '1' : '', CRASH_STDERR: crashStderr ? '1' : '' };
+    SWIFT_EXIT: String(code), ON_STDERR: stderr ? '1' : '', SPLIT: split ? '1' : '', CRASH_STDERR: crashStderr ? '1' : '', ...extraEnv };
   const r = spawnSync(process.execPath, ['scripts/tdd/swift-lane.mjs', ...args], { env, encoding:'utf8', timeout:10000 });
   assert.ifError(r.error);
   return { ...r, argvFile };
 }
+test('unterminatedDescendantStderrCannotHideIncompleteCleanup',()=>{
+  const r=run('swift-fail',1,{extraEnv:{SPAWN_DESCENDANT:'1',DESCENDANT_PID:path.join(temp,'descendant.pid'),
+    PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+  assert.equal(r.status,70,r.stderr);
+  assert.doesNotMatch(r.stdout,/^Tests run:/m);
+  assert.match(r.stderr,/incomplete cleanup/);
+});
+pluginTest('incompleteCleanupCannotProduceValidRedReceipt',({exec,classifyRedRun})=>{
+  const r=run('swift-fail',1,{extraEnv:{PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+  assert.equal(r.status,70,r.stderr);
+  assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
+  assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:null}).kind,'environment');
+});
+test('heldAndUnheldLanesPreservePassAndAssertionFailure Swift',()=>{
+  for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
+    const r=run(fixture,code);assert.equal(r.status,code,r.stderr);assert.match(r.stdout,/^Tests run:/m);
+    const bad=run(fixture,code,{extraEnv:{PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+    assert.equal(bad.status,70,bad.stderr);assert.doesNotMatch(bad.stdout,/^Tests run:/m);
+  }
+});
 for (const [fixture, code, expected, kind] of [
   ['swift-pass',0,{total:3,failed:0,passed:2,skipped:1},'green'],
   ['swift-fail',1,{total:3,failed:1,passed:1,skipped:1},'assertion-failure'],
