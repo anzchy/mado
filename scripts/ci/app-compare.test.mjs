@@ -218,6 +218,24 @@ test('comparison coordinator requires current matching worker evidence before tr
   }
 });
 
+test('hosted compare refuses the next native iteration after contradictory worker evidence',t=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'i657-compare-stop-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  let launched=0;
+  const status=comparison.runAppCompare({out:dir,now:()=>100,deadline:10000,stdout:()=>{},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
+      PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},
+    spawn:(_cmd,args,settings)=>{
+      launched++;
+      writeFileSync(args[2],'worker completed\n');
+      return attestedResult(settings,0,{drained:true});
+    }});
+  assert.equal(status,70);
+  assert.equal(launched,1);
+  const second=JSON.parse(readFileSync(path.join(dir,'iter-02.json'),'utf8'));
+  assert.equal(second.started,false);
+});
+
 test('comparison rows preserve ownership proof and label supervised duration without inventing native time',t=>{
   const dir=mkdtempSync(path.join(tmpdir(),'i393-ownership-row-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   let clock=100;
