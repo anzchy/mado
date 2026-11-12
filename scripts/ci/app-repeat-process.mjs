@@ -134,6 +134,12 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       ...(inspectorState?{inspector:inspectorState}:{})};
   }
   process.on('SIGTERM',interrupted);process.on('SIGINT',interrupted);signal?.addEventListener('abort',aborted,{once:true});
+  function expireAtDeadline(){
+    if(done||stopping||startupStopped)return;
+    const remaining=deadline-now();
+    if(remaining>0){deadlineTimer=setTimeout(expireAtDeadline,Math.max(1,remaining));return;}
+    stop('job time budget exhausted; terminating iteration process group');
+  }
   try{
     if(!Number.isFinite(deadline)||deadline<=now()){
       log('job time budget exhausted');return await finish(70,!required);
@@ -141,7 +147,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     if(signal?.aborted){startupStopped=true;return await finish(70,false);}
     if(env.MADO_HOST_OWNERSHIP_REQUIRED!==undefined&&env.MADO_HOST_OWNERSHIP_REQUIRED!=='1')throw new Error('invalid ownership requirement');
     if(!required&&env.MADO_HOST_EXECUTABLE)throw new Error('host executable requires explicit ownership policy');
-    deadlineTimer=setTimeout(()=>stop('job time budget exhausted; terminating iteration process group'),Math.max(0,deadline-now()));
+    deadlineTimer=setTimeout(expireAtDeadline,Math.max(1,deadline-now()));
     if(required){
       log('inspector startup '+JSON.stringify({deadline,remainingMilliseconds:Math.max(0,deadline-now())}));
       if(!inspector)inspector=await prepareHostInspector({deadline,env,spawn:inspectorSpawn,now,signal:startupAbort.signal});
