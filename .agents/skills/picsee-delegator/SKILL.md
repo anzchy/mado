@@ -124,9 +124,9 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    Run App tests step. An otherwise successful candidate missing --head/event/attempt is NOT VERIFIED with the field named.
    Failed/cancelled jobs cannot borrow step success. Docs-only/build-only are reasoned NOT RUN;
    filtered/repeat diagnostics are NOT VERIFIED, including dispatches whose inputs are absent from gh jobs exports.
-   Preserve the generated verdict; add audit/device-smoke rows and run the real PR-body lint. Current required checks:
-   Walking skeleton, PR body Gates, Agent tooling. App tests + Design check required and strict are planned by #613;
-   the owner must enable and verify those settings. Design check already runs in CI. For changed UI, add
+   Preserve the generated verdict; add audit/device-smoke rows and run the real PR-body lint. Current required checks
+   (strict, up to date before merge): Walking skeleton, PR body Gates, Agent tooling, App tests, Design check
+   (owner enabled them under #613 stage C). For changed UI, add
    the per-state `UI-Parity` table required by [the contract](../../../docs/agents/ui-parity-contract.md). Before
    merge, every changed reachable state needs design-derived automated assertions (geometry from the pinned CSS checked
    on rendered frames, colours, truncation, visible states, keyboard/menu behaviour), marked `AUTO-PASS`, plus both
