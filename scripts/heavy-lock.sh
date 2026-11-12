@@ -6,7 +6,8 @@
 # PICSEE_HEAVY_LOCK_WAIT_SECS: acquisition timeout, default 1800; exits 75.
 # PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: TERM grace before KILL, default 10.
 # PICSEE_HEAVY_LOCK_DRAIN_SECS: post-exit drain bound, default 30; then TERM/grace/KILL + up to 5s.
-# MDPRO_HEAVY_LOCK_HELD=1: skip shared lock; fail 75 immediately if picsee flock is held.
+# MDPRO_HEAVY_LOCK_HELD=1: reverse nesting has no verified handoff; exit 70
+# before lock acquisition or launch. Issue #665 will restore this path.
 # picsee never reclaims shared directories. Retain if workers survive KILL;
 # mdpro may reclaim a dead owner after holder SIGKILL or survivors beyond KILL.
 # PICSEE_HEAVY_LOCK_HELD=1: nesting hint; a live parent control FD is required.
