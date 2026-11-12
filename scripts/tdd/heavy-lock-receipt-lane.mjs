@@ -6,6 +6,8 @@ const file=process.env.PICSEE_HEAVY_TEST_FILE??'scripts/tdd/heavy-lock.test.mjs'
 if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','scripts/tdd/app-lane.test.mjs',
   'scripts/ci/integration/hosted-owner.test.mjs',
   'scripts/ci/integration/hosted-compare.test.mjs',
+  'scripts/ci/integration/app-repeat-process.test.mjs',
+  'scripts/ci/app-repeat.test.mjs',
   'scripts/tdd/host-unknown-fix1.test.mjs'].includes(file)){
   process.stderr.write('unsupported process contract file\n');process.exit(70);
 }
