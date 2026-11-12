@@ -110,6 +110,8 @@ def guardian_send(fd, kind, pid=0):
 
 def guardian_main(read_fd, ready_fd):
     """Hold the acquiring FD and finish cleanup if its supervisor disappears."""
+    for caught in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
+        signal.signal(caught, signal.SIG_IGN)
     os.write(ready_fd, b'R')
     os.close(ready_fd)
     root = None
@@ -442,12 +444,13 @@ def supervised_main():
         return 70
     lock = Path(os.environ.get('PICSEE_HEAVY_LOCK', str(Path.home() / '.picsee/locks/heavy.lock')))
     reverse = os.environ.get('MDPRO_HEAVY_LOCK_HELD') == '1'
+    if reverse and not held:
+        print('[heavy-lock] reverse mdpro nesting refused: no verified handoff (#665)',
+              file=sys.stderr, flush=True)
+        return 70
     shared_path = os.environ.get('PICSEE_MDPRO_LOCK', str(Path.home() / '.cache/mdpro-heavy.lock'))
     shared = None if held or reverse or shared_path == 'off' else Path(shared_path)
     fd = None
-    if reverse and not held:
-        print('[heavy-lock] mdpro parent already holds the shared lock; taking picsee flock only',
-              file=sys.stderr, flush=True)
     if not held:
         lock.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
@@ -507,6 +510,7 @@ def supervised_main():
                                          '--guardian', str(guardian_read), str(ready_write)],
                                         env=guardian_env,
                                         pass_fds=(guardian_read, ready_write, fd) if fd is not None else (guardian_read, ready_write),
+                                        start_new_session=True,
                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL)
             os.close(guardian_read)
@@ -561,6 +565,8 @@ def supervised_main():
                             execution_deadline, ancestor_control_fd=ancestor_control_fd)
             if guardian is not None and guardian.poll() is not None:
                 print('[heavy-lock] guardian disappeared before cleanup', file=sys.stderr, flush=True)
+                stop_owned(child, root, groups, hosts, grace, parent_control, session,
+                           excluded, guardian_write, flock_required, ancestor_control_fd)
                 cleanup = 'incomplete'
                 break
             rows = owned_state(root, groups, hosts, excluded)
