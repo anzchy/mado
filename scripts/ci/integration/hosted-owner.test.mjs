@@ -42,9 +42,11 @@ test('hostedAppLaunchServicesMissingRegistrationFailsClosed',t=>{
   const runner=path.join(dir,'runner.mjs');writeFileSync(runner,'setTimeout(()=>{},100);\n');
   const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
     PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
+    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),
     MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.match(run.stderr,/host cleanup incomplete or unregistered/);
+  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'incomplete');
 });

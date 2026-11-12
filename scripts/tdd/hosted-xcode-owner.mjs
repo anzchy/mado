@@ -64,6 +64,11 @@ while(true){
   if(drainDeadline!==null&&Date.now()>=drainDeadline){uncertain=true;break;}
   await sleep(100);
 }
+if(!observed||uncertain){
+  const mark=spawnSync(lock,['--mark-host-unknown'],{env:process.env,stdio,timeout:2000});
+  if(mark.status!==0||mark.error)
+    process.stderr.write('hosted-owner: supervisor could not record unknown host cleanup\n');
+}
 if(!observed||uncertain||stopping||childSignal){
   process.stderr.write('hosted-owner: host cleanup incomplete or unregistered; refusing result\n');
   process.exitCode=70;

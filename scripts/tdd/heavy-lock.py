@@ -163,6 +163,8 @@ def guardian_main(read_fd, ready_fd):
                     groups.add(pid)
                 elif kind == 'host' and pid > 0:
                     hosts.add(pid)
+                elif kind == 'host-unknown':
+                    hosts.add(-1)
                 elif kind == 'complete':
                     complete = True
                     break
@@ -227,6 +229,11 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
                 forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
                 if forwarded and guardian_send(guardian_fd, 'host', pid):
                     hosts.add(pid)
+                    answer = b'OK'
+            elif kind == 'host-unknown':
+                hosts.add(-1)
+                forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
+                if forwarded and guardian_send(guardian_fd, 'host-unknown'):
                     answer = b'OK'
         except (ValueError, TypeError, OSError, json.JSONDecodeError):
             pass
@@ -359,6 +366,8 @@ def release_shared(lock):
 
 
 def owned_state(root, groups, hosts, excluded=0):
+    if -1 in hosts:
+        return None
     rows = process_rows()
     if rows is None:
         return None
@@ -423,6 +432,10 @@ def supervised_main():
         if len(command) != 2 or not inherited_control or not command[1].isdigit():
             return 70
         return 0 if send_control(int(inherited_control), {'kind': 'host', 'pid': int(command[1])}) == b'OK' else 70
+    if command == ['--mark-host-unknown']:
+        if not inherited_control:
+            return 70
+        return 0 if send_control(int(inherited_control), {'kind': 'host-unknown'}) == b'OK' else 70
     if not command:
         return 64
     try:
