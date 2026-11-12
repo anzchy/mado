@@ -10,6 +10,15 @@
   "preflightCommand": "",
   "lanes": [
     {
+      "name": "heavy-lock-node",
+      "description": "Manual #657 heavy-lock process supervision RED receipts.",
+      "command": "node scripts/tdd/heavy-lock-receipt-lane.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
       "name": "release-appcast-node",
       "description": "Manual Node contract receipts for appcast generation and final/RC feed validity (#629).",
       "command": "node scripts/tdd/node-lane.mjs scripts/release/appcast.test.mjs",

@@ -28,6 +28,10 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
   if (env.PICSEE_HEAVY_LOCK_HELD !== '1') {
     stdout('app-repeat: repeat execution requires PICSEE_HEAVY_LOCK_HELD=1 (CI machine ownership)\n'); return 64;
   }
+  const controlFd=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(!Number.isInteger(controlFd)||controlFd<3||controlFd>64){
+    stdout('app-repeat: missing inherited supervision control FD\n');return 70;
+  }
   if (!Number.isFinite(deadline)) { stdout('app-repeat: invalid deadline\n'); return 64; }
   mkdirSync(out, { recursive: true });
   const repeatStarted=now();
@@ -47,7 +51,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
     stdout(line + '\n');
     if (summaryPath) appendFileSync(summaryPath, line + '\n');
   };
-  let failures = 0, previousGroupDrained = true;
+  let failures = 0, invalidCleanup = false, previousGroupDrained = true;
   try {
     for (let iteration = 1; iteration <= count; iteration++) {
       const label = String(iteration).padStart(2, '0');
@@ -78,9 +82,21 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
             'Build/Products/Debug/Mado.app/Contents/MacOS/Mado');
         } else {delete workerEnv.MADO_HOST_OWNERSHIP_REQUIRED;delete workerEnv.MADO_HOST_EXECUTABLE;}
         row.started=true;
+        const attestFd=Math.max(3,controlFd+1,Number(workerEnv.PICSEE_HEAVY_FLOCK_FD||0)+1);
+        if(attestFd>64)throw new Error('no private repeat status FD available');
+        const stdio=['ignore','pipe','pipe'];
+        while(stdio.length<=attestFd)stdio.push('ignore');
+        stdio[controlFd]=controlFd;
+        if(workerEnv.PICSEE_HEAVY_FLOCK_FD){
+          const flockFd=Number(workerEnv.PICSEE_HEAVY_FLOCK_FD);
+          if(!Number.isInteger(flockFd)||flockFd<3||flockFd>64)throw new Error('invalid inherited flock FD');
+          stdio[flockFd]=flockFd;
+        }
+        stdio[attestFd]='pipe';
         const run = spawn(process.execPath, [supervisor, String(deadline), logPath,
           process.execPath, worker, quarantinePath, path.join(temporary, `attempt-${label}.log`),mode], {
-          env: workerEnv, encoding:'utf8', maxBuffer:1024*1024 });
+          env:{...workerEnv,PICSEE_REPEAT_ATTEST_FD:String(attestFd),PICSEE_REPEAT_STATUS_DIR:temporary},
+          stdio,encoding:'utf8', maxBuffer:1024*1024 });
         log = readFileSync(logPath,'utf8');
         if (run.error || run.signal || run.status !== 0) {
           previousGroupDrained = false;
@@ -88,9 +104,20 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         }
         const result = JSON.parse(run.stdout);
         row.group=result.group??null;row.hostOwnership=result.hostOwnership??null;
-        previousGroupDrained = result.drained === true;
+        const privateLine=run.output?.[attestFd];
+        if(typeof privateLine!=='string'||!/^\{[^\n]+\}\n$/.test(privateLine))throw new Error('missing private iteration identity');
+        const {id,statusPath,supervisor:owner}=JSON.parse(privateLine);
+        if(!/^[0-9a-f]{32}$/.test(id)||!Number.isSafeInteger(owner)||owner<=0||
+          path.dirname(statusPath)!==temporary||path.basename(statusPath)!==`${id}.json`)
+          throw new Error('invalid private iteration identity');
+        const attestation=JSON.parse(readFileSync(statusPath,'utf8'));
+        if(attestation.id!==id||attestation.supervisor!==owner||
+          attestation.cleanup!=='complete'||attestation.commandExit!==result.status)
+          throw new Error('missing, stale or incomplete iteration cleanup status');
+        previousGroupDrained = true;
         row.drained=previousGroupDrained;
-        status = previousGroupDrained && Number.isInteger(result.status) ? result.status : 70;
+        status = Number.isInteger(result.status) ? result.status : 70;
+        if(status===70)invalidCleanup=true;
         if(requireComparisonEvidence&&mode!=='normal') {
           const evidence=JSON.parse(readFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,'utf8'));
           if(evidence.version!==1||evidence.runId!==workerEnv.MADO_APP_COMPARE_RESULT_ID||evidence.complete!==true||
@@ -99,7 +126,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
             throw new Error('missing, stale or contradictory current comparison worker result');
           row.comparisonResult=evidence;
         }
-      } catch (error) { status=70;log += `app-repeat: ${error.message}\n`; }
+      } catch (error) { status=70;invalidCleanup=true;log += `app-repeat: ${error.message}\n`; }
       row.endedAt=now();row.wallMilliseconds=Math.max(0,row.endedAt-iterationStarted);
       // Native process execution time is recorded by the actual lane, not inferred from supervision overhead.
       row.nativeWallMilliseconds=null;row.status=status;
@@ -113,15 +140,16 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
       const detail = names.join(', ') || (log.includes('job time budget exhausted') ? 'job time budget exhausted' : 'environment/lane failure (see log)');
       summarize(`${label} ${failed ? `FAIL ${detail}` : 'PASS'}`);
     }
-    summarize(`TOTAL ${count - failures} PASS, ${failures} FAIL`);
+    if(invalidCleanup)summarize('INVALID iteration cleanup status; no trusted repeat counts');
+    else summarize(`TOTAL ${count - failures} PASS, ${failures} FAIL`);
     const ended=now(),jobStarted=Number(env.APP_JOB_STARTED_MS);
     const jobWall=Number.isFinite(jobStarted)&&jobStarted>0?Math.max(0,ended-jobStarted):null;
     writeFileSync(path.join(out,'summary.json'),JSON.stringify({version:1,mode,scope,diagnostic:true,formal:false,
       sha:env.GITHUB_SHA??'unknown',runner:env.RUNNER_OS==='macOS'?'macos-26':'local',
-      requested:count,passed:count-failures,failed:failures,wallMilliseconds:Math.max(0,ended-repeatStarted),
+      requested:count,passed:invalidCleanup?null:count-failures,failed:invalidCleanup?null:failures,wallMilliseconds:Math.max(0,ended-repeatStarted),
       jobWallMilliseconds:jobWall,observedRunnerMinutes:jobWall===null?null:jobWall/60000,billedRunnerMinutes:null,
       usageLabel:'observed job elapsed runner minutes; billing data unavailable',iterations:rows},null,2)+'\n');
   } finally { rmSync(temporary, { recursive: true, force: true }); }
-  return failures ? 1 : 0;
+  return invalidCleanup ? 70 : failures ? 1 : 0;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runAppRepeat({validateOnly:process.argv[2] === '--validate'});

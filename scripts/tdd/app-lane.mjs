@@ -5,13 +5,27 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { classifyFlaky } from "../ci/flaky-gate.mjs";
 import { knownFlaky } from "../ci/known-flaky.mjs";
 import { hostedTestNames, hostedTestIDs, runHostedAppLane } from "./hosted-app-lane.mjs";
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
+function inheritedControlStdio(env){
+  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return undefined;
+  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(!Number.isInteger(control)||control<3||control>64)throw new Error('missing inherited heavy-lock control FD');
+  const fds=[control];
+  if(env.PICSEE_HEAVY_FLOCK_FD){
+    const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+    if(!Number.isInteger(flock)||flock<3||flock>64)throw new Error('invalid inherited heavy-lock flock FD');
+    fds.push(flock);
+  }
+  const stdio=['ignore','pipe','pipe'];
+  for(const fd of fds){while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;}
+  return stdio;
+}
 const bundle = ".build/dd-ci/Build/Products/Debug/MadoAppTests.xctest";
 const crashRecords = [
   /^error: (?:Process '[^'\r\n]+' )?Exited with [^\r\n]*\bsignal\b[^\r\n]*$/i,
@@ -234,19 +248,11 @@ deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(proces
 `;
   const checked = (args, locked = true) => {
     const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
-    const workerEnv = { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25' };
-    if (env.PICSEE_HEAVY_LOCK_HELD === '1') {
-      // Keep the manager in the outer job's group, but let it create a private
-      // worker group. Reuse neither the outer flock nor its shared mdpro lock.
-      delete workerEnv.PICSEE_HEAVY_LOCK_HELD;
-      delete workerEnv.MDPRO_HEAVY_LOCK_HELD;
-      workerEnv.PICSEE_HEAVY_LOCK = env.PICSEE_HEAVY_LOCK
-        ? `${env.PICSEE_HEAVY_LOCK}.app-discovery`
-        : path.join(homedir(), '.picsee/locks/app-discovery.lock');
-      workerEnv.PICSEE_MDPRO_LOCK = 'off';
-    }
+    const workerEnv = { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25',
+      PICSEE_HEAVY_LOCK_EXEC_SECS: '300' };
     const run = locked
-      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv })
+      ? spawn(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv,
+          ...(workerEnv.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(workerEnv)}:{}) })
       : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
     return run.stdout ?? '';
@@ -359,7 +365,8 @@ function selectionComplete(clean, selection) {
 
 function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
   const options = { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
-    env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" } };
+    env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" },
+    ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
   if (inclusion !== null) return spawnSync(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
   return spawnSync(lock, ["xcrun", "xctest", bundlePath], options);
 }

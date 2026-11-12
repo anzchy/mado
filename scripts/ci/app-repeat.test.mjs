@@ -6,6 +6,27 @@ import path from 'node:path';
 import { runAppRepeat } from './app-repeat.mjs';
 import { runAppIteration } from './app-repeat-worker.mjs';
 
+test('cleanWorkflowDispatchRepeatSurvivesDrainedToMissingDefault', t => {
+  const dir=mkdtempSync(path.join(tmpdir(),'app-repeat-auth-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const out=path.join(dir,'out');let calls=0;
+  const status=runAppRepeat({repeat:2,out,summaryPath:null,deadline:Date.now()+10000,
+    env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_ACTIONS:'true'},stdout:()=>{},
+    spawn:(_command,args,settings)=>{
+      calls++;
+      const logPath=args[2];writeFileSync(logPath,baseline);
+      const id='b'.repeat(30)+String(calls).padStart(2,'0');
+      const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:0})+'\n');
+      const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      return {status:0,stdout:JSON.stringify({status:0}),stderr:'',signal:null,
+        output};
+    }});
+  assert.equal(status,0,'a private complete record permits each clean iteration');
+  assert.equal(calls,2);
+  assert.match(readFileSync(path.join(out,'summary.json'),'utf8'),/"passed": 2/);
+});
+
 const baseline = readFileSync(new URL('../tdd/fixtures/i411-baseline.txt', import.meta.url), 'utf8');
 const flaky = readFileSync(new URL('./fixtures/app-a1.txt', import.meta.url), 'utf8');
 const result = (stdout = baseline, status = 0) => ({ stdout, stderr: '', status, signal: null });
@@ -15,7 +36,7 @@ function harness(t, options = {}) {
   const out = path.join(dir, 'logs'), summaryPath = path.join(dir, 'summary.md');
   const calls = [], supervisors = []; let output = '';
   const status = runAppRepeat({ repeat: 3, filter: '', out, summaryPath, deadline: 10000, now: () => 0,
-    env: { PICSEE_APP_FILTER: 'inherited-filter', PICSEE_HEAVY_LOCK_HELD:'1' }, stdout: s => output += s,
+    env: { PICSEE_APP_FILTER: 'inherited-filter', PICSEE_HEAVY_LOCK_HELD:'1', PICSEE_HEAVY_CONTROL_FD:'4' }, stdout: s => output += s,
     spawn: (command, arguments_, options_) => {
       supervisors.push({command,arguments_,options_});
       const [, deadline, logPath, , , quarantinePath, evidencePath] = arguments_;
@@ -27,7 +48,11 @@ function harness(t, options = {}) {
           spawn:(cmd,args,opts)=>{calls.push({cmd,args,opts});return options.native?.(calls.length,cmd,args,opts)??result();}});
       } catch (error) { log += error.message; status=70; }
       writeFileSync(logPath,log);
-      return {status:0,stdout:JSON.stringify({status,drained:true}),stderr:'',signal:null};
+      const id='a'.repeat(30)+String(supervisors.length).padStart(2,'0');
+      const statusPath=path.join(options_.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:status})+'\n');
+      const resultOutput=[];resultOutput[Number(options_.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      return {status:0,stdout:JSON.stringify({status,drained:true}),stderr:'',signal:null,output:resultOutput};
     },
     ...options });
   return { status, calls, output, out, summaryPath, supervisors };
@@ -63,7 +88,7 @@ test('filter is a literal environment value and selects real lane inventory', t 
   const inventory = 'APP_LANE_INVENTORY_BEGIN\nProbe.swiftKeep()\nAPP_LANE_INVENTORY_END\n';
   const selected = "Test Suite 'Selected tests' started at now\nTest Suite 'Selected tests' passed at now\nExecuted 0 tests, with 0 failures (0 unexpected)\n◇ Test run started.\n◇ Test swiftKeep() started.\n✔ Test swiftKeep() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
   const filter = '^Probe\\.swiftKeep\\(\\)$';
-  const h = harness(t, { repeat: 2, filter, env:{PICSEE_HEAVY_LOCK_HELD:'1'}, native: (_n, _cmd, args, opts) => {
+  const h = harness(t, { repeat: 2, filter, env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'}, native: (_n, _cmd, args, opts) => {
     assert.equal(opts.env.PICSEE_APP_FILTER, filter);
     assert.equal(opts.env.PICSEE_HEAVY_LOCK_HELD, '1', 'discovery stays in the already authorized iteration group');
     if (args.includes('xctest')) {
@@ -91,10 +116,10 @@ test('native environment errors and elapsed budget cannot pass or erase later it
     clock = 10001;
     return { status: null, stdout: 'partial native log', stderr: '', signal: 'SIGTERM', error: new Error('timed out') };
   }});
-  assert.equal(h.status, 1);
+  assert.equal(h.status, 70);
   assert.equal(h.calls.length, 1);
   assert.equal(readdirSync(h.out).filter(n => /^iter-/.test(n)).length, 3);
-  assert.match(readFileSync(h.summaryPath, 'utf8'), /01 FAIL.*\n02 FAIL.*budget.*\n03 FAIL.*budget.*\nTOTAL 0 PASS, 3 FAIL/);
+  assert.match(readFileSync(h.summaryPath, 'utf8'), /01 FAIL.*\n02 FAIL.*budget.*\n03 FAIL.*budget.*\nINVALID iteration cleanup status/);
 });
 
 test('failures at either end and thrown spawn errors still produce every outcome', t => {
@@ -103,10 +128,10 @@ test('failures at either end and thrown spawn errors still produce every outcome
       if (n === position) throw new Error('native boundary unavailable');
       return result();
     }});
-    assert.equal(h.status, 1);
+    assert.equal(h.status, 70);
     assert.equal(h.calls.length, 3);
     assert.match(readFileSync(path.join(h.out, `iter-0${position}.log`), 'utf8'), /native boundary unavailable/);
-    assert.match(readFileSync(h.summaryPath, 'utf8'), /TOTAL 2 PASS, 1 FAIL/);
+    assert.match(readFileSync(h.summaryPath, 'utf8'), /INVALID iteration cleanup status/);
   }
 });
 test('stdout and stderr both survive; invalid numeric inputs never spawn', t => {
@@ -129,10 +154,10 @@ test('supervisor group-drain failure refuses to launch another iteration', t => 
     writeFileSync(args[2],'group could not drain\n');
     return {status:0,stdout:JSON.stringify({status:70,drained:false}),stderr:''};
   }});
-  assert.equal(h.status,1);
+  assert.equal(h.status,70);
   assert.equal(launched,1);
   assert.match(readFileSync(path.join(h.out,'iter-02.log'),'utf8'),/refusing to overlap/);
-  assert.match(readFileSync(h.summaryPath,'utf8'),/TOTAL 0 PASS, 3 FAIL/);
+  assert.match(readFileSync(h.summaryPath,'utf8'),/INVALID iteration cleanup status/);
 });
 
 test('CLI rejects an excessive count with a clear nonzero status before native work', async () => {
@@ -163,8 +188,10 @@ test('real repeat CLI supervises worker failures and writes every log without na
   const {spawnSync} = await import('node:child_process');
   const dir = mkdtempSync(path.join(tmpdir(),'app-repeat-cli-'));
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
-  const run = spawnSync(process.execPath,[new URL('./app-repeat.mjs',import.meta.url).pathname], {
+  const run = spawnSync(new URL('../heavy-lock.sh',import.meta.url).pathname,
+    [process.execPath,new URL('./app-repeat.mjs',import.meta.url).pathname], {
     cwd:dir,env:{...process.env,APP_REPEAT:'2',APP_FILTER:'[',PICSEE_HEAVY_LOCK_HELD:'1',
+      PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',PICSEE_MDPRO_LOCK:'off',
       APP_REPEAT_DEADLINE_MS:String(Date.now()+5000),GITHUB_STEP_SUMMARY:path.join(dir,'summary')},
     encoding:'utf8',timeout:10000});
   assert.equal(run.status,1,run.stdout+run.stderr);

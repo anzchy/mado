@@ -8,6 +8,16 @@ export function runHostedBuild({env=process.env,cwd=process.cwd(),out=env.APP_CO
  if(mode!=='hosted'||env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='workflow_dispatch'||env.PICSEE_HEAVY_LOCK_HELD!=='1'){
   stderr('comparison build requires explicit locked dispatch mode\n');return 64;
  }
+ const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+ if(!Number.isInteger(control)||control<3||control>64){stderr('comparison build needs parent control FD\n');return 70;}
+ const fds=[control];
+ if(env.PICSEE_HEAVY_FLOCK_FD){
+  const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+  if(!Number.isInteger(flock)||flock<3||flock>64){stderr('comparison build has invalid flock FD\n');return 70;}
+  fds.push(flock);
+ }
+ const stdio=['ignore','pipe','pipe'];
+ for(const fd of fds){while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;}
  const started=now(),derivedDataPath='.build/dd-ci';
  const record={version:1,mode,sha:env.GITHUB_SHA??'unknown',runner:'macos-26',
   diagnostic:true,formal:false,complete:false,status:null,derivedDataPath};
@@ -18,7 +28,7 @@ export function runHostedBuild({env=process.env,cwd=process.cwd(),out=env.APP_CO
   const stageStarted=now();
   let run;
   try{run=spawn(new URL('../heavy-lock.sh',import.meta.url).pathname,args,
-   {cwd,env,encoding:'utf8',timeout:2100000,maxBuffer:64*1024*1024});}
+   {cwd,env,stdio,encoding:'utf8',timeout:2100000,maxBuffer:64*1024*1024});}
   catch(error){run={error,stdout:error.stdout,stderr:error.stderr};}
   const status=!run?.error&&!run?.signal&&Number.isInteger(run?.status)&&run.status>=0?run.status:70;
   const stage={name,complete:true,status,nativeStatus:run?.status??null,signal:run?.signal??null,error:run?.error?.message??null,
