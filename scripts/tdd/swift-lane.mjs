@@ -11,7 +11,7 @@
  * Counts failing tests, not Swift Testing issues or repeated XCTest suites.
  * An xcodebuild/UI lane is intentionally not implemented yet.
  */
-import { spawn } from "node:child_process";
+import { spawnAttested } from './status-channel.mjs';
 import os from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -147,7 +147,7 @@ function main(argv) {
     return;
   }
   const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
-  const child = spawn(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: ["inherit", "pipe", "pipe"] });
+  const {child,finished} = spawnAttested(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: ["inherit", "pipe", "pipe"] });
   const stdoutDetector = createDetector();
   const stderrDetector = createDetector();
   pipeThrough(child.stdout, process.stdout, stdoutDetector);
@@ -165,10 +165,16 @@ function main(argv) {
     process.stderr.write(`swift-lane: ${error.message}\n`);
     process.exitCode = 127;
   });
-  child.on("close", (code, signal) => {
+  finished.then(attestation => {
     if (settled) return;
     settle();
+    const code=attestation.status, signal=attestation.signal;
     if (signal) { afterDrain(() => reraise(signal)); return; }
+    if (!attestation.attested) {
+      process.stderr.write(`swift-lane: ${attestation.stderr.trim()}\n`);
+      process.exitCode=70;
+      return;
+    }
     const out = stdoutDetector.seen();
     const err = stderrDetector.seen();
     // SwiftPM writes complete test output to stdout. Accept stderr-only fixtures
