@@ -15,6 +15,7 @@ import secrets
 import select
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -478,18 +479,19 @@ def supervised_main():
             print(f'[heavy-lock] nested admission refused: {error}', file=sys.stderr, flush=True)
             return 70
     status_path = os.environ.get('PICSEE_HEAVY_STATUS_PATH')
-    private_dir = os.environ.get('PICSEE_HEAVY_STATUS_DIR')
     private_fd_text = os.environ.get('PICSEE_HEAVY_ATTEST_FD')
     private_fd = None
-    if private_dir or private_fd_text:
+    if private_fd_text or os.environ.get('PICSEE_HEAVY_STATUS_DIR'):
         try:
-            if not private_dir or not private_fd_text or status_path:
+            if not private_fd_text or status_path or os.environ.get('PICSEE_HEAVY_STATUS_DIR'):
                 raise ValueError('invalid private status channel')
             private_fd = int(private_fd_text)
-            os.fstat(private_fd)
-            directory = Path(private_dir)
-            if not directory.is_dir() or directory.stat().st_mode & 0o077:
-                raise ValueError('private status directory is not owner-only')
+            if private_fd < 3 or private_fd in [int(inherited_control or -1),
+                                               int(inherited_flock or -1)]:
+                raise ValueError('private status FD must be separate from stdio and control')
+            mode = os.fstat(private_fd).st_mode
+            if not (stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
+                raise ValueError('private status FD must be a pipe or socket')
         except (OSError, ValueError) as error:
             print(f'[heavy-lock] private status refused: {error}', file=sys.stderr, flush=True)
             return 70
@@ -524,8 +526,6 @@ def supervised_main():
     groups = set()
     hosts = set()
     invocation = secrets.token_hex(16)
-    if private_dir:
-        status_path = str(Path(private_dir) / f'{invocation}.json')
     flock_required = fd is not None or bool(inherited_flock)
     guardian = None
     guardian_write = None
@@ -586,6 +586,12 @@ def supervised_main():
                     raise RuntimeError('guardian failed to become ready before launch')
             finally:
                 os.close(ready_read)
+        if private_fd is not None:
+            header = (json.dumps({'kind': 'begin', 'id': invocation,
+                                  'supervisor': os.getpid()}) + '\n').encode()
+            if len(header) > os.fpathconf(private_fd, 'PC_PIPE_BUF') or \
+                    os.write(private_fd, header) != len(header):
+                raise OSError('private status header publication failed')
         parent_control, worker_control = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
         parent_control.setblocking(False)
         child_env = {**os.environ, 'PICSEE_HEAVY_LOCK_HELD': '1',
@@ -693,12 +699,16 @@ def supervised_main():
             return 70
         if private_fd is not None:
             try:
-                notice = json.dumps({'id': invocation, 'path': status_path,
-                                     'supervisor': os.getpid()}) + '\n'
-                if os.write(private_fd, notice.encode()) != len(notice.encode()):
-                    raise OSError('short private status notice')
+                if os.environ.get('PICSEE_HEAVY_FAULT_STATUS_WRITE') == '1':
+                    raise OSError('injected status publication failure')
+                record = (json.dumps({'kind': 'status', 'id': invocation,
+                                      'supervisor': os.getpid(), 'cleanup': cleanup,
+                                      'commandExit': result, 'timedOut': timed_out}) + '\n').encode()
+                if len(record) > os.fpathconf(private_fd, 'PC_PIPE_BUF') or \
+                        os.write(private_fd, record) != len(record):
+                    raise OSError('short private status record')
             except OSError as error:
-                print(f'[heavy-lock] private status notice failed: {error}', file=sys.stderr, flush=True)
+                print(f'[heavy-lock] private status publication failed: {error}', file=sys.stderr, flush=True)
                 return 70
         if cleanup == 'complete' and guardian_write is not None:
             guardian_send(guardian_write, 'complete')
