@@ -12,7 +12,7 @@ import {runAppRepeat} from '../app-repeat.mjs';
 
 // Modify only response delivery in the REAL Python inspector. Kernel enumeration,
 // identity checks, byte-stream transport, ownership and supervisor all stay real.
-async function scenario(t,{delay=1.25,hostLife=2400,workerLife=2700,deadlineMs=6000}={}){
+async function scenario(t,{delay=1.25,hostLife=2400,workerLife=2700,deadlineMs=6000,firstHostUnreadable=false}={}){
   const dir=mkdtempSync(path.join(tmpdir(),'i393-k-')),journal=path.join(dir,'queries'),logPath=path.join(dir,'run.log');
   const token=randomUUID();let inspector,result;
   t.after(async()=>{
@@ -26,10 +26,13 @@ async function scenario(t,{delay=1.25,hostLife=2400,workerLife=2700,deadlineMs=6
   inspector=await prepareHostInspector({deadline:Date.now()+10000,spawn:(command,args,options)=>{
     const changed=[...args],index=changed.indexOf('-c')+1;
     changed[index]=changed[index].replace('for line in sys.stdin:',
-      'delay_next=False;delayed=False\nfor line in sys.stdin:').replace("    emit(dict(protocol=1,type='result'",
+      'delay_next=False;delayed=False;unreadable_once=False\nfor line in sys.stdin:').replace("    emit(dict(protocol=1,type='result'",
       `    open(${JSON.stringify(journal)},'a').write(str(message['requestId'])+'\\n')\n`+
+      `    if delay_next and 'owned host registered ' not in open(${JSON.stringify(logPath)}).read(): delay_next=False\n`+
       `    if delay_next and not delayed: time.sleep(${delay});delayed=True\n`+
       "    if any(r.get('marker')==request.get('token') and r.get('ppid')!=os.getppid() for r in records): delay_next=True\n"+
+      (firstHostUnreadable?
+        "    if delay_next and not unreadable_once: snapshot=dict(complete=True,processes=[],unknown=[dict(pid=records[0]['pid'],reason='OS identity unavailable')]);unreadable_once=True\n":'')+
       "    emit(dict(protocol=1,type='result'");
     return spawn(command,changed,options);
   }});
@@ -57,7 +60,7 @@ for(const workerLife of [2700,900])test(`one slow real inspector query recovers 
 });
 
 for(const hostLife of [650,10000])test(`permanently hung real query blocks overlap at unchanged drain deadline, host life ${hostLife}ms`,async t=>{
-  const {result,requests,elapsed,deadline}=await scenario(t,{delay:30,hostLife,workerLife:900,deadlineMs:1800});
+  const {result,requests,elapsed,deadline}=await scenario(t,{delay:30,hostLife,workerLife:900,deadlineMs:1800,firstHostUnreadable:hostLife===10000});
   assert.equal(result.hostOwnership.observed,true);
   assert.equal(result.status,70);assert.equal(result.drained,false);
   assert.equal(result.hostOwnership.unknown.length>0,true);
