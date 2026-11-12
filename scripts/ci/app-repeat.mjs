@@ -128,7 +128,10 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
           const evidence=JSON.parse(readFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,'utf8'));
           if(evidence.version!==1||evidence.runId!==workerEnv.MADO_APP_COMPARE_RESULT_ID||evidence.complete!==true||
             evidence.mode!==mode||evidence.scope!==scope||evidence.sha!==(env.GITHUB_SHA??'unknown')||
-            evidence.status!==result.status||evidence.diagnostic!==true||evidence.formal!==false)
+            evidence.status!==result.status||evidence.diagnostic!==true||evidence.formal!==false||
+            !evidence.groups||typeof evidence.groups!=='object'||Array.isArray(evidence.groups)||
+            Object.keys(evidence.groups).length!==1||
+            evidence.groups[scope==='focus'?'hosted':'combined']!==result.status)
             throw new Error('missing, stale or contradictory current comparison worker result');
           row.comparisonResult=evidence;
         }
