@@ -117,7 +117,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         status = Number.isInteger(result.status) ? result.status : 70;
         // A complete cleanup attests absence of owned processes; it cannot turn
         // a timed-out or cancelled iteration into permission to start another.
-        if(status===70 || status===124 || result.timedOut || result.cancelledOnHostObserved) {
+        if(![0,1].includes(status) || result.timedOut || result.cancelledOnHostObserved) {
           invalidCleanup=true;
           previousGroupDrained=false;
           throw new Error('iteration did not complete; refusing further iterations');

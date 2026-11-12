@@ -175,6 +175,25 @@ test('hostedRepeatCannotStartBeforePreviousWorkloadDrains after a complete timeo
   assert.equal(launched,1,'timeout stops the controller even after verified cleanup');
 });
 
+test('repeatStopsAfterAnyNonLaneStatusBeforeSecondIteration',t=>{
+  for(const invalid of [64,65,75,130]){
+    let launched=0;
+    const h=harness(t,{repeat:2,spawn:(_command,args,settings)=>{
+      launched++;
+      writeFileSync(args[2],`native exited ${invalid}\n`);
+      const id='c'.repeat(30)+String(launched).padStart(2,'0');
+      const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:invalid})+'\n');
+      const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      return {status:0,stdout:JSON.stringify({status:invalid,drained:true}),stderr:'',signal:null,output};
+    }});
+    assert.equal(h.status,70,`invalid status ${invalid} must stop with untrusted counts`);
+    assert.equal(launched,1,`status ${invalid} must not launch iteration 2`);
+    assert.equal(JSON.parse(readFileSync(path.join(h.out,'summary.json'),'utf8')).iterations[1].started,false);
+    assert.doesNotMatch(h.output,/TOTAL \d+ PASS/);
+  }
+});
+
 test('CLI rejects an excessive count with a clear nonzero status before native work', async () => {
   const {spawnSync} = await import('node:child_process');
   const run = spawnSync(process.execPath, [new URL('./app-repeat.mjs', import.meta.url).pathname], {
@@ -209,13 +228,16 @@ test('real repeat CLI supervises worker failures and writes every log without na
       PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',PICSEE_MDPRO_LOCK:'off',
       APP_REPEAT_DEADLINE_MS:String(Date.now()+5000),GITHUB_STEP_SUMMARY:path.join(dir,'summary')},
     encoding:'utf8',timeout:10000});
-  assert.equal(run.status,1,run.stdout+run.stderr);
-  for (const label of ['01','02']) {
-    const log = readFileSync(path.join(dir,'.build/app-repeat',`iter-${label}.log`),'utf8');
-    assert.match(log,/usage: node scripts\/tdd\/app-lane.mjs/);
-    assert.doesNotMatch(log,/app-lane quarantine|Tests run:/);
-  }
-  assert.match(readFileSync(path.join(dir,'summary'),'utf8'),/01 FAIL.*\n02 FAIL.*\nTOTAL 0 PASS, 2 FAIL/);
+  assert.equal(run.status,70,run.stdout+run.stderr);
+  const first=readFileSync(path.join(dir,'.build/app-repeat','iter-01.log'),'utf8');
+  assert.match(first,/usage: node scripts\/tdd\/app-lane.mjs/);
+  assert.doesNotMatch(first,/app-lane quarantine|Tests run:/);
+  const second=readFileSync(path.join(dir,'.build/app-repeat','iter-02.log'),'utf8');
+  assert.match(second,/previous iteration process group did not drain; refusing to overlap/);
+  const report=JSON.parse(readFileSync(path.join(dir,'.build/app-repeat','summary.json'),'utf8'));
+  assert.equal(report.iterations[1].started,false);
+  assert.match(readFileSync(path.join(dir,'summary'),'utf8'),/INVALID iteration cleanup status/);
+  assert.doesNotMatch(run.stdout,/TOTAL \d+ PASS/);
 });
 
 test('repeat execution refuses an unowned machine before launching any worker', t => {
