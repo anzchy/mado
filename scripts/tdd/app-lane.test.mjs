@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { runAppLane, parseAppResult } from './app-lane.mjs';
 
 const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.meta.url), 'utf8');
@@ -14,6 +15,17 @@ const ids = ['OtherProbeTests/testSkip', 'ProbeTests/testKeep', 'ProbeTests/test
 const inventory = 'APP_LANE_INVENTORY_BEGIN\n' + ids.map(id => id.includes('(') ? id : `XCT_ID=-[${id.replace('/', ' ')}]`).join('\n') + '\nAPP_LANE_INVENTORY_END\n';
 const quarantine = [{owner:'test-owner',expires:'9999-12-31',id:'ProbeTests/testSkip',issue:411,reason:'test failure'}, {owner:'test-owner',expires:'9999-12-31',id:'Probe.swiftSkip()',issue:425,reason:'test failure'}];
 const result = stdout => ({status:0,stdout,stderr:'',signal:null});
+const require = createRequire(import.meta.url);
+const guardianRoot = process.env.PICSEE_TDD_PLUGIN_ROOT || path.join(process.env.HOME,'.claude/plugins/cache/xiaolai/tdd-guardian/0.10.2');
+function assertInvalidRed(r, countPattern = /^Tests run:/m) {
+ assert.doesNotMatch(r.stdout,countPattern);
+ if(!existsSync(path.join(guardianRoot,'scripts/tdd-guardian/lib/exec.js')))return;
+ const exec=require(path.join(guardianRoot,'scripts/tdd-guardian/lib/exec.js'));
+ const {classifyRedRun}=require(path.join(guardianRoot,'scripts/tdd-guardian/lib/verification.js'));
+ const counts=exec.parseCounts(r.stdout,r.stderr);
+ assert.equal(counts,null);
+ assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:counts}).kind,'environment');
+}
 const temporaryDirectories = new Set();
 afterEach(()=>{
  for(const dir of temporaryDirectories) {
@@ -84,6 +96,43 @@ test('native App completed assertion failure retains one count in both HELD mode
   const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
   assert.ifError(r.error);assert.equal(r.status,1,r.stderr);assert.match(r.stdout,/^Tests run: 3, Failures: 1/m);
  }
+});
+function appNativeFailureHarness(extraEnv={}){
+ const dir=mkdtempSync(path.join(tmpdir(),'i657-app-unknown-'));temporaryDirectories.add(dir);
+ const failing=baseline.replace('✔ Test swiftKeep() passed after 0.001 seconds.',
+  '✘ Test swiftKeep() recorded an issue at Probe.swift:1:1: Expectation failed\n✘ Test swiftKeep() failed after 0.001 seconds with 1 issue.')
+  .replace('✔ Test run with 3 tests in 0 suites passed after 0.001 seconds.','✘ Test run with 3 tests in 0 suites failed after 0.001 seconds with 1 issue.');
+ const fixture=path.join(dir,'fail.txt');writeFileSync(fixture,failing);
+ writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst fs=require('node:fs');process.stdout.write(fs.readFileSync(process.env.APP_FIXTURE));process.stderr.write('[heavy-lock] complete cleanup\\n');if(process.env.APP_HANG==='1'||process.env.APP_CANCEL==='1'){process.on('SIGTERM',()=>process.exit(1));fs.writeFileSync(process.env.APP_PID,String(process.pid));if(process.env.APP_CANCEL==='1')process.kill(process.ppid,'SIGTERM');setInterval(()=>{},1000);}process.exitCode=1;\n`,{mode:0o755});
+ const launcher=path.join(dir,'lane.mjs');
+ writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
+ const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
+  APP_PID:path.join(dir,'pid'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',
+  PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
+ const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:20000});
+ return {r,pidPath:env.APP_PID};
+}
+test('publishedUnknownCleanupRejectsCompletedAppAssertion',()=>{
+ const {r}=appNativeFailureHarness({PICSEE_HEAVY_FAULT_QUERY:'1'});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/unknown cleanup: process query failed/);
+ assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+ assertInvalidRed(r);
+});
+test('appExecutionTimeoutHasNoValidRed',()=>{
+ const {r,pidPath}=appNativeFailureHarness({APP_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'2'});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/execution timeout/);
+ assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+ assertInvalidRed(r);
+ assert.throws(()=>process.kill(Number(readFileSync(pidPath,'utf8')),0),{code:'ESRCH'});
+});
+test('appCancellationHasNoValidRed',()=>{
+ const {r,pidPath}=appNativeFailureHarness({APP_CANCEL:'1'});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/status-channel: invalid supervisor exit/);
+ assertInvalidRed(r);
+ assert.throws(()=>process.kill(Number(readFileSync(pidPath,'utf8')),0),{code:'ESRCH'});
 });
 test('repeatWorkerWrappedNativeSpawnCannotBypassCleanupStatus',()=>{
  const dir=mkdtempSync(path.join(tmpdir(),'i657-repeat-wrap-'));temporaryDirectories.add(dir);
@@ -1013,17 +1062,17 @@ for(const [name,corrupt] of [
 });
 
 const { runHostedAppLane } = await import('./hosted-app-lane.mjs');
-function hostedNativeHarness(held,failed,fault,descendant=false){
+function hostedNativeHarness(held,failed,fault,descendant=false, extraEnv={}){
  const dir=mkdtempSync(path.join(tmpdir(),'i657-hosted-native-'));temporaryDirectories.add(dir);
- writeFileSync(path.join(dir,'xcodebuild'),`#!${process.execPath}\nconst fs=require('node:fs');if(process.env.HOST_DESCENDANT==='1'){const c=require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore','ignore','inherit']});fs.writeFileSync(process.env.HOST_PID,String(c.pid));process.stderr.write('[heavy-lock] WARNING: incomplete cleanup');}process.stdout.write(process.env.HOST_FAIL==='1'?'** TEST EXECUTE FAILED **\\n':'** TEST EXECUTE SUCCEEDED **\\n');process.exitCode=process.env.HOST_FAIL==='1'?65:0;\n`,{mode:0o755});
+ writeFileSync(path.join(dir,'xcodebuild'),`#!${process.execPath}\nconst fs=require('node:fs');if(process.env.HOST_DESCENDANT==='1'){const c=require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore','ignore','inherit']});fs.writeFileSync(process.env.HOST_PID,String(c.pid));process.stderr.write('[heavy-lock] WARNING: incomplete cleanup');}process.stdout.write(process.env.HOST_FAIL==='1'?'** TEST EXECUTE FAILED **\\n':'** TEST EXECUTE SUCCEEDED **\\n');if(process.env.HOST_HANG==='1'||process.env.HOST_CANCEL==='1'){process.on('SIGTERM',()=>process.exit(65));fs.writeFileSync(process.env.HOST_PID,String(process.pid));if(process.env.HOST_CANCEL==='1')process.kill(process.ppid,'SIGTERM');setInterval(()=>{},1000);}process.exitCode=process.env.HOST_FAIL==='1'?65:0;\n`,{mode:0o755});
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst failed=process.env.HOST_FAIL==='1';const summary={totalTestCount:1,passedTests:failed?0:1,failedTests:failed?1:0,skippedTests:0,testFailures:failed?[{testName:'hostProof()'}]:[],result:failed?'Failed':'Passed'};const tree={testNodes:[{nodeType:'Test Case',nodeIdentifier:'hostProof()',result:failed?'Failed':'Passed'}]};process.stdout.write(JSON.stringify(process.argv.includes('summary')?summary:tree));\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runHostedAppLane} from ${JSON.stringify(new URL('./hosted-app-lane.mjs',import.meta.url).href)};\nif(process.env.HOST_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runHostedAppLane({selected:['hostProof()'],evidencePath:process.env.HOST_EVIDENCE}).status;\n`);
  const env={...process.env,PATH:`${dir}:${process.env.PATH}`,HOST_FAIL:failed?'1':'0',HOST_FAULT:fault?'1':'0',HOST_DESCENDANT:descendant?'1':'0',HOST_PID:path.join(dir,'pid'),HOST_EVIDENCE:path.join(dir,'evidence.log'),
-  PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'};
+  PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
- assert.ifError(r.error);return r;
+ assert.ifError(r.error);return {...r,pidPath:env.HOST_PID};
 }
 test('heldAndUnheldLanesPreservePassAndAssertionFailure hosted',()=>{
  for(const held of [false,true])for(const failed of [false,true]){
@@ -1037,6 +1086,28 @@ test('unterminatedDescendantStderrCannotHideIncompleteCleanup hosted',()=>{
  const r=hostedNativeHarness(false,true,true,true);
  assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/hosted-app-lane Tests run:/);
  assert.match(r.stderr,/incomplete cleanup/);
+});
+test('publishedUnknownCleanupRejectsCompletedHostedAssertion',()=>{
+ const r=hostedNativeHarness(false,true,false,false,{PICSEE_HEAVY_FAULT_QUERY:'1'});
+ assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/unknown cleanup: process query failed/);
+ assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+ assertInvalidRed(r,/hosted-app-lane Tests run:/);
+});
+test('hostedExecutionTimeoutHasNoValidRed',()=>{
+ const r=hostedNativeHarness(false,true,false,false,{HOST_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'2'});
+ assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/execution timeout/);
+ assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+ assertInvalidRed(r,/hosted-app-lane Tests run:/);
+ assert.throws(()=>process.kill(Number(readFileSync(r.pidPath,'utf8')),0),{code:'ESRCH'});
+});
+test('hostedCancellationHasNoValidRed',()=>{
+ const r=hostedNativeHarness(false,true,false,false,{HOST_CANCEL:'1'});
+ assert.equal(r.status,70,r.stderr);
+ assert.match(r.stderr,/status-channel: invalid supervisor exit/);
+ assertInvalidRed(r,/hosted-app-lane Tests run:/);
+ assert.throws(()=>process.kill(Number(readFileSync(r.pidPath,'utf8')),0),{code:'ESRCH'});
 });
 test('hosted local derived-data override selects the available outside-Documents build',()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'i393-dd-'));temporaryDirectories.add(directory);
