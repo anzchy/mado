@@ -55,7 +55,7 @@ echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
   > $o/$p-xcodebuild.log 2>&1; lane_result xcodebuild $?
-node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
+node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
 if [[ ! -d node_modules ]]; then

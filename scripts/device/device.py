@@ -187,6 +187,11 @@ def assert_clean_inputs(root=ROOT):
     inventory = input_inventory(root)
     tracked = set(checked(['git', '-C', root, 'ls-files', '-z']).split('\0'))
     tracked = {name for name in tracked if name and is_input(name)}
+    ignored = set(checked(['git', '-C', root, 'ls-files', '--others', '--ignored',
+                           '--exclude-standard', '-z']).split('\0'))
+    for name in (set(inventory) - tracked) & ignored:
+        if any(part.startswith('.build') for part in Path(name).parts):
+            del inventory[name]
     if set(inventory) != tracked:
         raise RuntimeError('untracked or missing build inputs: ' + ', '.join(sorted(set(inventory) ^ tracked)))
     if command(['git', '-C', root, 'diff', '--quiet', 'HEAD', '--', *sorted(tracked)]).returncode:
