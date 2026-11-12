@@ -119,7 +119,7 @@ test('native environment errors and elapsed budget cannot pass or erase later it
   assert.equal(h.status, 70);
   assert.equal(h.calls.length, 1);
   assert.equal(readdirSync(h.out).filter(n => /^iter-/.test(n)).length, 3);
-  assert.match(readFileSync(h.summaryPath, 'utf8'), /01 FAIL.*\n02 FAIL.*budget.*\n03 FAIL.*budget.*\nINVALID iteration cleanup status/);
+  assert.match(readFileSync(h.summaryPath, 'utf8'), /01 FAIL.*\n02 FAIL.*\n03 FAIL.*\nINVALID iteration cleanup status/);
 });
 
 test('failures at either end and thrown spawn errors still produce every outcome', t => {
@@ -129,7 +129,7 @@ test('failures at either end and thrown spawn errors still produce every outcome
       return result();
     }});
     assert.equal(h.status, 70);
-    assert.equal(h.calls.length, 3);
+    assert.equal(h.calls.length, position, 'no native work starts after an invalid iteration');
     assert.match(readFileSync(path.join(h.out, `iter-0${position}.log`), 'utf8'), /native boundary unavailable/);
     assert.match(readFileSync(h.summaryPath, 'utf8'), /INVALID iteration cleanup status/);
   }
@@ -158,6 +158,21 @@ test('supervisor group-drain failure refuses to launch another iteration', t => 
   assert.equal(launched,1);
   assert.match(readFileSync(path.join(h.out,'iter-02.log'),'utf8'),/refusing to overlap/);
   assert.match(readFileSync(h.summaryPath,'utf8'),/INVALID iteration cleanup status/);
+});
+
+test('hostedRepeatCannotStartBeforePreviousWorkloadDrains after a complete timeout', t => {
+  let launched=0;
+  const h=harness(t,{repeat:3,spawn:(_command,args,settings)=>{
+    launched++;
+    writeFileSync(args[2],'job time budget exhausted; owned host cleaned up\n');
+    const id='f'.repeat(30)+String(launched).padStart(2,'0');
+    const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+    writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:70})+'\n');
+    const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+    return {status:0,stdout:JSON.stringify({status:70,drained:true,cleanupStatus:'complete'}),stderr:'',signal:null,output};
+  }});
+  assert.equal(h.status,70);
+  assert.equal(launched,1,'timeout stops the controller even after verified cleanup');
 });
 
 test('CLI rejects an excessive count with a clear nonzero status before native work', async () => {
