@@ -133,6 +133,7 @@ def guardian_main(read_fd, ready_fd):
     root = None
     groups = set()
     hosts = set()
+    unknown = False
     complete = False
     # Before root publication the supervisor is the only holder that can
     # launch work. Bound that handoff even if the pipe remains open forever.
@@ -164,7 +165,7 @@ def guardian_main(read_fd, ready_fd):
                 elif kind == 'host' and pid > 0:
                     hosts.add(pid)
                 elif kind == 'host-unknown':
-                    hosts.add(-1)
+                    unknown = True
                 elif kind == 'complete':
                     complete = True
                     break
@@ -192,7 +193,7 @@ def guardian_main(read_fd, ready_fd):
 
 def receive_control(control, groups, hosts, session, guardian_fd=None, flock_required=False,
                     deadline=None, accept_groups=True, ancestor_control_fd=None,
-                    shared_owned=False):
+                    shared_owned=False, unknown=None):
     """Confirm registration before a nested supervisor launches its child."""
     if control is None:
         return
@@ -231,7 +232,8 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
                     hosts.add(pid)
                     answer = b'OK'
             elif kind == 'host-unknown':
-                hosts.add(-1)
+                if unknown is not None:
+                    unknown[0] = True
                 forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
                 if forwarded and guardian_send(guardian_fd, 'host-unknown'):
                     answer = b'OK'
@@ -366,8 +368,6 @@ def release_shared(lock):
 
 
 def owned_state(root, groups, hosts, excluded=0):
-    if -1 in hosts:
-        return None
     rows = process_rows()
     if rows is None:
         return None
@@ -395,14 +395,15 @@ def signal_owned(rows, sig):
 
 
 def stop_owned(child, root, groups, hosts, grace, control, session, excluded=0,
-               guardian_fd=None, flock_required=False, ancestor_control_fd=None):
+               guardian_fd=None, flock_required=False, ancestor_control_fd=None, unknown=None):
     started = time.monotonic()
     killed_at = None
     sent_term = False
     while True:
         child.poll()
         receive_control(control, groups, hosts, session, guardian_fd, flock_required,
-                        accept_groups=False, ancestor_control_fd=ancestor_control_fd)
+                        accept_groups=False, ancestor_control_fd=ancestor_control_fd,
+                        unknown=unknown)
         rows = owned_state(root, groups, hosts, excluded)
         if rows == []:
             return True
@@ -538,6 +539,7 @@ def supervised_main():
     worker_control = None
     groups = set()
     hosts = set()
+    unknown = [False]
     invocation = secrets.token_hex(16)
     flock_required = fd is not None or bool(inherited_flock)
     guardian = None
@@ -660,26 +662,26 @@ def supervised_main():
             result = child.poll()
             receive_control(parent_control, groups, hosts, session, guardian_write, flock_required,
                             execution_deadline, ancestor_control_fd=ancestor_control_fd,
-                            shared_owned=acquired or parent_shared)
+                            shared_owned=acquired or parent_shared, unknown=unknown)
             if guardian is not None and guardian.poll() is not None:
                 guardian_lost = True
                 print('[heavy-lock] guardian disappeared before cleanup', file=sys.stderr, flush=True)
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
-                                                   flock_required, ancestor_control_fd) else 'incomplete'
+                                                   flock_required, ancestor_control_fd, unknown) else 'incomplete'
                 break
             rows = owned_state(root, groups, hosts, excluded)
             if received:
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
-                                                   flock_required, ancestor_control_fd) else 'incomplete'
+                                                   flock_required, ancestor_control_fd, unknown) else 'incomplete'
                 break
             if time.monotonic() >= execution_deadline:
                 timed_out = True
                 print(f'[heavy-lock] execution timeout after {budget:g}s', file=sys.stderr, flush=True)
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
-                                                   flock_required, ancestor_control_fd) else 'incomplete'
+                                                   flock_required, ancestor_control_fd, unknown) else 'incomplete'
                 break
             if rows is None:
                 if result is not None:
@@ -702,11 +704,14 @@ def supervised_main():
                     print('[heavy-lock] drain timed out; terminating survivors', file=sys.stderr, flush=True)
                     cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                        parent_control, session, excluded, guardian_write,
-                                                       flock_required, ancestor_control_fd) else 'incomplete'
+                                                       flock_required, ancestor_control_fd, unknown) else 'incomplete'
                     break
             time.sleep(0.02)
-        retain_shared = cleanup != 'complete'
-        if cleanup == 'complete':
+        known_cleanup = cleanup
+        if unknown[0]:
+            cleanup = 'incomplete'
+        retain_shared = known_cleanup != 'complete'
+        if known_cleanup == 'complete':
             child.wait()
         if not publish_status(status_path, invocation, cleanup, result, timed_out):
             return 70
@@ -749,8 +754,11 @@ def supervised_main():
                 session = os.getsid(0) if nested else child.pid
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, os.getpid() if nested else 0,
-                                                   guardian_write, flock_required, ancestor_control_fd) else 'incomplete'
-                retain_shared = cleanup != 'complete'
+                                                   guardian_write, flock_required, ancestor_control_fd, unknown) else 'incomplete'
+                known_cleanup = cleanup
+                if unknown[0]:
+                    cleanup = 'incomplete'
+                retain_shared = known_cleanup != 'complete'
                 publish_status(status_path, invocation, cleanup, child.poll(), False)
             except BaseException as cleanup_error:
                 print(f'[heavy-lock] cleanup unknown after exception: {cleanup_error}',
