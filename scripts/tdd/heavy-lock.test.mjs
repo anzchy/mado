@@ -11,7 +11,10 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 const lock = path.join(root, 'scripts/heavy-lock.sh');
 function environment() {
   const home = mkdtempSync(path.join(scratch, 'lock-'));
-  return { ...process.env, HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '' };
+  const env = { ...process.env, HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '' };
+  delete env.PICSEE_HEAVY_CONTROL_FD;
+  delete env.PICSEE_HEAVY_FLOCK_FD;
+  return env;
 }
 function run(args, env) {
   return new Promise((resolve, reject) => {
@@ -47,7 +50,7 @@ redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
   assert.equal(existsSync(marker), false);
 });
 
-redTest('reverseMdproMissingHandoffRefusesBeforeLaunch — BLOCKED-upstream RED', () => {
+redTest('reverseMdproMissingHandoffRefusesBeforeLaunch', () => {
   const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1'};
   const marker = path.join(env.HOME, 'launched');
   const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
@@ -92,9 +95,9 @@ redTest('postLaunchSupervisorExceptionCancelsBeforeRelease', async () => {
 
 redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS:'0.4', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
-    PICSEE_HEAVY_INNER_GRACE_SECS:'5', PICSEE_MDPRO_LOCK:'off'};
+    PICSEE_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid');
-  const script = `"$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)' "$2"; :`;
+  const script = `PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)' "$2"; :`;
   const result = await run(['bash','-c',script,'_',lock,pidFile],env);
   assert.equal(result.code,124,result.output);
   assert.ok(existsSync(pidFile),'nested descendant launched');
@@ -103,9 +106,9 @@ redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
 });
 
 redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_HEAVY_INNER_GRACE_SECS:'5', PICSEE_MDPRO_LOCK:'off'};
+  const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid'), outerGroup=path.join(env.HOME,'outer-group');
-  const script = `ps -o pgid= -p $$ > "$3"; "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"`;
+  const script = `ps -o pgid= -p $$ > "$3"; PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"`;
   const holder = start(['bash','-c',script,'_',lock,pidFile,outerGroup],env);
   await until(()=>existsSync(pidFile),'nested descendant launched');
   const [nestedPid,nestedGroup]=readFileSync(pidFile,'utf8').split(' ').map(Number);
@@ -227,7 +230,21 @@ redTest('ciAppInvocationPreservesHeldSupervision', async () => {
   const workflow=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
   const step=workflow.slice(workflow.indexOf('- name: Run App tests'),workflow.indexOf('- name: Report App test evidence'));
   assert.match(step,/PICSEE_HEAVY_CI_TOP_LEVEL/);
-  assert.match(step,/scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+  assert.match(step,/PICSEE_HEAVY_LOCK_EXEC_SECS=2400 scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+});
+redTest('ciSupervisedAppStepsOutlastTheirOwnDeadlines', () => {
+  const workflow=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
+  const app=workflow.slice(workflow.indexOf('- name: Run App tests'),workflow.indexOf('- name: Report App test evidence'));
+  const compare=workflow.slice(workflow.indexOf('- name: Run App host comparison'),workflow.indexOf('- name: Upload App host comparison'));
+  const repeat=app.match(/PICSEE_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/ci\/app-repeat\.mjs/);
+  const ordinary=app.match(/PICSEE_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+  const hosted=compare.match(/PICSEE_HEAVY_LOCK_EXEC_SECS:\s*['"]?(\d+)/);
+  assert.ok(repeat,'repeat outer budget is explicit');
+  assert.ok(ordinary,'App lane outer budget is explicit');
+  assert.ok(hosted,'comparison outer budget is explicit');
+  assert.ok(Number(repeat[1])>=6900 && Number(repeat[1])<=7200,'repeat fits 115-minute deadline and 120-minute job');
+  assert.ok(Number(ordinary[1])>=2100 && Number(ordinary[1])<=2700,'App lane fits native deadline and 45-minute job');
+  assert.ok(Number(hosted[1])>=6900 && Number(hosted[1])<=7200,'comparison fits 115-minute deadline and 120-minute job');
 });
 test('uses picsee machine-wide default and exports nesting flag', () => {
   const env = environment();
@@ -279,6 +296,57 @@ test('HUP stops the command before releasing the lock', async () => {
   assert.ok(existsSync(stopped), 'child must receive termination before lock release');
   assert.equal((await run(['true'], env)).code, 0, 'lock available after hangup');
 });
+
+for (const sig of ['SIGINT', 'SIGHUP']) {
+  redTest(`groupDirected${sig}StopsWorkerAndReleasesLock`, async () => {
+    const env={...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+    const pidFile=path.join(env.HOME,'group-worker');
+    const child=spawn(lock,['python3','-c',
+      'import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)',pidFile],
+      {env,cwd:root,detached:true,stdio:['ignore','pipe','pipe']});
+    let output=''; child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
+    const done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',(code,signal)=>resolve({code,signal}));});
+    try {
+      await until(()=>existsSync(pidFile),'worker launched');
+      process.kill(-child.pid,sig);
+      const result=await done;
+      assert.equal(result.signal,sig,output);
+      const pid=Number(readFileSync(pidFile,'utf8'));
+      assert.throws(()=>process.kill(pid,0),{code:'ESRCH'},'group cancellation drains worker');
+      assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
+        'lock released after worker drain');
+    } finally {
+      try {process.kill(-child.pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+      await done;
+    }
+  }, {timeout:10000});
+}
+
+redTest('guardianLossStillDrainsWorkerBeforeExit70', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const pidFile=path.join(env.HOME,'worker-pid');
+  const holder=start(['python3','-c',
+    'import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)',pidFile],env);
+  try {
+    await until(()=>existsSync(pidFile),'worker launched');
+    const rows=spawnSync('ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'});
+    assert.equal(rows.status,0,rows.stderr);
+    const guardianPid=rows.stdout.split('\n').map(line=>line.trim().match(/^(\d+)\s+(\d+)\s+.*heavy-lock\.py --guardian /))
+      .filter(Boolean).find(match=>Number(match[2])===holder.child.pid)?.[1];
+    assert.ok(guardianPid,'guardian process found');
+    const began=Date.now();
+    process.kill(Number(guardianPid),'SIGKILL');
+    const result=await holder.done;
+    assert.ok(Date.now()-began<1500,'guardian loss stops the worker promptly');
+    assert.equal(result.code,70,result.output);
+    assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
+    assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
+      'guardian-loss cleanup released the flock');
+  } finally {
+    holder.child.kill('SIGTERM');
+    await holder.done;
+  }
+}, {timeout:10000});
 
 async function until(check, message) {
   for (let i = 0; i < 200 && !check(); i++) await new Promise(r => setTimeout(r, 20));
@@ -478,13 +546,14 @@ test('B2 leader exit retains directory until same-group worker finishes', async 
   }
 });
 
-test('N2 reverse nesting keeps picsee flock and skips the already-held shared lock', async () => {
+test('N2 reverse nesting refuses before picsee flock and leaves the shared lock untouched', async () => {
   const env={...environment(),MDPRO_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'};
   fakeHolder(env,process.pid);
   const before=statSync(env.PICSEE_MDPRO_LOCK);
   const result=await run(['bash','-c','test "$PICSEE_HEAVY_LOCK_HELD" = 1 && test "$MDPRO_HEAVY_LOCK_HELD" = 1 && test -f "$PICSEE_HEAVY_LOCK"'],env);
-  assert.equal(result.code,0,result.output);
-  assert.match(result.output,/already holds.*shared lock/);
+  assert.equal(result.code,70,result.output);
+  assert.match(result.output,/no verified handoff/);
+  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),false);
   assert.equal(statSync(env.PICSEE_MDPRO_LOCK).ino,before.ino);
   assert.ok(existsSync(path.join(env.PICSEE_MDPRO_LOCK,'owner')));
 });
@@ -520,9 +589,9 @@ test('R1 contended reverse nesting fails promptly without disturbing the flock h
     const began=Date.now();
     const nested=spawnSync(lock,['echo','must-not-launch'],{env:{...env,MDPRO_HEAVY_LOCK_HELD:'1'},encoding:'utf8',timeout:1500});
     assert.ifError(nested.error);
-    assert.equal(nested.status,75,nested.stderr);
+    assert.equal(nested.status,70,nested.stderr);
     assert.ok(Date.now()-began<1500);
-    assert.match(nested.stderr,/picsee job holds the picsee lock while waiting for mdpro/);
+    assert.match(nested.stderr,/no verified handoff/);
     assert.doesNotMatch(nested.stdout,/must-not-launch/);
     process.kill(peer.child.pid,0);
     assert.equal(existsSync(entered),false);

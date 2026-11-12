@@ -369,9 +369,9 @@ jobs:
           {
             if [ "$REPEAT_ENABLED" = true ]; then
               export APP_REPEAT_DEADLINE_MS=$((APP_JOB_STARTED_MS + 6900000))
-              scripts/heavy-lock.sh node scripts/ci/app-repeat.mjs
+              PICSEE_HEAVY_LOCK_EXEC_SECS=6900 scripts/heavy-lock.sh node scripts/ci/app-repeat.mjs
             else
-              scripts/heavy-lock.sh node scripts/tdd/app-lane.mjs
+              PICSEE_HEAVY_LOCK_EXEC_SECS=2400 scripts/heavy-lock.sh node scripts/tdd/app-lane.mjs
             fi
           } 2>&1 | tee .build/app-tests.log
       - name: Report App test evidence
@@ -573,6 +573,7 @@ jobs:
       - name: Run App host comparison
         env:
           PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_LOCK_EXEC_SECS: '6900'
           PICSEE_HEAVY_STATUS_PATH: .build/host-compare-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
         run: scripts/heavy-lock.sh node scripts/ci/app-compare.mjs
       - name: Upload App host comparison
