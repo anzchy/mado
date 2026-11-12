@@ -293,7 +293,7 @@ private final class ChromeFloatingGroupView: NSView {
         requestedFrame = frame
         requestedRect = rect
         requestedScale = scale
-        mayRender = visible && panel.opacity < 100 && frame != nil
+        mayRender = visible && panel.opacity < 100
         presentation.setHidden(!mayRender)
         backdrop.isHidden = !mayRender
         if !mayRender {
