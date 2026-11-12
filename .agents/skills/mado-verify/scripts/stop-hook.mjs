@@ -31,13 +31,24 @@ function overlay(root) {
   try { return fs.readFileSync(path.join(root, '.codex/rules/picsee-role.rules'), 'utf8').split(/\r?\n/, 1)[0] === '# Local picsee role: implementor'; }
   catch { return false; }
 }
-function namedMismatch(message, identity, target) {
-  const fields = Object.fromEntries(message.split(/\r?\n/).map(line => line.match(/^(Worktree|Branch|HEAD):\s*(\S+)\s*$/)).filter(Boolean).map(match => [match[1], match[2].replace(/^`|`$/g, '')]));
+function identityFields(message) {
+  return Object.fromEntries(message.split(/\r?\n/).map(line => line.match(/^\s*(?:-\s*)?\*\*(Worktree|Branch|HEAD)(?::\*\*|\*\*:)\s*(.*?)\s*$/) || line.match(/^\s*(?:-\s*)?(Worktree|Branch|HEAD):\s*(.*?)\s*$/)).filter(Boolean).map(match => [match[1], match[2].replace(/^`|`$/g, '')]));
+}
+function expandHome(value) { return value === '~' || value.startsWith('~/') ? path.join(process.env.HOME || '', value.slice(2)) : value; }
+function namedMismatch(fields, identity, target, required = false) {
+  if (required && (!fields.Worktree || !fields.Branch || !fields.HEAD)) return true;
   let namedWorktree = null;
   if (fields.Worktree) {
-    try { namedWorktree = fs.realpathSync(fields.Worktree); } catch { return true; }
+    try { namedWorktree = fs.realpathSync(expandHome(fields.Worktree)); } catch { return true; }
   }
-  return (namedWorktree && namedWorktree !== target) || (fields.Branch && fields.Branch !== identity.branch) || (fields.HEAD && fields.HEAD !== git(target, 'rev-parse', 'HEAD'));
+  const head = git(target, 'rev-parse', 'HEAD');
+  const namedHead = fields.HEAD;
+  const headMatches = !namedHead || (/^[0-9a-f]{40}$/i.test(namedHead) ? namedHead.toLowerCase() === head : /^[0-9a-f]{7,39}$/i.test(namedHead) && git(target, 'rev-parse', '--verify', `${namedHead}^{commit}`) === head);
+  return (namedWorktree && namedWorktree !== target) || (fields.Branch && fields.Branch !== identity.branch) || !headMatches;
+}
+function handoffIdentity(handoff, identity, target) {
+  try { return namedMismatch(identityFields(fs.readFileSync(handoff, 'utf8')), identity, target, true) ? 'mismatch' : 'match'; }
+  catch { return 'unreadable'; }
 }
 function block(reason) { process.stdout.write(JSON.stringify({ decision: 'block', reason })); }
 const message = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '';
@@ -50,7 +61,7 @@ if (root) {
   if (fs.existsSync(marker)) {
     try {
       identity = JSON.parse(fs.readFileSync(marker, 'utf8'));
-      if (!identity || !path.isAbsolute(identity.worktree) || !identity.branch || !Number.isSafeInteger(identity.issue) || identity.issue < 1 || !identity.task) throw new Error('marker requires worktree, branch, issue and task');
+      if (!identity || !path.isAbsolute(identity.worktree) || !identity.branch || !Number.isSafeInteger(identity.issue) || identity.issue < 1 || !identity.task || !path.isAbsolute(identity.handoff)) throw new Error('marker requires worktree, branch, issue, task and handoff');
       const real = fs.realpathSync(identity.worktree);
       const targetTop = git(real, 'rev-parse', '--show-toplevel');
       const currentCommon = git(root, 'rev-parse', '--path-format=absolute', '--git-common-dir');
@@ -60,18 +71,19 @@ if (root) {
     } catch { invalidTarget = true; }
   }
   if (!claudeAgent && !overlay(root) && !(target && overlay(target))) process.exit(0);
-  if (!claudeAgent && !git(root, 'symbolic-ref', '-q', '--short', 'HEAD') && !git(root, 'status', '--porcelain', '--untracked-files=no')) process.exit(0);
-  if (invalidTarget || !target) block('Missing or invalid mado-verify target worktree marker; dispatch must write JSON with worktree, branch, issue and task. Legacy one-line markers are invalid.');
+  if (!claudeAgent && !target && !invalidTarget && !fs.existsSync(marker) && !git(root, 'symbolic-ref', '-q', '--short', 'HEAD') && !git(root, 'status', '--porcelain', '--untracked-files=no')) process.exit(0);
+  const handoffStatus = target && message ? handoffIdentity(identity.handoff, identity, target) : null;
+  if (invalidTarget || !target) block('Missing or invalid mado-verify target worktree marker; dispatch must write JSON with worktree, branch, issue, task and handoff. Legacy one-line markers are invalid.');
   else if (git(target, 'symbolic-ref', '-q', '--short', 'HEAD') !== identity.branch) block('Mado-verify target branch differs from the dispatch marker.');
-  else if (target === root && git(root, 'symbolic-ref', '-q', '--short', 'HEAD') !== identity.branch) block('Pane home is not the briefed target branch.');
-  else if (namedMismatch(message, identity, target)) block('Handoff worktree, branch or HEAD differs from the dispatch target.');
+  else if (handoffStatus === 'unreadable') block('Missing or unreadable handoff file at the dispatch path.');
+  else if (handoffStatus === 'mismatch') block('Handoff worktree, branch or HEAD differs from the dispatch target.');
+  else if (namedMismatch(identityFields(message), identity, target)) block('Handoff worktree, branch or HEAD differs from the dispatch target.');
   else for (const worktree of target !== root ? [root, target] : [root]) {
     const head = git(worktree, 'rev-parse', 'HEAD');
     const base = git(worktree, 'merge-base', 'origin/main', 'HEAD');
     if (!head || !base) continue;
     const dirty = git(worktree, 'status', '--porcelain', '--untracked-files=no');
     if (worktree === root && target !== root && head === base && !dirty) continue;
-    if (worktree === root && target === root && head === base && !dirty) continue;
     let fresh = false;
     try {
       const record = JSON.parse(fs.readFileSync(path.join(worktree, '.build/mado-verify', `${head}.json`), 'utf8'));
