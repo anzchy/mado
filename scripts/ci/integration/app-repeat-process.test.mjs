@@ -57,6 +57,7 @@ test('hostedRepeatCannotStartBeforePreviousWorkloadDrains real nested timeout',a
     `deadline:Date.now()+8000,summaryPath:null});\n`);
   const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
     PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};
+  env.APP_COMPARE_MODE='none';delete env.APP_COMPARE_SCOPE;
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,controller],{env,encoding:'utf8',timeout:15000});
   assert.equal(run.status,70,run.stdout+run.stderr);
