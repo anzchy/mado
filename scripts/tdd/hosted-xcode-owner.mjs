@@ -48,7 +48,9 @@ while(true){
   const matching=snapshot.processes.filter(row=>row.marker===token);
   lastSnapshot={complete:snapshot.complete,unknown:snapshot.unknown,
     transport:{stage:snapshot.transport?.stage,status:snapshot.transport?.status,
-      signal:snapshot.transport?.signal,errorCode:snapshot.transport?.errorCode}};
+      signal:snapshot.transport?.signal,errorCode:snapshot.transport?.errorCode,
+      elapsedMilliseconds:snapshot.transport?.elapsedMilliseconds,
+      timeoutMilliseconds:snapshot.transport?.timeoutMilliseconds}};
   emit('query',{child:{pid:child.pid,exited:childExited,code:childCode,signal:childSignal},
     drainDeadline,stopping,snapshot:lastSnapshot,candidateCount:snapshot.processes.length,
     matching:matching.map(row=>({pid:row.pid,ppid:row.ppid,pgid:row.pgid,birth:row.birth,
