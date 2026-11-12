@@ -63,8 +63,8 @@ gh jobs omits dispatch inputs, so dispatch success cannot prove full-suite scope
 dispatch/repeat marker steps also prevent PASS, while completed/skipped markers on ordinary full runs are allowed.
 Add audit/device-smoke rows and run the real checkGates lint on the complete table.
 
-Current required checks are Walking skeleton, PR body Gates, Agent tooling. App tests + Design check required and strict
-are planned by #613 and need the owner's repository settings; Design check already runs in CI.
+Current required checks, with strict (branch up to date before merge): Walking skeleton, PR body Gates, Agent tooling,
+App tests, Design check. The owner enabled App tests, Design check and strict under #613 stage C.
 
 ## Sections
 
