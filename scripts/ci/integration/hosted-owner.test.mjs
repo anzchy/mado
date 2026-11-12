@@ -6,6 +6,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {findPostDrainUncertainty} from './hosted-owner-fixture-event.mjs';
 
 const lock=fileURLToPath(new URL('../../heavy-lock.sh',import.meta.url));
 const owner=fileURLToPath(new URL('../../tdd/hosted-xcode-owner.mjs',import.meta.url));
@@ -49,8 +50,8 @@ test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
   assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
 });
 for(const failure of [
-  {name:'unrelated PID',reply:'{...snapshot,unknown:[...snapshot.unknown,{pid:999999,reason:"unreadable kernel birth identity"}]}'},
-  {name:'PID-free transport timeout',reply:'{complete:false,processes:[],unknown:[{reason:"OS ownership inspection failed"}],transport:{stage:"process",status:null,signal:"SIGTERM",errorCode:"ETIMEDOUT"}}'}
+  {name:'unrelated PID',reply:'{...snapshot,unknown:[...snapshot.unknown,{pid:999999,reason:"fixture post-drain unreadable PID"}]}'},
+  {name:'PID-free transport timeout',reply:'{complete:false,processes:[],unknown:[{reason:"fixture post-drain transport timeout"}],transport:{stage:"process",status:null,signal:"SIGTERM",errorCode:"ETIMEDOUT"}}'}
 ])test(`hostedOwnerRequeriesAfterPostDrain${failure.name.replace(/[^A-Za-z]/g,'')}Uncertainty`,t=>{
   if(!['darwin','linux'].includes(process.platform)){
     t.skip('host ownership inspector supports macOS and Linux process APIs');return;
@@ -63,8 +64,9 @@ for(const failure of [
     if(url!==${JSON.stringify(ownershipURL)})return nextLoad(url,context);
     return {format:'module',shortCircuit:true,source:
       'import {queryHostProcesses as real} from '+JSON.stringify(url+'?real')+';'+
-      'let seen=false,injected=false; export function queryHostProcesses(options){const snapshot=real(options);'+
+      'let seen=false,injected=false,early=false; export function queryHostProcesses(options){const snapshot=real(options);'+
       'const hosts=snapshot.processes.filter(p=>p.marker===options.token&&p.ppid===1);'+
+      'if(seen&&!early&&hosts.length&&snapshot.complete){early=true;return {...snapshot,unknown:[...snapshot.unknown,{pid:999998,reason:"unreadable kernel birth identity"}]};}'+
       'if(hosts.length)seen=true;'+
       'if(seen&&!injected&&snapshot.complete&&hosts.length===0){injected=true;return '+
       ${JSON.stringify(failure.reply)}+';}return snapshot;}'};
@@ -82,8 +84,7 @@ for(const failure of [
   const run=spawnSync(lock,[process.execPath,'--loader',loader,owner,process.execPath,runner],
     {env,encoding:'utf8',timeout:8000});
   const queries=ownerEvents(run.stderr,'query');
-  const uncertain=queries.find(event=>event.snapshot.unknown.some(item=>item.reason===
-    (failure.name==='unrelated PID'?'unreadable kernel birth identity':'OS ownership inspection failed')));
+  const uncertain=findPostDrainUncertainty(queries,failure.name);
   assert.ok(uncertain,run.stderr);
   assert.equal(uncertain.child.exited,true,'the child has exited before this post-drain uncertainty');
   assert.equal(run.status,0,run.stdout+run.stderr);
