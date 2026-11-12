@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, existsSync, writeFileSync, rmSync, mkdirSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { runAttestedSync } from './status-channel.mjs';
 
 const root = process.cwd();
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'picsee-lock-tests-'));
@@ -39,6 +40,34 @@ redTest('hugeFiniteDeadlineRejectedBeforeLockOrLaunch', () => {
   assert.equal(result.status, 70, result.stderr);
   assert.equal(existsSync(marker), false);
   assert.equal(existsSync(env.PICSEE_HEAVY_LOCK), false, 'preflight precedes lock acquisition');
+});
+
+redTest('missingMalformedOrStaleCleanupStatusRejectsCounts', () => {
+  const env=environment();
+  for (const fault of ['missing','malformed','stale','contradictory']) {
+    const r=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000}, {fault});
+    assert.equal(r.status,70,`${fault}: ${r.stderr}`);
+    assert.equal(r.attested,false,`${fault} was accepted`);
+  }
+});
+
+redTest('publicationFailureNeverReportsComplete', () => {
+  const env={...environment(),PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'};
+  const r=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
+  assert.equal(r.status,70,r.stderr);
+  assert.equal(r.attested,false);
+  assert.doesNotMatch(r.stdout??'',/Tests run:/);
+});
+
+redTest('retryUsesFreshUnpredictableInvocationID', () => {
+  const env={...environment(),PICSEE_APP_RESULT_ID:'fixed-ci-id',PICSEE_APP_RESULT_PATH:path.join(scratch,'fixed-ci.json')};
+  const a=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
+  const b=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
+  assert.equal(a.status,0,a.stderr);assert.equal(b.status,0,b.stderr);
+  assert.match(a.invocationID,/^[0-9a-f]{32}$/);
+  assert.match(b.invocationID,/^[0-9a-f]{32}$/);
+  assert.notEqual(a.invocationID,b.invocationID);
+  assert.notEqual(a.statusPath,b.statusPath);
 });
 
 redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
