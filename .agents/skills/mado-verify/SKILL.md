@@ -5,7 +5,7 @@ description: Verify an implementation before handoff with Mado's gate ladder, te
 
 # mado-verify
 
-Run before an implementer handoff. Claude invokes `/mado-verify`; Codex follows this file. Claude's implementer-agent frontmatter installs the Stop hook at agent start (and converts it to SubagentStop when spawned); the skill carries no hooks, avoiding duplicate callbacks after invocation. Codex uses the tracked `.codex/hooks.json`; it must be reviewed and trusted in `/hooks` before it runs. A hook is a backstop; the delegator checks the comment link and final head.
+Run before an implementer handoff. Claude invokes `/mado-verify`; Codex follows this file. The project `.claude/settings.json` installs an overlay-gated Stop hook with no argument: it runs in every Claude session but acts only when the session checkout or dispatch target has the implementor role overlay. The implementer-agent frontmatter also installs a Stop hook with `--role-source claude-agent` (converted to SubagentStop when spawned). A Claude implementer session with an overlay may receive both callbacks. The skill carries no hooks. Codex uses the tracked `.codex/hooks.json`; it must be reviewed and trusted in `/hooks` before it runs. A hook is a backstop; the delegator checks the comment link and final head.
 
 ## 0. Define scope
 
