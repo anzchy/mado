@@ -82,6 +82,25 @@ redTest('privateCleanupDestinationNeverReachesWorkload',()=>{
   assert.equal(r.stderr.includes(r.invocationID),false);
 });
 
+redTest('privateStatusDestinationIsNotDiscoverableByChild',()=>{
+  const directory=mkdtempSync(path.join(scratch,'private-temp-'));
+  const script=`import {runAttestedSync} from ${JSON.stringify(new URL('./status-channel.mjs',import.meta.url).href)};
+    const r=runAttestedSync(${JSON.stringify(lock)},['python3','-c',
+      'import os; print(sum(name.startswith("mado-status-") for name in os.listdir(os.environ["TMPDIR"])))'],
+      {env:process.env,encoding:'utf8',timeout:5000});
+    process.stdout.write(r.stdout??'');process.stderr.write(r.stderr??'');process.exitCode=r.status;`;
+  const r=spawnSync(process.execPath,['--input-type=module','-e',script],
+    {env:{...environment(),TMPDIR:directory},encoding:'utf8',timeout:7000});
+  assert.ifError(r.error);assert.equal(r.status,0,r.stderr);
+  assert.equal(r.stdout.trim(),'0','a same-user child can enumerate a file destination');
+});
+redTest('stdoutCannotBecomePrivateStatusChannel',()=>{
+ const env={...environment(),PICSEE_HEAVY_ATTEST_FD:'1'};
+ const r=spawnSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
+ assert.doesNotMatch(r.stdout,/"kind": "(?:begin|status)"/);
+});
+
 redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_HELD:'1'};
   const marker = path.join(env.HOME, 'launched');
