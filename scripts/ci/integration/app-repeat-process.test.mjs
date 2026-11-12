@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runProcessGroup as realRunProcessGroup } from '../app-repeat-process.mjs';
+import {fileURLToPath} from 'node:url';
 
 
 const sessions=new AsyncLocalStorage();
@@ -37,6 +38,33 @@ function fixture(dir, exitLeader) {
   const root = `const fs=require('node:fs');fs.appendFileSync(${JSON.stringify(pids)},process.pid+'\\n');process.on('SIGTERM',()=>{});const c=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(middle)}],{stdio:['ignore','ignore','ignore','ipc']});c.on('message',()=>{console.log('grandchild ready');${exitLeader ? 'process.exit(0)' : ''}});setInterval(()=>{},1000);`;
   return {pids, command:process.execPath,args:['-e',root]};
 }
+
+test('hostedRepeatCannotStartBeforePreviousWorkloadDrains real nested timeout',async t=>{
+  const dir=directory(t),marker=path.join(dir,'iterations'),worker=path.join(dir,'worker.mjs');
+  const controller=path.join(dir,'controller.mjs');
+  const lock=fileURLToPath(new URL('../../heavy-lock.sh',import.meta.url));
+  const repeat=fileURLToPath(new URL('../app-repeat.mjs',import.meta.url));
+  writeFileSync(worker,`import {spawnSync} from 'node:child_process';import {appendFileSync} from 'node:fs';\n`+
+    `appendFileSync(${JSON.stringify(marker)},'started\\n');\n`+
+    `const fd=Number(process.env.PICSEE_HEAVY_CONTROL_FD);const stdio=['ignore','pipe','pipe'];`+
+    `while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;\n`+
+    `const run=spawnSync(${JSON.stringify(lock)},[process.execPath,'-e','setInterval(()=>{},1000)'],`+
+    `{env:{...process.env,PICSEE_HEAVY_LOCK_EXEC_SECS:'0.3'},stdio,encoding:'utf8',timeout:5000});`+
+    `process.exitCode=run.status??70;\n`);
+  writeFileSync(controller,`import {runAppRepeat} from ${JSON.stringify(new URL('../app-repeat.mjs',import.meta.url).href)};`+
+    `process.exitCode=runAppRepeat({repeat:2,filter:'^MadoAppTests\\\\.retainedOnly\\\\(\\\\)$',`+
+    `workerScript:${JSON.stringify(worker)},out:${JSON.stringify(path.join(dir,'out'))},`+
+    `deadline:Date.now()+8000,summaryPath:null});\n`);
+  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
+    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};
+  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  const run=spawnSync(lock,[process.execPath,controller],{env,encoding:'utf8',timeout:15000});
+  assert.equal(run.status,70,run.stdout+run.stderr);
+  assert.equal(readFileSync(marker,'utf8'),'started\n','the second native worker never starts');
+  const summary=JSON.parse(readFileSync(path.join(dir,'out/summary.json'),'utf8'));
+  assert.equal(summary.iterations[0].started,true);
+  assert.equal(summary.iterations[1].started,false);
+});
 for (const exitLeader of [false,true]) test(`process group drains TERM-resistant descendants when ${exitLeader ? 'deadline expires after leader exit' : 'deadline expires with leader alive'}`, async t => {
   const dir = directory(t), logPath = path.join(dir,'iteration.log');
   const f = fixture(dir,exitLeader);

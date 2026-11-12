@@ -14,7 +14,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
   out = '.build/app-repeat', summaryPath = process.env.GITHUB_STEP_SUMMARY,
   deadline = Number(process.env.APP_REPEAT_DEADLINE_MS || Date.now() + 6900000), now = Date.now,
   env = process.env, spawn = spawnSync, stdout = s => process.stdout.write(s), validateOnly = false,
-  requireComparisonEvidence = false } = {}) {
+  requireComparisonEvidence = false, workerScript = worker, hostExecutable } = {}) {
   const count = Number(repeat);
   if (String(repeat).trim() === '' || !Number.isInteger(count) || count < 1 || count > 50) {
     stdout('app-repeat: app_repeat must be an integer from 1 to 50\n'); return 64;
@@ -78,7 +78,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
           JSON.stringify({version:1,runId:workerEnv.MADO_APP_COMPARE_RESULT_ID,complete:false,status:null}));
         if(needsHost&&filterCanLaunch) {
           workerEnv.MADO_HOST_OWNERSHIP_REQUIRED='1';
-          workerEnv.MADO_HOST_EXECUTABLE=path.resolve(env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci',
+          workerEnv.MADO_HOST_EXECUTABLE=hostExecutable??path.resolve(env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci',
             'Build/Products/Debug/Mado.app/Contents/MacOS/Mado');
         } else {delete workerEnv.MADO_HOST_OWNERSHIP_REQUIRED;delete workerEnv.MADO_HOST_EXECUTABLE;}
         row.started=true;
@@ -94,7 +94,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         }
         stdio[attestFd]='pipe';
         const run = spawn(process.execPath, [supervisor, String(deadline), logPath,
-          process.execPath, worker, quarantinePath, path.join(temporary, `attempt-${label}.log`),mode], {
+          process.execPath, workerScript, quarantinePath, path.join(temporary, `attempt-${label}.log`),mode], {
           env:{...workerEnv,PICSEE_REPEAT_ATTEST_FD:String(attestFd),PICSEE_REPEAT_STATUS_DIR:temporary},
           stdio,encoding:'utf8', maxBuffer:1024*1024 });
         log = readFileSync(logPath,'utf8');
@@ -114,10 +114,16 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         if(attestation.id!==id||attestation.supervisor!==owner||
           attestation.cleanup!=='complete'||attestation.commandExit!==result.status)
           throw new Error('missing, stale or incomplete iteration cleanup status');
-        previousGroupDrained = true;
-        row.drained=previousGroupDrained;
         status = Number.isInteger(result.status) ? result.status : 70;
-        if(status===70)invalidCleanup=true;
+        // A complete cleanup attests absence of owned processes; it cannot turn
+        // a timed-out or cancelled iteration into permission to start another.
+        if(status===70 || status===124 || result.timedOut || result.cancelledOnHostObserved) {
+          invalidCleanup=true;
+          previousGroupDrained=false;
+          throw new Error('iteration did not complete; refusing further iterations');
+        }
+        previousGroupDrained = true;
+        row.drained=true;
         if(requireComparisonEvidence&&mode!=='normal') {
           const evidence=JSON.parse(readFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,'utf8'));
           if(evidence.version!==1||evidence.runId!==workerEnv.MADO_APP_COMPARE_RESULT_ID||evidence.complete!==true||
