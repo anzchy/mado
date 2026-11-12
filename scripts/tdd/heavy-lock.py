@@ -152,7 +152,7 @@ def guardian_main(read_fd, ready_fd):
 
 
 def receive_control(control, groups, hosts, session, guardian_fd=None, flock_required=False,
-                    deadline=None, accept_groups=True):
+                    deadline=None, accept_groups=True, ancestor_control_fd=None):
     """Confirm registration before a nested supervisor launches its child."""
     if control is None:
         return
@@ -177,13 +177,17 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
             if kind == 'group' and accept_groups and deadline is not None and \
                     time.monotonic() < deadline and pid > 0 and request.get('flock') is flock_required and \
                     os.getpgid(pid) == pid and os.getsid(pid) == session:
-                if guardian_send(guardian_fd, 'group', pid):
+                forwarded = True
+                if ancestor_control_fd is not None:
+                    forwarded = json.loads(send_control(ancestor_control_fd, request)).get('status') == 'OK'
+                if forwarded and guardian_send(guardian_fd, 'group', pid):
                     groups.add(pid)
                     answer = json.dumps({'status': 'OK', 'parent': os.getpid(),
                                          'deadline': deadline}).encode()
             elif kind == 'host' and pid > 0:
                 os.kill(pid, 0)
-                if guardian_send(guardian_fd, 'host', pid):
+                forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
+                if forwarded and guardian_send(guardian_fd, 'host', pid):
                     hosts.add(pid)
                     answer = b'OK'
         except (ValueError, TypeError, OSError, json.JSONDecodeError):
@@ -342,14 +346,14 @@ def signal_owned(rows, sig):
 
 
 def stop_owned(child, root, groups, hosts, grace, control, session, excluded=0,
-               guardian_fd=None, flock_required=False):
+               guardian_fd=None, flock_required=False, ancestor_control_fd=None):
     started = time.monotonic()
     killed_at = None
     sent_term = False
     while True:
         child.poll()
         receive_control(control, groups, hosts, session, guardian_fd, flock_required,
-                        accept_groups=False)
+                        accept_groups=False, ancestor_control_fd=ancestor_control_fd)
         rows = owned_state(root, groups, hosts, excluded)
         if rows == []:
             return True
@@ -410,16 +414,21 @@ def supervised_main():
         return 70
     inherited_flock = os.environ.get('PICSEE_HEAVY_FLOCK_FD')
     parent_deadline = None
+    ancestor_control_fd = None
     if nested:
         try:
             control_fd = int(inherited_control)
+            ancestor_control_fd = control_fd
             os.fstat(control_fd)
             if inherited_flock:
                 os.fstat(int(inherited_flock))
             os.setpgid(0, 0)
             reply = send_control(control_fd, {'kind': 'group', 'pid': os.getpid(),
                                               'flock': bool(inherited_flock)})
-            handoff = json.loads(reply)
+            try:
+                handoff = json.loads(reply)
+            except (ValueError, TypeError) as error:
+                raise ValueError(f'parent registration unavailable ({reply!r})') from error
             parent_deadline = float(handoff['deadline'])
             if handoff['status'] != 'OK' or not math.isfinite(parent_deadline) or \
                     parent_deadline <= time.monotonic() or int(handoff['parent']) <= 0:
@@ -518,6 +527,8 @@ def supervised_main():
             child_env['MDPRO_HEAVY_LOCK_HELD'] = '1'
         if fd is not None:
             child_env['PICSEE_HEAVY_FLOCK_FD'] = str(fd)
+        elif inherited_flock:
+            child_env['PICSEE_HEAVY_FLOCK_FD'] = inherited_flock
         else:
             child_env.pop('PICSEE_HEAVY_FLOCK_FD', None)
         passed = [worker_control.fileno()]
@@ -547,7 +558,7 @@ def supervised_main():
         while True:
             result = child.poll()
             receive_control(parent_control, groups, hosts, session, guardian_write, flock_required,
-                            execution_deadline)
+                            execution_deadline, ancestor_control_fd=ancestor_control_fd)
             if guardian is not None and guardian.poll() is not None:
                 print('[heavy-lock] guardian disappeared before cleanup', file=sys.stderr, flush=True)
                 cleanup = 'incomplete'
@@ -556,14 +567,14 @@ def supervised_main():
             if received:
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
-                                                   flock_required) else 'incomplete'
+                                                   flock_required, ancestor_control_fd) else 'incomplete'
                 break
             if time.monotonic() >= execution_deadline:
                 timed_out = True
                 print(f'[heavy-lock] execution timeout after {budget:g}s', file=sys.stderr, flush=True)
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
-                                                   flock_required) else 'incomplete'
+                                                   flock_required, ancestor_control_fd) else 'incomplete'
                 break
             if rows is None:
                 if result is not None:
@@ -586,7 +597,7 @@ def supervised_main():
                     print('[heavy-lock] drain timed out; terminating survivors', file=sys.stderr, flush=True)
                     cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                        parent_control, session, excluded, guardian_write,
-                                                       flock_required) else 'incomplete'
+                                                       flock_required, ancestor_control_fd) else 'incomplete'
                     break
             time.sleep(0.02)
         retain_shared = cleanup != 'complete'
@@ -614,7 +625,7 @@ def supervised_main():
                 session = os.getsid(0) if nested else child.pid
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, os.getpid() if nested else 0,
-                                                   guardian_write, flock_required) else 'incomplete'
+                                                   guardian_write, flock_required, ancestor_control_fd) else 'incomplete'
                 retain_shared = cleanup != 'complete'
                 publish_status(status_path, invocation, cleanup, child.poll(), False)
             except BaseException as cleanup_error:
