@@ -215,7 +215,9 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
   assert.match(upload, /^          path: \.build\/app-lane-attempt1\.log$/m);
   assert.ok(lane, 'App lane step exists');
   // The real pipeline exit-status contract is exercised in ci-workflow.test.mjs.
-  assert.match(lane, /else\n +node scripts\/tdd\/app-lane\.mjs\n +fi\n +\} 2>&1 \| tee \.build\/app-tests\.log/m);
+  assert.match(lane, /PICSEE_HEAVY_CI_TOP_LEVEL: '1'/);
+  assert.match(lane, /PICSEE_HEAVY_STATUS_PATH: \.build\/app-heavy-cleanup-/);
+  assert.match(lane, /else\n +scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs\n +fi\n +\} 2>&1 \| tee \.build\/app-tests\.log/m);
   assert.doesNotMatch(lane, /continue-on-error:/);
 });
 
