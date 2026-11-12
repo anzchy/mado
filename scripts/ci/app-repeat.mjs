@@ -111,6 +111,7 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
           path.dirname(statusPath)!==temporary||path.basename(statusPath)!==`${id}.json`)
           throw new Error('invalid private iteration identity');
         const attestation=JSON.parse(readFileSync(statusPath,'utf8'));
+        if(env.MADO_HOST_QUERY_DIAGNOSTICS==='1')log+=`app-repeat: private cleanup attestation ${JSON.stringify({at:now(),attestation,result})}\n`;
         if(attestation.id!==id||attestation.supervisor!==owner||
           attestation.cleanup!=='complete'||attestation.commandExit!==result.status)
           throw new Error('missing, stale or incomplete iteration cleanup status');

@@ -92,6 +92,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     const state=host.snapshot();if(state.identities.length>count){
       const added=state.identities.slice(count);
       log('owned host registered '+JSON.stringify(added));
+      if(env.MADO_HOST_QUERY_DIAGNOSTICS==='1')log('host registration '+JSON.stringify({at:now(),identities:added}));
       if(env.PICSEE_HEAVY_LOCK_HELD==='1')for(const identity of added){
         const registered=spawnSync(heavyLock,['--register-host',String(identity.pid)],
           {env,stdio:inheritedStdio(env,['ignore','ignore','ignore']),timeout:2000});
@@ -135,7 +136,15 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       if(!inspector)inspector=await prepareHostInspector({deadline,env,spawn:inspectorSpawn,now,signal:startupAbort.signal});
       if(startupStopped||now()>=deadline||!inspector.ready)return await finish(70,false);
       host=createAsyncHostOwnership({token:env.MADO_TEST_RUN_TOKEN,executable:env.MADO_HOST_EXECUTABLE,now,
-        excludeGroup:()=>group,query:hostQuery??(request=>inspector.query(request)),signal:hostSignal});
+        excludeGroup:()=>group,query:hostQuery??(async request=>{
+          const snapshot=await inspector.query(request);
+          if(env.MADO_HOST_QUERY_DIAGNOSTICS==='1')log('host query '+JSON.stringify({at:now(),
+            pids:request.pids??null,cleanupSignal:request.cleanupSignal??null,
+            snapshot:{complete:snapshot.complete,transport:snapshot.transport,unknown:snapshot.unknown,
+              candidateCount:snapshot.processes.length,
+              processes:snapshot.processes.filter(row=>row.marker===env.MADO_TEST_RUN_TOKEN||request.pids?.includes(row.pid))}}));
+          return snapshot;
+        }),signal:hostSignal});
     }
     if(startupStopped||now()>=deadline)return await finish(70,false);
     const childEnv={...env};if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;

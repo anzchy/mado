@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {existsSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -31,9 +31,15 @@ test('hostedCompareRealProcessesRequireHostDrainBeforeSecondIteration',t=>{
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
     APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),PICSEE_HEAVY_LOCK_HELD:'1',
     PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'15'};
+    PICSEE_HEAVY_LOCK_EXEC_SECS:'15',MADO_HOST_QUERY_DIAGNOSTICS:'1',
+    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'heavy-status.json')};
   delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
+  t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),deadline:env.APP_REPEAT_DEADLINE_MS,
+    status:run.status,signal:run.signal,error:run.error?.message??null,stdout:run.stdout,stderr:run.stderr,
+    files:existsSync(out)?readdirSync(out).sort().map(name=>({name,content:readFileSync(path.join(out,name),'utf8')})):[],
+    heavyStatus:existsSync(env.PICSEE_HEAVY_STATUS_PATH)?readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8'):null},null,2));
   assert.equal(run.status,0,run.stdout+run.stderr);
   const report=JSON.parse(readFileSync(path.join(out,'summary.json'),'utf8'));
   assert.equal(report.iterations.length,2);

@@ -38,6 +38,11 @@ const settledAt=()=>Date.now()+30000;
 let drainDeadline=null;
 while(true){
   const snapshot=queryHostProcesses({token,executable:canonical});
+  if(process.env.MADO_HOST_QUERY_DIAGNOSTICS==='1')
+    process.stderr.write('hosted-owner: query '+JSON.stringify({at:Date.now(),childPid:child.pid,
+      childExited,childCode,childSignal,drainDeadline,stopping,
+      snapshot:{complete:snapshot.complete,transport:snapshot.transport,unknown:snapshot.unknown,
+        candidateCount:snapshot.processes.length,processes:snapshot.processes.filter(row=>row.marker===token)}})+'\n');
   if(!snapshot.complete||snapshot.unknown.length)uncertain=true;
   else{
     const current=snapshot.processes.filter(p=>p.marker===token&&p.executable===canonical&&
@@ -54,7 +59,7 @@ while(true){
           process.stderr.write(`hosted-owner: host registration failed pid=${identity.pid}; cleanup incomplete\n`);
         }else{
           identities.set(identity.pid,identity);
-          process.stderr.write(`hosted-owner: registered host pid=${identity.pid}\n`);
+          process.stderr.write(`hosted-owner: registered host pid=${identity.pid} at=${Date.now()}\n`);
         }
       }
     }
@@ -66,6 +71,9 @@ while(true){
 }
 if(!observed||uncertain){
   const mark=spawnSync(lock,['--mark-host-unknown'],{env:process.env,stdio,timeout:2000});
+  if(process.env.MADO_HOST_QUERY_DIAGNOSTICS==='1')
+    process.stderr.write('hosted-owner: unknown cleanup mark '+JSON.stringify({at:Date.now(),status:mark.status,
+      signal:mark.signal,error:mark.error?.message??null,observed,uncertain,childExited,childCode,childSignal})+'\n');
   if(mark.status!==0||mark.error)
     process.stderr.write('hosted-owner: supervisor could not record unknown host cleanup\n');
 }
