@@ -270,3 +270,14 @@ test('historical Info identity is confined to the named release fixture', () => 
     assert.equal(scan(root, 'Mado', exceptions).length, count, path);
   }
 });
+
+test('the issue637 GUI-lock owner token is exempt only in its perf runner comparison', () => {
+  const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  const root = repo();
+  file(root, 'scripts/perf/issue637-run.py', "if values.get('project') != 'picsee':\nif values.get('other') != 'picsee':\n");
+  file(root, 'scripts/device/issue637-desktop.py', "if values.get('project') != 'picsee':\n");
+  const problems = scan(root, 'Mado', exceptions);
+  assert.equal(problems.length, 2, problems.join('\n'));
+  assert.ok(problems.some(message => message.startsWith('scripts/perf/issue637-run.py:2:')));
+  assert.ok(problems.some(message => message.startsWith('scripts/device/issue637-desktop.py:1:')));
+});

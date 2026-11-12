@@ -364,6 +364,14 @@
     "reason": "#556: exact desktop GUI-lease owner token/comparison and historical coordination-document filename; no app bundle or subsystem exception."
   },
   {
+    "pathRegex": "^scripts/perf/issue637-run\\.py$",
+    "pattern": "(?<=values\\.get\\('project'\\) != ')picsee(?=')",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556/#637: the perf runner compares the unchanged gui-lock.sh project owner token until both ends migrate."
+  },
+  {
     "pathRegex": "^\\.agents/skills/apple-developer-setup/scripts/setup-secrets-wizard\\.sh$",
     "pattern": "picsee-secrets\\.|picsee(?= release signing secrets)|picsee(?= notarisation)|(?<=account ')picsee(?=')|(?<=--account )picsee\\b",
     "scopes": [
