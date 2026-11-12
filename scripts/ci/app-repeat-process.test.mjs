@@ -92,6 +92,17 @@ test('expired startup and unreaped inspector cannot claim drain or launch a next
   assert.equal(stopped.drained,false);assert.equal(stopped.inspector.reaped,true);
 });
 
+test('deadline timer rechecks the clock before beginning cleanup',async t=>{
+  const o=options(t,{env:{},deadline:Date.now()+200,graceMs:20,drainMs:200});
+  let reads=0;
+  const now=()=>Date.now()+(++reads<=2?30:0);
+  const pending=runProcessGroup({...o,now});finish(t,pending,o);
+  const result=await pending;
+  assert.equal(result.status,70);
+  assert.ok(result.cleanup.graceStartedAt>=o.deadline,
+    `cleanup started before the original deadline: ${JSON.stringify(result.cleanup)}`);
+});
+
 test('awaited authorization consuming the original final drain never sends a signal or renews cleanup',async t=>{
   const f=externalInspectorFixture(t),o=options(t);let time=1000;const signals=[];
   const hostQuery=async({pids})=>{if(pids)time=2080;return {complete:true,processes:[identity(o.env.MADO_TEST_RUN_TOKEN)],unknown:[]};};
