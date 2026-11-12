@@ -56,7 +56,7 @@ if sys.platform=='darwin':
     def pids():
         # ps obtains each UID from the OS. Protected daemons owned by another UID
         # cannot be this invocation; never infer their UID from an unreadable path.
-        snapshot=subprocess.run(['/bin/ps','-axo','pid=,uid='],capture_output=True,text=True,timeout=1)
+        snapshot=subprocess.run(['/bin/ps','-axo','pid=,uid='],capture_output=True,text=True,timeout=request['psTimeoutSeconds'])
         if snapshot.returncode!=0: raise OSError('cannot enumerate OS process UIDs')
         rows=[line.split() for line in snapshot.stdout.splitlines() if line.strip()]
         if any(len(row)!=2 for row in rows): raise OSError('incomplete OS UID snapshot')
@@ -116,6 +116,7 @@ print(json.dumps(dict(complete=True,processes=records,unknown=unknown)))
 // The hosted runner may need more than one second for Python startup, ps and the
 // per-PID kernel walk. Keep each query below the owner's 30-second drain budget.
 const inspectorTimeoutMilliseconds=5000;
+const psTimeoutSeconds=(inspectorTimeoutMilliseconds-1000)/1000;
 
 export function queryHostProcesses({token,executable,uid=process.getuid(),pids,spawn=spawnSync,now=Date.now}={}){
   const started=now();let run,stage='spawn',reason='OS ownership inspector could not start';
@@ -124,7 +125,7 @@ export function queryHostProcesses({token,executable,uid=process.getuid(),pids,s
     errorCode:typeof run?.error?.code==='string'?run.error.code:null,
     stdoutBytes:Buffer.byteLength(run?.stdout??''),stderrBytes:Buffer.byteLength(run?.stderr??'')});
   try{
-    run=spawn('/usr/bin/python3',['-c',inspector,JSON.stringify({token,executable,uid,pids})],
+    run=spawn('/usr/bin/python3',['-c',inspector,JSON.stringify({token,executable,uid,pids,psTimeoutSeconds})],
       {encoding:'utf8',timeout:inspectorTimeoutMilliseconds,maxBuffer:4*1024*1024});
     stage='process';reason='OS ownership inspection failed';
     if(run.error||run.signal||run.status!==0)throw new Error(reason);

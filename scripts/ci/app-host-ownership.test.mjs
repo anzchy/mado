@@ -73,6 +73,16 @@ test('OS query failures expose bounded transport facts without leaking child out
     assert.equal(JSON.stringify(result).includes('secret'),false);assert.equal(JSON.stringify(result).includes('private'),false);
   }
 });
+test('inner ps receives more than one second but less than outer inspector budget',()=>{
+  let request,timeout;
+  queryHostProcesses({token:'invocation-A',executable,uid,spawn:(_command,args,options)=>{
+    request=JSON.parse(args[2]);timeout=options.timeout;
+    return {status:0,signal:null,stdout:'{"complete":true,"processes":[],"unknown":[]}',stderr:''};
+  }});
+  assert.equal(timeout,5000);
+  assert.ok(request.psTimeoutSeconds>1,'loaded ps may need more than the old one-second bound');
+  assert.ok(request.psTimeoutSeconds<=4,'leave at least one second for Python and kernel inspection');
+});
 
 test('slow OS inspector can observe a host before the ownership drain deadline',()=>{
   const token='i657-slow-inspector',record=identity({marker:token});
