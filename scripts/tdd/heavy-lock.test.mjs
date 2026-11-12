@@ -59,6 +59,37 @@ redTest('reverseMdproMissingHandoffRefusesBeforeLaunch', () => {
   assert.equal(existsSync(marker), false);
 });
 
+redTest('ciTopLevelRejectsUnverifiedMdproHandoffBeforeLaunch', () => {
+  const env={...environment(),GITHUB_ACTIONS:'true',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
+    PICSEE_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'};
+  const marker=path.join(env.HOME,'launched');
+  const result=spawnSync(lock,['touch',marker],{env,encoding:'utf8',timeout:5000});
+  assert.ifError(result.error);
+  assert.equal(result.status,70,result.stderr);
+  assert.match(result.stderr,/no verified handoff/);
+  assert.equal(existsSync(marker),false,'unverified CI input never launches');
+  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),false,'refusal precedes flock creation');
+  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+});
+
+redTest('picseeParentSharedOwnershipAuthenticatesNestedMdproFlag', async () => {
+  const env=environment();
+  const marker=path.join(env.HOME,'nested-launched');
+  const result=await run(['bash','-c','"$1" touch "$2"; exit $?','_',lock,marker],env);
+  assert.equal(result.code,0,result.output);
+  assert.equal(existsSync(marker),true);
+  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+});
+
+redTest('nestedMdproFlagNeedsParentSharedOwnership', async () => {
+  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const marker=path.join(env.HOME,'nested-launched');
+  const result=await run(['bash','-c','MDPRO_HEAVY_LOCK_HELD=1 "$1" touch "$2"; exit $?','_',lock,marker],env);
+  assert.equal(result.code,70,result.output);
+  assert.match(result.output,/no verified handoff/,result.output);
+  assert.equal(existsSync(marker),false);
+});
+
 redTest('reverseMdproDeadlineAndCancelReachWorkload — BLOCKED-upstream RED', async () => {
   const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1', PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};
   const pidFile = path.join(env.HOME, 'worker-pid');
@@ -323,7 +354,7 @@ for (const sig of ['SIGINT', 'SIGHUP']) {
 }
 
 redTest('guardianLossStillDrainsWorkerBeforeExit70', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const env={...environment(),PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
   const pidFile=path.join(env.HOME,'worker-pid');
   const holder=start(['python3','-c',
     'import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)',pidFile],env);
@@ -340,8 +371,10 @@ redTest('guardianLossStillDrainsWorkerBeforeExit70', async () => {
     assert.ok(Date.now()-began<1500,'guardian loss stops the worker promptly');
     assert.equal(result.code,70,result.output);
     assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
+    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,
+      'verified guardian-loss cleanup releases shared ownership');
     assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
-      'guardian-loss cleanup released the flock');
+      'guardian-loss cleanup released both locks');
   } finally {
     holder.child.kill('SIGTERM');
     await holder.done;

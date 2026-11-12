@@ -154,7 +154,8 @@ def guardian_main(read_fd, ready_fd):
 
 
 def receive_control(control, groups, hosts, session, guardian_fd=None, flock_required=False,
-                    deadline=None, accept_groups=True, ancestor_control_fd=None):
+                    deadline=None, accept_groups=True, ancestor_control_fd=None,
+                    shared_owned=False):
     """Confirm registration before a nested supervisor launches its child."""
     if control is None:
         return
@@ -185,7 +186,7 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
                 if forwarded and guardian_send(guardian_fd, 'group', pid):
                     groups.add(pid)
                     answer = json.dumps({'status': 'OK', 'parent': os.getpid(),
-                                         'deadline': deadline}).encode()
+                                         'deadline': deadline, 'shared': shared_owned}).encode()
             elif kind == 'host' and pid > 0:
                 os.kill(pid, 0)
                 forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
@@ -416,6 +417,7 @@ def supervised_main():
         return 70
     inherited_flock = os.environ.get('PICSEE_HEAVY_FLOCK_FD')
     parent_deadline = None
+    parent_shared = False
     ancestor_control_fd = None
     if nested:
         try:
@@ -435,6 +437,7 @@ def supervised_main():
             if handoff['status'] != 'OK' or not math.isfinite(parent_deadline) or \
                     parent_deadline <= time.monotonic() or int(handoff['parent']) <= 0:
                 raise ValueError('parent registration unavailable')
+            parent_shared = handoff.get('shared') is True
         except (OSError, ValueError) as error:
             print(f'[heavy-lock] nested admission refused: {error}', file=sys.stderr, flush=True)
             return 70
@@ -444,7 +447,7 @@ def supervised_main():
         return 70
     lock = Path(os.environ.get('PICSEE_HEAVY_LOCK', str(Path.home() / '.picsee/locks/heavy.lock')))
     reverse = os.environ.get('MDPRO_HEAVY_LOCK_HELD') == '1'
-    if reverse and not held:
+    if reverse and not parent_shared:
         print('[heavy-lock] reverse mdpro nesting refused: no verified handoff (#665)',
               file=sys.stderr, flush=True)
         return 70
@@ -462,6 +465,7 @@ def supervised_main():
     retain_shared = False
     result = 70
     timed_out = False
+    guardian_lost = False
     cleanup = 'incomplete'
     child = None
     parent_control = None
@@ -562,12 +566,14 @@ def supervised_main():
         while True:
             result = child.poll()
             receive_control(parent_control, groups, hosts, session, guardian_write, flock_required,
-                            execution_deadline, ancestor_control_fd=ancestor_control_fd)
+                            execution_deadline, ancestor_control_fd=ancestor_control_fd,
+                            shared_owned=acquired or parent_shared)
             if guardian is not None and guardian.poll() is not None:
+                guardian_lost = True
                 print('[heavy-lock] guardian disappeared before cleanup', file=sys.stderr, flush=True)
-                stop_owned(child, root, groups, hosts, grace, parent_control, session,
-                           excluded, guardian_write, flock_required, ancestor_control_fd)
-                cleanup = 'incomplete'
+                cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
+                                                   parent_control, session, excluded, guardian_write,
+                                                   flock_required, ancestor_control_fd) else 'incomplete'
                 break
             rows = owned_state(root, groups, hosts, excluded)
             if received:
@@ -652,6 +658,8 @@ def supervised_main():
         if fd is not None:
             os.close(fd)
     if cleanup != 'complete':
+        return 70
+    if guardian_lost:
         return 70
     if timed_out:
         return 124
