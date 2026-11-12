@@ -358,6 +358,8 @@ jobs:
           PICSEE_HEAVY_LOCK_HELD: '1'
           PICSEE_HEAVY_CI_TOP_LEVEL: '1'
           PICSEE_HEAVY_STATUS_PATH: .build/app-heavy-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
+          MADO_HOST_OWNERSHIP_REQUIRED: '1'
+          MADO_HOST_EXECUTABLE: .build/dd-ci/Build/Products/Debug/Mado.app/Contents/MacOS/Mado
           PICSEE_APP_RESULT_PATH: .build/app-result.json
           PICSEE_APP_RESULT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           REPEAT_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 }}
@@ -563,8 +565,9 @@ jobs:
       - name: Host ownership integration
         env:
           PICSEE_HEAVY_CI_TOP_LEVEL: '1'
+          PICSEE_HEAVY_CI_BOUNDARY_REQUIRED: '1'
           PICSEE_HEAVY_STATUS_PATH: .build/host-integration-cleanup-${{ github.run_id }}-${{ github.run_attempt }}.json
-        run: scripts/heavy-lock.sh env -u PICSEE_HEAVY_LOCK_HELD -u PICSEE_HEAVY_CONTROL_FD -u PICSEE_HEAVY_FLOCK_FD node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs > .build/host-ownership-integration.tap 2>&1
+        run: scripts/heavy-lock.sh node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs > .build/host-ownership-integration.tap 2>&1
       - name: Verify hosted cancellation ownership
         env:
           PICSEE_HEAVY_CI_TOP_LEVEL: '1'

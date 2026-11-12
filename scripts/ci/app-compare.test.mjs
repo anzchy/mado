@@ -21,6 +21,20 @@ function attestedResult(settings,status,details={}){
 const moduleURL=new URL('./app-compare.mjs',import.meta.url);
 const comparison=existsSync(moduleURL)?await import(moduleURL.href):{};
 const root=fileURLToPath(new URL('../../',import.meta.url));
+test('CI Host ownership lane refuses cleared inherited supervision before tests launch',t=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'i657-ci-clear-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const marker=path.join(dir,'ran');
+  const fixture=path.join(dir,'fixture.test.mjs');
+  writeFileSync(fixture,`import test from 'node:test';import {writeFileSync} from 'node:fs';test('must not run',()=>writeFileSync(${JSON.stringify(marker)},'ran'));\n`);
+  const env={...process.env,PICSEE_HEAVY_CI_BOUNDARY_REQUIRED:'1',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CONTROL_FD:''};
+  delete env.NODE_TEST_CONTEXT;
+  const run=spawnSync(process.execPath,[path.join(root,'scripts/tdd/node-lane.mjs'),fixture],{
+    env,
+    encoding:'utf8',timeout:5000});
+  assert.equal(run.status,70,run.stdout+run.stderr);
+  assert.equal(existsSync(marker),false);
+});
 // Owner-approved real-OS lane placement must execute the actual strict runner,
 // propagate its status and retain its report for every comparison mode.
 for(const mode of ['hosted'])for(const outcome of ['pass','fail','zero','crash'])

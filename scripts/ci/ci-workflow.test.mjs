@@ -415,3 +415,16 @@ test('workflow transports structured evidence paths policy and report verdict ou
   assert.match(skeleton,/APP_FORMAL: \$\{\{ needs\.app-tests\.outputs\.app_formal \}\}/);
   assert.match(skeleton,/APP_DIAGNOSTIC: \$\{\{ needs\.app-tests\.outputs\.app_diagnostic \}\}/);
 });
+
+test('CI Host ownership step retains inherited supervision and top-level admission', () => {
+  const host=jobBlock('app-host-comparison');
+  const integration=host.split(/^      - name: /m).find(step=>step.startsWith('Host ownership integration\n'));
+  assert.ok(integration);
+  assert.doesNotMatch(integration,/\benv -u\b|unset PICSEE_HEAVY/);
+  assert.match(integration,/PICSEE_HEAVY_CI_TOP_LEVEL: '1'/);
+  assert.match(integration,/PICSEE_HEAVY_CI_BOUNDARY_REQUIRED: '1'/);
+  assert.match(integration,/run: scripts\/heavy-lock\.sh node scripts\/tdd\/node-lane\.mjs scripts\/ci\/integration\/\*\.test\.mjs/);
+  const app=appStep('Run App tests');
+  assert.match(app,/MADO_HOST_OWNERSHIP_REQUIRED: '1'/);
+  assert.match(app,/MADO_HOST_EXECUTABLE: \.build\/dd-ci\/Build\/Products\/Debug\/Mado\.app\/Contents\/MacOS\/Mado/);
+});
