@@ -273,11 +273,20 @@ test('historical Info identity is confined to the named release fixture', () => 
 
 test('the issue637 GUI-lock owner token is exempt only in its perf runner comparison', () => {
   const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
+  const issue637Exceptions = exceptions.filter(entry => entry.reason.includes('#637'));
+  assert.equal(issue637Exceptions.length, 1);
+  const exception = issue637Exceptions[0];
+  const runnerPath = process.env.PICSEE_ISSUE637_NAME_RUNNER ?? new URL('../perf/issue637-run.py', import.meta.url);
+  const runner = readFileSync(runnerPath, 'utf8');
+  assert.equal([...runner.matchAll(new RegExp(exception.pattern, 'g'))].length, 1,
+    'the tracked issue637 perf runner must contain exactly one exempt owner token');
   const root = repo();
   file(root, 'scripts/perf/issue637-run.py', "if values.get('project') != 'picsee':\nif values.get('other') != 'picsee':\n");
+  file(root, 'x/scripts/perf/issue637-run.py', "if values.get('project') != 'picsee':\n");
   file(root, 'scripts/device/issue637-desktop.py', "if values.get('project') != 'picsee':\n");
   const problems = scan(root, 'Mado', exceptions);
-  assert.equal(problems.length, 2, problems.join('\n'));
+  assert.equal(problems.length, 3, problems.join('\n'));
   assert.ok(problems.some(message => message.startsWith('scripts/perf/issue637-run.py:2:')));
+  assert.ok(problems.some(message => message.startsWith('x/scripts/perf/issue637-run.py:1:')));
   assert.ok(problems.some(message => message.startsWith('scripts/device/issue637-desktop.py:1:')));
 });
