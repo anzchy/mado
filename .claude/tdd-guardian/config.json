@@ -162,6 +162,15 @@
       "timeoutMs": 120000
     },
     {
+      "name": "ci-host-timeout-node",
+      "description": "Focused #657 phase 4 synchronous OS ownership inspector RED receipt.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
       "name": "ci-host-ownership-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs scripts/ci/app-repeat-process.test.mjs scripts/ci/hosted-cancel-probe.test.mjs scripts/ci/app-host-inspector.test.mjs scripts/ci/integration/*.test.mjs",
       "gateOn": [

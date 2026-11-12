@@ -113,15 +113,19 @@ for pid in (wanted if wanted is not None else pids()):
 print(json.dumps(dict(complete=True,processes=records,unknown=unknown)))
 `;
 
+// The hosted runner may need more than one second for Python startup, ps and the
+// per-PID kernel walk. Keep each query below the owner's 30-second drain budget.
+const inspectorTimeoutMilliseconds=5000;
+
 export function queryHostProcesses({token,executable,uid=process.getuid(),pids,spawn=spawnSync,now=Date.now}={}){
   const started=now();let run,stage='spawn',reason='OS ownership inspector could not start';
-  const transport=()=>({stage,elapsedMilliseconds:Math.max(0,now()-started),timeoutMilliseconds:1000,
+  const transport=()=>({stage,elapsedMilliseconds:Math.max(0,now()-started),timeoutMilliseconds:inspectorTimeoutMilliseconds,
     status:Number.isInteger(run?.status)?run.status:null,signal:run?.signal??null,
     errorCode:typeof run?.error?.code==='string'?run.error.code:null,
     stdoutBytes:Buffer.byteLength(run?.stdout??''),stderrBytes:Buffer.byteLength(run?.stderr??'')});
   try{
     run=spawn('/usr/bin/python3',['-c',inspector,JSON.stringify({token,executable,uid,pids})],
-      {encoding:'utf8',timeout:1000,maxBuffer:4*1024*1024});
+      {encoding:'utf8',timeout:inspectorTimeoutMilliseconds,maxBuffer:4*1024*1024});
     stage='process';reason='OS ownership inspection failed';
     if(run.error||run.signal||run.status!==0)throw new Error(reason);
     stage='json';reason='OS ownership response is not JSON';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {realpathSync} from 'node:fs';
 import {queryHostProcesses,createHostOwnership,createAsyncHostOwnership} from './app-host-ownership.mjs';
@@ -67,11 +67,26 @@ test('OS query failures expose bounded transport facts without leaking child out
     const result=queryHostProcesses({token:'invocation-A',executable,uid,now:()=>{time+=25;return time;},spawn:()=>c.run});
     assert.equal(result.complete,false);assert.equal(result.transport?.stage,c.stage);
     assert.equal(result.transport.errorCode,c.code);assert.equal(result.transport.elapsedMilliseconds,25);
-    assert.equal(result.transport.timeoutMilliseconds,1000);assert.equal(result.transport.status,c.run.status);
+    assert.equal(result.transport.timeoutMilliseconds,5000);assert.equal(result.transport.status,c.run.status);
     assert.equal(result.transport.signal,c.run.signal??null);
     assert.equal(result.transport.stdoutBytes,Buffer.byteLength(c.run.stdout));assert.equal(result.transport.stderrBytes,Buffer.byteLength(c.run.stderr));
     assert.equal(JSON.stringify(result).includes('secret'),false);assert.equal(JSON.stringify(result).includes('private'),false);
   }
+});
+
+test('slow OS inspector can observe a host before the ownership drain deadline',()=>{
+  const token='i657-slow-inspector',record=identity({marker:token});
+  const reply=JSON.stringify({complete:true,processes:[record],unknown:[]});
+  const spawn=(_command,_args,options)=>spawnSync('/usr/bin/python3',
+    ['-c','import sys,time;time.sleep(1.5);sys.stdout.write(sys.argv[1])',reply],options);
+  const tracker=createHostOwnership({token,executable,uid,
+    query:()=>queryHostProcesses({token,executable,uid,spawn})});
+  tracker.observe();
+  const snapshot=tracker.snapshot();
+  assert.equal(snapshot.observed,true,'a 1.5-second OS reply must register as an observation');
+  assert.equal(snapshot.drained,false,'a live matching host still prevents drain');
+  assert.deepEqual(snapshot.unknown,[]);
+  assert.deepEqual(snapshot.queryFailures,[]);
 });
 
 test('failed query transport facts survive ownership refusal for diagnosis',()=>{
