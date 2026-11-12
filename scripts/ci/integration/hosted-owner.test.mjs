@@ -127,6 +127,8 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   const registrations=ownerEvents(run.stderr,'registration');
   const [decision]=ownerEvents(run.stderr,'decision');
   assert.ok(queries.length>=2,'real lane emits every query without a diagnostic flag');
+  assert.ok(queries.every(event=>Number.isFinite(event.snapshot.transport.elapsedMilliseconds)&&
+    event.snapshot.transport.timeoutMilliseconds===5000),'every query line carries the OS transport timing budget');
   assert.ok(registrations.some(event=>event.result==='registered'&&event.pid===pid));
   assert.equal(decision?.result,'complete');
   assert.equal(decision.observed,true);
