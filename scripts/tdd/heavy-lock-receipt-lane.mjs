@@ -3,7 +3,8 @@
 import {spawnSync} from 'node:child_process';
 const name=process.env.PICSEE_HEAVY_TEST_FILTER;
 const file=process.env.PICSEE_HEAVY_TEST_FILE??'scripts/tdd/heavy-lock.test.mjs';
-if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','scripts/tdd/app-lane.test.mjs'].includes(file)){
+if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','scripts/tdd/app-lane.test.mjs',
+  'scripts/ci/integration/hosted-owner.test.mjs'].includes(file)){
   process.stderr.write('unsupported process contract file\n');process.exit(70);
 }
 if(!name){process.stderr.write('PICSEE_HEAVY_TEST_FILTER is required\n');process.exit(70);}
