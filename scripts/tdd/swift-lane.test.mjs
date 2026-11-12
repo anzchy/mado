@@ -26,6 +26,17 @@ if(process.env.SPAWN_DESCENDANT){
 if(process.env.SPLIT) process.stderr.write(text);
 if(process.env.CRASH_STDERR) process.stderr.write(fs.readFileSync(process.env.CRASH_STDERR_FIXTURE,'utf8').split('\\n').filter(l=>/Fatal error|exited with unexpected signal/.test(l)).join('\\n'));
 if(process.env.INCOMPLETE_SWIFT) process.stderr.write(fs.readFileSync(process.env.SWIFT_START_FIXTURE,'utf8').split('\\n').filter(l=>l.includes('Test run started')).join('\\n')); 
+if(process.env.HANG_AFTER_ASSERTION){
+  process.on('SIGTERM',()=>process.exit(1));
+  fs.writeFileSync(process.env.RUNNER_STARTED,String(process.pid));
+  setInterval(()=>{},1000);
+}
+if(process.env.CANCEL_SUPERVISOR){
+  process.on('SIGTERM',()=>process.exit(1));
+  fs.writeFileSync(process.env.RUNNER_STARTED,String(process.pid));
+  process.kill(process.ppid,'SIGTERM');
+  setInterval(()=>{},1000);
+}
 process.exitCode=Number(process.env.SWIFT_EXIT);
 `, { mode: 0o755 });
 const require = createRequire(import.meta.url);
@@ -45,14 +56,15 @@ function pluginTest(name, fn) {
     return fn({ exec, classifyRedRun });
   });
 }
-function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false, extraEnv = {} } = {}) {
-  const argvFile = path.join(temp, 'argv.json');
+function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false, extraEnv = {}, timeoutMs = 10000 } = {}) {
+  const attempt=mkdtempSync(path.join(temp,'attempt-'));
+  const argvFile = path.join(attempt, 'argv.json');
   const env = { ...process.env, PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
-    PICSEE_HEAVY_LOCK: path.join(temp, 'heavy.lock'), PICSEE_HEAVY_LOCK_HELD: '',
-    PICSEE_MDPRO_LOCK: path.join(temp, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
+    PICSEE_HEAVY_LOCK: path.join(attempt, 'heavy.lock'), PICSEE_HEAVY_LOCK_HELD: '',
+    PICSEE_MDPRO_LOCK: path.join(attempt, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
     SWIFT_START_FIXTURE: path.join(root,'scripts/tdd/fixtures/swift-pass.txt'), TRUNCATE_ROOT: truncateRoot ? '1' : '', INCOMPLETE_SWIFT: incompleteSwift ? '1' : '', CRASH_STDERR_FIXTURE: path.join(root,'scripts/tdd/fixtures/xctest-partial-crash.txt'), ARGV_FILE: argvFile, FIXTURE: path.join(root, 'scripts/tdd/fixtures', fixture + '.txt'),
     SWIFT_EXIT: String(code), ON_STDERR: stderr ? '1' : '', SPLIT: split ? '1' : '', CRASH_STDERR: crashStderr ? '1' : '', ...extraEnv };
-  const r = spawnSync(process.execPath, ['scripts/tdd/swift-lane.mjs', ...args], { env, encoding:'utf8', timeout:10000 });
+  const r = spawnSync(process.execPath, ['scripts/tdd/swift-lane.mjs', ...args], { env, encoding:'utf8', timeout:timeoutMs });
   assert.ifError(r.error);
   return { ...r, argvFile };
 }
@@ -68,6 +80,38 @@ pluginTest('incompleteCleanupCannotProduceValidRedReceipt',({exec,classifyRedRun
   assert.equal(r.status,70,r.stderr);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
   assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:null}).kind,'environment');
+});
+pluginTest('publishedUnknownCleanupRejectsCompletedSwiftAssertion',({exec,classifyRedRun})=>{
+  const r=run('swift-fail',1,{extraEnv:{PICSEE_HEAVY_FAULT_QUERY:'1'}});
+  assert.equal(r.status,70,r.stderr);
+  assert.match(r.stderr,/unknown cleanup: process query failed/);
+  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+  assert.doesNotMatch(r.stdout,/^Tests run:/m);
+  const counts=exec.parseCounts(r.stdout,r.stderr);
+  assert.equal(counts,null);
+  assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:counts}).kind,'environment');
+});
+pluginTest('swiftExecutionTimeoutHasNoValidRed',({exec,classifyRedRun})=>{
+  const r=run('swift-fail',1,{extraEnv:{HANG_AFTER_ASSERTION:'1',RUNNER_STARTED:path.join(temp,'swift-timeout.pid'),
+    PICSEE_HEAVY_LOCK_EXEC_SECS:'2',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
+  assert.equal(r.status,70,r.stderr);
+  assert.match(r.stderr,/execution timeout/);
+  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
+  assert.doesNotMatch(r.stdout,/^Tests run:/m);
+  const counts=exec.parseCounts(r.stdout,r.stderr);
+  assert.equal(counts,null);
+  assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:counts}).kind,'environment');
+  assert.throws(()=>process.kill(Number(readFileSync(path.join(temp,'swift-timeout.pid'),'utf8')),0),{code:'ESRCH'});
+});
+pluginTest('swiftCancellationHasNoValidRed',({exec,classifyRedRun})=>{
+  const r=run('swift-fail',1,{extraEnv:{CANCEL_SUPERVISOR:'1',RUNNER_STARTED:path.join(temp,'swift-cancel.pid'),
+    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
+  assert.equal(r.signal,'SIGTERM',r.stderr);
+  assert.doesNotMatch(r.stdout,/^Tests run:/m);
+  const counts=exec.parseCounts(r.stdout,r.stderr);
+  assert.equal(counts,null);
+  assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:counts}).kind,'environment');
+  assert.throws(()=>process.kill(Number(readFileSync(path.join(temp,'swift-cancel.pid'),'utf8')),0),{code:'ESRCH'});
 });
 test('heldAndUnheldLanesPreservePassAndAssertionFailure Swift',()=>{
   for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
