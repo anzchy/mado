@@ -8,11 +8,10 @@ import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLA
 
 const modules = ['MadoCore', 'MadoApplication', 'MadoInfrastructure', 'MadoMacUI'];
 const prefix = 'Packages/MadoKit/Sources/';
-// Reviewed identities from i631-fn-astra.md B and the pending M6 refresh.
+// Reviewed identity from i631-fn-astra.md B; #637 retired the stale ViewerChrome pin.
 // The manifest supplies readable symbols and provenance; these pins prevent
 // replacing the approved symbol or source by editing only the manifest.
 const approvedFunctionIdentities = new Map([
-  [`${prefix}MadoMacUI/Chrome/ViewerChromeOverlay.swift:198`, { symbolSha256: '0d760c77616e860a9bc85999c00fc95ffaff7fac32df2f45b221310e00f0cdcd', sourceSha256: 'a1e985e2de3bf574033337383db0daeec08eec043126fd0d7a00bd05f41d9a18', decision: 'i631-pin-refresh.md M6' }],
   [`${prefix}MadoMacUI/Inspector/InspectorPanel.swift:191`, { symbolSha256: 'e55dd121048c133d38dd7d11d9ec25d52df5048ba7b5bf3dd2bd91718532ff6f', sourceSha256: '5ca22be215ecad2f711546e1569c959e5f41eacc0dd632332788e8d085b41477', decision: 'i631-fn-astra.md B' }],
 ]);
 // The review decision freezes all 17 declaration-only paths. The canonical
