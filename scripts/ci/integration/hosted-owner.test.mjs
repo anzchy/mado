@@ -89,7 +89,8 @@ for(const failure of [
   assert.equal(run.status,0,run.stdout+run.stderr);
   const registered=ownerEvents(run.stderr,'registration').find(event=>event.result==='registered');
   assert.ok(registered);
-  assert.equal(uncertain.matching.some(row=>row.pid===registered.pid),false,'registered host has drained');
+  assert.equal(uncertain.matching.some(row=>row.pid===registered.pid),false,
+    `registered host has drained; registration=${JSON.stringify(registered)} uncertainty=${JSON.stringify(uncertain)} stderr=${run.stderr}`);
   const [decision]=ownerEvents(run.stderr,'decision');
   assert.equal(decision?.result,'complete');
   assert.deepEqual(decision.lastSnapshot.unknown,[]);
