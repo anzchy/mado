@@ -70,6 +70,18 @@ redTest('retryUsesFreshUnpredictableInvocationID', () => {
   assert.notEqual(a.statusPath,b.statusPath);
 });
 
+redTest('privateCleanupDestinationNeverReachesWorkload',()=>{
+  const env=environment();
+  const r=runAttestedSync(lock,['python3','-c',
+    'import os,json; print(json.dumps({k:os.environ.get(k) for k in ("PICSEE_HEAVY_STATUS_DIR","PICSEE_HEAVY_ATTEST_FD","PICSEE_HEAVY_STATUS_PATH")}))'],
+    {env,encoding:'utf8',timeout:5000});
+  assert.equal(r.status,0,r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout.trim()),{
+    PICSEE_HEAVY_STATUS_DIR:null,PICSEE_HEAVY_ATTEST_FD:null,PICSEE_HEAVY_STATUS_PATH:null});
+  assert.equal(r.stdout.includes(r.invocationID),false);
+  assert.equal(r.stderr.includes(r.invocationID),false);
+});
+
 redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_HELD:'1'};
   const marker = path.join(env.HOME, 'launched');

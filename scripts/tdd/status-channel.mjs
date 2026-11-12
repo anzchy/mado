@@ -5,12 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 function setup(options) {
-  const directory=mkdtempSync(path.join(os.tmpdir(),'picsee-status-'));
+  const directory=mkdtempSync(path.join(os.tmpdir(),'mado-status-'));
   const stdio=Array.isArray(options.stdio)?[...options.stdio]:['ignore','pipe','pipe'];
   const fd=Math.max(3,stdio.length);
   while(stdio.length<=fd)stdio.push('ignore');
   stdio[fd]='pipe';
-  const env={...process.env,...options.env,PICSEE_HEAVY_STATUS_DIR:directory,
+  const env={...(options.env??process.env),PICSEE_HEAVY_STATUS_DIR:directory,
     PICSEE_HEAVY_ATTEST_FD:String(fd)};
   delete env.PICSEE_HEAVY_STATUS_PATH;
   return {directory,fd,stdio,env};
@@ -19,7 +19,7 @@ function setup(options) {
 function inspect(run, privateOutput, channel, fault) {
   let invocationID=null,statusPath=null,attested=false,reason='missing private cleanup status';
   try {
-    if (run.error || run.signal || ![0,1,124,70].includes(run.status)) throw new Error('invalid supervisor exit');
+    if (run.error || run.signal || ![0,1,65,124,70].includes(run.status)) throw new Error('invalid supervisor exit');
     if (typeof privateOutput!=='string' || !/^\{[^\n]+\}\n$/.test(privateOutput)) throw new Error('missing or malformed private notice');
     const notice=JSON.parse(privateOutput);
     invocationID=notice.id;statusPath=notice.path;
@@ -33,7 +33,7 @@ function inspect(run, privateOutput, channel, fault) {
     if (fault==='contradictory') record.commandExit=99;
     if (record.id!==invocationID || record.supervisor!==run.pid ||
         record.cleanup!=='complete' || record.timedOut!==false ||
-        record.commandExit!==run.status || ![0,1].includes(run.status) ||
+        record.commandExit!==run.status || ![0,1,65].includes(run.status) ||
         statSync(statusPath).nlink!==1) throw new Error('incomplete, stale or contradictory cleanup status');
     attested=true;reason='';
   } catch(error) {reason=error.message;}
@@ -54,7 +54,9 @@ export function runAttestedSync(command,args,options={}, {fault}={}) {
 /** Swift streams diagnostics but withholds Maven counts until this resolves. */
 export function spawnAttested(command,args,options={}) {
   const channel=setup(options);
-  const child=spawn(command,args,{...options,env:channel.env,stdio:channel.stdio});
+  let child;
+  try {child=spawn(command,args,{...options,env:channel.env,stdio:channel.stdio});}
+  catch(error) {rmSync(channel.directory,{recursive:true,force:true});throw error;}
   const chunks=[];
   child.stdio[channel.fd].on('data',chunk=>chunks.push(chunk));
   const finished=new Promise(resolve=>child.on('close',(code,signal)=>resolve(inspect(

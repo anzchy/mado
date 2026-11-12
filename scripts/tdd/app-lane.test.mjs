@@ -68,6 +68,34 @@ test('heldAndUnheldLanesPreservePassAndAssertionFailure App',()=>{
   else assert.match(r.stdout,/^Tests run: 3, Failures: 0/m);
  }
 });
+test('native App completed assertion failure retains one count in both HELD modes',()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'i657-app-fail-'));temporaryDirectories.add(dir);
+ const failing=baseline.replace('✔ Test swiftKeep() passed after 0.001 seconds.',
+  '✘ Test swiftKeep() recorded an issue at Probe.swift:1:1: Expectation failed\n✘ Test swiftKeep() failed after 0.001 seconds with 1 issue.')
+  .replace('✔ Test run with 3 tests in 0 suites passed after 0.001 seconds.','✘ Test run with 3 tests in 0 suites failed after 0.001 seconds with 1 issue.');
+ const fixture=path.join(dir,'fail.txt');writeFileSync(fixture,failing);
+ writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(process.env.APP_FIXTURE));process.exitCode=1;\n`,{mode:0o755});
+ const launcher=path.join(dir,'lane.mjs');
+ writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
+ const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
+  PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
+ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ for(const held of [false,true]){
+  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+  assert.ifError(r.error);assert.equal(r.status,1,r.stderr);assert.match(r.stdout,/^Tests run: 3, Failures: 1/m);
+ }
+});
+test('repeatWorkerWrappedNativeSpawnCannotBypassCleanupStatus',()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'i657-repeat-wrap-'));temporaryDirectories.add(dir);
+ writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(process.env.APP_FIXTURE));\n`,{mode:0o755});
+ const launcher=path.join(dir,'lane.mjs');
+ writeFileSync(launcher,`import {runAppIteration} from ${JSON.stringify(new URL('../ci/app-repeat-worker.mjs',import.meta.url).href)};\nprocess.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runAppIteration({evidencePath:process.env.APP_EVIDENCE});\n`);
+ const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
+  APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
+ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/^Tests run:/m);
+});
 
 test('ciHeldQuarantineCleanRunPreservesCounts',()=>{
  const h=harness(quarantine,{env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',PICSEE_APP_LANE_NO_RETRY:'1'}});
@@ -985,6 +1013,31 @@ for(const [name,corrupt] of [
 });
 
 const { runHostedAppLane } = await import('./hosted-app-lane.mjs');
+function hostedNativeHarness(held,failed,fault,descendant=false){
+ const dir=mkdtempSync(path.join(tmpdir(),'i657-hosted-native-'));temporaryDirectories.add(dir);
+ writeFileSync(path.join(dir,'xcodebuild'),`#!${process.execPath}\nconst fs=require('node:fs');if(process.env.HOST_DESCENDANT==='1'){const c=require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore','ignore','inherit']});fs.writeFileSync(process.env.HOST_PID,String(c.pid));process.stderr.write('[heavy-lock] WARNING: incomplete cleanup');}process.stdout.write(process.env.HOST_FAIL==='1'?'** TEST EXECUTE FAILED **\\n':'** TEST EXECUTE SUCCEEDED **\\n');process.exitCode=process.env.HOST_FAIL==='1'?65:0;\n`,{mode:0o755});
+ writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst failed=process.env.HOST_FAIL==='1';const summary={totalTestCount:1,passedTests:failed?0:1,failedTests:failed?1:0,skippedTests:0,testFailures:failed?[{testName:'hostProof()'}]:[],result:failed?'Failed':'Passed'};const tree={testNodes:[{nodeType:'Test Case',nodeIdentifier:'hostProof()',result:failed?'Failed':'Passed'}]};process.stdout.write(JSON.stringify(process.argv.includes('summary')?summary:tree));\n`,{mode:0o755});
+ const launcher=path.join(dir,'lane.mjs');
+ writeFileSync(launcher,`import {runHostedAppLane} from ${JSON.stringify(new URL('./hosted-app-lane.mjs',import.meta.url).href)};\nif(process.env.HOST_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runHostedAppLane({selected:['hostProof()'],evidencePath:process.env.HOST_EVIDENCE}).status;\n`);
+ const env={...process.env,PATH:`${dir}:${process.env.PATH}`,HOST_FAIL:failed?'1':'0',HOST_FAULT:fault?'1':'0',HOST_DESCENDANT:descendant?'1':'0',HOST_PID:path.join(dir,'pid'),HOST_EVIDENCE:path.join(dir,'evidence.log'),
+  PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'};
+ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+ const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+ assert.ifError(r.error);return r;
+}
+test('heldAndUnheldLanesPreservePassAndAssertionFailure hosted',()=>{
+ for(const held of [false,true])for(const failed of [false,true]){
+  const good=hostedNativeHarness(held,failed,false);
+  assert.equal(good.status,failed?1:0,good.stderr);assert.match(good.stdout,/hosted-app-lane Tests run: 1, Failures: [01]/);
+  const bad=hostedNativeHarness(held,failed,true);
+  assert.equal(bad.status,70,bad.stderr);assert.doesNotMatch(bad.stdout,/hosted-app-lane Tests run:/);
+ }
+});
+test('unterminatedDescendantStderrCannotHideIncompleteCleanup hosted',()=>{
+ const r=hostedNativeHarness(false,true,true,true);
+ assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/hosted-app-lane Tests run:/);
+ assert.match(r.stderr,/incomplete cleanup/);
+});
 test('hosted local derived-data override selects the available outside-Documents build',()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'i393-dd-'));temporaryDirectories.add(directory);
  const available=path.join(directory,'dd');const selected=['hostProof()'];let launched=false;

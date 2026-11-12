@@ -76,6 +76,17 @@ test('heldAndUnheldLanesPreservePassAndAssertionFailure Swift',()=>{
     assert.equal(bad.status,70,bad.stderr);assert.doesNotMatch(bad.stdout,/^Tests run:/m);
   }
 });
+test('native Swift nested HELD retains pass and assertion counts',()=>{
+ const lock=path.join(root,'scripts/heavy-lock.sh');
+ for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
+  const env={...process.env,PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
+   PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
+   ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures',fixture+'.txt'),SWIFT_EXIT:String(code)};
+  const r=spawnSync(lock,[process.execPath,'scripts/tdd/swift-lane.mjs'],{env,encoding:'utf8',timeout:10000});
+  assert.ifError(r.error);assert.equal(r.status,code,r.stderr);
+  assert.match(r.stdout,new RegExp(`^Tests run: 3, Failures: ${code}`,'m'));
+ }
+});
 for (const [fixture, code, expected, kind] of [
   ['swift-pass',0,{total:3,failed:0,passed:2,skipped:1},'green'],
   ['swift-fail',1,{total:3,failed:1,passed:1,skipped:1},'assertion-failure'],
@@ -202,7 +213,8 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   assert.deepEqual(tagCI.gateOn, ['manual']);
   assert.equal(tagCI.command, 'node scripts/tdd/node-lane.mjs scripts/release/check-tag-ci.test.mjs scripts/release/release-workflow.test.mjs');
   assert.equal(tagCI.probeCommand, 'node --version');
-  assert.match(readFileSync('scripts/tdd/app-lane.mjs','utf8'), /spawnSync\(lock, \["xcrun", "xctest"/);
+  assert.match(readFileSync('scripts/tdd/app-lane.mjs','utf8'), /const launch=spawnSync===realSpawnSync\?runAttestedSync:spawnSync/);
+  assert.match(readFileSync('scripts/tdd/app-lane.mjs','utf8'), /launch\(lock, \["xcrun", "xctest"/);
   assert.ok(probes.every(command=>command.startsWith('scripts/heavy-lock.sh ')));
   assert.ok(heavy.filter(l=>l.name!=='app-red').every(l=>l.probeCommand.startsWith('scripts/heavy-lock.sh swift test ')));
 });
