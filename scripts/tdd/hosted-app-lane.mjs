@@ -3,9 +3,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {randomUUID} from 'node:crypto';
 import { runAttestedSync } from './status-channel.mjs';
 
 const lock = fileURLToPath(new URL('../heavy-lock.sh', import.meta.url));
+const hostOwner=fileURLToPath(new URL('./hosted-xcode-owner.mjs',import.meta.url));
 function inheritedControlStdio(env){
   if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return undefined;
   const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
@@ -119,17 +121,27 @@ export function runHostedAppLane({ spawn = spawnSync, env = process.env, selecte
   let run;
   try {
     const launch=spawn===spawnSync?runAttestedSync:spawn;
-    run = launch(lock, ['xcodebuild', 'test-without-building', '-scheme', 'Mado',
+    const nativeArgs=['xcodebuild', 'test-without-building', '-scheme', 'Mado',
       '-destination', 'platform=macOS', '-derivedDataPath', derivedDataPath,
       '-parallel-testing-enabled', 'NO', '-resultBundlePath', resultPath,
       ...(selected.length === hostedTestNames.length && selected.every(name => hostedTestNames.includes(name))
-        ? ['-only-testing:MadoHostedFocusTests'] : selected.map(name => '-only-testing:MadoHostedFocusTests/' + name))], settings);
+        ? ['-only-testing:MadoHostedFocusTests'] : selected.map(name => '-only-testing:MadoHostedFocusTests/' + name))];
+    if(spawn===spawnSync&&env.MADO_HOST_OWNERSHIP_REQUIRED==='1'){
+      const token=env.MADO_TEST_RUN_TOKEN??randomUUID();
+      settings.env.MADO_TEST_RUN_TOKEN=token;
+      settings.env.TEST_RUNNER_MADO_TEST_RUN_TOKEN=token;
+      settings.env.MADO_HOST_EXECUTABLE=env.MADO_HOST_EXECUTABLE??path.resolve(derivedDataPath,
+        'Build/Products/Debug/Mado.app/Contents/MacOS/Mado');
+      run=launch(lock,[process.execPath,hostOwner,...nativeArgs],settings);
+    }else run=launch(lock,nativeArgs,settings);
   } catch (error) { run = {error, status:null}; }
   stdout(run.stdout ?? ''); stderr(run.stderr ?? '');
   const raw = `${run.stdout ?? ''}\n${run.stderr ?? ''}`;
   writeFileSync(path.join(directory, 'execution.log'), raw);
   writeFileSync(path.join(directory, 'process.json'), JSON.stringify({version:1, status:run.status ?? null,
     signal:run.signal ?? null, error:run.error?.message ?? null, selected, derivedDataPath, resultPath,
+    ...(spawn===spawnSync&&env.MADO_HOST_OWNERSHIP_REQUIRED==='1'
+      ?{hostCleanup:run.status===0||run.status===1||run.status===65?'complete':'incomplete'}:{}),
     wallMilliseconds:Date.now()-processStarted}, null, 2) + '\n');
   const readResult = kind => {
     const extraction = spawn('xcrun', ['xcresulttool', 'get', 'test-results', kind, '--path', resultPath],
