@@ -431,8 +431,13 @@ def supervised_main():
     inherited_control = os.environ.get('PICSEE_HEAVY_CONTROL_FD')
     if command[:1] == ['--register-host']:
         if len(command) != 2 or not inherited_control or not command[1].isdigit():
+            print('[heavy-lock] host registration refused: invalid PID or missing control FD', file=sys.stderr, flush=True)
             return 70
-        return 0 if send_control(int(inherited_control), {'kind': 'host', 'pid': int(command[1])}) == b'OK' else 70
+        reply = send_control(int(inherited_control), {'kind': 'host', 'pid': int(command[1])})
+        if reply != b'OK':
+            print(f'[heavy-lock] host registration refused: parent reply {reply!r}', file=sys.stderr, flush=True)
+            return 70
+        return 0
     if command == ['--mark-host-unknown']:
         if not inherited_control:
             return 70

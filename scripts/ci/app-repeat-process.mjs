@@ -8,6 +8,9 @@ import {fileURLToPath} from 'node:url';
 import {prepareHostInspector} from './app-host-inspector.mjs';
 import {createAsyncHostOwnership} from './app-host-ownership.mjs';
 const heavyLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
+// Registration includes a shell and Python startup plus the parent's ACK. Eight
+// seconds leaves the 120-second hosted probe ample time for its fixed cleanup.
+const hostRegistrationTimeoutMilliseconds=8000;
 
 function inheritedStdio(env,base){
   const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
@@ -94,9 +97,17 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       log('owned host registered '+JSON.stringify(added));
       if(env.MADO_HOST_QUERY_DIAGNOSTICS==='1')log('host registration '+JSON.stringify({at:now(),identities:added}));
       if(env.PICSEE_HEAVY_LOCK_HELD==='1')for(const identity of added){
+        const registrationStarted=Date.now();
         const registered=spawnSync(heavyLock,['--register-host',String(identity.pid)],
-          {env,stdio:inheritedStdio(env,['ignore','ignore','ignore']),timeout:2000});
-        if(registered.status!==0||registered.error)stop('outer supervisor host registration failed');
+          {env,stdio:inheritedStdio(env,['ignore','ignore','pipe']),encoding:'utf8',
+            maxBuffer:4096,timeout:hostRegistrationTimeoutMilliseconds});
+        if(registered.status!==0||registered.error||registered.signal){
+          const detail={pid:identity.pid,status:registered.status,signal:registered.signal,
+            errorCode:registered.error?.code??null,elapsedMilliseconds:Date.now()-registrationStarted,
+            timeoutMilliseconds:hostRegistrationTimeoutMilliseconds,
+            refusal:registered.stderr?.trim().slice(0,512)||null};
+          stop('outer supervisor host registration failed '+JSON.stringify(detail));
+        }
       }
     }
     if(cancelOnHostObserved&&state.observed&&!stopping&&!startupStopped){cancelledOnHostObserved=true;stop('owned host observed; cancelling requested probe');}

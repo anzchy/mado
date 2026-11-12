@@ -162,6 +162,24 @@
       "timeoutMs": 120000
     },
     {
+      "name": "ci-host-owner-log-node",
+      "description": "Focused #657 hosted-owner query timing log RED receipt.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/integration/hosted-owner.test.mjs",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "ci-host-register-node",
+      "description": "Focused #657 hosted registration delay RED receipt.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/integration/hosted-register-delay.test.mjs",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
       "name": "ci-host-timeout-node",
       "description": "Focused #657 phase 4 synchronous OS ownership inspector RED receipt.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs",
