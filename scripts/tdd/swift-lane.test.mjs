@@ -87,6 +87,17 @@ test('native Swift nested HELD retains pass and assertion counts',()=>{
   assert.match(r.stdout,new RegExp(`^Tests run: 3, Failures: ${code}`,'m'));
  }
 });
+test('native Swift nested HELD rejects unpublished cleanup without counts',()=>{
+ const lock=path.join(root,'scripts/heavy-lock.sh');
+ const lane=path.join(root,'scripts/tdd/swift-lane.mjs');
+ const launcher=path.join(temp,'nested-status-lane.mjs');
+ writeFileSync(launcher,`process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';process.argv[1]=${JSON.stringify(lane)};await import(${JSON.stringify(new URL('./swift-lane.mjs',import.meta.url).href)});`);
+ const env={...process.env,PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
+  PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
+  ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures/swift-pass.txt'),SWIFT_EXIT:'0'};
+ const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
+ assert.ifError(r.error);assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/^Tests run:/m);
+});
 for (const [fixture, code, expected, kind] of [
   ['swift-pass',0,{total:3,failed:0,passed:2,skipped:1},'green'],
   ['swift-fail',1,{total:3,failed:1,passed:1,skipped:1},'assertion-failure'],
