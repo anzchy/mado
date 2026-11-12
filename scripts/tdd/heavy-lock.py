@@ -53,6 +53,11 @@ def nonnegative_env(name, default):
     return value
 
 
+def safe_job_name(command):
+    """A useful diagnostic identifier that contains no command text."""
+    return f'argc={len(command)}'
+
+
 def process_rows():
     """Return live PID/PGID rows, or None when the query cannot prove absence."""
     if os.environ.get('PICSEE_HEAVY_FAULT_QUERY') == '1':
@@ -114,12 +119,14 @@ def guardian_main(read_fd, ready_fd):
         signal.signal(caught, signal.SIG_IGN)
     owner_path = os.environ.get('PICSEE_HEAVY_GUARDIAN_OWNER')
     if owner_path:
+        argc = os.environ.get('PICSEE_HEAVY_GUARDIAN_ARGC', '')
+        job = f'argc={argc}' if argc.isdecimal() else 'unknown'
         with os.fdopen(os.open(owner_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as owner:
             owner.write(f'pid={os.getpid()}\n'
                         f'cmd={sys.executable} {Path(__file__).resolve()} --guardian {read_fd} {ready_fd}\n'
                         f'started={time.strftime("%Y-%m-%dT%H:%M:%S%z")}\n'
                         f'supervisor={os.environ.get("PICSEE_HEAVY_GUARDIAN_SUPERVISOR", "unknown")}\n'
-                        f'job={os.environ.get("PICSEE_HEAVY_GUARDIAN_COMMAND", "unknown")}\n')
+                        f'job={job}\n')
     os.write(ready_fd, b'R')
     os.close(ready_fd)
     root = None
@@ -308,7 +315,7 @@ def acquire_shared(lock, deadline, received, command):
             try:
                 (lock / 'owner').write_text(
                     f'pid={os.getpid()}\nstarted={time.strftime("%Y-%m-%dT%H:%M:%S%z")}\n'
-                    f'cwd={os.getcwd()}\ncmd={" ".join(command)}\n')
+                    f'cwd={os.getcwd()}\ncmd={safe_job_name(command)}\n')
             except OSError as error:
                 # A peer may reclaim the ownerless directory before publication.
                 # We have no published ownership: never clean it up or launch.
@@ -330,7 +337,7 @@ def acquire_shared(lock, deadline, received, command):
         if now >= deadline:
             print(f'[heavy-lock] lock wait timed out; held by: {holder_desc(lock)}. '
                   f'Manual recovery: first confirm no process from that job is still running '
-                  f'(pgrep -f on its cmd); then remove the directory {lock}.',
+                  f'(inspect the owner PID and its process group); then remove the directory {lock}.',
                   file=sys.stderr, flush=True)
             return False
         wake = min(now + 5, deadline)
@@ -541,7 +548,7 @@ def supervised_main():
             guardian_log = lock.parent / f'heavy.lock.guardian-{invocation}.log'
             guardian_env['PICSEE_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
             guardian_env['PICSEE_HEAVY_GUARDIAN_SUPERVISOR'] = str(os.getpid())
-            guardian_env['PICSEE_HEAVY_GUARDIAN_COMMAND'] = ' '.join(command)
+            guardian_env['PICSEE_HEAVY_GUARDIAN_ARGC'] = str(len(command))
             lock.parent.mkdir(parents=True, exist_ok=True)
             with os.fdopen(os.open(guardian_log, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600),
                            'wb', buffering=0) as guardian_error:

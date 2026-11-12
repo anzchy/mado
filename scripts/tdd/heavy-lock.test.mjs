@@ -261,7 +261,7 @@ updates_r,updates_w=os.pipe();ready_r,ready_w=os.pipe()
 owner=lock.parent/'heavy.lock.guardian-repro.owner'
 log=lock.parent/'heavy.lock.guardian-repro.log'
 with open(log,'ab',buffering=0) as error:
- guardian_env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_COMMAND='fixture-job')
+ guardian_env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_ARGC='1')
  guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(updates_r),str(ready_w)],env=guardian_env,pass_fds=(updates_r,ready_w,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
 os.close(updates_r);os.close(ready_w)
 assert os.read(ready_r,1)==b'R'
@@ -287,6 +287,36 @@ time.sleep(30)`;
   }
 }, {timeout:7000});
 
+redTest('orphanedGuardianDiagnosticsNeverPersistJobArguments', async () => {
+  const env=environment();
+  const ready=path.join(env.HOME,'worker-ready');
+  const secret='credential=picsee-fixture-secret-666';
+  const holder=start(['python3','-c',
+    'import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text("ready"); time.sleep(30)',
+    ready,secret],env);
+  try {
+    await until(()=>existsSync(ready),'worker launched');
+    holder.child.kill('SIGKILL');
+    await holder.done;
+    const diagnostics=path.join(env.HOME,'.picsee/locks');
+    await until(()=>readdirSync(diagnostics).some(name=>name.endsWith('.log') &&
+      readFileSync(path.join(diagnostics,name),'utf8').includes('supervisor disappeared')),
+      'guardian orphan cleanup');
+    const files=readdirSync(diagnostics).filter(name=>/heavy\.lock\.guardian-.*\.(owner|log)$/.test(name));
+    assert.equal(files.length,2,'orphan diagnostics are retained');
+    for(const name of files) {
+      assert.equal(readFileSync(path.join(diagnostics,name),'utf8').includes(secret),false,
+        `${name} must not retain the job argument`);
+    }
+    assert.match(readFileSync(path.join(diagnostics,files.find(name=>name.endsWith('.owner'))),'utf8'),
+      /^job=argc=\d+$/m);
+    const sharedOwner=readFileSync(path.join(env.PICSEE_MDPRO_LOCK,'owner'),'utf8');
+    assert.equal(sharedOwner.includes(secret),false,'shared owner must not retain the job argument');
+  } finally {
+    holder.child.kill('SIGKILL');
+  }
+}, {timeout:7000});
+
 redTest('guardianRootPublicationHasDeadlineWhileSupervisorLives', async () => {
   const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
   const ready=path.join(env.HOME,'ready');
@@ -296,7 +326,7 @@ fd=os.open(str(lock),os.O_CREAT|os.O_RDWR,0o600);fcntl.flock(fd,fcntl.LOCK_EX)
 r,w=os.pipe();rr,rw=os.pipe()
 owner=lock.parent/'heavy.lock.guardian-deadline.owner';log=lock.parent/'heavy.lock.guardian-deadline.log'
 with open(log,'ab',buffering=0) as error:
- env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_COMMAND='deadline-fixture')
+ env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_ARGC='1')
  guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(r),str(rw)],env=env,pass_fds=(r,rw,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
 os.close(r);os.close(rw);assert os.read(rr,1)==b'R'
 pathlib.Path(sys.argv[1]).write_text(str(guardian.pid))
@@ -542,7 +572,7 @@ test('AC-2 shared owner is live and describes the job; exits and signal propagat
       process.kill(pid,0);
       assert.equal(pid,job.child.pid);
       assert.ok(owner.includes(`cwd=${root}\n`));
-      assert.match(owner,/^cmd=bash /m);
+      assert.match(owner,/^cmd=argc=\d+$/m);
       assert.match(owner,/^started=.+/m);
     } finally { writeFileSync(release,''); await job.done; }
     const result=await job.done;
@@ -563,7 +593,7 @@ test('AC-3 stale and ownerless mdpro locks time out without mutation or launch',
     assert.equal(result.code,75,result.output);
     assert.doesNotMatch(result.output,/must-not-launch|reclaiming stale/);
     assert.match(result.output,/waiting for an mdpro waiter to reclaim it/);
-    assert.match(result.output,/pgrep -f/);
+    assert.match(result.output,/inspect the owner PID and its process group/);
     assert.equal(statSync(env.PICSEE_MDPRO_LOCK).ino,before.ino);
     assert.equal(statSync(env.PICSEE_MDPRO_LOCK).mtimeMs,before.mtimeMs);
     assert.deepEqual(readdirSync(env.PICSEE_MDPRO_LOCK),contents);
