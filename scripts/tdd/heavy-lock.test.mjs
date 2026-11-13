@@ -851,3 +851,90 @@ for (const mode of ['eperm-signal']) {
     assert.equal(r.status,0,r.stderr.toString());
   });
 }
+
+// #672 WI-2: the delegator learns about an over-budget holder from its own status loop.
+const listenNotify = path.join(root, '.agents/skills/picsee-delegator/scripts/listen-notify.py');
+function lockAlerts(home) {
+  const dir = path.join(home, '.picsee/herdr/delegator/lock-alerts');
+  return existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith('.json')).map(name => path.join(dir, name)) : [];
+}
+
+redTest('lockAgeAlertFiresWhenHolderExceedsBudget', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.5', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
+  const command = ['bash', '-c', 'sleep 30 & wait', 'lock-age-fixture'];
+  const result = spawnSync(lock, command, {env, encoding: 'utf8', timeout: 20000});
+  assert.equal(result.status, 124, result.stderr);
+  const alerts = lockAlerts(env.HOME);
+  assert.equal(alerts.length, 1, result.stderr);
+  assert.equal(statSync(alerts[0]).mode & 0o777, 0o600);
+  const alert = JSON.parse(readFileSync(alerts[0], 'utf8'));
+  assert.equal(alert.kind, 'heavy-lock-budget-exceeded');
+  assert.match(alert.id, /^[0-9a-f]{32}$/);
+  assert.deepEqual(alert.command, command);
+  assert.equal(alert.cwd, root);
+  assert.equal(alert.budgetSeconds, 0.5);
+  for (const field of ['startedAt', 'deadlineAt', 'exceededAt']) assert.match(alert[field], /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/);
+  assert.ok(Number.isInteger(alert.supervisor) && alert.supervisor > 0);
+  assert.ok(Number.isInteger(alert.pid) && alert.pid > 0);
+  assert.equal(alert.pgid, alert.pid, 'top-level job leads its own process group');
+  assert.ok(alert.survivorsAtDeadline.length >= 2, 'leader and its sleeping child were still running');
+  for (const row of alert.survivorsAtDeadline) {
+    assert.equal(row.pgid, alert.pgid);
+    assert.match(row.state, /^[A-Z]/);
+    assert.ok(Number.isInteger(row.rssKiB) && row.rssKiB >= 0, JSON.stringify(row));
+  }
+  assert.equal(alert.phase, 'cleanup');
+  assert.equal(alert.cleanup, 'complete');
+  assert.deepEqual(alert.survivorsAfterCleanup, []);
+  assert.deepEqual(alert.retainedLocks, [
+    {kind: 'picsee-flock', path: env.PICSEE_HEAVY_LOCK, retained: false},
+    {kind: 'mdpro-directory', path: env.PICSEE_MDPRO_LOCK, retained: false},
+  ]);
+  const log = readFileSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log'), 'utf8');
+  assert.equal(log.split('\n').filter(Boolean).length, 1);
+  assert.match(log, new RegExp(`heavy-lock holder exceeded its 0\\.5s budget; pid ${alert.pid} pgid ${alert.pgid}; alert ${alerts[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  const status = spawnSync('python3', [listenNotify, 'status', '--state-root',
+    path.join(env.HOME, '.picsee/herdr/delegator/listeners')], {encoding: 'utf8', timeout: 10000});
+  assert.equal(status.status, 3, status.stderr);
+  assert.match(status.stdout, new RegExp(`^attention lock-alert ${alert.id} phase=cleanup cleanup=complete budget=0\\.5s pid=${alert.pid}`, 'm'));
+});
+
+redTest('lockAgeAlertKeepsRetainedLockPathsWhenCleanupIsUnknown', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.3', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0',
+    PICSEE_HEAVY_FAULT_QUERY: '1'};
+  const result = spawnSync(lock, ['sleep', '2'], {env, encoding: 'utf8', timeout: 20000});
+  assert.equal(result.status, 70, result.stderr);
+  const [file] = lockAlerts(env.HOME);
+  assert.ok(file, result.stderr);
+  const alert = JSON.parse(readFileSync(file, 'utf8'));
+  assert.equal(alert.cleanup, 'incomplete');
+  assert.equal(alert.survivorsAtDeadline, null, 'an unavailable process query is unknown, never empty');
+  assert.equal(alert.survivorsAfterCleanup, null);
+  assert.deepEqual(alert.retainedLocks.map(lock => lock.retained), [true, true]);
+  rmSync(env.PICSEE_MDPRO_LOCK, {recursive: true, force: true});
+});
+
+redTest('lockAgeAlertStaysSilentWithinBudget', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '5'};
+  const result = spawnSync(lock, ['true'], {env, encoding: 'utf8', timeout: 10000});
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(lockAlerts(env.HOME), []);
+  assert.equal(existsSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log')), false);
+});
+
+redTest('lockAgeAlertIgnoresPrivateLocksUnlessAnAlertDirIsGiven', () => {
+  // Test fixtures run heavy-lock on a private lock file; their deliberate timeouts must not
+  // reach the delegator's real attention channel. The machine lock, or an explicit
+  // PICSEE_HEAVY_ALERT_DIR, is what alerts.
+  const base = environment();
+  const env = {...base, PICSEE_HEAVY_LOCK: path.join(base.HOME, 'private', 'heavy.lock'),
+    PICSEE_HEAVY_LOCK_EXEC_SECS: '0.3', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
+  const result = spawnSync(lock, ['sleep', '5'], {env, encoding: 'utf8', timeout: 20000});
+  assert.equal(result.status, 124, result.stderr);
+  assert.deepEqual(lockAlerts(env.HOME), []);
+  assert.equal(existsSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log')), false);
+  const chosen = path.join(base.HOME, 'chosen-alerts');
+  const explicit = spawnSync(lock, ['sleep', '5'], {env: {...env, PICSEE_HEAVY_ALERT_DIR: chosen}, encoding: 'utf8', timeout: 20000});
+  assert.equal(explicit.status, 124, explicit.stderr);
+  assert.equal(readdirSync(path.join(chosen, 'lock-alerts')).filter(name => name.endsWith('.json')).length, 1);
+});

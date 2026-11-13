@@ -849,6 +849,24 @@ def listener_status(state_root):
                     value = _seconds(value)
                 line += " {}={}".format(field, value)
         lines.append(line)
+    # #672: heavy-lock writes one record per holder that exceeded its budget into
+    # lock-alerts/ beside the listeners directory. Each stays `attention` until the
+    # delegator moves it into lock-alerts/acked/.
+    alerts = root.parent / "lock-alerts"
+    for path in sorted(alerts.glob("*.json")) if alerts.is_dir() else []:
+        try:
+            alert = _read_json(path)
+        except (OSError, ValueError):
+            alert = None
+        attention = True
+        if not isinstance(alert, dict):
+            lines.append("attention lock-alert {} state=invalid file={}".format(path.stem, path))
+            continue
+        budget = alert.get("budgetSeconds")
+        lines.append("attention lock-alert {} phase={} cleanup={} budget={}s pid={} pgid={} file={}".format(
+            alert.get("id", path.stem), alert.get("phase"), alert.get("cleanup"),
+            _seconds(budget) if isinstance(budget, (int, float)) and not isinstance(budget, bool) else budget,
+            alert.get("pid"), alert.get("pgid"), path))
     return lines, attention
 
 
