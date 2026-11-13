@@ -64,7 +64,10 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
             }
             return (root, enqueue(root, rootID), siblings)
         }
-        if let error = await transition.value {
+        I658ScanStartTiming.mark("WatchHub transition wait start")
+        let transitionError = await transition.value
+        I658ScanStartTiming.mark("WatchHub transition wait end")
+        if let error = transitionError {
             await remove(subscriber.id, from: root, rootID)
             throw error
         }
@@ -135,6 +138,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
                 log.error("FolderWatch lease failed root=\(rootID.rawValue.uuidString, privacy: .public) error=\(String(describing: type(of: error)), privacy: .public)")
                 return error
             }
+            I658ScanStartTiming.mark("WatchHub lease acquired")
             guard lock.withLock({ !root.subscribers.isEmpty }) else { await access.release(lease); return nil }
             let stream: any FolderEventStream
             do { stream = try source.start(watching: lease.url) { [weak self] hints in self?.deliver(hints, to: root) } } catch {
@@ -142,6 +146,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
                 await access.release(lease)
                 return error
             }
+            I658ScanStartTiming.mark("FSEventSource start returned")
             lock.withLock { root.stream = stream; root.lease = lease }
             log.notice("FolderWatch start root=\(rootID.rawValue.uuidString, privacy: .public)")
             return nil

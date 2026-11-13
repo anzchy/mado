@@ -393,12 +393,18 @@ struct FolderScanFailedRead {
         sourceFolder = folder
         let watchToken = requestWatch()
         trace?.begin(generation: token, folderURL: folder)
+        let diagnosticBegin = ProcessInfo.processInfo.environment["MADO_I658_SCAN_TIMING"] == "1" ? ContinuousClock.now : nil
         let task = Task { [self] in
-            await subscribeWatch(folder, rootID: rootID, recursive: recursiveEnabled, token: watchToken)
+            I658ScanStartTiming.mark("coordinator task start", since: diagnosticBegin)
+            I658ScanStartTiming.mark("subscribeWatch entry", since: diagnosticBegin)
+            await I658ScanStartTiming.$begin.withValue(diagnosticBegin) {
+                await subscribeWatch(folder, rootID: rootID, recursive: recursiveEnabled, token: watchToken)
+            }
+            I658ScanStartTiming.mark("subscribeWatch return", since: diagnosticBegin)
             do {
                 try await Self.scanLeased(folder: folder, rootID: rootID, generation: token, input: input,
                     options: FolderScanOptions(recursive: recursiveEnabled),
-                    access: access, scanner: scanner, ready: { [self] version, itemID in
+                    access: access, scanner: scanner, diagnosticBegin: diagnosticBegin, ready: { [self] version, itemID in
                         guard activeGeneration == token, !Task.isCancelled else { return }
                         sourceSnapshot = FolderSnapshot(version: version, entries: [], isComplete: false)
                         snapshot = sourceSnapshot?.applying(conditions)
@@ -745,15 +751,18 @@ struct FolderScanFailedRead {
     /// Explicitly nonisolated: path canonicalization and scanning begin only inside the acquired lease.
     private nonisolated static func scanLeased(folder: URL, rootID: AccessRootID, generation: UInt64, input: URL?,
         options: FolderScanOptions,
-        access: any AccessLeasing, scanner: any FolderScanning,
+        access: any AccessLeasing, scanner: any FolderScanning, diagnosticBegin: ContinuousClock.Instant? = nil,
         ready: @MainActor @Sendable (SnapshotVersion, ItemID?) -> Void,
         emit: @MainActor @Sendable ([FolderEntry]) async throws -> Void) async throws {
         try await access.withLease(.root(rootID, file: folder)) { lease in
+            I658ScanStartTiming.mark("scan lease acquired", since: diagnosticBegin)
             let version = SnapshotVersion(rootID: rootID, folder: folder, generation: generation)
             let root = ItemIdentityRoot(id: rootID, url: lease.url)
             let itemID = input.flatMap { AccessBoundary.contains($0, in: lease.url) ? FolderEntry(url: $0, root: root).itemID : nil }
+            I658ScanStartTiming.mark("ready called", since: diagnosticBegin)
             await ready(version, itemID)
             try Task.checkCancellation()
+            I658ScanStartTiming.mark("scanner entry", since: diagnosticBegin)
             try await scanner.scan(in: folder, root: root, options: options) { batch in
                 try await emit(batch)
             }

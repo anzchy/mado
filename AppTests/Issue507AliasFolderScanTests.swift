@@ -12,6 +12,12 @@ private final class Alias507Events: @unchecked Sendable {
     func report() -> String { lock.withLock { events.joined(separator: ", ") } }
 }
 
+@MainActor private enum Alias507TimingGate {
+    static var users = 0
+    static func enter() { users += 1; setenv("MADO_I658_SCAN_TIMING", "1", 1) }
+    static func leave() { users -= 1; if users == 0 { unsetenv("MADO_I658_SCAN_TIMING") } }
+}
+
 
 private struct Alias507SystemAccess: SecurityScope, BookmarkCoding {
     let events: Alias507Events
@@ -70,6 +76,8 @@ private actor Alias507Scanner: FolderScanning {
 /// Each case has its own two-second wall-clock bound, independent of ConditionWait's timed-test policy.
 @Test(arguments: [false, true]) @MainActor
 func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
+    Alias507TimingGate.enter()
+    defer { Alias507TimingGate.leave() }
     _ = NSApplication.shared
     let fm = FileManager.default
     let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("alias507-\(UUID())")
