@@ -14,6 +14,6 @@ import MadoCore
     func copyPaths(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
         pasteboard.clearContents()
-        pasteboard.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+        pasteboard.setString(ImageFileActionPaths.plainText(urls), forType: .string)
     }
 }
