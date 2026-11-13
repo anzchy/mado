@@ -36,7 +36,10 @@ import Testing
 }
 
 // Catch expected helper failures: this tests the integration without leaving a failing test on main.
-@Test(.timeLimit(.minutes(3))) @MainActor func issue606WaitFailuresIncludeAppKitState() async throws {
+// Deliberately untimed (#672): the helpers' `.zero` bound applies only to untimed tests, so a time limit would
+// turn the never-true run-loop wait into a main-actor spin until the limit cancelled it.
+@Test @MainActor func issue606WaitFailuresIncludeAppKitState() async throws {
+    #expect(Test.current?.traits.contains(where: { $0 is TimeLimitTrait }) != true)
     _ = NSApplication.shared
     do {
         try await Task.detached {
