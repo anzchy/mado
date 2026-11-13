@@ -168,8 +168,11 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         target.resolve(availableItemIDs: orderedItemIDs)
     }
     public func preview(_ menu: ImageContextMenu) {
+        preview(menu, availableItemIDs: orderedItemIDs)
+    }
+    public func preview(_ menu: ImageContextMenu, availableItemIDs: [ItemID]) {
         guard mode == .browsing else { return }
-        let live = Set(orderedItemIDs)
+        let live = Set(orderedItemIDs).intersection(availableItemIDs)
         let isSelection = menu.target.itemIDs.count > 1
         let items = (isSelection ? menu.target.itemIDs : menu.openingItemIDs).filter(live.contains)
         guard items.contains(menu.clickedItemID) || (isSelection && !items.isEmpty) else { return }

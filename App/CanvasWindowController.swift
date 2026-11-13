@@ -1912,46 +1912,43 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     }
     private func performGridImageContextAction(_ action: GridImageContextMenu.Action,
                                                 captured: ImageContextMenu, rootID: AccessRootID) {
-        let resolved = resolveGridImageContext(captured, rootID: rootID)
-        guard !resolved.isEmpty else { return }
-        switch action {
-        case .quickLook:
-            session.preview(captured)
-        case .getInfo:
-            guard resolved.contains(where: { $0.itemID == captured.clickedItemID }) else { return }
-            session.focus(captured.clickedItemID)
-            gridView.setCurrentItemID(captured.clickedItemID)
-            syncInspector()
-            session.setInspectorVisible(true)
-        case .reveal, .copyPath:
-            guard let folder = gridFolderURL else { return }
-            imageContextActionGeneration = UUID()
-            let generation = imageContextActionGeneration
-            imageContextActionTask?.cancel()
-            imageContextActionTask = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    let services = try await accessServices.value
-                    let context = try await services.monitor.readContext(for: rootID)
-                    try await services.files.withLease(.root(rootID, file: folder)) { _ in
-                        try Task.checkCancellation()
-                        try context.permit.check()
-                        try await MainActor.run {
-                            guard self.imageContextActionGeneration == generation,
-                                  !self.imageContextWindowClosed else { return }
-                            let urls = self.resolveGridImageContext(captured, rootID: rootID, checkDisk: true).map(\.url)
-                            guard !urls.isEmpty else { return }
-                            switch action {
-                            case .reveal: self.fileRevealer.reveal(urls)
-                            case .copyPath: self.pathCopier.copyPaths(urls)
-                            default: break
-                            }
+        guard !resolveGridImageContext(captured, rootID: rootID).isEmpty,
+              let folder = gridFolderURL else { return }
+        imageContextActionGeneration = UUID()
+        let generation = imageContextActionGeneration
+        imageContextActionTask?.cancel()
+        imageContextActionTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let services = try await accessServices.value
+                let context = try await services.monitor.readContext(for: rootID)
+                try await services.files.withLease(.root(rootID, file: folder)) { _ in
+                    try Task.checkCancellation()
+                    try context.permit.check()
+                    try await MainActor.run {
+                        guard self.imageContextActionGeneration == generation,
+                              !self.imageContextWindowClosed else { return }
+                        let entries = self.resolveGridImageContext(captured, rootID: rootID, checkDisk: true)
+                        guard !entries.isEmpty else { return }
+                        switch action {
+                        case .quickLook:
+                            self.session.preview(captured, availableItemIDs: entries.map(\.itemID))
+                        case .getInfo:
+                            guard entries.contains(where: { $0.itemID == captured.clickedItemID }) else { return }
+                            self.session.focus(captured.clickedItemID)
+                            self.gridView.setCurrentItemID(captured.clickedItemID)
+                            self.syncInspector()
+                            self.session.setInspectorVisible(true)
+                        case .reveal: self.fileRevealer.reveal(entries.map(\.url))
+                        case .copyPath: self.pathCopier.copyPaths(entries.map(\.url))
                         }
                     }
-                } catch { /* A revoked lease or vanished target cannot retarget another file. */ }
-            }
+                }
+            } catch { /* A revoked lease or vanished target cannot retarget another file. */ }
         }
     }
+    /// Await the current menu operation when an App integration test needs to assert a silent no-op.
+    func waitForGridImageContextAction() async { await imageContextActionTask?.value }
     /// The viewer surface, with the folder sidebar beside it when this preview came from the grid (#444).
     private func showViewerSurface() {
         presentation.viewerSidebarAvailable = session.canToggleViewerSidebar
