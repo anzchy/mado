@@ -26,3 +26,28 @@ import MadoApplication
     #expect(session.previewSet?.itemIDs == [ids[1], ids[2], ids[4]])
     #expect(session.previewSet?.currentItemID == ids[4])
 }
+
+@Test @MainActor func imageContextMenuLockBlocksGridCommandsUntilMenuCloses() {
+    let session = ViewerSession()
+    session.beginBrowsing(items: sessionItems(2), sourceVersion: .init(1), scrollAnchor: nil)
+    session.setImageContextMenuOpen(true)
+    #expect(session.isMenuTracking)
+    #expect(!CommandRouter().route(.preview, from: .key, to: session))
+    session.setImageContextMenuOpen(false)
+    #expect(!session.isMenuTracking)
+    #expect(CommandRouter().route(.preview, from: .key, to: session))
+}
+
+@Test @MainActor func imageContextMenuPreviewDropsDeletedClickedItemButKeepsSelectionSurvivors() {
+    let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-preview-deleted"))
+    let entries = (0..<4).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
+    let ids = entries.map(\.itemID)
+    let session = ViewerSession()
+    session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: nil)
+    session.select(ids[1]); session.select(ids[2], modifier: .command)
+    let menu = ImageContextMenu(clickedItemID: ids[2], selection: session.selection, entries: entries)
+    session.updateItems([ids[0], ids[1], ids[3]], sourceVersion: .init(2))
+    session.preview(menu)
+    #expect(session.previewSet?.itemIDs == [ids[1]])
+    #expect(session.previewSet?.currentItemID == ids[1])
+}

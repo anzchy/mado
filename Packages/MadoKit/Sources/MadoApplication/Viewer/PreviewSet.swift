@@ -38,7 +38,8 @@ public struct PreviewSet: Equatable, Sendable {
         self.origin = origin
         isSelectionPreview = selectionPreview
         itemIDs = items
-        currentItemID = start.flatMap { items.contains($0) ? $0 : nil } ?? items.first
+        if let start, items.contains(start) { currentItemID = start }
+        else { currentItemID = items.first }
     }
     public mutating func move(forward: Bool, mayWrap: Bool = false) {
         guard let currentItemID, let index = itemIDs.firstIndex(of: currentItemID) else { return }
