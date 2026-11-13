@@ -251,7 +251,7 @@ private let deliberatelyUntimedTests: Set<String> = [
     "Issue606ConditionWaitStateTests.swift:issue606WaitFailuresIncludeAppKitState",
 ]
 
-/// #672 left these alone because the #144 branch edits ShortcutCatalogTests.swift.
+/// #672 left these alone because the #144 branch edits ShortcutCatalogTests.swift and ShortcutListViewTests.swift.
 /// Add `.timeLimit(.minutes(2))` to them and delete this list once #144 has landed.
 private let timeLimitDeferredFor144: Set<String> = Set([
     "issue219ShortcutCatalogMatchesLiveSourcesAndKeycaps",
@@ -263,4 +263,13 @@ private let timeLimitDeferredFor144: Set<String> = Set([
     "issue284ShortcutCatalogUsesTheFirstKeyedItemWhenAnActionRepeats",
     "issue284ShortcutCatalogResolvesMenuItemsToListedSources",
     "zoomKeycapsAllResolve",
-].map { "ShortcutCatalogTests.swift:\($0)" })
+].map { "ShortcutCatalogTests.swift:\($0)" } + [
+    "issue219ShortcutCardsFollowPinnedFrames",
+    "issue219ShortcutTypographyRowsAndKeycapsFollowPinnedDesign",
+    "issue219ShortcutLongestLabelsFitChineseAndEnglish",
+    "issue219ShortcutRenderedKeycapsPaintCompleteGlyphs",
+    "issue219ShortcutRenderedCardHeadersPaintCompleteSubtitles",
+    "issue219ShortcutVisibleCopyIsBilingualWithChineseMenuTitles",
+    "issue284ShortcutRowWithoutKeycapsGivesTheNameTheFullRow",
+    "issue284ShortcutTextWithoutFontOrColorPaintsInTheSystemLabelStyle",
+].map { "ShortcutListViewTests.swift:\($0)" })
