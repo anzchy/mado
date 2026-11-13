@@ -4,6 +4,46 @@ import MadoCore
 import MadoApplication
 import MadoInfrastructure
 
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573ExtensionlessImageSymlinkDropOpensTarget() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let target = tree.appendingPathComponent("image.png")
+    let link = tree.appendingPathComponent("image-link")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: target)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    let access = try FileAccess(scope: CountingScope(), bookmarks: FakeBookmarks(),
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([link], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+
+    #expect(host.hasImage, "Dropping an extensionless symlink to a supported image should open its target image; notices: \(host.notices)")
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573ImageExtensionSymlinkDropOpensTarget() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let target = tree.appendingPathComponent("image.png")
+    let link = tree.appendingPathComponent("image-link.png")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: target)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    let access = try FileAccess(scope: CountingScope(), bookmarks: FakeBookmarks(),
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([link], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+
+    #expect(host.hasImage, "Dropping an image-extension symlink to a supported image should open its target image; failures: \(host.failures)")
+}
+
 @MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionRealFixtureProbeKinds() async throws {
     let scope = CountingScope()
     let store = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
