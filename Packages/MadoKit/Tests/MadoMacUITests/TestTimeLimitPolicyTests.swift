@@ -11,7 +11,8 @@ import Testing
         }
     }
     """
-    #expect(packageTimeLimitViolations(in: source, fileName: "PrefetchResumptionTests.swift").isEmpty)
+    #expect(packageTimeLimitViolations(in: source, fileName: "MadoInfrastructureTests/PrefetchResumptionTests.swift").isEmpty)
+    #expect(packageTimeLimitViolations(in: source, fileName: "MadoApplicationTests/PrefetchResumptionTests.swift") == [.minutes(1)])
     #expect(packageTimeLimitViolations(in: source, fileName: "OtherTests.swift") == [.minutes(1)])
     let extra = source + "\n@Test(.timeLimit(.minutes(1))) func unrelated() {}"
     #expect(packageTimeLimitViolations(in: extra, fileName: "PrefetchResumptionTests.swift") == [.minutes(1), .minutes(1)])
@@ -101,9 +102,10 @@ import Testing
     for file in files {
         let source = try String(contentsOf: file, encoding: .utf8)
         limits += scanTimeLimits(in: source).count
-        let violations = packageTimeLimitViolations(in: source, fileName: file.lastPathComponent)
+        let relativePath = file.pathComponents.dropFirst(tests.pathComponents.count).joined(separator: "/")
+        let violations = packageTimeLimitViolations(in: source, fileName: relativePath)
         #expect(violations.isEmpty,
-                "\(file.lastPathComponent): \(violations) must be recognised literal minutes >= 2 for CI queueing, except #673's named one-minute suite")
+                "\(relativePath): \(violations) must be recognised literal minutes >= 2 for CI queueing, except #673's named one-minute suite")
     }
     #expect(limits > 100, "found \(limits) time limits")
 }
