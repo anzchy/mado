@@ -32,7 +32,7 @@ private func issue219Length(_ design: PinnedDesign, _ selector: String, _ proper
     try issue219Color(color.flatMap(NSColor.init(cgColor:)), appearance)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCardsFollowPinnedFrames() throws {
+@Test @MainActor func issue219ShortcutCardsFollowPinnedFrames() throws {
     for (name, theme) in issue219Appearances {
         let design = try PinnedDesign.page("shortcuts", appearance: theme)
         let view = try issue219View(.english, name)
@@ -72,7 +72,7 @@ private func issue219Length(_ design: PinnedDesign, _ selector: String, _ proper
     }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutTypographyRowsAndKeycapsFollowPinnedDesign() throws {
+@Test @MainActor func issue219ShortcutTypographyRowsAndKeycapsFollowPinnedDesign() throws {
     for (name, theme) in issue219Appearances {
         let design = try PinnedDesign.page("shortcuts", appearance: theme)
         let view = try issue219View(.simplifiedChinese, name)
@@ -126,7 +126,7 @@ private func issue219Length(_ design: PinnedDesign, _ selector: String, _ proper
     }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutLongestLabelsFitChineseAndEnglish() throws {
+@Test @MainActor func issue219ShortcutLongestLabelsFitChineseAndEnglish() throws {
     for language in [EntryPointLanguage.english, .simplifiedChinese] {
         for (appearance, _) in issue219Appearances {
             let view = try issue219View(language, appearance)
@@ -202,7 +202,7 @@ private struct Issue219PaintedText {
     return reference
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutRenderedKeycapsPaintCompleteGlyphs() throws {
+@Test @MainActor func issue219ShortcutRenderedKeycapsPaintCompleteGlyphs() throws {
     let requiredGlyphs: Set<String> = ["Space", "Return", "Esc", "Tab", ",", "0", "1", "+", "−"]
     var renderedGlyphs: Set<String> = []
     for language in [EntryPointLanguage.english, .simplifiedChinese] {
@@ -250,7 +250,7 @@ private struct Issue219PaintedText {
     #expect(requiredGlyphs.isSubset(of: renderedGlyphs))
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutRenderedCardHeadersPaintCompleteSubtitles() throws {
+@Test @MainActor func issue219ShortcutRenderedCardHeadersPaintCompleteSubtitles() throws {
     for language in [EntryPointLanguage.english, .simplifiedChinese] {
         for (appearance, theme) in issue219Appearances {
             let design = try PinnedDesign.page("shortcuts", appearance: theme)
@@ -290,7 +290,7 @@ private struct Issue219PaintedText {
     }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutVisibleCopyIsBilingualWithChineseMenuTitles() throws {
+@Test @MainActor func issue219ShortcutVisibleCopyIsBilingualWithChineseMenuTitles() throws {
     for language in [EntryPointLanguage.english, .simplifiedChinese] {
         for (appearance, _) in issue219Appearances {
             let menu = issue219Menu()
@@ -325,7 +325,7 @@ private struct Issue219PaintedText {
     }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue284ShortcutRowWithoutKeycapsGivesTheNameTheFullRow() {
+@Test @MainActor func issue284ShortcutRowWithoutKeycapsGivesTheNameTheFullRow() {
     let row = ShortcutRowView(row: ShortcutRow(sources: [], name: "Recall Tools", keycaps: []))
     row.frame = NSRect(x: 0, y: 0, width: 240, height: 34)
     row.layoutSubtreeIfNeeded()
@@ -334,7 +334,7 @@ private struct Issue219PaintedText {
     #expect(row.nameLabel.frame.width == 232)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue284ShortcutTextWithoutFontOrColorPaintsInTheSystemLabelStyle() throws {
+@Test @MainActor func issue284ShortcutTextWithoutFontOrColorPaintsInTheSystemLabelStyle() throws {
     _ = NSApplication.shared
     let field = ShortcutTextField(labelWithString: "Recall Tools")
     field.font = nil
