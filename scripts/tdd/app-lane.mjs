@@ -30,6 +30,7 @@ function inheritedControlStdio(env){
   return stdio;
 }
 const bundle = ".build/dd-ci/Build/Products/Debug/MadoAppTests.xctest";
+const stallWatchdog = fileURLToPath(new URL('./app-stall-watchdog.mjs', import.meta.url));
 const crashRecords = [
   /^error: (?:Process '[^'\r\n]+' )?Exited with [^\r\n]*\bsignal\b[^\r\n]*$/i,
   /^(?:[^:\r\n]+\.swift:\d+(?::\d+)?: )?Fatal error:(?: |$)/,
@@ -372,8 +373,10 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
     env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" },
     ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
   const launch=spawnSync===realSpawnSync?runAttestedSync:spawnSync;
-  if (inclusion !== null) return launch(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
-  return launch(lock, ["xcrun", "xctest", bundlePath], options);
+  const native = inclusion !== null ? ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath] :
+    ["xcrun", "xctest", bundlePath];
+  const command = env.PICSEE_APP_STALL_WATCHDOG === '1' ? [process.execPath, stallWatchdog, ...native] : native;
+  return launch(lock, command, options);
 }
 
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */

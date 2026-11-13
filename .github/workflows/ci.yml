@@ -32,6 +32,10 @@ on:
         description: App repetitions (1–50); values above 1 enable reproduction without retry or quarantine
         type: number
         default: 1
+      app_stall_watchdog:
+        description: Diagnostic App test stacks at 20, 60 and 170 seconds per test
+        type: boolean
+        default: false
       cold:
         description: Build from scratch, without restoring the SwiftPM or DerivedData cache
         type: boolean
@@ -365,6 +369,7 @@ jobs:
           REPEAT_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1 }}
           APP_FILTER: ${{ inputs.app_filter }}
           APP_REPEAT: ${{ inputs.app_repeat }}
+          PICSEE_APP_STALL_WATCHDOG: ${{ github.event_name == 'workflow_dispatch' && inputs.app_stall_watchdog && '1' || '0' }}
         run: |
           set -o pipefail
           mkdir -p .build
@@ -405,6 +410,17 @@ jobs:
         with:
           name: app-repeat
           path: .build/app-repeat
+          include-hidden-files: true
+          if-no-files-found: warn
+      - name: Upload App stall watchdog
+        continue-on-error: true
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.app_stall_watchdog
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-stall-watchdog
+          path: |
+            .build/app-watchdog
+            .build/app-repeat/watchdog-iter-*
           include-hidden-files: true
           if-no-files-found: warn
       - name: Save DerivedData

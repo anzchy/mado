@@ -74,6 +74,8 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
         const workerEnv={...iterationEnv,MADO_TEST_RUN_TOKEN:token,TEST_RUNNER_MADO_TEST_RUN_TOKEN:token,
           MADO_APP_COMPARE_RESULT_PATH:path.resolve(out,`iter-${label}.comparison.json`),
           MADO_APP_COMPARE_RESULT_ID:`${env.GITHUB_RUN_ID??'local'}-${label}-${token}`};
+        if (workerEnv.PICSEE_APP_STALL_WATCHDOG === '1')
+          workerEnv.PICSEE_APP_WATCHDOG_DIR = path.resolve(out, `watchdog-iter-${label}`);
         if(requireComparisonEvidence&&mode!=='normal')writeFileSync(workerEnv.MADO_APP_COMPARE_RESULT_PATH,
           JSON.stringify({version:1,runId:workerEnv.MADO_APP_COMPARE_RESULT_ID,complete:false,status:null}));
         if(needsHost&&filterCanLaunch) {
