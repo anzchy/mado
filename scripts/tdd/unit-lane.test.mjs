@@ -197,6 +197,19 @@ test('unitDrainExpiryWithSurvivingDescendantHasNoGreenGate', t => {
   assert.equal(alive(Number(fs.readFileSync(f.env.HELPER, 'utf8'))), false);
 });
 
+// #672 fix r2 (gpt confirm F1): Swift and coverage exit green, but the private
+// cleanup status is missing, malformed, stale or contradictory. Unverified
+// cleanup must not leave a green package gate.
+test('unitUnattestedStatusWithGreenChildHasNoGreenGate', t => {
+  for (const statusFault of ['missing', 'malformed', 'stale', 'contradictory']) {
+    const f = fixture(t);
+    const r = run(f, { statusFault });
+    assert.match(r.stdout, /7 tests/, statusFault);
+    assert.equal(r.status, 70, `${statusFault}: ${r.stderr}`);
+    assert.match(r.stderr, /unit-lane: cleanup status not attested/, statusFault);
+  }
+});
+
 test('consecutive invocations keep distinct logs and earlier diagnostic evidence', t => {
   const f = fixture(t); f.env.MARKER = 'first-run';
   assert.equal(run(f).status, 0);
