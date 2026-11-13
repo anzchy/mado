@@ -2,7 +2,7 @@ import AppKit
 import Testing
 import MadoMacUI
 
-@Test @MainActor func imageContextMenuItemsMatchPage31OrderWithoutFavorite() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuItemsMatchPage31OrderWithoutFavorite() throws {
     let menu = GridImageContextMenu(onAction: { _ in }).menu
     let items = try #require(menu.items.count == 5 ? menu.items : nil)
     #expect(items.map(\.title) == ["Quick Look", "", "Show in Finder", "Copy Path", "Get Info"])
@@ -15,7 +15,7 @@ import MadoMacUI
     #expect(menu.title == "Image Context Menu")
 }
 
-@Test @MainActor func imageContextMenuRevalidatesAndInvokesOnlyAvailableAction() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuRevalidatesAndInvokesOnlyAvailableAction() throws {
     _ = NSApplication.shared
     var actions: [GridImageContextMenu.Action] = []
     let owner = GridImageContextMenu { actions.append($0) }

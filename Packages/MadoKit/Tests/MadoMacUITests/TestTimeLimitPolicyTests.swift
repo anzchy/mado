@@ -233,11 +233,9 @@ import Testing
         }
     }
     #expect(scanned > 300)
-    let deferred = Set(missing).intersection(timeLimitDeferredFor144)
-    #expect(deferred.count == timeLimitDeferredFor144.count, "stale #144 deferral: \(timeLimitDeferredFor144.subtracting(deferred).sorted())")
     let untimed = Set(missing).intersection(deliberatelyUntimedTests)
     #expect(untimed.count == deliberatelyUntimedTests.count, "stale untimed exemption: \(deliberatelyUntimedTests.subtracting(untimed).sorted())")
-    missing.removeAll { deferred.contains($0) || untimed.contains($0) }
+    missing.removeAll { untimed.contains($0) }
     #expect(missing.isEmpty, "\(missing.count) async/AppKit tests lack a time limit: \(missing.prefix(40))")
 }
 
@@ -250,26 +248,3 @@ private let deliberatelyUntimedTests: Set<String> = [
     "ConditionWaitTests.swift:i400UntimedRunLoopKeepsItsBounds",
     "Issue606ConditionWaitStateTests.swift:issue606WaitFailuresIncludeAppKitState",
 ]
-
-/// #672 left these alone because the #144 branch edits ShortcutCatalogTests.swift and ShortcutListViewTests.swift.
-/// Add `.timeLimit(.minutes(2))` to them and delete this list once #144 has landed.
-private let timeLimitDeferredFor144: Set<String> = Set([
-    "issue219ShortcutCatalogMatchesLiveSourcesAndKeycaps",
-    "issue219ShortcutCatalogUsesSimplifiedChinese",
-    "issue219ShortcutCatalogFollowsImplementedFlagAndMenuAvailability",
-    "issue219ShortcutCatalogKeepsAllRowsWithChineseMenuTitles",
-    "issue219ShortcutCatalogKeepsRowsWhenMenuActionsAreRetitled",
-    "issue284ShortcutCatalogNamesTheSurvivingHalfOfAPairedRow",
-    "issue284ShortcutCatalogUsesTheFirstKeyedItemWhenAnActionRepeats",
-    "issue284ShortcutCatalogResolvesMenuItemsToListedSources",
-    "zoomKeycapsAllResolve",
-].map { "ShortcutCatalogTests.swift:\($0)" } + [
-    "issue219ShortcutCardsFollowPinnedFrames",
-    "issue219ShortcutTypographyRowsAndKeycapsFollowPinnedDesign",
-    "issue219ShortcutLongestLabelsFitChineseAndEnglish",
-    "issue219ShortcutRenderedKeycapsPaintCompleteGlyphs",
-    "issue219ShortcutRenderedCardHeadersPaintCompleteSubtitles",
-    "issue219ShortcutVisibleCopyIsBilingualWithChineseMenuTitles",
-    "issue284ShortcutRowWithoutKeycapsGivesTheNameTheFullRow",
-    "issue284ShortcutTextWithoutFontOrColorPaintsInTheSystemLabelStyle",
-].map { "ShortcutListViewTests.swift:\($0)" })

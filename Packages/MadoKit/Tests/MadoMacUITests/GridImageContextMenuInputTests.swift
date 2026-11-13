@@ -11,7 +11,7 @@ import MadoMacUI
     }
 }
 
-@Test @MainActor func imageContextMenuKeyboardEntryTargetsCurrentCell() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuKeyboardEntryTargetsCurrentCell() throws {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-grid"))
     let entries = (0..<6).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
     let snapshot = FolderSnapshot(version: SnapshotVersion(rootID: root.id, folder: root.url, generation: 1),

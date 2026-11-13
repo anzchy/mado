@@ -68,7 +68,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     }
 }
 
-@Test @MainActor func issue219ShortcutCatalogMatchesLiveSourcesAndKeycaps() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCatalogMatchesLiveSourcesAndKeycaps() throws {
     let catalog = ShortcutCatalog(menu: issue219Menu(), language: .english)
     let actual = issue219Flatten(catalog)
     #expect(actual.count == issue219ExpectedRows.count)
@@ -82,7 +82,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(catalog.cards.map(\.when) == ["Anytime", "While Browsing a Folder", "While Viewing One Image"])
 }
 
-@Test @MainActor func issue219ShortcutCatalogUsesSimplifiedChinese() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCatalogUsesSimplifiedChinese() {
     let catalog = ShortcutCatalog(menu: issue219Menu(), language: .simplifiedChinese)
     let actual = issue219Flatten(catalog)
     #expect(actual.count == issue219ExpectedRows.count)
@@ -93,7 +93,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(catalog.cards.map(\.when) == ["任何时候", "浏览文件夹时", "查看一张图片时"])
 }
 
-@Test @MainActor func issue219ShortcutCatalogFollowsImplementedFlagAndMenuAvailability() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCatalogFollowsImplementedFlagAndMenuAvailability() throws {
     let menu = issue219Menu()
     let settings = try #require(menu.items.first { $0.title == "Mado" }?.submenu?.items.first { $0.title == "Settings…" })
     settings.keyEquivalent = ""
@@ -109,7 +109,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(sources.contains("menu:Redo") == false)
 }
 
-@Test @MainActor func issue219ShortcutCatalogKeepsAllRowsWithChineseMenuTitles() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCatalogKeepsAllRowsWithChineseMenuTitles() {
     let menu = issue219Menu()
     let titles = [
         "Settings…": "设置…", "Hide Mado": "隐藏 Mado", "Hide Others": "隐藏其他",
@@ -132,7 +132,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     }
 }
 
-@Test @MainActor func issue219ShortcutCatalogKeepsRowsWhenMenuActionsAreRetitled() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue219ShortcutCatalogKeepsRowsWhenMenuActionsAreRetitled() throws {
     let menu = issue219Menu()
     let view = try #require(menu.items.first { $0.title == "View" }?.submenu)
     try #require(view.items.first { $0.title == "Hide sidebar" }).title = "Show sidebar"
@@ -145,7 +145,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(issue219Flatten(catalog).count == issue219ExpectedRows.count)
 }
 
-@Test @MainActor func issue284ShortcutCatalogNamesTheSurvivingHalfOfAPairedRow() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue284ShortcutCatalogNamesTheSurvivingHalfOfAPairedRow() {
     let implemented = Set(CommandID.allCases).subtracting([.previous, .zoomIn])
     for (language, names) in [(EntryPointLanguage.english, ["Next Image", "Zoom Out"]),
                                (.simplifiedChinese, ["下一张", "缩小"])] {
@@ -164,7 +164,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     }
 }
 
-@Test @MainActor func issue284ShortcutCatalogUsesTheFirstKeyedItemWhenAnActionRepeats() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue284ShortcutCatalogUsesTheFirstKeyedItemWhenAnActionRepeats() throws {
     let menu = issue219Menu()
     let file = try #require(menu.items.first { $0.title == "File" }?.submenu)
     let closeTab = NSMenuItem(title: "Close Tab", action: NSSelectorFromString("performClose:"), keyEquivalent: "w")
@@ -176,7 +176,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     #expect(close.first?.2 == ["⌘", "W"])
 }
 
-@Test @MainActor func issue284ShortcutCatalogResolvesMenuItemsToListedSources() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue284ShortcutCatalogResolvesMenuItemsToListedSources() {
     let catalog = ShortcutCatalog(menu: issue219Menu(), language: .english)
     func item(_ action: String?, command: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: "", action: action.map(NSSelectorFromString), keyEquivalent: "")
@@ -200,7 +200,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
 }
 
 /// #348: the catalog's zoom keycaps stay bare, and each one is still caught by a menu binding.
-@Test @MainActor func zoomKeycapsAllResolve() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func zoomKeycapsAllResolve() throws {
     let zoom: Set<String> = ["command:fit", "command:actualPixels", "command:zoomIn", "command:zoomOut"]
     for language in [EntryPointLanguage.english, .simplifiedChinese] {
         let catalog = ShortcutCatalog(menu: issue219Menu(), language: language)

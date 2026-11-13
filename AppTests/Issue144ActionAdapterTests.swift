@@ -23,7 +23,7 @@ import MadoMacUI
     return view.subviews.lazy.compactMap { issue144Grid($0) }.first
 }
 
-@Test @MainActor func issue144CopyPathReplacesPasteboardWithOneStoredPathPerLine() throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue144CopyPathReplacesPasteboardWithOneStoredPathPerLine() throws {
     let pasteboard = NSPasteboard(name: .init(UUID().uuidString))
     defer { pasteboard.releaseGlobally() }
     pasteboard.setString("old content", forType: .string)
