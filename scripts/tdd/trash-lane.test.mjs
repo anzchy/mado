@@ -7,7 +7,7 @@ import os from 'node:os';
 import { loadManifest, discoveryVerdict, parseListing, scenarioFilter, swiftFlags, TRASH_LIMITS } from './trash-lane.mjs';
 
 const root = process.cwd();
-const scratch = mkdtempSync(path.join(os.tmpdir(), 'picsee-trash-lane-'));
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'mado-trash-lane-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 const lock = path.join(root, 'scripts/heavy-lock.sh');
 const driver = path.join(root, 'scripts/tdd/fixtures/trash-lane-driver.mjs');
