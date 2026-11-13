@@ -93,6 +93,7 @@ func issue144MenuCopyUsesCapturedUnselectedTargetAfterCurrentChanges() async thr
     let infoMenu = try #require(controller.makeGridImageContextMenu(for: ids[3]))
     let infoItem = infoMenu.items[4]
     _ = NSApp.sendAction(try #require(infoItem.action), to: infoItem.target, from: infoItem)
+    await controller.waitForGridImageContextAction()
     #expect(controller.session.selection.currentItemID == ids[3])
     #expect(controller.session.inspectorFocus.isVisible)
 
@@ -126,4 +127,51 @@ func issue144MenuCopyUsesCapturedUnselectedTargetAfterCurrentChanges() async thr
     let staleItem = unavailableMenu.items[3]
     _ = NSApp.sendAction(try #require(staleItem.action), to: staleItem.target, from: staleItem)
     #expect(copier.calls.count == 1)
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue144DeletedDiskTargetsCannotPreviewOrOpenInspectorFromStaleGrid() async throws {
+    _ = NSApplication.shared
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent("issue144-deleted-\(UUID().uuidString)")
+    let folder = base.appendingPathComponent("Images")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: base) }
+    let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("TestAssets/synthetic/landscape-3x2.png")
+    let data = try Data(contentsOf: fixture)
+    for i in 0..<6 { try data.write(to: folder.appendingPathComponent(String(format: "%03d.png", i))) }
+    let scope = SystemSecurityScope()
+    let access = try FileAccess(scope: scope, bookmarks: scope,
+        store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue144-deleted")
+    let services = AccessServices(files: access,
+        recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")), browser: FolderBrowser(),
+        watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+        accessServices: Task { services }, motionPolicy: MotionPolicy(source: Issue144Motion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    controller.openGrantedFolder(folder)
+    try await waitUntil("grid ready", between: { window.contentView?.layoutSubtreeIfNeeded() }) {
+        controller.gridSearchAvailable && (issue144Grid(window.contentView)?.displayedItemIDs.count ?? 0) == 6
+    }
+    let grid = try #require(issue144Grid(window.contentView))
+    let ids = grid.displayedItemIDs
+    controller.session.select(ids[0])
+
+    let previewMenu = try #require(controller.makeGridImageContextMenu(for: ids[3]))
+    try FileManager.default.removeItem(at: try #require(grid.entry(for: ids[3])).url)
+    #expect(grid.displayedItemIDs.contains(ids[3]))
+    let preview = previewMenu.items[0]
+    _ = NSApp.sendAction(try #require(preview.action), to: preview.target, from: preview)
+    await controller.waitForGridImageContextAction()
+    #expect(controller.session.mode == .browsing)
+
+    let infoMenu = try #require(controller.makeGridImageContextMenu(for: ids[4]))
+    try FileManager.default.removeItem(at: try #require(grid.entry(for: ids[4])).url)
+    #expect(grid.displayedItemIDs.contains(ids[4]))
+    let info = infoMenu.items[4]
+    _ = NSApp.sendAction(try #require(info.action), to: info.target, from: info)
+    await controller.waitForGridImageContextAction()
+    #expect(controller.session.selection.currentItemID == ids[0])
+    #expect(!controller.session.inspectorFocus.isVisible)
 }

@@ -51,3 +51,16 @@ import MadoApplication
     #expect(session.previewSet?.itemIDs == [ids[1]])
     #expect(session.previewSet?.currentItemID == ids[1])
 }
+
+@Test @MainActor func imageContextMenuPreviewUsesOnlyDiskSurvivorsFromCapturedRange() {
+    let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-preview-disk"))
+    let entries = (0..<4).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
+    let ids = entries.map(\.itemID)
+    let session = ViewerSession()
+    session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: nil)
+    session.select(ids[1]); session.select(ids[2], modifier: .command)
+    let menu = ImageContextMenu(clickedItemID: ids[2], selection: session.selection, entries: entries)
+    session.preview(menu, availableItemIDs: [ids[1]])
+    #expect(session.previewSet?.itemIDs == [ids[1]])
+    #expect(session.previewSet?.currentItemID == ids[1])
+}
