@@ -1936,7 +1936,12 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                         switch action {
                         case .quickLook:
                             self.prepareGridPreview()
-                            self.session.preview(captured, availableItemIDs: entries.map(\.itemID))
+                            // The clicked item must survive the disk check above. A single
+                            // target still previews the captured folder range; a multi-selection
+                            // is limited to its surviving selected targets.
+                            let previewIDs = captured.target.itemIDs.count > 1
+                                ? entries.map(\.itemID) : captured.openingItemIDs
+                            self.session.preview(captured, availableItemIDs: previewIDs)
                         case .getInfo:
                             guard entries.contains(where: { $0.itemID == captured.clickedItemID }) else { return }
                             self.session.focus(captured.clickedItemID)
