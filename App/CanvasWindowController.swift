@@ -1822,10 +1822,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     func route(_ command: CommandID, from entry: CommandEntry, commandModified: Bool = false) -> Bool {
         if command == .search, gridSearchAvailable { gridShell.focusSearch(); return true }
         if !gridView.isHidden && (command == .preview || command == .enter) {
-            gridPreviewScrollOffset = gridView.contentOffset
-            session.beginBrowsing(items: gridView.displayedItemIDs,
-                sourceVersion: .init(gridProjection.snapshot?.version.generation ?? 0),
-                scrollAnchor: gridView.firstVisibleItemID())
+            prepareGridPreview()
         }
         session.updateFocus(focusContext)
         session.setMenuTracking(menuTracking())
@@ -1834,6 +1831,12 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             return canvas.preservingKeyboardFocusRing { router.route(command, from: entry, to: session) }
         }
         return router.route(command, from: entry, to: session, commandModified: commandModified)
+    }
+    private func prepareGridPreview() {
+        gridPreviewScrollOffset = gridView.contentOffset
+        session.beginBrowsing(items: gridView.displayedItemIDs,
+            sourceVersion: .init(gridProjection.snapshot?.version.generation ?? 0),
+            scrollAnchor: gridView.firstVisibleItemID())
     }
     private func returnToFolder(of file: URL) {
         let operation = accessIntent.navigation()
@@ -1932,6 +1935,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                         guard !entries.isEmpty else { return }
                         switch action {
                         case .quickLook:
+                            self.prepareGridPreview()
                             self.session.preview(captured, availableItemIDs: entries.map(\.itemID))
                         case .getInfo:
                             guard entries.contains(where: { $0.itemID == captured.clickedItemID }) else { return }
