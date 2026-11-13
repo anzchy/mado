@@ -48,7 +48,7 @@ private func classificationURL(_ name: String, directory: Bool = false) -> URL {
     }
 }
 
-@Test func inputClassificationRealSymlinkAliasesRetainFirstAndCountOnce() throws {
+@Test(.timeLimit(.minutes(2))) func inputClassificationRealSymlinkAliasesUseTargetAndCountOnce() throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }
@@ -60,7 +60,7 @@ private func classificationURL(_ name: String, directory: Bool = false) -> URL {
     try FileManager.default.createSymbolicLink(at: zipAlias, withDestinationURL: zip)
     for aliasFirst in [false, true] {
         let urls = aliasFirst ? [imageAlias, zipAlias, b, a, zip, zipAlias] : [a, zip, b, imageAlias, zipAlias, zip]
-        let expected = [aliasFirst ? imageAlias : a, b]
+        let expected = [a, b]
         let result = ViewerInput.classification(urls)
         #expect(result.input == .files(expected))
         #expect(result.excludedCount == 1)
