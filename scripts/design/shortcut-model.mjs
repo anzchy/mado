@@ -37,6 +37,8 @@ export const KEY_HANDLERS = [
   { id: 'key:grid-end', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
     anchor: /let preserveSelection = !event\.modifierFlags\.intersection\(\[\.shift, \.command\]\)\.isEmpty[\s\S]*?case 119: onPageOrEdge\?\(\.last, preserveSelection\); return/,
     keys: ['End', '⇧', 'End'] },
+  { id: 'key:grid-context-menu', file: 'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
+    anchor: /if event\.keyCode == 36, contextModifiers == \.control \{/, keys: ['⌃', 'Return'] },
   { id: 'key:viewer-tab', file: 'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     anchor: /if event\.keyCode == 48 \{ onTab\?\(/, keys: ['Tab'] },
 ];
@@ -48,7 +50,8 @@ const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissa
 export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
     123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
-    116: 'key:grid-page-up', 121: 'key:grid-page-down', 115: 'key:grid-home', 119: 'key:grid-end' },
+    116: 'key:grid-page-up', 121: 'key:grid-page-down', 115: 'key:grid-home', 119: 'key:grid-end',
+    36: 'key:grid-context-menu' },
   'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
     36: { excluded: OPEN_KEY_RING }, 49: { excluded: OPEN_KEY_RING }, 76: { excluded: OPEN_KEY_RING } },
   'App/CanvasWindowController.swift': { 34: 'command:inspector', 53: 'command:escape', 49: 'command:preview', 36: 'command:enter', 76: 'command:enter',

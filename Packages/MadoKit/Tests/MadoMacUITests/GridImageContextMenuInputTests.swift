@@ -43,4 +43,10 @@ import MadoMacUI
     let photo = try #require(grid.collectionView.item(at: IndexPath(item: 3, section: 0)) as? GridPhotoItem)
     #expect(photo.view.accessibilityPerformShowMenu())
     #expect(presenter.presented?.view === grid.collectionView)
+    presenter.presented = nil
+    let wrongModifiers = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: [.control, .shift], timestamp: 0, windowNumber: window.windowNumber,
+        context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+    grid.collectionView.keyDown(with: wrongModifiers)
+    #expect(presenter.presented == nil)
 }
