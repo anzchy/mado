@@ -51,6 +51,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
 
     public func subscribe(rootID: AccessRootID, folder: URL, recursive: Bool,
         onChange: @escaping @Sendable () -> Void) async throws -> any FolderWatchSubscription {
+        I676SidebarHandoffTiming.mark("hub subscribe entered")
         let subscriber = Subscriber(folder: folder, recursive: recursive, onChange: onChange)
         let (root, transition, siblings) = lock.withLock { () -> (Root, Task<(any Error)?, Never>, [Subscriber]) in
             let root = roots[rootID] ?? Root()
@@ -64,10 +65,13 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
             }
             return (root, enqueue(root, rootID), siblings)
         }
+        I676SidebarHandoffTiming.mark("hub waiting for subscription transition")
         if let error = await transition.value {
+            I676SidebarHandoffTiming.mark("hub subscription transition failed")
             await remove(subscriber.id, from: root, rootID)
             throw error
         }
+        I676SidebarHandoffTiming.mark("hub subscription transition finished")
         // Every old window must rebase its own folder URL after the shared stream moves.
         for sibling in siblings { sibling.onChange() }
         return Subscription(hub: self, root: root, rootID: rootID, id: subscriber.id)
@@ -84,12 +88,15 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
     }
 
     private func remove(_ id: UUID, from root: Root, _ rootID: AccessRootID) async {
+        I676SidebarHandoffTiming.mark("hub remove entered")
         let transition = lock.withLock { () -> Task<(any Error)?, Never>? in
             guard let subscriber = root.subscribers.removeValue(forKey: id) else { return nil }
             subscriber.timer?.cancel()
             return enqueue(root, rootID)
         }
+        I676SidebarHandoffTiming.mark("hub waiting for remove transition")
         _ = await transition?.value
+        I676SidebarHandoffTiming.mark("hub remove transition finished")
     }
 
     /// Caller holds the lock. Chains a transition after the root's previous one.
@@ -97,8 +104,11 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
         let previous = root.tail
         root.queued += 1
         let task = Task {
+            I676SidebarHandoffTiming.mark("hub transition queued; waiting for previous")
             _ = await previous?.value
+            I676SidebarHandoffTiming.mark("hub previous transition finished")
             let error = await self.transition(root, rootID)
+            I676SidebarHandoffTiming.mark("hub transition finished")
             self.lock.withLock { // An idle root with nothing queued leaves the map; its Subscriptions still hold it.
                 root.queued -= 1
                 if root.queued == 0, root.subscribers.isEmpty, root.stream == nil, self.roots[rootID] === root { self.roots[rootID] = nil }
@@ -123,18 +133,24 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
             return .start(folder)
         }
         switch step {
-        case .none: return nil
+        case .none:
+            I676SidebarHandoffTiming.mark("hub transition no-op")
+            return nil
         case .stop(let stream, let lease):
+            I676SidebarHandoffTiming.mark("hub stopping stream; waiting for lease release")
             stream.stop()
             log.notice("FolderWatch stop root=\(rootID.rawValue.uuidString, privacy: .public)")
             await access.release(lease)
+            I676SidebarHandoffTiming.mark("hub lease released")
             return await transition(root, rootID)
         case .start(let folder):
             let lease: AccessLease
+            I676SidebarHandoffTiming.mark("hub waiting for lease acquire")
             do { lease = try await access.acquire(.root(rootID, file: folder)) } catch {
                 log.error("FolderWatch lease failed root=\(rootID.rawValue.uuidString, privacy: .public) error=\(String(describing: type(of: error)), privacy: .public)")
                 return error
             }
+            I676SidebarHandoffTiming.mark("hub lease acquired")
             guard lock.withLock({ !root.subscribers.isEmpty }) else { await access.release(lease); return nil }
             let stream: any FolderEventStream
             do { stream = try source.start(watching: lease.url) { [weak self] hints in self?.deliver(hints, to: root) } } catch {
@@ -143,6 +159,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
                 return error
             }
             lock.withLock { root.stream = stream; root.lease = lease }
+            I676SidebarHandoffTiming.mark("hub stream started")
             log.notice("FolderWatch start root=\(rootID.rawValue.uuidString, privacy: .public)")
             return nil
         }
@@ -165,6 +182,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
     }
 
     private func deliver(_ hints: [FolderChangeHint], to root: Root) {
+        I676SidebarHandoffTiming.mark("hub event delivered hints=\(hints.count)")
         let paths = hints.map { hint -> (path: [String], excluded: [Bool])? in
             guard case .changed(let url) = hint else { return nil }
             let path = Self.canonical(url)
@@ -194,6 +212,7 @@ public final class WatchHub: FolderWatching, @unchecked Sendable {
             defer { subscriber.pending = false }
             return subscriber.pending
         }
+        I676SidebarHandoffTiming.mark("hub flush due=\(due)")
         if due { subscriber.onChange() }
     }
 }

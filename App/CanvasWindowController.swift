@@ -1557,6 +1557,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func loadSidebarTree(_ folder: URL, rootID: AccessRootID, count: Int?, failedRead: Bool = false) {
+        I676SidebarHandoffTiming.mark("controller loadSidebarTree entered")
         if failedRead { sidebarFailedReadFolder = folder }
         else if sidebarFailedReadFolder != folder ||
             (session.folderScan?.failure == nil && session.folderScan?.snapshot?.isComplete == true) {
@@ -1569,12 +1570,15 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             gridShell.showFolderTree(current: GridSidebarFolder(url: folder, count: count), parent: nil, children: [])
         }
         sidebarTreeTask = Task(priority: .utility) { [weak self, accessServices] in
+            I676SidebarHandoffTiming.mark("controller sidebar task started; waiting for access services")
             var failureContext: AccessMonitor.ReadContext?
             var monitor: AccessMonitor?
             do {
                 let services = try await accessServices.value
+                I676SidebarHandoffTiming.mark("controller access services ready; waiting for read context")
                 monitor = services.monitor
                 let context = try await services.monitor.readContext(for: rootID)
+                I676SidebarHandoffTiming.mark("controller read context ready")
                 failureContext = context
                 try Task.checkCancellation()
                 try context.permit.check()
@@ -1584,24 +1588,37 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     access: services.files, enumerator: SystemSidebarFolderEnumerator())
                 let loader = SidebarFolderLoadSession(browser: browser)
                 self.sidebarLoader = loader
+                I676SidebarHandoffTiming.mark("controller waiting for recovery parent")
                 let recoveryParent = recoveringFailedRead ? try await browser.parent(in: folder, rootID: rootID) : nil
                 let listingFolder = recoveryParent ?? folder
+                I676SidebarHandoffTiming.mark("controller waiting for watch registration")
                 let watch = try await services.watch.subscribe(rootID: rootID, folder: listingFolder,
                     recursive: true, onChange: { [weak self] in
+                        I676SidebarHandoffTiming.mark("controller watch callback delivered; scheduling refresh")
                         Task { @MainActor [weak self] in
+                            I676SidebarHandoffTiming.mark("controller watch refresh task entered")
                             guard let self, self.gridFolderURL == folder,
-                                self.sidebarWatchGeneration == generation || self.sidebarTreeGeneration == generation else { return }
+                                self.sidebarWatchGeneration == generation || self.sidebarTreeGeneration == generation else {
+                                I676SidebarHandoffTiming.mark("controller watch refresh rejected by generation")
+                                return
+                            }
+                            I676SidebarHandoffTiming.mark("controller watch refresh accepted")
                             self.loadSidebarTree(folder, rootID: rootID, count: nil)
                         }
                     })
+                I676SidebarHandoffTiming.mark("controller watch registration returned")
                 guard !Task.isCancelled, self.sidebarTreeGeneration == generation, context.permit.isCurrent else {
+                    I676SidebarHandoffTiming.mark("controller watch registration stale; waiting for cancel")
                     await watch.cancel()
+                    I676SidebarHandoffTiming.mark("controller stale watch canceled")
                     return
                 }
                 let previous = self.sidebarWatchSubscription
                 self.sidebarWatchSubscription = watch
                 self.sidebarWatchGeneration = generation
+                I676SidebarHandoffTiming.mark("controller replacement watch installed")
                 if let previous { Task { await previous.cancel() } }
+                I676SidebarHandoffTiming.mark("controller starting owned sidebar read")
                 loader.start(folder: listingFolder, rootID: rootID, onRows: { [weak self] children, parentURL in
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
@@ -1615,17 +1632,20 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                             parent: parentURL.map { GridSidebarFolder(url: $0, count: self.sidebarKnownCounts[$0]) },
                             children: children.map { GridSidebarFolder(url: $0) })
                     }
+                    I676SidebarHandoffTiming.mark("controller sidebar rows observed count=\(children.count)")
                 }, onCount: { [weak self] child, imageCount in
                     guard let self, self.sidebarTreeGeneration == generation,
                         self.gridFolderURL == folder, context.permit.isCurrent else { return }
                     self.sidebarKnownCounts[child] = imageCount
                     self.gridShell.updateFolderCount(imageCount, for: child)
+                    I676SidebarHandoffTiming.mark("controller sidebar count observed count=\(imageCount)")
                 }, onFailure: { [weak self] _ in
                     guard let self, self.sidebarTreeGeneration == generation,
                           self.gridFolderURL == folder, context.permit.isCurrent else { return }
                     Task { await services.monitor.reportReadFailure(rootID, from: context.stamp) }
                 })
             } catch {
+                I676SidebarHandoffTiming.mark("controller sidebar task error \(type(of: error))")
                 if let failureContext, !Task.isCancelled, !(error is CancellationError) {
                     await monitor?.reportReadFailure(rootID, from: failureContext.stamp, error: error)
                 }

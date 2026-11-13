@@ -33,7 +33,17 @@ private func sameSidebarURL(_ lhs: URL, _ rhs: URL) -> Bool {
     state: () -> String = { "" },
     fileID: String = #fileID, line: Int = #line, _ condition: () async -> Bool) async throws {
     watch?.reconcileAll()
-    do { try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) { await condition() } } catch {
+    I676SidebarHandoffTiming.mark("waiting for \(stage)")
+    var nextProgress = ContinuousClock.now + .seconds(10)
+    do { try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line, between: {
+        if ContinuousClock.now >= nextProgress {
+            I676SidebarHandoffTiming.mark("still waiting for \(stage)")
+            nextProgress += .seconds(10)
+        }
+    }) { await condition() }
+        I676SidebarHandoffTiming.mark("observed \(stage)")
+    } catch {
+        I676SidebarHandoffTiming.mark("wait ended for \(stage): \(type(of: error))")
         // On stdout, so CI's uploaded first-attempt log names the state a stuck stage saw (#425).
         let seen = state()
         guard !seen.isEmpty else { throw error }
@@ -44,14 +54,19 @@ private func sameSidebarURL(_ lhs: URL, _ rhs: URL) -> Bool {
 
 @MainActor private func sidebarCondition(for seconds: Double,
     _ condition: () async -> Bool) async -> Bool {
+    I676SidebarHandoffTiming.mark("waiting for short boundary condition")
     let deadline = ContinuousClock.now + .seconds(seconds)
     while await !condition(), ContinuousClock.now < deadline {
         try? await Task.sleep(for: .milliseconds(10))
     }
-    return await condition()
+    let result = await condition()
+    I676SidebarHandoffTiming.mark("short boundary condition finished result=\(result)")
+    return result
 }
 
 private final class SidebarHandoffGate: @unchecked Sendable {
+    private let label: String
+    init(_ label: String = "other") { self.label = label }
     private let lock = NSLock()
     private var armed = false
     private var released = false
@@ -60,6 +75,7 @@ private final class SidebarHandoffGate: @unchecked Sendable {
     var isHolding: Bool { lock.withLock { holding } }
     func arm() {
         lock.withLock { armed = true; released = false; holding = false }
+        I676SidebarHandoffTiming.mark("\(label) gate armed")
     }
     func holdIfArmed() async {
         guard lock.withLock({ () -> Bool in
@@ -67,6 +83,7 @@ private final class SidebarHandoffGate: @unchecked Sendable {
             armed = false; holding = true
             return true
         }) else { return }
+        I676SidebarHandoffTiming.mark("\(label) gate entered; waiting for release")
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 let resumeNow = lock.withLock { () -> Bool in
@@ -77,8 +94,10 @@ private final class SidebarHandoffGate: @unchecked Sendable {
                 if resumeNow { continuation.resume() }
             }
         } onCancel: { release() }
+        I676SidebarHandoffTiming.mark("\(label) gate resumed")
     }
     func release() {
+        I676SidebarHandoffTiming.mark("\(label) gate release requested")
         let continuation = lock.withLock { () -> CheckedContinuation<Void, Never>? in
             released = true; holding = false
             defer { self.continuation = nil }
@@ -93,12 +112,14 @@ private final class SidebarHandoffWatch: FolderWatching, @unchecked Sendable {
         let subscription: any FolderWatchSubscription
         let didCancel: @Sendable () -> Void
         func cancel() async {
+            I676SidebarHandoffTiming.mark("old subscription cancel waiting")
             await subscription.cancel()
+            I676SidebarHandoffTiming.mark("old subscription cancel finished")
             didCancel()
         }
     }
     private let hub: WatchHub
-    private let gate = SidebarHandoffGate()
+    private let gate = SidebarHandoffGate("subscription")
     private let lock = NSLock()
     private var cancelledSubscriptions = 0
     init(hub: WatchHub) { self.hub = hub }
@@ -108,8 +129,11 @@ private final class SidebarHandoffWatch: FolderWatching, @unchecked Sendable {
     func releaseSubscription() { gate.release() }
     func subscribe(rootID: AccessRootID, folder: URL, recursive: Bool,
         onChange: @escaping @Sendable () -> Void) async throws -> any FolderWatchSubscription {
+        I676SidebarHandoffTiming.mark("replacement subscribe entered")
         await gate.holdIfArmed()
+        I676SidebarHandoffTiming.mark("waiting for hub subscription")
         let subscription = try await hub.subscribe(rootID: rootID, folder: folder, recursive: recursive, onChange: onChange)
+        I676SidebarHandoffTiming.mark("hub subscription returned")
         return Subscription(subscription: subscription) { [self] in
             lock.withLock { cancelledSubscriptions += 1 }
         }
@@ -119,18 +143,24 @@ private final class SidebarHandoffWatch: FolderWatching, @unchecked Sendable {
 
 private final class SidebarHandoffEnumerator: SidebarFolderEnumerating, @unchecked Sendable {
     private let system = SystemSidebarFolderEnumerator()
-    private let gate = SidebarHandoffGate()
+    private let gate = SidebarHandoffGate("children read")
     var isReadCaptured: Bool { gate.isHolding }
     func armNextChildrenRead() { gate.arm() }
     func releaseChildrenRead() { gate.release() }
     func children(in folder: URL, root: URL) async throws -> [URL] {
+        I676SidebarHandoffTiming.mark("children system read started")
         let children = try await system.children(in: folder, root: root)
+        I676SidebarHandoffTiming.mark("children system read finished count=\(children.count)")
         await gate.holdIfArmed()
+        I676SidebarHandoffTiming.mark("children captured read released")
         try Task.checkCancellation()
         return children
     }
     func imageCount(in folder: URL, root: URL) async throws -> Int {
-        try await system.imageCount(in: folder, root: root)
+        I676SidebarHandoffTiming.mark("image count read started")
+        let count = try await system.imageCount(in: folder, root: root)
+        I676SidebarHandoffTiming.mark("image count read finished count=\(count)")
+        return count
     }
 }
 
@@ -145,10 +175,15 @@ private final class SidebarHandoffEventSource: FolderEventSource, @unchecked Sen
     func start(watching url: URL, onHints: @escaping @Sendable ([FolderChangeHint]) -> Void) throws -> any FolderEventStream {
         let id = UUID()
         lock.withLock { handlers[id] = onHints }
-        return Stream { [self] in lock.withLock { handlers[id] = nil } }
+        I676SidebarHandoffTiming.mark("event stream registered")
+        return Stream { [self] in
+            lock.withLock { handlers[id] = nil }
+            I676SidebarHandoffTiming.mark("event stream retired")
+        }
     }
     func emit(_ hint: FolderChangeHint) {
         let callbacks = lock.withLock { Array(handlers.values) }
+        I676SidebarHandoffTiming.mark("event emitted streams=\(callbacks.count)")
         for handler in callbacks { handler([hint]) }
     }
 }
@@ -166,13 +201,19 @@ private final class SidebarHandoffClock: WatchScheduling, @unchecked Sendable {
     func schedule(afterMilliseconds: Int, _ action: @escaping @Sendable () -> Void) -> any WatchCancellable {
         let token = Token()
         lock.withLock { pending.append((token, action)) }
+        I676SidebarHandoffTiming.mark("callback scheduled delay=\(afterMilliseconds)ms")
         return token
     }
     func fireScheduledChanges() {
+        I676SidebarHandoffTiming.mark("scheduled callbacks fire started")
         while let action = lock.withLock({ () -> (@Sendable () -> Void)? in
             pending.removeAll { $0.token.cancelled }
             return pending.isEmpty ? nil : pending.removeFirst().action
-        }) { action() }
+        }) {
+            I676SidebarHandoffTiming.mark("scheduled callback delivered")
+            action()
+        }
+        I676SidebarHandoffTiming.mark("scheduled callbacks fire finished")
     }
 }
 
@@ -419,6 +460,14 @@ private enum SidebarHandoffDelivery {
 }
 
 @MainActor private func expectSidebarHandoffDelivery(_ delivery: SidebarHandoffDelivery) async throws {
+    try await I676SidebarHandoffTiming.$begin.withValue(.now) {
+        I676SidebarHandoffTiming.mark("test started delivery=\(delivery)")
+        try await runSidebarHandoffDelivery(delivery)
+        I676SidebarHandoffTiming.mark("test finished delivery=\(delivery)")
+    }
+}
+
+@MainActor private func runSidebarHandoffDelivery(_ delivery: SidebarHandoffDelivery) async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -432,7 +481,9 @@ private enum SidebarHandoffDelivery {
     let scope = SystemSecurityScope()
     let access = try FileAccess(scope: scope, bookmarks: scope,
         store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "sidebar-handoff")
+    I676SidebarHandoffTiming.mark("waiting for root grant")
     let root = try await access.grant(folder: base)
+    I676SidebarHandoffTiming.mark("root grant finished")
     let source = SidebarHandoffEventSource(), clock = SidebarHandoffClock()
     let hub = WatchHub(access: access, source: source, scheduler: clock)
     let watch = SidebarHandoffWatch(hub: hub)
@@ -446,6 +497,7 @@ private enum SidebarHandoffDelivery {
     let enumerator = SidebarHandoffEnumerator()
     controller.sidebarBrowserOverride = SidebarFolderBrowser(access: access, enumerator: enumerator)
     defer { enumerator.releaseChildrenRead(); watch.releaseSubscription() }
+    I676SidebarHandoffTiming.mark("browse recovered folder started")
     controller.browseRecoveredFolder(a, rootID: root)
     let tree = try sidebarTree(controller)
     try await waitForSidebar("initial tree") {
@@ -461,6 +513,7 @@ private enum SidebarHandoffDelivery {
         _ = await sidebarCondition(for: 0.25) { enumerator.isReadCaptured }
         if !enumerator.isReadCaptured {
             subscriptionFirst = true
+            I676SidebarHandoffTiming.mark("subscription won boundary; releasing gate")
             watch.releaseSubscription()
         }
     }
@@ -474,13 +527,16 @@ private enum SidebarHandoffDelivery {
     }
     let d = a.appendingPathComponent("D")
     try fm.createDirectory(at: d, withIntermediateDirectories: true)
+    I676SidebarHandoffTiming.mark("D created; emitting change")
     source.emit(.changed(d))
     switch delivery {
     case .beforeRegistrationRelease:
         clock.fireScheduledChanges()
+        I676SidebarHandoffTiming.mark("releasing registration after callback")
         watch.releaseSubscription()
     case .afterOldSubscriptionRetires:
         let retirementBaseline = watch.cancelledSubscriptionCount
+        I676SidebarHandoffTiming.mark("releasing registration before old retirement")
         watch.releaseSubscription()
         if !subscriptionFirst {
             try await waitForSidebar("old subscription retired after event") {
@@ -489,9 +545,11 @@ private enum SidebarHandoffDelivery {
         }
         clock.fireScheduledChanges()
     case .duringOwnedRead:
+        I676SidebarHandoffTiming.mark("releasing registration before owned read")
         watch.releaseSubscription()
         clock.fireScheduledChanges()
     }
+    I676SidebarHandoffTiming.mark("releasing captured children read")
     enumerator.releaseChildrenRead()
     // One external change must refresh D with count 0 without another event or reconcile.
     try await waitForSidebar("D refreshed to count 0 by one external change") {

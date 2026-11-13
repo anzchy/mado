@@ -14,8 +14,10 @@ import os
         task?.cancel()
         let browser = self.browser
         task = Task(priority: .utility) {
+            I676SidebarHandoffTiming.mark("loader task started; waiting for children")
             do {
                 let children = try await browser.children(in: folder, rootID: rootID)
+                I676SidebarHandoffTiming.mark("loader children finished count=\(children.count); waiting for parent")
                 let parent: URL?
                 do { parent = try await browser.parent(in: folder, rootID: rootID) }
                 catch is CancellationError { return }
@@ -25,13 +27,16 @@ import os
                     parent = nil
                 }
                 try Task.checkCancellation()
+                I676SidebarHandoffTiming.mark("loader parent finished; publishing rows")
                 onRows(children, parent)
                 let countFolders = [folder] + children + (parent.map { [$0] } ?? [])
                 for child in countFolders {
                     try Task.checkCancellation()
                     do {
+                        I676SidebarHandoffTiming.mark("loader waiting for image count")
                         let count = try await browser.imageCount(in: child, rootID: rootID)
                         try Task.checkCancellation()
+                        I676SidebarHandoffTiming.mark("loader image count finished count=\(count)")
                         onCount(child, count)
                     } catch is CancellationError {
                         return
@@ -42,8 +47,10 @@ import os
                     }
                 }
             } catch is CancellationError {
+                I676SidebarHandoffTiming.mark("loader canceled")
                 return
             } catch {
+                I676SidebarHandoffTiming.mark("loader failed \(type(of: error))")
                 guard !Task.isCancelled else { return }
                 logger.error("Sidebar folder listing failed")
                 onFailure?(folder)
