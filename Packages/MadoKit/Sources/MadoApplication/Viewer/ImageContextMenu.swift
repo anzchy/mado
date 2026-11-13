@@ -5,10 +5,16 @@ import MadoCore
 public struct ImageContextMenu: Sendable {
     public let clickedItemID: ItemID
     public let target: ContextMenuTarget
+    public let openingItemIDs: [ItemID]
+    public let openingSelection: BrowserSelection
+    public var isEmpty: Bool { target.itemIDs.isEmpty }
     public init(clickedItemID: ItemID, selection: BrowserSelection, entries: [FolderEntry]) {
+        let ids = entries.map(\.itemID)
         self.clickedItemID = clickedItemID
+        self.openingItemIDs = ids
+        self.openingSelection = selection
         self.target = ContextMenuTarget(clickedItemID: clickedItemID, selection: selection,
-                                        items: entries.map(\.itemID))
+                                        items: ids)
     }
     public func resolvedEntries(in entries: [FolderEntry], rootReadable: Bool,
                                 fileExists: (URL) -> Bool) -> [FolderEntry] {
