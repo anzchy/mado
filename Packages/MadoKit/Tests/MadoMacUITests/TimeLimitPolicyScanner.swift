@@ -46,6 +46,25 @@ func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
     return declarations
 }
 
+/// #673: only this exact injected-clock suite declaration may carry a one-minute limit.
+/// Replace that declaration for the ordinary scanner; all remaining declarations keep the same rule.
+func packageTimeLimitViolations(in source: String, fileName: String) -> [TimeLimitDeclaration] {
+    guard fileName == "PrefetchResumptionTests.swift" else {
+        return scanTimeLimits(in: source).filter(\.violatesPolicy)
+    }
+    let namedSuite = "@Suite(.timeLimit(.minutes(1))) struct PrefetchResumptionTests {"
+    guard source.components(separatedBy: namedSuite).count == 2 else {
+        return scanTimeLimits(in: source).filter(\.violatesPolicy)
+    }
+    let declarations = scanTimeLimits(in: source)
+    guard declarations.filter({ $0 == .minutes(1) }).count == 1 else {
+        return declarations.filter(\.violatesPolicy)
+    }
+    let ordinarySuite = "@Suite(.timeLimit(.minutes(2))) struct PrefetchResumptionTests {"
+    let checkedSource = source.replacingOccurrences(of: namedSuite, with: ordinarySuite)
+    return scanTimeLimits(in: checkedSource).filter(\.violatesPolicy)
+}
+
 private func timeLimitIdentifierCount(_ source: String) -> Int {
     let pattern = #"(?<![\p{L}\p{N}_])timeLimit(?![\p{L}\p{N}_])"#
     let expression = try! NSRegularExpression(pattern: pattern)
