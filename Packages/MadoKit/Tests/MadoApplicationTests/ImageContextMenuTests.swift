@@ -24,3 +24,18 @@ import MadoApplication
     #expect(outside.resolvedEntries(in: entries, rootReadable: false, fileExists: { _ in true }).isEmpty)
     #expect(outside.resolvedEntries(in: entries, rootReadable: true, fileExists: { _ in false }).isEmpty)
 }
+
+@Test func imageContextMenuReportsEmptyTargetForUnknownIdentity() {
+    let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-empty"))
+    let entry = FolderEntry(url: root.url.appendingPathComponent("known.png"), root: root)
+    #expect(!ImageContextMenu(clickedItemID: entry.itemID, selection: BrowserSelection(), entries: [entry]).isEmpty)
+    #expect(ImageContextMenu(clickedItemID: sessionItems(1)[0], selection: BrowserSelection(), entries: [entry]).isEmpty)
+}
+
+@Test func imageContextMenuKeepsFirstSnapshotURLWhenIdentityRepeats() {
+    let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-duplicate"))
+    let first = FolderEntry(url: root.url.appendingPathComponent("first.png"), root: root)
+    let alias = FolderEntry(url: root.url.appendingPathComponent("alias.png"), root: root, itemID: first.itemID)
+    let menu = ImageContextMenu(clickedItemID: first.itemID, selection: BrowserSelection(), entries: [first])
+    #expect(menu.resolvedEntries(in: [first, alias], rootReadable: true, fileExists: { _ in true }).map(\.url) == [first.url])
+}
