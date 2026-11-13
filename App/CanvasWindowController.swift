@@ -96,6 +96,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private let gridSearch = GridSearchState()
     private let searchProjection = GridSearchProjectionScheduler()
     private var gridView: GridBrowserView!
+    var fileRevealer: any FileRevealing = WorkspaceFileRevealer()
+    var pathCopier: any PathCopying = PasteboardPathCopier()
+    private var activeImageContextMenu: GridImageContextMenu?
+    private var imageContextActionTask: Task<Void, Never>?
+    private var imageContextActionGeneration = UUID()
+    private var imageContextWindowClosed = false
     private var gridShell: GridShellView!
     private var sidebarTreeTask: Task<Void, Never>?
     private var sidebarLoader: SidebarFolderLoadSession?
@@ -180,6 +186,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var appearanceAdapter: WindowAppearanceAdapter?
 
     override func showWindow(_ sender: Any?) {
+        imageContextWindowClosed = false
         attachAccessMonitor()
         if let window { appearanceAdapter?.register(window) }
         super.showWindow(sender)
@@ -321,6 +328,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self?.session.focus(id)
             self?.syncInspector()
         }
+        gridView.onContextMenu = { [weak self] id in self?.makeGridImageContextMenu(for: id) }
+        gridView.onContextEntriesChange = { [weak self] in self?.activeImageContextMenu?.updateAvailability() }
         gridView.onDeselect = { [weak self] in
             guard let self else { return }
             self.session.clearSelection()
@@ -1382,6 +1391,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        imageContextWindowClosed = true
+        activeImageContextMenu?.menu.cancelTracking()
+        activeImageContextMenu = nil
+        session.setImageContextMenuOpen(false)
+        imageContextActionGeneration = UUID()
+        imageContextActionTask?.cancel(); imageContextActionTask = nil
         setReadingFolderOwner(nil)
         dismissRebindStrip(force: true)
         accessAttachmentGeneration = UUID()
@@ -1857,6 +1872,85 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     }
     /// Public toggle for the grid footer's later info button.
     func toggleInspector() { _ = route(.inspector, from: .button) }
+    func makeGridImageContextMenu(for id: ItemID) -> NSMenu? {
+        guard !gridView.isHidden, waitingAccessPosition == nil, let rootID = gridFolderRoot else { return nil }
+        let entries = gridView.displayedItemIDs.compactMap { gridView.entry(for: $0) }
+        let captured = ImageContextMenu(clickedItemID: id, selection: session.selection, entries: entries)
+        guard !captured.isEmpty else { return nil }
+        let controller = GridImageContextMenu { [weak self] action in
+            self?.performGridImageContextAction(action, captured: captured, rootID: rootID)
+        }
+        controller.menu.appearance = window?.effectiveAppearance
+        controller.isAvailable = { [weak self] action in
+            guard let self else { return false }
+            let resolved = self.resolveGridImageContext(captured, rootID: rootID)
+            if action == .getInfo { return resolved.contains { $0.itemID == captured.clickedItemID } }
+            return !resolved.isEmpty
+        }
+        controller.onOpen = { [weak self] in self?.session.setImageContextMenuOpen(true) }
+        controller.onClose = { [weak self] in
+            guard let self else { return }
+            self.session.setImageContextMenuOpen(false)
+            if self.session.mode == .browsing, !self.gridView.isHidden {
+                _ = self.window?.makeFirstResponder(self.gridView.collectionView)
+            }
+            self.activeImageContextMenu = nil
+        }
+        controller.updateAvailability()
+        activeImageContextMenu = controller
+        return controller.menu
+    }
+    private func resolveGridImageContext(_ captured: ImageContextMenu, rootID: AccessRootID,
+                                         checkDisk: Bool = false) -> [FolderEntry] {
+        let readable = waitingAccessPosition == nil && gridFolderRoot == rootID &&
+            accessMonitor?.state.snapshot(for: rootID)?.availability == .readable
+        let entries = gridView.displayedItemIDs.compactMap { gridView.entry(for: $0) }
+        return captured.resolvedEntries(in: entries, rootReadable: readable) { url in
+            !checkDisk || FileManager.default.fileExists(atPath: url.path)
+        }
+    }
+    private func performGridImageContextAction(_ action: GridImageContextMenu.Action,
+                                                captured: ImageContextMenu, rootID: AccessRootID) {
+        let resolved = resolveGridImageContext(captured, rootID: rootID)
+        guard !resolved.isEmpty else { return }
+        switch action {
+        case .quickLook:
+            session.preview(captured)
+        case .getInfo:
+            guard resolved.contains(where: { $0.itemID == captured.clickedItemID }) else { return }
+            session.focus(captured.clickedItemID)
+            gridView.setCurrentItemID(captured.clickedItemID)
+            syncInspector()
+            session.setInspectorVisible(true)
+        case .reveal, .copyPath:
+            guard let folder = gridFolderURL else { return }
+            imageContextActionGeneration = UUID()
+            let generation = imageContextActionGeneration
+            imageContextActionTask?.cancel()
+            imageContextActionTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let services = try await accessServices.value
+                    let context = try await services.monitor.readContext(for: rootID)
+                    try await services.files.withLease(.root(rootID, file: folder)) { _ in
+                        try Task.checkCancellation()
+                        try context.permit.check()
+                        try await MainActor.run {
+                            guard self.imageContextActionGeneration == generation,
+                                  !self.imageContextWindowClosed else { return }
+                            let urls = self.resolveGridImageContext(captured, rootID: rootID, checkDisk: true).map(\.url)
+                            guard !urls.isEmpty else { return }
+                            switch action {
+                            case .reveal: self.fileRevealer.reveal(urls)
+                            case .copyPath: self.pathCopier.copyPaths(urls)
+                            default: break
+                            }
+                        }
+                    }
+                } catch { /* A revoked lease or vanished target cannot retarget another file. */ }
+            }
+        }
+    }
     /// The viewer surface, with the folder sidebar beside it when this preview came from the grid (#444).
     private func showViewerSurface() {
         presentation.viewerSidebarAvailable = session.canToggleViewerSidebar

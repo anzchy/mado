@@ -42,11 +42,11 @@ public enum EntryPoint: String, CaseIterable, Sendable {
 
     public var state: EntryPointState {
         switch self {
-        case .reportIssue, .diagnostics, .keyboardShortcuts,
+        case .reportIssue, .diagnostics, .keyboardShortcuts, .contextMenu,
              .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
              .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay,
              .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode: .implemented
-        case .contextMenu, .filmstrip, .favorites, .recents, .footerInfo: .comingSoon
+        case .filmstrip, .favorites, .recents, .footerInfo: .comingSoon
         }
     }
     public var isEnabled: Bool { state == .implemented }

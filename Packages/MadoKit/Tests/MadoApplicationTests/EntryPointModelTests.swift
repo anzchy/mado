@@ -9,13 +9,13 @@ import MadoApplication
 
 @Test func issue215EntryPointModelCoversEveryReleaseSurfaceEntry() {
     let expectedComingSoon: Set<EntryPoint> = [
-        .contextMenu, .filmstrip, .favorites, .recents, .footerInfo,
+        .filmstrip, .favorites, .recents, .footerInfo,
     ]
     // #220 / ADR-015: the two Settings → Updates controls are real now; #299: so are the About links (#285);
     // #114: the grid footer Display button opens the page-15 popover, and Settings 显示 edits the same three
     // preferences (owner: 「两者都做，共用一组偏好」).
     let implemented: Set<EntryPoint> = [
-        .reportIssue, .diagnostics, .keyboardShortcuts, .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
+        .reportIssue, .diagnostics, .keyboardShortcuts, .contextMenu, .settingsUpdatesAutomaticCheck, .settingsUpdatesCheckNow,
         .settingsAboutPrivacyNote, .settingsAboutSourceCode, .footerDisplay,
         .settingsDisplayThumbnailSize, .settingsDisplayFileNames, .settingsDisplayFitMode,
     ]

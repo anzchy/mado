@@ -5,6 +5,12 @@ import MadoApplication
 @MainActor private final class GridPhotoSurface: NSView {
     var onAppearanceChange: (() -> Void)?
     var onLayout: (() -> Void)?
+    var onShowMenu: (() -> Void)?
+    override func accessibilityPerformShowMenu() -> Bool {
+        guard let onShowMenu else { return false }
+        onShowMenu()
+        return true
+    }
     /// Drawn above the subviews' layers, which AppKit attaches after manually added sublayers.
     var overlayLayer: CALayer?
     override func layout() {
@@ -33,6 +39,9 @@ import MadoApplication
 /// A reused grid item contains only display data supplied by an authorized snapshot.
 @MainActor public final class GridPhotoItem: NSCollectionViewItem {
     public private(set) var representedItemID: ItemID?
+    public var onShowContextMenu: (() -> Void)? {
+        didSet { (view as? GridPhotoSurface)?.onShowMenu = onShowContextMenu }
+    }
     public private(set) var filename = ""
     public private(set) var thumbnailToken = UUID()
     public private(set) var thumbnailGeneration: UInt64 = 0
@@ -49,6 +58,7 @@ import MadoApplication
 
     public override func loadView() {
         let surface = GridPhotoSurface(frame: NSRect(x: 0, y: 0, width: 220, height: 184))
+        surface.onShowMenu = onShowContextMenu
         surface.onAppearanceChange = { [weak self] in self?.updateSelection() }
         surface.onLayout = { [weak self] in self?.layoutContent() }
         surface.wantsLayer = true
@@ -251,10 +261,17 @@ private enum GridPageMove {
     var onClick: ((Int?, SelectionModifier) -> Void)?
     var onNativeSelectionChange: (() -> Void)?
     var onMagnify: ((NSEvent) -> Void)?
+    var onContextMenu: ((NSEvent) -> NSMenu?)?
+    var onKeyboardContextMenu: (() -> Void)?
     override func magnify(with event: NSEvent) { onMagnify?(event) }
+    override func menu(for event: NSEvent) -> NSMenu? { onContextMenu?(event) }
     var columnStep = 1
     override func mouseDown(with event: NSEvent) {
-        guard event.clickCount == 1, !event.modifierFlags.contains(.control) else { return }
+        if event.modifierFlags.contains(.control) {
+            if let menu = menu(for: event) { NSMenu.popUpContextMenu(menu, with: event, for: self) }
+            return
+        }
+        guard event.clickCount == 1 else { return }
         let point = convert(event.locationInWindow, from: nil)
         let modifier: SelectionModifier = event.modifierFlags.contains(.shift) ? .shift
             : event.modifierFlags.contains(.command) ? .command : .plain
@@ -262,6 +279,10 @@ private enum GridPageMove {
         window?.makeFirstResponder(self)
     }
     override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36, event.modifierFlags.contains(.control) {
+            onKeyboardContextMenu?()
+            return
+        }
         let preserveSelection = !event.modifierFlags.intersection([.shift, .command]).isEmpty
         switch event.keyCode {
         case 116: onPageOrEdge?(.page(-1), preserveSelection); return
@@ -314,6 +335,29 @@ private enum GridPageMove {
     public var onDeselect: (() -> Void)?
     /// The grid's Current Item changed without a selection (entry, Esc return, removal fallback).
     public var onCurrentChange: ((ItemID) -> Void)?
+    public var onContextMenu: ((ItemID) -> NSMenu?)?
+    public var onContextEntriesChange: (() -> Void)?
+    public var contextMenuPresenter: (any GridContextMenuPresenting)?
+    public func showCurrentItemContextMenu() {
+        guard let currentItemID else { return }
+        showContextMenu(for: currentItemID)
+    }
+    private func showContextMenu(for id: ItemID) {
+        guard let index = indices[id] else { return }
+        scrollIntoView(index)
+        collectionView.layoutSubtreeIfNeeded()
+        guard let menu = onContextMenu?(id) else { return }
+        let cell = collectionView.frameForItem(at: index)
+        let insets = scrollView.contentInsets
+        var visible = scrollView.contentView.documentVisibleRect
+        visible.origin.y += insets.top
+        visible.size.height -= insets.top + insets.bottom
+        let frame = cell.intersection(visible)
+        guard !frame.isEmpty else { return }
+        let anchor = NSPoint(x: frame.midX, y: frame.midY)
+        if let contextMenuPresenter { contextMenuPresenter.present(menu, at: anchor, in: collectionView) }
+        else { menu.popUp(positioning: nil, at: anchor, in: collectionView) }
+    }
     private let scrollView = NSScrollView()
     var bottomContentInset: CGFloat = 0 {
         didSet {
@@ -392,6 +436,16 @@ private enum GridPageMove {
         }
         (collectionView as? GridCollectionView)?.onMagnify = { [weak self] event in
             self?.magnify(with: event)
+        }
+        (collectionView as? GridCollectionView)?.onContextMenu = { [weak self] event in
+            guard let self else { return nil }
+            let point = self.collectionView.convert(event.locationInWindow, from: nil)
+            guard let index = self.collectionView.indexPathForItem(at: point)?.item,
+                  let id = self.itemID(at: index) else { return nil }
+            return self.onContextMenu?(id)
+        }
+        (collectionView as? GridCollectionView)?.onKeyboardContextMenu = { [weak self] in
+            self?.showCurrentItemContextMenu()
         }
         collectionView.register(GridPhotoItem.self, forItemWithIdentifier: Self.reuseID)
         collectionView.setAccessibilityIdentifier("grid.collection")
@@ -511,6 +565,7 @@ private enum GridPageMove {
         firstThumbnailsBegun = nil
         thumbnailGeneration &+= 1
         entries = []; indices = [:]; currentItemID = nil
+        onContextEntriesChange?()
         selection = BrowserSelection()
         updating = true
         collectionView.reloadData()
@@ -657,6 +712,7 @@ private enum GridPageMove {
         }
         entries = snapshot.navigationEntries
         indices = Dictionary(uniqueKeysWithValues: entries.enumerated().map { ($0.element.itemID, $0.offset) })
+        onContextEntriesChange?()
         self.selection = selection
         self.selection.reconcile(with: entries.map(\.itemID))
         if let selectedCurrent = self.selection.currentItemID { currentItemID = selectedCurrent }
@@ -815,6 +871,8 @@ private enum GridPageMove {
     public func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let item = collectionView.makeItem(withIdentifier: Self.reuseID, for: indexPath)
         if let photo = item as? GridPhotoItem {
+            let id = entries[indexPath.item].itemID
+            photo.onShowContextMenu = { [weak self] in self?.showContextMenu(for: id) }
             photo.apply(displayOptions)
             photo.configure(entries[indexPath.item])
             photo.isSelected = selection.selectedItemIDs.contains(entries[indexPath.item].itemID)
