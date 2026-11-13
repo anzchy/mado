@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@Test @MainActor func imageContextMenuPreviewKeepsClickedStartAndCapturedSelectionRange() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuPreviewKeepsClickedStartAndCapturedSelectionRange() throws {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-preview"))
     let entries = (0..<6).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
     let ids = entries.map(\.itemID)
@@ -27,7 +27,7 @@ import MadoApplication
     #expect(session.previewSet?.currentItemID == ids[4])
 }
 
-@Test @MainActor func imageContextMenuLockBlocksGridCommandsUntilMenuCloses() {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuLockBlocksGridCommandsUntilMenuCloses() {
     let session = ViewerSession()
     session.beginBrowsing(items: sessionItems(2), sourceVersion: .init(1), scrollAnchor: nil)
     session.setImageContextMenuOpen(true)
@@ -38,7 +38,7 @@ import MadoApplication
     #expect(CommandRouter().route(.preview, from: .key, to: session))
 }
 
-@Test @MainActor func imageContextMenuPreviewDropsDeletedClickedItemButKeepsSelectionSurvivors() {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuPreviewDropsDeletedClickedItemButKeepsSelectionSurvivors() {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-preview-deleted"))
     let entries = (0..<4).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
     let ids = entries.map(\.itemID)
@@ -52,7 +52,7 @@ import MadoApplication
     #expect(session.previewSet?.currentItemID == ids[1])
 }
 
-@Test @MainActor func imageContextMenuPreviewUsesOnlyDiskSurvivorsFromCapturedRange() {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageContextMenuPreviewUsesOnlyDiskSurvivorsFromCapturedRange() {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/i144-preview-disk"))
     let entries = (0..<4).map { FolderEntry(url: root.url.appendingPathComponent("\($0).png"), root: root) }
     let ids = entries.map(\.itemID)
