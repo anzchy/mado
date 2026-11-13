@@ -178,6 +178,25 @@ with open(lock_path,'w') as owner:
   }
 });
 
+// #672 fix r1 (AC-2): Swift exits green but leaves a descendant that outlives
+// the heavy-lock drain; the forced stop must not leave a green package gate.
+test('unitDrainExpiryWithSurvivingDescendantHasNoGreenGate', t => {
+  const f = fixture(t);
+  f.env.PICSEE_HEAVY_LOCK_DRAIN_SECS = '0.2'; f.env.PICSEE_HEAVY_LOCK_KILL_GRACE_SECS = '0.1';
+  // The watchdog already reaps Swift's own group; a survivor that outlives the
+  // drain sits in heavy-lock's root group, here left by the coverage evaluator.
+  fs.writeFileSync(path.join(f.dir, 'scripts/ci/package-coverage-clear.mjs'), '');
+  fs.writeFileSync(path.join(f.dir, 'scripts/ci/package-coverage-local.mjs'),
+    "import fs from 'node:fs'; import cp from 'node:child_process';\n" +
+    "const c = cp.spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' }); c.unref();\n" +
+    "fs.writeFileSync(process.env.HELPER, String(c.pid)); console.log('Coverage gate: PASS');\n");
+  const r = run(f, { verifyCoverage: true });
+  assert.match(r.stderr, /drain timed out/);
+  assert.equal(r.status, 70, r.stderr);
+  assert.match(r.stderr, /unit-lane: drain expired/);
+  assert.equal(alive(Number(fs.readFileSync(f.env.HELPER, 'utf8'))), false);
+});
+
 test('consecutive invocations keep distinct logs and earlier diagnostic evidence', t => {
   const f = fixture(t); f.env.MARKER = 'first-run';
   assert.equal(run(f).status, 0);
