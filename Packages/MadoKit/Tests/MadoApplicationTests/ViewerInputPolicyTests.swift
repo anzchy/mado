@@ -47,7 +47,7 @@ private func inputURL(_ name: String, directory: Bool = false) -> URL {
     #expect(ViewerInput.classify([alias, two, ten]) == aliasFirst)
 }
 
-@Test func inputPolicySymlinkAliases() throws {
+@Test(.timeLimit(.minutes(2))) func inputPolicySymlinkAliases() throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }
@@ -57,8 +57,9 @@ private func inputURL(_ name: String, directory: Bool = false) -> URL {
     try Data([2]).write(to: b)
     try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: a)
     #expect(ViewerInput.classify([a, alias, b]) == .files([a, b]))
-    #expect(ViewerInput.classify([alias, a, b]) == .files([alias, b]))
-    #expect(ViewerInput.classify([alias, a]) == .single(alias))
+    // #573: a file symlink is opened through its target, whichever spelling arrives first.
+    #expect(ViewerInput.classify([alias, a, b]) == .files([a, b]))
+    #expect(ViewerInput.classify([alias, a]) == .single(a))
     #expect(alias.resolvingSymlinksInPath().standardizedFileURL == a.resolvingSymlinksInPath().standardizedFileURL)
 }
 

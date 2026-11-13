@@ -1053,6 +1053,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         retryIntent = ViewerRetryIntent(fileURL: url, accessRequest: accessRequest)
         retryFromFolderScan = fromFolderScan
         if !fromFolderScan { _ = accessIntent.begin() }
+        // Install the explicit File Grant before the loader can report a failed scope.
+        // The later background root check may confirm or replace this provisional grant.
+        if !fromFolderScan, case .fileGrant(let granted)? = accessRequest {
+            standaloneGrantURL = granted
+            standaloneReadInput = inputIntent.current
+        }
         refreshRecents()
         filesystemLogger.notice("Open file=\(url.lastPathComponent, privacy: .private)")
         fileURL = url
@@ -1109,6 +1115,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 else { root = await services.files.rootCovering(url) }
                 guard operation.isCurrent, self.fileURL == url else { return }
                 if let root {
+                    // A root takes precedence over the provisional File Grant.
+                    self.standaloneGrantURL = nil
+                    self.standaloneReadInput = nil
                     self.bindAccessMonitor(services.monitor)
                     self.presentationRootID = root
                     self.applyCurrentAccessState()

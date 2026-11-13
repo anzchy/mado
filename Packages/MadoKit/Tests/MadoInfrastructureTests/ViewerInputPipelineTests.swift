@@ -42,6 +42,120 @@ import MadoInfrastructure
     await host.session.imageLoader.loadTask?.value
 
     #expect(host.hasImage, "Dropping an image-extension symlink to a supported image should open its target image; failures: \(host.failures)")
+    #expect(host.session.imageLoader.fileURL == target, "The displayed file must be the target, not the link")
+    #expect(host.retry?.accessRequest == .fileGrant(target), "Recovery must request the target image")
+    #expect(host.images.last?.sourcePixelSize == CGSize(width: 256, height: 128))
+}
+
+private final class Issue573TargetDeniedScope: SecurityScope, @unchecked Sendable {
+    let denied: URL
+    init(denied: URL) { self.denied = denied }
+    func isReadable(_ url: URL) -> Bool { url != denied }
+    func start(_ url: URL) -> Bool { url != denied }
+    func stop(_ url: URL) { }
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573DeniedTargetRequestsTargetReconnection() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let target = tree.appendingPathComponent("image.png")
+    let link = tree.appendingPathComponent("image-link.png")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: target)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    let access = try FileAccess(scope: Issue573TargetDeniedScope(denied: target), bookmarks: FakeBookmarks(),
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573-denied")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([link], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+
+    #expect(host.retry?.fileURL == target)
+    #expect(host.retry?.accessRequest == .fileGrant(target))
+    #expect(host.failures.contains(String(describing: FileAccessError.startFailed)),
+            "The target grant must fail; the App recovery boundary maps this failure to Choose File")
+    #expect(!host.hasImage && host.images.isEmpty)
+    #expect(await access.records().isEmpty)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573ChainedLinkOpensFinalImage() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let target = tree.appendingPathComponent("image.png")
+    let middle = tree.appendingPathComponent("middle")
+    let first = tree.appendingPathComponent("first")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: target)
+    try FileManager.default.createSymbolicLink(at: middle, withDestinationURL: target)
+    try FileManager.default.createSymbolicLink(at: first, withDestinationURL: middle)
+    let access = try FileAccess(scope: CountingScope(), bookmarks: FakeBookmarks(),
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573-chain")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([first], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+
+    #expect(host.hasImage && host.failures.isEmpty && host.notices.isEmpty)
+    #expect(host.session.imageLoader.fileURL == target)
+    #expect(host.images.last?.sourcePixelSize == CGSize(width: 256, height: 128))
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573MixedFileSetNavigatesResolvedTargetAndPlainImage() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let a = tree.appendingPathComponent("A.png")
+    let b = tree.appendingPathComponent("B.png")
+    let link = tree.appendingPathComponent("z-link")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: a)
+    try FileManager.default.copyItem(at: fixture("portrait-2x3.png"), to: b)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: a)
+    let access = try FileAccess(scope: CountingScope(), bookmarks: FakeBookmarks(),
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573-set")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([link, b], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+    #expect(host.session.filePreviewSet?.members == [a, b])
+    #expect(host.session.imageLoader.fileURL == a)
+    #expect(host.images.last?.sourcePixelSize == CGSize(width: 256, height: 128))
+    #expect(CommandRouter().route(.next, from: .key, to: host.session))
+    await host.session.imageLoader.loadTask?.value
+    #expect(host.session.filePreviewSet?.index == 1)
+    #expect(host.session.imageLoader.fileURL == b)
+    #expect(host.images.last?.sourcePixelSize == CGSize(width: 400, height: 600))
+    #expect(host.failures.isEmpty && host.notices.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue573RealSystemScopeOpensResolvedTargetWhenReadable() async throws {
+    let tree = FileManager.default.temporaryDirectory.appendingPathComponent("issue573-\(UUID())", isDirectory: true)
+    try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tree) }
+    let target = tree.appendingPathComponent("image.png")
+    let link = tree.appendingPathComponent("link")
+    try FileManager.default.copyItem(at: fixture("alpha-gradient.png"), to: target)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    let system = SystemSecurityScope()
+    let access = try FileAccess(scope: system, bookmarks: system,
+        store: BookmarkStore(url: tree.appendingPathComponent("roots.json")), buildSHA: "issue573-system")
+    let host = InputReplacementHost(access: access, root: nil)
+    let admission = ViewerInputAdmission(access: access, pipeline: host.pipeline,
+        maximumPixelSize: 64, rootCovering: { _ in nil })
+
+    await host.session.openInput([link], operation: AccessIntent().begin(), admission: admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+
+    #expect(host.hasImage && host.failures.isEmpty && host.notices.isEmpty)
+    #expect(host.session.imageLoader.fileURL == target)
+    #expect(host.images.last?.sourcePixelSize == CGSize(width: 256, height: 128))
+    #expect(host.retry?.accessRequest == .fileGrant(target))
+    #expect(await access.records().isEmpty)
 }
 
 @MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionRealFixtureProbeKinds() async throws {
