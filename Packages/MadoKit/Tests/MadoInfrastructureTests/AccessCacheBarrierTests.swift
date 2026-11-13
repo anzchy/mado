@@ -15,7 +15,7 @@ private func t229Request(_ original: ImageDecodeRequest, permit: AccessWorkPermi
         renderKey: original.renderKey, identityRoot: original.identityRoot, accessPermit: permit)
 }
 
-@Test func t229MemoryCacheCannotRetainHeldDecodeAfterCounterChanges() async throws {
+@Test(.timeLimit(.minutes(2))) func t229MemoryCacheCannotRetainHeldDecodeAfterCounterChanges() async throws {
     let authority = AccessWorkAuthority()
     authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), memory = ImageMemoryCache(capacity: 1_000_000)
@@ -38,7 +38,7 @@ private func t229Request(_ original: ImageDecodeRequest, permit: AccessWorkPermi
     await #expect(throws: (any Error).self) { try await pipeline.image(for: request) }
 }
 
-@Test func t229DiskPublicationCannotIndexAfterCounterChanges() async throws {
+@Test(.timeLimit(.minutes(2))) func t229DiskPublicationCannotIndexAfterCounterChanges() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -91,7 +91,7 @@ private func t229Request(_ original: ImageDecodeRequest, permit: AccessWorkPermi
     #expect(await writer.diagnostics().entries == 1)
 }
 
-@Test func t229WarmedMemoryOriginCannotSurviveRecovery() async throws {
+@Test(.timeLimit(.minutes(2))) func t229WarmedMemoryOriginCannotSurviveRecovery() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let decoder = CacheCountingDecoder(), memory = ImageMemoryCache(capacity: 1_000_000)
     let pipeline = ImageIOPipeline(decoder: decoder, cache: memory)
@@ -109,7 +109,7 @@ private func t229Request(_ original: ImageDecodeRequest, permit: AccessWorkPermi
     #expect(decoder.count == 2)
 }
 
-@Test func t229LossDuringRewritePreservesExistingDurablePayload() async throws {
+@Test(.timeLimit(.minutes(2))) func t229LossDuringRewritePreservesExistingDurablePayload() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -211,7 +211,7 @@ private final class T229RevokingTrace: ResourceSnapshotTracing, @unchecked Senda
     #expect(await cache.image(for: key) == nil)
 }
 
-@Test func t229RealSourceFingerprintPermissionIsNotACacheMiss() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RealSourceFingerprintPermissionIsNotACacheMiss() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -232,7 +232,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
         formatIdentifier: image.formatIdentifier, revision: image.revision, itemID: image.itemID, accessPermit: permit)
 }
 
-@Test func t229HeldPinCannotReinsertRevokedPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func t229HeldPinCannotReinsertRevokedPixels() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let permit = authority.permit(counter: 0), memory = ImageMemoryCache(capacity: 1024)
     let key = cacheKey(230), image = t229Tag(cacheImage(try cachePixels(), key: key), permit: permit)
@@ -242,7 +242,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
     #expect(await memory.image(for: key) == nil)
 }
 
-@Test func t229PinnedDurablePixelsCannotWarmLaterCacheDisabledRequest() async throws {
+@Test(.timeLimit(.minutes(2))) func t229PinnedDurablePixelsCannotWarmLaterCacheDisabledRequest() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let permit = authority.permit(counter: 0), memory = ImageMemoryCache(capacity: 1_000_000)
     let decoder = CacheCountingDecoder()
@@ -263,7 +263,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
     #expect(await memory.diagnostics().entries == 1)
 }
 
-@Test func t229FreshCounterQueuesOwnDecodeInsteadOfJoiningRevokedJob() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FreshCounterQueuesOwnDecodeInsteadOfJoiningRevokedJob() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), pipeline = ImageIOPipeline(decoder: decoder)
     defer { decoder.gate.open() }
@@ -284,7 +284,7 @@ private func t229Tag(_ image: DecodedImage, permit: AccessWorkPermit) -> Decoded
     #expect(decoder.count == 2)
 }
 
-@Test func t229SameCounterRetainsDecodeCoalescence() async throws {
+@Test(.timeLimit(.minutes(2))) func t229SameCounterRetainsDecodeCoalescence() async throws {
     let authority = AccessWorkAuthority(); authority.update(counter: 0, readable: true)
     let decoder = CacheBlockingDecoder(), pipeline = ImageIOPipeline(decoder: decoder)
     defer { decoder.gate.open() }

@@ -17,7 +17,7 @@ private actor CachePinObserver: ImagePresentationPinning {
 }
 
 @Suite struct ImageCachePinTests {
-    @Test func cachePinsRefcountAndOversizeLifetime() async throws {
+    @Test(.timeLimit(.minutes(2))) func cachePinsRefcountAndOversizeLifetime() async throws {
         let cache = ImageMemoryCache(capacity: 32), a = cacheKey(1), b = cacheKey(2), c = cacheKey(3)
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2), cp = try cachePixels(marker: 3)
         await cache.insert(cacheImage(ap, key: a), for: a)
@@ -43,7 +43,7 @@ private actor CachePinObserver: ImagePresentationPinning {
         #expect(await oversize.pinCount(for: o) == 0)
     }
 
-    @Test func cachePinnedMultiEvictionAndLastUnpinImmediatelyRestoreBound() async throws {
+    @Test(.timeLimit(.minutes(2))) func cachePinnedMultiEvictionAndLastUnpinImmediatelyRestoreBound() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), b = cacheKey(2), c = cacheKey(3), d = cacheKey(4)
         let ap = try cachePixels(), bp = try cachePixels(marker: 2), cp = try cachePixels(marker: 3), dp = try cachePixels(rows: 4)
         await cache.pin(a, image: cacheImage(ap, key: a))
@@ -67,7 +67,7 @@ private actor CachePinObserver: ImagePresentationPinning {
         #expect(await normal.usage() == ImageCacheUsage(entries: 2, previewBytes: 0, detailBytes: 32))
     }
 
-    @Test func cacheZeroTrimDropsUnpinnedAliasAndOldRevisionWaitsForUnpin() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheZeroTrimDropsUnpinnedAliasAndOldRevisionWaitsForUnpin() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), alias = cacheKey(2, preview: true)
         let pixels = try cachePixels()
         await cache.pin(a, image: cacheImage(pixels, key: a))
@@ -93,7 +93,7 @@ private actor CachePinObserver: ImagePresentationPinning {
         #expect(await revisions.image(for: newer)?.image === fresh)
     }
 
-    @Test(arguments: [false, true]) func cachePinGapAccountsForDistinctSameKeyBuffers(reverse: Bool) async throws {
+    @Test(.timeLimit(.minutes(2)), arguments: [false, true]) func cachePinGapAccountsForDistinctSameKeyBuffers(reverse: Bool) async throws {
         let cache = ImageMemoryCache(capacity: 16), key = cacheKey(1), filler = cacheKey(2)
         let a = try cachePixels(marker: 1), b = try cachePixels(marker: 2), c = try cachePixels(marker: 3)
         await cache.insert(cacheImage(a, key: key), for: key)

@@ -15,7 +15,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
 /// A single synthetic Home at a time: other suites still run concurrently while the loops below yield.
 @Suite(.serialized) struct FirstLaunchDriftTests {
-    @Test func i316MayAnimateTruthTable() {
+    @Test(.timeLimit(.minutes(2))) func i316MayAnimateTruthTable() {
         for visible in [false, true] {
             for frontmost in [false, true] {
                 for reduceMotion in [false, true] {
@@ -27,7 +27,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         }
     }
 
-    @Test func i316DriftConstantsMatchPinnedPage21() throws {
+    @Test(.timeLimit(.minutes(2))) func i316DriftConstantsMatchPinnedPage21() throws {
         let page = try PinnedDesign.page("first-launch")
         let animation = try page.animation(".wall .tiles")
         #expect(animation.name == "home-wall-drift")
@@ -40,7 +40,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(FirstLaunchDrift.range == CGFloat(-frames.to.y))
     }
 
-    @Test func i316OffsetPingPongLaws() throws {
+    @Test(.timeLimit(.minutes(2))) func i316OffsetPingPongLaws() throws {
         let (period, range) = try i316Pinned()
         #expect(i316Close(FirstLaunchDrift.offset(elapsed: period), range), "offset(P) \(FirstLaunchDrift.offset(elapsed: period))")
         var generator = SplitMix64(seed: 0x316)
@@ -57,7 +57,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         }
     }
 
-    @Test func i316OffsetBoundaries() throws {
+    @Test(.timeLimit(.minutes(2))) func i316OffsetBoundaries() throws {
         let (period, range) = try i316Pinned()
         #expect(FirstLaunchDrift.offset(elapsed: 0) == 0)
         #expect(i316Close(FirstLaunchDrift.offset(elapsed: period), range))
@@ -71,7 +71,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(FirstLaunchDrift.offset(elapsed: -5) == 0, "negative elapsed clamps to rest")
     }
 
-    @Test @MainActor func i316DefaultReadersOnRealWindow() {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316DefaultReadersOnRealWindow() {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: .titled,
                               backing: .buffered, defer: false)
@@ -141,7 +141,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     private func i316Mod(_ t: CFTimeInterval) -> CFTimeInterval { t.truncatingRemainder(dividingBy: 2 * FirstLaunchDrift.period) }
 
-    @Test @MainActor func i316DriftRunsOnlyWhenAllInputsHold() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316DriftRunsOnlyWhenAllInputsHold() async throws {
         let (period, range) = try i316Pinned()
         // The clock never advances in this truth table, so one Home can exercise all eight inputs from rest.
         let home = I316Home(visible: false, frontmost: false, reduceMotion: true)
@@ -178,7 +178,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         }
     }
 
-    @Test @MainActor func i316HideFreezesOffsetAndUnhideResumesSamePhase() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316HideFreezesOffsetAndUnhideResumesSamePhase() throws {
         let (period, range) = try i316Pinned()
         let home = I316Home()
         defer { home.close() }
@@ -202,7 +202,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(i316Close(CGFloat(i316Mod(second.timeOffset)), CGFloat(1.5 * period)), "timeOffset \(second.timeOffset) lost the leg")
     }
 
-    @Test @MainActor func i316HiddenAncestorPausesAndResumes() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316HiddenAncestorPausesAndResumes() throws {
         let home = I316Home()
         defer { home.close() }
         home.clock.now += 12
@@ -214,7 +214,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(home.drift.map { i316Close(CGFloat($0.timeOffset), 12) } == true)
     }
 
-    @Test @MainActor func i316ElapsedDriftIsConservedAcrossToggles() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316ElapsedDriftIsConservedAcrossToggles() async throws {
         let home = I316Home()
         defer { home.close() }
         var generator = SplitMix64(seed: 0x3160)
@@ -249,7 +249,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(pausedLegs == Set([false, true]), "the seeded sequence must pause on both ping-pong legs")
     }
 
-    @Test @MainActor func i316RelayoutKeepsFrozenOffsetAndRunningAnimation() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316RelayoutKeepsFrozenOffsetAndRunningAnimation() throws {
         let home = I316Home(size: NSSize(width: 900, height: 600))
         defer { home.close() }
         func resize(_ size: NSSize) {
@@ -278,7 +278,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
     }
 
-    @Test @MainActor func i316AppAndWindowNotificationsPauseAndResume() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316AppAndWindowNotificationsPauseAndResume() async throws {
         struct Case { let pause: Notification.Name; let resume: Notification.Name; let app: Bool; let flipsFrontmost: Bool }
         let cases = [
             Case(pause: NSApplication.didResignActiveNotification, resume: NSApplication.didBecomeActiveNotification, app: true, flipsFrontmost: true),
@@ -304,7 +304,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         }
     }
 
-    @Test @MainActor func i316NotificationsReReadEveryInput() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316NotificationsReReadEveryInput() throws {
         let home = I316Home()
         defer { home.close() }
         let start = try #require(home.drift)
@@ -326,7 +326,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(i316Close(home.frozenOffset, FirstLaunchDrift.offset(elapsed: 10)))
     }
 
-    @Test @MainActor func i316ReduceMotionLiveStopsAndResumes() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316ReduceMotionLiveStopsAndResumes() throws {
         let home = I316Home()
         defer { home.close() }
         home.clock.now += 20
@@ -348,7 +348,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(home.drift == nil, "resumed while Mado is in the background")
     }
 
-    @Test @MainActor func i316LeavingHomeReleasesDriftForEveryExit() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316LeavingHomeReleasesDriftForEveryExit() async throws {
         let scene = StatesScene()
         defer { scene.window.contentView = nil; scene.window.close() }
         for exit in [ViewerImageStatus.loading("a.jpg"), .readingFolder, .showing] {
@@ -375,7 +375,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     /// The drift (animation, readers, observers) must not keep a Home alive once it leaves its window. The host path
     /// is not used: on main the state host already keeps its last Home object alive after leaving (reported in #316).
-    @Test @MainActor func i316OldHomeIsReleasedAfterLeaving() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316OldHomeIsReleasedAfterLeaving() throws {
         weak var released: FirstLaunchView?
         var window: NSWindow?
         autoreleasepool {
@@ -392,7 +392,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         #expect(released == nil, "the drift keeps the old Home alive")
     }
 
-    @Test @MainActor func i316DragFadeAndDriftCoexist() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316DragFadeAndDriftCoexist() throws {
         let home = I316Home()
         defer { home.close() }
         home.clock.now += 5
@@ -410,7 +410,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     // MARK: - Review fix round: the window-visibility rule and window moves
 
-    @Test func i316WindowVisibilityTruthTable() {
+    @Test(.timeLimit(.minutes(2))) func i316WindowVisibilityTruthTable() {
         for onScreen in [false, true] {
             for miniaturized in [false, true] {
                 for appHidden in [false, true] {
@@ -422,7 +422,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
         }
     }
 
-    @Test @MainActor func i316MovingToAnotherWindowIgnoresTheOldWindow() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316MovingToAnotherWindowIgnoresTheOldWindow() throws {
         let home = I316Home()
         defer { home.close() }
         let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: .borderless,
@@ -445,7 +445,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     /// ⌘W keeps a reusable window (`isReleasedWhenClosed = false`) and the Home inside it. Closing pauses the drift at
     /// once, even before any reader reports the window gone; showing it again resumes only if every input holds.
-    @Test @MainActor func i316ClosingTheWindowPausesAndReopeningResumesOnlyWhenAllowed() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316ClosingTheWindowPausesAndReopeningResumesOnlyWhenAllowed() throws {
         let home = I316Home()
         defer { home.close() }
         let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: .borderless,
@@ -472,7 +472,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     /// About 6 pt/s needs no display-rate recomposite of the whole wall: a low preferred rate whose per-frame step
     /// stays at or under half a pixel at @2x (0.25 pt), capped well below 60 Hz. Claims no CPU or GPU figure.
-    @Test @MainActor func i316DriftRequestsALowFrameRate() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316DriftRequestsALowFrameRate() throws {
         let (period, range) = try i316Pinned()
         let rate = FirstLaunchDrift.frameRate
         let preferred = try #require(rate.preferred, "no preferred rate")
@@ -499,7 +499,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
 
     /// Every drift trigger reads the app input once, so the read count shows how many registrations a notification
     /// reaches: none after leaving the window, exactly one after coming back (characterization).
-    @Test @MainActor func i316LeavingAndReturningLeavesOneRegistrationPerTrigger() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316LeavingAndReturningLeavesOneRegistrationPerTrigger() async throws {
         let home = I316Home()
         defer { home.close() }
         let count = I316ReadCount()
@@ -536,7 +536,7 @@ private func i316Close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 1e-6) 
     /// Leaving the Home through ⌘O (device smoke run=20261101-212141-i316s): the App puts the Reading State on the reading
     /// surface before the scan starts, while the Session still reads `.empty`. The Session's observation refresh in that
     /// gap rebuilt the Home, whose drift ran for about 8 ms until the scan began and hid it again.
-    @Test @MainActor func i316LeavingTheHomeForAFolderReadNeverRebuildsTheHome() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func i316LeavingTheHomeForAFolderReadNeverRebuildsTheHome() throws {
         let scene = StatesScene()
         defer { scene.window.contentView = nil; scene.window.close() }
         #expect(scene.state.subviews.contains { $0 is FirstLaunchView }, "the scene starts on the Home")

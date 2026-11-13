@@ -48,7 +48,7 @@ private struct SplitMix64: RandomNumberGenerator {
     }
 }
 
-@MainActor @Test func issue220UpdateControlsAreEnabledWithoutComingSoon() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220UpdateControlsAreEnabledWithoutComingSoon() throws {
     let panel = issue220Panel(FakeUpdatePort())
     defer { panel.window.close() }
     let pane = try #require(issue220View("settings.pane.update", in: panel))
@@ -65,14 +65,14 @@ private struct SplitMix64: RandomNumberGenerator {
     }
 }
 
-@MainActor @Test(arguments: [("2.3.0", "57"), (nil, "57"), ("2.3.0", nil), (nil, nil)] as [(String?, String?)])
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [("2.3.0", "57"), (nil, "57"), ("2.3.0", nil), (nil, nil)] as [(String?, String?)])
 func issue220VersionLabelShowsPortVersionAndBuild(version: String?, build: String?) throws {
     let panel = issue220Panel(FakeUpdatePort(version: version, build: build))
     defer { panel.window.close() }
     #expect(try issue220Text("settings.update.version", in: panel) == versionText(version, build))
 }
 
-@MainActor @Test(arguments: [(UInt64(0x2201), false), (UInt64(0x2202), true)])
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [(UInt64(0x2201), false), (UInt64(0x2202), true)])
 func issue220AutomaticToggleRoundTripsThroughPort(seed: UInt64, initial: Bool) throws {
     let port = FakeUpdatePort(automatic: initial)
     let panel = issue220Panel(port)
@@ -114,7 +114,7 @@ func issue220AutomaticToggleRoundTripsThroughPort(seed: UInt64, initial: Bool) t
     #expect(port.checkCount == 0)
 }
 
-@MainActor @Test func issue220CheckNowChecksOncePerClickAndShowsResultDate() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220CheckNowChecksOncePerClickAndShowsResultDate() throws {
     let date = try Date("2026-03-04T05:06:00Z", strategy: .iso8601)
     let port = FakeUpdatePort(automatic: true, nextCheckDate: date)
     let panel = issue220Panel(port)
@@ -131,7 +131,7 @@ func issue220AutomaticToggleRoundTripsThroughPort(seed: UInt64, initial: Bool) t
     #expect(port.automaticallyChecksForUpdates)
 }
 
-@MainActor @Test func issue220LastCheckedRendersDateOrUnknownAndRefreshesOnShow() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220LastCheckedRendersDateOrUnknownAndRefreshesOnShow() throws {
     let first = try Date("2026-01-02T03:04:00Z", strategy: .iso8601)
     let second = first.addingTimeInterval(61)
     let port = FakeUpdatePort()
@@ -154,7 +154,7 @@ func issue220AutomaticToggleRoundTripsThroughPort(seed: UInt64, initial: Bool) t
     #expect(try label() == String(localized: "Last checked: Unknown"))
 }
 
-@MainActor @Test func issue220NilPortDisablesUpdateControlsWithoutComingSoon() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220NilPortDisablesUpdateControlsWithoutComingSoon() throws {
     let panel = issue220Panel(nil)
     defer { panel.window.close() }
     let pane = try #require(issue220View("settings.pane.update", in: panel))

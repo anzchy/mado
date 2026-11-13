@@ -5,7 +5,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func gridWindowIdentityRestoresFolderAfterSuccessfulOrFailedPreview() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridWindowIdentityRestoresFolderAfterSuccessfulOrFailedPreview() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-folder", isDirectory: true)
     let image = folder.appendingPathComponent("A.jpg")
@@ -20,7 +20,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func nativeGridEntryRetiresCanvasInspectorAndDocumentTogether() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func nativeGridEntryRetiresCanvasInspectorAndDocumentTogether() throws {
     _ = NSApplication.shared
     let session = ViewerSession()
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 320, height: 240), session: session)

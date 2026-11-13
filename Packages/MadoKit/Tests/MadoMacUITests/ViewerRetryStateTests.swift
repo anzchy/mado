@@ -4,7 +4,7 @@ import MadoCore
 @testable import MadoApplication
 @testable import MadoMacUI
 
-@Test(arguments: [0, 1, 2]) @MainActor func statesRetryPreservesIntentMintsGenerationAndResetsFit(_ mode: Int) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2]) @MainActor func statesRetryPreservesIntentMintsGenerationAndResetsFit(_ mode: Int) async throws {
     let scene = StatesScene(), pipeline = StatesPipeline(), leases = StatesLeases()
     defer { scene.session.closeImage(); scene.window.close() }
     let file = URL(fileURLWithPath: "/folder/A.png"), root = AccessRootID()

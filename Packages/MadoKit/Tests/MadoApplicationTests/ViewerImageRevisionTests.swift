@@ -20,7 +20,7 @@ actor LoadRevisionPipeline: ImagePipeline {
         return loadImage(request.renderKey!, source: 512)
     }
 }
-@MainActor @Test func loadRevisionRetryKeepsGenerationAndReopenMintsAnother() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadRevisionRetryKeepsGenerationAndReopenMintsAnother() async {
     let session = ViewerSession(), host = LoadHost(), access = LoadLeases(), pipeline = LoadRevisionPipeline(changes: 1)
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/replace.png")
@@ -38,7 +38,7 @@ actor LoadRevisionPipeline: ImagePipeline {
     await session.imageLoader.loadTask?.value
     #expect(host.images.count == 4)
 }
-@MainActor @Test func loadRevisionSecondChangeFailsWithTypedContext() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadRevisionSecondChangeFailsWithTypedContext() async {
     let session = ViewerSession(), host = LoadHost(), access = LoadLeases(), pipeline = LoadRevisionPipeline(changes: 2)
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/replace.png")

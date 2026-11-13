@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 @testable import MadoMacUI
-@MainActor @Test func designMetricsAndSymbolsMatchSpecification() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func designMetricsAndSymbolsMatchSpecification() throws {
     let json = try registry()
     for (section, native) in [("typography", DesignMetrics.typeSizes), ("customRadii", DesignMetrics.radii)] {
         let expected = json[section] as! [String: [String: Any]]

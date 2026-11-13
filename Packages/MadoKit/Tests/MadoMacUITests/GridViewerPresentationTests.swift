@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func issue136InspectorSharesWindowWithViewerAndGrid() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorSharesWindowWithViewerAndGrid() {
     _ = NSApplication.shared
     let host = NSView(frame: NSRect(x: 0, y: 0, width: 960, height: 640))
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 960, height: 612),
@@ -51,7 +51,7 @@ import MadoApplication
     #expect(state.frame == NSRect(x: 0, y: 0, width: 700, height: 520))
 }
 
-@Test @MainActor func cancelReadingRestoresVisibleViewerForFolderNavigatedImage() {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingRestoresVisibleViewerForFolderNavigatedImage() {
     _ = NSApplication.shared
     let canvas = NSView(), chrome = NSView(), state = NSView(), grid = NSView(), inspector = NSView()
     let presentation = GridViewerPresentation(canvas: canvas, chrome: chrome, state: state, grid: grid, inspector: inspector)
@@ -86,7 +86,7 @@ import MadoApplication
     expectViewer("cancel to empty")
 }
 
-@Test @MainActor func p204R4ShowReadingOverGridOnlyWhenGridVisible() {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R4ShowReadingOverGridOnlyWhenGridVisible() {
     _ = NSApplication.shared
     let canvas = NSView(), chrome = NSView(), state = NSView(), grid = NSView(), inspector = NSView()
     let presentation = GridViewerPresentation(canvas: canvas, chrome: chrome, state: state, grid: grid, inspector: inspector)
@@ -101,7 +101,7 @@ import MadoApplication
     #expect(!state.isHidden && !state.isAccessibilityHidden() && canvas.isHidden && chrome.isHidden)
 }
 
-@Test @MainActor func gridReadingStaysInsideShellAndViewerRestoresFullStateFrame() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridReadingStaysInsideShellAndViewerRestoresFullStateFrame() {
     _ = NSApplication.shared
     let host = NSView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800))
     let store = InMemoryDisplayPreferencesStore()

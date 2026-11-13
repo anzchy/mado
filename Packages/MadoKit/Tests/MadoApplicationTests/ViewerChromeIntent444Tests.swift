@@ -74,7 +74,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     source == .preview || (source == .single && canReturnToFolder)
 }
 
-@Test(arguments: Intent444Source.allCases, [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: Intent444Source.allCases, [false, true])
 @MainActor func i444EscapeEnabledEqualsCanReturnToSourceAcrossStates(source: Intent444Source, folder: Bool) {
     for focus in [FocusContext.canvas, .tools] {
         let f = Intent444Fixture(source, canReturnToFolder: folder)
@@ -85,7 +85,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     }
 }
 
-@Test(arguments: [1, 3, 12], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [1, 3, 12], [false, true])
 @MainActor func i444ReturnToGridIntentMatchesEscapeAtCanvasFocus(count: Int, anchor: Bool) {
     for selected in Set([0, count / 2, count - 1]) {
         let a = Intent444Fixture(.preview, count: count, selected: selected, anchor: anchor)
@@ -112,7 +112,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     #expect(a.session.mode == b.session.mode)
 }
 
-@Test @MainActor func i444ReturnToGridIntentFromToolsFocusReturnsWhileEscapeOnlyRefocuses() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ReturnToGridIntentFromToolsFocusReturnsWhileEscapeOnlyRefocuses() {
     let x = Intent444Fixture(.preview), y = Intent444Fixture(.preview)
     x.session.updateFocus(.tools); y.session.updateFocus(.tools)
     CommandRouter().route(.escape, from: .key, to: x.session)
@@ -123,7 +123,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     #expect(y.session.selection.currentItemID == y.items[1] && y.host.returns == 1)
 }
 
-@Test @MainActor func i444DisabledIntentsAreNoOpsAndReturnIsIdempotent() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444DisabledIntentsAreNoOpsAndReturnIsIdempotent() {
     let returnable = Intent444Fixture(.preview)
     returnable.session.perform(intent: .returnToGrid)
     let once = returnable.session.browsingState
@@ -148,7 +148,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     #expect(unavailable.host.intents.isEmpty && unavailable.store.value.gridSidebarVisible)
 }
 
-@Test(arguments: Intent444Source.allCases, [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: Intent444Source.allCases, [false, true])
 @MainActor func i444CanToggleViewerSidebarTruthTable(source: Intent444Source, visible: Bool) {
     for available in [false, true] {
         let f = Intent444Fixture(source, available: available)
@@ -178,7 +178,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
     #expect(detached.session.canToggleViewerSidebar == false)
 }
 
-@Test @MainActor func i444ToggleSidebarIntentReachesHostOnlyWhenEnabled() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ToggleSidebarIntentReachesHostOnlyWhenEnabled() {
     let off = Intent444Fixture(.preview, available: false)
     off.session.perform(intent: .toggleSidebar)
     #expect(off.host.intents.isEmpty && off.store.value.gridSidebarVisible && !off.session.isViewerSidebarShown)
@@ -197,7 +197,7 @@ private func canReturnOracle(_ source: Intent444Source, _ canReturnToFolder: Boo
 /// Owner decision 2026-11-04 (#444): 进入大图时侧栏默认隐藏；在大图里点「显示侧栏」后，在这次查看中保持，返回网格时网格侧栏照旧。
 /// "This viewing" is one folder preview: it lasts across ←/→ and ends when the preview ends (返回网格, Esc, or the
 /// folder being replaced); the next entry starts hidden again.
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func i444ViewerSidebarIsIndependentAndStartsHiddenEachViewing(gridVisible: Bool) {
     let f = Intent444Fixture(.browsing, available: true)
     f.store.value.gridSidebarVisible = gridVisible

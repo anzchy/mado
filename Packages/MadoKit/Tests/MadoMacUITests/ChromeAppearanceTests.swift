@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeGroupLayersResolveLightDarkAndBack() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeGroupLayersResolveLightDarkAndBack() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 640, height: 680), session: ViewerSession())
     overlay.setToolBackgroundOpacity(100)
@@ -22,7 +22,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func chromeFloatingPanelsSeparateFromCanvasAcrossAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeFloatingPanelsSeparateFromCanvasAcrossAppearances() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 1280, height: 800),
         session: ViewerSession())

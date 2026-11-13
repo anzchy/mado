@@ -17,7 +17,7 @@ private actor SidebarLeaseProbe: AccessLeasing {
     func release(_ lease: AccessLease) { active -= 1; releases += 1 }
 }
 
-@Test func sidebarListingCountsRealDirectImagesAndKeepsLease() async throws {
+@Test(.timeLimit(.minutes(2))) func sidebarListingCountsRealDirectImagesAndKeepsLease() async throws {
     let base = FileManager.default.temporaryDirectory.appendingPathComponent("sidebar-list-\(UUID())")
     let root = base.appendingPathComponent("root")
     defer { try? FileManager.default.removeItem(at: base) }

@@ -24,7 +24,7 @@ import MadoCore
     _ = CommandRouter().route(command, from: .key, to: session)
 }
 
-@Test @MainActor func issue345PreviewLiveToggleStopsWrapsAndPersistsOnReturn() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue345PreviewLiveToggleStopsWrapsAndPersistsOnReturn() {
     let ids = sessionItems(3), store = InMemoryDisplayPreferencesStore(), host = Issue345Host()
     let session = ViewerSession(preferencesStore: store, host: host)
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[0])
@@ -42,7 +42,7 @@ import MadoCore
     issue345Route(.preview, session); step(.previous, 2)
 }
 
-@Test(arguments: [2, 3, 5], [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [2, 3, 5], [false, true]) @MainActor
 func issue345GridOrderFilterAndSelectionCycles(count: Int, descending: Bool) async throws {
     let fixture = FolderScanFixture(), host = Issue345Host(), store = InMemoryDisplayPreferencesStore()
     let session = ViewerSession(preferencesStore: store, host: host)
@@ -81,7 +81,7 @@ func issue345GridOrderFilterAndSelectionCycles(count: Int, descending: Bool) asy
     }
 }
 
-@Test(arguments: [0, 1], [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1], [false, true]) @MainActor
 func issue345EmptyAndSingletonNeverReload(count: Int, loop: Bool) {
     let ids = sessionItems(count), host = Issue345Host(), session = ViewerSession(host: host)
     session.setFolderLoopEnabled(loop)
@@ -100,7 +100,7 @@ func issue345EmptyAndSingletonNeverReload(count: Int, loop: Bool) {
     #expect(!session.isEnabled(.next) && !session.isEnabled(.previous))
 }
 
-@Test(arguments: [2, 3, 5]) @MainActor func issue345FinderLiveToggleAndCycles(count: Int) {
+@Test(.timeLimit(.minutes(2)), arguments: [2, 3, 5]) @MainActor func issue345FinderLiveToggleAndCycles(count: Int) {
     let files = (0..<count).map { URL(fileURLWithPath: "/finder/\($0).png") }
     let store = InMemoryDisplayPreferencesStore(), host = Issue345Host()
     let session = ViewerSession(preferencesStore: store, host: host)
@@ -131,7 +131,7 @@ func issue345EmptyAndSingletonNeverReload(count: Int, loop: Bool) {
     #expect(host.opened.allSatisfy { files.contains($0) })
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue345WrapEscapeKeepsLatestCurrentAndSelection(reverse: Bool) {
     let ids = sessionItems(5), host = Issue345Host(), session = ViewerSession(host: host)
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[2])
@@ -161,7 +161,7 @@ func issue345WrapEscapeKeepsLatestCurrentAndSelection(reverse: Bool) {
     #expect(session.scrollAnchor == ids[4])
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue345FastPagingAcrossWrapRejectsOldDecode(finder: Bool) async throws {
     let ids = sessionItems(3), host = Issue345Host(), session = ViewerSession(host: host)
     let pipeline = GenerationPipeline(), access = LoadLeases(), imageHost = LoadHost()
@@ -194,7 +194,7 @@ func issue345FastPagingAcrossWrapRejectsOldDecode(finder: Bool) async throws {
     #expect(imageHost.names == ["B", "B"])
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue345WrappedRemovalReturnsSurvivingCurrent(reverse: Bool) {
     let ids = sessionItems(3), host = Issue345Host(), session = ViewerSession(host: host)
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[0])

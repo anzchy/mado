@@ -50,7 +50,7 @@ func channels(_ c: NSColor) -> [Double] {
     let c = c.usingColorSpace(.sRGB)!
     return [c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent]
 }
-@MainActor @Test func designColorsFollowCSSAndAppearance() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func designColorsFollowCSSAndAppearance() throws {
     let colors = try registry()["colors"] as! [String: [String: Any]]
     #expect(Set(colors.keys) == Set(DesignColor.allCases.map(\.rawValue)))
     #expect(DesignColor.allCases.count == 22) // Includes the page-26 waiting indicator role.

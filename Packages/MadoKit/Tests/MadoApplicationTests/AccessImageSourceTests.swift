@@ -71,7 +71,7 @@ actor AccessPipelineProbe: ImagePipeline {
     #expect(await access.count() == 0)
 }
 
-@Test func accessImageSourceNeverAsksPipelineWithoutLeaseAndReleasesErrors() async throws {
+@Test(.timeLimit(.minutes(2))) func accessImageSourceNeverAsksPipelineWithoutLeaseAndReleasesErrors() async throws {
     let access = AccessProbe(); let pipeline = AccessPipelineProbe(access: access)
     let file = URL(fileURLWithPath: "/tmp/a.jpg")
     let source = try await AccessImageSource.open(.fileGrant(file), access: access, pipeline: pipeline)
@@ -93,7 +93,7 @@ actor AccessPipelineProbe: ImagePipeline {
     #expect(await access.count() == 0)
 }
 
-@Test func accessCancelledOpenAndClosedSourceDoNotLeakOrStartPipeline() async throws {
+@Test(.timeLimit(.minutes(2))) func accessCancelledOpenAndClosedSourceDoNotLeakOrStartPipeline() async throws {
     let access = AccessProbe(); let pipeline = AccessPipelineProbe(access: access)
     let file = URL(fileURLWithPath: "/tmp/a.jpg")
     let cancelled = Task {
@@ -112,7 +112,7 @@ actor AccessPipelineProbe: ImagePipeline {
     #expect(await access.count() == 0)
 }
 
-@Test func accessImageSourceCoverageFallsBackWhenPipelineCannotReadHeaderFirst() async throws {
+@Test(.timeLimit(.minutes(2))) func accessImageSourceCoverageFallsBackWhenPipelineCannotReadHeaderFirst() async throws {
     let access = AccessProbe(); let pipeline = AccessPipelineProbe(access: access)
     let source = try await AccessImageSource.open(.fileGrant(URL(fileURLWithPath: "/tmp/a.jpg")), access: access, pipeline: pipeline)
     let (request, _) = try await source.image(covering: ThumbnailCoverage(width: 424, height: 296), priority: .prefetch)

@@ -22,7 +22,7 @@ import Testing
     #expect(abs(actual.alphaComponent - expected.alpha) < 0.01)
 }
 
-@Test(arguments: ["light", "dark"]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: ["light", "dark"]) @MainActor
 func position445Fix1EffectivePrimaryForegroundAndHalo(_ theme: String) throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }
@@ -131,7 +131,7 @@ private struct Fix445Ink: CustomStringConvertible {
     return try fix445Render(reference).cropped()
 }
 
-@Test(arguments: ["light", "dark"]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: ["light", "dark"]) @MainActor
 func position445Fix1LongNameActuallyDrawsCompleteFractionAndEllipsis(_ theme: String) throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }

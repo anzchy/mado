@@ -16,7 +16,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     (0..<count).map { URL(fileURLWithPath: "/input-files/f\($0).png") }
 }
 
-@Test @MainActor func cancelReadingRestoresFilePreviewSetAndArrowNavigation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingRestoresFilePreviewSetAndArrowNavigation() async throws {
     let files = inputFiles(3), router = CommandRouter()
     let (fixture, host, session) = filePreviewSession(files, at: 1)
     let token = session.inputNavigationIntent.current
@@ -45,7 +45,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     await fixture.scanner.finish(); try await reading.value
 }
 
-@Test @MainActor func cancelReadingRoundTripPreservesFilePreviewSetAtEveryIndex() {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingRoundTripPreservesFilePreviewSetAtEveryIndex() {
     for count in 1...4 {
         for index in 0..<count {
             let files = inputFiles(count), host = FolderNavigationHost(), session = ViewerSession(host: host)
@@ -65,7 +65,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     }
 }
 
-@Test @MainActor func completedFolderEntryDiscardsFilePreviewSet() {
+@Test(.timeLimit(.minutes(2))) @MainActor func completedFolderEntryDiscardsFilePreviewSet() {
     let files = inputFiles(3), host = FolderNavigationHost(), session = ViewerSession(host: host)
     host.canNavigate = false; host.hasImage = false
     session.filePreviewSet = FilePreviewSet(files: files)
@@ -80,7 +80,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     #expect(!session.isEnabled(.next))
 }
 
-@Test @MainActor func repeatedBeginKeepsFirstFilePreviewSet() {
+@Test(.timeLimit(.minutes(2))) @MainActor func repeatedBeginKeepsFirstFilePreviewSet() {
     let files = inputFiles(3), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.filePreviewSet = FilePreviewSet(files: files)
     session.filePreviewSet?.move(forward: true)
@@ -96,7 +96,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     #expect(session.filePreviewSet?.index == 2)
 }
 
-@Test @MainActor func cancelReadingWithIncompleteSourceFallsBackToNativeNavigation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingWithIncompleteSourceFallsBackToNativeNavigation() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let a = fixture.folder.appendingPathComponent("a.png")
@@ -124,7 +124,7 @@ private func inputFiles(_ count: Int) -> [URL] {
     #expect(host.inputOpens.isEmpty)
 }
 
-@Test @MainActor func cancelReadingWithPriorCompleteFolderRestoresFilePreviewSet() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingWithPriorCompleteFolderRestoresFilePreviewSet() async throws {
     let files = inputFiles(3)
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host

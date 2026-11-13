@@ -16,7 +16,7 @@ import MadoApplication
     func returnToGrid() {}
 }
 
-@Test @MainActor func gridChromeKeepsTitlebarVisibleAcrossDeadlineAndViewerRoundTrip() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridChromeKeepsTitlebarVisibleAcrossDeadlineAndViewerRoundTrip() {
     _ = NSApplication.shared
     let clock = GridChromeClock(), session = ViewerSession(clock: clock, host: GridChromeSessionHost())
     let router = CommandRouter()

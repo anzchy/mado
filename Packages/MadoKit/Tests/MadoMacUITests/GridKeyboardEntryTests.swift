@@ -15,7 +15,7 @@ import MadoApplication
     func returnToGrid() {}
 }
 
-@Test @MainActor func gridEntryDefinesCurrentWithoutSelectionThenArrowsPreviewAndEscUseIt() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridEntryDefinesCurrentWithoutSelectionThenArrowsPreviewAndEscUseIt() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-keyboard")
     let rootID = AccessRootID(rawValue: UUID())

@@ -48,7 +48,7 @@ private actor MenuOpeningGate {
     #expect(!session.inspectorFocus.isVisible)
 }
 
-@Test @MainActor func statesMenuLoadingFailureAndEmptyRejectStaleHostImageAcrossEntries() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesMenuLoadingFailureAndEmptyRejectStaleHostImageAcrossEntries() async {
     let host = MenuStateHost(), gate = MenuOpeningGate()
     let session = ViewerSession(host: host)
     session.openImage(URL(fileURLWithPath: "/B.jpg"), maximumPixelSize: 512) { try await gate.open() }
@@ -81,7 +81,7 @@ private actor MenuOpeningGate {
     #expect(session.isEnabled(.open))
 }
 
-@Test @MainActor func statesMenuShowingEnablesImageActionsAcrossEntries() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesMenuShowingEnablesImageActionsAcrossEntries() async {
     let host = MenuStateHost(), pipeline = LoadPipeline(), access = LoadLeases()
     let session = ViewerSession(host: host)
     let file = URL(fileURLWithPath: "/A.png")

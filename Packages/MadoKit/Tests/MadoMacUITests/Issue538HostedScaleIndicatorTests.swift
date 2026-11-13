@@ -59,7 +59,7 @@ import Testing
 
 /// The same independent single-opacity Text oracle as Issue538ScaleIndicatorOpacityTests,
 /// now installed through NSHostingView and NSWindow rather than ImageRenderer alone.
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func issue538HostedDisabledLabelMatchesSingleOpacityAndRejectsActivation(_ theme: DesignTheme) throws {
     let reference = Text(String(localized: "Fit window"))
         .font(Font(DesignMetrics.font("uiSmall")))

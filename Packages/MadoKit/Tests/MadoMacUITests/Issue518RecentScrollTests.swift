@@ -164,7 +164,7 @@ private struct Issue518RecentOracle {
     }
 }
 
-@Test @MainActor func issue518RecentScrollCountSizeThemeAndSurfaceMatrix() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518RecentScrollCountSizeThemeAndSurfaceMatrix() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for grid in [true, false] {
             for height: CGFloat in [640, 772] {
@@ -180,7 +180,7 @@ private struct Issue518RecentOracle {
     }
 }
 
-@Test @MainActor func issue518RecentScrollExact640WindowSmoke() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518RecentScrollExact640WindowSmoke() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let contentHeight = 640 - (try issue518NativeTitlebarHeight())
         #expect(contentHeight == 612, "960×640 window is distinct from640 content fixture")
@@ -190,7 +190,7 @@ private struct Issue518RecentOracle {
     }
 }
 
-@Test @MainActor func issue518RecentScrollFitAndResizeRestoration() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518RecentScrollFitAndResizeRestoration() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for grid in [true, false] {
             for count in [3, 10] {
@@ -300,7 +300,7 @@ private struct Issue518Fix3Minimum {
     }
 }
 
-@Test @MainActor func issue518Fix3ShortHeightCountThemeAndSurfaceMatrix() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518Fix3ShortHeightCountThemeAndSurfaceMatrix() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for grid in [true, false] {
             for height: CGFloat in [300, 200] {
@@ -318,7 +318,7 @@ private struct Issue518Fix3Minimum {
     }
 }
 
-@Test @MainActor func issue518Fix3CompactThresholdBoundaries() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518Fix3CompactThresholdBoundaries() throws {
     let pin = try PinnedDesign.page("empty-folder")
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for grid in [true, false] {
@@ -338,7 +338,7 @@ private struct Issue518Fix3Minimum {
     }
 }
 
-@Test @MainActor func issue518Fix3ResizeRestoresFramesRowsAndFocus() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518Fix3ResizeRestoresFramesRowsAndFocus() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for grid in [true, false] {
             for count in [0, 10] {

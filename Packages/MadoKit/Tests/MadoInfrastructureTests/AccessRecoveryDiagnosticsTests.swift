@@ -38,7 +38,7 @@ private actor DiagnosticMounts: DiskMountPort {
     func events() -> AsyncStream<DiskMountEvent> { AsyncStream { $0.finish() } }
 }
 
-@Test func t229DiagnosticsErrorPrivacyAndNestedErrno() {
+@Test(.timeLimit(.minutes(2))) func t229DiagnosticsErrorPrivacyAndNestedErrno() {
     let text = AccessDiagnostics.errorKind(DiagnosticBoundary.error)
     #expect(text.contains("NSCocoaErrorDomain:257"))
     #expect(text.contains("NSPOSIXErrorDomain:13"))
@@ -47,7 +47,7 @@ private actor DiagnosticMounts: DiskMountPort {
     #expect(unknown == "other:5")
 }
 
-@Test(arguments: ["bookmark", "scope", "volumeMismatch", "volumeRead", "identityMismatch", "identityRead", "rootRead", "folderRead", "stale", "readable"])
+@Test(.timeLimit(.minutes(2)), arguments: ["bookmark", "scope", "volumeMismatch", "volumeRead", "identityMismatch", "identityRead", "rootRead", "folderRead", "stale", "readable"])
 func t229DiagnosticsVerificationStages(mode: String) async throws {
     let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: base) }

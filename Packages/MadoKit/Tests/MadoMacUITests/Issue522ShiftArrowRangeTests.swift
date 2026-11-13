@@ -6,7 +6,7 @@ import MadoApplication
 
 /// #522 / GRID-04 / GRID-05: reproduction only. Native arrow delivery is real;
 /// the preview command below checks session semantics, not the App's Space bridge.
-@Test(arguments: [1, 3]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [1, 3]) @MainActor
 func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-issue522")
@@ -189,7 +189,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522ShiftRangeShrinksAndCrossesAnchor() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522ShiftRangeShrinksAndCrossesAnchor() throws {
     let fixture = try Issue522RangeFixture(start: 1)
     defer { fixture.window.close() }
     for endpoint in [2, 3, 2, 1, 0, 1] {
@@ -198,7 +198,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522VerticalRangeUsesLayoutColumnsAndClampsAtEdge() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522VerticalRangeUsesLayoutColumnsAndClampsAtEdge() throws {
     let fixture = try Issue522RangeFixture(start: 1)
     defer { fixture.window.close() }
     let layout = try #require(fixture.grid.collectionView.collectionViewLayout)
@@ -217,7 +217,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522CommandPreservesAndPlainReplacesRange() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522CommandPreservesAndPlainReplacesRange() throws {
     let fixture = try Issue522RangeFixture(start: 3)
     defer { fixture.window.close() }
     try fixture.press(124)
@@ -232,7 +232,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     fixture.expectSelection(3...4, current: 4, anchor: 3)
 }
 
-@Test @MainActor func issue522PlainArrowEstablishesDifferentRangeAnchor() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522PlainArrowEstablishesDifferentRangeAnchor() throws {
     let fixture = try Issue522RangeFixture(start: 3)
     defer { fixture.window.close() }
     try fixture.press(124)
@@ -245,7 +245,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     fixture.expectSelection(4...5, current: 5, anchor: 4)
 }
 
-@Test @MainActor func issue522StandaloneGridExtendsWithoutCallbacks() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522StandaloneGridExtendsWithoutCallbacks() throws {
     let fixture = try Issue522RangeFixture(start: 1, callbacks: false)
     defer { fixture.window.close() }
     for endpoint in [2, 3, 2] {
@@ -254,7 +254,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522ShiftResumesRangeAfterCommandFocus() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522ShiftResumesRangeAfterCommandFocus() throws {
     for callbacks in [true, false] {
         let f = try Issue522RangeFixture(start: 3, callbacks: callbacks)
         defer { f.window.close() }
@@ -272,7 +272,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522ShiftReplacesCommandBuiltSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522ShiftReplacesCommandBuiltSelection() throws {
     for callbacks in [true, false] {
         for start in [0, 1] {
             let f = try Issue522RangeFixture(start: start, callbacks: callbacks)
@@ -291,7 +291,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522ShiftRebuildsClearedSelectionFromAnchor() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522ShiftRebuildsClearedSelectionFromAnchor() throws {
     for callbacks in [true, false] {
         let f = try Issue522RangeFixture(start: 1, callbacks: callbacks)
         defer { f.window.close() }
@@ -305,7 +305,7 @@ func issue522SingleSelectionShiftRightTwiceExtendsContiguousRange(start: Int) th
     }
 }
 
-@Test @MainActor func issue522ShiftWithoutAnchorSelectsSingleThenExtends() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue522ShiftWithoutAnchorSelectsSingleThenExtends() throws {
     for callbacks in [true, false] {
         let f = try Issue522RangeFixture(start: 1, callbacks: callbacks, selectStart: false)
         defer { f.window.close() }

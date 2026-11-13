@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func watchHubIgnoresHiddenAndPackageContentsBelowTheFolder() async throws {
+@Test(.timeLimit(.minutes(2))) func watchHubIgnoresHiddenAndPackageContentsBelowTheFolder() async throws {
     // (name, subscriber folder, changed path, delivers to recursive, delivers to flat)
     let rows: [(name: String, folder: String, changed: String, recursive: Bool, flat: Bool)] = [
         ("E1 .git object", "root/F", "root/F/.git/objects/ab/cd", false, false),

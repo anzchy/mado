@@ -21,7 +21,7 @@ import MadoMacUI
     return nil
 }
 
-@MainActor @Test func issue218SettingsAndMenuShareAppearanceAndTools() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218SettingsAndMenuShareAppearanceAndTools() throws {
     let (panel, preferences, _) = settingsFixture()
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu

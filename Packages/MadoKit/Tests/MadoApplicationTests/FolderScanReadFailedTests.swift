@@ -62,7 +62,7 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
 
 // MARK: WI-1 — the failure state carries the folder name; a folder-entry failure keeps nothing partial.
 
-@Test(arguments: [0, 1, 2, 3], ReadFailedErrorKind.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3], ReadFailedErrorKind.allCases)
 @MainActor func readFailedFolderEntryNeverPublishesPartialAsComplete(cut: Int, kind: ReadFailedErrorKind) async throws {
     let (fixture, coordinator, session, host, folder) = readFailedScene()
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -85,7 +85,7 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func readFailedAcquireFailureIsAReadFailureWithNoLease() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedAcquireFailureIsAReadFailureWithNoLease() async throws {
     let fixture = FolderScanFixture(fails: true), host = ReadFailedHost()
     let session = ViewerSession(host: host), coordinator = fixture.coordinator
     session.folderScan = coordinator; coordinator.host = host
@@ -98,7 +98,7 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
     #expect(await fixture.scanner.startedCount == 0)
 }
 
-@Test(arguments: ["待整理", "A"])
+@Test(.timeLimit(.minutes(2)), arguments: ["待整理", "A"])
 @MainActor func readFailedStatusNamesTheFolderNotACount(name: String) async throws {
     let (fixture, coordinator, session, _, folder) = readFailedScene(name)
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -109,7 +109,7 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
     #expect(session.imageStatus == .folderScanFailed("Folder scan failed", name))
 }
 
-@Test @MainActor func readFailedFolderEntryRetryRescansWithoutSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedFolderEntryRetryRescansWithoutSnapshot() async throws {
     let (fixture, coordinator, session, host, folder) = readFailedScene()
     _ = coordinator.setRecursiveEnabled(true)
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -133,7 +133,7 @@ func readFailedSameError(_ lhs: (any Error)?, _ rhs: any Error) -> Bool {
     await fixture.scanner.finish(1); _ = try? await retry.value
 }
 
-@Test(arguments: [0, 1, 3])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 3])
 @MainActor func readFailedImageFirstKeepsKnownImagesNavigable(count: Int) async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let coordinator = fixture.coordinator, session = ViewerSession(host: host)
@@ -183,7 +183,7 @@ private func readFailedIsScanFailure(_ status: ViewerImageStatus) -> Bool {
 
 enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
 
-@Test(arguments: RootCheckOutcome.allCases, [0, 2])
+@Test(.timeLimit(.minutes(2)), arguments: RootCheckOutcome.allCases, [0, 2])
 @MainActor func readFailedRootCheckOutcomeTable(outcome: RootCheckOutcome, cut: Int) async throws {
     for imageFirst in [false, true] {
         let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
@@ -219,7 +219,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     }
 }
 
-@Test @MainActor func readFailedRootCheckPendingKeepsReadingState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRootCheckPendingKeepsReadingState() async throws {
     let (fixture, coordinator, session, host, folder) = readFailedScene()
     let gate = RootLossGate(); gate.install(on: coordinator)
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -241,7 +241,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     #expect(coordinator.sourceSnapshot == nil && host.sinceStart == ["end"])
 }
 
-@Test @MainActor func readFailedRootLostHandsOffWithoutPublishingFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRootLostHandsOffWithoutPublishingFailure() async throws {
     let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
     let session = ViewerSession(host: host)
@@ -265,7 +265,7 @@ enum RootCheckOutcome: CaseIterable, Sendable { case none, readable, lost }
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func readFailedRootReadablePublishesReadFailed() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRootReadablePublishesReadFailed() async throws {
     let (fixture, coordinator, session, host, folder) = readFailedScene()
     let gate = RootLossGate(); gate.install(on: coordinator)
     let task = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -292,7 +292,7 @@ struct ReadFailedProjection: Equatable {
         count: coordinator.completedImageCount, hasSource: session.hasFolderSource)
 }
 
-@Test(arguments: [0, 3])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 3])
 @MainActor func readFailedWithoutRootCheckMatchesReadableCheck(cut: Int) async throws {
     var projections: [ReadFailedProjection] = [], logs: [[String]] = []
     for checked in [false, true] {
@@ -311,7 +311,7 @@ struct ReadFailedProjection: Equatable {
 
 enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, replaced, cancellationError }
 
-@Test(arguments: ReadFailedEnding.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: ReadFailedEnding.allCases)
 @MainActor func readFailedRootCheckRunsOncePerFailureNotOnCancel(ending: ReadFailedEnding) async throws {
     let (fixture, coordinator, session, _, folder) = readFailedScene()
     let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
@@ -344,7 +344,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     }
 }
 
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func readFailedCancelDuringRootCheckWins(lateLost: Bool) async throws {
     let fixture = FolderScanFixture(), host = ReadFailedHost(), trace = FolderFixTrace()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
@@ -366,7 +366,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func readFailedNewerOpenDuringRootCheckWins() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedNewerOpenDuringRootCheckWins() async throws {
     let (fixture, coordinator, session, host, folder) = readFailedScene()
     let gate = RootLossGate(); gate.install(on: coordinator)
     let first = coordinator.begin(folder: folder, rootID: fixture.id)
@@ -400,7 +400,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     return (fixture, coordinator, session, host, trace)
 }
 
-@Test @MainActor func readFailedRefreshRootLostKeepsSourceWithoutFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRefreshRootLostKeepsSourceWithoutFailure() async throws {
     let (fixture, coordinator, session, host, _) = try await readFailedCompletedSource()
     let gate = RootLossGate(fixed: true); gate.install(on: coordinator)
     let logBefore = host.log.count
@@ -419,7 +419,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     await fixture.scanner.waitForStart(2); await fixture.scanner.finish(2); _ = try? await again.value
 }
 
-@Test @MainActor func readFailedRefreshRootReadablePublishesFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRefreshRootReadablePublishesFailure() async throws {
     let (fixture, coordinator, session, host, _) = try await readFailedCompletedSource()
     let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
     let logBefore = host.log.count
@@ -436,7 +436,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     await fixture.scanner.waitForStart(2); await fixture.scanner.finish(2)
 }
 
-@Test @MainActor func readFailedRefreshEndDuringRootCheckIgnoresLateResult() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRefreshEndDuringRootCheckIgnoresLateResult() async throws {
     let (fixture, coordinator, _, _, trace) = try await readFailedCompletedSource()
     let gate = RootLossGate(); gate.install(on: coordinator)
     let refresh = try #require(coordinator.refresh())
@@ -466,7 +466,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     return (fixture, coordinator, session, host, readFailedProject(coordinator, session))
 }
 
-@Test @MainActor func readFailedRetrySucceedsShowsCompleteFolder() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRetrySucceedsShowsCompleteFolder() async throws {
     let (fixture, coordinator, session, host, _) = try await readFailedState()
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(1)
@@ -481,7 +481,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(coordinator.failure == nil)
 }
 
-@Test(arguments: [0, 2])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 2])
 @MainActor func readFailedRetryFailsAgainReturnsToSameFailedState(batches: Int) async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState()
     let retry = try #require(coordinator.retry())
@@ -494,7 +494,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(await fixture.access.balance == [2, 2])
 }
 
-@Test @MainActor func readFailedRetryFailsWithNewErrorPublishesNewReason() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRetryFailsWithNewErrorPublishesNewReason() async throws {
     let (fixture, coordinator, session, _, failed) = try await readFailedState(.denied)
     #expect(failed.failureReason == "Folder access denied")
     let retry = try #require(coordinator.retry())
@@ -506,7 +506,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(now.conditions == failed.conditions && now.sourceNil && now.snapshotNil && !now.scanning)
 }
 
-@Test(arguments: [0, 2])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 2])
 @MainActor func readFailedCancelDuringRetryRestoresFailedState(batches: Int) async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState(.denied)
     #expect(!coordinator.isRetryingFailedRead)
@@ -529,7 +529,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(await fixture.access.balance == [3, 3])
 }
 
-@Test @MainActor func readFailedRepeatedRetryCancelIsStable() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRepeatedRetryCancelIsStable() async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState()
     var generation = coordinator.generation
     for cycle in 1...3 {
@@ -546,7 +546,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(!host.log.contains { $0.hasPrefix("complete-") })
 }
 
-@Test @MainActor func readFailedDoubleRetryThenCancelRestoresFailedState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedDoubleRetryThenCancelRestoresFailedState() async throws {
     let (fixture, coordinator, session, _, failed) = try await readFailedState()
     let first = try #require(coordinator.retry())
     let second = coordinator.retry()
@@ -558,7 +558,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(readFailedProject(coordinator, session) == failed)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func readFailedLateEventsAfterCancelledRetryAreIgnored(lateFails: Bool) async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState()
     let gate = RootLossGate(fixed: false); gate.install(on: coordinator)
@@ -573,7 +573,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(gate.calls.isEmpty && host.log == logAtCancel)
 }
 
-@Test @MainActor func readFailedCancelDuringRetryRootCheckRestoresFailedState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedCancelDuringRetryRootCheckRestoresFailedState() async throws {
     let (fixture, coordinator, session, host, failed) = try await readFailedState()
     let gate = RootLossGate(); gate.install(on: coordinator)
     let retry = try #require(coordinator.retry())
@@ -589,7 +589,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
     #expect(host.log == logAtCancel)
 }
 
-@Test @MainActor func readFailedEndDuringRetryClearsEverything() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedEndDuringRetryClearsEverything() async throws {
     let (fixture, coordinator, session, _, _) = try await readFailedState()
     let retry = try #require(coordinator.retry())
     await fixture.scanner.waitForStart(1)
@@ -602,7 +602,7 @@ enum ReadFailedEnding: CaseIterable, Sendable { case failure, cancel, end, repla
 
 enum ReadFailedRestoreRow: CaseIterable, Sendable { case newReason, successThenOpen, successThenFailedOpen }
 
-@Test(arguments: ReadFailedRestoreRow.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: ReadFailedRestoreRow.allCases)
 @MainActor func readFailedRestorePointTracksLatestFailureAndClears(row: ReadFailedRestoreRow) async throws {
     let (fixture, coordinator, session, _, _) = try await readFailedState(.denied)
     let first = try #require(coordinator.retry())
@@ -641,7 +641,7 @@ enum ReadFailedRestoreRow: CaseIterable, Sendable { case newReason, successThenO
     }
 }
 
-@Test @MainActor func readFailedSessionCancelFolderEntryReturnsReadFailedTarget() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedSessionCancelFolderEntryReturnsReadFailedTarget() async throws {
     // Failure, nothing shown: Cancel Reading during Retry returns to 「读取失败」.
     do {
         let (fixture, coordinator, session, host, failed) = try await readFailedState(.denied)

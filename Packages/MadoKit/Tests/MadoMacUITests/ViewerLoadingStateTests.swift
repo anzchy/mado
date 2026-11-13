@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func statesLoadingHasFilenameIndeterminateProgressAndCancelOnly() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesLoadingHasFilenameIndeterminateProgressAndCancelOnly() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     host.hasImage = false; host.canNavigate = false

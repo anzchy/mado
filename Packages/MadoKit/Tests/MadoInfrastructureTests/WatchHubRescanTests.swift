@@ -4,7 +4,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func watchHubForcesRescanOnDropFlagsAndReconcile() async throws {
+@Test(.timeLimit(.minutes(2))) func watchHubForcesRescanOnDropFlagsAndReconcile() async throws {
     // (a) Every subset of 4 drop flags and 5 ordinary flags: mustRescan iff a drop flag is present.
     // RootChanged is ordinary: FSEvents sends it only with WatchRoot, which the stream does not set.
     func flag(_ value: Int) -> FSEventStreamEventFlags { FSEventStreamEventFlags(value) }

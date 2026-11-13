@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import Testing
 @testable import MadoMacUI
-@MainActor @Test func designSurfacesRenderBothThemes() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func designSurfacesRenderBothThemes() throws {
     // NSBitmapImageRep.colorAt labels RGB samples as calibrated, losing this image's sRGB profile.
     // Read its encoded components directly after requiring an sRGB output image below.
     func channels(_ color: NSColor) -> [Double] {

@@ -21,7 +21,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     func counts(_ url: URL) -> [Int] { lock.withLock { [attempts[url.path, default: 0], stops[url.path, default: 0]] } }
 }
 
-@Test func issue73ReadableFileGrantSharesAndRetiresTokensWithoutStopping() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73ReadableFileGrantSharesAndRetiresTokensWithoutStopping() async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = Issue73Scope(), file = URL(fileURLWithPath: "/tmp/drop-A.png")
@@ -52,7 +52,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     #expect(try store.load().isEmpty)
 }
 
-@Test func issue73UnreadableFileGrantCanRetryWithoutPersistingAuthority() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73UnreadableFileGrantCanRetryWithoutPersistingAuthority() async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = Issue73Scope(), file = URL(fileURLWithPath: "/tmp/denied.png")
@@ -66,7 +66,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     #expect(await access.records().isEmpty)
 }
 
-@Test func issue73ReadableRootsPanelAndStaleRefreshStillRequireScopeStart() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73ReadableRootsPanelAndStaleRefreshStillRequireScopeStart() async throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }
@@ -88,7 +88,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     #expect(scope.counts(tree) == [5, 1])
 }
 
-@Test func issue73StartedFileGrantSharesAndStopsOnlyAfterFinalRelease() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73StartedFileGrantSharesAndStopsOnlyAfterFinalRelease() async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = Issue73Scope(), file = URL(fileURLWithPath: "/tmp/started.png")
@@ -103,7 +103,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     #expect(await access.records().isEmpty)
 }
 
-@Test func issue73FallbackReleasesAfterBodyFailureAndCancellation() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73FallbackReleasesAfterBodyFailureAndCancellation() async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = Issue73Scope(), file = URL(fileURLWithPath: "/tmp/cancelled.png")
@@ -132,7 +132,7 @@ final class Issue73Scope: SecurityScope, @unchecked Sendable {
     #expect(await access.records().isEmpty)
 }
 
-@Test(arguments: [true, false]) func issue73DistinctFileLeasesKeepIndependentScopeOwnership(releaseFallbackFirst: Bool) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [true, false]) func issue73DistinctFileLeasesKeepIndependentScopeOwnership(releaseFallbackFirst: Bool) async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = Issue73Scope(), a = URL(fileURLWithPath: "/tmp/mixed-A.png"), b = URL(fileURLWithPath: "/tmp/mixed-B.png")

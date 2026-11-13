@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeWindowTitlebarDragAndCanvasIsolation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeWindowTitlebarDragAndCanvasIsolation() throws {
     _ = NSApplication.shared
     let clock = ChromeViewClock()
     let host = ChromeRecallViewHost()

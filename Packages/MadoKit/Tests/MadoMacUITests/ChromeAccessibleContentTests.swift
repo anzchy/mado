@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeAccessibleScaleAndFilenameUpdateWithoutDuplicateActions() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeAccessibleScaleAndFilenameUpdateWithoutDuplicateActions() throws {
     _ = NSApplication.shared
     let effects = ChromeToolsHost()
     let session = ViewerSession(host: effects)

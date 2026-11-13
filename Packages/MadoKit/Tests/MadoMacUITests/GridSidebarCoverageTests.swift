@@ -4,7 +4,7 @@ import MadoApplication
 import MadoInfrastructure
 @testable import MadoMacUI
 
-@Test @MainActor func sidebarOpenGlyphRendersAndRowsRespondToUpdates() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarOpenGlyphRendersAndRowsRespondToUpdates() throws {
     _ = NSApplication.shared
     let parent = URL(fileURLWithPath: "/tmp/Photos")
     let current = parent.appendingPathComponent("Travel")
@@ -53,7 +53,7 @@ import MadoInfrastructure
     window.close()
 }
 
-@Test @MainActor func sidebarShellRoutesRowAndKeepsKeyboardLoop() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarShellRoutesRowAndKeepsKeyboardLoop() throws {
     _ = NSApplication.shared
     let root = URL(fileURLWithPath: "/tmp/Photos")
     let child = root.appendingPathComponent("Trip")

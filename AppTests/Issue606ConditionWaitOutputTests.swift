@@ -2,7 +2,7 @@ import AppKit
 import os
 import Testing
 
-@Test @MainActor func issue606FailureHookPrintsRedactedAlertStateSynchronouslyAndAsynchronously() async throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue606FailureHookPrintsRedactedAlertStateSynchronouslyAndAsynchronously() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 480, height: 320),
                           styleMask: [.titled], backing: .buffered, defer: false)
@@ -44,7 +44,7 @@ import Testing
     #expect(!asynchronous.contains("/Users/"))
 }
 
-@Test func issue606StateOutputBoundsWindowsLinesAndAlertFields() {
+@Test(.timeLimit(.minutes(3))) func issue606StateOutputBoundsWindowsLinesAndAlertFields() {
     let windows = (0..<23).map { index in
         ConditionWaitWindowState(className: "NSWindow", title: "/Users/i606-secret/" + String(repeating: "x", count: 5000),
             isVisible: true, level: index, alertText: ["message", "informative", "third-static-secret"])

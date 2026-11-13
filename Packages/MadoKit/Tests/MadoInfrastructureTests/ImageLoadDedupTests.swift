@@ -64,7 +64,7 @@ private actor DedupPipeline: ImagePipeline {
     func installImage(_ image: DecodedImage, fileURL: URL) { MainActor.assertIsolated(); names.append(fileURL.lastPathComponent) }
     func imageLoadFailed(_ error: any Error) { }
 }
-@MainActor @Test(arguments: [0, 1, 2]) func loadDedupTwoSessionsKeepIndependentSubscriptions(cancelCount: Int) async {
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2]) func loadDedupTwoSessionsKeepIndependentSubscriptions(cancelCount: Int) async {
     let executor = ControlledExecutor(), decoder = DedupDecoder()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 100), executor: executor, decoder: decoder)
     let pipeline = DedupPipeline(admission), access = DedupLeases()

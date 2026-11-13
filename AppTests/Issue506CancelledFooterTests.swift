@@ -143,7 +143,7 @@ func issue506CancelledReadRestoresFooterAndSource(previousCount: Int) async thro
 }
 
 /// The snapshot identity and entry admission must agree even when lexical parent removal crosses a symlink.
-@Test @MainActor func issue506SymlinkParentFolderCompletesNormally() async throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue506SymlinkParentFolderCompletesNormally() async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
     let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("symlink506-\(UUID())")

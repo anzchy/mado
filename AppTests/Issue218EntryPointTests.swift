@@ -30,7 +30,7 @@ import MadoMacUI
     return own + root.subviews.flatMap(disabledSettingsControls(in:))
 }
 
-@MainActor @Test func issue218SettingsControlsUseDeclaredImplementedEntryPoints() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218SettingsControlsUseDeclaredImplementedEntryPoints() throws {
     let panel = settingsEntryPointPanel()
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)
@@ -59,7 +59,7 @@ import MadoMacUI
     #expect(disabled.isEmpty)
 }
 
-@MainActor @Test func issue218AboutReportIssueOpensSharedEntryPointURL() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218AboutReportIssueOpensSharedEntryPointURL() throws {
     var openedURLs: [URL] = []
     let panel = settingsEntryPointPanel(openURL: { openedURLs.append($0) })
     defer { panel.window.close() }

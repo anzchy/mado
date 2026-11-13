@@ -25,7 +25,7 @@ import MadoCore
     func showInspector(_ visible: Bool) { }
 }
 
-@Test @MainActor func folderNavigationEnabledTable() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationEnabledTable() async throws {
     for complete in [false, true] {
         for position in 0...2 {
             let fixture = FolderScanFixture(), host = FolderNavigationHost()
@@ -43,7 +43,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func folderNavigationVisibleMoveSequence() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationVisibleMoveSequence() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
@@ -67,7 +67,7 @@ import MadoCore
     #expect(host.navigation.isEmpty)
 }
 
-@Test @MainActor func folderNavigationEarlierInsertKeepsCurrentItemID() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationEarlierInsertKeepsCurrentItemID() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -83,7 +83,7 @@ import MadoCore
     #expect(host.opens.map(\.0.lastPathComponent) == ["img10.png"])
 }
 
-@Test(arguments: [NavigationDirection.next, .previous])
+@Test(.timeLimit(.minutes(2)), arguments: [NavigationDirection.next, .previous])
 @MainActor func folderNavigationPendingOnce(direction: NavigationDirection) async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     fixture.coordinator.host = host
@@ -107,7 +107,7 @@ import MadoCore
     #expect(host.opens.count == 1)
 }
 
-@Test @MainActor func folderNavigationPrecedenceAndFallback() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationPrecedenceAndFallback() async throws {
     for source in ["file", "grid", "snapshot", "nonmember"] {
         let fixture = FolderScanFixture(), host = FolderNavigationHost()
         let session = ViewerSession(host: host), router = CommandRouter(implementedCommands: Set(CommandID.allCases))
@@ -143,7 +143,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func folderNavigationFileGrantEndsSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationFileGrantEndsSnapshot() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession()
     session.host = host; session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -165,7 +165,7 @@ import MadoCore
     session.folderScan = nil; session.endFolderScan(); session.cancelFolderReading()
 }
 
-@Test @MainActor func folderNavigationReadingDisablesOldImageArrowsAndCancelForwards() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationReadingDisablesOldImageArrowsAndCancelForwards() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession()
     session.host = host; session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -179,7 +179,7 @@ import MadoCore
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderNavigationCancelDuringPendingApply() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationCancelDuringPendingApply() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     fixture.coordinator.host = host; host.onOpen = { fixture.coordinator.cancel() }
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -195,7 +195,7 @@ import MadoCore
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderNavigationSupersededAccessIntentCannotAutoOpen() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationSupersededAccessIntentCannotAutoOpen() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), intent = AccessIntent()
     fixture.coordinator.host = host
     let a = intent.begin()
@@ -214,7 +214,7 @@ import MadoCore
     await fixture.scanner.finish(); try await task.value
 }
 
-@Test @MainActor func folderNavigationActualURLMismatchFallsThrough() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationActualURLMismatchFallsThrough() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,

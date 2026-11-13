@@ -13,7 +13,7 @@ import MadoInfrastructure
     return nil
 }
 
-@Test @MainActor func issue282ReadingFooterShowsReadingStatusAndMasksRealSidebarCount() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282ReadingFooterShowsReadingStatusAndMasksRealSidebarCount() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -70,7 +70,7 @@ import MadoInfrastructure
 }
 
 /// #142 owner decision / page 24: an unknown count is absent visually and from the AX label.
-@Test @MainActor func issue282SidebarLeavesUnknownCountBlankForTheFolderBeingRead() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282SidebarLeavesUnknownCountBlankForTheFolderBeingRead() async throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
         preferencesStore: InMemoryDisplayPreferencesStore())

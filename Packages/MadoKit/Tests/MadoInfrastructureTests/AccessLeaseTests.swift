@@ -14,7 +14,7 @@ final class CountingScope: SecurityScope, @unchecked Sendable {
     var counts: [Int] { lock.withLock { [starts, stops] } }
 }
 
-@Test func accessLeasesBalanceAcrossWindowsFailuresAndCancellation() async throws {
+@Test(.timeLimit(.minutes(2))) func accessLeasesBalanceAcrossWindowsFailuresAndCancellation() async throws {
     let scope = CountingScope()
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
@@ -38,7 +38,7 @@ final class CountingScope: SecurityScope, @unchecked Sendable {
     }
 }
 
-@Test func accessFileGrantFailedStartNeverStopsAndScopesOnlyOneFile() async throws {
+@Test(.timeLimit(.minutes(2))) func accessFileGrantFailedStartNeverStopsAndScopesOnlyOneFile() async throws {
     let scope = CountingScope(); scope.succeeds = false
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
@@ -95,7 +95,7 @@ private final class LinkChangingScope: SecurityScope, @unchecked Sendable {
     var balanced: Bool { lock.withLock { starts == stops } }
 }
 
-@Test func accessBoundaryIsRecheckedAfterScopeActuallyStarts() async throws {
+@Test(.timeLimit(.minutes(2))) func accessBoundaryIsRecheckedAfterScopeActuallyStarts() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -138,7 +138,7 @@ private final class ScopeSensitiveBoundary: SecurityScope, @unchecked Sendable {
     var observations: [Int] { lock.withLock { [live, checks, unscoped] } }
 }
 
-@Test func accessDiscoversRootsOnlyAfterScopedBoundaryConfirmation() async throws {
+@Test(.timeLimit(.minutes(2))) func accessDiscoversRootsOnlyAfterScopedBoundaryConfirmation() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -156,7 +156,7 @@ private final class ScopeSensitiveBoundary: SecurityScope, @unchecked Sendable {
     #expect(scope.observations == [0, 2, 0])
 }
 
-@Test func accessFailedPanelGrantLeavesStoreUntouchedAndNeverStopsFailedScope() async throws {
+@Test(.timeLimit(.minutes(2))) func accessFailedPanelGrantLeavesStoreUntouchedAndNeverStopsFailedScope() async throws {
     let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: storeURL) }
     let scope = CountingScope(); scope.succeeds = false

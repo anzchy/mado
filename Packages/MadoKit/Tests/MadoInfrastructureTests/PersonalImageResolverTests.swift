@@ -53,7 +53,7 @@ private struct PersonalResolverFixture {
 
 private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
 
-@Test func personalImageResolverPresentOnRealGrant() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverPresentOnRealGrant() async throws {
     let fixture = try await PersonalResolverFixture()
     defer { try? FileManager.default.removeItem(at: fixture.base) }
     let bytes = Data("present".utf8)
@@ -66,7 +66,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(fixture.scope.counts[0] == fixture.scope.counts[1])
 }
 
-@Test func personalImageResolverMissingCases() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverMissingCases() async throws {
     let fm = FileManager.default
     let fixture = try await PersonalResolverFixture()
     defer { try? fm.removeItem(at: fixture.base) }
@@ -101,7 +101,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(fixture.scope.counts[0] == fixture.scope.counts[1])
 }
 
-@Test func personalImageResolverNeverServesStaleResult() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverNeverServesStaleResult() async throws {
     let fixture = try await PersonalResolverFixture()
     defer { try? FileManager.default.removeItem(at: fixture.base) }
     let resolver = fixture.resolver
@@ -118,7 +118,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(fixture.scope.counts[0] == fixture.scope.counts[1])
 }
 
-@Test func personalImageResolverRevokedWhenRootFolderGone() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverRevokedWhenRootFolderGone() async throws {
     let fixture = try await PersonalResolverFixture()
     defer { try? FileManager.default.removeItem(at: fixture.base) }
     let ref = try await fixture.remember("a.jpg")
@@ -129,7 +129,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(try await fixture.resolver.resolve(ref) == .revoked)
 }
 
-@Test func personalImageResolverUsesEachRefsOwnRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverUsesEachRefsOwnRoot() async throws {
     let first = try await PersonalResolverFixture(name: "one")
     defer { try? FileManager.default.removeItem(at: first.base) }
     let secondFolder = first.base.appendingPathComponent("two")
@@ -152,7 +152,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     guard case .present = try await first.resolver.resolve(one) else { Issue.record("root one unaffected"); return }
 }
 
-@Test func personalImageResolverRevokedOnBookmarkOrScopeFailure() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverRevokedOnBookmarkOrScopeFailure() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -177,7 +177,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(scope.counts[0] == scope.counts[1] + 1, "the denied start is counted but never stopped")
 }
 
-@Test func personalImageResolverBalancesLeases() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverBalancesLeases() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -213,7 +213,7 @@ private func personalCanonicalPath(_ url: URL) -> String { url.standardizedFileU
     #expect(PersonalImageResolver.fingerprint(of: folder.appendingPathComponent("deleted.jpg")) == nil)
 }
 
-@Test func personalImageResolverDeletedRootIsRevokedThroughPorts() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverDeletedRootIsRevokedThroughPorts() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -263,7 +263,7 @@ private final class CancellingScope: SecurityScope, @unchecked Sendable {
     func isReadable(_ url: URL) -> Bool { false }
 }
 
-@Test func personalImageResolverCancellationIsNotRevoked() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverCancellationIsNotRevoked() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -292,7 +292,7 @@ private final class CancellingScope: SecurityScope, @unchecked Sendable {
     guard case .present = try await resolver.resolve(ref) else { Issue.record("an uncancelled resolve is present"); return }
 }
 
-@Test func personalImageResolverFavoriteHealsAfterRevisit() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageResolverFavoriteHealsAfterRevisit() async throws {
     let fixture = try await PersonalResolverFixture()
     defer { try? FileManager.default.removeItem(at: fixture.base) }
     let store = PersonalImageStore(url: fixture.base.appendingPathComponent("support/personal-images.json"))

@@ -13,7 +13,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     func read(_ url: URL, access: AccessRequest) async throws -> InspectorMetadata { value }
 }
 
-@Test func issue136InspectorFrameLeavesGridTitleAndFooterVisible() {
+@Test(.timeLimit(.minutes(2))) func issue136InspectorFrameLeavesGridTitleAndFooterVisible() {
     // Both pinned pages: default 220; max-width:1050px 195; max-width:720px 220 overlay.
     for (windowWidth, expected) in [
         (1280.0, NSRect(x: 1060, y: 0, width: 220, height: 640)),
@@ -26,19 +26,19 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     }
 }
 
-@Test func issue136InspectorTypeNamesUseKnownExtensionOrHonestIdentifier() {
+@Test(.timeLimit(.minutes(2))) func issue136InspectorTypeNamesUseKnownExtensionOrHonestIdentifier() {
     #expect(InspectorPanel.typeName("public.png") == "PNG")
     #expect(InspectorPanel.typeName("com.example.unrecognized-image") == "com.example.unrecognized-image")
 }
 
-@Test func issue136EnglishAndChineseLabelsFitTheirColumn() {
+@Test(.timeLimit(.minutes(2))) func issue136EnglishAndChineseLabelsFitTheirColumn() {
     for label in ["Dimensions", "Modified", "Created", "Type", "Size",
                   "尺寸", "修改日期", "创建日期", "类型", "大小"] {
         #expect(InspectorPanelLayout.labelWidth(label) == 48)
     }
 }
 
-@Test @MainActor func issue136SmokeInspectorLabelsStayOneLineAtTiledWidths() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136SmokeInspectorLabelsStayOneLineAtTiledWidths() throws {
     _ = NSApplication.shared
     #expect(InspectorPanelLayout.labelWidth([]) == 48)
     let font = NSFont.systemFont(ofSize: 12)
@@ -92,7 +92,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
 
 // design/prototypes/picsee-browser/states/viewer-inspector.html and viewer-inspector-light.html:
 // .inspector dl uses a 7 px column gap and 12 px type; the label and value must remain distinct.
-@Test @MainActor func issue136Pages16And34DrawEnglishAndChineseRowsWithoutOverlap() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136Pages16And34DrawEnglishAndChineseRowsWithoutOverlap() throws {
     _ = NSApplication.shared
     for theme in DesignTheme.allCases {
         for (label, heightRange) in [("Dimensions", 20...30), ("尺寸", 8...15)] {
@@ -122,7 +122,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     }
 }
 
-@Test @MainActor func issue136InspectorPanelUsesPage16And34GeometryAndSurfaceColors() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136InspectorPanelUsesPage16And34GeometryAndSurfaceColors() throws {
     _ = NSApplication.shared
     let session = ViewerSession(), model = InspectorModel(reader: EmptyInspectorReader())
     func renderedCSS(_ rgb: [Double]) throws -> [CGFloat] {
@@ -238,7 +238,7 @@ private struct FilledInspectorReader: InspectorMetadataReading {
     #expect(session.inspectorFocus.focus == .canvas)
 }
 
-@Test @MainActor func issue136ComboGridSearchKeepsEditorWithInspectorOpen() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136ComboGridSearchKeepsEditorWithInspectorOpen() {
     #expect(!InspectorPanel.shouldFocusCloseButton(.textInput, allows: false))
     #expect(InspectorPanel.shouldFocusCloseButton(.textInput, allows: true))
     #expect(InspectorPanel.shouldFocusCloseButton(.panel, allows: false))

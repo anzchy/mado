@@ -32,7 +32,7 @@ private func movementKey(_ item: Int, revision: Int = 42) -> RenderKey {
               revision: FileRevision(byteCount: revision, modificationDate: nil), maximumPixelSize: 512, isPreview: item % 2 == 0)
 }
 
-@Test func p308MemoryCacheReportsAdmissionsAndBudgetEvictions() async throws {
+@Test(.timeLimit(.minutes(2))) func p308MemoryCacheReportsAdmissionsAndBudgetEvictions() async throws {
     let recorder = MovementRecorder()
     let cache = ImageMemoryCache(capacity: 32, budget: nil, movementTrace: recorder)
     let a = cacheKey(1, preview: true), b = cacheKey(2), c = cacheKey(3)
@@ -48,7 +48,7 @@ private func movementKey(_ item: Int, revision: Int = 42) -> RenderKey {
     #expect(recorder.admissions.count == 3 && recorder.departures.count == 1)
 }
 
-@Test func p308ReplacingAKeyIsADiscardThenAnAdmission() async throws {
+@Test(.timeLimit(.minutes(2))) func p308ReplacingAKeyIsADiscardThenAnAdmission() async throws {
     let recorder = MovementRecorder()
     let cache = ImageMemoryCache(capacity: 64, budget: nil, movementTrace: recorder)
     let a = cacheKey(1)
@@ -62,7 +62,7 @@ private func movementKey(_ item: Int, revision: Int = 42) -> RenderKey {
 
 /// Random operations over every admission and removal site. After each: admissions − departures == entries, and the
 /// departures the operation caused carry an allowed reason. Emptying the cache at the end balances the bytes.
-@Test func p308RandomCacheOperationsConserveEntriesAndBytes() async throws {
+@Test(.timeLimit(.minutes(2))) func p308RandomCacheOperationsConserveEntriesAndBytes() async throws {
     let recorder = MovementRecorder()
     let cache = ImageMemoryCache(capacity: 96, budget: nil, movementTrace: recorder)
     var generator = SplitMix64(seed: 0x146_3)
@@ -134,7 +134,7 @@ private func movementKey(_ item: Int, revision: Int = 42) -> RenderKey {
     #expect(Set(recorder.admissions.map(\.preview)) == [true, false])
 }
 
-@Test func p308MemoryCacheDiscardsARevokedEntryOnItsNextRead() async throws {
+@Test(.timeLimit(.minutes(2))) func p308MemoryCacheDiscardsARevokedEntryOnItsNextRead() async throws {
     let recorder = MovementRecorder()
     let cache = ImageMemoryCache(capacity: 64, budget: nil, movementTrace: recorder)
     let authority = AccessWorkAuthority()
@@ -238,7 +238,7 @@ private func p308InfrastructureSignpostMessages(source: String = #filePath) thro
 }
 
 /// A tracer written before the counters (lookups only) keeps compiling and receives them as no-ops.
-@Test func p308CountersDefaultToNoOpsForOlderTracers() async throws {
+@Test(.timeLimit(.minutes(2))) func p308CountersDefaultToNoOpsForOlderTracers() async throws {
     final class LookupsOnly: ResourceSnapshotTracing, @unchecked Sendable {
         var lookups = 0
         func lookup(isPreview: Bool, hit: Bool) { lookups += 1 }
@@ -255,7 +255,7 @@ private func p308InfrastructureSignpostMessages(source: String = #filePath) thro
 }
 
 /// Budget accounting is the only remover here (capacity is far above the budget): its departures are reported too.
-@Test func p308BudgetAccountingReportsItsEvictions() async throws {
+@Test(.timeLimit(.minutes(2))) func p308BudgetAccountingReportsItsEvictions() async throws {
     let recorder = MovementRecorder()
     let cache = ImageMemoryCache(capacity: 1_000, budget: MemoryBudget(limit: 32), movementTrace: recorder)
     let keys = [cacheKey(1), cacheKey(2), cacheKey(3)]

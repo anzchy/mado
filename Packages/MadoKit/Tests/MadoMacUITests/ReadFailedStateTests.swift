@@ -26,7 +26,7 @@ private let readFailedChinese = ReadFailedStateText(title: "没能读完“待�
     #expect(abs(rgb.blueComponent - expected.blue) < 0.01, "\(what)")
 }
 
-@Test(arguments: ReadFailedCase.all) @MainActor private func readFailedPinnedNativeComposition(_ sample: ReadFailedCase) throws {
+@Test(.timeLimit(.minutes(2)), arguments: ReadFailedCase.all) @MainActor private func readFailedPinnedNativeComposition(_ sample: ReadFailedCase) throws {
     _ = NSApplication.shared
     let size = NSSize(width: CGFloat(sample.width), height: CGFloat(sample.height))
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
@@ -97,7 +97,7 @@ private let readFailedChinese = ReadFailedStateText(title: "没能读完“待�
     if let appearanceError { throw appearanceError }
 }
 
-@Test @MainActor func readFailedRetryIsInitialKeyViewWithAXLabels() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRetryIsInitialKeyViewWithAXLabels() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
@@ -165,7 +165,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
 }
 
 /// #316 M2: a Session change releases the pre-scan hold without leaving the reading surface.
-@Test @MainActor func i316SessionStatusChangeReleasesHeldReading() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i316SessionStatusChangeReleasesHeldReading() async throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let coordinator = FolderScanCoordinator(access: ReadFailedNativeLeases(), scanner: ReadFailedNativeScanner())
@@ -189,7 +189,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     #expect(scene.state.subviews.contains { $0 is FirstLaunchView }, "a later empty Session is not masked by the old hold")
 }
 
-@Test @MainActor func readFailedHostShowsPinnedStateWithoutPartialCount() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedHostShowsPinnedStateWithoutPartialCount() async throws {
     let (scene, _, _) = await readFailedHostScene()
     defer { scene.window.close() }
     #expect(scene.session.imageStatus == .folderScanFailed("Folder scan failed", "待整理"))
@@ -207,7 +207,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     #expect((scene.state.accessibilityChildren() ?? []).compactMap { $0 as? NSView }.contains { $0 === view })
 }
 
-@Test @MainActor func readFailedRetryButtonStartsRescan() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRetryButtonStartsRescan() async throws {
     let (scene, coordinator, scanner) = await readFailedHostScene(failures: 2)
     defer { scene.window.close() }
     let retry = try #require(scene.state.buttons.first { $0.identifier?.rawValue == "state.retry-folder" })
@@ -220,7 +220,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     #expect(scene.state.buttons.allSatisfy { $0.isEnabled && !$0.isHiddenOrHasHiddenAncestor })
 }
 
-@Test @MainActor func readFailedChooseOtherFolderRequestsOpen() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedChooseOtherFolderRequestsOpen() async throws {
     let (scene, coordinator, scanner) = await readFailedHostScene()
     defer { scene.window.close() }
     let other = try #require(scene.state.buttons.first { $0.identifier?.rawValue == "state.choose-other-folder" })
@@ -229,7 +229,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     #expect(await scanner.calls == 1 && coordinator.failure != nil)
 }
 
-@Test @MainActor func readFailedHostSwitchTransitions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedHostSwitchTransitions() async throws {
     let (scene, _, _) = await readFailedHostScene()
     defer { scene.window.close() }
     func count() -> Int { scene.state.subviews.filter { $0 is ReadFailedStateView && !$0.isHidden }.count }
@@ -243,7 +243,7 @@ private actor ReadFailedNativeScanner: FolderScanning {
     #expect(scene.state.buttons.map { $0.identifier?.rawValue } == ["state.retry"])
 }
 
-@Test func readFailedCatalogKeysHaveEnglishAndChinese() throws {
+@Test(.timeLimit(.minutes(2))) func readFailedCatalogKeysHaveEnglishAndChinese() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))

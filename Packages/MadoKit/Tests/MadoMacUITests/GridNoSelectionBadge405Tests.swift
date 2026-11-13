@@ -135,7 +135,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
 }
 
 // The deviation, pinned both ways: page 32 does draw the badge, and the native cell does not.
-@Test @MainActor func issue405Page32DrawsBadgeButNativeCellOmitsItByOwnerDecision() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405Page32DrawsBadgeButNativeCellOmitsItByOwnerDecision() throws {
     let page32 = try PinnedDesign.page("grid-multiselect")
     #expect(page32.classCount("is-selected") == 3, "page 32 has three selected cells")
     #expect(try page32.raw(gridBadgeSelector, "content", viewport: 1280) == "\"✓\"", "page 32 draws ✓ per selected cell")
@@ -177,7 +177,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
     }
 }
 
-@Test @MainActor func issue405SelectionCountWalkNeverRendersBadge() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405SelectionCountWalkNeverRendersBadge() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let (grid, window, entries, root, folder) = badgeGrid(6, folderName: "mado-405-walk")
         _ = window
@@ -214,7 +214,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
     }
 }
 
-@Test @MainActor func issue405ReloadedAndRedisplayedCellsStayBadgeFree() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405ReloadedAndRedisplayedCellsStayBadgeFree() throws {
     let (grid, window, entries, root, folder) = badgeGrid(3, folderName: "mado-405-reuse")
     _ = window
     grid.appearance = NSAppearance(named: .aqua)
@@ -259,7 +259,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
     try check("reused down to 0")
 }
 
-@Test @MainActor func issue405ExhaustiveCellStateDomainHasNoBadge() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405ExhaustiveCellStateDomainHasNoBadge() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-405-domain")
     let entry = FolderEntry(url: folder.appendingPathComponent("DSC_0342.jpg"),
@@ -289,7 +289,7 @@ func gridSelectedCheckFill(_ appearance: NSAppearance.Name) throws -> PinnedDesi
     }
 }
 
-@Test @MainActor func issue405SelectedCellKeepsPinnedOutlineAndNameRow() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405SelectedCellKeepsPinnedOutlineAndNameRow() throws {
     for (page, appearance) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         let cell = GridPhotoItem()

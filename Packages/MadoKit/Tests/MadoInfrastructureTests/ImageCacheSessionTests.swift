@@ -34,7 +34,7 @@ private struct CacheDelayedPipeline: ImagePipeline {
 }
 
 @Suite @MainActor struct ImageCacheSessionTests {
-    @Test func cacheWarmXtoYtoXAndSecondSession() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheWarmXtoYtoXAndSecondSession() async throws {
         let decoder = CacheCountingDecoder(), cache = ImageMemoryCache(capacity: 16_000_000)
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache), access = CacheLeases()
         let a = ViewerSession(), b = ViewerSession(), ah = CacheHost(), bh = CacheHost()

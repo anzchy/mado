@@ -15,7 +15,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
 
 /// search-empty.html `.empty-state`, `h2`, `p`, `.mock-actions`, `.mock-primary`;
 /// `.grid-bottom-bar` and `.grid-file-status`. grid-dark.html supplies dark tokens.
-@Test @MainActor func page23GeometryTypographyAndResolvedColorsFollowPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page23GeometryTypographyAndResolvedColorsFollowPinnedCSS() throws {
     _ = NSApplication.shared
     let light = try PinnedDesign.page("search-empty")
     let dark = try PinnedDesign.page("grid-dark")
@@ -80,7 +80,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     }
 }
 
-@Test @MainActor func issue314BottomBarFillRuleAndLiveReduceTransparencyMatchPinnedPages() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue314BottomBarFillRuleAndLiveReduceTransparencyMatchPinnedPages() throws {
     _ = NSApplication.shared
     for (pageName, appearanceName) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(pageName)
@@ -117,7 +117,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     }
 }
 
-@Test @MainActor func issue314OverrideRestylesFooterImmediately() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue314OverrideRestylesFooterImmediately() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -136,7 +136,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
 /// 7px only at max-width:480px), `.grid-toolbar-tools` (6px gap;
 /// 2px at max-width:800px), and primitives.css `.ds-icon-button` (30x28).
 /// search-empty.html `.empty-state` and its h2/p/.mock-primary rules.
-@Test @MainActor func pinnedSearchFooterFramesAndPage23AtBothSizesAndAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func pinnedSearchFooterFramesAndPage23AtBothSizesAndAppearances() throws {
     _ = NSApplication.shared
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let design = try PinnedDesign.page(appearance == .darkAqua ? "grid-dark" : "grid-light")
@@ -206,7 +206,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
 
 /// grid-light.html `.grid-bottom-bar` switches to 7px only at
 /// `@media (max-width:480px)`; its tools keep the `max-width:800px` 2px gap.
-@Test @MainActor func pinnedFooterUsesNarrowMediaInsetAt480Points() {
+@Test(.timeLimit(.minutes(2))) @MainActor func pinnedFooterUsesNarrowMediaInsetAt480Points() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 480, height: 680),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -218,7 +218,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(shell.searchField.frame.maxX + 2 == shell.sortButton.frame.minX)
 }
 
-@Test @MainActor func issue215SearchFieldKeepsReadableFloorAtNarrowWidths() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue215SearchFieldKeepsReadableFloorAtNarrowWidths() {
     _ = NSApplication.shared
     for width in [238.0, 480.0] {
         let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: width, height: 680),
@@ -237,7 +237,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     }
 }
 
-@Test @MainActor func issue136Combo2FooterTabTargetsFollowVisibleKeyLoop() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136Combo2FooterTabTargetsFollowVisibleKeyLoop() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 765, height: 600),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -266,7 +266,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(shell.adjacentFooterKeyView(to: anchor, reverse: false) == nil)
 }
 
-@Test @MainActor func issue136TiledGridFooterUsesPinnedSearchAndSortFrames() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136TiledGridFooterUsesPinnedSearchAndSortFrames() throws {
     _ = NSApplication.shared
     for shellWidth in [765.0, 1060.0] {
         let design = try PinnedDesign.page("grid-light")
@@ -284,7 +284,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     }
 }
 
-@Test @MainActor func gridFooterSearchSortAndEmptyStateFitCompactViewport() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridFooterSearchSortAndEmptyStateFitCompactViewport() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -340,7 +340,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(shell.searchField.isEnabled)
 }
 
-@Test @MainActor func nativeSearchClearAndReadingStateKeepFieldAndResultsInStep() {
+@Test(.timeLimit(.minutes(2))) @MainActor func nativeSearchClearAndReadingStateKeepFieldAndResultsInStep() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -356,7 +356,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(shell.searchField.isEnabled == false)
 }
 
-@Test @MainActor func searchFieldNativeActionAndClickOutsideCollapse() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func searchFieldNativeActionAndClickOutsideCollapse() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 680),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -384,7 +384,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(shell.searchField.isHidden && !shell.searchButton.isHidden)
 }
 
-@Test @MainActor func footerSortActionsUseFolderMenuActionsAndReflectCurrentConditions() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func footerSortActionsUseFolderMenuActionsAndReflectCurrentConditions() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -404,7 +404,7 @@ private func expectPinnedColor(_ actual: NSColor?, _ expected: PinnedDesign.Colo
     #expect(chosen == .sort(.size))
 }
 
-@Test @MainActor func gridCurrentItemSetterKeepsVisibleIdentityOrFallsBack() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCurrentItemSetterKeepsVisibleIdentityOrFallsBack() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-current-search")
     let rootID = AccessRootID(rawValue: UUID())

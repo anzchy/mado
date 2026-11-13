@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func latestSearchProjectionWinsAndCancelSuppressesOldResult() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func latestSearchProjectionWinsAndCancelSuppressesOldResult() async throws {
     let folder = URL(fileURLWithPath: "/tmp/mado-search-scheduler")
     let rootID = AccessRootID(rawValue: UUID())
     let root = ItemIdentityRoot(id: rootID, url: folder)

@@ -25,7 +25,7 @@ private actor FirstDetailPipeline: ImagePipeline {
                             revision: pixels.revision, itemID: pixels.itemID)
     }
 }
-@MainActor @Test(arguments: [4000, 256])
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [4000, 256])
 func loadFirstDetailIsRequiredEvenWhenPreviewCoversViewport(sourceEdge: Int) async {
     let session = ViewerSession(), host = LoadHost(), access = LoadLeases()
     let pipeline = FirstDetailPipeline(sourceEdge: sourceEdge)

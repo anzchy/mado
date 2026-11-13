@@ -140,7 +140,7 @@ private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, ro
     }
 }
 
-@MainActor @Test func inputAdmissionScopeHeadersAndLeaseConservation() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionScopeHeadersAndLeaseConservation() async throws {
     for root in [nil, AccessRootID()] {
         for outcome in 0...4 {
             let access = InputLeases(), pipeline = InputPipeline(), intent = AccessIntent()
@@ -171,7 +171,7 @@ private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, ro
     #expect(await pipeline.headers.isEmpty == true)
 }
 
-@MainActor @Test func inputAdmissionUnsupportedPreservesEveryStateAndExistingOpening() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionUnsupportedPreservesEveryStateAndExistingOpening() async throws {
     for state in 0...3 {
         let host = InputHost(), intent = AccessIntent()
         let gate = InputGate()
@@ -212,7 +212,7 @@ private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, ro
     }
 }
 
-@MainActor @Test func inputAdmissionCorruptReplacesShowingImage() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionCorruptReplacesShowingImage() async {
     let host = InputHost(), intent = AccessIntent()
     host.openInputImage(inputA, accessRequest: nil)
     await host.session.imageLoader.loadTask?.value
@@ -229,7 +229,7 @@ private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, ro
     await host.finish()
 }
 
-@MainActor @Test func inputAdmissionRejectedHasNoIOOrStateChange() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionRejectedHasNoIOOrStateChange() async {
     for showing in [false, true] {
         let host = InputHost(), intent = AccessIntent()
         if showing { host.openInputImage(inputA, accessRequest: nil); await host.session.imageLoader.loadTask?.value }
@@ -250,7 +250,7 @@ private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, ro
     }
 }
 
-@MainActor @Test func inputAdmissionStaleErrorsAndLifecycleNeverAct() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionStaleErrorsAndLifecycleNeverAct() async {
     for stage in ["root", "acquire", "header", "release"] {
         for failure in 0...3 {
             for transition in ["new", "rejected", "close", "recent", "folder", "cancel"] {

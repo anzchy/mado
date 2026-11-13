@@ -30,7 +30,7 @@ private actor FolderAuthorityBarrier {
     }
 }
 
-@Test @MainActor func folderAuthorityTracksAccessInputAndOriginIndependently() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderAuthorityTracksAccessInputAndOriginIndependently() async {
     let accessIntent = AccessIntent(), inputIntent = AccessIntent(), originBarrier = FolderAuthorityBarrier()
     let access = accessIntent.current, input = inputIntent.current
     let origin = Task { await originBarrier.hold() }
@@ -54,7 +54,7 @@ private actor FolderAuthorityBarrier {
     await originBarrier.finish(); await origin.value
 }
 
-@Test(arguments: ["first", "pending", "empty"])
+@Test(.timeLimit(.minutes(2)), arguments: ["first", "pending", "empty"])
 @MainActor func folderAuthorityNewInputBlocksOldAutomaticEffects(effect: String) async throws {
     let fixture = FolderScanFixture(), host = FolderAuthorityHost()
     let accessIntent = AccessIntent(), inputIntent = AccessIntent(), originBarrier = FolderAuthorityBarrier()
@@ -84,7 +84,7 @@ private actor FolderAuthorityBarrier {
     await originBarrier.finish(); await origin.value
 }
 
-@Test @MainActor func folderAuthorityNewInputDuringRememberPreventsCommitAndOpen() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderAuthorityNewInputDuringRememberPreventsCommitAndOpen() async throws {
     let fixture = FolderScanFixture(), host = FolderAuthorityHost(), trace = FolderFixTrace()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
     let accessIntent = AccessIntent(), inputIntent = AccessIntent()

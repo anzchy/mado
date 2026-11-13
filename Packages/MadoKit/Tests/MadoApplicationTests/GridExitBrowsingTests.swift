@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@Test @MainActor func openingIndependentImageLeavesGridBrowsingState() {
+@Test(.timeLimit(.minutes(2))) @MainActor func openingIndependentImageLeavesGridBrowsingState() {
     let id = ItemID.ephemeral(UUID())
     let session = ViewerSession()
     session.beginBrowsing(items: [id], sourceVersion: .init(3), scrollAnchor: id)

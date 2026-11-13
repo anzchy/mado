@@ -12,7 +12,7 @@ import MadoCore
 }
 
 @Suite @MainActor struct FolderOpenFirstByNameTests {
-    @Test func folderOpenWaitsForCompletionThenOpensNameFirst() async throws {
+    @Test(.timeLimit(.minutes(2))) func folderOpenWaitsForCompletionThenOpensNameFirst() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -40,7 +40,7 @@ import MadoCore
         #expect(await fixture.access.balance == [1, 1])
     }
 
-    @Test func inputOpenPublishesInputImmediatelyAndNeverChoosesFolderFirst() async throws {
+    @Test(.timeLimit(.minutes(2))) func inputOpenPublishesInputImmediatelyAndNeverChoosesFolderFirst() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let input = fixture.folder.appendingPathComponent("img-0040.png")
@@ -61,7 +61,7 @@ import MadoCore
         #expect(await fixture.access.balance == [1, 1])
     }
 
-    @Test func emptyFolderShowsEmptyOnlyAfterCompletion() async throws {
+    @Test(.timeLimit(.minutes(2))) func emptyFolderShowsEmptyOnlyAfterCompletion() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -78,7 +78,7 @@ import MadoCore
         #expect(await fixture.access.balance == [1, 1])
     }
 
-    @Test func cancelDuringReadingRejectsLateCompletion() async throws {
+    @Test(.timeLimit(.minutes(2))) func cancelDuringReadingRejectsLateCompletion() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -95,7 +95,7 @@ import MadoCore
         #expect(await fixture.access.balance == [1, 1])
     }
 
-    @Test func failureAfterBatchKeepsPartialSnapshotWithoutOpening() async throws {
+    @Test(.timeLimit(.minutes(2))) func failureAfterBatchKeepsPartialSnapshotWithoutOpening() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -112,7 +112,7 @@ import MadoCore
         #expect(await fixture.access.balance == [1, 1])
     }
 
-    @Test func supersededFolderScanCannotOpenAfterCompletion() async throws {
+    @Test(.timeLimit(.minutes(2))) func supersededFolderScanCannotOpenAfterCompletion() async throws {
         let fixture = FolderScanFixture(), host = FolderOpenFirstByNameHost()
         fixture.coordinator.host = host
         let old = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)

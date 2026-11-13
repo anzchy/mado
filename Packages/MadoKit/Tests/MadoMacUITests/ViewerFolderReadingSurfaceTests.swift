@@ -14,7 +14,7 @@ private actor ReadingSurfaceScanner: FolderScanning {
     func finish() { end?.resume(); end = nil }
 }
 
-@Test @MainActor func viewerFolderFixOpaqueReadingSurfaceAndRestoration() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerFolderFixOpaqueReadingSurfaceAndRestoration() async throws {
     for theme in DesignTheme.allCases {
         for priorImage in [false, true] {
             let scene = StatesScene(), pipeline = StatesPipeline(), leases = StatesLeases(), scanner = ReadingSurfaceScanner()

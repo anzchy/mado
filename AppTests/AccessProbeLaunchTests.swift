@@ -5,7 +5,7 @@ import Testing
 #if DEBUG
 @MainActor
 struct AccessProbeLaunchTests {
-    @Test func runsOnlyWithExplicitLaunchArgument() {
+    @Test(.timeLimit(.minutes(3))) func runsOnlyWithExplicitLaunchArgument() {
         var runCount = 0
         let normal = AccessProbeRunner.runIfRequested(arguments: ["Mado"], runProbe: {
             runCount += 1
@@ -27,7 +27,7 @@ struct AccessProbeLaunchTests {
         #expect(runCount == 1)
     }
 
-    @Test func probeAppLifecycleNeverTouchesProductState() {
+    @Test(.timeLimit(.minutes(3))) func probeAppLifecycleNeverTouchesProductState() {
         var probeRunCount = 0
         var terminationCount = 0
         var accessServicesConstructionCount = 0
@@ -56,13 +56,13 @@ struct AccessProbeLaunchTests {
         #expect(!events.contains(.openURL))
     }
 
-    @Test func resultsLogUsesFixedMarkerInsteadOfContainerPath() {
+    @Test(.timeLimit(.minutes(3))) func resultsLogUsesFixedMarkerInsteadOfContainerPath() {
         let output = URL(fileURLWithPath: "/Users/example/Library/Containers/example/results.jsonl")
 
         #expect(AccessProbeRunner.resultsLogMessage(for: output) == "AccessProbe results ready")
     }
 
-    @Test func collectsSequentialFolderPicksUntilCancel() {
+    @Test(.timeLimit(.minutes(3))) func collectsSequentialFolderPicksUntilCancel() {
         let first = URL(fileURLWithPath: "/Volumes/A/One", isDirectory: true)
         let second = URL(fileURLWithPath: "/Volumes/B/Two", isDirectory: true)
         var picks: [URL?] = [first, second, nil]
@@ -77,7 +77,7 @@ struct AccessProbeLaunchTests {
         #expect(pickCount == 3)
     }
 
-    @Test func storesBothBookmarkKindsAndWritesJSONLOnEveryRun() throws {
+    @Test(.timeLimit(.minutes(3))) func storesBothBookmarkKindsAndWritesJSONLOnEveryRun() throws {
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? fileManager.removeItem(at: root) }

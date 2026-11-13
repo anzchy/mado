@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func cancelReadingTargetsFolderNavigatedViewerImageOnce() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingTargetsFolderNavigatedViewerImageOnce() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
@@ -61,7 +61,7 @@ import MadoCore
     return (fixture, host, session, task)
 }
 
-@Test @MainActor func cancelReadingRestoresPreviewAndFolderSource() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cancelReadingRestoresPreviewAndFolderSource() async throws {
     let router = CommandRouter()
 
     // (a) Previewing b from a grid → Cancel shows b again; Esc still returns to the origin grid.

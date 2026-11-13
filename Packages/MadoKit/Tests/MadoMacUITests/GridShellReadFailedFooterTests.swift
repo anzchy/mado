@@ -35,7 +35,7 @@ import MadoApplication
     try #require(readFailedFind(GridSidebarFolderButton.self, in: shell.folderTree) { $0.folderURL == url })
 }
 
-@Test(arguments: [(1280, 772, nil), (1280, 772, 7), (800, 680, nil)] as [(Int, Int, Int?)])
+@Test(.timeLimit(.minutes(2)), arguments: [(1280, 772, nil), (1280, 772, 7), (800, 680, nil)] as [(Int, Int, Int?)])
 @MainActor func gridShellReadFailedFooterAndSidebarDash(width: Int, height: Int, current: Int?) throws {
     let (window, shell, folder, child) = readFailedShell(width: CGFloat(width), height: CGFloat(height), current: current)
     defer { window.close() }
@@ -52,7 +52,7 @@ import MadoApplication
     #expect(try readFailedRow(shell, child).countLabel.stringValue == "4")
 }
 
-@Test @MainActor func gridShellReadFailedDisablesSearchSortInfoOnly() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridShellReadFailedDisablesSearchSortInfoOnly() throws {
     let (window, shell, _, child) = readFailedShell()
     defer { window.close() }
     shell.setFooterActionsEnabled(true)
@@ -73,7 +73,7 @@ import MadoApplication
 
 enum GridFooterMode: CaseIterable, Sendable { case normal, reading, failed }
 
-@Test @MainActor func gridShellStatusTransitionsRestoreStoredFooter() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridShellStatusTransitionsRestoreStoredFooter() throws {
     let modes = GridFooterMode.allCases
     let sequences = modes.flatMap { a in modes.map { [a, $0] } } + modes.flatMap { a in modes.flatMap { b in modes.map { [a, b, $0] } } }
     for (index, sequence) in sequences.enumerated() {

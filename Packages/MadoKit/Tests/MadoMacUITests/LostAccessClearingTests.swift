@@ -5,7 +5,7 @@ import MadoApplication
 import MadoInfrastructure
 @testable import MadoMacUI
 
-@MainActor @Test func t229ClearingGridAndTreeRemovesPrivateSelectionRowsAndAccessibility() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229ClearingGridAndTreeRemovesPrivateSelectionRowsAndAccessibility() throws {
     _ = NSApplication.shared
     let snapshot = pinningSnapshot(count: 2, names: ["private-one.png", "private-two.png"])
     let grid = GridBrowserView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
@@ -32,7 +32,7 @@ import MadoInfrastructure
     #expect(tree.rows.isEmpty && grid.displayedItemIDs.isEmpty)
 }
 
-@MainActor @Test func t229LostPageTwoActionFocusOrderSurvivesSidebarToggle() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229LostPageTwoActionFocusOrderSurvivesSidebarToggle() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
         styleMask: [.titled], backing: .buffered, defer: false)
@@ -65,7 +65,7 @@ import MadoInfrastructure
     #expect(window.firstResponder !== page.reselectButton)
 }
 
-@MainActor @Test func t229LostAccessSearchClearingErasesRetainedAccessibilityValues() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229LostAccessSearchClearingErasesRetainedAccessibilityValues() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 680),
         preferencesStore: InMemoryDisplayPreferencesStore())

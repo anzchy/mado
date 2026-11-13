@@ -20,7 +20,7 @@ final class DecodeCounter: ImageDecoding, @unchecked Sendable {
         return try TinyDecoder().decode(request)
     }
 }
-@Test func oversizeHeaderNeverReachesPixelDecoder() async {
+@Test(.timeLimit(.minutes(2))) func oversizeHeaderNeverReachesPixelDecoder() async {
     let decoder = DecodeCounter()
     let pipeline = ImageIOPipeline(decoder: decoder)
     await #expect(performing: {
@@ -34,7 +34,7 @@ func rgba(_ image: CGImage) throws -> [UInt8] {
     context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
     return Array(UnsafeBufferPointer(start: context.data!.assumingMemoryBound(to: UInt8.self), count: image.width * image.height * 4))
 }
-@Test func realFixturesHaveIdenticalUprightPixelsAndPreserveAlpha() async throws {
+@Test(.timeLimit(.minutes(2))) func realFixturesHaveIdenticalUprightPixelsAndPreserveAlpha() async throws {
     let pipeline = ImageIOPipeline()
     var reference: [UInt8] = []
     for orientation in 1...8 {
@@ -58,7 +58,7 @@ func rgba(_ image: CGImage) throws -> [UInt8] {
         #expect(partial.image.width <= 64 && partial.image.height <= 48)
     } catch { #expect((error as? ImageLoadError)?.kind == .corruptImage) }
 }
-@Test func selfEncodedJPEGAndHEICDecodeAtRequestedSize() async throws {
+@Test(.timeLimit(.minutes(2))) func selfEncodedJPEGAndHEICDecodeAtRequestedSize() async throws {
     let context = try #require(CGContext(data: nil, width: 64, height: 32, bitsPerComponent: 8, bytesPerRow: 256,
         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
     context.setFillColor(CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1))
@@ -76,7 +76,7 @@ func rgba(_ image: CGImage) throws -> [UInt8] {
     }
 }
 
-@Test func embeddedJPEGPreviewDoesNotReplaceSmallViewportDetail() async throws {
+@Test(.timeLimit(.minutes(2))) func embeddedJPEGPreviewDoesNotReplaceSmallViewportDetail() async throws {
     let context = try #require(CGContext(data: nil, width: 2000, height: 1500, bitsPerComponent: 8, bytesPerRow: 8000,
         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
     context.setFillColor(CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1))
@@ -97,7 +97,7 @@ func rgba(_ image: CGImage) throws -> [UInt8] {
     #expect(smaller.image.width == 320)
 }
 
-@Test func previewWithoutEmbeddedThumbnailDecodesSourcePixels() async throws {
+@Test(.timeLimit(.minutes(2))) func previewWithoutEmbeddedThumbnailDecodesSourcePixels() async throws {
     let pipeline = ImageIOPipeline()
     let oriented = try await pipeline.image(for: ImageDecodeRequest(fileURL: fixture("orientation-6.tiff"),
         maximumPixelSize: 128, isPreview: true))
@@ -107,7 +107,7 @@ func rgba(_ image: CGImage) throws -> [UInt8] {
     #expect(try rgba(alpha.image)[3] == 0)
 }
 
-@Test func tinyAndTruncatedPreviewsRemainBoundedOrFailCleanly() async throws {
+@Test(.timeLimit(.minutes(2))) func tinyAndTruncatedPreviewsRemainBoundedOrFailCleanly() async throws {
     for name in ["alpha-gradient.png", "truncated.png"] {
         for maximum in [1, 8, 128, 512] {
             do {

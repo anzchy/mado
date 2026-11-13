@@ -19,7 +19,7 @@ private actor SmallTierPipeline: ImagePipeline {
         return loadImage(request.renderKey!, edge: 160)
     }
 }
-@MainActor @Test func loadTiersNeverRepeatDeliveredRequestWhenDecoderReturnsSmallerPixels() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadTiersNeverRepeatDeliveredRequestWhenDecoderReturnsSmallerPixels() async {
     let pipeline = SmallTierPipeline(), session = ViewerSession(), access = LoadLeases(), host = LoadHost()
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/small-tier.png")

@@ -15,7 +15,7 @@ private let i315Missing = URL(fileURLWithPath: "/mado-i315-missing.jpg")
     return view
 }
 
-@Test @MainActor func i315WallReplacesPrintsAndStack() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallReplacesPrintsAndStack() throws {
     let scene = StatesScene(width: 960)
     defer { scene.window.close() }
     scene.state.display(.empty)
@@ -33,7 +33,7 @@ private let i315Missing = URL(fileURLWithPath: "/mado-i315-missing.jpg")
     #expect(names.contains("first-launch.wall.scrim"))
 }
 
-@Test @MainActor func i315WallTilesUseOnlyBundledSamplesWithDistinctNeighbours() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallTilesUseOnlyBundledSamplesWithDistinctNeighbours() async throws {
     let pinned = try PinnedDesign.page("first-launch")
     let count = try pinned.childCount(tag: "img", inClass: "tiles")
     #expect(count > 0 && count % 6 == 0)
@@ -86,7 +86,7 @@ private let i315Missing = URL(fileURLWithPath: "/mado-i315-missing.jpg")
     }
 }
 
-@Test @MainActor func i315WallHidesOnlyFailedSampleTiles() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallHidesOnlyFailedSampleTiles() async throws {
     for failing in ["gate", "alley"] {
         var urls: [String: URL] = [:]
         for name in i315Samples { urls[name] = name == failing ? i315Missing : FirstLaunchView.sampleURL(name: name) }
@@ -105,7 +105,7 @@ private let i315Missing = URL(fileURLWithPath: "/mado-i315-missing.jpg")
     }
 }
 
-@Test @MainActor func i315WallShowsNoTilesWhenEverySampleFails() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallShowsNoTilesWhenEverySampleFails() async throws {
     let reference = try await i315Launch(nil)
     let expectedFrames = reference.semanticViews.map(\.frame)
     let allMissing = Dictionary(uniqueKeysWithValues: i315Samples.map { ($0, i315Missing) })
@@ -144,7 +144,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     abs(a.red - b.red) <= rgb && abs(a.green - b.green) <= rgb && abs(a.blue - b.blue) <= rgb && abs(a.alpha - b.alpha) <= alpha
 }
 
-@Test @MainActor func i315WallFrameFillsContentBelowTitleBar() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallFrameFillsContentBelowTitleBar() throws {
     let pinned = try PinnedDesign.page("first-launch")
     for size in [NSSize(width: 960, height: 640), NSSize(width: 800, height: 680), NSSize(width: 1440, height: 900)] {
         let (scene, home) = try i315Scene(size)
@@ -160,7 +160,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test func i315WallLayoutGeometryLawHoldsAcrossSizes() throws {
+@Test(.timeLimit(.minutes(2))) func i315WallLayoutGeometryLawHoldsAcrossSizes() throws {
     let pinned = try PinnedDesign.page("first-launch")
     let selector = ".wall .tiles"
     let columns = try pinned.gridColumns(selector)
@@ -221,7 +221,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315RenderedWallTilesFollowLayoutTiltAndOffset() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315RenderedWallTilesFollowLayoutTiltAndOffset() throws {
     let pinned = try PinnedDesign.page("first-launch")
     let tilt = CGFloat(-(try pinned.rotationDegrees(".wall .tiles")))
     let offset = CGFloat(try pinned.translateY(".wall .tiles>:nth-child(2n)"))
@@ -262,7 +262,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315WallRelayoutsOnResize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallRelayoutsOnResize() throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     var boxes: [NSRect] = []
@@ -289,7 +289,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     #expect(boxes.count == 3 && boxes[1].width != boxes[0].width, "stale geometry would pass: \(boxes)")
 }
 
-@Test @MainActor func i315DecodedContentsSurviveResizeAndThemeChange() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DecodedContentsSurviveResizeAndThemeChange() async throws {
     for failing in [nil, "gate"] as [String?] {
         var urls: [String: URL]?
         if let failing {
@@ -331,7 +331,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315WallOpacityFollowsThemeToken() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallOpacityFollowsThemeToken() throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
@@ -347,7 +347,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315OnlyTilesLayerCarriesWallOpacity() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315OnlyTilesLayerCarriesWallOpacity() async throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
@@ -377,7 +377,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315WallTileRadiusRingAndShadowFollowThemeShadowSoft() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallTileRadiusRingAndShadowFollowThemeShadowSoft() throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
@@ -417,7 +417,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
 
 /// Audit M2: `--shadow-soft`'s first layer is an outer zero-blur spread, so the ring lies outside the image
 /// (from its edge out by the spread, at radius + spread); a CALayer border on the image would cover its edge.
-@Test @MainActor func i315WallTileRingSitsOutsideImageBounds() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallTileRingSitsOutsideImageBounds() throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
@@ -450,7 +450,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
 
 // MARK: - WI-3 drop outline inset and centre placement (pinned page 21)
 
-@Test @MainActor func i315DropOutlineInsetsContentByPinnedInset() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DropOutlineInsetsContentByPinnedInset() throws {
     let pinned = try PinnedDesign.page("first-launch")
     for size in [NSSize(width: 960, height: 640), NSSize(width: 800, height: 680), NSSize(width: 1440, height: 900)] {
         let (scene, home) = try i315Scene(size)
@@ -478,7 +478,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
     }
 }
 
-@Test @MainActor func i315CentreGroupCentresOnContentMidpoint() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315CentreGroupCentresOnContentMidpoint() throws {
     let pinned = try PinnedDesign.page("first-launch")
     let fixtureRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("B4PinnedDesign")
     let b4 = try PinnedDesign.page("b4-first-launch", source: fixtureRoot.appendingPathComponent("a/b/c/d/source.swift").path)
@@ -512,7 +512,7 @@ private func i315Close(_ a: PinnedDesign.Color, _ b: PinnedDesign.Color, rgb: Do
 
 /// #441: with the chips row gone, the hint and the button keep re-pinned page 21's positions, measured from the
 /// content top (the native title bar strip is the contract's exception), in both appearances, idle and dragging.
-@Test @MainActor func i441CentreKeepsPinnedPositionsAt1280x800() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i441CentreKeepsPinnedPositionsAt1280x800() throws {
     let pinned = try PinnedDesign.page("first-launch")
     let viewport: Double = 1280
     let titleBar = try pinned.length(":root", "--title-bar-height", viewport: viewport)
@@ -563,7 +563,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     return CGFloat(try #require(Double(value), "'.is-drag-over .wall' opacity '\(value)'"))
 }
 
-@Test @MainActor func i315DragSequencesRoundTripToIdleAndActive() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DragSequencesRoundTripToIdleAndActive() async throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     try await waitForSamples(home)
@@ -617,7 +617,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     }
 }
 
-@Test @MainActor func i315DecodeFinishingDuringDragKeepsActivePresentation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DecodeFinishingDuringDragKeepsActivePresentation() async throws {
     let pinned = try PinnedDesign.page("first-launch")
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
@@ -647,7 +647,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     #expect(try wallPresentation(home) == wallPresentation(freshHome), "idle after a drag that spanned decode")
 }
 
-@Test @MainActor func i315DragActiveValuesComeFromPinnedPage() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DragActiveValuesComeFromPinnedPage() throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let dragAlpha = try i315DragWallAlpha()
@@ -690,7 +690,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     }
 }
 
-@Test @MainActor func i315WallFadeUsesFastMotionDurationUnlessReduceMotion() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallFadeUsesFastMotionDurationUnlessReduceMotion() throws {
     let pinned = try PinnedDesign.page("first-launch")
     let fast = try PinnedDesign.seconds(pinned.rootToken("--motion-duration-fast"))
     #expect(fast > 0)
@@ -722,7 +722,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     }
 }
 
-@Test @MainActor func i315ReduceTransparencyDragHidesWallAndUsesOpaqueDropFill() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315ReduceTransparencyDragHidesWallAndUsesOpaqueDropFill() throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     home.pinAccessibility(reduceTransparency: true)
@@ -745,7 +745,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     }
 }
 
-@Test @MainActor func i315LiveAccessibilityChangeRestylesWallDuringDrag() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315LiveAccessibilityChangeRestylesWallDuringDrag() throws {
     let dragAlpha = try i315DragWallAlpha()
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
@@ -770,7 +770,7 @@ private func i315DragWallAlpha() throws -> CGFloat {
     #expect(heading.stringValue == "Release to open")
 }
 
-@Test @MainActor func i315DropViewLifecycleDrivesWallThroughHost() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315DropViewLifecycleDrivesWallThroughHost() async throws {
     let dragAlpha = try i315DragWallAlpha()
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
@@ -830,7 +830,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
     return [node.accessibilityIdentifier() ?? ""] + (node.accessibilityChildren() ?? []).flatMap { i315AXReachable($0, depth: depth + 1) }
 }
 
-@Test @MainActor func i315WallIsInvisibleToAccessibility() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallIsInvisibleToAccessibility() throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     let wall = try #require(wallView(home))
@@ -855,7 +855,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
     check("dark after drag")
 }
 
-@Test @MainActor func i315WallNeverInterceptsDragsOrClicks() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallNeverInterceptsDragsOrClicks() throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     let wall = try #require(wallView(home))
@@ -889,7 +889,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
 
 // MARK: - WI-6 the centre stays readable with the scrim behind it (pinned page 21)
 
-@Test @MainActor func i315CentreReadableAtSupportedSizes() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315CentreReadableAtSupportedSizes() throws {
     let sizes = [NSSize(width: 800, height: 680)]
         + generatedSizes(seed: 0x3156, count: 30, width: 800...2400, height: 680...1600)
     let scene = StatesScene(width: 960)
@@ -931,7 +931,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
     }
 }
 
-@Test @MainActor func i315ScrimSitsAboveTilesBelowCentre() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315ScrimSitsAboveTilesBelowCentre() throws {
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }
     let wall = try #require(wallView(home))
@@ -951,7 +951,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
     }
 }
 
-@Test @MainActor func i315ScrimColoursFollowPinnedRadialGradient() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315ScrimColoursFollowPinnedRadialGradient() throws {
     let light = try PinnedDesign.page("first-launch")
     let dark = try PinnedDesign.page("first-launch", appearance: "dark")
     let (scene, home) = try i315Scene()
@@ -980,7 +980,7 @@ private let i315AXChildren = ["first-launch.heading", "state.open", "first-launc
 
 // MARK: - Review M1: the fade runs from the alpha on screen to the drag target
 
-@Test @MainActor func i315WallFadeRunsFromPreviousAlphaToTarget() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315WallFadeRunsFromPreviousAlphaToTarget() throws {
     let dragAlpha = try i315DragWallAlpha()
     let (scene, home) = try i315Scene()
     defer { scene.window.close() }

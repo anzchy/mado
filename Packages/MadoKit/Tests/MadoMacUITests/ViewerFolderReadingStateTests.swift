@@ -63,7 +63,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     #expect(await scanner.callCount == 2)
 }
 
-@Test @MainActor func viewerFolderReadingStateRendersAndCancels() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerFolderReadingStateRendersAndCancels() async throws {
     let scene = StatesScene(), leases = FolderReadingNativeLeases(), scanner = FolderReadingNativeScanner()
     defer { scene.window.close() }
     let coordinator = FolderScanCoordinator(access: leases, scanner: scanner)
@@ -99,7 +99,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     }
 }
 
-@Test func viewerFolderReadingLocalizationExactValues() throws {
+@Test(.timeLimit(.minutes(2))) func viewerFolderReadingLocalizationExactValues() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))
@@ -121,7 +121,7 @@ private actor GenericFailureThenSuccessScanner: FolderScanning {
     }
 }
 
-@Test @MainActor func viewerNoMatchesStateOffersClearFilterAndDistinctEmptyState() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerNoMatchesStateOffersClearFilterAndDistinctEmptyState() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     scene.state.display(.noMatches)
@@ -142,7 +142,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     }
 }
 
-@Test @MainActor func viewerCompletedFolderCountUsesActualSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerCompletedFolderCountUsesActualSnapshot() async throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/native-folder/A")
@@ -156,7 +156,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     #expect(scene.chrome.position == "1 / 1")
 }
 
-@Test @MainActor func viewerImageFirstRescanShowsUnknownTotalAsReading() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerImageFirstRescanShowsUnknownTotalAsReading() async throws {
     let scene = StatesScene(), leases = FolderReadingNativeLeases(), scanner = FolderReadingNativeScanner()
     defer { scene.window.close() }
     let coordinator = FolderScanCoordinator(access: leases, scanner: scanner)
@@ -171,7 +171,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     #expect(await leases.balance == [1, 1])
 }
 
-@Test @MainActor func viewerFolderScanFailureShowsReadFailedPage() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerFolderScanFailureShowsReadFailedPage() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     scene.state.surface = .gridReading
@@ -183,7 +183,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     #expect(scene.state.isHidden == false)
 }
 
-@Test @MainActor func viewerNoMatchesClearButtonRestoresEligibleFolderSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerNoMatchesClearButtonRestoresEligibleFolderSnapshot() async throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let folder = URL(fileURLWithPath: "/native-folder/A")
@@ -202,7 +202,7 @@ private struct FolderNoMatchesScanner: FolderScanning {
     #expect(scene.session.imageStatus != .noMatches)
 }
 
-@Test func viewerFolderMenuAndNoMatchesCatalogIsBilingual() throws {
+@Test(.timeLimit(.minutes(2))) func viewerFolderMenuAndNoMatchesCatalogIsBilingual() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))

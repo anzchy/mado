@@ -64,7 +64,7 @@ private struct RemountFixture {
     }
 }
 
-@Test func t229R2SameObjectSurvivesChangedMountTokens() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2SameObjectSurvivesChangedMountTokens() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), files = try fixture.files(evidence)
     let id = try await files.grant(folder: fixture.root)
@@ -86,7 +86,7 @@ private struct RemountFixture {
     #expect(evidence.scopeCounts.0 == evidence.scopeCounts.1)
 }
 
-@Test(arguments: ["inode", "volume"])
+@Test(.timeLimit(.minutes(2)), arguments: ["inode", "volume"])
 func t229R2ChangedObjectStillRefusesRecovery(change: String) async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), files = try fixture.files(evidence)
@@ -98,7 +98,7 @@ func t229R2ChangedObjectStillRefusesRecovery(change: String) async throws {
     #expect(evidence.scopeCounts.0 == evidence.scopeCounts.1)
 }
 
-@Test func t229R2OfflineLaunchCannotInventRecoveryBaseline() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2OfflineLaunchCannotInventRecoveryBaseline() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence()
     let original = try fixture.files(evidence)
@@ -146,7 +146,7 @@ private final class OptionalRecoveryReader: FileIdentityResourceReading, @unchec
     }
 }
 
-@Test func t229R2MissingSessionProofCannotFallBackToMatchingOpaqueToken() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2MissingSessionProofCannotFallBackToMatchingOpaqueToken() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), reader = OptionalRecoveryReader(evidence)
     let files = try FileAccess(scope: evidence, bookmarks: evidence, store: fixture.store, buildSHA: "T229R2",
@@ -160,7 +160,7 @@ private final class OptionalRecoveryReader: FileIdentityResourceReading, @unchec
     #expect(result.rootURL == nil)
 }
 
-@Test func t229R2CapturedFolderRefusesDifferentInodeAtSamePath() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2CapturedFolderRefusesDifferentInodeAtSamePath() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence()
     let files = try FileAccess(scope: evidence, bookmarks: evidence, store: fixture.store, buildSHA: "T229R2",
@@ -178,7 +178,7 @@ private final class OptionalRecoveryReader: FileIdentityResourceReading, @unchec
     #expect(restored == nil)
 }
 
-@Test func t229R2ThrowingSessionProofCannotFallBackToMatchingOpaqueToken() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2ThrowingSessionProofCannotFallBackToMatchingOpaqueToken() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), reader = OptionalRecoveryReader(evidence)
     let files = try FileAccess(scope: evidence, bookmarks: evidence, store: fixture.store, buildSHA: "T229R2",
@@ -205,7 +205,7 @@ private final class ReplacementDuringCaptureReader: FileIdentityResourceReading,
     }
 }
 
-@Test func t229R2ReplacementDuringCaptureCannotEstablishItsOwnBaseline() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2ReplacementDuringCaptureCannotEstablishItsOwnBaseline() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence()
     let files = try FileAccess(scope: evidence, bookmarks: evidence, store: fixture.store, buildSHA: "T229R2",
@@ -218,7 +218,7 @@ private final class ReplacementDuringCaptureReader: FileIdentityResourceReading,
     #expect(result.rootURL == nil)
 }
 
-@Test func t229R2OnlineLaunchCapturesSessionProofBeforeLaterRemount() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2OnlineLaunchCapturesSessionProofBeforeLaterRemount() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), original = try fixture.files(evidence)
     let id = try await original.grant(folder: fixture.root)
@@ -234,7 +234,7 @@ private final class ReplacementDuringCaptureReader: FileIdentityResourceReading,
     #expect(evidence.scopeCounts.0 == evidence.scopeCounts.1)
 }
 
-@Test func t229R2LegacyWithoutInodeRetainsRawProofAndRejectsChangedObject() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2LegacyWithoutInodeRetainsRawProofAndRejectsChangedObject() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), unavailable = OptionalRecoveryReader(evidence)
     unavailable.becomeMissing()
@@ -271,7 +271,7 @@ private struct RemountStaleCodec: BookmarkCoding {
     }
 }
 
-@Test func t229R2StaleRefreshWithoutInodeUsesValidOpaqueProofAndInvalidatesOldFence() async throws {
+@Test(.timeLimit(.minutes(2))) func t229R2StaleRefreshWithoutInodeUsesValidOpaqueProofAndInvalidatesOldFence() async throws {
     let fixture = try RemountFixture(); defer { fixture.remove() }
     let evidence = RemountEvidence(), unavailable = OptionalRecoveryReader(evidence)
     unavailable.becomeMissing()

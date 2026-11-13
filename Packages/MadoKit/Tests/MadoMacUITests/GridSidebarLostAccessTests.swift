@@ -12,7 +12,7 @@ import MadoApplication
     #expect(abs(actual.alphaComponent - expected.alpha) < 0.01)
 }
 
-@Test(arguments: [NSAppearance.Name.aqua, .darkAqua]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [NSAppearance.Name.aqua, .darkAqua]) @MainActor
 func t232LostSidebarRowMatchesPermissionDeniedRenderedFrames(_ appearanceName: NSAppearance.Name) throws {
     _ = NSApplication.shared
     let page = try PinnedDesign.page("permission-denied", appearance: appearanceName == .aqua ? "light" : "dark")
@@ -73,7 +73,7 @@ func t232LostSidebarRowMatchesPermissionDeniedRenderedFrames(_ appearanceName: N
     #expect(!tree.rows[1].countLabel.isHidden)
 }
 
-@Test(arguments: [
+@Test(.timeLimit(.minutes(2)), arguments: [
     (AccessLossCause.accessExpired, "Access Has Expired"),
     (.diskNotConnected, "External Disk Is Not Connected"),
     (.notFound, "Not Found"),
@@ -99,7 +99,7 @@ func t232LostSidebarAccessibilityUsesPage26CauseCopy(_ sample: (cause: AccessLos
     #expect(row.countLabel.isHidden)
 }
 
-@Test @MainActor func t238LostUnreadSidebarRowKeepsLostAccessAccessibility() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t238LostUnreadSidebarRowKeepsLostAccessAccessibility() throws {
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
     let folder = URL(fileURLWithPath: "/tmp/Trip")
     tree.showsDashForCurrent = true
@@ -112,7 +112,7 @@ func t232LostSidebarAccessibilityUsesPage26CauseCopy(_ sample: (cause: AccessLos
     #expect(row.accessibilityHelp() == expected)
 }
 
-@Test @MainActor func t232NoncurrentLostRowUsesMutedWarning() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t232NoncurrentLostRowUsesMutedWarning() throws {
     let page = try PinnedDesign.page("permission-denied")
     let row = GridSidebarFolderButton(folder: .init(url: URL(fileURLWithPath: "/tmp/Trip"),
         accessLossCause: .unknown), depth: 0, current: false)
@@ -120,7 +120,7 @@ func t232LostSidebarAccessibilityUsesPage26CauseCopy(_ sample: (cause: AccessLos
         equals: page.color(".sidebar .ds-nav-row.is-unavailable svg", "color", viewport: 1280))
 }
 
-@Test func t232SidebarUnavailableCatalogHasPinnedChineseAndEnglishCopy() throws {
+@Test(.timeLimit(.minutes(2))) func t232SidebarUnavailableCatalogHasPinnedChineseAndEnglishCopy() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))

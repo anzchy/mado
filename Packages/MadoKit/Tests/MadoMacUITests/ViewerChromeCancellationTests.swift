@@ -29,7 +29,7 @@ private actor ChromeOpeningGate {
         .first { $0.accessibilityIdentifier() == "chrome.filename" })
 }
 
-@Test @MainActor func statesChromeCancelClearsLabelAcrossRefreshAndReopen() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesChromeCancelClearsLabelAcrossRefreshAndReopen() async throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let label = try filenameLabel(scene.chrome)
@@ -69,7 +69,7 @@ private actor ChromeOpeningGate {
     await reopened?.value
 }
 
-@Test @MainActor func statesChromeDeliveredCancellationAndDismissClearLabel() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesChromeDeliveredCancellationAndDismissClearLabel() async throws {
     let scene = StatesScene()
     let host = ChromeCancellationHost(scene.session)
     scene.session.imageLoader.host = host

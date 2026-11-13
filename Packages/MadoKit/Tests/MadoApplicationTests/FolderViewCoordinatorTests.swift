@@ -11,7 +11,7 @@ import MadoCore
     func clearFolderImageForNoMatches() { cleared += 1 }
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderViewSameExplicitInputRetryKeepsScanAndFilterAuthority(completed: Bool) async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     let accessIntent = AccessIntent(), operation = accessIntent.current
@@ -41,7 +41,7 @@ import MadoCore
     if !completed { await fixture.scanner.finish(); try await task.value }
 }
 
-@Test @MainActor func folderViewFiltersNavigationAndRestoresSource() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewFiltersNavigationAndRestoresSource() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost()
     let coordinator = fixture.coordinator
     coordinator.host = host
@@ -70,7 +70,7 @@ import MadoCore
     #expect(coordinator.sourceSnapshot?.entries.count == 3)
 }
 
-@Test @MainActor func folderViewOnlyWrapsCompleteMultiItemSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewOnlyWrapsCompleteMultiItemSnapshot() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     coordinator.host = host
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -96,7 +96,7 @@ import MadoCore
     #expect(host.opens.map(\.lastPathComponent) == ["b.png", "a.png"])
 }
 
-@Test @MainActor func folderViewLateBatchUsesLatestFilterAndNewFolderResetsConditions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewLateBatchUsesLatestFilterAndNewFolderResetsConditions() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     let session = ViewerSession()
     coordinator.host = host
@@ -123,7 +123,7 @@ import MadoCore
     #expect(host.opens.map(\.lastPathComponent) == ["b.PNG", "img2.jpg"])
 }
 
-@Test @MainActor func folderViewSessionControlsRespectFrozenPreviewAndReportNoMatches() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewSessionControlsRespectFrozenPreviewAndReportNoMatches() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     #expect(fixture.coordinator.availableExtensions.isEmpty)
     #expect(!session.hasFolderSource && session.folderAvailableExtensions.isEmpty)
@@ -154,7 +154,7 @@ import MadoCore
     #expect(fixture.coordinator.snapshot?.entries.count == 2)
 }
 
-@Test @MainActor func folderViewCompletedFolderWithExcludedEntriesClearsPriorPresentation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewCompletedFolderWithExcludedEntriesClearsPriorPresentation() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     coordinator.host = host
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -176,7 +176,7 @@ import MadoCore
     #expect(coordinator.isEmptyFolder && host.cleared == 1)
 }
 
-@Test @MainActor func folderViewFilterExcludesExplicitInputBeforeItsBatchArrives() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewFilterExcludesExplicitInputBeforeItsBatchArrives() async throws {
     let fixture = FolderScanFixture(), host = FolderViewTestHost(), coordinator = fixture.coordinator
     coordinator.host = host
     let input = fixture.folder.appendingPathComponent("late.jpg")
@@ -194,7 +194,7 @@ import MadoCore
     #expect(host.opens.map(\.lastPathComponent) == ["first.PNG"])
 }
 
-@Test @MainActor func folderViewNoMatchesDoesNotOverrideFrozenPreviewStatus() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewNoMatchesDoesNotOverrideFrozenPreviewStatus() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,
@@ -217,7 +217,7 @@ import MadoCore
     #expect(session.previewSet != nil && session.imageStatus != .noMatches)
 }
 
-@Test @MainActor func folderViewFilterReplacesAliasURLSharingEligibleIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewFilterReplacesAliasURLSharingEligibleIdentity() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -246,7 +246,7 @@ import MadoCore
     #expect(host.opens == [image])
 }
 
-@Test @MainActor func folderViewFailedImageNextSkipsExcludedEntries() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewFailedImageNextSkipsExcludedEntries() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession()
     host.hasImage = false; session.host = host; session.folderScan = fixture.coordinator
     fixture.coordinator.host = host
@@ -267,7 +267,7 @@ import MadoCore
 }
 
 // #345 replaces the former no-loop limitation; sort/filter controls still cannot change frozen membership/order.
-@Test @MainActor func folderViewControlsPreserveFrozenOrderAndShareLoopPreference() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderViewControlsPreserveFrozenOrderAndShareLoopPreference() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: host)
     session.folderScan = fixture.coordinator; fixture.coordinator.host = host
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id,

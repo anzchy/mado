@@ -83,7 +83,7 @@ import MadoInfrastructure
 }
 
 /// grid-light/grid-dark .ds-icon-button[aria-pressed="true"] · color/background.
-@Test @MainActor func issue406PressedSidebarToggleFollowsPinnedColorsThroughRoundTrip() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue406PressedSidebarToggleFollowsPinnedColorsThroughRoundTrip() throws {
     for (page, name) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         let (shell, window) = issue406Scene()
@@ -104,7 +104,7 @@ import MadoInfrastructure
 
 /// grid-light/grid-dark .keyboard-hint>span · margin-right, .grid-bottom-bar · gap,
 /// :root · --color-text, and .ds-keycap · color, with zh/en content-width fixtures.
-@Test @MainActor func issue406HintColorsAndGapSurviveLocaleResizeAndSearchRoundTrips() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue406HintColorsAndGapSurviveLocaleResizeAndSearchRoundTrips() throws {
     for (page, name) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         for text in ["Quick Look", "快速查看"] {
@@ -140,7 +140,7 @@ import MadoInfrastructure
 
 /// grid-light/grid-dark pressed toggle · color/background, inherited hint · color,
 /// .ds-keycap · color, and hint span margin-right + bottom-bar gap remain live.
-@Test @MainActor func issue406ExistingShellRestylesAcrossAppearanceRoundTrip() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue406ExistingShellRestylesAcrossAppearanceRoundTrip() throws {
     let (shell, window) = issue406Scene()
     defer { window.close() }
     let (hint, _, _) = try issue406Hint(shell)

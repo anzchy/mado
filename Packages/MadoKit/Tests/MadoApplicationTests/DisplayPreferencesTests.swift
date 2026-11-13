@@ -3,7 +3,7 @@ import Observation
 import Testing
 import MadoApplication
 
-@Test @MainActor func sessionSearchIsTransientPreferencesSharedAndRestored() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sessionSearchIsTransientPreferencesSharedAndRestored() throws {
     let store = InMemoryDisplayPreferencesStore()
     let first = ViewerSession(preferencesStore: store)
     let second = ViewerSession(preferencesStore: store)

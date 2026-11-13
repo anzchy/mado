@@ -11,7 +11,7 @@ import MadoCore
     func end(outcome: FolderScanOutcome, generation: UInt64) { events.append("\(outcome.rawValue)-\(generation)") }
 }
 
-@Test(arguments: [0, 1, 3])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 3])
 @MainActor func folderFixFailureKeepsPartialEndpointsRecoverable(count: Int) async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), trace = FolderFixTrace()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
@@ -46,7 +46,7 @@ import MadoCore
     session.closeImage()
 }
 
-@Test @MainActor func p204R3ImageFirstRetryKeepsInputAndViewingSurface() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R3ImageFirstRetryKeepsInputAndViewingSurface() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let coordinator = fixture.coordinator, session = ViewerSession(host: host)
     session.folderScan = coordinator; coordinator.host = host

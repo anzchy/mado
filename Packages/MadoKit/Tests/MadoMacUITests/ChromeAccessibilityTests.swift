@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeAccessibilityPressRoutesOnlyVisibleEnabledTools() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeAccessibilityPressRoutesOnlyVisibleEnabledTools() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     let session = ViewerSession(host: host)

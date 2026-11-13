@@ -20,7 +20,7 @@ import MadoCore
     #expect(record.createdAt == Date(timeIntervalSinceReferenceDate: 0))
 }
 
-@Test func p201CompatibilityLegacyReconnectDedupAndFreshInstancePreserveIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func p201CompatibilityLegacyReconnectDedupAndFreshInstancePreserveIdentity() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     try FileManager.default.createDirectory(at: f.store.url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let oldBookmark = Data(f.old.path.utf8)
@@ -51,7 +51,7 @@ import MadoCore
     #expect(scope.balanced)
 }
 
-@Test(arguments: ["absent", "valid", "corrupt"])
+@Test(.timeLimit(.minutes(2)), arguments: ["absent", "valid", "corrupt"])
 func p201CompatibilityRecoveryReconnectPreservesCorruptPrimaryAndFileGrants(recovery: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     try FileManager.default.createDirectory(at: f.store.url.deletingLastPathComponent(), withIntermediateDirectories: true)

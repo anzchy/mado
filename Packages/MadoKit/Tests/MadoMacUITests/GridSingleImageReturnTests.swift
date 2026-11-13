@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoMacUI
 
-@Test @MainActor func singleImageEscDestinationUsesRootIdentityAndCurrentWithoutSelection() {
+@Test(.timeLimit(.minutes(2))) @MainActor func singleImageEscDestinationUsesRootIdentityAndCurrentWithoutSelection() {
     _ = NSApplication.shared
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: URL(fileURLWithPath: "/authorized"))
     let file = root.url.appendingPathComponent("nested/image.jpg")

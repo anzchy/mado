@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func issue358HitTestKeepsFirstEligibleGroupResultIncludingNil() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue358HitTestKeepsFirstEligibleGroupResultIncludingNil() {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 640, height: 680), session: ViewerSession())
     let point = NSPoint(x: 70, y: 25)

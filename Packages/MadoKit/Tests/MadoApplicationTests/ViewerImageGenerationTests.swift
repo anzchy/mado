@@ -39,7 +39,7 @@ actor GenerationPipeline: ImagePipeline {
     }
     return session.imageLoader.loadTask
 }
-@MainActor @Test func loadGenerationsCThenBThenALastBalancesLeases() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadGenerationsCThenBThenALastBalancesLeases() async {
     let session = ViewerSession(), host = LoadHost(), pipeline = GenerationPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let a = generationOpen("A", session: session, pipeline: pipeline, access: access)
@@ -64,7 +64,7 @@ actor GenerationPipeline: ImagePipeline {
         for lease in tokens { #expect(released.filter { $0 == lease }.count == 1) }
     }
 }
-@MainActor @Test func loadGenerationsALandsBetweenBAndCAndCloseDropsPending() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadGenerationsALandsBetweenBAndCAndCloseDropsPending() async {
     let session = ViewerSession(), host = LoadHost(), pipeline = GenerationPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let a = generationOpen("A", session: session, pipeline: pipeline, access: access)

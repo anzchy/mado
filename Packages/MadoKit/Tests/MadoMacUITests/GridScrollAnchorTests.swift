@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoMacUI
 
-@Test @MainActor func gridBatchesAndEscRestoreExactClipOffsetAndSectionInset() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridBatchesAndEscRestoreExactClipOffsetAndSectionInset() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-scroll")
     let rootID = AccessRootID(rawValue: UUID())

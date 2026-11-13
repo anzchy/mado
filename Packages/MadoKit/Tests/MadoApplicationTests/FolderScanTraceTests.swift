@@ -30,7 +30,7 @@ private enum FolderTraceEvent: Equatable {
     var folder: URL { root.appendingPathComponent("A") }
 }
 
-@Test @MainActor func folderScanTraceBeginsBeforeAcquire() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanTraceBeginsBeforeAcquire() async throws {
     let fixture = FolderTraceFixture(holdsAcquire: true)
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     #expect(fixture.trace.events == [.begin(1, fixture.folder)])
@@ -45,7 +45,7 @@ private enum FolderTraceEvent: Equatable {
     #expect(fixture.trace.events == [.begin(1, fixture.folder), .end(.cancelled, 1)])
 }
 
-@Test(arguments: ["complete", "cancel", "end", "failed"])
+@Test(.timeLimit(.minutes(2)), arguments: ["complete", "cancel", "end", "failed"])
 @MainActor func folderScanTraceLifecycle(ending: String) async throws {
     let fixture = FolderTraceFixture(), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -78,7 +78,7 @@ private enum FolderTraceEvent: Equatable {
     #expect(fixture.trace.events == events)
 }
 
-@Test(arguments: ["batch", "completion", "error"])
+@Test(.timeLimit(.minutes(2)), arguments: ["batch", "completion", "error"])
 @MainActor func folderScanTraceRejectsLateEvents(event: String) async throws {
     let fixture = FolderTraceFixture(), coordinator = fixture.coordinator
     let old = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -103,7 +103,7 @@ private enum FolderTraceEvent: Equatable {
     #expect(await fixture.access.balance == [2, 2])
 }
 
-@Test @MainActor func folderScanTraceEmptyAndAcquisitionFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanTraceEmptyAndAcquisitionFailure() async throws {
     let fixture = FolderTraceFixture()
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -121,7 +121,7 @@ private enum FolderTraceEvent: Equatable {
     #expect(await failed.access.balance == [0, 0])
 }
 
-@Test @MainActor func folderScanTraceReturnedTaskCancellationEndsOnce() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanTraceReturnedTaskCancellationEndsOnce() async throws {
     let fixture = FolderTraceFixture()
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()

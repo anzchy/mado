@@ -11,7 +11,7 @@ private let multipleTwo = URL(fileURLWithPath: "/two", isDirectory: true)
 private let multipleThree = URL(fileURLWithPath: "/three", isDirectory: true)
 private let multipleZip = URL(fileURLWithPath: "/bad.zip")
 
-@Test @MainActor func inputFoldersMultipleHaveAccurateNoticeAndPreserveState() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFoldersMultipleHaveAccurateNoticeAndPreserveState() async {
     for showing in [false, true] {
         let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
         if showing {
@@ -55,7 +55,7 @@ private let multipleZip = URL(fileURLWithPath: "/bad.zip")
     }
 }
 
-@Test @MainActor func inputFoldersNeighborsKeepExistingPolicy() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFoldersNeighborsKeepExistingPolicy() async {
     for urls in [[multipleOne, multipleOne], [multipleOne, multipleZip],
                  [multipleOne, URL(fileURLWithPath: "/./one", isDirectory: true)]] {
         let host = InputFileSetHost()

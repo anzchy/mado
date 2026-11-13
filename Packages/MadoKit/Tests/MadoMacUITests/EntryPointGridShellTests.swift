@@ -12,7 +12,7 @@ import MadoInfrastructure
             "content height \(contentSize.height) exceeds frame \(button.frame)")
 }
 
-@Test @MainActor func issue215GridComingSoonEntriesAreVisibleDisabledAndUnfocusable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue215GridComingSoonEntriesAreVisibleDisabledAndUnfocusable() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
                               preferencesStore: InMemoryDisplayPreferencesStore())
@@ -48,7 +48,7 @@ import MadoInfrastructure
     expectComingSoonContentFits(shell.displayButton)
 }
 
-@Test @MainActor func issue215ComingSoonLayoutFitsDesignAndNarrowWindowInBothLanguages() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue215ComingSoonLayoutFitsDesignAndNarrowWindowInBothLanguages() throws {
     _ = NSApplication.shared
     for width in [1280.0, 800.0, 480.0, 238.0] {
         for appearance in [NSAppearance.Name.aqua, .darkAqua] {
@@ -100,7 +100,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue215EveryVisibleComingSoonControlIsDeclaredInModel() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue215EveryVisibleComingSoonControlIsDeclaredInModel() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
                               preferencesStore: InMemoryDisplayPreferencesStore())

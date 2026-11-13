@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func gridEmptySpaceDeselectionKeepsViewAndModelInSync() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridEmptySpaceDeselectionKeepsViewAndModelInSync() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-deselect")
     let rootID = AccessRootID(rawValue: UUID())

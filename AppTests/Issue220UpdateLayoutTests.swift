@@ -5,7 +5,7 @@ import MadoMacUI
 
 // settings.html ?section=update: .form grid 120px label column + 16px gap (controls at x 162 in the 580pt pane),
 // .hint muted ui-sm text, .switch (native checkbox, #218 mapping) and .btn rows at the #218 vertical rhythm.
-@MainActor @Test func issue220UpdatePaneMatchesPinnedFrames() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220UpdatePaneMatchesPinnedFrames() throws {
     let panel = issue220Panel(FakeUpdatePort())
     defer { panel.window.close() }
     panel.window.contentView?.layoutSubtreeIfNeeded()
@@ -34,7 +34,7 @@ import MadoMacUI
     #expect(try frame("settings.update.now").maxX <= 554)
 }
 
-@MainActor @Test func issue220LongestUpdateLabelsFitInEnglishAndChinese() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220LongestUpdateLabelsFitInEnglishAndChinese() throws {
     let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("App/Resources/Localizable.xcstrings")
     let root = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
@@ -80,7 +80,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue220UpdatePaneTextColoursInLightAndDark() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220UpdatePaneTextColoursInLightAndDark() throws {
     let panel = issue220Panel(FakeUpdatePort())
     defer { panel.window.close() }
     let version = try #require(issue220View("settings.update.version", in: panel) as? NSTextField)

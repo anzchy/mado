@@ -20,7 +20,7 @@ func issue518NativeTitlebarHeight() throws -> CGFloat {
 /// #518 fix1: compare content coordinates below the native system titlebar.
 /// CSS is evaluated at the same real shell height, not normalized to 800-38.
 /// Normal browser line boxes: h2=23, recent header=17, row/button=19pt.
-@Test @MainActor func issue518EmptyFolderRenderedTopsMatchPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518EmptyFolderRenderedTopsMatchPinnedCSS() throws {
     _ = NSApplication.shared
     let design = try PinnedDesign.page("empty-folder")
     let nativeTitlebar = try issue518NativeTitlebarHeight()

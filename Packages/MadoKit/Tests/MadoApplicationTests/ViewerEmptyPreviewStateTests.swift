@@ -27,7 +27,7 @@ private actor EmptyPreviewOpeningGate {
     func finish() { pending?.resume(throwing: ImageLoadError(.cancelled)); pending = nil }
 }
 
-@Test @MainActor func statesEmptyPreviewCannotNavigateBeforeLoadOrAfterCancel() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesEmptyPreviewCannotNavigateBeforeLoadOrAfterCancel() async {
     let host = EmptyPreviewHost(), session = ViewerSession(host: nil)
     session.host = host
     let first = ItemID.ephemeral(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)

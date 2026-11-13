@@ -15,7 +15,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func chromeRecallRegionsTabLoopAndFocusLock() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeRecallRegionsTabLoopAndFocusLock() {
     let clock = FakeViewerClock()
     let host = ChromeRecallHost()
     let session = ViewerSession(clock: clock)

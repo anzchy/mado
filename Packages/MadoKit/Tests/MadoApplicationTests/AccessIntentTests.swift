@@ -22,7 +22,7 @@ private actor AccessSuspension {
 
 private enum AccessTestFailure: Error { case expected }
 
-@Test @MainActor func accessIntentDiscardsSuspendedOpensAndErrorsAfterCloseNewOpenOrCancellation() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessIntentDiscardsSuspendedOpensAndErrorsAfterCloseNewOpenOrCancellation() async {
     // Listing, Recent write, grant containment/listing, and old-source close
     // are all suspensions after which App must consult the same operation.
     for stage in 0..<4 {
@@ -61,7 +61,7 @@ private enum AccessTestFailure: Error { case expected }
     }
 }
 
-@Test @MainActor func accessIntentAllowsCurrentResultsAndErrorsButDoesNotStartExpiredWork() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessIntentAllowsCurrentResultsAndErrorsButDoesNotStartExpiredWork() async throws {
     let intent = AccessIntent()
     let operation = intent.begin()
     #expect(operation.isCurrent)
@@ -77,7 +77,7 @@ private enum AccessTestFailure: Error { case expected }
     #expect(!started)
 }
 
-@Test @MainActor func accessFolderOpenDiscardsBlockedListingAndRecentWriteAfterCloseOrNewOpen() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessFolderOpenDiscardsBlockedListingAndRecentWriteAfterCloseOrNewOpen() async {
     for blockListing in [true, false] {
         for newOpen in [true, false] {
             for fails in [true, false] {
@@ -107,7 +107,7 @@ private enum AccessTestFailure: Error { case expected }
     }
 }
 
-@Test @MainActor func accessFolderOpenReturnsFirstImageAndRemembersOnlyNonemptyFolders() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessFolderOpenReturnsFirstImageAndRemembersOnlyNonemptyFolders() async throws {
     let operation = AccessIntent().begin()
     var remembered = 0
     let first = try await operation.firstImage(list: {
@@ -138,7 +138,7 @@ private enum AccessTestFailure: Error { case expected }
     func showInspector(_ visible: Bool) {}
 }
 
-@Test @MainActor func accessSessionNoopArrowPreservesSuspendedOpen() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessSessionNoopArrowPreservesSuspendedOpen() async throws {
     for covered in [true, false] {
         let host = PendingAccessHost()
         host.covered = covered
@@ -175,7 +175,7 @@ private enum AccessTestFailure: Error { case expected }
     }
 }
 
-@Test @MainActor func accessSessionGrantCancelStillInstallsDecodedPendingImage() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessSessionGrantCancelStillInstallsDecodedPendingImage() async throws {
     let host = PendingAccessHost()
     host.covered = false
     let session = ViewerSession(host: host)

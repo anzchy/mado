@@ -85,7 +85,7 @@ private actor GridPriorityPort {
     }
 }
 
-@Test @MainActor func gridThumbnailRapidScrollKeepsOnlyVisibleAndTwoNearbyRows() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailRapidScrollKeepsOnlyVisibleAndTwoNearbyRows() {
     let root = AccessRootID(rawValue: UUID())
     let snapshot = gridThumbnailSnapshot(rootID: root, count: 5000, generation: 1)
     let scheduler = GridThumbnailScheduler()
@@ -103,7 +103,7 @@ private actor GridPriorityPort {
     #expect(scheduler.activeItemIDs.isEmpty)
 }
 
-@Test @MainActor func gridThumbnailRootAndScaleReplacementRetireOldRequests() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailRootAndScaleReplacementRetireOldRequests() {
     let first = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 20, generation: 1)
     let second = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 20, generation: 2)
     let scheduler = GridThumbnailScheduler()
@@ -120,7 +120,7 @@ private actor GridPriorityPort {
     #expect(scheduler.activeItemIDs.isEmpty)
 }
 
-@Test @MainActor func gridSearchFilterCancelsOldThumbnailsAndStartsMatchingRequest() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSearchFilterCancelsOldThumbnailsAndStartsMatchingRequest() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 4, generation: 1)
     let first = snapshot.navigationEntries[0].itemID
     let match = snapshot.navigationEntries[3].itemID
@@ -146,7 +146,7 @@ private actor GridPriorityPort {
     await port.waitCancelled(match)
 }
 
-@Test func gridThumbnailPixelSizingRoundsUpForRetina() {
+@Test(.timeLimit(.minutes(2))) func gridThumbnailPixelSizingRoundsUpForRetina() {
     #expect(GridThumbnailPixelSizing.edge(tile: NSSize(width: 212, height: 148), backingScale: 1) >= 318)
     #expect(GridThumbnailPixelSizing.edge(tile: NSSize(width: 212, height: 148), backingScale: 2) >= 636)
     #expect(GridThumbnailPixelSizing.edge(tile: NSSize(width: 211.5, height: 148), backingScale: 2) >= 635)
@@ -157,7 +157,7 @@ private actor GridPriorityPort {
     #expect(GridThumbnailPixelSizing.edge(tile: NSSize(width: 900, height: 700), backingScale: 2) == 1024)
 }
 
-@Test @MainActor func gridFailedPrefetchReplaysAndRetriesOnlyOnVisibilityTransition() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridFailedPrefetchReplaysAndRetriesOnlyOnVisibilityTransition() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 4, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)
@@ -177,7 +177,7 @@ private actor GridPriorityPort {
     #expect(failures.contains(2))
 }
 
-@Test @MainActor func gridSourceChangedRetriesOnceWithFreshRequest() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSourceChangedRetriesOnceWithFreshRequest() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 1, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)
@@ -193,7 +193,7 @@ private actor GridPriorityPort {
     #expect(scheduler.result(at: 0)?.0.renderKey?.revision.byteCount == 2)
 }
 
-@Test @MainActor func gridAdmissionRejectionRecoversWhenCapacityFrees() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridAdmissionRejectionRecoversWhenCapacityFrees() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 3, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)
@@ -215,7 +215,7 @@ private actor GridPriorityPort {
     #expect(scheduler.result(at: 2)?.0.renderKey?.revision.byteCount == 9)
 }
 
-@Test @MainActor func gridFailedVisibleRequestRetriesAfterNearbyRevisit() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridFailedVisibleRequestRetriesAfterNearbyRevisit() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 3, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)
@@ -239,7 +239,7 @@ private actor GridPriorityPort {
     #expect(await attempts.count == 2)
 }
 
-@Test @MainActor func gridPendingPrefetchPromotesWhenVisible() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridPendingPrefetchPromotesWhenVisible() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 3, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)
@@ -255,7 +255,7 @@ private actor GridPriorityPort {
     scheduler.stop()
 }
 
-@Test @MainActor func gridThumbnailScrollAndCloseCancelHeldFilePortWork() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailScrollAndCloseCancelHeldFilePortWork() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 30, generation: 1)
     let port = HeldGridThumbnailPort()
     let scheduler = GridThumbnailScheduler()
@@ -276,7 +276,7 @@ private actor GridPriorityPort {
     #expect(scheduler.activeItemIDs.isEmpty)
 }
 
-@Test @MainActor func gridThumbnailInvalidDecodedIdentityShowsFailureInsteadOfPendingForever() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailInvalidDecodedIdentityShowsFailureInsteadOfPendingForever() async {
     let snapshot = gridThumbnailSnapshot(rootID: AccessRootID(rawValue: UUID()), count: 1, generation: 1)
     let scheduler = GridThumbnailScheduler()
     scheduler.setSnapshot(snapshot)

@@ -18,7 +18,7 @@ import MadoCore
     func returnSingleImageToFolder() { returns += 1 }
 }
 
-@Test @MainActor func singleImageEscRunsAfterInspectorFocusThenReturnsOnce() {
+@Test(.timeLimit(.minutes(2))) @MainActor func singleImageEscRunsAfterInspectorFocusThenReturnsOnce() {
     let router = CommandRouter()
     for context in [FocusContext.textInput, .panel, .tools] {
         let host = SingleImageReturnHost(), session = ViewerSession(host: host)

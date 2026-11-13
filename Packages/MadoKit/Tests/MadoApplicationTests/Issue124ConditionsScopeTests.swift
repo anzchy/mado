@@ -13,7 +13,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     var requested: [String] { lock.lock(); defer { lock.unlock() }; return recorded }
 }
 
-@Test @MainActor func issue124SameFolderBeginKeepsFilterAndSortButDifferentFolderClearsFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124SameFolderBeginKeepsFilterAndSortButDifferentFolderClearsFilter() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let first = scan.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -38,7 +38,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.finish(2); try await next.value
 }
 
-@Test @MainActor func issue124RecursiveAndRetryKeepFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124RecursiveAndRetryKeepFilter() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let first = scan.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -58,7 +58,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(scan.snapshot?.entries.map(\.url.lastPathComponent) == ["b.png"])
 }
 
-@Test @MainActor func issue124SortIsSharedAcrossWindowsAndSurvivesEncoding() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124SortIsSharedAcrossWindowsAndSurvivesEncoding() throws {
     let store = InMemoryDisplayPreferencesStore()
     let first = ViewerSession(preferencesStore: store)
     let second = ViewerSession(preferencesStore: store)
@@ -79,7 +79,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(!String(decoding: encoded, as: UTF8.self).contains("selectedExtensions"))
 }
 
-@Test @MainActor func issue124MenuSelectionReflectsRetainedConditions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124MenuSelectionReflectsRetainedConditions() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let first = scan.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -99,7 +99,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
         hasFolderSource: true, previewActive: false).checked)
 }
 
-@Test @MainActor func issue124SameFolderRegrantKeepsExtensionFilterWithNewRootID() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124SameFolderRegrantKeepsExtensionFilterWithNewRootID() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let first = scan.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -128,7 +128,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(scan.conditions.sort == key)
 }
 
-@Test @MainActor func issue124EndedScanReopensSameFolderWithFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124EndedScanReopensSameFolderWithFilter() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let first = scan.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -149,7 +149,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.finish(2); try await other.value
 }
 
-@Test @MainActor func issue124ResolvedSymlinkFolderKeepsFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124ResolvedSymlinkFolderKeepsFilter() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let real = root.appendingPathComponent("real"), link = root.appendingPathComponent("link")
     try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
@@ -167,7 +167,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.finish(1); try await same.value
 }
 
-@Test @MainActor func issue124CorruptSortFieldsKeepOtherPreferences() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124CorruptSortFieldsKeepOtherPreferences() throws {
     let json = #"{"alwaysShowTools":true,"filmstripExpanded":true,"appearance":"dark","gridSidebarWidth":240,"gridSidebarVisible":false,"folderSort":"unknown","folderSortDirection":42}"#
     let decoded = try JSONDecoder().decode(DisplayPreferences.self, from: Data(json.utf8))
     #expect(decoded.folderSort == .name && decoded.folderSortDirection == .ascending)
@@ -175,7 +175,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(decoded.appearance == .dark && decoded.gridSidebarWidth == 240 && !decoded.gridSidebarVisible)
 }
 
-@Test @MainActor func issue124CancelReadingRestoresFilterWithCurrentAppSort() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124CancelReadingRestoresFilterWithCurrentAppSort() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let store = InMemoryDisplayPreferencesStore(), session = ViewerSession(preferencesStore: store)
     session.folderScan = scan
@@ -196,7 +196,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     await fixture.scanner.finish(1); try await reading.value
 }
 
-@Test @MainActor func issue124SharedSortDoesNotReorderFrozenPreview() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124SharedSortDoesNotReorderFrozenPreview() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let store = InMemoryDisplayPreferencesStore(), session = ViewerSession(preferencesStore: store)
     session.folderScan = scan
@@ -216,7 +216,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(scan.conditions.sort == .name)
 }
 
-@Test @MainActor func issue124Fix2FolderPreviewReplaysSharedSortAfterEscape() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124Fix2FolderPreviewReplaysSharedSortAfterEscape() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let store = InMemoryDisplayPreferencesStore()
     let session = ViewerSession(preferencesStore: store)
@@ -244,7 +244,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
         hasFolderSource: session.hasFolderSource, previewActive: false).checked)
 }
 
-@Test @MainActor func issue124Fix2FilePreviewReplaysSharedSortOnEnd() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124Fix2FilePreviewReplaysSharedSortOnEnd() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let store = InMemoryDisplayPreferencesStore()
     let session = ViewerSession(preferencesStore: store)
@@ -306,7 +306,7 @@ private final class Issue124MetadataReader: FolderMetadataReading, @unchecked Se
     #expect(reader.requested.count == 2)
 }
 
-@Test @MainActor func issue124Fix2AutomaticPreviewClearReplaysSharedSort() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124Fix2AutomaticPreviewClearReplaysSharedSort() async throws {
     let fixture = FolderScanFixture(), scan = fixture.coordinator
     let store = InMemoryDisplayPreferencesStore()
     let session = ViewerSession(preferencesStore: store)

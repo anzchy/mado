@@ -27,7 +27,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try Data(contentsOf: path) == future)
 }
 
-@Test func t216RecentFoldersVersionAndFuturePreservation() async throws {
+@Test(.timeLimit(.minutes(2))) func t216RecentFoldersVersionAndFuturePreservation() async throws {
     let base = schemaTestDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     let path = base.appendingPathComponent("recent.json")
     let store = RecentFolderStore(url: path)
@@ -46,7 +46,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try Data(contentsOf: path) == future)
 }
 
-@Test func t216PersonalImagesVersionAndFuturePreservation() async throws {
+@Test(.timeLimit(.minutes(2))) func t216PersonalImagesVersionAndFuturePreservation() async throws {
     let base = schemaTestDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     let path = base.appendingPathComponent("personal.json")
     let store = PersonalImageStore(url: path)
@@ -66,7 +66,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try Data(contentsOf: path) == future)
 }
 
-@Test @MainActor func t216DisplayPreferencesVersionAndFuturePreservation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t216DisplayPreferencesVersionAndFuturePreservation() throws {
     let suite = "mado.schema.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -87,7 +87,7 @@ private func schemaTestDirectory() -> URL {
     #expect(defaults.data(forKey: key) == future)
 }
 
-@Test @MainActor func t216ExplicitOlderVersionsArePreserved() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t216ExplicitOlderVersionsArePreserved() async throws {
     let base = schemaTestDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let oldItems = Data(#"{"schemaVersion":0,"items":[{"old":true}]}"#.utf8)
@@ -145,7 +145,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try store.load() == [record])
 }
 
-@Test func t216FutureRecentRecoveryStaysByteIdentical() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FutureRecentRecoveryStaysByteIdentical() async throws {
     let base = schemaTestDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let path = base.appendingPathComponent("recent.json")
@@ -161,7 +161,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try Data(contentsOf: recovery) == future)
 }
 
-@Test func t216FuturePersonalRecoveryStaysByteIdentical() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FuturePersonalRecoveryStaysByteIdentical() async throws {
     let base = schemaTestDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let path = base.appendingPathComponent("personal.json")
@@ -178,7 +178,7 @@ private func schemaTestDirectory() -> URL {
     #expect(try Data(contentsOf: recovery) == future)
 }
 
-@Test @MainActor func t216FuturePreferencesRemainUsableInMemory() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t216FuturePreferencesRemainUsableInMemory() throws {
     let suite = "mado.schema.future.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }

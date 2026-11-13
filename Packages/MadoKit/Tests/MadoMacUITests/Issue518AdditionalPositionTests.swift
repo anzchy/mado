@@ -118,7 +118,7 @@ private struct Issue518StackOracle {
     expect(page.chooseButton, top: oracle.actionTop, height: oracle.actionHeight, name: "choose folder")
 }
 
-@Test @MainActor func issue518SubfolderRenderedTopsMatchPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518SubfolderRenderedTopsMatchPinnedCSS() throws {
     let design = try PinnedDesign.page("empty-folder")
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for size in [NSSize(width: 1280, height: 800), NSSize(width: 800, height: 680)] {
@@ -134,7 +134,7 @@ private struct Issue518StackOracle {
     }
 }
 
-@Test @MainActor func issue518ViewerZeroInsetRenderedTopsMatchPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518ViewerZeroInsetRenderedTopsMatchPinnedCSS() throws {
     let design = try PinnedDesign.page("empty-folder")
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         for subfolders in [true, false] {

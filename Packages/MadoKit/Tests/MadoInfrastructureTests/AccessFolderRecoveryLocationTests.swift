@@ -27,7 +27,7 @@ private struct T229RecoveryLocationFixture {
     func canonical(_ url: URL) -> URL { url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL }
 }
 
-@Test func t229RecoveryLocationCapturesScopedIdentityAndVersionedResult() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationCapturesScopedIdentityAndVersionedResult() async throws {
     let f = try T229RecoveryLocationFixture(); defer { f.remove() }
     let id = try await f.files.grant(folder: f.root)
     let reference = try #require(try await f.files.captureRecoveryFolder(rootID: id, folder: f.child))
@@ -45,7 +45,7 @@ private struct T229RecoveryLocationFixture {
     #expect(f.scope.counts[0] == f.scope.counts[1])
 }
 
-@Test func t229RecoveryLocationMissingOrReplacedChildFallsBackToRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationMissingOrReplacedChildFallsBackToRoot() async throws {
     for replaces in [false, true] {
         let f = try T229RecoveryLocationFixture(); defer { f.remove() }
         let id = try await f.files.grant(folder: f.root)
@@ -61,7 +61,7 @@ private struct T229RecoveryLocationFixture {
     }
 }
 
-@Test func t229RecoveryLocationDoesNotFollowOriginalFolderOutsideRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationDoesNotFollowOriginalFolderOutsideRoot() async throws {
     let f = try T229RecoveryLocationFixture(); defer { f.remove() }
     let id = try await f.files.grant(folder: f.root)
     let reference = try #require(try await f.files.captureRecoveryFolder(rootID: id, folder: f.child))
@@ -73,7 +73,7 @@ private struct T229RecoveryLocationFixture {
     #expect(f.scope.counts[0] == f.scope.counts[1])
 }
 
-@Test func t229RecoveryLocationRebasesActualFolderAfterRootPathChanges() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationRebasesActualFolderAfterRootPathChanges() async throws {
     let f = try T229RecoveryLocationFixture(); defer { f.remove() }
     let id = try await f.files.grant(folder: f.root)
     let reference = try #require(try await f.files.captureRecoveryFolder(rootID: id, folder: f.child))
@@ -87,7 +87,7 @@ private struct T229RecoveryLocationFixture {
     #expect(f.scope.counts[0] == f.scope.counts[1])
 }
 
-@Test func t229RecoveryLocationRejectsReplacedRootEvenIfChildInodeSurvives() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationRejectsReplacedRootEvenIfChildInodeSurvives() async throws {
     let f = try T229RecoveryLocationFixture(); defer { f.remove() }
     let id = try await f.files.grant(folder: f.root)
     let reference = try #require(try await f.files.captureRecoveryFolder(rootID: id, folder: f.child))
@@ -101,7 +101,7 @@ private struct T229RecoveryLocationFixture {
     #expect(f.scope.counts[0] == f.scope.counts[1])
 }
 
-@Test func t229RecoveryLocationRootFailureIsNotChildFallback() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryLocationRootFailureIsNotChildFallback() async throws {
     for scopeFailure in [false, true] {
         let f = try T229RecoveryLocationFixture(); defer { f.remove() }
         let id = try await f.files.grant(folder: f.root)
@@ -119,7 +119,7 @@ private struct T229NoRecoveryIdentity: FileIdentityResourceReading {
     func identity(for fileURL: URL) throws -> FileResourceIdentity? { nil }
 }
 
-@Test func t229RecoveryCaptureWithoutIdentityOrAuthorityNeverInventsReference() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RecoveryCaptureWithoutIdentityOrAuthorityNeverInventsReference() async throws {
     let noIdentity = try T229RecoveryLocationFixture(resourceReader: T229NoRecoveryIdentity())
     defer { noIdentity.remove() }
     let id = try await noIdentity.files.grant(folder: noIdentity.root)

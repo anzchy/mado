@@ -57,7 +57,7 @@ private actor P303BoundaryPipeline: ThumbnailCacheProviding {
     }
 }
 
-@Test func p303AccessBoundaryRejectsCachePixelsWithWrongRevision() async throws {
+@Test(.timeLimit(.minutes(2))) func p303AccessBoundaryRejectsCachePixelsWithWrongRevision() async throws {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp"))
     let pipeline = P303BoundaryPipeline()
     let file = root.url.appendingPathComponent("image.png")
@@ -118,7 +118,7 @@ private struct P303WarmPipeline: ThumbnailCacheProviding {
     }
 }
 
-@Test func p303DisplayedSourceDeniedOnReacquireCannotReadWarmCache() async throws {
+@Test(.timeLimit(.minutes(2))) func p303DisplayedSourceDeniedOnReacquireCannotReadWarmCache() async throws {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp"))
     let access = P303DenyReacquire(root: root)
     let cache = P303WarmCache()

@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test(arguments: ["missing", "resolved", "launch-stale", "reconnected", "acquire-stale", "failed"])
+@Test(.timeLimit(.minutes(2)), arguments: ["missing", "resolved", "launch-stale", "reconnected", "acquire-stale", "failed"])
 func p201RecoveryRootQueryUsesPublishedURLWithoutMutation(state: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()

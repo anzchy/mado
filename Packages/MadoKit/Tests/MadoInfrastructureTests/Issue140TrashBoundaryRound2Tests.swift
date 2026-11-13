@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoInfrastructure
 
-@Test func issue140OrdinaryDotTrashFolderKeepsMovedFileGrantLive() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140OrdinaryDotTrashFolderKeepsMovedFileGrantLive() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let ordinaryTrash = base.appendingPathComponent(".Trash")

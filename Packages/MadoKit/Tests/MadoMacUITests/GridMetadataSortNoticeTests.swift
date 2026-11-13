@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func issue108GridMetadataSortNoticeIsAccessibleAndDoesNotReplaceGrid() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue108GridMetadataSortNoticeIsAccessibleAndDoesNotReplaceGrid() {
     let grid = GridBrowserView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
     #expect(grid.metadataSortNotice.isHidden)
     grid.setMetadataSortPending(true)
@@ -31,7 +31,7 @@ import MadoApplication
     #expect(grid.metadataSortNotice.isHidden)
 }
 
-@Test @MainActor func issue108SortStatusDistinguishesPendingAndUnavailableInBothSurfaces() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue108SortStatusDistinguishesPendingAndUnavailableInBothSurfaces() {
     let grid = GridBrowserView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
     let viewer = ViewerChromeOverlay(frame: grid.frame, session: ViewerSession())
     for state in [MetadataSortState.pending, .incomplete] {

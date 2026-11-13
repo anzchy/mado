@@ -9,7 +9,7 @@ import MadoInfrastructure
     func preferencesDidChange(_ preferences: DisplayPreferences) { latest = preferences }
 }
 
-@Test @MainActor func issue349LegacyPreferencesAndStoredSizesSurviveRelaunch() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue349LegacyPreferencesAndStoredSizesSurviveRelaunch() throws {
     // Literal payloads from pre-114 and #114's flat schema-1 encoding, not re-encoded by the new model.
     let old = #"{"alwaysShowTools":true,"filmstripExpanded":true,"appearance":"dark","gridSidebarWidth":284,"gridSidebarVisible":false,"folderSort":"size","folderSortDirection":"descending","loopThroughImages":true}"#
     let versioned = #"{"schemaVersion":1,"alwaysShowTools":true,"filmstripExpanded":true,"appearance":"dark","gridSidebarWidth":284,"gridSidebarVisible":false,"folderSort":"size","folderSortDirection":"descending","loopThroughImages":true}"#

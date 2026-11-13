@@ -1,7 +1,7 @@
 import Testing
 import MadoApplication
 
-@Test @MainActor func chromeWindowAlwaysShowPinsAllWindowsAndUnpinRetimes() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeWindowAlwaysShowPinsAllWindowsAndUnpinRetimes() {
     let clock = FakeViewerClock()
     let store = InMemoryDisplayPreferencesStore()
     let first = ViewerSession(preferencesStore: store, clock: clock)

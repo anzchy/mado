@@ -25,7 +25,7 @@ private func probeResult(_ access: FileAccess, _ id: AccessRootID) async -> Resu
     catch { return .failure(error) }
 }
 
-@MainActor @Test func p201Fix1FirstRecentAfterLaunchResolutionLossReconnects() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1FirstRecentAfterLaunchResolutionLossReconnects() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
     let original = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -57,7 +57,7 @@ private func probeResult(_ access: FileAccess, _ id: AccessRootID) async -> Resu
     #expect(scope.balanced)
 }
 
-@MainActor @Test func p201Fix1RepeatedProbesReleaseBeforeBrowsing() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1RepeatedProbesReleaseBeforeBrowsing() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -79,7 +79,7 @@ private func probeResult(_ access: FileAccess, _ id: AccessRootID) async -> Resu
     #expect(scope.balanced)
 }
 
-@Test func p201Fix1HeldLeaseSurvivesSuccessfulAndFailedProbe() async throws {
+@Test(.timeLimit(.minutes(2))) func p201Fix1HeldLeaseSurvivesSuccessfulAndFailedProbe() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -99,7 +99,7 @@ private func probeResult(_ access: FileAccess, _ id: AccessRootID) async -> Resu
     #expect(scope.counts(f.old) == [2, 2, 0] && scope.balanced)
 }
 
-@MainActor @Test func p201Fix1MoveAfterLaunchProbesLiveLocationAndKeepsOldLease() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1MoveAfterLaunchProbesLiveLocationAndKeepsOldLease() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -123,7 +123,7 @@ private func probeResult(_ access: FileAccess, _ id: AccessRootID) async -> Resu
     #expect(scope.counts(f.old) == [2, 2, 0] && scope.balanced)
 }
 
-@MainActor @Test(arguments: [false, true])
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201Fix1MissingAndUnresolvedRootsNeverGrant(unresolved: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
@@ -147,7 +147,7 @@ func p201Fix1MissingAndUnresolvedRootsNeverGrant(unresolved: Bool) async throws 
     #expect(scope.counts(f.old) == counts && codec.count == creations && scope.balanced)
 }
 
-@MainActor @Test func p201Fix1DeniedStartDoesNotStopOrFabricateReconnection() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1DeniedStartDoesNotStopOrFabricateReconnection() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = FakeBookmarks(); let scope = ReconnectScope()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -182,7 +182,7 @@ private final class ProbeSequencedBookmarks: BookmarkCoding, @unchecked Sendable
     }
 }
 
-@MainActor @Test func p201Fix1LossDuringAcquisitionDoesNotReturnEarlierResolution() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1LossDuringAcquisitionDoesNotReturnEarlierResolution() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = ProbeSequencedBookmarks(); let scope = ReconnectScope()
     let original = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")

@@ -11,7 +11,7 @@ import MadoMacUI
 }
 
 /// Closing the window ends a folder entry; a reused controller's Cancel Reading must not restore what was shown before.
-@Test @MainActor func issue150ClosingWindowDropsFolderEntryRestorePoint() throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue150ClosingWindowDropsFolderEntryRestorePoint() throws {
     _ = NSApplication.shared
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
         preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: Task { throw CancellationError() },

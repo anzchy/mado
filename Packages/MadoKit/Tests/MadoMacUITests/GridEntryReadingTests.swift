@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoMacUI
 
-@Test @MainActor func gridReadingShowsNoCellsUntilCompleteAndCancelRestoresPriorPresentation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridReadingShowsNoCellsUntilCompleteAndCancelRestoresPriorPresentation() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-reading")
     let rootID = AccessRootID(rawValue: UUID())

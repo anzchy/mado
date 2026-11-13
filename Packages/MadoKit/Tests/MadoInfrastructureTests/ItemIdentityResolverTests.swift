@@ -27,7 +27,7 @@ private struct NilGrantResourceReader: FileIdentityResourceReading {
     func identity(for fileURL: URL) throws -> FileResourceIdentity? { nil }
 }
 
-@Test func itemResolverFileGrantWithoutResourceKeepsOneEphemeralTokenPerCanonicalPath() async throws {
+@Test(.timeLimit(.minutes(2))) func itemResolverFileGrantWithoutResourceKeepsOneEphemeralTokenPerCanonicalPath() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let grant = FileItemIdentityResolver(reader: NilGrantResourceReader())
     let first = try await grant.identity(for: tree.file)
@@ -42,7 +42,7 @@ private struct NilGrantResourceReader: FileIdentityResourceReading {
     #expect(second != first)
 }
 
-@Test func itemResolverCanonicalAliasesRenameAndHardLinks() async throws {
+@Test(.timeLimit(.minutes(2))) func itemResolverCanonicalAliasesRenameAndHardLinks() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope)
     let original = try await resolver.identity(for: tree.file)
@@ -68,7 +68,7 @@ private struct NilGrantResourceReader: FileIdentityResourceReading {
     #expect(try await resolver.identity(for: renamed) == original)
 }
 
-@Test @MainActor func itemResolverMissingResourcesHaveExplicitFallbacks() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func itemResolverMissingResourcesHaveExplicitFallbacks() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope, reader: MissingIdentityReader())
     #expect(try await resolver.identity(for: tree.file) == .rootRelative(rootID: tree.id, relativePath: "b.png"))
@@ -101,7 +101,7 @@ private final class OptionalIdentityReader: FileIdentityResourceReading, @unchec
     }
 }
 
-@Test func itemResolverVacatedNameDoesNotCollideWithRenamedItem() async throws {
+@Test(.timeLimit(.minutes(2))) func itemResolverVacatedNameDoesNotCollideWithRenamedItem() async throws {
     for missing in [false, true] {
         let tree = try IdentityTree(); defer { tree.remove() }
         let reader = OptionalIdentityReader()
@@ -119,7 +119,7 @@ private final class OptionalIdentityReader: FileIdentityResourceReading, @unchec
     }
 }
 
-@Test func itemResolverFileGrantsUseResourceBytesWhenAvailable() async throws {
+@Test(.timeLimit(.minutes(2))) func itemResolverFileGrantsUseResourceBytesWhenAvailable() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let first = FileItemIdentityResolver()
     let item = try await first.identity(for: tree.file)
@@ -131,7 +131,7 @@ private final class OptionalIdentityReader: FileIdentityResourceReading, @unchec
     #expect(try await FileItemIdentityResolver().identity(for: renamed) == item)
 }
 
-@Test func issue140MovedRootKeepsRenamedItemIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140MovedRootKeepsRenamedItemIdentity() async throws {
     let tree = try IdentityTree()
     let movedRoot = tree.root.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
     defer {
@@ -154,7 +154,7 @@ private final class OptionalIdentityReader: FileIdentityResourceReading, @unchec
     #expect(try await moved.identity(for: movedOriginal) == original)
 }
 
-@Test func issue140MovedRootDoesNotBorrowAnotherRootIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140MovedRootDoesNotBorrowAnotherRootIdentity() async throws {
     let first = try IdentityTree(), second = try IdentityTree()
     let movedFirst = first.root.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
     defer {
@@ -174,7 +174,7 @@ private final class OptionalIdentityReader: FileIdentityResourceReading, @unchec
     #expect(try await secondResolver.identity(for: second.file) == secondID)
 }
 
-@Test func issue140MovedRootKeepsAssociationWhenOldNameIsReused() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140MovedRootKeepsAssociationWhenOldNameIsReused() async throws {
     let tree = try IdentityTree()
     let movedRoot = tree.root.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
     defer {
@@ -199,7 +199,7 @@ private struct ReusedResourceReader: FileIdentityResourceReading {
     }
 }
 
-@Test func issue140CompletedScanPrunesDeletedResourceAssociation() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140CompletedScanPrunesDeletedResourceAssociation() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope, reader: ReusedResourceReader())
     let deletedID = try await resolver.identity(for: tree.file)
@@ -210,7 +210,7 @@ private struct ReusedResourceReader: FileIdentityResourceReading {
     #expect(try await resolver.identity(for: replacement) != deletedID)
 }
 
-@Test func issue140IndexedResolverKeepsThousandsOfRealFilesDistinctAcrossRescan() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140IndexedResolverKeepsThousandsOfRealFilesDistinctAcrossRescan() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope)
     let count = 2_500

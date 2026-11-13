@@ -21,7 +21,7 @@ import MadoMacUI
     return nil
 }
 
-@MainActor @Test func issue218PinnedSettingsSidebarRenderedFrames() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218PinnedSettingsSidebarRenderedFrames() throws {
     let (panel, _, _) = settingsFixture()
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)
@@ -46,7 +46,7 @@ import MadoMacUI
     #expect(abs((heading.font?.pointSize ?? 0) - 16) < 1)
 }
 
-@MainActor @Test func issue218SettingsSectionPersistsAcrossWindowInstances() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218SettingsSectionPersistsAcrossWindowInstances() {
     let (first, _, defaults) = settingsFixture()
     for section in SettingsSection.allCases {
         first.select(section)

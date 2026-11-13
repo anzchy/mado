@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@Test @MainActor func gridProjectionPreservesIdentityAcrossGenerationsAndRejectsLateSnapshot() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridProjectionPreservesIdentityAcrossGenerationsAndRejectsLateSnapshot() throws {
     let rootID = AccessRootID(rawValue: UUID())
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-projection")
     let root = ItemIdentityRoot(id: rootID, url: folder)
@@ -28,7 +28,7 @@ import MadoApplication
     #expect(grid.scrollAnchor == a.itemID)
 }
 
-@Test @MainActor func gridProjectionDropsOldFolderIdentityOnRootChange() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridProjectionDropsOldFolderIdentityOnRootChange() {
     let firstRoot = AccessRootID(rawValue: UUID())
     let secondRoot = AccessRootID(rawValue: UUID())
     let firstFolder = URL(fileURLWithPath: "/tmp/mado-grid-first")

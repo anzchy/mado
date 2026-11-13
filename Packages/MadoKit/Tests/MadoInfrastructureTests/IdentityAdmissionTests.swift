@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoInfrastructure
 
-@Test func identityAdmissionAliasesShareOneDecodeAndRenameKeepsItem() async throws {
+@Test(.timeLimit(.minutes(2))) func identityAdmissionAliasesShareOneDecodeAndRenameKeepsItem() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope)
     let decoder = DecodeCounter()
@@ -32,7 +32,7 @@ import MadoInfrastructure
     #expect(next.itemID == keyA.itemID)
 }
 
-@Test func identityAtomicReplacementKeepsItemAndChangesRevisionEvenAtSameSizeAndTime() async throws {
+@Test(.timeLimit(.minutes(2))) func identityAtomicReplacementKeepsItemAndChangesRevisionEvenAtSameSizeAndTime() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let time = Date(timeIntervalSince1970: 1_000_000)
     try Data(contentsOf: fixture("orientation-1.tiff")).write(to: tree.file)
@@ -61,7 +61,7 @@ import MadoInfrastructure
     #expect(try await fresh.request(for: renamed, maximumPixelSize: 128).renderKey?.itemID == after.itemID)
 }
 
-@Test func identityPipelineAliasesShareCanonicalRevisions() async throws {
+@Test(.timeLimit(.minutes(2))) func identityPipelineAliasesShareCanonicalRevisions() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     try Data(contentsOf: fixture("orientation-1.tiff")).write(to: tree.file)
     let link = tree.root.appendingPathComponent("alias.tiff")

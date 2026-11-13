@@ -33,7 +33,7 @@ import MadoApplication
     func showInspector(_ visible: Bool) {}
 }
 
-@Test @MainActor func accessArrowCommandsRouteFromAllEntriesAndRespectTextInput() {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessArrowCommandsRouteFromAllEntriesAndRespectTextInput() {
     let target = AccessNavigationTarget()
     let session = ViewerSession(host: target)
     for entry in CommandEntry.allCases {
@@ -71,7 +71,7 @@ import MadoApplication
     #expect(navigation.step(from: escaped, direction: .next, covered: true) == .move(second))
 }
 
-@Test @MainActor func accessSessionKeepsPreviewSteppingAndFolderHostAvailabilitySeparate() {
+@Test(.timeLimit(.minutes(2))) @MainActor func accessSessionKeepsPreviewSteppingAndFolderHostAvailabilitySeparate() {
     let target = AccessNavigationTarget()
     let session = ViewerSession(host: target)
     let router = CommandRouter(implementedCommands: Set(CommandID.allCases))

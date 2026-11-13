@@ -71,7 +71,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func i313HomeHasNoBottomBarOrSidebar() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i313HomeHasNoBottomBarOrSidebar() {
     let scene = BarPresenceScene()
     defer { scene.window.close() }
     scene.presentation.showViewer()
@@ -81,7 +81,7 @@ import MadoInfrastructure
     expectHome(scene, "cold launch")
 }
 
-@Test @MainActor func i313EveryFolderStateShowsTheBottomBarInTheSamePass() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i313EveryFolderStateShowsTheBottomBarInTheSamePass() {
     let scene = BarPresenceScene()
     defer { scene.window.close() }
     scene.presentation.showViewer()
@@ -134,7 +134,7 @@ import MadoInfrastructure
     expectBar(scene, "Grid")
 }
 
-@Test @MainActor func i313ReturningFromTheViewerLeavesTheBottomBarAsItWas() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i313ReturningFromTheViewerLeavesTheBottomBarAsItWas() {
     let scene = BarPresenceScene()
     defer { scene.window.close() }
     let snapshot = scene.folder(["a.png", "b.png"])
@@ -162,7 +162,7 @@ import MadoInfrastructure
     #expect(scene.shell.searchAvailable == before.search)
 }
 
-@Test @MainActor func i313CancellingAnEntryToTheHomeRemovesTheBar() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i313CancellingAnEntryToTheHomeRemovesTheBar() {
     let scene = BarPresenceScene()
     defer { scene.window.close() }
     scene.presentation.showViewer()
@@ -178,7 +178,7 @@ import MadoInfrastructure
     expectHome(scene, "after Cancel Reading")
 }
 
-@Test @MainActor func i313TwoWindowsDecideTheBarOnTheirOwn() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i313TwoWindowsDecideTheBarOnTheirOwn() {
     let home = BarPresenceScene(), folder = BarPresenceScene()
     defer { home.window.close(); folder.window.close() }
     home.presentation.showViewer()

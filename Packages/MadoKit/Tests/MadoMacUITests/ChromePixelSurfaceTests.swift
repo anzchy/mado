@@ -22,7 +22,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func chromeLightPanelHasRenderedContourAwayFromControls() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeLightPanelHasRenderedContourAwayFromControls() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 480, height: 240),
         session: ViewerSession())
@@ -44,7 +44,7 @@ import MadoApplication
     #expect(edgeInk > 2)
 }
 
-@Test @MainActor func chromeShortNamesDrawInFullAndLongNameTruncates() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeShortNamesDrawInFullAndLongNameTruncates() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 1280, height: 800),
         session: ViewerSession())

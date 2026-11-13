@@ -66,7 +66,7 @@ private let revokeMembers = [revokeA, revokeB, revokeC]
     }
 }
 
-@Test @MainActor func inputRevocationSetMovesPreserveNewerMember() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputRevocationSetMovesPreserveNewerMember() async {
     for command in [CommandID.next, .previous] {
         for unsupported in [false, true] {
             let host = InputFileSetHost(), input = AccessIntent(), probe = RevocationProbe()
@@ -90,7 +90,7 @@ private let revokeMembers = [revokeA, revokeB, revokeC]
     }
 }
 
-@Test @MainActor func inputRevocationFolderNavigationBeforeDestinationOpens() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputRevocationFolderNavigationBeforeDestinationOpens() async {
     for command in [CommandID.next, .previous] {
         for unsupported in [false, true] {
             let host = InputFileSetHost(), probe = RevocationProbe()
@@ -113,7 +113,7 @@ private let revokeMembers = [revokeA, revokeB, revokeC]
     }
 }
 
-@Test @MainActor func inputRevocationRetryAndCancelPreserveLaterState() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputRevocationRetryAndCancelPreserveLaterState() async {
     for unsupported in [false, true] {
         for failed in [false, true] {
             let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), probe = RevocationProbe()
@@ -151,7 +151,7 @@ private let revokeMembers = [revokeA, revokeB, revokeC]
     }
 }
 
-@Test @MainActor func inputRevocationLoaderCompletionDoesNotSupersedeAdmission() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputRevocationLoaderCompletionDoesNotSupersedeAdmission() async {
     for unsupported in [false, true] {
         let host = InputHost(), loaderGate = InputGate(), probe = RevocationProbe()
         host.session.filePreviewSet = FilePreviewSet(files: revokeMembers)
@@ -179,7 +179,7 @@ private let revokeMembers = [revokeA, revokeB, revokeC]
     }
 }
 
-@Test @MainActor func inputRevocationComposedLifecyclePreservesDestination() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputRevocationComposedLifecyclePreservesDestination() async {
     for boundary in ["recent", "folder", "close"] {
         for unsupported in [false, true] {
             let host = InputFileSetHost(), probe = RevocationProbe()

@@ -5,7 +5,7 @@ import MadoApplication
 import MadoInfrastructure
 @testable import MadoMacUI
 
-@Test func sidebarHeadingIsCataloguedWithoutChineseLiteralInSource() throws {
+@Test(.timeLimit(.minutes(2))) func sidebarHeadingIsCataloguedWithoutChineseLiteralInSource() throws {
     let tests = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     let root = tests.deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
@@ -24,7 +24,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func sidebarTreeRowsFollowPinnedOptionAGeometryAndCounts() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarTreeRowsFollowPinnedOptionAGeometryAndCounts() throws {
     _ = NSApplication.shared
     let design = try PinnedDesign.page("grid-light")
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
@@ -62,7 +62,7 @@ import MadoInfrastructure
     #expect(tree.rows.allSatisfy { $0.nameLabel.frame.maxX <= $0.countLabel.frame.minX || $0.countLabel.isHidden })
 }
 
-@Test @MainActor func sidebarTreeParentAndKeyboardSelectionUseActualURLs() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarTreeParentAndKeyboardSelectionUseActualURLs() throws {
     _ = NSApplication.shared
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
     let parent = URL(fileURLWithPath: "/tmp/Images")
@@ -92,7 +92,7 @@ import MadoInfrastructure
     #expect(chosen == child)
 }
 
-@Test @MainActor func sidebarTreeCompactIndentUsesPinnedBreakpoint() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarTreeCompactIndentUsesPinnedBreakpoint() throws {
     _ = NSApplication.shared
     let design = try PinnedDesign.page("compact-grid")
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 612))
@@ -113,7 +113,7 @@ import MadoInfrastructure
     #expect(tree.rows[1].frame.maxX <= tree.bounds.maxX)
 }
 
-@Test @MainActor func sidebarTreeSelectedFillFollowsPinnedLightAndDarkCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarTreeSelectedFillFollowsPinnedLightAndDarkCSS() throws {
     _ = NSApplication.shared
     for (name, appearanceName) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(name)

@@ -21,7 +21,7 @@ import MadoInfrastructure
     try body(defaults)
 }
 
-@Test @MainActor func preferencesPersistenceRelaunchAndCommittedObserverValues() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceRelaunchAndCommittedObserverValues() {
     withPreferencesDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         let first = PersistenceObserver(defaults)
@@ -46,7 +46,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func preferencesPersistenceEqualValueDoesNotWriteOrNotify() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceEqualValueDoesNotWriteOrNotify() {
     withPreferencesDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         let observer = PersistenceObserver(defaults)
@@ -64,7 +64,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func preferencesPersistenceMissingCorruptAndWrongTypeRecover() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceMissingCorruptAndWrongTypeRecover() {
     let invalid: [Any?] = [nil, Data([0xff, 0xfe]), "not encoded data",
         Data(#"{"alwaysShowTools":true,"appearance":7,"filmstripExpanded":false}"#.utf8)]
     for input in invalid {
@@ -81,7 +81,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func preferencesPersistenceLegacyAndUnknownRestore() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceLegacyAndUnknownRestore() {
     for literal in [#"{"alwaysShowTools":true,"filmstripExpanded":false}"#,
                     #"{"alwaysShowTools":true,"appearance":"sepia","filmstripExpanded":false,"future":42}"#] {
         withPreferencesDefaults { defaults in
@@ -92,7 +92,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue124SortSurvivesUserDefaultsStoreRecreation() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue124SortSurvivesUserDefaultsStoreRecreation() {
     withPreferencesDefaults { defaults in
         let first = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         var changed = first.value
@@ -105,7 +105,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func preferencesPersistenceWeakObserverAndSurvivingObserver() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceWeakObserverAndSurvivingObserver() {
     withPreferencesDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         let surviving = PersistenceObserver(defaults)
@@ -120,7 +120,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func preferencesPersistenceReloadedSessionsStartPinnedAndSynchronize() {
+@Test(.timeLimit(.minutes(2))) @MainActor func preferencesPersistenceReloadedSessionsStartPinnedAndSynchronize() {
     withPreferencesDefaults { defaults in
         let initial = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         initial.value = DisplayPreferences(alwaysShowTools: true, appearance: .light)

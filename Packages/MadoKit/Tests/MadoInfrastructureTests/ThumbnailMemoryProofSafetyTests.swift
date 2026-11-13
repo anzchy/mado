@@ -274,7 +274,7 @@ func issue452FinalSourceGenerationRetryUsesCurrentDiskPayload() async throws {
 
 }
 
-@Test func issue452OrdinaryPipelineCannotConsumeLeaseBoundThumbnail() async throws {
+@Test(.timeLimit(.minutes(2))) func issue452OrdinaryPipelineCannotConsumeLeaseBoundThumbnail() async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
     let (request, native, before) = try await f.warm()
@@ -379,7 +379,7 @@ private struct Issue452ProofFixture {
     }
 }
 
-@Test func issue452NativeWarmProofRejectsSameRevisionContentChange() async throws {
+@Test(.timeLimit(.minutes(2))) func issue452NativeWarmProofRejectsSameRevisionContentChange() async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
     let timestamp = Date(timeIntervalSince1970: 1_000_000)
@@ -419,7 +419,7 @@ private struct Issue452ProofFixture {
     #expect(await f.pipeline.diagnostics().memoryCache?.hits == (before.memoryCache?.hits ?? 0) + 1)
 }
 
-@Test func issue452NativeWarmGenerationRejectsOldProof() async throws {
+@Test(.timeLimit(.minutes(2))) func issue452NativeWarmGenerationRejectsOldProof() async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
     let (request, warm, before) = try await f.warm()
@@ -438,7 +438,7 @@ private struct Issue452ProofFixture {
     #expect(await f.pipeline.diagnostics().memoryCache?.hits == (before.memoryCache?.hits ?? 0) + 1)
 }
 
-@Test func issue452RevokedCurrentRequestCannotHitNativeMemory() async throws {
+@Test(.timeLimit(.minutes(2))) func issue452RevokedCurrentRequestCannotHitNativeMemory() async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
     let authority = AccessWorkAuthority(), old = AccessWorkAuthority()
@@ -461,7 +461,7 @@ private struct Issue452ProofFixture {
     #expect(await f.pipeline.diagnostics().memoryCache?.hits == (before.memoryCache?.hits ?? 0) + 1)
 }
 
-@Test(arguments: ["denied", "missing", "corrupt"])
+@Test(.timeLimit(.minutes(2)), arguments: ["denied", "missing", "corrupt"])
 func issue452NativeWarmProofStillChecksPayloadFailure(_ condition: String) async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
@@ -576,7 +576,7 @@ func issue452ClearDuringNativeValidationRejectsOldCandidate() async throws {
     }
 }
 
-@Test func issue452CachedImageWrapperPreservesValidNativeMemory() async throws {
+@Test(.timeLimit(.minutes(2))) func issue452CachedImageWrapperPreservesValidNativeMemory() async throws {
     let f = try await Issue452ProofFixture.make()
     defer { try? FileManager.default.removeItem(at: f.base) }
     let (request, native, before) = try await f.warm()

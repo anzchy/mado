@@ -22,7 +22,7 @@ private func issue114StoredFields(_ defaults: UserDefaults) throws -> [String: A
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 }
 
-@Test @MainActor func issue114PrefsUserDefaultsRelaunchRoundTrip() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PrefsUserDefaultsRelaunchRoundTrip() throws {
     try issue114WithDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         var a = DisplayPreferences(alwaysShowTools: true, filmstripExpanded: true, appearance: .dark,
@@ -51,7 +51,7 @@ private func issue114StoredFields(_ defaults: UserDefaults) throws -> [String: A
     }
 }
 
-@Test @MainActor func issue114PrefsUserDefaultsNormalizesOnSetAndNotifiesOncePerChange() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PrefsUserDefaultsNormalizesOnSetAndNotifiesOncePerChange() throws {
     try issue114WithDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         let observer = Issue114StoreObserver()
@@ -77,7 +77,7 @@ private func issue114StoredFields(_ defaults: UserDefaults) throws -> [String: A
     }
 }
 
-@Test @MainActor func issue114PrefsUserDefaultsUnsupportedSchemaKeepsBytes() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PrefsUserDefaultsUnsupportedSchemaKeepsBytes() {
     issue114WithDefaults { defaults in
         let data = Data(#"{"schemaVersion":99,"future":"keep"}"#.utf8)
         defaults.set(data, forKey: issue114Key)

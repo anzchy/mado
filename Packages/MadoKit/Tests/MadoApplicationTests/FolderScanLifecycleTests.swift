@@ -116,7 +116,7 @@ actor FolderScanControlledScanner: FolderScanning {
     var folder: URL { root.appendingPathComponent("A") }
 }
 
-@Test @MainActor func folderScanBeginsReadingBeforeAcquisition() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanBeginsReadingBeforeAcquisition() async throws {
     let fixture = FolderScanFixture()
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     #expect(fixture.coordinator.isReadingFolder)
@@ -128,7 +128,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(fixture.coordinator.snapshot == nil)
 }
 
-@Test(arguments: ["complete", "cancel", "failed", "replaced", "end"])
+@Test(.timeLimit(.minutes(2)), arguments: ["complete", "cancel", "failed", "replaced", "end"])
 @MainActor func folderScanLeaseEndings(ending: String) async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -162,7 +162,7 @@ actor FolderScanControlledScanner: FolderScanning {
     if ending == "cancel" || ending == "end" { #expect(coordinator.snapshot == nil) }
 }
 
-@Test(arguments: ["batch", "completion", "error"])
+@Test(.timeLimit(.minutes(2)), arguments: ["batch", "completion", "error"])
 @MainActor func folderScanOldBatchCompletionErrorCannotBackflow(event: String) async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let old = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -187,7 +187,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(await fixture.access.balance == [2, 2])
 }
 
-@Test(arguments: ["cancel", "end", "replaced"])
+@Test(.timeLimit(.minutes(2)), arguments: ["cancel", "end", "replaced"])
 @MainActor func folderScanCancelRetainsLeaseUntilScannerExits(ending: String) async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -218,7 +218,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(!coordinator.isReadingFolder)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderScanCancelThenLateCompletionAndError(failing: Bool) async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -235,7 +235,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderScanCancelDuringAcquisitionNeverEnumerates() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanCancelDuringAcquisitionNeverEnumerates() async throws {
     let fixture = FolderScanFixture(holdsAcquire: true), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.access.waitForHeldAcquisition()
@@ -248,7 +248,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(!coordinator.isReadingFolder)
 }
 
-@Test @MainActor func folderScanAcquireErrorsEndReadingWithoutLease() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanAcquireErrorsEndReadingWithoutLease() async {
     let fixture = FolderScanFixture(fails: true), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await #expect(throws: FolderScanTestError.expected) { try await task.value }
@@ -259,7 +259,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(await fixture.scanner.startedCount == 0)
 }
 
-@Test @MainActor func folderScanInputRemainsBackgroundAndCompletionIsImmutable() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanInputRemainsBackgroundAndCompletionIsImmutable() async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let input = fixture.folder.appendingPathComponent("img2.png")
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id, input: input)
@@ -279,7 +279,7 @@ actor FolderScanControlledScanner: FolderScanning {
     #expect(!coordinator.isReadingFolder)
 }
 
-@Test @MainActor func folderScanReturnedTaskCancellationEndsWithoutFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanReturnedTaskCancellationEndsWithoutFailure() async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()

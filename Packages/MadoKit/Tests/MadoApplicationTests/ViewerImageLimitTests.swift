@@ -23,7 +23,7 @@ private actor LimitedDetailPipeline: ImagePipeline {
         return loadImage(key)
     }
 }
-@MainActor @Test func loadResourceLimitReconnectionFailureClearsPixelsAndIdentity() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadResourceLimitReconnectionFailureClearsPixelsAndIdentity() async {
     let session = ViewerSession(), access = RenewalLeases(), pipeline = LimitedDetailPipeline(), host = LoadHost()
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/renew.png")

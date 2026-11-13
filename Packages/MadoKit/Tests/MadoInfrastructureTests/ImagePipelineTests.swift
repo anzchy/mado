@@ -34,7 +34,7 @@ private struct ThreadProbeDecoder: ImageDecoding {
         try await body(file)
     }
 
-    @Test func requestsDecodeOffMainAndRespectPixelLimit() async throws {
+    @Test(.timeLimit(.minutes(2))) func requestsDecodeOffMainAndRespectPixelLimit() async throws {
         try await withImage { file in
             let pipeline = ImageIOPipeline(decoder: ThreadProbeDecoder(), configuration: DecodeConfiguration(workers: 1))
             for maximum in [1, 8, 64, 128] {
@@ -50,7 +50,7 @@ private struct ThreadProbeDecoder: ImageDecoding {
         }
     }
 
-    @Test func corruptFilesAndInvalidRequestsFailCleanly() async throws {
+    @Test(.timeLimit(.minutes(2))) func corruptFilesAndInvalidRequestsFailCleanly() async throws {
         try await withImage { file in
             try Data("not an image".utf8).write(to: file)
             let pipeline = ImageIOPipeline()
@@ -65,7 +65,7 @@ private struct ThreadProbeDecoder: ImageDecoding {
             }, throws: loadError(.sourceChanged))
         }
     }
-    @Test func zoomSequenceDecodesOnlyPreviewAndOneDetailOnPipelineQueue() async throws {
+    @Test(.timeLimit(.minutes(2))) func zoomSequenceDecodesOnlyPreviewAndOneDetailOnPipelineQueue() async throws {
         try await withImage { file in
             let pipeline = ImageIOPipeline(decoder: ThreadProbeDecoder(), configuration: DecodeConfiguration(workers: 1))
             let source = CGSize(width: 64, height: 32)

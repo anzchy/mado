@@ -7,7 +7,7 @@ import MadoApplication
 @Suite struct ImageCoverageRequestTests {
     // #161: the pipeline reads the header once and chooses the smallest covering edge for the real source.
     // The fixtures are 600×400 and 400×600, so a 212×148 tile keeps both edges below the source size.
-    @Test(arguments: [("landscape-3x2.png", 222), ("portrait-2x3.png", 318)])
+    @Test(.timeLimit(.minutes(2)), arguments: [("landscape-3x2.png", 222), ("portrait-2x3.png", 318)])
     func coverageRequestDecodesSmallestCoveringEdge(name: String, edge: Int) async throws {
         let pipeline = ImageIOPipeline(), tile = ThumbnailCoverage(width: 212, height: 148)
         let request = try await pipeline.request(for: fixture(name), covering: tile, identityRoot: nil)
@@ -18,7 +18,7 @@ import MadoApplication
         #expect(max(image.width, image.height) == edge)
     }
 
-    @Test func coverageRequestUsesOrientedRatio() async throws {
+    @Test(.timeLimit(.minutes(2))) func coverageRequestUsesOrientedRatio() async throws {
         let pipeline = ImageIOPipeline(), tile = ThumbnailCoverage(width: 64, height: 32)
         // 1 and 3 keep the raw 128×96 ratio; 5 to 8 store 96×128 and rotate it upright.
         for orientation in [1, 3, 5, 6, 7, 8] {
@@ -29,7 +29,7 @@ import MadoApplication
         }
     }
 
-    @Test func coverageRequestThroughAccessSourceReachesTheGrid() async throws {
+    @Test(.timeLimit(.minutes(2))) func coverageRequestThroughAccessSourceReachesTheGrid() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -49,7 +49,7 @@ import MadoApplication
 }
 
 // The header read only learns the ratio; the budget is checked against the edge actually chosen.
-@Test func coverageRequestChecksBudgetAtTheChosenEdgeNotTheCeiling() async throws {
+@Test(.timeLimit(.minutes(2))) func coverageRequestChecksBudgetAtTheChosenEdgeNotTheCeiling() async throws {
     let tile = ThumbnailCoverage(width: 16, height: 12)
     let cost = try DecodeBudget.outputCost(width: 1280, height: 960, maximumPixelSize: 16, bytesPerPixel: 4, budget: .max)
     let pipeline = ImageIOPipeline(configuration: DecodeConfiguration(budget: 2 * cost))

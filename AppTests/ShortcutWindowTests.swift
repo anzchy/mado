@@ -4,7 +4,7 @@ import MadoApplication
 import MadoInfrastructure
 import MadoMacUI
 
-@MainActor @Test func issue219HelpOpensOneShortcutWindowAndCommandWClosesIt() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue219HelpOpensOneShortcutWindowAndCommandWClosesIt() throws {
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu
     var shortcutWindow: ShortcutWindow!
@@ -52,7 +52,7 @@ import MadoMacUI
     #expect(!first.isVisible)
 }
 
-@MainActor @Test func issue219RealMainMenuCatalogListsEverySourceExactlyOnce() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue219RealMainMenuCatalogListsEverySourceExactlyOnce() throws {
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu
     let menu = CommandMenu(preferencesStore: InMemoryDisplayPreferencesStore(),
@@ -78,7 +78,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue219AppDelegateShowShortcutsReusesItsCachedWindow() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue219AppDelegateShowShortcutsReusesItsCachedWindow() throws {
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu
     let menu = CommandMenu(preferencesStore: InMemoryDisplayPreferencesStore(),

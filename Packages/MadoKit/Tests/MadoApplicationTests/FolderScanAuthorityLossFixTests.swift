@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test(arguments: ["empty-batch", "showing-batch", "empty-complete", "showing-complete", "empty-error", "showing-error"])
+@Test(.timeLimit(.minutes(2)), arguments: ["empty-batch", "showing-batch", "empty-complete", "showing-complete", "empty-error", "showing-error"])
 @MainActor func folderFixAuthorityLossRestoresPriorPresentation(event: String) async throws {
     let fixture = FolderScanFixture(), host = FolderFixEffectsHost(), trace = FolderFixTrace()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)

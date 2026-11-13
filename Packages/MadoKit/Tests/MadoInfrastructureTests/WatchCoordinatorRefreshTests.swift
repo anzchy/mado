@@ -184,7 +184,7 @@ private actor EntrySink {
 }
 
 /// I-1 (#137): a real scan of a folder holding only a non-image file and a subfolder is empty; real refreshes toggle it.
-@Test @MainActor func realEmptyFolderScanSetsIsEmptyFolderAndWatchedRefreshClearsIt() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func realEmptyFolderScanSetsIsEmptyFolderAndWatchedRefreshClearsIt() async throws {
     let w = try await WatchedCoordinator(files: ["F/notes.txt"], folders: ["root/F", "root/F/sub"]); defer { w.f.remove() }
     let c = w.coordinator
     try await c.begin(folder: w.url("F"), rootID: w.rootID).value

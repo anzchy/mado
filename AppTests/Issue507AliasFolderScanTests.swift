@@ -68,7 +68,7 @@ private actor Alias507Scanner: FolderScanning {
 }
 
 /// Each case has its own two-second wall-clock bound, independent of ConditionWait's timed-test policy.
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
 func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
@@ -135,7 +135,7 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     }
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("grants507-\(UUID())", isDirectory: true)
@@ -164,7 +164,7 @@ func issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget() async throws {
     #expect(await files.records().count == 1)
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue507LinkedFirstGrantKeepsCanonicalRootIdentity() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("linked-first507-\(UUID())", isDirectory: true)
@@ -261,7 +261,7 @@ private struct Unreadable507Access: SecurityScope, BookmarkCoding {
     }
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
 func issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner: Bool) async throws {
     for entry in ["drop raw symlink", "drop plain folder", "open -a symlink", "open -a plain folder"] {
         let rig = try Delivered507Rig(legacyScanner: legacyScanner)
@@ -299,7 +299,7 @@ func issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner: Bool) async throw
     }
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue507CancelledFolderPanelLeavesNoGrant() async throws {
     let rig = try Delivered507Rig()
     defer { rig.remove() }
@@ -312,7 +312,7 @@ func issue507CancelledFolderPanelLeavesNoGrant() async throws {
     try await rig.expectNothingGranted("cancel")
 }
 
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt() async throws {
     let rig = try Delivered507Rig(unreadable: true)
     defer { rig.remove() }
@@ -325,7 +325,7 @@ func issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt() async th
 
 /// smoke507-20261107: in the sandbox a cold Finder drop of a raw link is neither readable nor startable,
 /// yet it must reach the folder prompt on its canonical target.
-@Test @MainActor
+@Test(.timeLimit(.minutes(3))) @MainActor
 func issue507UnreadableDroppedLinkPromptsForItsTarget() async throws {
     let rig = try Delivered507Rig(unreadable: true)
     defer { rig.remove() }
@@ -337,7 +337,7 @@ func issue507UnreadableDroppedLinkPromptsForItsTarget() async throws {
     try await rig.expectNothingGranted("unreadable link")
 }
 
-@Test(arguments: ["image", "link and image", "stale link"]) @MainActor
+@Test(.timeLimit(.minutes(3)), arguments: ["image", "link and image", "stale link"]) @MainActor
 func issue507NonFolderInputNeverPromptsForAFolder(input: String) async throws {
     let rig = try Delivered507Rig()
     defer { rig.remove() }

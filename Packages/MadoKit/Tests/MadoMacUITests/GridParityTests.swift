@@ -27,7 +27,7 @@ import MadoCore
     grid.collectionView.keyDown(with: event)
 }
 
-@Test @MainActor func gridArrowSequenceDrawsOnlyModelSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridArrowSequenceDrawsOnlyModelSelection() throws {
     let (grid, entries, window) = parityGrid(width: 700)
     var modelSelection: ItemID?
     grid.onSelect = { modelSelection = $0 }
@@ -47,7 +47,7 @@ import MadoCore
     #expect(entries.contains { $0.itemID == modelSelection })
 }
 
-@Test @MainActor func gridResponsiveGeometryMatchesPageElevenAndTwelve() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridResponsiveGeometryMatchesPageElevenAndTwelve() throws {
     let (grid, _, window) = parityGrid(width: 1280)
     let scroll = try #require(grid.subviews.compactMap { $0 as? NSScrollView }.first)
     scroll.scrollerStyle = .overlay
@@ -79,7 +79,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func gridRenderedColumnsAndArrowFollowClipWidth() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridRenderedColumnsAndArrowFollowClipWidth() throws {
     for (width, style, columns, gap, inset, tileHeight) in [
         (1280.0, NSScroller.Style.overlay, 5, 16.0, 24.0, 188.16),
         (1280.0, .legacy, 5, 16.0, 24.0, 188.16),
@@ -109,7 +109,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func gridArrowStepMatchesRenderedColumnsAtFractionalWidths() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridArrowStepMatchesRenderedColumnsAtFractionalWidths() throws {
     for (width, style) in [(789.0, NSScroller.Style.overlay), (804.0, .legacy)] {
         let (grid, entries, window) = parityGrid(width: width)
         let scroll = try #require(grid.subviews.compactMap { $0 as? NSScrollView }.first)
@@ -129,7 +129,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func gridRelayoutsWhenScrollerOrClipChangesWithoutOuterResize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridRelayoutsWhenScrollerOrClipChangesWithoutOuterResize() throws {
     let (grid, _, _) = parityGrid(width: 1280)
     let scroll = try #require(grid.subviews.compactMap { $0 as? NSScrollView }.first)
     let layout = try #require(grid.collectionView.collectionViewLayout as? NSCollectionViewFlowLayout)
@@ -155,7 +155,7 @@ import MadoCore
     #expect(layout.itemSize.width < legacyWidth)
 }
 
-@Test @MainActor func gridSelectionOutlinesTileOnlyAndCurrentRingIsDistinct() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSelectionOutlinesTileOnlyAndCurrentRingIsDistinct() throws {
     let cell = GridPhotoItem()
     _ = cell.view
     cell.view.frame = NSRect(x: 0, y: 0, width: 233.6, height: 224.16)
@@ -174,7 +174,7 @@ import MadoCore
     #expect(!cell.currentRingLayer.isHidden)
 }
 
-@Test @MainActor func gridFilenameTruncatesAtEnd() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridFilenameTruncatesAtEnd() throws {
     let cell = GridPhotoItem()
     _ = cell.view
     let name = try #require(cell.view.subviews.compactMap { $0 as? NSTextField }

@@ -17,7 +17,7 @@ final class CacheSnapshotRecorder: ResourceSnapshotTracing, @unchecked Sendable 
 }
 
 @Suite struct ImageCacheSnapshotTests {
-    @Test func cacheSnapshotScriptHasLiteralFieldsAndLookupOutcomes() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheSnapshotScriptHasLiteralFieldsAndLookupOutcomes() async throws {
         let recorder = CacheSnapshotRecorder(), cache = ImageMemoryCache(capacity: 32)
         let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 64), executor: ControlledExecutor(), decoder: TinyDecoder())
         let context = ResourceSnapshotContext(tracer: recorder, activity: await admission.activity())
@@ -52,7 +52,7 @@ final class CacheSnapshotRecorder: ResourceSnapshotTracing, @unchecked Sendable 
         #expect(await cache.usage().entries == 0)
     }
 
-    @Test func cacheSnapshotIncludesActualAdmissionActivity() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheSnapshotIncludesActualAdmissionActivity() async throws {
         let recorder = CacheSnapshotRecorder(), cache = ImageMemoryCache(capacity: 32), executor = ControlledExecutor()
         let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 32), executor: executor, decoder: TinyDecoder())
         let first = await admission.subscribe(tinyRequest, key: decodeKey(90), cost: 16, heavy: false, priority: .current)
@@ -68,7 +68,7 @@ final class CacheSnapshotRecorder: ResourceSnapshotTracing, @unchecked Sendable 
         #expect(recorder.values.map(\.pressure) == [.normal, .warning])
     }
 
-    @Test func cachePipelineConnectsMutationSnapshotsAndOneLookupPerRequest() async throws {
+    @Test(.timeLimit(.minutes(2))) func cachePipelineConnectsMutationSnapshotsAndOneLookupPerRequest() async throws {
         let recorder = CacheSnapshotRecorder(), cache = ImageMemoryCache(capacity: 100_000), decoder = CacheCountingDecoder()
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache, cacheTrace: recorder)
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)

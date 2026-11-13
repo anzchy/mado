@@ -35,7 +35,7 @@ import MadoInfrastructure
 
 /// grid-light.html is pinned with overlay scrollbars, which take no width. A legacy scroller sits beside the grid, as a
 /// browser's classic scrollbar does: tiles shrink to the narrower content width, breakpoints still follow the window.
-@Test(arguments: [NSScroller.Style.overlay, .legacy]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [NSScroller.Style.overlay, .legacy]) @MainActor
 func issue281ThumbnailFramesAndPitchUseWindowViewportAtBreakpoints(scrollerStyle: NSScroller.Style) throws {
     let design = try PinnedDesign.page("grid-light")
     let cases: [(width: CGFloat, height: CGFloat, columns: Int, inset: CGFloat, gap: CGFloat, rowGap: CGFloat)] = [
@@ -93,7 +93,7 @@ private func issue281Image(width: Int, height: Int) -> CGImage {
         provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
 }
 
-@Test @MainActor func issue281ThumbnailCoverFillHandlesLandscapePortraitAndSinglePixelImages() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281ThumbnailCoverFillHandlesLandscapePortraitAndSinglePixelImages() throws {
     for (width, height) in [(3, 2), (2, 3), (1, 1)] {
         let cell = GridPhotoItem()
         let folder = URL(fileURLWithPath: "/tmp/mado-grid-281-cover")

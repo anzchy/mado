@@ -17,7 +17,7 @@ func issue344LoopMenuStateIsGlobal(loop: Bool, folder: Bool) {
     }
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue344LoopMenuSharedTogglePreservesOtherPreferences(initial: Bool) {
     var value = DisplayPreferences(alwaysShowTools: true, filmstripExpanded: true, appearance: .dark,
                                    gridSidebarWidth: 284, gridSidebarVisible: false)

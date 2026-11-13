@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func p201LeaseRebindReconnectKeepsEachTokensOriginalSession() async throws {
+@Test(.timeLimit(.minutes(2))) func p201LeaseRebindReconnectKeepsEachTokensOriginalSession() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -29,7 +29,7 @@ import MadoCore
     #expect(scope.balanced)
 }
 
-@Test func p201LeaseRebindStaleRelocationSeparatesLiveSessionsAndPersists() async throws {
+@Test(.timeLimit(.minutes(2))) func p201LeaseRebindStaleRelocationSeparatesLiveSessionsAndPersists() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -60,7 +60,7 @@ import MadoCore
     #expect(scope.balanced)
 }
 
-@Test(arguments: [0, 1, 2, 3])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3])
 func p201LeaseRebindReleasePermutationsAndDuplicatesConserveScopes(scenario: Int) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
@@ -98,7 +98,7 @@ func p201LeaseRebindReleasePermutationsAndDuplicatesConserveScopes(scenario: Int
     #expect(scope.balanced)
 }
 
-@Test(arguments: ["bookmark", "start"])
+@Test(.timeLimit(.minutes(2)), arguments: ["bookmark", "start"])
 func p201LeaseRebindFailedStaleRepairKeepsOldTokenReleasable(kind: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
@@ -126,7 +126,7 @@ func p201LeaseRebindFailedStaleRepairKeepsOldTokenReleasable(kind: String) async
     #expect(scope.balanced)
 }
 
-@Test func p201LeaseRebindSameURLStaleAcquiresShareOneRefresh() async throws {
+@Test(.timeLimit(.minutes(2))) func p201LeaseRebindSameURLStaleAcquiresShareOneRefresh() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -145,7 +145,7 @@ func p201LeaseRebindFailedStaleRepairKeepsOldTokenReleasable(kind: String) async
     #expect(scope.balanced)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201LeaseRebindReturnToHeldURLPublishesLatestRoot(stale: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
@@ -188,7 +188,7 @@ func p201LeaseRebindReturnToHeldURLPublishesLatestRoot(stale: Bool) async throws
     #expect(scope.balanced)
 }
 
-@Test func p201LeaseRebindReturnRefreshFailureKeepsBothHeldSessions() async throws {
+@Test(.timeLimit(.minutes(2))) func p201LeaseRebindReturnRefreshFailureKeepsBothHeldSessions() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = FakeBookmarks()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")

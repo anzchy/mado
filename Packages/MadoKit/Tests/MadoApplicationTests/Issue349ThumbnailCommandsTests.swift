@@ -2,7 +2,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@Test @MainActor func issue349ThumbnailCommandsFollowFiniteStateModel() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue349ThumbnailCommandsFollowFiniteStateModel() {
     let router = CommandRouter()
     let root = AccessRootID()
     let ids = (0..<4).map { ItemID.rootRelative(rootID: root, relativePath: "\($0).jpg") }
@@ -37,7 +37,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue349ThumbnailCommandsRejectBareFitAndFocusedInput() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue349ThumbnailCommandsRejectBareFitAndFocusedInput() {
     let router = CommandRouter()
     let store = InMemoryDisplayPreferencesStore()
     let host = FakeSessionHost()
@@ -68,7 +68,7 @@ import MadoApplication
     #expect(host.lastCanvasCommand == nil, "Grid never sends thumbnail commands to image canvas")
 }
 
-@Test @MainActor func issue349ThumbnailCommandsLeaveViewerZoomUnchanged() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue349ThumbnailCommandsLeaveViewerZoomUnchanged() {
     let router = CommandRouter()
     var preferences = DisplayPreferences()
     preferences.thumbnailSize = 170

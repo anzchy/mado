@@ -11,7 +11,7 @@ final class StatsClock: @unchecked Sendable {
     func advance(_ seconds: TimeInterval) { lock.withLock { value += seconds } }
 }
 
-@Test func diagnosticsDiskIndexIsScannedAtMostOncePerTenSeconds() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskIndexIsScannedAtMostOncePerTenSeconds() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

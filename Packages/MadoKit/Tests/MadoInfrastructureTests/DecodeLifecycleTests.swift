@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func cancelledBeforeRegistrationNeverSubmitsWork() async {
+@Test(.timeLimit(.minutes(2))) func cancelledBeforeRegistrationNeverSubmitsWork() async {
     for realQueue in [false, true] {
         let controlled = ControlledExecutor()
         let executor: any DecodeExecuting = realQueue ? OperationDecodeExecutor(workers: 1) : controlled
@@ -48,7 +48,7 @@ import MadoCore
 private struct FailingDecoder: ImageDecoding {
     func decode(_ request: ImageDecodeRequest) throws -> DecodedImage { throw ImageDecodeError.unreadableImage }
 }
-@Test func failureReleasesPermitsAndFinishesAllConsumersOnce() async {
+@Test(.timeLimit(.minutes(2))) func failureReleasesPermitsAndFinishesAllConsumersOnce() async {
     for realQueue in [false, true] {
         let controlled = ControlledExecutor()
         let executor: any DecodeExecuting = realQueue ? OperationDecodeExecutor(workers: 1) : controlled
@@ -65,7 +65,7 @@ private struct FailingDecoder: ImageDecoding {
     }
 }
 
-@Test func preparedRequestsShareIdentityAndRejectChangedRevisions() async throws {
+@Test(.timeLimit(.minutes(2))) func preparedRequestsShareIdentityAndRejectChangedRevisions() async throws {
     let pipeline = ImageIOPipeline()
     let file = fixture("orientation-1.tiff")
     let a = try await pipeline.request(for: file, maximumPixelSize: 128)
@@ -82,7 +82,7 @@ private struct FailingDecoder: ImageDecoding {
     #expect(throws: ImageDecodeError.unreadableImage) { try ImageIODecoder().decode(ImageDecodeRequest(fileURL: fixture("corrupt.png"), maximumPixelSize: 1)) }
 }
 
-@Test func eligibleVisibleWorkPrecedesPrefetchAndCurrentWorkCanUseAllSlots() async throws {
+@Test(.timeLimit(.minutes(2))) func eligibleVisibleWorkPrecedesPrefetchAndCurrentWorkCanUseAllSlots() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 2, visible: 1, budget: 8), executor: executor, decoder: TinyDecoder())
     let first = await admission.subscribe(tinyRequest, key: decodeKey(50), cost: 4, heavy: false, priority: .current)
@@ -122,7 +122,7 @@ private struct FailingDecoder: ImageDecoding {
     #expect(await admission.activity().running == 0)
 }
 
-@Test func cancellingAllQueuedConsumersAllowsSameKeyToBeRegisteredAgain() async throws {
+@Test(.timeLimit(.minutes(2))) func cancellingAllQueuedConsumersAllowsSameKeyToBeRegisteredAgain() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4), executor: executor, decoder: TinyDecoder())
     let current = await admission.subscribe(tinyRequest, key: decodeKey(61), cost: 4, heavy: true, priority: .current)
@@ -137,7 +137,7 @@ private struct FailingDecoder: ImageDecoding {
     #expect(await admission.activity().reservedBytes == 0)
 }
 
-@Test func unavailableBytesDoNotTakeSlotsAndPendingPromotionDoesNotDuplicateWork() async throws {
+@Test(.timeLimit(.minutes(2))) func unavailableBytesDoNotTakeSlotsAndPendingPromotionDoesNotDuplicateWork() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 3, budget: 8), executor: executor, decoder: TinyDecoder())
     let a = await admission.subscribe(tinyRequest, key: decodeKey(70), cost: 8, heavy: false, priority: .current)

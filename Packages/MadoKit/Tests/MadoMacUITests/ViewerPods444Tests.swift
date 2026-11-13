@@ -126,7 +126,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
         && abs(a.width - b.width) <= tolerance && abs(a.height - b.height) <= tolerance
 }
 
-@Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+@Test(.timeLimit(.minutes(2)), arguments: [NSAppearance.Name.aqua, .darkAqua])
 @MainActor func i444LeadingPodMatchesPage14(appearance: NSAppearance.Name) {
     let scene = Pods444Scene(appearance: appearance)
     defer { scene.close() }
@@ -148,7 +148,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(!ids.contains("command.open.button") && !ids.contains("command.inspector.button"))
 }
 
-@Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+@Test(.timeLimit(.minutes(2)), arguments: [NSAppearance.Name.aqua, .darkAqua])
 @MainActor func i444ZoomPodAndChevronMatchPage14(appearance: NSAppearance.Name) throws {
     let design = try PinnedDesign.page("viewer-controls", appearance: appearance == .darkAqua ? "dark" : "light")
     #expect(try design.length(".zoom-pod .zoom-label", "min-width", viewport: 1280) == 100)
@@ -183,7 +183,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(inked, "chevron pixels in \(appearance.rawValue)")
 }
 
-@Test(arguments: [Pods444Source.browsing, .preview, .single, .files], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [Pods444Source.browsing, .preview, .single, .files], [false, true])
 @MainActor func i444ReturnToGridToolEnabledIffCanReturnAndPressReturns(source: Pods444Source, folder: Bool) {
     for activation in 0..<3 {
         let scene = Pods444Scene(source, canReturnToFolder: folder)
@@ -211,7 +211,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     }
 }
 
-@Test(arguments: [false, true], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true], [false, true])
 @MainActor func i444SidebarToolFollowsSessionState(canToggle: Bool, visible: Bool) {
     let scene = Pods444Scene(.preview, available: canToggle)
     defer { scene.close() }
@@ -232,7 +232,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     else { #expect(scene.host.intents.isEmpty && scene.store.value.gridSidebarVisible == visible) }
 }
 
-@Test @MainActor func i444PodTooltipsMatchPage14() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444PodTooltipsMatchPage14() {
     let scene = Pods444Scene()
     defer { scene.close() }
     scene.store.value.gridSidebarVisible = false
@@ -251,7 +251,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(scene.sidebar.toolTip == "Show sidebar (⌃⌘S)")
 }
 
-@Test @MainActor func i444ZoomModeLabelFollowsZoomMode() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ZoomModeLabelFollowsZoomMode() {
     let scene = Pods444Scene()
     defer { scene.close() }
     func label() -> String? { scene.zoom.accessibilityValue() as? String }
@@ -272,7 +272,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(!(scene.zoom.accessibilityHelp() ?? "").isEmpty)
 }
 
-@Test @MainActor func i444ZoomMenuRoutesAndRoundTripsFitActualFit() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ZoomMenuRoutesAndRoundTripsFitActualFit() {
     let scene = Pods444Scene()
     defer { scene.close() }
     scene.session.beginCanvasImage(); scene.overlay.refresh(filename: "a.png")
@@ -312,7 +312,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     }
 }
 
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func i444ZoomToolOpensMenuByClickSpaceAndAXPressOnlyWhenImageAvailable(hasImage: Bool) {
     for activation in 0..<3 {
         let scene = Pods444Scene(hasImage: hasImage)
@@ -335,7 +335,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     }
 }
 
-@Test(arguments: ["zoom", "more"])
+@Test(.timeLimit(.minutes(2)), arguments: ["zoom", "more"])
 @MainActor func i444MenuLockHeldOnlyWhileEitherMenuPresents(menu: String) {
     let scene = Pods444Scene()
     defer { scene.close() }
@@ -358,7 +358,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(scene.session.chrome.locks == before)
 }
 
-@Test @MainActor func i444MoreToolPresentsProviderMenuOrDoesNothing() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444MoreToolPresentsProviderMenuOrDoesNothing() {
     let scene = Pods444Scene()
     defer { scene.close() }
     let menu = NSMenu()
@@ -383,7 +383,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(scene.more.isEnabled && scene.more.acceptsFirstResponder)
 }
 
-@Test(arguments: [false, true], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true], [false, true])
 @MainActor func i444PodsNeverOverlapAcrossContentWidths(notice: Bool, longName: Bool) {
     let scene = Pods444Scene()
     defer { scene.close() }
@@ -402,7 +402,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     }
 }
 
-@Test @MainActor func i444RowBreakThresholdsUseNewPodWidths() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444RowBreakThresholdsUseNewPodWidths() {
     let scene = Pods444Scene()
     defer { scene.close() }
     func layout(_ width: CGFloat) { scene.overlay.frame = NSRect(x: 0, y: 0, width: width, height: 800) }
@@ -419,7 +419,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     #expect(scene.overlay.groups[1].frame.minY == 60)
 }
 
-@Test @MainActor func i444TabOrderIsEnabledToolsInVisualOrder() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444TabOrderIsEnabledToolsInVisualOrder() {
     let rows: [(Pods444Source, Bool, Bool, Bool)] = [  // source, sidebar available, folder, image
         (.preview, true, false, true), (.preview, false, false, true), (.preview, true, false, false),
         (.single, false, true, true), (.single, false, false, true), (.browsing, false, false, false)]
@@ -450,7 +450,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
     }
 }
 
-@Test @MainActor func i444ToolEnablementTracksSessionTransitionsOnOneOverlay() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ToolEnablementTracksSessionTransitionsOnOneOverlay() {
     let scene = Pods444Scene(.browsing, available: false)
     defer { scene.close() }
     func check(_ step: String) {
@@ -481,7 +481,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
 }
 
 /// The live face's own action (the SwiftUI component's tap) runs the tool's activation, like a click on the view.
-@Test @MainActor func i444FaceActionActivatesItsTool() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444FaceActionActivatesItsTool() throws {
     let scene = Pods444Scene(.preview)
     defer { scene.close() }
     let face = try #require(scene.returnTool.subviews.first as? NSHostingView<ChromeToolFace>)
@@ -492,7 +492,7 @@ private func near(_ a: NSRect, _ b: NSRect, _ tolerance: CGFloat = 1) -> Bool {
 }
 
 /// Without a presenter (the App installs NSMenu's pop-up) the pod menus stay closed: nothing tracks, no menu lock.
-@Test @MainActor func i444NoPresenterLeavesPodMenusClosed() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444NoPresenterLeavesPodMenusClosed() {
     let scene = Pods444Scene(hasImage: true)
     defer { scene.close() }
     scene.overlay.menuPresenter = nil

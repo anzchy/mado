@@ -35,7 +35,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     return .init(limit: budget.limit, pinned: usage.pinned, evictable: usage.evictable, staging: usage.reserved, peak: budget.peak)
 }
 
-@Test func diagnosticsSnapshotMatchesItsSourcesAfterRealLoads() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsSnapshotMatchesItsSourcesAfterRealLoads() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)
@@ -62,7 +62,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     #expect(pinned.budget?.pinned == budget.evictable && pinned.budget?.evictable == 0)
 }
 
-@Test func diagnosticsSnapshotCarriesTheWholeDiskGroup() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsSnapshotCarriesTheWholeDiskGroup() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)
@@ -101,7 +101,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     #expect(done.decoding == (await pipeline.admission.diagnostics()))
 }
 
-@Test func diagnosticsSnapshotLeavesAbsentSourcesUnknown() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsSnapshotLeavesAbsentSourcesUnknown() async throws {
     let pipeline = ImageIOPipeline(cache: ImageMemoryCache(capacity: 1 << 20))
     let snapshot = await pipeline.diagnostics()
     #expect(snapshot.budget == nil)
@@ -110,7 +110,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     #expect(snapshot.decoding == .init(running: 0, waiting: 0, finished: 0))
 }
 
-@Test func diagnosticsDiskCacheableThumbnailsUseValidatedMemoryFirst() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskCacheableThumbnailsUseValidatedMemoryFirst() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)
@@ -133,7 +133,7 @@ private func budgetFigures(_ pipeline: ImageIOPipeline) throws -> DiagnosticsSna
     #expect(snapshot.memoryCache?.misses == 2)
 }
 
-@Test func diagnosticsViewerImagesUpTo1024UseValidatedMemoryAndLargerUseOrdinaryMemory() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsViewerImagesUpTo1024UseValidatedMemoryAndLargerUseOrdinaryMemory() async throws {
     let rig = try SnapshotRig()
     defer { rig.remove() }
     let disk = ThumbnailDiskCache(directory: rig.cacheDirectory)

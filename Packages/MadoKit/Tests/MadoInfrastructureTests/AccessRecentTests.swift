@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoInfrastructure
 
-@Test func accessRecentFoldersPersistNewestTenWithoutBookmarksOrAuthority() async throws {
+@Test(.timeLimit(.minutes(2))) func accessRecentFoldersPersistNewestTenWithoutBookmarksOrAuthority() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -31,7 +31,7 @@ import MadoInfrastructure
     #expect(await access.rootCovering(folders[3].url) == nil)
 }
 
-@Test func accessCorruptRecentStorePreservesEvidenceAndRecoversAcrossRelaunch() async throws {
+@Test(.timeLimit(.minutes(2))) func accessCorruptRecentStorePreservesEvidenceAndRecoversAcrossRelaunch() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -55,7 +55,7 @@ import MadoInfrastructure
     #expect(!String(decoding: try Data(contentsOf: recovery), as: UTF8.self).contains("bookmark"))
 }
 
-@Test func accessIncompatibleRecentAndCorruptRecoveryStillAllowFreshRecents() async throws {
+@Test(.timeLimit(.minutes(2))) func accessIncompatibleRecentAndCorruptRecoveryStillAllowFreshRecents() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }

@@ -255,7 +255,7 @@ private struct BudgetRig {
 }
 
 // A budgeted cache keeps the default monotonic recovery clock.
-@Test func budgetedCacheRecoversPrefetchOnTheDefaultClock() async {
+@Test(.timeLimit(.minutes(2))) func budgetedCacheRecoversPrefetchOnTheDefaultClock() async {
     let cache = ImageMemoryCache(capacity: 64, budget: MemoryBudget(limit: 64), pressureRecoveryDelay: 0)
     await cache.pressure(.critical)
     #expect(await !cache.permits(.prefetch))

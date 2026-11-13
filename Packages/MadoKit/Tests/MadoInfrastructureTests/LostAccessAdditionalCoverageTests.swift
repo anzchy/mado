@@ -29,7 +29,7 @@ private actor T229CoverageMounts: DiskMountPort {
     func events() -> AsyncStream<DiskMountEvent> { AsyncStream { $0.finish() } }
 }
 
-@Test func t229AdditionalLaunchNeverPublishesUnknownOrWrongVolume() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalLaunchNeverPublishesUnknownOrWrongVolume() async throws {
     for unknown in [false, true] {
         let f = try T229CoverageFixture(); defer { f.remove() }
         let id = AccessRootID(), scope = CountingScope()
@@ -49,7 +49,7 @@ private actor T229CoverageMounts: DiskMountPort {
     }
 }
 
-@Test func t229AdditionalMountedLegacyNeedsObservedRootIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalMountedLegacyNeedsObservedRootIdentity() async throws {
     let f = try T229CoverageFixture(); defer { f.remove() }
     let id = AccessRootID(), scope = CountingScope()
     let legacy = try f.root.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -63,7 +63,7 @@ private actor T229CoverageMounts: DiskMountPort {
     #expect(scope.counts == [1, 1])
 }
 
-@Test func t229AdditionalStaleLaunchListsMountedRootBeforePublishing() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalStaleLaunchListsMountedRootBeforePublishing() async throws {
     for directory in [false, true] {
         let f = try T229CoverageFixture(); defer { f.remove() }
         let target = directory ? f.root : f.base.appendingPathComponent("plain-file")
@@ -85,7 +85,7 @@ private actor T229CoverageMounts: DiskMountPort {
     }
 }
 
-@Test func t229AdditionalUnknownRecoveryCannotMintRootOrVolume() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalUnknownRecoveryCannotMintRootOrVolume() async throws {
     let f = try T229CoverageFixture(); defer { f.remove() }
     let scope = CountingScope()
     let files = try FileAccess(scope: scope, bookmarks: FakeBookmarks(), store: f.store, buildSHA: "T229")
@@ -98,7 +98,7 @@ private actor T229CoverageMounts: DiskMountPort {
     #expect(await files.records().isEmpty)
 }
 
-@Test func t229AdditionalLiveStaleRefreshRequiresMountedSameRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalLiveStaleRefreshRequiresMountedSameRoot() async throws {
     for mode in ["readable", "offline", "replacement"] {
         let f = try T229CoverageFixture(); defer { f.remove() }
         let original = try #require(try URLIdentityResourceReader().identity(for: f.root))
@@ -128,7 +128,7 @@ private actor T229CoverageMounts: DiskMountPort {
     }
 }
 
-@Test func t229AdditionalFreshOriginKeepsBothPinnedBuffersUntilLastRelease() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalFreshOriginKeepsBothPinnedBuffersUntilLastRelease() async throws {
     let authority = AccessWorkAuthority(), memory = ImageMemoryCache(capacity: 1_000_000)
     let pipeline = ImageIOPipeline(cache: memory)
     authority.update(counter: 0, readable: true)
@@ -164,7 +164,7 @@ private actor T229CoverageMounts: DiskMountPort {
     #expect(try await pipeline.image(for: freshRequest).image === fresh.image)
 }
 
-@Test func t229AdditionalStorePreservesRealSourcePermissionFailureBeforeAndAfterPayload() async throws {
+@Test(.timeLimit(.minutes(2))) func t229AdditionalStorePreservesRealSourcePermissionFailureBeforeAndAfterPayload() async throws {
     for afterPayload in [false, true] {
         let f = try T229CoverageFixture(); defer { f.remove() }
         let file = f.root.appendingPathComponent("image.tiff")
@@ -187,7 +187,7 @@ private actor T229CoverageMounts: DiskMountPort {
     }
 }
 
-@Test func t229MountedLegacyNormalReadKeepsObservedIdentityAndOriginalBookmark() async throws {
+@Test(.timeLimit(.minutes(2))) func t229MountedLegacyNormalReadKeepsObservedIdentityAndOriginalBookmark() async throws {
     let f = try T229CoverageFixture(); defer { f.remove() }
     let file = f.root.appendingPathComponent("readable.txt")
     let expected = Data("legacy session remains readable".utf8)

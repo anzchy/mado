@@ -95,7 +95,7 @@ private final class Issue362Canvas: CanvasView {
     return DecodedImage(image: try #require(context.makeImage()), sourcePixelSize: CGSize(width: 800, height: 400))
 }
 
-@Test @MainActor func issue362StageRingAppearsOnlyAfterKeyboardNavigation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue362StageRingAppearsOnlyAfterKeyboardNavigation() throws {
     _ = NSApplication.shared
     for name in [NSAppearance.Name.aqua, .darkAqua] {
         let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
@@ -183,7 +183,7 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
         isARepeat: false, keyCode: keyCode))
 }
 
-@Test @MainActor func issue362KeyboardRingAfterEscapeFromTool() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue362KeyboardRingAfterEscapeFromTool() throws {
     _ = NSApplication.shared
     let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
     let session = ViewerSession()
@@ -209,7 +209,7 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     try issue362ExpectReference(canvas, ring: true)
 }
 
-@Test @MainActor func issue362KeyboardRingAfterEscapeClosesInspector() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue362KeyboardRingAfterEscapeClosesInspector() throws {
     _ = NSApplication.shared
     let frame = NSRect(x: 0, y: 0, width: 652, height: 500)
     let session = ViewerSession()
@@ -257,7 +257,7 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     try issue362ExpectReference(canvas, ring: true)
 }
 
-@Test @MainActor func issue362KeyboardRingSurvivesArrowNavigation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue362KeyboardRingSurvivesArrowNavigation() throws {
     _ = NSApplication.shared
     let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
     let canvas = CanvasView(frame: frame, session: ViewerSession())
@@ -292,7 +292,7 @@ private struct Issue362InspectorReader: InspectorMetadataReading {
     }
 }
 
-@Test @MainActor func issue362HandledArrowWithoutOpeningLeavesNoRingForLaterOpening() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue362HandledArrowWithoutOpeningLeavesNoRingForLaterOpening() throws {
     _ = NSApplication.shared
     let frame = NSRect(x: 0, y: 0, width: 432, height: 232)
     let canvas = CanvasView(frame: frame, session: ViewerSession())

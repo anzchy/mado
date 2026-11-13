@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func recursiveToggleReplacesGenerationAndDiscardsOldBatch() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func recursiveToggleReplacesGenerationAndDiscardsOldBatch() async throws {
     let fixture = FolderScanFixture()
     let old = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -31,7 +31,7 @@ private struct PartialFailureScanner: FolderScanning {
     }
 }
 
-@Test @MainActor func folderScanFailureKeepsPartialCountAndRecoverableState() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanFailureKeepsPartialCountAndRecoverableState() async {
     let fixture = FolderScanFixture()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: PartialFailureScanner())
     let session = ViewerSession(host: nil)
@@ -72,7 +72,7 @@ private struct PartialFailureScanner: FolderScanning {
     func showInspector(_ visible: Bool) { }
 }
 
-@Test @MainActor func p204FixR2RapidOffOnOffClearsSettledNestedPresentation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204FixR2RapidOffOnOffClearsSettledNestedPresentation() async throws {
     let fixture = FolderScanFixture(), host = RecursiveSelectionHost()
     let session = ViewerSession(host: host), pipeline = LoadPipeline(), leases = LoadLeases()
     host.session = session
@@ -109,7 +109,7 @@ private struct PartialFailureScanner: FolderScanning {
     #expect(await fixture.access.balance == [4, 4])
 }
 
-@Test @MainActor func p204FixR2FailedOffRetryClearsSettledNestedPresentation() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204FixR2FailedOffRetryClearsSettledNestedPresentation() async throws {
     let fixture = FolderScanFixture(), host = RecursiveSelectionHost()
     let session = ViewerSession(host: host), pipeline = LoadPipeline(), leases = LoadLeases()
     host.session = session
@@ -144,7 +144,7 @@ private struct PartialFailureScanner: FolderScanning {
     #expect(await fixture.access.balance == [3, 3])
 }
 
-@Test @MainActor func p204FixR2CancelledOffKeepsSettledImageAndReplacementPresentsTopLevel() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204FixR2CancelledOffKeepsSettledImageAndReplacementPresentsTopLevel() async throws {
     let fixture = FolderScanFixture(), host = RecursiveSelectionHost()
     let session = ViewerSession(host: host), pipeline = LoadPipeline(), leases = LoadLeases()
     host.session = session
@@ -177,7 +177,7 @@ private struct PartialFailureScanner: FolderScanning {
     #expect(await fixture.access.balance == [3, 3])
 }
 
-@Test @MainActor func p204FixEmptyFlatToggleClearsExcludedNestedImage() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204FixEmptyFlatToggleClearsExcludedNestedImage() async throws {
     let fixture = FolderScanFixture(), host = RecursiveSelectionHost()
     let session = ViewerSession(host: nil)
     host.session = session
@@ -203,7 +203,7 @@ private struct PartialFailureScanner: FolderScanning {
     #expect(fixture.coordinator.canMove(.previous, currentURL: nested) == false)
 }
 
-@Test @MainActor func recursiveToggleOffRemovesNestedSelectionAndKeepsConditions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func recursiveToggleOffRemovesNestedSelectionAndKeepsConditions() async throws {
     let fixture = FolderScanFixture(), host = RecursiveSelectionHost()
     fixture.coordinator.host = host
     _ = fixture.coordinator.setRecursiveEnabled(true)
@@ -256,7 +256,7 @@ private struct PermissionFailureScanner: FolderScanning {
         emit: @Sendable ([FolderEntry]) async throws -> Void) async throws { throw error }
 }
 
-@Test @MainActor func folderScanPermissionFailureIsRecoverableAndNoCountInvented() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderScanPermissionFailureIsRecoverableAndNoCountInvented() async {
     let fixture = FolderScanFixture()
     let coordinator = FolderScanCoordinator(access: fixture.access,
         scanner: PermissionFailureScanner(error: POSIXError(.EPERM)))
@@ -278,7 +278,7 @@ private actor RootFailureLease: AccessLeasing {
     func release(_ lease: AccessLease) { }
 }
 
-@Test @MainActor func folderAccessFailureBeforeSnapshotShowsZeroAndCanRetry() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderAccessFailureBeforeSnapshotShowsZeroAndCanRetry() async {
     let fixture = FolderScanFixture(), access = RootFailureLease(), session = ViewerSession(host: nil)
     #expect(session.folderRecursiveEnabled == false)
     let coordinator = FolderScanCoordinator(access: access, scanner: fixture.scanner)

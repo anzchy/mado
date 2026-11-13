@@ -50,7 +50,7 @@ import Testing
     return reference
 }
 
-@Test @MainActor func issue92ShortcutHintPaintsCompleteEnglishSentence() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92ShortcutHintPaintsCompleteEnglishSentence() throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }
     scene.window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
@@ -71,7 +71,7 @@ import Testing
     #expect(keyInk > 40)
 }
 
-@Test @MainActor func issue92ShortcutHintPaintsChineseAtCompactSize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92ShortcutHintPaintsChineseAtCompactSize() throws {
     let scene = StatesScene(width: 800)
     defer { scene.window.close() }
     scene.window.setFrameOrigin(NSPoint(x: -20000, y: -20000))

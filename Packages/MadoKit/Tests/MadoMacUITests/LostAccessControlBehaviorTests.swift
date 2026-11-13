@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func t229LostAccessRejectsArchivedViewConstruction() {
+@Test(.timeLimit(.minutes(2))) @MainActor func t229LostAccessRejectsArchivedViewConstruction() {
     // Recovery controls require the programmatic initializer's complete native composition.
     let archive = NSKeyedArchiver(requiringSecureCoding: false)
     #expect(LostAccessStateView(coder: archive) == nil)
@@ -25,7 +25,7 @@ import MadoApplication
     return (window, view)
 }
 
-@Test @MainActor func t229LostAccessNativeFocusMaskPaintsRoundedControl() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t229LostAccessNativeFocusMaskPaintsRoundedControl() throws {
     let (window, view) = controlScene(.light)
     defer { window.close() }
     for button in view.buttons {
@@ -60,7 +60,7 @@ import MadoApplication
     #expect(abs(actual.alphaComponent - expected.alpha) < 0.001)
 }
 
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func t229LostAccessPrimaryHoverTracksPointerAndRestoresThemeFill(_ theme: DesignTheme) throws {
     let (window, view) = controlScene(theme)
     defer { window.close() }

@@ -45,7 +45,7 @@ import Testing
     Issue.record("No installed button accepted a mouse press in the expected region")
 }
 
-@Test @MainActor func issue631InstalledButtonsRouteActionsAndKeyboard() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue631InstalledButtonsRouteActionsAndKeyboard() throws {
     var iconCalls = 0
     let (iconWindow, _) = installed631(IconCommandButton(symbol: .sidebar, state: [], theme: .light) { iconCalls += 1 })
     defer { iconWindow.close() }
@@ -109,7 +109,7 @@ import Testing
     var handler: ((Bool) -> Void)?
 }
 
-@Test @MainActor func issue631InstalledSuppliedHoverClosureChangesVisibleSurface() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue631InstalledSuppliedHoverClosureChangesVisibleSurface() throws {
     let iconBox = HoverHandlerBox631()
     var icon = IconCommandButton(symbol: .sidebar, state: [], theme: .light) {}
     icon.receiveHoverHandler = { iconBox.handler = $0 }

@@ -8,7 +8,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     try #require(issue220View(id, in: panel) as? NSTextField, "missing \(id)").stringValue
 }
 
-@MainActor @Test func issue220AppDelegatePassesUpdatePortToSettings() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220AppDelegatePassesUpdatePortToSettings() throws {
     let date = try Date("2026-05-06T07:08:00Z", strategy: .iso8601)
     let port = FakeUpdatePort(version: "9.9.9-test", build: "4242", automatic: true, nextCheckDate: date)
     let suite = UserDefaults(suiteName: "issue220-delegate-\(UUID().uuidString)")!
@@ -28,7 +28,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     #expect(suite.string(forKey: "settings.selectedSection.v1") == "update")
 }
 
-@MainActor @Test func issue220AppDelegateWithoutPortShowsInertUpdateControls() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220AppDelegateWithoutPortShowsInertUpdateControls() throws {
     let suite = UserDefaults(suiteName: "issue220-delegate-nil-\(UUID().uuidString)")!
     let delegate = AppDelegate()
     let panel = delegate.makeSettingsWindow(defaults: suite)
@@ -45,7 +45,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
 
 // The production path cannot open Settings in a unit test (show() activates the app and scans the real cache),
 // so these source guards pin the two links the tests above bypass; the behaviour is device-checked in #223.
-@Test func issue220ProductionPathWiresUpdatePortIntoSettings() throws {
+@Test(.timeLimit(.minutes(3))) func issue220ProductionPathWiresUpdatePortIntoSettings() throws {
     let delegate = try String(contentsOf: repository.appendingPathComponent("App/AppDelegate.swift"), encoding: .utf8)
     #expect(delegate.components(separatedBy: "SettingsPanelWindow(").count == 2, "one construction site")
     let make = try #require(delegate.range(of: "func makeSettingsWindow("))

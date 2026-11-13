@@ -44,7 +44,7 @@ private final class Issue363ContourReference: NSView {
     return rep
 }
 
-@Test @MainActor func issue363ChromeGroupsHaveOnePinnedContourAndNoOverlayStroke() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue363ChromeGroupsHaveOnePinnedContourAndNoOverlayStroke() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 480, height: 240),
                                       session: ViewerSession())

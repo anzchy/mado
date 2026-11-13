@@ -216,7 +216,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     }
 }
 
-@Test @MainActor func page22SubfolderCaseShowsTilesActionsAndNoCounts() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22SubfolderCaseShowsTilesActionsAndNoCounts() async throws {
     let scene = Page22Scene()
     scene.tree(["2024 冲绳", "手机备份", "扫描件"])
     try await scene.open([])
@@ -262,7 +262,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await partC.close()
 }
 
-@Test @MainActor func page22UpdatesWhenSidebarChildrenArrive() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22UpdatesWhenSidebarChildrenArrive() async throws {
     let scene = Page22Scene()
     scene.recents = recentFolders(2)
     scene.tree([])
@@ -277,7 +277,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22StateSurvivesLaterShellCalls() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22StateSurvivesLaterShellCalls() async throws {
     let scene = Page22Scene()
     scene.tree(["a", "b", "c"])
     try await scene.open([])
@@ -300,7 +300,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22TileBoundaries() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22TileBoundaries() async throws {
     var x0: CGFloat?
     for count in [1, 3, 4, 60] {
         let scene = Page22Scene()
@@ -332,7 +332,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     }
 }
 
-@Test @MainActor func page22RecentsRowsRenderCappedModelOrder() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22RecentsRowsRenderCappedModelOrder() async throws {
     let scene = Page22Scene()
     scene.recents = recentFolders(12)
     scene.tree([])
@@ -351,7 +351,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test(arguments: ["items", "empty", "cancel"])
+@Test(.timeLimit(.minutes(2)), arguments: ["items", "empty", "cancel"])
 @MainActor func page22IncludeSubfoldersStartsReadingOverShellThenGridOrPage22(ending: String) async throws {
     let scene = Page22Scene()
     scene.tree(["sub"])
@@ -392,7 +392,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22ActionsRouteToOpenTileAndRecent() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22ActionsRouteToOpenTileAndRecent() async throws {
     let scene = Page22Scene()
     let recents = recentFolders(3)
     scene.recents = recents
@@ -410,7 +410,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test(arguments: ["subfolders", "recents"])
+@Test(.timeLimit(.minutes(2)), arguments: ["subfolders", "recents"])
 @MainActor func page22ChooseAnotherFolderRoutesOpenInBothCases(kind: String) async throws {
     let scene = Page22Scene()
     scene.recents = recentFolders(2)
@@ -431,7 +431,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22DropTargetOutlineAndForwarding() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22DropTargetOutlineAndForwarding() async throws {
     let scene = Page22Scene()
     scene.tree([])
     try await scene.open([])
@@ -471,7 +471,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22NeverDuringReadingOrOverItems() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22NeverDuringReadingOrOverItems() async throws {
     let pool = ["a.png", "b.jpg", "c.heic"]
     let filters: [Set<String>?] = [nil, ["png"], ["jpg"], ["heic"]]
     var random = Page22Random(state: 0x2222)
@@ -527,7 +527,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
 /// AC-3 at model level only: a filter that empties a non-empty folder is `.noMatches`, never page 22. It does not prove
 /// a visible message: the grid surface hides the state host and shows nothing for this case until #125 adds the
 /// grid-owned No Images Match page (FOLDER-08 limit).
-@Test @MainActor func filterEmptyingFolderIsNoMatchesStatusWithoutPage22() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func filterEmptyingFolderIsNoMatchesStatusWithoutPage22() async throws {
     let scene = Page22Scene()
     scene.tree(["sub"])
     try await scene.open(["a.jpg", "b.jpg"])
@@ -541,7 +541,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22FooterDisabledSidebarUsableAndSearchEmptyHidden() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22FooterDisabledSidebarUsableAndSearchEmptyHidden() async throws {
     let scene = Page22Scene()
     let shell = scene.shell
     scene.tree(["sub"])
@@ -570,7 +570,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test @MainActor func page22KeyLoopAndAccessibility() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22KeyLoopAndAccessibility() async throws {
     let recorder = Page22EscRecorder()
     let scene = Page22Scene(content: recorder)
     scene.tree(["2024 冲绳", "手机备份", "扫描件"])
@@ -601,7 +601,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
     await scene.close()
 }
 
-@Test func page22LocalizationExactValues() throws {
+@Test(.timeLimit(.minutes(2))) func page22LocalizationExactValues() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))
@@ -638,7 +638,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
 
 /// Owner decision C (#137): the viewer surface renders page 22's content for an empty folder session, never the
 /// generic first-launch state, and its actions route exactly as on the grid page.
-@Test @MainActor func viewerEmptyFolderSessionShowsPage22AndRoutesLikeTheGrid() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerEmptyFolderSessionShowsPage22AndRoutesLikeTheGrid() async throws {
     let scene = Page22Scene()
     let recents = recentFolders(2)
     scene.recents = recents
@@ -675,7 +675,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
 }
 
 /// gpt M2: with page 22 shown the footer search is disabled, so focusing search is refused.
-@Test @MainActor func page22RefusesSearchFocus() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22RefusesSearchFocus() async throws {
     let scene = Page22Scene()
     scene.tree(["sub"])
     try await scene.open([])
@@ -692,7 +692,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
 }
 
 /// L1: a real folder URL without a trailing slash is still a folder; a mixed drop forwards only its folders.
-@Test @MainActor func page22DropForwardsOnlyFolders() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22DropForwardsOnlyFolders() async throws {
     let scene = Page22Scene()
     scene.tree([])
     try await scene.open([])
@@ -710,7 +710,7 @@ private func recentFolders(_ count: Int) -> [RecentFolder] {
 }
 
 /// opus L3: page 22 replacing the Reading State moves focus to its first control, not the hidden collection view.
-@Test @MainActor func page22ReplacingReadingStateFocusesAPageControl() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22ReplacingReadingStateFocusesAPageControl() async throws {
     for children in [["sub"], []] {
         let scene = Page22Scene()
         scene.recents = recentFolders(2)

@@ -29,7 +29,7 @@ private struct FolderBrowserTree {
     func remove() { try? FileManager.default.removeItem(at: tree) }
 }
 
-@Test func folderBrowserMembershipMatchesSiblingLister() async throws {
+@Test(.timeLimit(.minutes(2))) func folderBrowserMembershipMatchesSiblingLister() async throws {
     let fixture = try FolderBrowserTree()
     defer { fixture.remove() }
     let manager = FileManager.default
@@ -62,7 +62,7 @@ private struct FolderBrowserTree {
     #expect(alias.itemID == ItemID.rootRelative(rootID: fixture.root.id, relativePath: "a.png"))
 }
 
-@Test(arguments: [0, 1, 63, 64, 65, 321])
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 63, 64, 65, 321])
 func folderBrowserBatchBoundaries(count: Int) async throws {
     let fixture = try FolderBrowserTree(count: count)
     defer { fixture.remove() }
@@ -87,7 +87,7 @@ func folderBrowserBatchBoundaries(count: Int) async throws {
     #expect(names.count == count)
 }
 
-@Test func folderBrowserConsumerCancellation() async throws {
+@Test(.timeLimit(.minutes(2))) func folderBrowserConsumerCancellation() async throws {
     let fixture = try FolderBrowserTree(count: 321)
     defer { fixture.remove() }
     let collected = FolderBrowserBatches()
@@ -104,7 +104,7 @@ func folderBrowserBatchBoundaries(count: Int) async throws {
     #expect(batches.map(\.count) == [64])
 }
 
-@Test func folderBrowserOutsideRootAndMissingFolder() async throws {
+@Test(.timeLimit(.minutes(2))) func folderBrowserOutsideRootAndMissingFolder() async throws {
     let fixture = try FolderBrowserTree()
     defer { fixture.remove() }
     let collected = FolderBrowserBatches()
@@ -125,7 +125,7 @@ func folderBrowserBatchBoundaries(count: Int) async throws {
 }
 
 private struct FolderBrowserDeliveryError: Error {}
-@Test func folderBrowserDeliveryFailureStopsEnumeration() async throws {
+@Test(.timeLimit(.minutes(2))) func folderBrowserDeliveryFailureStopsEnumeration() async throws {
     let fixture = try FolderBrowserTree(count: 321)
     defer { fixture.remove() }
     let collected = FolderBrowserBatches()
@@ -140,7 +140,7 @@ private struct FolderBrowserDeliveryError: Error {}
     #expect(await collected.batches.map(\.count) == [64])
 }
 
-@Test func folderBrowserCollectsSortMetadata() async throws {
+@Test(.timeLimit(.minutes(2))) func folderBrowserCollectsSortMetadata() async throws {
     let fixture = try FolderBrowserTree()
     defer { fixture.remove() }
     let file = fixture.folder.appendingPathComponent("metadata.JpG")

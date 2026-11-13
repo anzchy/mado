@@ -11,7 +11,7 @@ final class CachePressureClock: @unchecked Sendable {
 }
 
 @Suite struct ImageCachePressureTests {
-    @Test func cacheWarningCriticalTrimAndPinnedProtection() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheWarningCriticalTrimAndPinnedProtection() async throws {
         let cache = ImageMemoryCache(capacity: 64)
         let a = cacheKey(1), b = cacheKey(2), c = cacheKey(3), p = cacheKey(4), d = cacheKey(5)
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2), cp = try cachePixels(marker: 3)
@@ -35,7 +35,7 @@ final class CachePressureClock: @unchecked Sendable {
         #expect(await cache.usage() == ImageCacheUsage(entries: 1, previewBytes: 0, detailBytes: 16, pinnedBytes: 16))
     }
 
-    @Test func cachePressureGateRefusesPrefetchButCurrentAndVisibleDecode() async throws {
+    @Test(.timeLimit(.minutes(2))) func cachePressureGateRefusesPrefetchButCurrentAndVisibleDecode() async throws {
         let cache = ImageMemoryCache(capacity: 100_000), decoder = CacheCountingDecoder(), trace = CacheEvents()
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache, cacheTrace: trace), file = fixture("coordinate-grid.png")
         let cached = try await pipeline.request(for: file, maximumPixelSize: 16)
@@ -59,7 +59,7 @@ final class CachePressureClock: @unchecked Sendable {
         #expect(await cache.usage().entries == 0)
     }
 
-    @Test func cacheNormalRecoveryRequiresExactDelayAndResetsOnWarning() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheNormalRecoveryRequiresExactDelayAndResetsOnWarning() async throws {
         let clock = CachePressureClock(), decoder = CacheCountingDecoder(), cache = ImageMemoryCache(capacity: 100_000,
             pressureRecoveryDelay: 5, pressureClock: { clock.now })
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache), file = fixture("coordinate-grid.png")
@@ -84,7 +84,7 @@ final class CachePressureClock: @unchecked Sendable {
         #expect(decoder.count == 1)
     }
 
-    @Test func cacheZeroRecoveryUsesDefaultMonotonicClocks() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheZeroRecoveryUsesDefaultMonotonicClocks() async throws {
         #expect(DecodeConfiguration().pressureRecoveryDelay == 5)
         let decoder = CacheCountingDecoder()
         let pipeline = ImageIOPipeline(decoder: decoder, configuration: DecodeConfiguration(pressureRecoveryDelay: 0))

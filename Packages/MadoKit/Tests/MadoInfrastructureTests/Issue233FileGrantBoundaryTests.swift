@@ -19,7 +19,7 @@ private actor LossLeaseRecorder: AccessLeasing {
     func release(_ lease: AccessLease) async { await real.release(lease); active.remove(lease.token) }
 }
 
-@Test func issue233PackageFileGrantReadersNeverRequestRootLease() async throws {
+@Test(.timeLimit(.minutes(2))) func issue233PackageFileGrantReadersNeverRequestRootLease() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: base, withIntermediateDirectories: true)

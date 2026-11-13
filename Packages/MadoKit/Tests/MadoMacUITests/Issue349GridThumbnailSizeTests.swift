@@ -105,7 +105,7 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
 }
 
 @Suite(.serialized) struct Issue349GridThumbnailSizeTests {
-    @Test @MainActor func issue349GridDetachedResizeKeepsCurrentWhileAwaitingWindowAttachment() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue349GridDetachedResizeKeepsCurrentWhileAwaitingWindowAttachment() throws {
         let scene = try Issue349GridScene(count: 96)
         defer { scene.close() }
         let ids = scene.entries.map(\.itemID)
@@ -125,7 +125,7 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
     }
 
     /// FIRST UI RED: assertions inspect attached rendered cells/tiles, not production geometry inputs.
-    @Test @MainActor func issue349GridRenderedFramesFollowPinnedSizesAtEveryBreakpoint() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue349GridRenderedFramesFollowPinnedSizesAtEveryBreakpoint() throws {
         let widths: [CGFloat] = [1601, 1600, 1599, 1280, 1051, 1050, 1049, 721, 720, 719, 481, 480, 479]
         for (page, appearance) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
             let design = try PinnedDesign.page(page)
@@ -166,7 +166,7 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
         }
     }
 
-    @Test @MainActor func issue349GridColumnsRespectExactThresholdAndScrollerWidth() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue349GridColumnsRespectExactThresholdAndScrollerWidth() throws {
         let design = try PinnedDesign.page("grid-light")
         // Solve each CSS media region independently, then assert just below, at, and above each feasible boundary.
         // Harness correction after RED: NSWindow rounds fractional initial content widths to backing pixels;
@@ -222,7 +222,7 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
         }
     }
 
-    @Test @MainActor func issue349GridNamesAndShellFramesStayStableAcrossSizeChanges() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue349GridNamesAndShellFramesStayStableAcrossSizeChanges() throws {
         for (page, appearance) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
             let design = try PinnedDesign.page(page)
             #expect(try design.declaration(".photo-name", "white-space", viewport: 1280) == "nowrap")
@@ -258,7 +258,7 @@ private func issue349PinnedHorizontalInsets(_ design: PinnedDesign, width: Doubl
         }
     }
 
-    @Test @MainActor func issue349GridSizeChangeRevealsCurrentAndConservesSelection() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue349GridSizeChangeRevealsCurrentAndConservesSelection() throws {
         let scene = try Issue349GridScene(count: 96)
         defer { scene.close() }
         let ids = scene.entries.map(\.itemID)

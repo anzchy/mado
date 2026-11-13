@@ -135,7 +135,7 @@ private struct Issue185Random: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func issue185ReopenSameFolderLateEmptyRefreshStaysHidden() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue185ReopenSameFolderLateEmptyRefreshStaysHidden() async throws {
     let scanner = GatedScriptScanner([["a.png", "b.png", "c.png"]])
     let scene = Issue185Scene(scanner: scanner)
     defer { scene.session.folderScan?.cancel(); scene.window.close() }
@@ -148,7 +148,7 @@ private struct Issue185Random: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func issue185OpenAnotherFolderLateEmptyRefreshStaysHidden() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue185OpenAnotherFolderLateEmptyRefreshStaysHidden() async throws {
     let scanner = GatedScriptScanner([["a.png", "b.png", "c.png"], ["d.png", "e.png", "f.png", "g.png", "h.png"]])
     let scene = Issue185Scene(scanner: scanner)
     defer { scene.session.folderScan?.cancel(); scene.window.close() }
@@ -161,7 +161,7 @@ private struct Issue185Random: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func issue185WatchedRefreshKeepsOverlayHidden() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue185WatchedRefreshKeepsOverlayHidden() async throws {
     let scanner = GatedScriptScanner([["a.png", "b.png"], ["a.png", "b.png", "c.png", "d.png"]])
     let scene = Issue185Scene(scanner: scanner)
     defer { scene.session.folderScan?.cancel(); scene.window.close() }
@@ -181,7 +181,7 @@ private struct Issue185Random: RandomNumberGenerator {
     #expect(scene.itemCount == 4)
 }
 
-@Test @MainActor func issue185ViewerSurfaceReshowsUnchangedEmptyStatus() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue185ViewerSurfaceReshowsUnchangedEmptyStatus() async throws {
     let scene = Issue185Scene()
     defer { scene.window.close() }
     #expect(!scene.state.isHidden && scene.session.imageStatus == .empty)
@@ -199,7 +199,7 @@ private struct Issue185Random: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func issue185SurfaceVisibilityInvariantAcrossGeneratedTransitions() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue185SurfaceVisibilityInvariantAcrossGeneratedTransitions() {
     enum Surface { case viewer, gridReading, grid }
     let statuses: [ViewerImageStatus] = [.empty, .loading("a.png"), .readingFolder,
         .folderScanFailed("Folder scan failed", "A"), .noMatches, .showing, .detailLimited,

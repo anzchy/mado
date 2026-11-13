@@ -19,7 +19,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     NSApp.windows.filter { $0.windowController is CanvasWindowController && $0.isVisible }
 }
 
-@MainActor @Test func issue359LaunchStartsUpdaterOnceAfterFirstWindowIsVisible() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue359LaunchStartsUpdaterOnceAfterFirstWindowIsVisible() {
     _ = NSApplication.shared
     let port = FakeUpdatePort()
     let delegate = AppDelegate()
@@ -35,7 +35,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     }
 }
 
-@MainActor @Test func issue359ActivationAndRelaunchDoNotStartUpdaterAgain() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue359ActivationAndRelaunchDoNotStartUpdaterAgain() {
     _ = NSApplication.shared
     let port = FakeUpdatePort()
     let delegate = AppDelegate()
@@ -48,7 +48,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
     }
 }
 
-@MainActor @Test func issue359LaunchWithoutUpdatePortShowsWindowAndStartsNothing() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue359LaunchWithoutUpdatePortShowsWindowAndStartsNothing() {
     _ = NSApplication.shared
     let delegate = AppDelegate()
     delegate.updates = nil
@@ -65,7 +65,7 @@ private let repository = URL(fileURLWithPath: #filePath).deletingLastPathCompone
 
 // The compiled adapter tests cover feed availability. This supplemental source guard pins native forwarding:
 // the controller is built stopped, and its start operation uses startUpdater() to preserve Sparkle's alert.
-@Test func issue359SparklePortIsBuiltStoppedAndStartsThroughStartUpdater() throws {
+@Test(.timeLimit(.minutes(3))) func issue359SparklePortIsBuiltStoppedAndStartsThroughStartUpdater() throws {
     let source = try String(contentsOf: repository.appendingPathComponent("App/Updates/SparkleUpdatePort.swift"),
                             encoding: .utf8)
     #expect(source.contains("startingUpdater: false"))

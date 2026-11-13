@@ -11,7 +11,7 @@ private func observationKey(_ original: RenderKey, token: String) -> RenderKey {
 }
 
 extension ImageCacheObservationTests {
-    @Test func cacheRetiredOrWrongItemObservationCannotReadOrDisturbPixels() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheRetiredOrWrongItemObservationCannotReadOrDisturbPixels() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), b = cacheKey(2)
         let pixels = try cachePixels(marker: 1)
         let retired = await cache.withObservation(itemID: a.itemID) { $0 }
@@ -55,7 +55,7 @@ private actor ObservationIdentityGate: ItemIdentityResolving {
 private enum ObservationFailure: Error { case expected }
 
 @Suite struct ImageCacheObservationTests {
-    @Test func cacheDelayedPinnedRevisionCannotReviveOrEvictNewPixels() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheDelayedPinnedRevisionCannotReviveOrEvictNewPixels() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = observationKey(cacheKey(1), token: "R1")
         let new = observationKey(old, token: "R2")
         let p1 = try cachePixels(marker: 1), p2 = try cachePixels(marker: 2)
@@ -75,7 +75,7 @@ private enum ObservationFailure: Error { case expected }
         #expect(await cache.usage() == ImageCacheUsage(entries: 1, previewBytes: 0, detailBytes: 16))
     }
 
-    @Test func cacheDelayedRevisionPreservesPendingNewDecode() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheDelayedRevisionPreservesPendingNewDecode() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = observationKey(cacheKey(1), token: "R1")
         let new = observationKey(old, token: "R2")
         let p1 = try cachePixels(marker: 1), p2 = try cachePixels(marker: 2)
@@ -94,7 +94,7 @@ private enum ObservationFailure: Error { case expected }
         }
     }
 
-    @Test func cacheDelayedRevisionRejectedAfterNewPixelsEvicted() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheDelayedRevisionRejectedAfterNewPixelsEvicted() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = observationKey(cacheKey(1), token: "R1")
         let new = observationKey(old, token: "R2")
         let p1 = try cachePixels(marker: 1), p2 = try cachePixels(marker: 2)
@@ -110,7 +110,7 @@ private enum ObservationFailure: Error { case expected }
         }
     }
 
-    @Test func cacheRequestStartOrderCannotOverrideHeaderObservation() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheRequestStartOrderCannotOverrideHeaderObservation() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = observationKey(cacheKey(1), token: "R1")
         let new = observationKey(old, token: "R2")
         let p1 = try cachePixels(marker: 1), p2 = try cachePixels(marker: 2)
@@ -130,7 +130,7 @@ private enum ObservationFailure: Error { case expected }
         }
     }
 
-    @Test func cacheConcurrentSameRevisionAndUnrelatedItemRemainValid() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheConcurrentSameRevisionAndUnrelatedItemRemainValid() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), b = cacheKey(2)
         let newB = observationKey(b, token: "B2")
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2)
@@ -153,7 +153,7 @@ private enum ObservationFailure: Error { case expected }
         }
     }
 
-    @Test func cacheObservationCleanupAllowsSequentialProgressIncludingFailure() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheObservationCleanupAllowsSequentialProgressIncludingFailure() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = observationKey(cacheKey(1), token: "R1")
         let new = observationKey(old, token: "R3"), unrelated = cacheKey(2)
         let p1 = try cachePixels(marker: 1), p3 = try cachePixels(marker: 3), p2 = try cachePixels(marker: 2)
@@ -179,7 +179,7 @@ private enum ObservationFailure: Error { case expected }
         }
     }
 
-    @Test func cachePipelineRejectsStalePinnedLookupAsSourceChanged() async throws {
+    @Test(.timeLimit(.minutes(2))) func cachePipelineRejectsStalePinnedLookupAsSourceChanged() async throws {
         let cache = ImageMemoryCache(capacity: 100_000), decoder = CacheCountingDecoder()
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache)
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)
@@ -221,7 +221,7 @@ private enum ObservationFailure: Error { case expected }
 }
 
 extension ImageCacheObservationTests {
-    @Test func cacheRawObservationBindsResolvedItemAndKeepsRevisionSafety() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheRawObservationBindsResolvedItemAndKeepsRevisionSafety() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), b = cacheKey(2)
         let newA = observationKey(a, token: "A2"), newB = observationKey(b, token: "B2")
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2)

@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderFixReusePendingSessionArrows(finalPrevious: Bool) async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: nil)
     session.host = host; session.folderScan = fixture.coordinator; fixture.coordinator.host = host
@@ -33,7 +33,7 @@ import MadoCore
     session.closeImage()
 }
 
-@Test @MainActor func folderFixReuseMatchesOnlyLiveRequest() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderFixReuseMatchesOnlyLiveRequest() async throws {
     let fixture = FolderScanFixture(holdsAcquire: true), coordinator = fixture.coordinator
     let input = fixture.folder.appendingPathComponent("img2.png")
     let task = coordinator.begin(folder: fixture.folder, rootID: fixture.id, input: input)

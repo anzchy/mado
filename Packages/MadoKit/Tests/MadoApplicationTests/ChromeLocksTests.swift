@@ -1,7 +1,7 @@
 import Testing
 import MadoApplication
 
-@Test @MainActor func chromeLocksEachReasonAndLastRelease() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeLocksEachReasonAndLastRelease() {
     for reason in ChromeLockReason.allCases {
         let clock = FakeViewerClock()
         let store = InMemoryDisplayPreferencesStore()

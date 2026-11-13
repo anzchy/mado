@@ -4,7 +4,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeRefreshChangesRenderInputAndKeepsAXButtonsAsLeaves() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeRefreshChangesRenderInputAndKeepsAXButtonsAsLeaves() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     host.hasImage = false

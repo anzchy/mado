@@ -21,7 +21,7 @@ private actor AccessRenewalPipeline: ImagePipeline {
     let intent = AccessIntent()
     var openings = 0
 }
-@MainActor @Test(arguments: [false, true])
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func loadAccessRenewalUsesCurrentIntentAfterUnrelatedBegin(revisionChange: Bool) async {
     let probe = AccessRenewalProbe(), session = ViewerSession(), host = LoadHost(), access = LoadLeases()
     let pipeline = AccessRenewalPipeline(revisionChange: revisionChange)

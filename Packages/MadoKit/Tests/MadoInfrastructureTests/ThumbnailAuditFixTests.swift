@@ -45,7 +45,7 @@ private final class AuditReplaceOnce: @unchecked Sendable {
     }
 }
 
-@Test func p303StoreSourceReplacementPropagatesSourceChangedBeforeDelivery() async throws {
+@Test(.timeLimit(.minutes(2))) func p303StoreSourceReplacementPropagatesSourceChangedBeforeDelivery() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -150,7 +150,7 @@ private final class AuditReplaceOnce: @unchecked Sendable {
     session.imageLoader.close()
 }
 
-@Test func p303DiskWriteFailureStillDeliversCurrentDecodedPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func p303DiskWriteFailureStillDeliversCurrentDecodedPixels() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -172,7 +172,7 @@ private final class AuditReplaceOnce: @unchecked Sendable {
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func p303FreshAdmissionDoesNotJoinSameSessionKeyInFlight() async throws {
+@Test(.timeLimit(.minutes(2))) func p303FreshAdmissionDoesNotJoinSameSessionKeyInFlight() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4),
         executor: executor, decoder: TinyDecoder())
@@ -190,7 +190,7 @@ private final class AuditReplaceOnce: @unchecked Sendable {
     #expect(await admission.activity().running == 0)
 }
 
-@Test func p303FreshDecodeRejectsPrecancelChangedRequestAndSuspendedPrefetch() async throws {
+@Test(.timeLimit(.minutes(2))) func p303FreshDecodeRejectsPrecancelChangedRequestAndSuspendedPrefetch() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -228,7 +228,7 @@ private final class AuditRewritingDecoder: ImageDecoding, @unchecked Sendable {
     }
 }
 
-@Test func p303FreshDecodeRejectsRevisionChangedInsideDecoder() async throws {
+@Test(.timeLimit(.minutes(2))) func p303FreshDecodeRejectsRevisionChangedInsideDecoder() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -242,7 +242,7 @@ private final class AuditRewritingDecoder: ImageDecoding, @unchecked Sendable {
     catch let error as ImageLoadError { #expect(error.kind == .sourceChanged) }
 }
 
-@Test func p303StoreRejectsMismatchedDecodedIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func p303StoreRejectsMismatchedDecodedIdentity() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -261,7 +261,7 @@ private final class AuditRewritingDecoder: ImageDecoding, @unchecked Sendable {
     catch let error as ImageLoadError { #expect(error.kind == .sourceChanged) }
 }
 
-@Test func p303PostwriteCancellationRemovesUnindexedPayload() async throws {
+@Test(.timeLimit(.minutes(2))) func p303PostwriteCancellationRemovesUnindexedPayload() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -282,7 +282,7 @@ private final class AuditRewritingDecoder: ImageDecoding, @unchecked Sendable {
     #expect(!FileManager.default.fileExists(atPath: cacheDirectory.appendingPathComponent("index.sqlite3").path))
 }
 
-@Test func p303PostwriteSourceLossPropagatesAndRemovesPayload() async throws {
+@Test(.timeLimit(.minutes(2))) func p303PostwriteSourceLossPropagatesAndRemovesPayload() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -303,7 +303,7 @@ private final class AuditRewritingDecoder: ImageDecoding, @unchecked Sendable {
     #expect(!FileManager.default.fileExists(atPath: cacheDirectory.appendingPathComponent("index.sqlite3").path))
 }
 
-@Test func p303LegacyEncoderTicketCannotBeLoadedOrStored() async throws {
+@Test(.timeLimit(.minutes(2))) func p303LegacyEncoderTicketCannotBeLoadedOrStored() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

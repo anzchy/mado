@@ -5,7 +5,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeToolsRenderAndActivateWithKeyboard() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeToolsRenderAndActivateWithKeyboard() throws {
     _ = NSApplication.shared
     let effects = ChromeToolsHost()
     let clock = ChromeViewClock()

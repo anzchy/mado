@@ -50,7 +50,7 @@ func t231RebindStripFramesAccessibilityAndKeyboard(_ size: NSSize) throws {
 
 }
 
-@Test func t231NotFoundCatalogTranslationsAreExact() throws {
+@Test(.timeLimit(.minutes(3))) func t231NotFoundCatalogTranslationsAreExact() throws {
     let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("App/Resources/Localizable.xcstrings")
     let object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
     let strings = try #require(object["strings"] as? [String: [String: Any]])

@@ -35,7 +35,7 @@ private func nearestSurvivor(of current: ItemID?, old: [ItemID], new: [ItemID]) 
     return old[(index + 1)...].first(where: alive.contains) ?? old[..<index].last(where: alive.contains)
 }
 
-@Test @MainActor func browsingRemovalMovesCurrentToNearestSurvivor() {
+@Test(.timeLimit(.minutes(2))) @MainActor func browsingRemovalMovesCurrentToNearestSurvivor() {
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID()), c = ItemID.ephemeral(UUID())
     let d = ItemID.ephemeral(UUID()), x = ItemID.ephemeral(UUID())
     func browse(_ items: [ItemID], current: ItemID) -> ViewerSession {
@@ -116,7 +116,7 @@ private func nearestSurvivor(of current: ItemID?, old: [ItemID], new: [ItemID]) 
     #expect(host.returned == 0)
 }
 
-@Test @MainActor func browsingFilterThatHidesCurrentMovesItToTheNearestVisibleItem() {
+@Test(.timeLimit(.minutes(2))) @MainActor func browsingFilterThatHidesCurrentMovesItToTheNearestVisibleItem() {
     // Chosen rule (audit L1): updateItems gets the navigable IDs, so a filter that hides Current moves it like a deletion.
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID()), c = ItemID.ephemeral(UUID()), d = ItemID.ephemeral(UUID())
     let session = ViewerSession(host: FakeSessionHost())

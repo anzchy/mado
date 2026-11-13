@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoInfrastructure
 
-@Test @MainActor func gridSidebarPreferenceSurvivesRelaunchAndLegacyPayload() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSidebarPreferenceSurvivesRelaunchAndLegacyPayload() throws {
     let suite = "grid-sidebar-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -29,7 +29,7 @@ import MadoApplication
     #expect(legacy.value.gridSidebarVisible)
 }
 
-@Test @MainActor func gridSidebarPreferenceNormalizesBadFieldsWithoutLosingOtherPreferences() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSidebarPreferenceNormalizesBadFieldsWithoutLosingOtherPreferences() throws {
     let suite = "grid-sidebar-bad-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }

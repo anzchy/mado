@@ -17,7 +17,7 @@ import MadoApplication
     return host.convert(view.bounds, from: view)
 }
 
-@Test @MainActor func issue92EmptyStateComposesSemanticContent() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92EmptyStateComposesSemanticContent() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     scene.state.display(.empty)
@@ -36,7 +36,7 @@ import MadoApplication
     #expect(stateView("first-launch.heading", in: scene.state)?.accessibilityLabel() == scene.state.textLines[0])
 }
 
-@Test @MainActor func issue92FailureStateTruncatesAtCompactSizeAndTracksNext() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92FailureStateTruncatesAtCompactSizeAndTracksNext() throws {
     let scene = StatesScene(width: 800)
     defer { scene.window.close() }
     scene.state.frame.size.height = 680
@@ -87,7 +87,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue92CompleteStateCompositionSurvivesResize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92CompleteStateCompositionSurvivesResize() throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }
     for size in [NSSize(width: 1280, height: 800), NSSize(width: 800, height: 680)] {
@@ -129,7 +129,7 @@ private func appTranslation(_ key: String, language: String) throws -> String {
     return try #require(unit["value"] as? String)
 }
 
-@Test @MainActor func issue92IconLabelsResolveInEnglishAndChinese() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92IconLabelsResolveInEnglishAndChinese() throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("Issue92StateLabels-\(UUID().uuidString).bundle", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -159,7 +159,7 @@ private func appTranslation(_ key: String, language: String) throws -> String {
                                           locale: Locale(identifier: "fr")) == "Open folder")
 }
 
-@Test @MainActor func issue92LongChineseStateCopyRemainsContained() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92LongChineseStateCopyRemainsContained() throws {
     let scene = StatesScene(width: 800)
     defer { scene.window.close() }
     let size = NSSize(width: 800, height: 680)

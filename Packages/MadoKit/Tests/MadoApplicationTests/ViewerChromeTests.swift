@@ -6,7 +6,7 @@ import MadoApplication
     var now: TimeInterval = 0
 }
 
-@Test @MainActor func chromeClockBoundariesActivityAndLocks() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeClockBoundariesActivityAndLocks() {
     let clock = FakeViewerClock()
     var chrome = ViewerChromeState(now: clock.now)
     #expect(chrome.hideDelay == 2.5)

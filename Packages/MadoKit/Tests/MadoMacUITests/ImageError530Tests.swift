@@ -84,7 +84,7 @@ import MadoApplication
     return try (0..<32).flatMap { y in try (0..<32).map { x in try imageError530Alpha(bitmap, x, y) } }
 }
 
-@Test @MainActor func imageError530PinnedOutlineAndTint() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError530PinnedOutlineAndTint() throws {
     let scene = imageError530Scene()
     defer { scene.window.close() }
     for (appearance, ink) in [(NSAppearance.Name.aqua, UInt32(0x6b7280)), (.darkAqua, UInt32(0x9aa4b2))] {
@@ -97,7 +97,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func imageError530AppearanceRoundTripPreservesOutline() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError530AppearanceRoundTripPreservesOutline() throws {
     let scene = imageError530Scene()
     defer { scene.window.close() }
     scene.state.display(.failed(.corruptImage, "photo.jpg"), nextEnabled: true)
@@ -111,7 +111,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func imageError530FailureReentryIsIdempotent() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError530FailureReentryIsIdempotent() throws {
     let scene = imageError530Scene()
     defer { scene.window.close() }
     for (appearance, ink) in [(NSAppearance.Name.aqua, UInt32(0x6b7280)), (.darkAqua, UInt32(0x9aa4b2))] {

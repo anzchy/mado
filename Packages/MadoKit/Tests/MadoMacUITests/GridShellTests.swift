@@ -10,7 +10,7 @@ import MadoInfrastructure
     func preferencesDidChange(_ preferences: DisplayPreferences) { writes += 1 }
 }
 
-@Test @MainActor func issue136RestoredSearchEditorIgnoresOnlyPendingMenuEndEditing() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136RestoredSearchEditorIgnoresOnlyPendingMenuEndEditing() async throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -33,7 +33,7 @@ import MadoInfrastructure
     #expect(shell.searchField.isHidden)
 }
 
-@Test @MainActor func gridShellFramesAndColumnsFollowSidebarAtDesignViewports() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridShellFramesAndColumnsFollowSidebarAtDesignViewports() throws {
     _ = NSApplication.shared
     let store = InMemoryDisplayPreferencesStore()
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772), preferencesStore: store)
@@ -95,7 +95,7 @@ import MadoInfrastructure
     #expect(abs(layout.itemSize.width - 298) < 0.1) // two columns at 800 × 680
 }
 
-@Test @MainActor func gridShellFooterButtonDragAndTruthfulFolderAreAccessible() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridShellFooterButtonDragAndTruthfulFolderAreAccessible() throws {
     _ = NSApplication.shared
     let store = InMemoryDisplayPreferencesStore()
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652), preferencesStore: store)
@@ -145,7 +145,7 @@ import MadoInfrastructure
     #expect(GridShellView(coder: NSKeyedArchiver(requiringSecureCoding: false)) == nil)
 }
 
-@Test @MainActor func compactGridLongFilenameStaysInMainColumnAboveFooter() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func compactGridLongFilenameStaysInMainColumnAboveFooter() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
                               preferencesStore: InMemoryDisplayPreferencesStore())
@@ -173,7 +173,7 @@ import MadoInfrastructure
     #expect(cellInShell.minY >= shell.footer.frame.maxY)
 }
 
-@Test @MainActor func sidebarDragUsesMouseDownWidthAndWritesOnceOnRelease() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarDragUsesMouseDownWidthAndWritesOnceOnRelease() throws {
     _ = NSApplication.shared
     let store = InMemoryDisplayPreferencesStore()
     let observer = SidebarWriteObserver()
@@ -198,7 +198,7 @@ import MadoInfrastructure
     #expect(observer.writes == 1)
 }
 
-@Test @MainActor func gridSidebarControlsAreInKeyboardLoopAndExposeAdjustableWidth() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSidebarControlsAreInKeyboardLoopAndExposeAdjustableWidth() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
                               preferencesStore: InMemoryDisplayPreferencesStore())
@@ -236,7 +236,7 @@ import MadoInfrastructure
     #expect(shell.sidebar.frame.width == 204)
 }
 
-@Test @MainActor func savedSidebarWidthSizesGridWhenAppHostReopens() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func savedSidebarWidthSizesGridWhenAppHostReopens() throws {
     _ = NSApplication.shared
     let suite = "grid-host-reopen-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -263,7 +263,7 @@ import MadoInfrastructure
 
 /// PR #304 CI: footer status updates re-run the shell's layout without moving the main frame. The shell resets every
 /// main-content view on that pass, so it must tell the owner each time, after the reset, or a carved strip is lost.
-@Test @MainActor func gridShellReportsEveryMainContentLayoutAfterResettingContentFrames() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridShellReportsEveryMainContentLayoutAfterResettingContentFrames() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
         preferencesStore: InMemoryDisplayPreferencesStore())
@@ -293,7 +293,7 @@ import MadoInfrastructure
         height: shell.mainContent.bounds.height + shell.footer.bounds.height)
 }
 
-@Test @MainActor func issue314GridScrollsBehindBottomBarAndClearsItAtTheEnd() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue314GridScrollsBehindBottomBarAndClearsItAtTheEnd() throws {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 800, height: 652),
         preferencesStore: InMemoryDisplayPreferencesStore())

@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoInfrastructure
 
-@Test func accessSiblingListingSkipsHiddenNestedAndOutsideLinks() async throws {
+@Test(.timeLimit(.minutes(2))) func accessSiblingListingSkipsHiddenNestedAndOutsideLinks() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -58,7 +58,7 @@ import MadoInfrastructure
     #expect(try Data(contentsOf: result.url) == Data([1, 2, 3]))
 }
 
-@Test func issue73SystemScopeReadabilityReflectsRealFiles() async throws {
+@Test(.timeLimit(.minutes(2))) func issue73SystemScopeReadabilityReflectsRealFiles() async throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }

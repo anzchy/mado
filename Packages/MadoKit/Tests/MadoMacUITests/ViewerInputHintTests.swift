@@ -15,7 +15,7 @@ private struct InputHintCatalog: Decodable {
     let strings: [String: Record]
     func value(_ key: String, _ language: String) -> String? { strings[key]?.localizations?[language]?.stringUnit?.value }
 }
-@Test func inputHintCatalogExactBilingualValuesAndFilenameFormatting() throws {
+@Test(.timeLimit(.minutes(2))) func inputHintCatalogExactBilingualValuesAndFilenameFormatting() throws {
     var root = URL(fileURLWithPath: #filePath)
     for _ in 0..<5 { root.deleteLastPathComponent() }
     let catalog = try JSONDecoder().decode(InputHintCatalog.self,
@@ -64,7 +64,7 @@ private struct InputHintCatalog: Decodable {
     return ink
 }
 
-@Test @MainActor func inputHintActualStaticTextResponsiveAndOutsideKeyLoop() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputHintActualStaticTextResponsiveAndOutsideKeyLoop() throws {
     for width: CGFloat in [960, 360] {
         let scene = StatesScene(width: width)
         defer { scene.session.closeImage(); scene.window.close() }
@@ -112,7 +112,7 @@ private struct InputHintCatalog: Decodable {
     }
 }
 
-@Test @MainActor func inputHintOnlyEmptyAcrossStateTransitionsWithoutDuplicates() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputHintOnlyEmptyAcrossStateTransitionsWithoutDuplicates() throws {
     let scene = StatesScene()
     defer { scene.session.closeImage(); scene.window.close() }
     scene.window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); scene.window.orderFront(nil)

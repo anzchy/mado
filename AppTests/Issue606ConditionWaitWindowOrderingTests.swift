@@ -3,7 +3,7 @@ import Testing
 
 /// Reuse the unchanged output assertions with both an empty fixture and a cap-filling backlog.
 /// Existing windows belonging to other tests are deliberately left alone.
-@Test(.serialized, arguments: [0, 25]) @MainActor
+@Test(.timeLimit(.minutes(3)), .serialized, arguments: [0, 25]) @MainActor
 func issue606FailureHookIncludesCurrentWindowsWithPreexistingWindows(preexistingWindowCount: Int) async throws {
     _ = NSApplication.shared
     var olderWindows: [NSWindow] = []

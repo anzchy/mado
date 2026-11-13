@@ -12,7 +12,7 @@ import MadoApplication
     return window
 }
 
-@Test @MainActor func appearanceWindowAllValuesAndLateRegistration() {
+@Test(.timeLimit(.minutes(2))) @MainActor func appearanceWindowAllValuesAndLateRegistration() {
     let store = InMemoryDisplayPreferencesStore()
     let adapter = WindowAppearanceAdapter(preferencesStore: store)
     let first = appearanceWindow(), second = appearanceWindow(), late = appearanceWindow()
@@ -34,7 +34,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func appearanceWindowCloseReleaseAndReRegister() {
+@Test(.timeLimit(.minutes(2))) @MainActor func appearanceWindowCloseReleaseAndReRegister() {
     let store = InMemoryDisplayPreferencesStore(DisplayPreferences(appearance: .dark))
     let adapter = WindowAppearanceAdapter(preferencesStore: store)
     let closed = appearanceWindow(), live = appearanceWindow()
@@ -63,7 +63,7 @@ import MadoApplication
     #expect(closed.appearance?.name == .darkAqua)
 }
 
-@Test @MainActor func appearanceWindowPreservesImageZoomChromeAndFirstResponder() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func appearanceWindowPreservesImageZoomChromeAndFirstResponder() throws {
     let store = InMemoryDisplayPreferencesStore(DisplayPreferences(alwaysShowTools: true))
     let adapter = WindowAppearanceAdapter(preferencesStore: store)
     let session = ViewerSession(preferencesStore: store)

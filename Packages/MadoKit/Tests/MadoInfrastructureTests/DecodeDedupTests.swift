@@ -1,7 +1,7 @@
 import Testing
 import MadoInfrastructure
 
-@Test func sharedDecodeKeepsConsumersIndependentAndCleanupMatchesTask() async throws {
+@Test(.timeLimit(.minutes(2))) func sharedDecodeKeepsConsumersIndependentAndCleanupMatchesTask() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4), executor: executor, decoder: TinyDecoder())
     let a = await admission.subscribe(tinyRequest, key: decodeKey(30), cost: 4, heavy: false, priority: .current)
@@ -29,7 +29,7 @@ import MadoInfrastructure
     #expect(await admission.activity().reservedBytes == 0)
 }
 
-@Test func replacementNeverDecodesConcurrentlyWithCancelledTaskForSameKey() async throws {
+@Test(.timeLimit(.minutes(2))) func replacementNeverDecodesConcurrentlyWithCancelledTaskForSameKey() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 3, budget: 12), executor: executor, decoder: TinyDecoder())
     let old = await admission.subscribe(tinyRequest, key: decodeKey(32), cost: 4, heavy: false, priority: .current)

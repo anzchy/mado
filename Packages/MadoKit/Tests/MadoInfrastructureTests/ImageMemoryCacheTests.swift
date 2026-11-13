@@ -23,7 +23,7 @@ func cacheImage(_ pixels: CGImage, key: RenderKey) -> DecodedImage {
 }
 
 @Suite struct ImageMemoryCacheTests {
-    @Test func cacheLRUEvictsOldestAndHitRefreshes() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheLRUEvictsOldestAndHitRefreshes() async throws {
         let a = cacheKey(1), b = cacheKey(2), c = cacheKey(3)
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2), cp = try cachePixels(marker: 3)
         let first = ImageMemoryCache(capacity: 32)
@@ -47,7 +47,7 @@ func cacheImage(_ pixels: CGImage, key: RenderKey) -> DecodedImage {
         #expect(await second.usage() == ImageCacheUsage(entries: 2, previewBytes: 0, detailBytes: 32))
     }
 
-    @Test func cacheActualRowsOversizeAndTierSplit() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheActualRowsOversizeAndTierSplit() async throws {
         let p = cacheKey(1, preview: true), d = cacheKey(2), o = cacheKey(3)
         let preview = try cachePixels(rows: 2), detail = try cachePixels(rows: 2, depth: 16)
         let oversize = try cachePixels(rows: 5)
@@ -72,7 +72,7 @@ func cacheImage(_ pixels: CGImage, key: RenderKey) -> DecodedImage {
         #expect(await zero.usage() == ImageCacheUsage(entries: 0, previewBytes: 0, detailBytes: 0))
     }
 
-    @Test func cacheDuplicateAndSharedBufferConserveBytes() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheDuplicateAndSharedBufferConserveBytes() async throws {
         let a = cacheKey(1, preview: true), b = cacheKey(2)
         let original = try cachePixels(), replacement = try cachePixels(rows: 2)
         let cache = ImageMemoryCache(capacity: 64)
@@ -93,7 +93,7 @@ func cacheImage(_ pixels: CGImage, key: RenderKey) -> DecodedImage {
         #expect(await cache.usage() == ImageCacheUsage(entries: 0, previewBytes: 0, detailBytes: 0))
     }
 
-    @Test func cacheInsertEvictsMultipleEntriesUntilWithinCapacity() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheInsertEvictsMultipleEntriesUntilWithinCapacity() async throws {
         let cache = ImageMemoryCache(capacity: 64)
         let a = cacheKey(1), b = cacheKey(2), c = cacheKey(3), d = cacheKey(4)
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2), cp = try cachePixels(marker: 3)

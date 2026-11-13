@@ -25,7 +25,7 @@ import Testing
 }
 
 /// The window-level integration test also verifies these equivalents beat the actual command menu.
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func retry442ControlReturnActivatesOnlyTheFocusedAction(keypad: Bool) throws {
     let (window, page) = retry442ControlScene()
     defer { window.close() }
@@ -45,7 +45,7 @@ func retry442ControlReturnActivatesOnlyTheFocusedAction(keypad: Bool) throws {
     #expect(window.firstResponder === page.chooseOtherButton)
 }
 
-@Test @MainActor func retry442ControlRejectsExcludedKeyAndControlStates() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func retry442ControlRejectsExcludedKeyAndControlStates() throws {
     let (window, page) = retry442ControlScene()
     defer { window.close() }
     var actions: [String] = []

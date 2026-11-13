@@ -72,7 +72,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
     darkMode ? try dark.color(":root", token, viewport: width) : try light.color(selector, property, viewport: width)
 }
 
-@Test @MainActor func page22TypographyAndSpacingFollowPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22TypographyAndSpacingFollowPinnedCSS() throws {
     let light = try PinnedDesign.page("empty-folder"), dark = try PinnedDesign.page("grid-dark")
     for (name, darkMode) in page22Appearances {
         for size in page22Sizes {
@@ -131,7 +131,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
     }
 }
 
-@Test @MainActor func page22SubfolderTilesFollowPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22SubfolderTilesFollowPinnedCSS() throws {
     let light = try PinnedDesign.page("empty-folder"), dark = try PinnedDesign.page("grid-dark")
     for (name, darkMode) in page22Appearances {
         for size in page22Sizes {
@@ -189,7 +189,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
     }
 }
 
-@Test @MainActor func page22RecentsAndButtonsFollowPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22RecentsAndButtonsFollowPinnedCSS() throws {
     let light = try PinnedDesign.page("empty-folder"), dark = try PinnedDesign.page("grid-dark")
     for (name, darkMode) in page22Appearances {
         for size in page22Sizes {
@@ -281,7 +281,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
     }
 }
 
-@Test @MainActor func page22DropOutlineFollowsPinnedCSS() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22DropOutlineFollowsPinnedCSS() throws {
     let light = try PinnedDesign.page("empty-folder"), dark = try PinnedDesign.page("grid-dark")
     for (name, darkMode) in page22Appearances {
         for size in page22Sizes {
@@ -329,7 +329,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
     func resetSpringLoading() { }
 }
 
-@Test @MainActor func page22LongestStringsFitInBothLanguages() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22LongestStringsFitInBothLanguages() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = try Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))
@@ -385,7 +385,7 @@ private func designColor(_ light: PinnedDesign, _ dark: PinnedDesign, darkMode: 
 
 /// Viewer rows (owner decision C, #137): the viewer surface reuses page 22, so at the same content size and appearance
 /// its layout and colours equal the grid page pinned above to empty-folder.html (light) and grid-dark.html (dark).
-@Test @MainActor func viewerPage22MatchesThePinnedGridPage() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerPage22MatchesThePinnedGridPage() throws {
     for (name, _) in page22Appearances {
         for children in [["2024 冲绳", "手机备份", "扫描件"], []] {
             let shell = try page22Shell(page22Sizes[0], name, children: children, recents: page22Recents())

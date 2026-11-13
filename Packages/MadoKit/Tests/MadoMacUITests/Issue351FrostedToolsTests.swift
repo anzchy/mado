@@ -47,7 +47,7 @@ private final class Issue351PanelReference: NSView {
     #expect(abs(color.alphaComponent - alpha) < 0.015)
 }
 
-@Test @MainActor func issue351FrostedPinnedPagesRenderPanelAndFixedBackingAtEveryTier() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue351FrostedPinnedPagesRenderPanelAndFixedBackingAtEveryTier() throws {
     _ = NSApplication.shared
     for page in ["viewer-controls", "viewer-inspector", "viewer-filmstrip"] {
         for theme in ["light", "dark"] {
@@ -130,7 +130,7 @@ private final class Issue351PanelReference: NSView {
     }
 }
 
-@Test @MainActor func issue351FrostedInitialPreferencesAndOpacityChangesPreserveTools() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue351FrostedInitialPreferencesAndOpacityChangesPreserveTools() throws {
     _ = NSApplication.shared
     for initial in [30.0, 50, 100] {
         var value = DisplayPreferences(alwaysShowTools: true)
@@ -169,7 +169,7 @@ private final class Issue351PanelReference: NSView {
     }
 }
 
-@Test @MainActor func issue351FrostedAppearanceAndInvalidOpacityRestoreDeterministically() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue351FrostedAppearanceAndInvalidOpacityRestoreDeterministically() throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 640, height: 300), session: ViewerSession())
     let surface = try issue351Background(overlay.groups[0])

@@ -13,7 +13,7 @@ import MadoApplication
 
 // Design: 9234b14, prototype-first-launch-b4-final.html SHA-256
 // 8ba81de68f67911b0c3bdfbc90ff1513860ebf41d32c9b216fef6be8576d50da.
-@Test @MainActor func p316B4FirstLaunchPresentsPinnedCentre() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4FirstLaunchPresentsPinnedCentre() throws {
     let scene = StatesScene(width: 960)
     defer { scene.window.close() }
     scene.state.display(.empty)
@@ -26,11 +26,11 @@ import MadoApplication
     #expect(b4View("first-launch.chip.images", in: scene.state) == nil)
 }
 
-@Test @MainActor func p316B4DecoderInitIsUnavailable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4DecoderInitIsUnavailable() {
     #expect(FirstLaunchView(coder: NSCoder()) == nil)
 }
 
-@Test @MainActor func p316B4PinnedCSSMatchesRenderedCentre() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4PinnedCSSMatchesRenderedCentre() throws {
     let fixtureRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("B4PinnedDesign")
     let source = fixtureRoot.appendingPathComponent("a/b/c/d/source.swift").path
     let css = try PinnedDesign.page("b4-first-launch", source: source)
@@ -51,7 +51,7 @@ import MadoApplication
     #expect(Double(scene.state.bounds.maxY) - titleBar - Double(drop.frame.maxY) == inset)
 }
 
-@Test @MainActor func p316B4PinnedCentreSpacingAndButtonGroup() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4PinnedCentreSpacingAndButtonGroup() throws {
     let fixtureRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("B4PinnedDesign")
     let css = try PinnedDesign.page("b4-first-launch", source: fixtureRoot.appendingPathComponent("a/b/c/d/source.swift").path)
     let scene = StatesScene()
@@ -76,7 +76,7 @@ import MadoApplication
 
 // #441, owner 2026-11-03: 「打开首页的这行字我不喜欢，删掉」. The Home has no chips row in either language, in any
 // presentation; exact matches, since "Folder" is inside "Choose Folder…" and 文件夹 inside 选择文件夹….
-@Test @MainActor func i441HomeHasNoChipsInEitherLanguage() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i441HomeHasNoChipsInEitherLanguage() throws {
     let chipText: Set<String> = ["Folder", "One or more images", "Common image formats", "文件夹", "单张或多张图片", "常见图片格式"]
     let scene = StatesScene(width: 960)
     defer { scene.window.close() }

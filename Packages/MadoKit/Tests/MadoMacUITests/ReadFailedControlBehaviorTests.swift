@@ -4,7 +4,7 @@ import MadoApplication
 @testable import MadoMacUI
 
 /// #238: 「读取失败」 (24F-A) controls behave like page 26's: rounded focus mask, pinned hover fill, no archive.
-@Test @MainActor func readFailedRejectsArchivedViewConstruction() {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedRejectsArchivedViewConstruction() {
     let archive = NSKeyedArchiver(requiringSecureCoding: false)
     #expect(ReadFailedStateView(coder: archive) == nil)
     archive.finishEncoding()
@@ -24,7 +24,7 @@ import MadoApplication
     return (window, view)
 }
 
-@Test @MainActor func readFailedFocusMaskPaintsRoundedControl() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func readFailedFocusMaskPaintsRoundedControl() throws {
     let (window, view) = readFailedControlScene(.light)
     defer { window.close() }
     for button in view.buttons {
@@ -55,7 +55,7 @@ import MadoApplication
     #expect(abs(actual.blueComponent - expected.blue) < 0.001)
 }
 
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func readFailedRetryHoverTracksPointerAndRestoresThemeFill(_ theme: DesignTheme) throws {
     let (window, view) = readFailedControlScene(theme)
     defer { window.close() }
@@ -81,7 +81,7 @@ func readFailedRetryHoverTracksPointerAndRestoresThemeFill(_ theme: DesignTheme)
     try readFailedFill(button, normal)
 }
 
-@Test(arguments: [(1280.0, 48.0), (1000.0, 40.0)])
+@Test(.timeLimit(.minutes(2)), arguments: [(1280.0, 48.0), (1000.0, 40.0)])
 @MainActor func readFailedLayoutWithoutWindowUsesItsOwnWidth(width: Double, inset: Double) {
     // Off-window, the page's own width picks the narrow or wide side inset (page 26's rule).
     let view = ReadFailedStateView(frame: NSRect(x: 0, y: 0, width: width, height: 680))

@@ -94,7 +94,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453PageAndEdgeKeysMoveSelectAndReveal() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453PageAndEdgeKeysMoveSelectAndReveal() {
     let scene = PageKeyScene()
     for code: UInt16 in [121, 116, 115, 119] {
         scene.reset(40, selected: [40])
@@ -107,7 +107,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453PageSizeTracksLiveGeometryAndInsets() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453PageSizeTracksLiveGeometryAndInsets() {
     let scene = PageKeyScene(count: 240)
     for width: CGFloat in [480, 720, 1200] {
         scene.window.setContentSize(NSSize(width: width, height: 600))
@@ -135,7 +135,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453EdgesRevealCurrentAndRepeatWithoutScrolling() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453EdgesRevealCurrentAndRepeatWithoutScrolling() {
     let scene = PageKeyScene()
     scene.scroll.contentInsets = NSEdgeInsets(top: 24, left: 0, bottom: 40, right: 0)
     for (code, endpoint): (UInt16, Int) in [(115, 0), (119, 119)] {
@@ -161,7 +161,7 @@ import MadoApplication
     #expect(offset.y == 0)
 }
 
-@Test @MainActor func issue453ShiftAndCommandPreserveArrowSelectionSemantics() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453ShiftAndCommandPreserveArrowSelectionSemantics() {
     let scene = PageKeyScene()
     for flags: NSEvent.ModifierFlags in [.shift, .command] {
         scene.reset(40, selected: [2, 40, 70])
@@ -181,7 +181,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453EmptySingletonAndPartialRowsClamp() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453EmptySingletonAndPartialRowsClamp() {
     let empty = PageKeyScene(count: 0)
     let offset = empty.grid.contentOffset
     for flags: NSEvent.ModifierFlags in [[], .shift] {
@@ -206,7 +206,7 @@ import MadoApplication
 }
 
 /// Exhaustive finite domain; S4 bounds plus S5 repeated-edge/inverse invariants, no random/shrinking claim.
-@Test @MainActor func issue453BoundedMovementLaws() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453BoundedMovementLaws() {
     for width: CGFloat in [480, 1200] {
         for count in 1...9 {
             let scene = PageKeyScene(count: count, width: width, height: 240)
@@ -241,7 +241,7 @@ import MadoApplication
     override func keyDown(with event: NSEvent) { received.append(event.keyCode) }
 }
 
-@Test @MainActor func issue453TextEditorAndOtherResponderKeepTheirKeys() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453TextEditorAndOtherResponderKeepTheirKeys() throws {
     let scene = PageKeyScene()
     scene.reset(40, selected: [40])
     let search = NSSearchField(frame: NSRect(x: 0, y: 0, width: 180, height: 24))
@@ -270,7 +270,7 @@ import MadoApplication
     #expect(other.received == [115, 119, 116, 121])
 }
 
-@Test @MainActor func issue453AlreadyCurrentUnselectedEdgesStillSelect() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453AlreadyCurrentUnselectedEdgesStillSelect() {
     for count in [1, 120] {
         let scene = PageKeyScene(count: count)
         for (code, endpoint): (UInt16, Int) in [(115, 0), (119, count - 1)] {
@@ -286,7 +286,7 @@ import MadoApplication
 }
 
 /// A displayed snapshot can receive native focus before activate() establishes Current Item.
-@Test @MainActor func issue453NativeFocusWithoutCurrentStartsPageAndEdgeMovesAtZero() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453NativeFocusWithoutCurrentStartsPageAndEdgeMovesAtZero() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-page-keys-no-current")
     let rootID = AccessRootID(rawValue: UUID())
@@ -338,7 +338,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453Fix1ClampedPageKeysKeepMultiSelectionLikeArrows() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453Fix1ClampedPageKeysKeepMultiSelectionLikeArrows() {
     let scene = PageKeyScene()
     for (page, arrow, endpoint, selected): (UInt16, UInt16, Int, Set<Int>) in [
         (121, 125, 119, [2, 119]), (116, 126, 0, [0, 2]),
@@ -365,7 +365,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue453Fix1HomeEndExplicitlySelectAndRevealCurrentEndpoint() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue453Fix1HomeEndExplicitlySelectAndRevealCurrentEndpoint() {
     let scene = PageKeyScene()
     for (key, endpoint, selected): (UInt16, Int, Set<Int>) in [(115, 0, [0, 2]), (119, 119, [2, 119])] {
         for flags: NSEvent.ModifierFlags in [[], .shift] {

@@ -4,7 +4,7 @@ import MadoCore
 @testable import MadoInfrastructure
 import Darwin
 
-@Test func issue140FileGrantDescriptorOpensInsideResolvedScope() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140FileGrantDescriptorOpensInsideResolvedScope() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let file = f.url("root/image.png")
     try Data([1]).write(to: file)
@@ -17,7 +17,7 @@ import Darwin
     #expect(f.scope.counts == [1, 1])
 }
 
-@Test func issue140RealFileGrantDescriptorHasBalancedScope() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140RealFileGrantDescriptorHasBalancedScope() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -33,7 +33,7 @@ import Darwin
     if descriptor >= 0 { _ = Darwin.close(descriptor) }
 }
 
-@Test @MainActor func issue140FailedFileGrantWatchLogsOnceAndUsesForegroundFallback() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140FailedFileGrantWatchLogsOnceAndUsesForegroundFallback() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let file = f.url("root/image.png")
     try Data([1]).write(to: file)

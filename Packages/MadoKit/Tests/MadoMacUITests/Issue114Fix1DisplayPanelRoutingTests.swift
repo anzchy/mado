@@ -44,7 +44,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue114Fix1EscapeClosesOpenPanelFromAnyFocus() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114Fix1EscapeClosesOpenPanelFromAnyFocus() throws {
     let scene = Issue114Fix1Scene()
     defer { scene.close() }
     let shell = scene.shell
@@ -68,7 +68,7 @@ import MadoApplication
     #expect(shell.isDisplayPanelOpen)
 }
 
-@Test @MainActor func issue114Fix1TabInsidePanelFollowsPanelLoop() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114Fix1TabInsidePanelFollowsPanelLoop() throws {
     let scene = Issue114Fix1Scene()
     defer { scene.close() }
     let shell = scene.shell
@@ -96,7 +96,7 @@ import MadoApplication
     #expect(scene.route(scene.key(48, "\t", .control)) == nil)
 }
 
-@Test @MainActor func issue114Fix1OutsideClickClosesPanelAndClickStillLands() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114Fix1OutsideClickClosesPanelAndClickStillLands() throws {
     let scene = Issue114Fix1Scene()
     defer { scene.close() }
     let shell = scene.shell

@@ -1,7 +1,7 @@
 import Testing
 @testable import MadoMacUI
 
-@Test @MainActor func chromeComponentsDefaultToLive() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeComponentsDefaultToLive() {
     var icons = 0
     var scales = 0
     let icon = IconCommandButton(symbol: .next, state: [], theme: .light) { icons += 1 }

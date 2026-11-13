@@ -68,7 +68,7 @@ private actor HeldInspectorReader: InspectorMetadataReading {
     #expect(model.value == .known(.init(pixelWidth: 200)))
 }
 
-@Test @MainActor func issue136GridCurrentItemCanOpenInspectorAndEscapeRestoresCanvas() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136GridCurrentItemCanOpenInspectorAndEscapeRestoresCanvas() {
     let host = FakeSessionHost(), session = ViewerSession(host: host)
     let first = ItemID.rootRelative(rootID: AccessRootID(), relativePath: "one.png")
     session.beginBrowsing(items: [first], sourceVersion: .init(1), scrollAnchor: first)

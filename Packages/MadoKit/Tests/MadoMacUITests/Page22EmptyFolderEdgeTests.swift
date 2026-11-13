@@ -32,7 +32,7 @@ import MadoApplication
     return page
 }
 
-@Test @MainActor func page22ViewsAreNotArchivable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22ViewsAreNotArchivable() {
     let coder = NSKeyedArchiver(requiringSecureCoding: false)
     #expect(EmptyFolderStateView(coder: coder) == nil)
     #expect(EmptyFolderTile(coder: coder) == nil)
@@ -40,7 +40,7 @@ import MadoApplication
 }
 
 /// The focus ring follows the control's rounded shape; a control without a layer gets a square ring.
-@Test @MainActor func page22FocusRingMaskCoversTheControlShape() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22FocusRingMaskCoversTheControlShape() throws {
     let tile = try #require(edgePage().tiles.first)
     let bare = EmptyFolderButton(frame: NSRect(x: 0, y: 0, width: 40, height: 20))
     #expect(bare.layer == nil)
@@ -60,7 +60,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func page22DragEndedClearsOutlineAndEmptyPasteboardIsRefused() {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22DragEndedClearsOutlineAndEmptyPasteboardIsRefused() {
     let page = edgePage()
     let board = NSPasteboard.withUniqueName()
     defer { board.releaseGlobally() }
@@ -74,7 +74,7 @@ import MadoApplication
     #expect(!page.isDragOver && page.dropOutline.isHidden)
 }
 
-@Test @MainActor func page22ChooseWithoutSessionDoesNothing() {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22ChooseWithoutSessionDoesNothing() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
                               preferencesStore: InMemoryDisplayPreferencesStore())
@@ -85,7 +85,7 @@ import MadoApplication
     #expect(shell.emptyFolderVisible, "no session: the actions are inert and the page stays")
 }
 
-@Test @MainActor func page22WithoutRecentsShowsOnlyTheChooseAction() {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22WithoutRecentsShowsOnlyTheChooseAction() {
     _ = NSApplication.shared
     let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
                               preferencesStore: InMemoryDisplayPreferencesStore())

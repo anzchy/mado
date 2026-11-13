@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func watchHubRelevanceFilterMatchesFolderScope() async throws {
+@Test(.timeLimit(.minutes(2))) func watchHubRelevanceFilterMatchesFolderScope() async throws {
     // (row, subscriber folder spelling or nil for the fixture's own, hint, recursive notified, flat notified)
     typealias Row = (name: String, folder: (WatchFixture) -> URL, hint: (WatchFixture) -> FolderChangeHint, recursive: Bool, flat: Bool)
     let plainF: (WatchFixture) -> URL = { $0.url("root/F") }
@@ -61,7 +61,7 @@ import MadoCore
 
 private func flushTimes(_ log: ChangeLog) -> [Int] { log.times }
 
-@Test func watchHubDebounceFlushesExactlyAtWindowDeadline() async throws {
+@Test(.timeLimit(.minutes(2))) func watchHubDebounceFlushesExactlyAtWindowDeadline() async throws {
     func fixture() async throws -> (WatchFixture, AccessRootID, ChangeLog, any FolderWatchSubscription) {
         let (f, root) = try await WatchFixture.filterRoot()
         let log = ChangeLog(clock: f.clock)

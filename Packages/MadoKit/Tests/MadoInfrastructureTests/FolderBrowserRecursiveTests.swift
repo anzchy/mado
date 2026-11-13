@@ -68,7 +68,7 @@ private struct RecursiveTree {
     func cleanup() { try? FileManager.default.removeItem(at: base) }
 }
 
-@Test func recursiveScanIncludesNestedImagesOnlyWhenEnabled() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanIncludesNestedImagesOnlyWhenEnabled() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.image("top.png")
     _ = try tree.directory("sub")
@@ -81,7 +81,7 @@ private struct RecursiveTree {
     #expect(Set(await on.entries.map(\.relativePath)) == ["top.png", "sub/nested.png"])
 }
 
-@Test func p204R3FlatFolderBeyondRecursiveEntryLimitStillCompletes() async throws {
+@Test(.timeLimit(.minutes(2))) func p204R3FlatFolderBeyondRecursiveEntryLimitStillCompletes() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     let source = tree.root.appendingPathComponent("seed.txt")
     try Data().write(to: source)
@@ -96,7 +96,7 @@ private struct RecursiveTree {
     #expect(await result.entries.isEmpty)
 }
 
-@Test @MainActor func p204R3UnreadableSubdirectoryRetainsPartialFailureSurface() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R3UnreadableSubdirectoryRetainsPartialFailureSurface() async throws {
     let tree = try RecursiveTree()
     let blocked = try tree.directory("blocked")
     defer {
@@ -120,7 +120,7 @@ private struct RecursiveTree {
     #expect(session.imageStatus == .folderScanFailed("Folder access denied", tree.root.lastPathComponent))
 }
 
-@Test func recursiveScanRejectsOutsideLinksAndCyclesWithoutDuplicateIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanRejectsOutsideLinksAndCyclesWithoutDuplicateIdentity() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     let sub = try tree.directory("sub")
     let image = try tree.image("sub/a.png")
@@ -141,7 +141,7 @@ private struct RecursiveTree {
     #expect(Set(entries.map(\.itemID)) == [.rootRelative(rootID: tree.rootID, relativePath: "sub/a.png")])
 }
 
-@Test func p204FixAliasFilterKeepsEligibleNestedRepresentative() async throws {
+@Test(.timeLimit(.minutes(2))) func p204FixAliasFilterKeepsEligibleNestedRepresentative() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.image("a.png")
     _ = try tree.directory("sub")
@@ -162,7 +162,7 @@ private struct RecursiveTree {
     #expect(snapshot.applying(.init(sort: .type, direction: .descending)).navigationEntries.count == 2)
 }
 
-@Test(arguments: ["00-link.jpg", "z-link.jpg"])
+@Test(.timeLimit(.minutes(2)), arguments: ["00-link.jpg", "z-link.jpg"])
 func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.image("a.png")
@@ -181,7 +181,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(Set(filtered.navigationEntries.map(\.itemID)).count == 2)
 }
 
-@Test(arguments: [3, 70]) func p204FixMetadataFailureEmitsBufferedPrefix(imageCount: Int) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [3, 70]) func p204FixMetadataFailureEmitsBufferedPrefix(imageCount: Int) async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     for index in 0...imageCount { _ = try tree.image(String(format: "%04d.png", index)) }
     let failure = FailingMetadataRead(failAfterImages: imageCount)
@@ -197,7 +197,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(Set(entries.map(\.itemID)).count == imageCount)
 }
 
-@Test @MainActor func recursiveAliasCountTracksUniqueNavigationAcrossModesAndFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func recursiveAliasCountTracksUniqueNavigationAcrossModesAndFilter() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.image("a.png")
     _ = try tree.directory("sub")
@@ -216,7 +216,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(coordinator.snapshot?.navigationEntries.map(\.relativePath) == ["a.png", "sub/b.png"])
 }
 
-@Test @MainActor func recursiveBufferedFailureCountMatchesRetainedSnapshot() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func recursiveBufferedFailureCountMatchesRetainedSnapshot() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     for index in 0...3 { _ = try tree.image(String(format: "%04d.png", index)) }
     let failure = FailingMetadataRead(failAfterImages: 3)
@@ -230,7 +230,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(coordinator.completedImageCount == nil)
 }
 
-@Test func recursiveDepthGuardFlushesPendingImageBeforeFailure() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveDepthGuardFlushesPendingImageBeforeFailure() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     let image = try tree.image("a.png")
     _ = try tree.image("b.png")
@@ -246,7 +246,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await result.entries.count == 1)
 }
 
-@Test func recursiveScanEntryGuardReportsHonestPartialCount() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanEntryGuardReportsHonestPartialCount() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.image("a.png")
     _ = try tree.image("b.png")
@@ -260,7 +260,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await result.entries.count == 1)
 }
 
-@Test func recursiveScanGuardBoundaryAndDepthAreExplicit() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanGuardBoundaryAndDepthAreExplicit() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.directory("sub")
     _ = try tree.image("sub/a.png")
@@ -278,7 +278,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await limited.entries.isEmpty)
 }
 
-@Test func recursiveScanEmptyAndHiddenPackageFoldersStayExcluded() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanEmptyAndHiddenPackageFoldersStayExcluded() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.directory("empty")
     _ = try tree.directory(".hidden")
@@ -292,7 +292,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await result.entries.isEmpty)
 }
 
-@Test func recursiveScanDeepTreeStopsAtConfiguredDepth() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanDeepTreeStopsAtConfiguredDepth() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     var path = ""
     for level in 0..<8 {
@@ -310,7 +310,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await result.entries.isEmpty)
 }
 
-@Test func recursiveScanDeepAliasToSeenDirectoryDoesNotTripDepthGuard() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanDeepAliasToSeenDirectoryDoesNotTripDepthGuard() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     let seen = try tree.directory("seen")
     _ = try tree.image("seen/a.png")
@@ -323,7 +323,7 @@ func recursiveAliasNameDoesNotChangeFilteredSort(aliasName: String) async throws
     #expect(await result.entries.count == 1)
 }
 
-@Test func recursiveScanCancellationStopsBeforeNextNestedBatch() async throws {
+@Test(.timeLimit(.minutes(2))) func recursiveScanCancellationStopsBeforeNextNestedBatch() async throws {
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     _ = try tree.directory("sub")
     for index in 0..<321 { _ = try tree.image(String(format: "sub/%04d.png", index)) }

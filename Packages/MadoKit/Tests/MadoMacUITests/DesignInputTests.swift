@@ -3,7 +3,7 @@ import AppKit
 import Testing
 @testable import MadoMacUI
 
-@MainActor @Test func designForcedSamplesIgnoreLiveInput() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func designForcedSamplesIgnoreLiveInput() throws {
     for theme in DesignTheme.allCases {
         for supplied: ComponentState in [[], .hover, .pressed, .selected, .keyboardFocused, .disabled] {
             for input in [ComponentInput.forced, .live] {

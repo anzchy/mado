@@ -156,7 +156,7 @@ func position445KeepsHonestReadingFailureAndRecursiveRescanLabels() async throws
     }
 }
 
-@Test @MainActor func position445Page14TextAXAndMeasuredPodWidth() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func position445Page14TextAXAndMeasuredPodWidth() throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }
     let field = try #require(scene.chrome.groups.flatMap(\.subviews).compactMap { $0 as? NSTextField }
@@ -179,7 +179,7 @@ func position445KeepsHonestReadingFailureAndRecursiveRescanLabels() async throws
     #expect(field.stringValue == "standalone.png")
 }
 
-@Test @MainActor func position445RealPreviewSetMovementUsesTheDisplayedURL() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func position445RealPreviewSetMovementUsesTheDisplayedURL() async throws {
     let test = Position445Scene()
     defer { test.finish() }
     try await test.begin()
@@ -224,7 +224,7 @@ func position445KeepsHonestReadingFailureAndRecursiveRescanLabels() async throws
     }
 }
 
-@Test @MainActor func position445Page27OriginalSizeKeepsThePositionLabel() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func position445Page27OriginalSizeKeepsThePositionLabel() async throws {
     let test = Position445Scene()
     defer { test.finish() }
     let design = try PinnedDesign.page("original-size")
@@ -235,7 +235,7 @@ func position445KeepsHonestReadingFailureAndRecursiveRescanLabels() async throws
     try test.expect("b.jpg  2 / 3")
 }
 
-@Test @MainActor func position445Fix1SelectedPreviewUsesSetOrderAndIndependentCount() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func position445Fix1SelectedPreviewUsesSetOrderAndIndependentCount() async throws {
     let test = Position445Scene()
     defer { test.finish() }
     try await test.begin()
