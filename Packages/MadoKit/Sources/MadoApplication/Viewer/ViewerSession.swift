@@ -167,8 +167,24 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public func resolve(_ target: ContextMenuTarget) -> [ItemID] {
         target.resolve(availableItemIDs: orderedItemIDs)
     }
+    public func preview(_ menu: ImageContextMenu) {
+        guard mode == .browsing else { return }
+        let live = Set(orderedItemIDs)
+        let isSelection = menu.target.itemIDs.count > 1
+        let items = (isSelection ? menu.target.itemIDs : menu.openingItemIDs).filter(live.contains)
+        guard items.contains(menu.clickedItemID) || (isSelection && !items.isEmpty) else { return }
+        let start = isSelection ? menu.openingSelection.currentItemID : menu.clickedItemID
+        previewSet = PreviewSet(items: items, sourceVersion: sourceVersion,
+            origin: PreviewOrigin(selection: menu.openingSelection, scrollAnchor: scrollAnchor),
+            startingAt: start, selectionPreview: isSelection)
+        mode = .viewing
+        updateFocus(.canvas)
+        host?.applyFocus(.canvas)
+        if let id = previewSet?.currentItemID { host?.presentGridItem(id) }
+    }
     private var appMenuTracking = false
     private var chromeMenuOpen = false
+    private var imageContextMenuOpen = false
     public func setMenuTracking(_ tracking: Bool) {
         appMenuTracking = tracking
         applyMenuLock()
@@ -179,8 +195,12 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         chromeMenuOpen = open
         applyMenuLock()
     }
+    public func setImageContextMenuOpen(_ open: Bool) {
+        imageContextMenuOpen = open
+        applyMenuLock()
+    }
     private func applyMenuLock() {
-        isMenuTracking = appMenuTracking || chromeMenuOpen
+        isMenuTracking = appMenuTracking || chromeMenuOpen || imageContextMenuOpen
         chrome.setLock(.menu, active: isMenuTracking, at: clock.now)
         synchronizeChrome()
     }

@@ -31,6 +31,15 @@ public struct PreviewSet: Equatable, Sendable {
             ? items.filter { origin.selection.selectedItemIDs.contains($0) } : items
         currentItemID = origin.selection.currentItemID.flatMap { itemIDs.contains($0) ? $0 : nil } ?? itemIDs.first
     }
+    /// A context menu may preview a captured range while Esc restores a different grid selection.
+    init(items: [ItemID], sourceVersion: PreviewSourceVersion, origin: PreviewOrigin,
+         startingAt start: ItemID?, selectionPreview: Bool) {
+        self.sourceVersion = sourceVersion
+        self.origin = origin
+        isSelectionPreview = selectionPreview
+        itemIDs = items
+        currentItemID = start.flatMap { items.contains($0) ? $0 : nil } ?? items.first
+    }
     public mutating func move(forward: Bool, mayWrap: Bool = false) {
         guard let currentItemID, let index = itemIDs.firstIndex(of: currentItemID) else { return }
         let next = index + (forward ? 1 : -1)
