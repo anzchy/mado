@@ -46,10 +46,11 @@ func scanTimeLimits(in source: String) -> [TimeLimitDeclaration] {
     return declarations
 }
 
-/// #673: only this exact injected-clock suite declaration may carry a one-minute limit.
+/// #673: only this exact injected-clock suite declaration at its package Tests path may carry a one-minute limit.
 /// Replace that declaration for the ordinary scanner; all remaining declarations keep the same rule.
+/// `fileName` is the slash-separated path relative to the package's Tests directory.
 func packageTimeLimitViolations(in source: String, fileName: String) -> [TimeLimitDeclaration] {
-    guard fileName == "PrefetchResumptionTests.swift" else {
+    guard fileName == "MadoInfrastructureTests/PrefetchResumptionTests.swift" else {
         return scanTimeLimits(in: source).filter(\.violatesPolicy)
     }
     let namedSuite = "@Suite(.timeLimit(.minutes(1))) struct PrefetchResumptionTests {"
