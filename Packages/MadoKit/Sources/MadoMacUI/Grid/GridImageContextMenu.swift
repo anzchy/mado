@@ -1,5 +1,9 @@
 import AppKit
 
+@MainActor public protocol GridContextMenuPresenting: AnyObject {
+    func present(_ menu: NSMenu, at point: NSPoint, in view: NSView)
+}
+
 /// A standard AppKit menu; its target closure never consults the grid's later selection.
 @MainActor public final class GridImageContextMenu: NSObject, NSMenuDelegate {
     public enum Action: String, CaseIterable, Sendable { case quickLook, reveal, copyPath, getInfo }
