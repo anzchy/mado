@@ -12,8 +12,8 @@ function setup(options) {
   return {fd,stdio,env};
 }
 
-function inspect(run, privateOutput, channel, fault, rejectDrain=false) {
-  let invocationID=null,statusPath=null,attested=false,reason='missing private cleanup status';
+function inspect(run, privateOutput, channel, fault, rejectDrain=true) {
+  let invocationID=null,statusPath=null,attested=false,reason='missing private cleanup status',drainExpired=false;
   try {
     if (run.error || run.signal || ![0,1,65,124,70].includes(run.status)) throw new Error('invalid supervisor exit');
     if (typeof privateOutput!=='string' || !/^(?:\{[^\n]+\}\n){2}$/.test(privateOutput)) throw new Error('missing or malformed private records');
@@ -26,6 +26,7 @@ function inspect(run, privateOutput, channel, fault, rejectDrain=false) {
     if (fault==='missing') throw new Error('missing status');
     if (fault==='malformed') body='{';
     const record=JSON.parse(body);
+    drainExpired=record.drainExpired===true;
     if (fault==='stale') record.id='0'.repeat(32);
     if (fault==='contradictory') record.commandExit=99;
     if (record.kind!=='status' || record.id!==invocationID || record.supervisor!==run.pid ||
@@ -33,17 +34,17 @@ function inspect(run, privateOutput, channel, fault, rejectDrain=false) {
         record.commandExit!==run.status || ![0,1,65].includes(run.status))
       throw new Error('incomplete, stale or contradictory cleanup status');
     // #672: a leader that exited while its group survived had to be drained by
-    // force. Callers producing gates or RED receipts never accept that result.
+    // force. Every gate and RED-receipt caller rejects that result by default.
     if (rejectDrain && record.drainExpired!==false)
       throw new Error('drain expired: leader exited with surviving descendants');
     attested=true;reason='';
   } catch(error) {reason=error.message;}
-  return {...run,status:attested?run.status:70,attested,invocationID,statusPath,
+  return {...run,status:attested?run.status:70,supervisorStatus:run.status,drainExpired,attested,invocationID,statusPath,
     ...(attested?{}:{stderr:`${run.stderr??''}status-channel: ${reason}\n`})};
 }
 
 /** For synchronous App/hosted consumers. `fault` corrupts evidence in tests only. */
-export function runAttestedSync(command,args,options={}, {fault,rejectDrain=false}={}) {
+export function runAttestedSync(command,args,options={}, {fault,rejectDrain=true}={}) {
   const channel=setup(options);
   let run;
   try {run=spawnSync(command,args,{...options,env:channel.env,stdio:channel.stdio,encoding:'utf8'});}
@@ -52,7 +53,7 @@ export function runAttestedSync(command,args,options={}, {fault,rejectDrain=fals
 }
 
 /** Swift streams diagnostics but withholds Maven counts until this resolves. */
-export function spawnAttested(command,args,options={},{rejectDrain=false}={}) {
+export function spawnAttested(command,args,options={},{rejectDrain=true}={}) {
   const channel=setup(options);
   const child=spawn(command,args,{...options,env:channel.env,stdio:channel.stdio});
   const chunks=[];
