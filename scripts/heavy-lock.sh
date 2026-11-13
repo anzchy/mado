@@ -11,6 +11,13 @@
 # picsee never reclaims shared directories. Retain if workers survive KILL;
 # mdpro may reclaim a dead owner after holder SIGKILL or survivors beyond KILL.
 # PICSEE_HEAVY_LOCK_HELD=1: nesting hint; a live parent control FD is required.
+# Lock-age alert (#672): when a top-level holder passes its execution budget, the
+# supervisor writes $PICSEE_HEAVY_ALERT_DIR/lock-alerts/<id>.json (default dir
+# ~/.picsee/herdr/delegator; 0600; command, deadline, pid/pgid, survivor
+# state/RSS, retained lock paths) and one attention.log line there. listen-notify.py
+# status reports it until the file is moved to lock-alerts/acked/.
+# The private status record carries drainExpired; consumers that opt in (Trash lane,
+# swift-red receipts) reject a run whose leader exited with surviving descendants.
 # The inherited descriptor owns the lock until its last close, including after
 # this launcher is SIGKILLed. Never unlink/rename the persistent lock file.
 set -euo pipefail

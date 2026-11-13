@@ -200,7 +200,10 @@ does not restore the paused `gpt-auditor`.
   per undelivered event and exits 3 when any line is `attention` (`deferred-user-typing`, `delivery-uncertain`,
   `delivery-failed`, `launch-failed`, a `status.json` with `attention: true` or that is not a JSON object
   (`state=invalid`), or a worker
-  that is stopped or `foreign` — a stale pid now owned by another user's process). For a deferral, check the
+  that is stopped or `foreign` — a stale pid now owned by another user's process), or an open heavy-lock
+  lock-age alert (`attention lock-alert <id> …`, from `lock-alerts/*.json` beside the listeners directory;
+  #672). For a lock alert, read the file, confirm with `ps` that the listed pid/pgid are gone and the
+  retained locks are free, then move it to `lock-alerts/acked/`. For a deferral, check the
   box, then resume with the identical `start` command (or `listen-notify.py run --event-dir <dir>`); a still-running worker answers
   `already-running` and sends on its next check. Resuming keeps the event's registered `--typing-*` values;
   different flags on the `start` command are ignored for an existing event. A resumed worker restarts the hold
