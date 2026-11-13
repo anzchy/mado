@@ -251,7 +251,7 @@
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| CAP-01 | Capture Bar（截图工具条） | Absent | 无 | P7-10 | — | 在 macOS 26 的 Screenshots 设置中开启 Capture Bar，首次截图才请求屏幕录制权限；区域、窗口、全屏截图默认存入可更改的 Capture Folder 并复制。拖动、收起和恢复工具条，关闭 Mado 窗口后仍可用，关掉工具条后不再驻留。用默认或自定义全局快捷键截图，冲突会提示，系统的 ⌘⇧3/4/5 仍可用。 |
+| CAP-01 | Capture Bar（截图工具条） | Absent | 无 | P7-10 | — | macOS 26 开启 Capture Bar，首次截图才请求录屏；区域/窗口/全屏截图存入 Capture Folder 并复制，命名 `mado-YYYYMMDDHHmmss.png`（同秒加 `-2/-3`）。工具条可拖动、收起/恢复，浮于全屏 App 的每个 Space，关 Mado 窗口仍可用；设置里关闭后 helper 退出且不再随登录启动。默认或自定义全局快捷键可截图，冲突有提示，系统 ⌘⇧3/4/5 不受影响。 |
 | CAP-02 | Capture Thumbnail（截图缩略图） | Absent | 无 | P7-10 | — | 在 macOS 26 截图后，角落的 Capture Thumbnail 约五秒后消失，可复制、标注、在 Mado 打开、识别文字、移到废纸篓或拖走。关闭自动存盘后截图只在剪贴板，可从缩略图保存；标注或打开前先存入 Capture Folder。首次在 Mado 打开时可授权 Capture Folder 翻图，拒绝后仍能打开当前截图。 |
 
 ### 编辑与导出
@@ -265,7 +265,7 @@
 | EDIT-05 | 移到废纸篓 | Absent | 无 | P5-06 | — | 删除一张图后它出现在废纸篓里；不存在永久删除选项 |
 | EDIT-06 | 未保存编辑的提示 | Absent | 无 | P5-07 | — | 裁剪后不保存就切图或关窗口，提示保存、放弃或取消；选取消后编辑仍在 |
 | EDIT-07 | Annotate Mode（标注模式） | Absent | 无 | P7-11 | — | 在 macOS 26 打开任意图片，按 ⌘E 或点标注按钮，在原窗口使用箭头、矩形、文字、荧光笔、画笔、马赛克或纯色遮挡、裁剪及自动编号标记；标记可调整、撤销和重做，浏览键不切图。按 Esc、关窗口或切图且有未存标记时，出现保存、放弃、取消提示；选取消仍留在 Annotate Mode。 |
-| EDIT-08 | Annotated Copy（标注副本） | Absent | 无 | P7-11 | — | 在 macOS 26 按 ⌘S 得到原图旁的 `<name>-annotated[-n].<ext>`，原图不变；保留原格式，不可写格式改存 PNG 并提示。已授权可写的 Access Root 直接保存，其他位置弹出预填的保存面板；副本在 Grid 和 Preview Set 可见。按 ⌘C 只复制标注图；保存失败时原图不变并提示。 |
+| EDIT-08 | Annotated Copy（标注副本） | Absent | 无 | P7-11 | — | macOS 26 按 ⌘S，在原图旁生成不覆盖原图的 `<name>-annotated[-n].<ext>`，保留格式或改用 PNG；仍在 Annotate Mode，提示“Saved as <name>”及 Show in Finder。副本按排序/筛选进入 Grid、以后打开的 Preview Set，当前 Preview Set 不变；可写 Access Root 直接存，否则弹预填面板。按 ⌘C 只复制，保存失败时原图不变并提示。 |
 
 ### 格式
 
@@ -308,10 +308,11 @@ v0.0.1 起就是门槛，范围是 J1/J2 的页面（见计划 P3「MVP 还需�
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| EXT-01 | 识别并复制图中文字 | Absent | 无 | P7-01 | — | 打开含文字的截图，选中文字复制，粘贴结果正确；缩放、旋转或翻图后选区不错位 限制：按 [ADR-019](adr/0019-cloud-text-recognition-with-user-key-and-consent.md)，选字默认且始终使用 On-device Recognition；用户提供密钥并同意上传后，显式“识别文字”可用 Cloud Recognition。 |
+| EXT-01 | 识别并复制图中文字 | Absent | 无 | P7-01 | — | 打开含文字的截图，选中文字复制，粘贴结果正确；缩放、旋转或翻图后选区不错位。 限制：按 [ADR-019](adr/0019-cloud-text-recognition-with-user-key-and-consent.md)，选字默认且始终使用 On-device Recognition；用户提供密钥并同意上传后，显式“识别文字”可用 Cloud Recognition。 |
 | EXT-02 | 提取主体 | Absent | 无 | P7-02 | — | 对人像提取主体，复制后粘贴为带透明背景的图；换一张图后不会沿用上一张的结果 |
 | EXT-03 | 跟随 Finder 排序 | Absent | 无 | P7-05 | — | 在 Finder 里手动排好顺序后用 Mado 打开该目录，翻图顺序与 Finder 一致；读不到时回到默认排序并提示 |
-| EXT-04 | Cloud Recognition（云识别） | Absent | 无 | P7-12 | — | 在 macOS 26 设置自己的百度密钥，首次点“识别文字”时说明上传并征求同意，结果标明引擎。关闭云识别开关、无密钥、离线或额度用尽时回退并标明 On-device Recognition；直接选字只用本机。Capture Bar 识别文字只复制文字、不存图，通知显示字数和引擎并可点开编辑；无文字时提示且不清空剪贴板。 |
+| EXT-04 | Cloud Recognition（云识别） | Absent | 无 | P7-12 | — | 在 macOS 26 输入自己的百度密钥并启用 Cloud Recognition，首次显式识别文字前告知图片离开 Mac 上传百度、链接百度条款并征求同意；结果标明引擎。关闭全局开关、无密钥、离线或额度耗尽时回退并标明 On-device Recognition。直接选字只用本机；删除密钥后不再调用百度。 |
+| EXT-05 | 显式识别文字 | Absent | 无 | P7-01 | — | 在 macOS 26 从 Capture Bar 截取并识别文字，只复制文字而不存图；通知显示字数与识别引擎，点开可编辑和复制。在查看器对任意图片点“识别文字”，可读、编辑和复制结果。无文字时提示“未找到文字”，剪贴板不变。 |
 
 ### 不做
 
@@ -357,6 +358,7 @@ Mado 只支持 macOS，没有跨平台差异表，但同一能力在不同硬件
 | 缓存与资源 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 命令与键盘 | 2026-11-06 | doc-gardener | c812184..c45749c |
 | 窗口与桌面工具 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
+| 截图 | 2026-11-13 | 建账 | 1386d07 (#681) |
 | 编辑与导出 | 2026-10-22 | doc-gardener | 历史复核见 git log -p -- docs/feature-ledger.md |
 | 格式 | 2026-11-01 | doc-gardener | 7bcea16..b393b22 |
 | 可访问性与本地化 | 2026-11-06 | doc-gardener | c812184..c45749c |
