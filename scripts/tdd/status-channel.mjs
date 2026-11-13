@@ -12,7 +12,7 @@ function setup(options) {
   return {fd,stdio,env};
 }
 
-function inspect(run, privateOutput, channel, fault) {
+function inspect(run, privateOutput, channel, fault, rejectDrain=false) {
   let invocationID=null,statusPath=null,attested=false,reason='missing private cleanup status';
   try {
     if (run.error || run.signal || ![0,1,65,124,70].includes(run.status)) throw new Error('invalid supervisor exit');
@@ -32,6 +32,10 @@ function inspect(run, privateOutput, channel, fault) {
         record.cleanup!=='complete' || record.timedOut!==false ||
         record.commandExit!==run.status || ![0,1,65].includes(run.status))
       throw new Error('incomplete, stale or contradictory cleanup status');
+    // #672: a leader that exited while its group survived had to be drained by
+    // force. Callers producing gates or RED receipts never accept that result.
+    if (rejectDrain && record.drainExpired!==false)
+      throw new Error('drain expired: leader exited with surviving descendants');
     attested=true;reason='';
   } catch(error) {reason=error.message;}
   return {...run,status:attested?run.status:70,attested,invocationID,statusPath,
@@ -39,21 +43,21 @@ function inspect(run, privateOutput, channel, fault) {
 }
 
 /** For synchronous App/hosted consumers. `fault` corrupts evidence in tests only. */
-export function runAttestedSync(command,args,options={}, {fault}={}) {
+export function runAttestedSync(command,args,options={}, {fault,rejectDrain=false}={}) {
   const channel=setup(options);
   let run;
   try {run=spawnSync(command,args,{...options,env:channel.env,stdio:channel.stdio,encoding:'utf8'});}
   catch(error) {run={error,status:null,stdout:'',stderr:''};}
-  return inspect(run,run.output?.[channel.fd],channel,fault);
+  return inspect(run,run.output?.[channel.fd],channel,fault,rejectDrain);
 }
 
 /** Swift streams diagnostics but withholds Maven counts until this resolves. */
-export function spawnAttested(command,args,options={}) {
+export function spawnAttested(command,args,options={},{rejectDrain=false}={}) {
   const channel=setup(options);
   const child=spawn(command,args,{...options,env:channel.env,stdio:channel.stdio});
   const chunks=[];
   child.stdio[channel.fd].on('data',chunk=>chunks.push(chunk));
   const finished=new Promise(resolve=>child.on('close',(code,signal)=>resolve(inspect(
-    {status:code,signal,pid:child.pid,stdout:'',stderr:''},Buffer.concat(chunks).toString('utf8'),channel))));
+    {status:code,signal,pid:child.pid,stdout:'',stderr:''},Buffer.concat(chunks).toString('utf8'),channel,undefined,rejectDrain))));
   return {child,finished};
 }

@@ -139,8 +139,19 @@ func issue610NativeBookmarkCreationFailurePreservesError(route: Int) throws {
     }
 }
 
-@Test(arguments: [false, true])
-func issue610FailedBookmarkCreationDoesNotInventTrash(trash: Bool) async throws {
+@Test(.timeLimit(.minutes(2))) func issue610FailedBookmarkCreationDoesNotInventTrash() async throws {
+    try await issue610FailedBookmarkCreation(trash: false)
+}
+
+#if MADO_TRASH_INTEGRATION
+// #672: real DesktopServices Trash; runs only in `node scripts/tdd/trash-lane.mjs`.
+@Test(.timeLimit(.minutes(2))) func issue610FailedBookmarkCreationDoesNotInventRealTrash() async throws {
+    try await issue610FailedBookmarkCreation(trash: true)
+}
+#endif
+
+/// #672: the removal case stays in the default lane; the real-Trash case is integration only.
+private func issue610FailedBookmarkCreation(trash: Bool) async throws {
     let f = try Issue610Fixture(); defer { f.remove() }
     let codec = SystemSecurityScope(bookmarkCreation: SecurityScopedBookmarkCreation(bookmarkData: { _, _, _ in
         throw CocoaError(.fileReadUnknown)
@@ -153,8 +164,13 @@ func issue610FailedBookmarkCreationDoesNotInventTrash(trash: Bool) async throws 
     await access.release(first)
     var trashed: NSURL?
     defer { if let trashed { try? FileManager.default.removeItem(at: trashed as URL) } }
+    #if MADO_TRASH_INTEGRATION
     if trash { try FileManager.default.trashItem(at: f.file, resultingItemURL: &trashed) }
     else { try FileManager.default.removeItem(at: f.file) }
+    #else
+    precondition(!trash, "the real-Trash case compiles only with MADO_TRASH_INTEGRATION")
+    try FileManager.default.removeItem(at: f.file)
+    #endif
     let resolved = try await access.resolveFileGrant(f.file)
     #expect(resolved == f.file)
     #expect(throws: (any Error).self) { try Data(contentsOf: resolved) }

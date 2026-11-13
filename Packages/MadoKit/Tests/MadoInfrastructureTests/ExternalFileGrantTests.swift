@@ -90,6 +90,8 @@ private actor NoRelocationLease: AccessLeasing {
     func release(_ lease: AccessLease) async {}
 }
 
+#if MADO_TRASH_INTEGRATION
+// #672: real DesktopServices Trash; runs only in `node scripts/tdd/trash-lane.mjs`.
 @Test func issue140RealFileGrantTrashIsDeletion() async throws {
     let fm = FileManager.default
     let directory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -105,6 +107,28 @@ private actor NoRelocationLease: AccessLeasing {
     var trashed: NSURL?
     try fm.trashItem(at: original, resultingItemURL: &trashed)
     defer { if let trashed { try? fm.removeItem(at: trashed as URL) } }
+    await #expect(throws: FileAccessError.fileDeleted(original)) {
+        _ = try await access.resolveFileGrant(original)
+    }
+}
+#endif
+
+/// #672 deterministic replacement: the bookmark resolves into the user Trash path.
+@Test(.timeLimit(.minutes(2))) func issue140FileGrantBookmarkResolvingIntoTrashIsDeletion() async throws {
+    let fm = FileManager.default
+    let directory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: directory) }
+    let original = directory.appendingPathComponent("trashed.png")
+    try Data([1, 2, 3]).write(to: original)
+    let scope = SystemSecurityScope()
+    let bookmarks = TrashFactBookmarks(system: scope)
+    let access = try FileAccess(scope: scope, bookmarks: bookmarks,
+        store: BookmarkStore(url: directory.appendingPathComponent("roots.json")), buildSHA: "issue140-trash-fact")
+    let lease = try await access.acquire(.fileGrant(original))
+    await access.release(lease)
+    try fm.removeItem(at: original)
+    bookmarks.moveResolution(to: try TrashFacts.syntheticTrashURL("trashed.png"))
     await #expect(throws: FileAccessError.fileDeleted(original)) {
         _ = try await access.resolveFileGrant(original)
     }

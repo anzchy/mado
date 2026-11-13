@@ -386,15 +386,27 @@ func t231UndoSurvivesBenignBookmarkRefresh() async throws {
 }
 
 @Test(.timeLimit(.minutes(2)), arguments: ["grant", "rebind"])
+func t231ExplicitTrashSelectionHasSessionAuthorityOnlyTrashFact(action: String) async throws {
+    try await t231ExplicitTrashSelectionHasSessionAuthorityOnlyBody(action: action, real: false)
+}
+
+// #672: real `trashItem` scenario; runs only in the serialized Trash lane (node scripts/tdd/trash-lane.mjs).
+#if MADO_TRASH_INTEGRATION
+@Test(.timeLimit(.minutes(2)), arguments: ["grant", "rebind"])
 func t231ExplicitTrashSelectionHasSessionAuthorityOnly(action: String) async throws {
+    try await t231ExplicitTrashSelectionHasSessionAuthorityOnlyBody(action: action, real: true)
+}
+#endif
+
+/// #672: the default lane renames into the user Trash; the Trash lane asks DesktopServices.
+private func t231ExplicitTrashSelectionHasSessionAuthorityOnlyBody(action: String, real: Bool) async throws {
     let f = try RebindFixture(); defer { f.remove() }
     let codec = SystemSecurityScope()
     let access = try FileAccess(scope: f.scope, bookmarks: codec, store: f.roots, buildSHA: "trash")
     let a = try await access.grant(folder: f.old)
-    var trashed: NSURL?
-    try FileManager.default.trashItem(at: f.chosen, resultingItemURL: &trashed)
-    let selected = try #require(trashed as URL?)
-    defer { try? FileManager.default.removeItem(at: selected) }
+    let moved = try TrashFacts.trash(f.chosen, real: real)
+    defer { moved.cleanup() }
+    let selected = moved.url
     let id: AccessRootID
     if action == "grant" { id = try await access.grant(folder: selected) }
     else { id = try await access.rebind(a, folder: selected, recentStore: f.recents).rootID }
@@ -453,12 +465,24 @@ func t231RebindFailedWriteStillRetiresSavedGrantProof(undo: Bool) async throws {
 }
 
 @Test(.timeLimit(.minutes(2)))
+func t231ExplicitTrashSelectionRefusesReplacementAtSamePathTrashFact() async throws {
+    try await t231ExplicitTrashSelectionRefusesReplacementAtSamePathBody(real: false)
+}
+
+// #672: real `trashItem` scenario; runs only in the serialized Trash lane (node scripts/tdd/trash-lane.mjs).
+#if MADO_TRASH_INTEGRATION
+@Test(.timeLimit(.minutes(2)))
 func t231ExplicitTrashSelectionRefusesReplacementAtSamePath() async throws {
+    try await t231ExplicitTrashSelectionRefusesReplacementAtSamePathBody(real: true)
+}
+#endif
+
+/// #672: the default lane renames into the user Trash; the Trash lane asks DesktopServices.
+private func t231ExplicitTrashSelectionRefusesReplacementAtSamePathBody(real: Bool) async throws {
     let f = try RebindFixture(); defer { f.remove() }
-    var trashed: NSURL?
-    try FileManager.default.trashItem(at: f.chosen, resultingItemURL: &trashed)
-    let selected = try #require(trashed as URL?)
-    defer { try? FileManager.default.removeItem(at: selected) }
+    let moved = try TrashFacts.trash(f.chosen, real: real)
+    defer { moved.cleanup() }
+    let selected = moved.url
     let id = try await f.access.grant(folder: selected)
     try FileManager.default.moveItem(at: selected, to: f.base.appendingPathComponent("retained"))
     try FileManager.default.createDirectory(at: selected, withIntermediateDirectories: true)
@@ -549,13 +573,25 @@ func t231RebindUndoRetiresProofForRootGrantedAfterSnapshot() async throws {
 }
 
 @Test(.timeLimit(.minutes(2)))
+func t231ExplicitTrashStillRefusesAutomaticRootProbeTrashFact() async throws {
+    try await t231ExplicitTrashStillRefusesAutomaticRootProbeBody(real: false)
+}
+
+// #672: real `trashItem` scenario; runs only in the serialized Trash lane (node scripts/tdd/trash-lane.mjs).
+#if MADO_TRASH_INTEGRATION
+@Test(.timeLimit(.minutes(2)))
 func t231ExplicitTrashStillRefusesAutomaticRootProbe() async throws {
+    try await t231ExplicitTrashStillRefusesAutomaticRootProbeBody(real: true)
+}
+#endif
+
+/// #672: the default lane renames into the user Trash; the Trash lane asks DesktopServices.
+private func t231ExplicitTrashStillRefusesAutomaticRootProbeBody(real: Bool) async throws {
     let f = try RebindFixture(); defer { f.remove() }
     let access = try FileAccess(scope: f.scope, bookmarks: SystemSecurityScope(), store: f.roots, buildSHA: "automatic-trash")
-    var trashed: NSURL?
-    try FileManager.default.trashItem(at: f.chosen, resultingItemURL: &trashed)
-    let selected = try #require(trashed as URL?)
-    defer { try? FileManager.default.removeItem(at: selected) }
+    let moved = try TrashFacts.trash(f.chosen, real: real)
+    defer { moved.cleanup() }
+    let selected = moved.url
     let id = try await access.grant(folder: selected)
     #expect(try await access.verifyExplicitSelection(id).standardizedFileURL == selected.standardizedFileURL)
     await #expect(throws: FileAccessError.needsReconnection(id)) { try await access.probeRootURL(id) }

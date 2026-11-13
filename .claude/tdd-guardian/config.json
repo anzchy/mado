@@ -19,6 +19,15 @@
       "timeoutMs": 120000
     },
     {
+      "name": "trash-lane-node",
+      "description": "Manual #672 Trash integration lane process/discovery contracts (fake Swift under the real heavy-lock).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/trash-lane.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
       "name": "release-appcast-node",
       "description": "Manual Node contract receipts for appcast generation and final/RC feed validity (#629).",
       "command": "node scripts/tdd/node-lane.mjs scripts/release/appcast.test.mjs",

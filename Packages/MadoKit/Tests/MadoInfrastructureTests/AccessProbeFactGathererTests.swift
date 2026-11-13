@@ -146,6 +146,8 @@ private final class AccessProbeBookmarkRecorder: AccessProbeBookmarkCoding, @unc
     #expect(report.classification.cause == .notFound)
 }
 
+#if MADO_TRASH_INTEGRATION
+// #672: real DesktopServices Trash; runs only in `node scripts/tdd/trash-lane.mjs`.
 @Test func accessProbeGathererMarksFolderInTrash() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -175,6 +177,56 @@ private final class AccessProbeBookmarkRecorder: AccessProbeBookmarkCoding, @unc
     #expect(report.classification.isInTrash)
     // #231: the signed T1 probe supports specific Not Found copy for Trash.
     #expect(report.classification.cause == .notFound)
+}
+#endif
+
+/// #672 deterministic replacement: a renamed folder plus an injected Trash fact.
+@Test func accessProbeGathererMarksFolderInTrashFromInjectedFact() throws {
+    let fileManager = FileManager.default
+    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? fileManager.removeItem(at: root) }
+    let folder = root.appendingPathComponent("Trashed", isDirectory: true)
+    let trashed = root.appendingPathComponent("FactTrash/Trashed", isDirectory: true)
+    try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+    try fileManager.createDirectory(at: trashed.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let bookmarks = TrashFactProbeBookmarks(destination: trashed)
+    let gatherer = AccessProbeFactGatherer(
+        bookmarks: bookmarks,
+        scope: SystemSecurityScope(),
+        mountedVolumes: { [AccessProbeVolume(uuid: "volume-a", url: nil, name: "Fixture")] },
+        lister: { try FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil).count },
+        isInTrash: { $0.standardizedFileURL.path.hasPrefix(trashed.deletingLastPathComponent().standardizedFileURL.path + "/") }
+    )
+    let bookmark = try gatherer.makeBookmark(for: folder, storingVolumeProperties: true)
+
+    try fileManager.moveItem(at: folder, to: trashed)
+    let report = gatherer.gather(bookmarkData: bookmark)
+
+    #expect(report.resolution.url?.resolvingSymlinksInPath() == trashed.resolvingSymlinksInPath())
+    let resolvedURL = try #require(report.resolution.url)
+    let trashInputs = try #require(report.trashCheckInputs)
+    #expect(report.resolvedPath == resolvedURL.path)
+    #expect(trashInputs.resolvedPath == resolvedURL.path)
+    #expect(trashInputs.standardizedPath == resolvedURL.standardizedFileURL.path)
+    #expect(trashInputs.userTrashPath != nil)
+    #expect(trashInputs.volumePath != nil)
+    #expect(trashInputs.perUserVolumeTrashPath != nil)
+    #expect(report.isInTrash)
+    #expect(report.classification.isInTrash)
+    #expect(report.classification.cause == .notFound)
+}
+
+private struct TrashFactProbeBookmarks: AccessProbeBookmarkCoding {
+    let destination: URL
+    func makeBookmark(for url: URL, includingResourceValuesForKeys keys: Set<URLResourceKey>?) throws -> Data {
+        try url.bookmarkData(options: [], includingResourceValuesForKeys: keys, relativeTo: nil)
+    }
+    func volumeProperties(in data: Data) throws -> AccessProbeVolume {
+        AccessProbeVolume(uuid: "volume-a", url: nil, name: "Fixture")
+    }
+    func resolve(_ data: Data, options: URL.BookmarkResolutionOptions) throws -> AccessProbeResolution {
+        .resolved(destination, stale: false)
+    }
 }
 
 @Test func accessProbeGathererCapturesPermissionDenial() throws {

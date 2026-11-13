@@ -1,0 +1,15 @@
+{
+  "define": "MADO_TRASH_INTEGRATION",
+  "scratchPath": ".build/trash-integration",
+  "scenarios": [
+    "MadoInfrastructureTests.accessProbeGathererMarksFolderInTrash()",
+    "MadoInfrastructureTests.issue140RealFileGrantTrashIsDeletion()",
+    "MadoInfrastructureTests.issue140TrashedOldInodeYieldsToLiveSamePathReplacement()",
+    "MadoInfrastructureTests.issue140UnreadableSamePathReplacementNeedsReconnection()",
+    "MadoInfrastructureTests.issue610FailedBookmarkCreationDoesNotInventRealTrash()",
+    "MadoInfrastructureTests.t231AutomaticTrashRootAdmissionNeverPublishesReadable(_:)",
+    "MadoInfrastructureTests.t231ExplicitTrashSelectionHasSessionAuthorityOnly(action:)",
+    "MadoInfrastructureTests.t231ExplicitTrashSelectionRefusesReplacementAtSamePath()",
+    "MadoInfrastructureTests.t231ExplicitTrashStillRefusesAutomaticRootProbe()"
+  ]
+}

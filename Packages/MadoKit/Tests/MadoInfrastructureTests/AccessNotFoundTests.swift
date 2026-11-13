@@ -71,7 +71,20 @@ func t231MatchingLegacyRootStaysReadableAcrossRepeatedAdmissions() async throws 
 }
 
 @Test(.timeLimit(.minutes(2)), arguments: [false, true])
+func t231AutomaticTrashRootAdmissionNeverPublishesReadableTrashFact(_ held: Bool) async throws {
+    try await t231AutomaticTrashRootAdmissionNeverPublishesReadableBody(held, real: false)
+}
+
+// #672: real `trashItem` scenario; runs only in the serialized Trash lane (node scripts/tdd/trash-lane.mjs).
+#if MADO_TRASH_INTEGRATION
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func t231AutomaticTrashRootAdmissionNeverPublishesReadable(_ held: Bool) async throws {
+    try await t231AutomaticTrashRootAdmissionNeverPublishesReadableBody(held, real: true)
+}
+#endif
+
+/// #672: the default lane renames into the user Trash; the Trash lane asks DesktopServices.
+private func t231AutomaticTrashRootAdmissionNeverPublishesReadableBody(_ held: Bool, real: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(), system = SystemSecurityScope()
     let access = try FileAccess(scope: scope, bookmarks: system, store: f.store, buildSHA: "T231")
@@ -84,10 +97,9 @@ func t231AutomaticTrashRootAdmissionNeverPublishesReadable(_ held: Bool) async t
     let oldLease = held ? try await access.acquire(.root(id, file: f.old)) : nil
     let saved = try #require(await access.records().first).bookmark
     let volume = AccessProbeFactGatherer.bookmarkVolume(in: saved)
-    var trashed: NSURL?
-    try FileManager.default.trashItem(at: f.old, resultingItemURL: &trashed)
-    defer { if let trashed { try? FileManager.default.removeItem(at: trashed as URL) } }
-    let trash = try #require(trashed as URL?)
+    let moved = try TrashFacts.trash(f.old, real: real)
+    defer { moved.cleanup() }
+    let trash = moved.url
     #expect(FileAccess.isTrashed(trash))
     #expect(try system.resolve(saved).url.resolvingSymlinksInPath() == trash.resolvingSymlinksInPath())
     // All automatic entrances must reject even a valid, resolvable bookmark.
