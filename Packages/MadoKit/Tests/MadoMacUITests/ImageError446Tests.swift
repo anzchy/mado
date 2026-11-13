@@ -27,7 +27,7 @@ import MadoApplication
 
 /// image-error.html: SVG32, h2 margin18/normal23, p margin9/line22.1,
 /// actions margin18 + flex row43, Retry box35 at row+4, Next box35 at row+8.
-@Test @MainActor func imageError446PinnedDarkFramesAndColors() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446PinnedDarkFramesAndColors() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     scene.state.display(.failed(.corruptImage, "DSC_0342.jpg"), nextEnabled: true)
@@ -88,7 +88,7 @@ import MadoApplication
     if let appearanceError { throw appearanceError }
 }
 
-@Test @MainActor func imageError446OneLineTruncatesAndCompositionIsIdempotent() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446OneLineTruncatesAndCompositionIsIdempotent() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     for width: CGFloat in [1280, 800, 1280] {
@@ -136,7 +136,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func imageError446ActionsFocusAndLabels() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446ActionsFocusAndLabels() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     defer { scene.session.closeImage() }
@@ -159,7 +159,7 @@ import MadoApplication
     #expect(retries == 1 && scene.host.navigation == [.next])
 }
 
-@Test @MainActor func imageError446FolderFailuresKeepOriginalGlyphAndColors() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446FolderFailuresKeepOriginalGlyphAndColors() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     for surface: ViewerStateHost.Surface in [.gridReading, .viewer] {
@@ -196,7 +196,7 @@ import MadoApplication
     }
 }
 
-@Test func imageError446CatalogCopyIsExactlyPinnedInBothLanguages() throws {
+@Test(.timeLimit(.minutes(2))) func imageError446CatalogCopyIsExactlyPinnedInBothLanguages() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let catalog = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("App/Resources/Localizable.xcstrings"))) as? [String: Any])
@@ -211,7 +211,7 @@ import MadoApplication
 
 /// #446 fix1: preserve every reason glyph; only the name may elide. At the
 /// 238pt content minimum the reason itself must wrap inside the pin's 24pt padding.
-@Test @MainActor func imageError446FilenameOnlyEllipsisKeepsReasonDrawnAcrossResize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446FilenameOnlyEllipsisKeepsReasonDrawnAcrossResize() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     let failures: [(ViewerImageFailure, String)] = [
@@ -272,7 +272,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func imageError446ActionColorsFollowAppearanceWithoutLayout() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446ActionColorsFollowAppearanceWithoutLayout() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     scene.state.display(.failed(.corruptImage, "photo.jpg"), nextEnabled: true)
@@ -296,7 +296,7 @@ import MadoApplication
 }
 
 /// Exercise the actual cell's truncation detection, not AX/stringValue alone.
-@Test @MainActor func imageError446HeadingIsFullyDrawnAcrossLanguagesAndWidths() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func imageError446HeadingIsFullyDrawnAcrossLanguagesAndWidths() throws {
     let scene = imageError446Scene()
     defer { scene.window.close() }
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {

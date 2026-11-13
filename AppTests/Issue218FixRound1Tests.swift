@@ -34,7 +34,7 @@ import MadoMacUI
     return Data(bytes: bytes, count: rep.bytesPerRow * rep.pixelsHigh)
 }
 
-@MainActor @Test func issue218AppearanceSelectionChangesPixelsAndAccessibleValue() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218AppearanceSelectionChangesPixelsAndAccessibleValue() throws {
     let (panel, store) = fixPanel()
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)
@@ -59,7 +59,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue218RepeatedAppearanceChoiceRemainsSelectedWithPersistentStore() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218RepeatedAppearanceChoiceRemainsSelectedWithPersistentStore() throws {
     let suite = "issue218-repeat-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }

@@ -122,7 +122,7 @@ private actor HeldGridImagePort {
     func release(_ id: ItemID) { if let value = values.removeValue(forKey: id) { waiting.removeValue(forKey: id)?.resume(returning: value) } }
 }
 
-@Test @MainActor func gridMultiSelectionKeepsThumbnailAcrossRedrawAndCellReuse() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridMultiSelectionKeepsThumbnailAcrossRedrawAndCellReuse() async throws {
     _ = NSApplication.shared
     let a = thumbnailFixture("Selected-A.jpg"), b = thumbnailFixture("Selected-B.jpg")
     let snapshot = FolderSnapshot(version: .init(rootID: AccessRootID(rawValue:
@@ -161,7 +161,7 @@ private actor HeldGridImagePort {
     grid.stopThumbnails()
 }
 
-@Test @MainActor func gridThumbnailBindingRejectsReuseRevisionAndScale() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailBindingRejectsReuseRevisionAndScale() {
     _ = NSApplication.shared
     let a = thumbnailFixture("A.jpg"), b = thumbnailFixture("B.jpg")
     let cell = GridPhotoItem()
@@ -184,7 +184,7 @@ private actor HeldGridImagePort {
     #expect(cell.filename == "B.jpg")
 }
 
-@Test @MainActor func gridThumbnailFailureIsTruthfulAndRecoverable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailFailureIsTruthfulAndRecoverable() {
     _ = NSApplication.shared
     let a = thumbnailFixture("Broken.jpg")
     let cell = GridPhotoItem()
@@ -201,7 +201,7 @@ private actor HeldGridImagePort {
     #expect(cell.view.accessibilityLabel() == "Broken.jpg")
 }
 
-@Test @MainActor func gridVisibleCellLoadsPixelsAndFailureRemainsTruthful() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridVisibleCellLoadsPixelsAndFailureRemainsTruthful() async throws {
     _ = NSApplication.shared
     let a = thumbnailFixture("Visible.jpg"), broken = thumbnailFixture("Broken.png")
     let rootID = AccessRootID(rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000118")!)
@@ -260,7 +260,7 @@ private actor HeldGridImagePort {
     grid.stopThumbnails()
 }
 
-@Test @MainActor func gridScrollStartsThumbnailForNewVisibleCell() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridScrollStartsThumbnailForNewVisibleCell() async throws {
     _ = NSApplication.shared
     let rootID = AccessRootID(rawValue: UUID())
     let root = ItemIdentityRoot(id: rootID, url: URL(fileURLWithPath: "/tmp/grid-scroll-thumbnails"))
@@ -288,7 +288,7 @@ private actor HeldGridImagePort {
     grid.stopThumbnails()
 }
 
-@Test @MainActor func gridOffscreenFailureAppearsWhenScrolledIntoView() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridOffscreenFailureAppearsWhenScrolledIntoView() async throws {
     _ = NSApplication.shared
     let rootID = AccessRootID(rawValue: UUID())
     let root = ItemIdentityRoot(id: rootID, url: URL(fileURLWithPath: "/tmp/grid-offscreen-failure"))
@@ -317,7 +317,7 @@ private actor HeldGridImagePort {
     grid.stopThumbnails()
 }
 
-@Test @MainActor func gridRootReplacementRejectsLateSameFilenamePixels() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridRootReplacementRejectsLateSameFilenamePixels() async throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/grid-root-replacement")
     let oldRoot = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)

@@ -12,7 +12,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     (.access, "Access to this image is unavailable.")
 ]
 
-@Test(arguments: failureMessages) @MainActor private func statesFailureMessagePartitions(_ example: (ViewerImageFailure, String)) {
+@Test(.timeLimit(.minutes(2)), arguments: failureMessages) @MainActor private func statesFailureMessagePartitions(_ example: (ViewerImageFailure, String)) {
     let scene = StatesScene()
     defer { scene.window.close() }
     #expect(example.0.messageKey == example.1)
@@ -23,7 +23,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     #expect(!scene.state.showsProgress)
 }
 
-@Test @MainActor func statesFailureNextTracksSessionAndNeverShowsPreviousPixels() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesFailureNextTracksSessionAndNeverShowsPreviousPixels() async throws {
     let scene = StatesScene(), pipeline = StatesPipeline(), leases = StatesLeases()
     defer { scene.session.closeImage(); scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/A.png"), pipeline: pipeline, leases: leases)?.value
@@ -48,7 +48,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     }
 }
 
-@Test(arguments: [960.0, 238.0]) @MainActor func statesFailureKeepsEveryToolHitTestable(_ width: Double) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [960.0, 238.0]) @MainActor func statesFailureKeepsEveryToolHitTestable(_ width: Double) async throws {
     let scene = StatesScene(width: width), pipeline = StatesPipeline(), leases = StatesLeases()
     defer { scene.session.closeImage(); scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/B.jpg"), pipeline: pipeline, leases: leases)?.value
@@ -70,7 +70,7 @@ private let failureMessages: [(ViewerImageFailure, String)] = [
     #expect(presenter.presented.count == 1)
 }
 
-@Test @MainActor func statesLimitedKeepsActualPreviewAndDoesNotTakeFocus() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesLimitedKeepsActualPreviewAndDoesNotTakeFocus() async {
     let scene = StatesScene(), pipeline = StatesPipeline(), leases = StatesLeases()
     defer { scene.session.closeImage(); scene.window.close() }
     await scene.open(URL(fileURLWithPath: "/limited.png"), pipeline: pipeline, leases: leases)?.value

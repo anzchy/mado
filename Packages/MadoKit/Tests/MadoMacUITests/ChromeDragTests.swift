@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeDragPolicyEnablesStripWithoutMakingCanvasDraggable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeDragPolicyEnablesStripWithoutMakingCanvasDraggable() {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 960, height: 640),
         styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)

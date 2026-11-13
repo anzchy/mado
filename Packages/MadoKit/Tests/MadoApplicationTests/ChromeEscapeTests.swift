@@ -3,7 +3,7 @@ import MadoCore
 import MadoApplication
 
 // GREEN-only: the existing one-Esc branch already handles the new tools focus context.
-@Test @MainActor func chromeEscapeConsumesMenuThenFocusThenRealOrigin() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeEscapeConsumesMenuThenFocusThenRealOrigin() {
     let effects = FakeSessionHost()
     let chrome = ChromeRecallHost()
     let session = ViewerSession(host: effects)

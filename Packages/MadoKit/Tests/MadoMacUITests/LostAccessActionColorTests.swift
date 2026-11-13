@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func t229LostAccessTextActionUsesPinnedForeground(_ theme: DesignTheme) throws {
     _ = NSApplication.shared
     let view = LostAccessStateView(frame: NSRect(x: 0, y: 0, width: 800, height: 680))

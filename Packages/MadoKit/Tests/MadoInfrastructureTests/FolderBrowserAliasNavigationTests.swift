@@ -12,7 +12,7 @@ import MadoInfrastructure
     func openFolderImage(_ url: URL, rootID: AccessRootID) { visible = url; opens.append(url) }
 }
 
-@Test @MainActor func folderNavigationInwardAliasDoesNotTrapCurrentItem() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderNavigationInwardAliasDoesNotTrapCurrentItem() async throws {
     let fm = FileManager.default
     // Foundation resolves this prefix back to /var; enumeration uses the physical /private/var spelling.
     let physicalTemp = try #require(realpath(fm.temporaryDirectory.path, nil))

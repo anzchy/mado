@@ -46,7 +46,7 @@ actor LoadPipeline: ImagePipeline {
     }
     func imageLoadFailed(_ error: any Error) { MainActor.assertIsolated(); failures += 1 }
 }
-@MainActor @Test func loadSessionDeliversPreparedIdentityOnMainActor() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadSessionDeliversPreparedIdentityOnMainActor() async throws {
     let session = ViewerSession(), host = LoadHost(), pipeline = LoadPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let url = URL(fileURLWithPath: "/A.png")

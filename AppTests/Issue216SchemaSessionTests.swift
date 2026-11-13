@@ -14,7 +14,7 @@ private struct Issue216Scope: SecurityScope, BookmarkCoding {
     }
 }
 
-@Test func issue216AccessServicesGrantsForSessionOverFutureFiles() async throws {
+@Test(.timeLimit(.minutes(3))) func issue216AccessServicesGrantsForSessionOverFutureFiles() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }

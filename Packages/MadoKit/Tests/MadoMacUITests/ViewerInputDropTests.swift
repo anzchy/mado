@@ -25,7 +25,7 @@ import MadoApplication
     func resetSpringLoading() { }
 }
 
-@Test @MainActor func inputDropPasteboardTransitionsPreserveOrderAndRefuseSheets() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputDropPasteboardTransitionsPreserveOrderAndRefuseSheets() throws {
     _ = NSApplication.shared
     let a = URL(fileURLWithPath: "/photos/A.jpg"), b = URL(fileURLWithPath: "/photos/B.png")
     let remote = URL(string: "https://example.test/image.png")!
@@ -66,7 +66,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func inputDropContentKeepsChromeAndCanvasHitTesting() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputDropContentKeepsChromeAndCanvasHitTesting() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     host.hasImage = false; host.canNavigate = false

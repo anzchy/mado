@@ -36,7 +36,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func gridCurrentItemReachesSessionForSpaceAndFallsBackToFirst() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCurrentItemReachesSessionForSpaceAndFallsBackToFirst() throws {
     _ = NSApplication.shared
     let scene = CurrentItemScene(), router = CommandRouter()
     let a = scene.entry("A.jpg"), b = scene.entry("B.jpg"), c = scene.entry("C.jpg")
@@ -90,7 +90,7 @@ import MadoApplication
     #expect(kept.selection.currentItemID == c.itemID)
 }
 
-@Test @MainActor func gridDrawsCurrentItemRingDistinctFromSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridDrawsCurrentItemRingDistinctFromSelection() throws {
     _ = NSApplication.shared
     let scene = CurrentItemScene()
     let a = scene.entry("A.jpg"), b = scene.entry("B.jpg"), c = scene.entry("C.jpg")
@@ -166,7 +166,7 @@ private func gridCellAccessibilityValue(selected: Bool, current: Bool) -> String
     }
 }
 
-@Test @MainActor func gridCellAccessibilityValueIsAFunctionOfFinalState() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCellAccessibilityValueIsAFunctionOfFinalState() {
     _ = NSApplication.shared
     let scene = CurrentItemScene()
     let states = [(false, false), (true, false), (false, true), (true, true)]
@@ -188,7 +188,7 @@ private func gridCellAccessibilityValue(selected: Bool, current: Bool) -> String
     }
 }
 
-@Test @MainActor func gridCellAccessibilityValueMovesWithCurrentItem() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCellAccessibilityValueMovesWithCurrentItem() throws {
     _ = NSApplication.shared
     let scene = CurrentItemScene(), grid = scene.grid
     let a = scene.entry("A.jpg"), b = scene.entry("B.jpg"), c = scene.entry("C.jpg")
@@ -219,7 +219,7 @@ private func gridCellAccessibilityValue(selected: Bool, current: Bool) -> String
     #expect(announcedCurrent() == ["A.jpg"])
 }
 
-@Test func gridCellAccessibilityValueUsesWholeStringKey() throws {
+@Test(.timeLimit(.minutes(2))) func gridCellAccessibilityValueUsesWholeStringKey() throws {
     let source = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/MadoMacUI/Grid/GridBrowserView.swift"), encoding: .utf8)
@@ -240,7 +240,7 @@ extension CurrentItemScene {
     }
 }
 
-@Test @MainActor func gridKeepsRequestedCurrentUntilAnEmptiedGridIsRefilled() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridKeepsRequestedCurrentUntilAnEmptiedGridIsRefilled() throws {
     _ = NSApplication.shared
     let scene = CurrentItemScene()
     let a = scene.entry("A.jpg"), b = scene.entry("B.jpg"), c = scene.entry("C.jpg")

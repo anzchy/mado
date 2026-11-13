@@ -17,7 +17,7 @@ private struct EmptyFolderRandom: RandomNumberGenerator {
     mutating func below(_ bound: Int) -> Int { Int(next() % UInt64(bound)) }
 }
 
-@Test @MainActor func emptyFolderPredicateTrueOnlyAfterCompleteZeroEntryScan() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func emptyFolderPredicateTrueOnlyAfterCompleteZeroEntryScan() async throws {
     let fixture = FolderScanFixture(), coordinator = fixture.coordinator, session = ViewerSession()
     session.folderScan = coordinator
     #expect(!coordinator.isEmptyFolder, "a: fresh fixture")
@@ -80,7 +80,7 @@ private struct EmptyFolderRandom: RandomNumberGenerator {
     #expect(c.failure == nil && c.isEmptyFolder, "l: recovered refresh")
 }
 
-@Test @MainActor func emptyFolderExclusiveWithReadingNoMatchesAndFailureAcrossTransitions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func emptyFolderExclusiveWithReadingNoMatchesAndFailureAcrossTransitions() async throws {
     let pool = ["a.png", "b.jpg", "c.heic"]
     let filters: [Set<String>?] = [nil, ["png"], ["jpg"], ["heic"]]
     var random = EmptyFolderRandom(seed: 0x137)
@@ -157,7 +157,7 @@ private struct EmptyFolderRandom: RandomNumberGenerator {
     #expect(failedRefreshReached > 0, "the generator reached a failed refresh over a complete source")
 }
 
-@Test @MainActor func filterNeverProducesEmptyFolderState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func filterNeverProducesEmptyFolderState() async throws {
     let extensions = ["png", "jpg", "heic", "gif"]
     var random = EmptyFolderRandom(seed: 0x22)
     for sample in 0..<80 {
@@ -181,7 +181,7 @@ private struct EmptyFolderRandom: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func watchedRefreshTogglesEmptyFolder() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func watchedRefreshTogglesEmptyFolder() async throws {
     let fixture = FolderScanFixture(), c = fixture.coordinator
     let task = c.begin(folder: fixture.folder, rootID: fixture.id)
     await fixture.scanner.waitForStart()
@@ -199,7 +199,7 @@ private struct EmptyFolderRandom: RandomNumberGenerator {
     }
 }
 
-@Test @MainActor func recursiveRescanFromEmptyFolderCancelRestoresEmptyFolder() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func recursiveRescanFromEmptyFolderCancelRestoresEmptyFolder() async throws {
     let fixture = FolderScanFixture(), session = ViewerSession()
     session.folderScan = fixture.coordinator
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)

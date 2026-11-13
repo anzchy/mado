@@ -52,7 +52,7 @@ private func summary(_ values: [Double]) -> String {
     return "n=\(sorted.count) min=\(sorted.first!) p50=\(sorted[Int(ceil(Double(sorted.count) * 0.50)) - 1]) p95=\(sorted[Int(ceil(Double(sorted.count) * 0.95)) - 1]) max=\(sorted.last!)"
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["PICSEE_DECODE_MEASURE"] == "1"))
+@Test(.timeLimit(.minutes(2)), .enabled(if: ProcessInfo.processInfo.environment["PICSEE_DECODE_MEASURE"] == "1"))
 func measureRealPhotoDecodesAndConcurrency() async throws {
     let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".picsee/testassets/photos")
     let jpeg = root.appendingPathComponent("5B_JPEG_SDR.jpg")

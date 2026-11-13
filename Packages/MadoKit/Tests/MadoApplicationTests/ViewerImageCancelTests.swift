@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func statesCancelRetiresDecodeBalancesLeasesAndEscDoesNotCancel() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesCancelRetiresDecodeBalancesLeasesAndEscDoesNotCancel() async {
     let session = ViewerSession(), host = LoadHost(), pipeline = GenerationPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let old = generationOpen("A.png", session: session, pipeline: pipeline, access: access)
@@ -49,7 +49,7 @@ private actor CancelOpenerGate {
     func release() { pending?.resume(returning: source); pending = nil }
 }
 
-@Test @MainActor func statesCancelClosesLateOpenerExactlyOnce() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesCancelClosesLateOpenerExactlyOnce() async throws {
     let session = ViewerSession(), host = LoadHost(), pipeline = LoadPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/late.png")
@@ -83,7 +83,7 @@ private actor CancelOpenerGate {
     }
 }
 
-@Test @MainActor func statesCancelExternalFailureReturnsIdleWithoutAlert() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesCancelExternalFailureReturnsIdleWithoutAlert() async {
     let session = ViewerSession(), host = CancelledFailureHost()
     host.session = session; session.imageLoader.host = host
     session.openImage(URL(fileURLWithPath: "/cancelled.png"), maximumPixelSize: 512) {
@@ -100,7 +100,7 @@ private actor CancelOpenerGate {
     #expect(!session.dismissCancelledImageFailure(FileAccessError.startFailed))
 }
 
-@Test @MainActor func statesCancelSwiftCancellationReturnsIdleWithoutAlert() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesCancelSwiftCancellationReturnsIdleWithoutAlert() async {
     let session = ViewerSession(), host = CancelledFailureHost()
     host.session = session; session.imageLoader.host = host
     session.openImage(URL(fileURLWithPath: "/cancelled-task.png"), maximumPixelSize: 512) {

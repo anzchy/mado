@@ -188,3 +188,81 @@ private func timeLimitCodeTokens(_ source: String) -> (tokens: [String], ignored
     }
     return (tokens, ignoredCount, lexicalFailure)
 }
+
+/// #672 (#650 item 4): names of `@Test` functions that can hang a lane without a bound.
+/// A test needs a limit when its signature is `async`, it or an enclosing type is
+/// `@MainActor`, or the file imports AppKit, SwiftUI or MadoMacUI. Its own trait or an
+/// enclosing `@Suite` trait satisfies the rule. Comments and strings are trivia.
+func testsMissingTimeLimit(in source: String) -> [String] {
+    let tokens = timeLimitCodeTokens(source).tokens
+    let limitName = "time" + "Limit"
+    struct Attribute { let name: String; let limited: Bool }
+    struct Scope { let limited: Bool; let mainActor: Bool }
+    var scopes = [Scope(limited: false, mainActor: false)]
+    var pending: [Attribute] = []
+    var typeScope: Scope?
+    var missing: [String] = []
+    var importsUI = false
+    var index = 0
+    func balanced(from start: Int) -> Int {
+        var depth = 0
+        var cursor = start
+        while cursor < tokens.count {
+            if tokens[cursor] == "(" { depth += 1 }
+            if tokens[cursor] == ")" { depth -= 1; if depth == 0 { return cursor } }
+            cursor += 1
+        }
+        return tokens.count - 1
+    }
+    while index < tokens.count {
+        let token = tokens[index]
+        switch token {
+        case "@" where index + 1 < tokens.count:
+            let name = tokens[index + 1]
+            var end = index + 1
+            if end + 1 < tokens.count, tokens[end + 1] == "(" { end = balanced(from: end + 1) }
+            pending.append(Attribute(name: name, limited: tokens[(index + 1)...end].contains(limitName)))
+            index = end
+        case "import":
+            if index + 1 < tokens.count, ["AppKit", "SwiftUI", "MadoMacUI"].contains(tokens[index + 1]) { importsUI = true }
+            pending.removeAll()
+        case "struct", "class", "enum", "actor", "extension":
+            let parent = scopes.last!
+            typeScope = Scope(limited: parent.limited || pending.contains { $0.name == "Suite" && $0.limited },
+                              mainActor: parent.mainActor || pending.contains { $0.name == "MainActor" })
+            pending.removeAll()
+        case "{":
+            scopes.append(typeScope ?? scopes.last!)
+            typeScope = nil
+            pending.removeAll()
+        case "}":
+            if scopes.count > 1 { scopes.removeLast() }
+            pending.removeAll()
+        case "func":
+            if let test = pending.first(where: { $0.name == "Test" }), index + 1 < tokens.count {
+                var cursor = index + 2
+                var depth = 0
+                var isAsync = false
+                while cursor < tokens.count {
+                    let part = tokens[cursor]
+                    if part == "(" { depth += 1 } else if part == ")" { depth -= 1 }
+                    else if part == "{" && depth == 0 { break }
+                    else if part == "async" && depth == 0 { isAsync = true }
+                    cursor += 1
+                }
+                let scope = scopes.last!
+                let mainActor = scope.mainActor || pending.contains { $0.name == "MainActor" }
+                if !test.limited && !scope.limited && (isAsync || mainActor || importsUI) {
+                    missing.append(tokens[index + 1])
+                }
+            }
+            pending.removeAll()
+        case "let", "var", "init", "subscript", "typealias", "case", "protocol", ";":
+            pending.removeAll()
+        default:
+            break
+        }
+        index += 1
+    }
+    return missing
+}

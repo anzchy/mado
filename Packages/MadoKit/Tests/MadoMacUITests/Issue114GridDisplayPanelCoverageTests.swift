@@ -16,13 +16,13 @@ import MadoApplication
     return (shell, window)
 }
 
-@Test @MainActor func issue114PanelCoverageDecodingIsUnsupported() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCoverageDecodingIsUnsupported() throws {
     #expect(GridDisplayPanelView(coder: NSKeyedArchiver(requiringSecureCoding: false)) == nil)
 }
 
 /// Page 15 controls take keyboard focus whenever the panel is shown (Tab cycles close → slider → names → fit),
 /// independent of the system's full keyboard access setting, and refuse it once the panel is hidden or disabled.
-@Test @MainActor func issue114PanelCoverageControlsFocusOnlyWhileShownAndEnabled() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCoverageControlsFocusOnlyWhileShownAndEnabled() throws {
     let (shell, window) = issue114CoverageShell()
     defer { window.contentView = nil; window.close() }
     let panel = shell.displayPanel
@@ -46,7 +46,7 @@ import MadoApplication
 }
 
 /// grid-display.html `--shadow-soft` / `--color-panel`: the panel follows the window between light and dark.
-@Test @MainActor func issue114PanelCoverageAppearanceChangeRefreshesSurface() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCoverageAppearanceChangeRefreshesSurface() throws {
     let (shell, window) = issue114CoverageShell()
     defer { window.contentView = nil; window.close() }
     let panel = shell.displayPanel
@@ -64,7 +64,7 @@ import MadoApplication
 }
 
 /// Esc reaches the panel as `cancelOperation(_:)` from its controls' responder chain and closes it.
-@Test @MainActor func issue114PanelCoverageCancelOperationCloses() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCoverageCancelOperationCloses() throws {
     let (shell, window) = issue114CoverageShell()
     defer { window.contentView = nil; window.close() }
     shell.setDisplayPanelOpen(true)
@@ -76,7 +76,7 @@ import MadoApplication
 
 /// The store is the grid's one source: a grid that arrives with other options takes the stored ones on attach,
 /// including the defaults.
-@Test @MainActor func issue114PanelCoverageAttachedGridTakesStoredOptions() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCoverageAttachedGridTakesStoredOptions() throws {
     _ = NSApplication.shared
     for stored in [GridDisplayOptions(), GridDisplayOptions(thumbnailSize: 260, showFileNames: false, fit: .fit)] {
         var preferences = DisplayPreferences()

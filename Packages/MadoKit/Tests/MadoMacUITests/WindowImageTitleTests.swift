@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import MadoMacUI
 
-@MainActor @Test func windowImageTitleFollowsInstallOpeningAndEmptyRescan() {
+@MainActor @Test(.timeLimit(.minutes(2))) func windowImageTitleFollowsInstallOpeningAndEmptyRescan() {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 100, height: 100),
         styleMask: [.titled], backing: .buffered, defer: false)

@@ -2,7 +2,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@Test @MainActor func commandRouting() {
+@Test(.timeLimit(.minutes(2))) @MainActor func commandRouting() {
     let router = CommandRouter()
     let firstHost = FakeSessionHost()
     let secondHost = FakeSessionHost()
@@ -62,7 +62,7 @@ import MadoApplication
 }
 
 /// #348: a ⌘ zoom key resolves to the bare key's command, so key entry still yields to a text field.
-@Test @MainActor func cmdZoomKeyEntryBlockedInTextInput() {
+@Test(.timeLimit(.minutes(2))) @MainActor func cmdZoomKeyEntryBlockedInTextInput() {
     let router = CommandRouter()
     let host = FakeSessionHost()
     let session = ViewerSession(host: host)

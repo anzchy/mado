@@ -47,7 +47,7 @@ import ImageIO
     #expect(throws: ImageDecodeError.budgetExceeded) { try DecodeBudget.sourceCost(width: 1, height: 1, budget: 1000, bytesPerPixel: 0) }
 }
 
-@Test func bitDepthGraySixteenUsesTwoComponentsBytesWithoutEightBitFloor() async throws {
+@Test(.timeLimit(.minutes(2))) func bitDepthGraySixteenUsesTwoComponentsBytesWithoutEightBitFloor() async throws {
     #expect(DecodeBudget.bytesPerPixel(depth: 16, components: 1, hasAlpha: false, isFloat: false) == 2)
     let request = ImageDecodeRequest(fileURL: fixture("gradient-16bit.png"), maximumPixelSize: 256)
     let pipeline = ImageIOPipeline(configuration: DecodeConfiguration(budget: 80_000))

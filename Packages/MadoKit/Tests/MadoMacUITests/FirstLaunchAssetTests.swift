@@ -3,7 +3,7 @@ import CryptoKit
 import Testing
 @testable import MadoMacUI
 
-@Test @MainActor func p316B4BundledSamplesMatchPinnedBytes() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4BundledSamplesMatchPinnedBytes() throws {
     let expected = [
         "alley": "3168c66cbe2b8615d4a2d59f2872f41601265bb2309c0f3d1e8db32628f19001",
         "lakeside": "ef934fd0f43fa7e7d1cc3e0629a60f3d120ca4fdd7455aaf5652463d7f4cc9c6",
@@ -22,7 +22,7 @@ import Testing
     #expect(total == 353_257)
 }
 
-@Test @MainActor func i315BundledWallSamplesAreExactlySixJPEGs() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i315BundledWallSamplesAreExactlySixJPEGs() throws {
     let bundle = try #require(FirstLaunchView.sampleURL(name: "alley")).deletingLastPathComponent()
     let enumerator = try #require(FileManager.default.enumerator(at: bundle, includingPropertiesForKeys: nil))
     let jpgs = enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension.lowercased() == "jpg" }
@@ -32,7 +32,7 @@ import Testing
     #expect(Set(names) == Set(FirstLaunchLayout.sampleNames))
 }
 
-@Test func p316B4CatalogContainsApprovedEnglishAndChineseCopy() throws {
+@Test(.timeLimit(.minutes(2))) func p316B4CatalogContainsApprovedEnglishAndChineseCopy() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent()
@@ -60,7 +60,7 @@ import Testing
 
 // #441, owner 2026-11-03: 「打开首页的这行字我不喜欢，删掉」. The chips' three strings leave the catalog, and no other
 // entry carries their text under a new key.
-@Test func i441CatalogDropsChipStrings() throws {
+@Test(.timeLimit(.minutes(2))) func i441CatalogDropsChipStrings() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent()

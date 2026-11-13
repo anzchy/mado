@@ -13,7 +13,7 @@ import MadoCore
     return f
 }
 
-@Test @MainActor func i142WI2CompletedCountFollowsFilterRoundTrip() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i142WI2CompletedCountFollowsFilterRoundTrip() async throws {
     let f = try await i142CompletedScan(), c = f.coordinator
     for (extensions, names) in [
         (nil as Set<String>?, ["a.png", "b.jpg", "c.png"]),
@@ -28,7 +28,7 @@ import MadoCore
     }
 }
 
-@Test(arguments: ["folder-complete", "folder-failed", "image-failed"])
+@Test(.timeLimit(.minutes(2)), arguments: ["folder-complete", "folder-failed", "image-failed"])
 @MainActor func i142WI2UnknownAndFailureCountsStayNil(ending: String) async throws {
     let f = FolderScanFixture(holdsAcquire: true), c = f.coordinator
     #expect(c.completedImageCount == nil)
@@ -56,7 +56,7 @@ import MadoCore
     #expect(!c.isScanning)
 }
 
-@Test @MainActor func i142WI2CancelRestoresFilteredCountAndRejectsLateEvents() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i142WI2CancelRestoresFilteredCountAndRejectsLateEvents() async throws {
     let f = try await i142CompletedScan(), c = f.coordinator, session = ViewerSession()
     session.folderScan = c
     c.setConditions(.init(selectedExtensions: ["png"]))
@@ -79,7 +79,7 @@ import MadoCore
     #expect(c.completedImageCount == 2)
 }
 
-@Test @MainActor func i142WI2SilentRefreshKeepsCountUntilFailureThenRecovers() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i142WI2SilentRefreshKeepsCountUntilFailureThenRecovers() async throws {
     let f = try await i142CompletedScan(), c = f.coordinator
     c.setConditions(.init(selectedExtensions: ["png"]))
     let prior = try #require(c.snapshot)

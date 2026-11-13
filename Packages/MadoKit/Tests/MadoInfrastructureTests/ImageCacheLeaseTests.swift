@@ -90,7 +90,7 @@ struct CachePipelineEvents: ImagePipeline {
 }
 
 @Suite struct ImageCacheLeaseTests {
-    @Test func cacheLeaseOrderOnMissAndHit() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheLeaseOrderOnMissAndHit() async throws {
         let events = CacheEvents(), decoder = CacheCountingDecoder(events: events)
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let actual = ImageIOPipeline(decoder: decoder, cache: cache, cacheTrace: events)
@@ -114,7 +114,7 @@ struct CachePipelineEvents: ImagePipeline {
         for lease in acquired { #expect(released.filter { $0 == lease }.count == 1) }
     }
 
-    @MainActor @Test(arguments: [false, true], [0, 1]) func cacheRevokedDisplayAndDecodeLeaseDeliverNothing(root: Bool, successfulAcquires: Int) async throws {
+    @MainActor @Test(.timeLimit(.minutes(2)), arguments: [false, true], [0, 1]) func cacheRevokedDisplayAndDecodeLeaseDeliverNothing(root: Bool, successfulAcquires: Int) async throws {
         let file = fixture("coordinate-grid.png"), events = CacheEvents(), decoder = CacheCountingDecoder()
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let actual = ImageIOPipeline(decoder: decoder, cache: cache, cacheTrace: events)

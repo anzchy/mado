@@ -1,6 +1,6 @@
 import Testing
 @testable import MadoMacUI
-@Test func designComponentStateAndActivation() throws {
+@Test(.timeLimit(.minutes(2))) func designComponentStateAndActivation() throws {
     for theme in DesignTheme.allCases {
         for kind in ComponentKind.allCases {
             let normal = ComponentResolver.resolve(kind, state: [], theme: theme)
@@ -32,7 +32,7 @@ import Testing
     #expect(ComponentResolver.transition(reduceMotion: false) == behavior["shortTransitionSeconds"] as? Double)
     #expect(ComponentResolver.transition(reduceMotion: true) == behavior["reducedMotionTransitionSeconds"] as? Double)
 }
-@Test func designThumbnailSelectionDoesNotTintImage() {
+@Test(.timeLimit(.minutes(2))) func designThumbnailSelectionDoesNotTintImage() {
     for theme in DesignTheme.allCases {
         for state: ComponentState in [[], .selected, .hover, .pressed, [.selected, .keyboardFocused]] {
             #expect(ComponentResolver.resolve(.thumbnail, state: state, theme: theme).background == nil)

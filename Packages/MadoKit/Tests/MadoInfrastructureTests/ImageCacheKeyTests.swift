@@ -4,7 +4,7 @@ import MadoCore
 @testable import MadoInfrastructure
 
 @Suite struct ImageCacheKeyTests {
-    @Test(arguments: 0..<10) func cacheFullKeyFieldsAreIndependent(field: Int) async throws {
+    @Test(.timeLimit(.minutes(2)), arguments: 0..<10) func cacheFullKeyFieldsAreIndependent(field: Int) async throws {
         let item = cacheKey(1).itemID
         func key(changing field: Int? = nil) -> RenderKey {
             RenderKey(itemID: field == 0 ? cacheKey(2).itemID : item,

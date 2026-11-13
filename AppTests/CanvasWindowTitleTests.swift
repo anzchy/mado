@@ -10,7 +10,7 @@ import MadoMacUI
     var onChange: (@MainActor () -> Void)?
 }
 
-@MainActor @Test func emptyRescanClearsAppWindowImageIdentity() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func emptyRescanClearsAppWindowImageIdentity() throws {
     _ = NSApplication.shared
     let unavailable = Task<AccessServices, Error> { throw CancellationError() }
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
@@ -43,7 +43,7 @@ import MadoMacUI
     #expect(window.representedURL == nil)
 }
 
-@MainActor @Test func issue136WindowRoutesInspectorCommandTabAndEscape() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue136WindowRoutesInspectorCommandTabAndEscape() throws {
     let defaultsDomain = Bundle.main.bundleIdentifier ?? "MadoAppTests"
     let keyboardMode = UserDefaults.standard.persistentDomain(forName: defaultsDomain)?["AppleKeyboardUIMode"]
     UserDefaults.standard.set(0, forKey: "AppleKeyboardUIMode")

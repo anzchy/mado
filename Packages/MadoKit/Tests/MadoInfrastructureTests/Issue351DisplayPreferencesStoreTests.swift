@@ -49,7 +49,7 @@ private func issue351Expected(_ opacity: Double = 50) -> DisplayPreferences {
     }
 }
 
-@Test @MainActor func issue351StoresPublishNormalizedValuesAndPersistAcrossRecreation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue351StoresPublishNormalizedValuesAndPersistAcrossRecreation() throws {
     let suite = "mado.issue351.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -87,7 +87,7 @@ private func issue351Expected(_ opacity: Double = 50) -> DisplayPreferences {
     }
 }
 
-@Test @MainActor func issue351DefaultLoadingDoesNotWriteAndFutureSchemaRemainsUntouched() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue351DefaultLoadingDoesNotWriteAndFutureSchemaRemainsUntouched() throws {
     let suite = "mado.issue351.load.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }

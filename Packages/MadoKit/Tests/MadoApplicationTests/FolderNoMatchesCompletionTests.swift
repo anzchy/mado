@@ -11,7 +11,7 @@ import MadoCore
     func clearFolderImageForNoMatches() { clears += 1 }
 }
 
-@Test @MainActor func issue123ExcludedExplicitInputWaitsForLaterFilteredMatch() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123ExcludedExplicitInputWaitsForLaterFilteredMatch() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -33,7 +33,7 @@ import MadoCore
     #expect(host.opens.map(\.lastPathComponent) == ["b.png"])
 }
 
-@Test @MainActor func issue123FilteredPartialFailureOffersRetryAndRecovers() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123FilteredPartialFailureOffersRetryAndRecovers() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -57,7 +57,7 @@ import MadoCore
     #expect(!coordinator.hasNoMatches && session.imageStatus != .folderScanFailed("Folder scan failed", "A"))
 }
 
-@Test @MainActor func issue123FirstEligibleBatchUsesTypeOrderAndLaterBatchKeepsCurrent() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123FirstEligibleBatchUsesTypeOrderAndLaterBatchKeepsCurrent() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -78,7 +78,7 @@ import MadoCore
     await fixture.scanner.finish(); try await task.value
 }
 
-@Test @MainActor func issue123FilteredFailureRetryWithoutMatchFinishesAsNoMatches() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123FilteredFailureRetryWithoutMatchFinishesAsNoMatches() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -100,7 +100,7 @@ import MadoCore
     #expect(host.clears == 1 && coordinator.currentURL == nil)
 }
 
-@Test @MainActor func issue123CancelWhileAwaitingMatchClearsNoMatchState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123CancelWhileAwaitingMatchClearsNoMatchState() async throws {
     let fixture = FolderScanFixture(), session = ViewerSession()
     let coordinator = fixture.coordinator
     session.folderScan = coordinator
@@ -117,7 +117,7 @@ import MadoCore
     #expect(session.imageStatus != .noMatches && session.imageStatus != .readingFolder)
 }
 
-@Test @MainActor func issue123EligibleExplicitInputRemainsCurrentUntilItsBatch() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123EligibleExplicitInputRemainsCurrentUntilItsBatch() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -134,7 +134,7 @@ import MadoCore
     #expect(coordinator.currentURL == input && host.clears == 0)
 }
 
-@Test @MainActor func issue127LateJPEGInputStaysCurrentWithJPGFilter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue127LateJPEGInputStaysCurrentWithJPGFilter() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -152,7 +152,7 @@ import MadoCore
     #expect(coordinator.currentURL == input && !coordinator.hasNoMatches)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func issue123NoMatchIsFinalOnlyAfterScanCompletion(grid: Bool) async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
@@ -169,7 +169,7 @@ import MadoCore
     #expect(host.clears == 1 && coordinator.currentURL == nil)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func issue123SilentRefreshDefersNewNoMatchUntilReplacementIsComplete(hasLaterMatch: Bool) async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
@@ -197,7 +197,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func issue123RefreshKeepsExistingNoMatchUntilNewMatchCompletes() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123RefreshKeepsExistingNoMatchUntilNewMatchCompletes() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -219,7 +219,7 @@ import MadoCore
     #expect(host.opens.map(\.lastPathComponent) == ["b.png"] && host.clears == 1)
 }
 
-@Test @MainActor func issue123ChangedRefreshWithNoFilteredMatchClearsOnceAfterCompletion() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123ChangedRefreshWithNoFilteredMatchClearsOnceAfterCompletion() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -239,7 +239,7 @@ import MadoCore
     #expect(coordinator.currentURL == nil && host.clears == 1)
 }
 
-@Test @MainActor func issue123EmptyFolderRefreshKeepsEmptyStateWhileScanning() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123EmptyFolderRefreshKeepsEmptyStateWhileScanning() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), session = ViewerSession()
     let coordinator = fixture.coordinator
     coordinator.host = host; session.folderScan = coordinator
@@ -257,7 +257,7 @@ import MadoCore
     #expect(session.imageStatus == .emptyFolder && host.clears == 0)
 }
 
-@Test @MainActor func issue123RefreshLosingPresentationAuthorityDoesNotClearHost() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue123RefreshLosingPresentationAuthorityDoesNotClearHost() async throws {
     let fixture = FolderScanFixture(), host = NoMatchesHost(), coordinator = fixture.coordinator
     coordinator.host = host
     var allowed = true

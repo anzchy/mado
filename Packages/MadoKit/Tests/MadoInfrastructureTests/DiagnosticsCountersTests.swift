@@ -26,7 +26,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     }
 }
 
-@Test func diagnosticsMemoryCacheCountsEachLookupOutcomeOnce() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsMemoryCacheCountsEachLookupOutcomeOnce() async throws {
     let rig = try CounterRig()
     defer { rig.remove() }
     let pipeline = ImageIOPipeline()
@@ -49,7 +49,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(afterOther.hits == 1 && afterOther.misses == 2 && afterOther.entries == 2)
 }
 
-@Test func diagnosticsDiskCacheCountsLoadOutcomesAndReadsTheIndex() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskCacheCountsLoadOutcomesAndReadsTheIndex() async throws {
     let rig = try CounterRig()
     defer { rig.remove() }
     let pipeline = ImageIOPipeline()
@@ -83,7 +83,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await cache.diagnostics() == .init(entries: 1, storedBytes: payloadBytes, hits: 2, misses: 1))
 }
 
-@Test func diagnosticsDiskCacheReportsAnUnreadableIndexAsUnknown() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskCacheReportsAnUnreadableIndexAsUnknown() async throws {
     let rig = try CounterRig()
     defer { rig.remove() }
     try FileManager.default.createDirectory(at: rig.cacheDirectory.appendingPathComponent("index.sqlite3"),
@@ -92,7 +92,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await cache.diagnostics() == .init(entries: nil, storedBytes: nil, hits: 0, misses: 0))
 }
 
-@Test func diagnosticsAdmissionCountsFinishedSourceDecodesOnly() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsAdmissionCountsFinishedSourceDecodesOnly() async throws {
     let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 64),
         executor: OperationDecodeExecutor(workers: 1), decoder: FailingEdgeDecoder(),
         memory: MemoryBudget(limit: 64), release: nil)
@@ -109,7 +109,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await admission.diagnostics() == .init(running: 0, waiting: 0, finished: 2))
 }
 
-@Test func diagnosticsDiskCacheLoadCancelledAfterItsLeaseCountsNothing() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskCacheLoadCancelledAfterItsLeaseCountsNothing() async throws {
     let rig = try CounterRig()
     defer { rig.remove() }
     let pipeline = ImageIOPipeline()
@@ -127,7 +127,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(after.hits == 0 && after.misses == 0 && after.entries == 1)
 }
 
-@Test func diagnosticsDiskCacheEntriesFollowTheIndexThroughReplaceAndClear() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsDiskCacheEntriesFollowTheIndexThroughReplaceAndClear() async throws {
     let rig = try CounterRig()
     defer { rig.remove() }
     let pipeline = ImageIOPipeline()
@@ -149,7 +149,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await cache.diagnostics() == .init(entries: 0, storedBytes: 0, hits: 0, misses: 0))
 }
 
-@Test func diagnosticsAdmissionCountsOneFinishPerDecoderReturn() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsAdmissionCountsOneFinishPerDecoderReturn() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 64), executor: executor, decoder: TinyDecoder())
     // Two callers coalesced on one key share one decode.
@@ -168,7 +168,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await admission.diagnostics() == .init(running: 0, waiting: 0, finished: 2))
 }
 
-@Test func diagnosticsMemoryCacheIgnoresLookupsThatResolveNothing() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsMemoryCacheIgnoresLookupsThatResolveNothing() async throws {
     let cache = ImageMemoryCache(capacity: 1 << 20)
     let current = decodeKey(1)
     let tiny = try TinyDecoder().decode(tinyRequest)
@@ -189,7 +189,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(after.hits == 0 && after.misses == 1)
 }
 
-@Test func diagnosticsQueueShowsAHeldDiskLoadButNotAsADecode() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsQueueShowsAHeldDiskLoadButNotAsADecode() async throws {
     let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 64),
         executor: OperationDecodeExecutor(workers: 1), decoder: TinyDecoder(), memory: MemoryBudget(limit: 64), release: nil)
     let (entered, enter) = AsyncStream<Void>.makeStream()
@@ -209,7 +209,7 @@ private struct FailingEdgeDecoder: ImageDecoding {
     #expect(await admission.diagnostics() == .init(running: 0, waiting: 0, finished: 0))
 }
 
-@Test func diagnosticsCountsAResolvedLookupEvenIfTheCallerDropsIt() async throws {
+@Test(.timeLimit(.minutes(2))) func diagnosticsCountsAResolvedLookupEvenIfTheCallerDropsIt() async throws {
     let cache = ImageMemoryCache(capacity: 1 << 20)
     // The pipeline abandons a resolved lookup this way when its caller is cancelled after the lookup returned.
     let request = await cache.lookup(decodeKey(1))

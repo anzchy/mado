@@ -18,7 +18,7 @@ func issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing: Bool) throw
     #expect(!resolved.stale)
 }
 
-@Test func issue507FooterBookmarkVerifiesRawSymlinkParentSelection() async throws {
+@Test(.timeLimit(.minutes(3))) func issue507FooterBookmarkVerifiesRawSymlinkParentSelection() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("verify507-\(UUID())", isDirectory: true)
     defer { try? fm.removeItem(at: base) }

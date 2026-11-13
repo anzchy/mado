@@ -18,7 +18,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func chromeSchedulerBoundariesAndRearming() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeSchedulerBoundariesAndRearming() {
     let clock = FakeViewerClock()
     let scheduler = ChromeTestScheduler()
     let session = ViewerSession(clock: clock)

@@ -16,7 +16,7 @@ private actor LimitLeases: AccessLeasing {
     func installImage(_ image: DecodedImage, fileURL: URL) { images += 1 }
     func imageLoadFailed(_ error: any Error) { failures += 1 }
 }
-@MainActor @Test func loadResourceLimitKeepsPreviewAndFailsOnlyWithoutPixels() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadResourceLimitKeepsPreviewAndFailsOnlyWithoutPixels() async {
     let session = ViewerSession(), host = LimitHost(), access = LimitLeases()
     session.imageLoader.host = host
     let file = fixture("pan-grid-4096x3072.png")

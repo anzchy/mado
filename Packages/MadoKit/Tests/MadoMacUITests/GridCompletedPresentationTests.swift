@@ -5,7 +5,7 @@ import MadoApplication
 @testable import MadoMacUI
 
 /// App seam: grid-light.html and GRID-02 pending Current Item and Cancel Reading restore.
-@Test @MainActor func completedGridPresentationRestoresPendingCurrentAndCancelOffsetSynchronously() {
+@Test(.timeLimit(.minutes(2))) @MainActor func completedGridPresentationRestoresPendingCurrentAndCancelOffsetSynchronously() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-complete-presentation")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)

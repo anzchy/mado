@@ -24,7 +24,7 @@ import MadoCore
     _ = CommandRouter().route(command, from: .key, to: session)
 }
 
-@Test @MainActor func issue344SessionLoopStopsWrapsAndStopsAgain() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344SessionLoopStopsWrapsAndStopsAgain() async throws {
     let store = InMemoryDisplayPreferencesStore()
     let (_, host, session, _) = try await issue344FolderSession(store: store)
     #expect(!session.isEnabled(.previous))
@@ -47,7 +47,7 @@ import MadoCore
     #expect(host.navigation.isEmpty)
 }
 
-@Test @MainActor func issue344SessionLoopTwoWindowsShareLiveUpdates() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344SessionLoopTwoWindowsShareLiveUpdates() async throws {
     let store = InMemoryDisplayPreferencesStore()
     let (_, firstHost, first, _) = try await issue344FolderSession(store: store)
     let (_, secondHost, second, _) = try await issue344FolderSession(store: store)
@@ -66,7 +66,7 @@ import MadoCore
     #expect(firstHost.navigation.isEmpty && secondHost.navigation.isEmpty)
 }
 
-@Test @MainActor func issue344SessionLoopIncompleteEndpointsWaitForCompletion() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344SessionLoopIncompleteEndpointsWaitForCompletion() async throws {
     var preferences = DisplayPreferences()
     preferences.loopThroughImages = true
     let (fixture, host, session, task) = try await issue344FolderSession(
@@ -83,7 +83,7 @@ import MadoCore
     #expect(host.navigation.isEmpty)
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue344SessionLoopEmptyAndSingletonNeverReopen(singleton: Bool) async throws {
     var preferences = DisplayPreferences()
     preferences.loopThroughImages = true
@@ -97,7 +97,7 @@ func issue344SessionLoopEmptyAndSingletonNeverReopen(singleton: Bool) async thro
     #expect(host.navigation.isEmpty)
 }
 
-@Test(arguments: [2, 3, 5], [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [2, 3, 5], [false, true]) @MainActor
 func issue344SessionLoopCyclesRespectFilteredOrder(count: Int, descending: Bool) async throws {
     var preferences = DisplayPreferences()
     preferences.loopThroughImages = true
@@ -123,7 +123,7 @@ func issue344SessionLoopCyclesRespectFilteredOrder(count: Int, descending: Bool)
     #expect(host.navigation.isEmpty)
 }
 
-@Test @MainActor func issue344SessionLoopRestoreKeepsLatestSharedPreference() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344SessionLoopRestoreKeepsLatestSharedPreference() async throws {
     let store = InMemoryDisplayPreferencesStore()
     let (fixture, host, session, _) = try await issue344FolderSession(store: store)
     let otherWindow = ViewerSession(preferencesStore: store)
@@ -159,7 +159,7 @@ func issue344SessionLoopCyclesRespectFilteredOrder(count: Int, descending: Bool)
     var changed = false
 }
 
-@Test(arguments: [CommandID.previous, .next]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [CommandID.previous, .next]) @MainActor
 func issue344SessionLoopObservationInvalidatesOtherWindowEndpoints(command: CommandID) async throws {
     let store = InMemoryDisplayPreferencesStore()
     let first = ViewerSession(preferencesStore: store)

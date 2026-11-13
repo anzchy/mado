@@ -72,7 +72,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
     }
 }
 
-@MainActor @Test func issue114SettingsEntryPointsEnabledNoBadge() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsEntryPointsEnabledNoBadge() throws {
     let panel = issue114SettingsPanel(InMemoryDisplayPreferencesStore())
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)
@@ -105,7 +105,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
     #expect(issue114SettingsDisabled(in: root).compactMap { $0.accessibilityIdentifier() } == [])
 }
 
-@MainActor @Test func issue114SettingsControlsWriteStore() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsControlsWriteStore() throws {
     let store = InMemoryDisplayPreferencesStore()
     let panel = issue114SettingsPanel(store)
     defer { panel.window.close() }
@@ -139,7 +139,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
 }
 
 /// Adversary round 1: every write is read-modify-write on the store's current value.
-@MainActor @Test func issue114SettingsControlsPreserveConcurrentFields() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsControlsPreserveConcurrentFields() throws {
     let store = InMemoryDisplayPreferencesStore()
     let panel = issue114SettingsPanel(store)
     defer { panel.window.close() }
@@ -174,7 +174,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
     #expect(store.value.gridSidebarWidth == 300 && store.value.appearance == .dark)
 }
 
-@MainActor @Test func issue114SettingsSliderClampsAndSnaps() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsSliderClampsAndSnaps() throws {
     let store = InMemoryDisplayPreferencesStore()
     let panel = issue114SettingsPanel(store)
     defer { panel.window.close() }
@@ -186,7 +186,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
     }
 }
 
-@MainActor @Test func issue114SettingsReflectExternalWrites() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsReflectExternalWrites() throws {
     let store = InMemoryDisplayPreferencesStore(DisplayPreferences(alwaysShowTools: true, appearance: .light))
     let panel = issue114SettingsPanel(store)
     defer { panel.window.close() }
@@ -261,7 +261,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
 }
 
 /// AC-4: one real UserDefaults suite; each surface is built on a freshly loaded store, as after a relaunch.
-@MainActor @Test func issue114SettingsCrossSurfacePersistence() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsCrossSurfacePersistence() throws {
     let suite = "issue114-cross-\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -424,7 +424,7 @@ private final class Issue114SettingsScanner: FolderScanning, @unchecked Sendable
 
 /// #114 fix round 1 (opus L1): the Settings note says changes sync immediately. Within the app both surfaces observe
 /// the one store, so with Settings and the grid panel open together each reflects the other's change at once.
-@MainActor @Test func issue114SettingsAndOpenPanelSyncInProcess() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsAndOpenPanelSyncInProcess() throws {
     let store = InMemoryDisplayPreferencesStore()
     let grid = try Issue114SettingsShell(store)
     defer { grid.window.close() }

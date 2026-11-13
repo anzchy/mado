@@ -9,7 +9,7 @@ private func attempt(_ body: () async throws -> any FolderWatchSubscription) asy
     do { return .success(try await body()) } catch { return .failure(error) }
 }
 
-@Test func watchHubRefusedStreamHoldsNothingAndLaterStartsOnce() async throws {
+@Test(.timeLimit(.minutes(2))) func watchHubRefusedStreamHoldsNothingAndLaterStartsOnce() async throws {
     let f = try WatchFixture(folders: ["root/A", "root/B"])
     defer { f.remove() }
     let root = try await f.access.grant(folder: f.url("root"))

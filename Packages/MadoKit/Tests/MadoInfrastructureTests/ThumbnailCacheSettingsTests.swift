@@ -15,7 +15,7 @@ import MadoCore
     #expect(ThumbnailDiskCache.publicErrorCode(NSError(domain: path, code: 7)) == "other:7")
 }
 
-@Test func p305ClearCountsAndRemovesOwnedSQLiteJournal() async throws {
+@Test(.timeLimit(.minutes(2))) func p305ClearCountsAndRemovesOwnedSQLiteJournal() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let cacheURL = root.appendingPathComponent("cache")
     try FileManager.default.createDirectory(at: cacheURL, withIntermediateDirectories: true)
@@ -29,7 +29,7 @@ import MadoCore
     #expect(try await cache.sizeBytes() == 0)
 }
 
-@Test func p305ClearInvalidatesHeldStoreAndMeasuresRealBytes() async throws {
+@Test(.timeLimit(.minutes(2))) func p305ClearInvalidatesHeldStoreAndMeasuresRealBytes() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -64,7 +64,7 @@ import MadoCore
     #expect(try await second.load(fresh).map { _ in true } == nil)
 }
 
-@Test @MainActor func p307SettingsModelRetainsClearFailure() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p307SettingsModelRetainsClearFailure() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -98,7 +98,7 @@ private actor P307MeasurementGate {
     func release() { releaseFirst?.resume() }
 }
 
-@Test @MainActor func p307NewMeasurementCannotBeOverwrittenByOlderResult() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func p307NewMeasurementCannotBeOverwrittenByOlderResult() async {
     let cache = ThumbnailDiskCache()
     let model = CacheSettingsModel(cache: cache)
     let gate = P307MeasurementGate()
@@ -111,7 +111,7 @@ private actor P307MeasurementGate {
     #expect(model.sizeBytes == 0)
 }
 
-@Test func p305WriteFailureRetriesWithoutClearAfterOneSkippedAttempt() async throws {
+@Test(.timeLimit(.minutes(2))) func p305WriteFailureRetriesWithoutClearAfterOneSkippedAttempt() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -148,7 +148,7 @@ private actor P307MeasurementGate {
     #expect(try await cache.load(fresh).map { _ in true } != nil)
 }
 
-@Test func p305AuthorizedImagesStillDisplayWhenCacheCannotWrite() async throws {
+@Test(.timeLimit(.minutes(2))) func p305AuthorizedImagesStillDisplayWhenCacheCannotWrite() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -181,7 +181,7 @@ private actor P307MeasurementGate {
     #expect(try Data(contentsOf: cacheURL) == Data("blocked".utf8))
 }
 
-@Test @MainActor func p307SettingsModelShowsMeasuredBytesAndClear() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p307SettingsModelShowsMeasuredBytesAndClear() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -234,7 +234,7 @@ private actor P305WaitRegistration {
     }
 }
 
-@Test func p305ClearKeepsLeasedPayloadAndNeverDeletesForeignFiles() async throws {
+@Test(.timeLimit(.minutes(2))) func p305ClearKeepsLeasedPayloadAndNeverDeletesForeignFiles() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -279,7 +279,7 @@ private actor P305WaitRegistration {
     #expect(try await seed.sizeBytes() == 0)
 }
 
-@Test func p305ClearRejectsSymlinkDirectory() async throws {
+@Test(.timeLimit(.minutes(2))) func p305ClearRejectsSymlinkDirectory() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -298,7 +298,7 @@ private actor P305WaitRegistration {
     #expect(try Data(contentsOf: payload) == Data("keep".utf8))
 }
 
-@Test func p305ClearRejectsSymlinkAncestor() async throws {
+@Test(.timeLimit(.minutes(2))) func p305ClearRejectsSymlinkAncestor() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -318,7 +318,7 @@ private actor P305WaitRegistration {
     #expect(try Data(contentsOf: payload) == Data("keep".utf8))
 }
 
-@Test @MainActor func p307SettingsWaitsForLeasedClearBeforeShowingZero() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p307SettingsWaitsForLeasedClearBeforeShowingZero() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -345,7 +345,7 @@ private actor P305WaitRegistration {
     #expect(!model.isMeasuring)
 }
 
-@Test func p305PendingDrainTracksAllLeasedPayloads() async throws {
+@Test(.timeLimit(.minutes(2))) func p305PendingDrainTracksAllLeasedPayloads() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -386,7 +386,7 @@ private actor P305WaitRegistration {
     #expect(try await cache.sizeBytes() == 0)
 }
 
-@Test @MainActor func p307SettingsClearMeasuresAfterRegisteredLeaseDrain() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p307SettingsClearMeasuresAfterRegisteredLeaseDrain() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -421,7 +421,7 @@ private actor P305WaitRegistration {
     #expect(!model.isMeasuring)
 }
 
-@Test func p305FailedDeferredDeletionIsDiagnosedAndRetryable() async throws {
+@Test(.timeLimit(.minutes(2))) func p305FailedDeferredDeletionIsDiagnosedAndRetryable() async throws {
     let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: rootURL) }

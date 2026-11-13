@@ -2,7 +2,7 @@ import SwiftUI
 import Testing
 @testable import MadoMacUI
 
-@MainActor @Test func designKeyboardCommandsActivateExactlyOnce() {
+@MainActor @Test(.timeLimit(.minutes(2))) func designKeyboardCommandsActivateExactlyOnce() {
     for input in [ComponentInput.forced, .live] {
         for state: ComponentState in [[], .disabled] {
             var calls = 0

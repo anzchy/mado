@@ -10,7 +10,7 @@ import MadoCore
     var onChange: (@MainActor () -> Void)?
 }
 
-@MainActor @Test func issue136SmokeInspectorMenuEquivalentPreservesGridSearchEditor() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue136SmokeInspectorMenuEquivalentPreservesGridSearchEditor() throws {
     _ = NSApplication.shared
     let preferences = InMemoryDisplayPreferencesStore()
     let previousMenu = NSApp.mainMenu
@@ -264,7 +264,7 @@ import MadoCore
     override var acceptsFirstResponder: Bool { true }
 }
 
-@MainActor @Test func inspectorEscapeRoutesWithTextFieldFocusedAndUnfocused() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func inspectorEscapeRoutesWithTextFieldFocusedAndUnfocused() throws {
     _ = NSApplication.shared
     let unavailable = Task<AccessServices, Error> { throw CancellationError() }
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),

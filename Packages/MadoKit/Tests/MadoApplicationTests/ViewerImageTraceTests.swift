@@ -9,7 +9,7 @@ import MadoCore
     func begin(_ id: UUID, fileURL: URL) { starts.append(id) }
     func end(_ id: UUID, outcome: FirstPreviewOutcome) { ends.append((id, outcome)) }
 }
-@MainActor @Test func loadFirstPreviewBalancesSuccessSupersededAndFailure() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadFirstPreviewBalancesSuccessSupersededAndFailure() async {
     let trace = PreviewRecorder(), loader = ViewerImageLoader(trace: trace), host = LoadHost()
     let session = ViewerSession(imageLoader: loader), pipeline = LoadPipeline(), access = LoadLeases()
     loader.host = host

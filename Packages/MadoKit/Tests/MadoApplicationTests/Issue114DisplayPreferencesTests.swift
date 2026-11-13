@@ -187,7 +187,7 @@ private func issue114Fields(_ value: DisplayPreferences) throws -> [String: Any]
     }
 }
 
-@Test @MainActor func issue114PrefsInMemoryStoreNormalizesAndNotifies() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue114PrefsInMemoryStoreNormalizesAndNotifies() {
     let store = InMemoryDisplayPreferencesStore()
     let observer = Issue114Observer()
     store.observe(observer)

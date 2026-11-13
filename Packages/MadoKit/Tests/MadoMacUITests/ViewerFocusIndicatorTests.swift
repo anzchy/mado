@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func viewerCanvasHasNoFocusOutlineAfterGridPreview() {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerCanvasHasNoFocusOutlineAfterGridPreview() {
     _ = NSApplication.shared
     let session = ViewerSession()
     let item = ItemID.ephemeral(UUID())

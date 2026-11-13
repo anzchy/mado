@@ -15,7 +15,7 @@ import MadoApplication
     func returnToGrid() { returned += 1 }
 }
 
-@Test @MainActor func gridViewerRouteOpensStableCurrentAndReturnsAfterUpdate() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridViewerRouteOpensStableCurrentAndReturnsAfterUpdate() {
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID()), inserted = ItemID.ephemeral(UUID())
     let host = GridRouteHost()
     let session = ViewerSession(host: host)
@@ -33,7 +33,7 @@ import MadoApplication
     #expect(host.opened == [b, b])
 }
 
-@Test @MainActor func gridPreviewRemovalPresentsReconciledSuccessorThenEmptyGrid() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridPreviewRemovalPresentsReconciledSuccessorThenEmptyGrid() {
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID()), c = ItemID.ephemeral(UUID())
     let host = GridRouteHost(), session = ViewerSession(host: host)
     session.beginBrowsing(items: [a, b, c], sourceVersion: .init(1), scrollAnchor: a)
@@ -52,7 +52,7 @@ import MadoApplication
     #expect(host.returned == 1)
 }
 
-@Test @MainActor func defaultRouterEnablesGridPreviewKeysOnlyWhenBrowseHasItems() {
+@Test(.timeLimit(.minutes(2))) @MainActor func defaultRouterEnablesGridPreviewKeysOnlyWhenBrowseHasItems() {
     let session = ViewerSession(host: GridRouteHost())
     let router = CommandRouter()
     #expect(!router.route(.preview, from: .key, to: session))
@@ -64,7 +64,7 @@ import MadoApplication
     #expect(router.route(.enter, from: .key, to: session))
 }
 
-@Test @MainActor func issue140FolderScanCannotPresentOutsideSearchedOrFrozenPreviewSet() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140FolderScanCannotPresentOutsideSearchedOrFrozenPreviewSet() {
     let a = ItemID.ephemeral(UUID()), b = ItemID.ephemeral(UUID()), c = ItemID.ephemeral(UUID())
     // Search projection and frozen Preview Set both pass only their viewed IDs to the session.
     for viewed in [[a, c]] {

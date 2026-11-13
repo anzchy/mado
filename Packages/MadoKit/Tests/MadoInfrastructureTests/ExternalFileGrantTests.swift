@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoInfrastructure
 
-@Test func issue140FileGrantBookmarkFollowsRenameAndRefreshesStaleData() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140FileGrantBookmarkFollowsRenameAndRefreshesStaleData() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let original = f.url("root/old.png"), renamed = f.url("root/new.png")
     try Data(repeating: 1, count: 4).write(to: original)
@@ -26,7 +26,7 @@ import MadoApplication
     }
 }
 
-@Test func issue140FileGrantSourceUsesRenamedFileAndReplacementPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140FileGrantSourceUsesRenamedFileAndReplacementPixels() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let original = f.url("root/old.png"), renamed = f.url("root/new.png")
     try FileManager.default.copyItem(at: fixture("landscape-3x2.png"), to: original)
@@ -46,7 +46,7 @@ import MadoApplication
     await source.close()
 }
 
-@Test func issue140FileGrantRenameWinsWhenVacatedNameIsReused() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140FileGrantRenameWinsWhenVacatedNameIsReused() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let original = f.url("root/old.png"), renamed = f.url("root/new.png")
     try Data(repeating: 1, count: 3).write(to: original)
@@ -58,7 +58,7 @@ import MadoApplication
     #expect(try await f.access.resolveFileGrant(original) == renamed)
 }
 
-@Test func issue140SingleFileSamePathAtomicReplacementShowsNewPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140SingleFileSamePathAtomicReplacementShowsNewPixels() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let file = f.url("root/image.png")
     try FileManager.default.copyItem(at: fixture("landscape-3x2.png"), to: file)
@@ -73,7 +73,7 @@ import MadoApplication
     await source.close()
 }
 
-@Test func issue140ExistingFileGrantBookmarkReportsScopeLossForReconnection() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140ExistingFileGrantBookmarkReportsScopeLossForReconnection() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let file = f.url("root/image.png")
     try Data(repeating: 1, count: 4).write(to: file)
@@ -92,7 +92,7 @@ private actor NoRelocationLease: AccessLeasing {
 
 #if MADO_TRASH_INTEGRATION
 // #672: real DesktopServices Trash; runs only in `node scripts/tdd/trash-lane.mjs`.
-@Test func issue140RealFileGrantTrashIsDeletion() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140RealFileGrantTrashIsDeletion() async throws {
     let fm = FileManager.default
     let directory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -150,7 +150,7 @@ private actor NoRelocationLease: AccessLeasing {
     #expect(!FileAccess.isTrashed(URL(fileURLWithPath: "/Volumes/other/.Trashes-near/image.png")))
 }
 
-@Test func issue140OtherAccessLeasesHaveNoImplicitFolderRelocation() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140OtherAccessLeasesHaveNoImplicitFolderRelocation() async throws {
     #expect(try await NoRelocationLease().relocatedFolder(URL(fileURLWithPath: "/tmp"),
         rootID: AccessRootID()) == nil)
 }

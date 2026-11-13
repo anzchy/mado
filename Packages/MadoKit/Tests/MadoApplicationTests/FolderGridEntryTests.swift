@@ -59,7 +59,7 @@ private actor HeldGridDecode: ImagePipeline {
     func resume() { pending?.resume(); pending = nil }
 }
 
-@Test @MainActor func gridEntryRetiresSettledImageLeaseAndInspectorBeforeNewSource() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridEntryRetiresSettledImageLeaseAndInspectorBeforeNewSource() async throws {
     let session = ViewerSession(), host = GridEntryHost(), leases = GridEntryLeases(), pipeline = LoadPipeline()
     session.host = host; session.imageLoader.host = host
     let a = URL(fileURLWithPath: "/tmp/grid-old-A.png")
@@ -89,7 +89,7 @@ private actor HeldGridDecode: ImagePipeline {
     session.closeImage()
 }
 
-@Test @MainActor func gridEntryRejectsLateOldDecodeWithoutCancellingNewBrowseState() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridEntryRejectsLateOldDecodeWithoutCancellingNewBrowseState() async throws {
     let session = ViewerSession(), host = GridEntryHost(), leases = GridEntryLeases(), pipeline = HeldGridDecode()
     session.host = host; session.imageLoader.host = host
     let a = URL(fileURLWithPath: "/tmp/grid-delayed-A.png")
@@ -111,7 +111,7 @@ private actor HeldGridDecode: ImagePipeline {
     #expect(session.mode == .browsing && session.imageLoader.phase == .idle)
 }
 
-@Test @MainActor func gridEntryKeepsNewFolderScanAuthorizedThroughLaterBatch() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridEntryKeepsNewFolderScanAuthorizedThroughLaterBatch() async throws {
     let fixture = FolderScanFixture()
     let session = ViewerSession()
     session.folderScan = fixture.coordinator

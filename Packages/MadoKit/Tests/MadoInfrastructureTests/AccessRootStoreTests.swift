@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func p201RootStoreCanonicalGrantsRefreshOneRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func p201RootStoreCanonicalGrantsRefreshOneRoot() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = ReconnectBookmarks(); let scope = ReconnectScope()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -30,7 +30,7 @@ import MadoCore
     #expect(scope.balanced)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201RootStoreParentChildAndPrefixStayDistinct(parentFirst: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -53,7 +53,7 @@ func p201RootStoreParentChildAndPrefixStayDistinct(parentFirst: Bool) async thro
     #expect(scope.balanced)
 }
 
-@Test func p201RootStoreGrantDoesNotReviveUnresolvedRecord() async throws {
+@Test(.timeLimit(.minutes(2))) func p201RootStoreGrantDoesNotReviveUnresolvedRecord() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
     let first = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -72,7 +72,7 @@ func p201RootStoreParentChildAndPrefixStayDistinct(parentFirst: Bool) async thro
     #expect(scope.balanced)
 }
 
-@Test(arguments: ["bookmark", "save"])
+@Test(.timeLimit(.minutes(2)), arguments: ["bookmark", "save"])
 func p201RootStoreDuplicateFailurePreservesAuthorization(kind: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -98,7 +98,7 @@ func p201RootStoreDuplicateFailurePreservesAuthorization(kind: String) async thr
     #expect(scope.balanced)
 }
 
-@Test func p201RootStoreReusedGrantReplacesRecentEntry() async throws {
+@Test(.timeLimit(.minutes(2))) func p201RootStoreReusedGrantReplacesRecentEntry() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -119,7 +119,7 @@ func p201RootStoreDuplicateFailurePreservesAuthorization(kind: String) async thr
     #expect(scope.balanced)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201RootStoreGrantUsesPostScopeSymlinkIdentity(reuse: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -170,7 +170,7 @@ private final class RootStoreVisibilityScope: SecurityScope, @unchecked Sendable
     func isReadable(_ url: URL) -> Bool { false }
 }
 
-@Test func p201RootStoreOtherRootCanonicalizationHasItsOwnScope() async throws {
+@Test(.timeLimit(.minutes(2))) func p201RootStoreOtherRootCanonicalizationHasItsOwnScope() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let alias = f.base.appendingPathComponent("visible-in-scope", isDirectory: true)
     let scope = RootStoreVisibilityScope(alias: alias, destination: f.old)
@@ -188,7 +188,7 @@ private final class RootStoreVisibilityScope: SecurityScope, @unchecked Sendable
     #expect(scope.counts.balanced)
 }
 
-@Test(arguments: ["grant", "reconnect", "selected-denied"])
+@Test(.timeLimit(.minutes(2)), arguments: ["grant", "reconnect", "selected-denied"])
 func p201RootStoreUnrelatedDeniedRootDoesNotBlockExplicitSelection(action: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()

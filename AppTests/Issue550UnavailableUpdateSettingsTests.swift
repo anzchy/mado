@@ -15,7 +15,7 @@ import MadoMacUI
     return panel
 }
 
-@MainActor @Test func issue550SettingsWithoutFeedKeepsBothControlsInertAfterClickAndRefresh() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550SettingsWithoutFeedKeepsBothControlsInertAfterClickAndRefresh() throws {
     for info: [String: Any] in [[:], ["SUFeedURL": ""], ["SUFeedURL": " \n\t"]] {
         let port = SparkleUpdatePort(infoDictionary: info)
         let panel = issue550Settings(port)
@@ -42,7 +42,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue550SettingsWithRealStoppedFeedKeepsAutomaticAvailableAndPrivacyHint() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550SettingsWithRealStoppedFeedKeepsAutomaticAvailableAndPrivacyHint() throws {
     let port = SparkleUpdatePort(infoDictionary: ["SUFeedURL": "https://example.com/feed.xml"])
     let panel = issue550Settings(port)
     defer { panel.window.close() }
@@ -57,7 +57,7 @@ import MadoMacUI
     #expect(!labels.contains(String(localized: "Updates are not available in this build.")))
 }
 
-@MainActor @Test func issue550UnavailableUpdateExplanationHasEnglishAndChineseTextThatFits() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550UnavailableUpdateExplanationHasEnglishAndChineseTextThatFits() throws {
     let key = "Updates are not available in this build."
     let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("App/Resources/Localizable.xcstrings")

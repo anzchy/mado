@@ -4,7 +4,7 @@ import Testing
 import MadoCore
 @testable import MadoMacUI
 
-@Test @MainActor func gridCellReuseAndSnapshotOrderKeepTruthfulIdentity() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCellReuseAndSnapshotOrderKeepTruthfulIdentity() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-ui")
     let rootID = AccessRootID(rawValue: UUID())
@@ -31,7 +31,7 @@ import MadoCore
     #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 2, section: 0)])
 }
 
-@Test @MainActor func gridViewSelectionAndScrollUseCurrentIdentity() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridViewSelectionAndScrollUseCurrentIdentity() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-secondary")
     let rootID = AccessRootID(rawValue: UUID())
@@ -61,7 +61,7 @@ import MadoCore
     #expect(GridBrowserView(coder: NSCoder()) == nil)
 }
 
-@Test @MainActor func gridSelectedCellUsesSemanticAccentAndFilenameFillAcrossAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSelectedCellUsesSemanticAccentAndFilenameFillAcrossAppearances() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-colors")
     let id = AccessRootID(rawValue: UUID())
@@ -87,7 +87,7 @@ import MadoCore
     #expect(cell.isSelected && cell.view.window?.firstResponder !== cell.view)
 }
 
-@Test @MainActor func gridTileSurfaceDiffersFromGridBackgroundAcrossAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridTileSurfaceDiffersFromGridBackgroundAcrossAppearances() throws {
     let application = NSApplication.shared
     let previous = application.appearance
     defer { application.appearance = previous }

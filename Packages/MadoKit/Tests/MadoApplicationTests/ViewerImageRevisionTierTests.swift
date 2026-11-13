@@ -30,7 +30,7 @@ private actor DetailRevisionPipeline: ImagePipeline {
     }
     func release() { pending?.resume(); pending = nil }
 }
-@MainActor @Test(arguments: [false, true]) func loadRevisionAfterPreviewReentersOpeningWithinSameGeneration(failAgain: Bool) async {
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [false, true]) func loadRevisionAfterPreviewReentersOpeningWithinSameGeneration(failAgain: Bool) async {
     let session = ViewerSession(), pipeline = DetailRevisionPipeline(failAgain: failAgain), access = LoadLeases(), host = LoadHost()
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/revision-tier.png")

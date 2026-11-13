@@ -32,7 +32,7 @@ private func issue611Defaults(_ automatic: Bool = true, _ install: Bool = true) 
     return defaults
 }
 
-@MainActor @Test func issue611BuiltDebugConfigurationNeverConstructsOrStartsUpdater() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue611BuiltDebugConfigurationNeverConstructsOrStartsUpdater() throws {
     // App tests are a standalone bundle: Bundle.main is the test runner, not Mado.app.
     let url = issue611Repository.appendingPathComponent(".build/dd-ci/Build/Products/Debug/Mado.app/Contents/Info.plist")
     let info = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
@@ -51,7 +51,7 @@ private func issue611Defaults(_ automatic: Bool = true, _ install: Bool = true) 
     #expect(native.starts == 0, "Debug currently forwards startUpdater(), enabling the scheduler")
 }
 
-@MainActor @Test func issue611DisabledDebugPreservesEveryStoredPreferenceCombination() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue611DisabledDebugPreservesEveryStoredPreferenceCombination() {
     for automatic in [false, true] {
         for install in [false, true] {
             let defaults = issue611Defaults(automatic, install)
@@ -78,7 +78,7 @@ private func issue611Defaults(_ automatic: Bool = true, _ install: Bool = true) 
     }
 }
 
-@MainActor @Test func issue611ReleaseAndLegacyConfigurationKeepExistingUpdateBehavior() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue611ReleaseAndLegacyConfigurationKeepExistingUpdateBehavior() {
     for disabled: String? in ["NO", nil] {
         var info: [String: Any] = ["SUFeedURL": issue611Feed]
         if let disabled { info["MadoDisableUpdates"] = disabled }
@@ -98,7 +98,7 @@ private func issue611Defaults(_ automatic: Bool = true, _ install: Bool = true) 
     }
 }
 
-@MainActor @Test func issue611RealDisabledDebugPortIsUnavailable() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue611RealDisabledDebugPortIsUnavailable() {
     let port = SparkleUpdatePort(infoDictionary: ["SUFeedURL": issue611Feed, "MadoDisableUpdates": "YES"])
     #expect(!port.isAvailable)
     // On RED the native controller is still stopped; never start/check a real enabled updater here.
@@ -110,7 +110,7 @@ private func issue611Defaults(_ automatic: Bool = true, _ install: Bool = true) 
     #expect(port.lastUpdateCheckDate == nil)
 }
 
-@MainActor @Test func issue611DisabledDebugSettingsReuseUnavailableStateAfterClicksAndRefresh() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue611DisabledDebugSettingsReuseUnavailableStateAfterClicksAndRefresh() throws {
     let native = Issue611Controller(issue611Defaults())
     let port = SparkleUpdatePort(infoDictionary: ["SUFeedURL": issue611Feed, "MadoDisableUpdates": "YES"],
         makeController: { native })

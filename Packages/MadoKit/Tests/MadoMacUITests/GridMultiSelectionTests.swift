@@ -4,13 +4,13 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func gridAllowsMultipleNativeSelection() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridAllowsMultipleNativeSelection() {
     _ = NSApplication.shared
     let grid = GridBrowserView(frame: NSRect(x: 0, y: 0, width: 700, height: 500))
     #expect(grid.collectionView.allowsMultipleSelection)
 }
 
-@Test @MainActor func gridMouseModifiersDrawExactlyTheSessionSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridMouseModifiersDrawExactlyTheSessionSelection() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-multi")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -80,7 +80,7 @@ import MadoApplication
     #expect(grid.collectionView.selectionIndexPaths.isEmpty)
 }
 
-@Test @MainActor func gridNativeSelectAllCannotDivergeFromSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridNativeSelectAllCannotDivergeFromSelection() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-select-all")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -98,7 +98,7 @@ import MadoApplication
     #expect(grid.collectionView.selectionIndexPaths == [IndexPath(item: 0, section: 0)])
 }
 
-@Test @MainActor func gridModifiedArrowKeepsMultiSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridModifiedArrowKeepsMultiSelection() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-modified-arrow")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -133,7 +133,7 @@ import MadoApplication
 
 // Owner decision 2026-11-03 (#405, 1B): no ✓ badge at any selection count, deviating from page 32, which draws one
 // on each of its three selected cells.
-@Test @MainActor func page32SelectedCellDrawsNoBadgeInBothAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page32SelectedCellDrawsNoBadgeInBothAppearances() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-badge")
     let entry = FolderEntry(url: folder.appendingPathComponent("A.jpg"),
@@ -148,7 +148,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func gridStandaloneMouseSelectionAndEmptyClick() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridStandaloneMouseSelectionAndEmptyClick() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-standalone")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -176,7 +176,7 @@ import MadoApplication
     #expect(grid.collectionView.selectionIndexPaths.isEmpty)
 }
 
-@Test @MainActor func gridMultiPreviewFreezesOrderAndRestoresSelection() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridMultiPreviewFreezesOrderAndRestoresSelection() {
     let session = ViewerSession()
     let ids = (0..<5).map { _ in ItemID.ephemeral(UUID()) }
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: ids[0])
@@ -196,7 +196,7 @@ import MadoApplication
     #expect(session.scrollAnchor == ids[0])
 }
 
-@Test @MainActor func gridControlClickDoesNotReplaceSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridControlClickDoesNotReplaceSelection() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-control-click")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)

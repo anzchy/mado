@@ -4,7 +4,7 @@ import MadoCore
 @testable import MadoInfrastructure
 
 @Suite struct ImageCacheRevisionTests {
-    @Test func cacheKeyValidationPrecedesLookupAndReplacementDropsOldRevision() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheKeyValidationPrecedesLookupAndReplacementDropsOldRevision() async throws {
         let tree = try IdentityTree(); defer { tree.remove() }
         let time = Date(timeIntervalSince1970: 1_000_000)
         try Data(contentsOf: fixture("orientation-1.tiff")).write(to: tree.file)
@@ -40,7 +40,7 @@ import MadoCore
         #expect(await cache.usage().entries == 1)
     }
 
-    @Test func cacheLateOldDecodeCannotDisplaceNewRevision() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheLateOldDecodeCannotDisplaceNewRevision() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = cacheKey(1)
         let new = RenderKey(itemID: old.itemID, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "new"), maximumPixelSize: 512)
         let oldPixels = try cachePixels(marker: 1), newPixels = try cachePixels(marker: 2)
@@ -55,7 +55,7 @@ import MadoCore
         #expect(hit.image?.image === newPixels)
     }
 
-    @Test func cacheRootScopesAndFileGrantNeverCrossHit() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheRootScopesAndFileGrantNeverCrossHit() async throws {
         let file = fixture("coordinate-grid.png"), decoder = CacheCountingDecoder(), events = CacheEvents()
         let pipeline = ImageIOPipeline(decoder: decoder, cacheTrace: events)
         let a = ItemIdentityRoot(id: AccessRootID(), url: file.deletingLastPathComponent())

@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoMacUI
 
-@Test @MainActor func issue281CurrentRingIsOutsideThumbnailAndNameRowMatchesPinnedSelection() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281CurrentRingIsOutsideThumbnailAndNameRowMatchesPinnedSelection() throws {
     for (page, appearanceName) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         let cell = GridPhotoItem()
@@ -56,7 +56,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func issue281CurrentItemAloneHasTintedNameRowAndNoSelectionBadge() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281CurrentItemAloneHasTintedNameRowAndNoSelectionBadge() throws {
     for (page, appearanceName) in [("grid-light", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         let cell = GridPhotoItem()

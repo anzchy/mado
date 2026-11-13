@@ -69,7 +69,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue637BackdropCropTracksCanvasFitZoomPanAndReplacement() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropCropTracksCanvasFitZoomPanAndReplacement() throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     canvas.install(DecodedImage(image: try issue637Image(), sourcePixelSize: CGSize(width: 64, height: 64)))
@@ -89,7 +89,7 @@ import MadoInfrastructure
     try issue637CompareCrop(canvas, rect: pill, scale: 1)
 }
 
-@Test @MainActor func issue637BackdropCropMatchesCanvasAtTwoPixelScaleAndImageEdge() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropCropMatchesCanvasAtTwoPixelScaleAndImageEdge() throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     canvas.appearance = NSAppearance(named: .darkAqua)
@@ -97,7 +97,7 @@ import MadoInfrastructure
     try issue637CompareCrop(canvas, rect: CGRect(x: 32, y: 44, width: 96, height: 38), scale: 2)
 }
 
-@Test @MainActor func issue637BackdropInvalidationPublishesNewestFrameAndClearsFailure() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropInvalidationPublishesNewestFrameAndClearsFailure() throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     var generations: [UInt64] = []
@@ -117,7 +117,7 @@ import MadoInfrastructure
         backingScale: 1, blurRadius: 20, saturation: 1.6) == nil)
 }
 
-@Test @MainActor func issue637BackdropUsesDecodedOrientationWithoutRotatingAgain() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropUsesDecodedOrientationWithoutRotatingAgain() async throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -131,7 +131,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue637BackdropBlurCompositesTransparentEdgeBeforeFiltering() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropBlurCompositesTransparentEdgeBeforeFiltering() throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     canvas.appearance = NSAppearance(named: .darkAqua)
@@ -165,7 +165,7 @@ import MadoInfrastructure
     #expect(try issue637Pixel(actual, x: 0, y: 0).alphaComponent < 0.01)
 }
 
-@Test @MainActor func issue637BackdropAppearanceResizeAndBackingEventsPublishNewFrame() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropAppearanceResizeAndBackingEventsPublishNewFrame() throws {
     let (canvas, window) = issue637Canvas()
     defer { window.close() }
     canvas.install(DecodedImage(image: try issue637Image(alpha: true), sourcePixelSize: CGSize(width: 64, height: 64)))
@@ -187,7 +187,7 @@ import MadoInfrastructure
     #expect(resized.canvasSize == CGSize(width: 180, height: 140))
 }
 
-@Test @MainActor func issue637BackdropDropsOutOfOrderResultsAndHiddenResult() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropDropsOutOfOrderResultsAndHiddenResult() throws {
     let red = try issue637Image()
     let green = try issue637Image(alpha: true)
     let presentation = ChromeBackdropPresentation()
@@ -206,7 +206,7 @@ import MadoInfrastructure
     #expect(presentation.visibleImage == nil)
 }
 
-@Test @MainActor func issue637BackdropBurstCoalescesToNewestAndSuppressesHiddenWork() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropBurstCoalescesToNewestAndSuppressesHiddenWork() {
     let presentation = ChromeBackdropPresentation()
     for generation in 1...50 { presentation.request(generation: UInt64(generation)) }
     #expect(presentation.takePendingGeneration() == 50)

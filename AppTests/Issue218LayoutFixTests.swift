@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 
-@MainActor @Test func issue218EveryButtonTitleFitsActualControlInBothLanguages() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218EveryButtonTitleFitsActualControlInBothLanguages() throws {
     let (panel, _) = fixPanel()
     defer { panel.window.close() }
     let root = try #require(panel.window.contentView)

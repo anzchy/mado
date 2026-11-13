@@ -8,7 +8,7 @@ func expectCancelled(_ subscription: DecodeSubscription) async {
     catch { #expect(error is CancellationError) }
 }
 
-@Test func cancellationKeepsRunningReservationsUntilActualReturn() async throws {
+@Test(.timeLimit(.minutes(2))) func cancellationKeepsRunningReservationsUntilActualReturn() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(workers: 1, budget: 4), executor: executor, decoder: TinyDecoder())
     let running = await admission.subscribe(tinyRequest, key: decodeKey(10), cost: 4, heavy: true, priority: .current)

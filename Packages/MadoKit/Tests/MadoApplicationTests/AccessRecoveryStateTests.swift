@@ -5,7 +5,7 @@ import MadoApplication
 
 private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
 
-@MainActor @Test func t229RecoveryStateCommitsInsideFenceAndAnnouncesOutside() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RecoveryStateCommitsInsideFenceAndAnnouncesOutside() throws {
     let state = AccessState(), id = AccessRootID(), lock = NSLock()
     state.register(id, volumeUUID: "111")
     let old = try #require(state.permit(for: id))
@@ -34,7 +34,7 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
     #expect(events.count == 1)
 }
 
-@MainActor @Test func t229RecoveryStateRejectedFenceAndSecondEjectNeverBecomeReadable() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RecoveryStateRejectedFenceAndSecondEjectNeverBecomeReadable() throws {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "111")
     state.diskUnmounted(volumeUUID: "111")
@@ -56,7 +56,7 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
     #expect(state.permit(for: id) == nil)
 }
 
-@MainActor @Test func t229RecoveryFailureRefinesCauseWithoutAnotherEpisodeOrPermit() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RecoveryFailureRefinesCauseWithoutAnotherEpisodeOrPermit() throws {
     let state = AccessState(), a = AccessRootID(), b = AccessRootID()
     state.register(a, volumeUUID: "111"); state.register(b, volumeUUID: "111")
     let oldStamp = state.stamp(for: a)
@@ -81,7 +81,7 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
     #expect(events == [.lost(a, counter: 1), .recovered(a, counter: 1)])
 }
 
-@MainActor @Test func t229RecoveryFailureRejectsDisconnectedStaleWrongAndReadableAttempts() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RecoveryFailureRejectsDisconnectedStaleWrongAndReadableAttempts() throws {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "111")
     state.diskUnmounted(volumeUUID: "111")
@@ -99,7 +99,7 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
     #expect(!state.refineRecoveryFailure(latest, cause: .unknown))
 }
 
-@MainActor @Test func t229RecoveryRefinementSequencesPreserveCounterAndRevokedWork() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RecoveryRefinementSequencesPreserveCounterAndRevokedWork() throws {
     for mask in 0..<16 {
         let state = AccessState(), id = AccessRootID(), unaffected = AccessRootID()
         state.register(id, volumeUUID: "111"); state.register(unaffected, volumeUUID: "222")
@@ -126,7 +126,7 @@ private enum T229RecoveryAdmissionError: Error, Equatable { case obsoleteGrant }
     }
 }
 
-@MainActor @Test func issue358MixedVolumesRejectUnrelatedUnmountAndRemount() {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue358MixedVolumesRejectUnrelatedUnmountAndRemount() {
     let state = AccessState()
     let first = AccessRootID(), second = AccessRootID(), other = AccessRootID()
     state.register(first, volumeUUID: "111")

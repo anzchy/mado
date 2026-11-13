@@ -44,7 +44,7 @@ private final class Issue610Diagnostics: @unchecked Sendable {
     var observations: [(String, URL?)] { lock.withLock { events } }
 }
 
-@Test func issue610ReadOnlyFileGrantTracksRename() async throws {
+@Test(.timeLimit(.minutes(2))) func issue610ReadOnlyFileGrantTracksRename() async throws {
     let f = try Issue610Fixture(); defer { f.remove() }
     let native = Issue610NativeBoundary()
     let codec = SystemSecurityScope(bookmarkCreation: native.creation)
@@ -181,7 +181,7 @@ private func issue610FailedBookmarkCreation(trash: Bool) async throws {
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func issue610RetainedBookmarkLossRemainsReconnection(scopeDenied: Bool) async throws {
     let f = try Issue610Fixture(); defer { f.remove() }
     let native = Issue610NativeBoundary(), scope = CountingScope()

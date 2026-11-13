@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoInfrastructure
 
-@Test @MainActor func folderBrowserCoordinatorRealLeaseIntegration() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderBrowserCoordinatorRealLeaseIntegration() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let root = base.appendingPathComponent("images")
@@ -38,7 +38,7 @@ import MadoApplication
     #expect(scope.counts == [4, 4])
 }
 
-@Test @MainActor func realFolderScanMetadataAndFilterRoundTrip() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func realFolderScanMetadataAndFilterRoundTrip() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let folder = base.appendingPathComponent("images")

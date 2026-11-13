@@ -68,7 +68,7 @@ private final class Issue350MagnifyEvent: NSEvent {
 }
 
 @Suite(.serialized) struct Issue350GridPinchTests {
-    @Test @MainActor func issue350NativeGridPinchRendersAndConservesState() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue350NativeGridPinchRendersAndConservesState() throws {
         let scene = try Issue350GridScene()
         defer { scene.close() }
         // Establish the current item's rendered frame, then deliberately move it out of view.
@@ -96,7 +96,7 @@ private final class Issue350MagnifyEvent: NSEvent {
         #expect(scene.store.value == expected)
     }
 
-    @Test @MainActor func issue350FractionalEventsResetAndFollowExternalPreferences() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue350FractionalEventsResetAndFollowExternalPreferences() throws {
         let scene = try Issue350GridScene()
         defer { scene.close() }
         scene.event(0, .began)

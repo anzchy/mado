@@ -13,7 +13,7 @@ func contrast(_ a: [Double], _ b: [Double]) -> Double {
     let x = luminance(a), y = luminance(b)
     return (max(x,y)+0.05)/(min(x,y)+0.05)
 }
-@Test func designContrastReport() {
+@Test(.timeLimit(.minutes(2))) func designContrastReport() {
     #expect(abs(contrast([0,0,0,1], [1,1,1,1])-21) < 0.00001)
     let pairs: [(String, DesignColor, DesignColor?, Double)] = [
         ("Default text / canvas", .textPrimary, nil, 4.5),

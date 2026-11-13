@@ -44,7 +44,7 @@ private func issue538Compare(_ actual: [UInt8], _ expected: [UInt8], context: St
     #expect(abs(inkRatio - 1) < 0.02, "integrated ink matches single opacity: \(context)")
 }
 
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func issue538DisabledScaleLabelUsesSingleComponentOpacity(_ theme: DesignTheme) throws {
     _ = NSApplication.shared
     let actual = ScaleIndicator(actualPixels: false, state: .disabled, theme: theme, input: .live) {}
@@ -53,7 +53,7 @@ func issue538DisabledScaleLabelUsesSingleComponentOpacity(_ theme: DesignTheme) 
     issue538Compare(actualPixels, reference, context: "disabled \(theme)")
 }
 
-@Test(arguments: [DesignTheme.light, .dark]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [DesignTheme.light, .dark]) @MainActor
 func issue538EnabledScaleLabelKeepsFullOpacity(_ theme: DesignTheme) throws {
     _ = NSApplication.shared
     for (actualPixels, customZoom, label) in [(false, nil, String(localized: "Fit window")),

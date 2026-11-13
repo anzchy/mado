@@ -52,7 +52,7 @@ private struct Delivered507Fixture {
     func remove() { try? FileManager.default.removeItem(at: base) }
 }
 
-@Test(arguments: ["raw symlink", "plain folder without hint"])
+@Test(.timeLimit(.minutes(2)), arguments: ["raw symlink", "plain folder without hint"])
 func issue507DeliveredFolderNamesItsCanonicalDirectory(input: String) async throws {
     let f = try Delivered507Fixture()
     defer { f.remove() }
@@ -72,7 +72,7 @@ func issue507DeliveredFolderNamesItsCanonicalDirectory(input: String) async thro
     #expect(!FileManager.default.fileExists(atPath: f.base.appendingPathComponent("roots.json").path))
 }
 
-@Test(arguments: ["image", "file symlink", "dangling symlink", "non-file URL"])
+@Test(.timeLimit(.minutes(2)), arguments: ["image", "file symlink", "dangling symlink", "non-file URL"])
 func issue507DeliveredNonFolderIsNotAFolder(input: String) async throws {
     let f = try Delivered507Fixture()
     defer { f.remove() }
@@ -97,7 +97,7 @@ func issue507DeliveredNonFolderIsNotAFolder(input: String) async throws {
 
 /// The sandbox fact behind smoke507-20261107 (probe, 2026-11-07): a dropped link is neither readable nor
 /// startable, yet its target's metadata is. Classification must use that metadata and start no scope.
-@Test(arguments: [(false, false), (true, false), (false, true)])
+@Test(.timeLimit(.minutes(2)), arguments: [(false, false), (true, false), (false, true)])
 func issue507SandboxedSelectionIsClassifiedByMetadata(readable: Bool, startable: Bool) async throws {
     let f = try Delivered507Fixture()
     defer { f.remove() }

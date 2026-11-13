@@ -28,7 +28,7 @@ private struct FolderFixReleaseLeases: AccessLeasing {
     func release(_ lease: AccessLease) async { await releasing.hold(); await base.release(lease) }
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderFixTaskCancelRejectsLateEffects(input: Bool) async throws {
     let fixture = FolderScanFixture(), trace = FolderFixTrace(), host = FolderFixEffectsHost()
     let coordinator = FolderScanCoordinator(access: fixture.access, scanner: fixture.scanner, trace: trace)
@@ -49,7 +49,7 @@ private struct FolderFixReleaseLeases: AccessLeasing {
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderFixTaskCancelDuringAcquireNeverPublishesReady() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderFixTaskCancelDuringAcquireNeverPublishesReady() async throws {
     let fixture = FolderScanFixture(holdsAcquire: true), releasing = FolderFixBarrier(), host = FolderFixEffectsHost()
     let coordinator = FolderScanCoordinator(access: FolderFixReleaseLeases(base: fixture.access, releasing: releasing), scanner: fixture.scanner)
     coordinator.host = host
@@ -67,7 +67,7 @@ private struct FolderFixReleaseLeases: AccessLeasing {
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderFixTaskCancelDuringRememberCannotOpenOrPublishAgain() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderFixTaskCancelDuringRememberCannotOpenOrPublishAgain() async throws {
     let fixture = FolderScanFixture(), host = FolderFixEffectsHost(), barrier = FolderFixBarrier()
     fixture.coordinator.host = host; host.onRemember = { await barrier.hold() }
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)

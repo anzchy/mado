@@ -166,3 +166,99 @@ import Testing
         }
     }
 }
+
+/// #672 (#650 item 4): an async or AppKit test without a limit can hang the whole lane.
+@Test func TestTimeLimitPolicy672AsyncAndAppKitTestsNeedALimit() {
+    let async = """
+    @Test func plain() {}
+    @Test func waits() async {}
+    @Test("named", arguments: [1, 2]) func throwsAsync(value: Int) async throws {}
+    @Test(.timeLimit(.minutes(2))) func limited() async {}
+    @MainActor @Test func mainActor() {}
+    @Test @MainActor func mainActorAfter() {}
+    """
+    #expect(testsMissingTimeLimit(in: async) == ["waits", "throwsAsync", "mainActor", "mainActorAfter"])
+    let appKit = """
+    import AppKit
+    @Test func drawsView() {}
+    @Test(.timeLimit(.minutes(3))) func limited() {}
+    """
+    #expect(testsMissingTimeLimit(in: appKit) == ["drawsView"])
+    for module in ["SwiftUI", "MadoMacUI"] {
+        #expect(testsMissingTimeLimit(in: "@testable import \(module)\n@Test func ui() {}") == ["ui"], "\(module)")
+    }
+    let suites = """
+    @Suite(.serialized, .timeLimit(.minutes(2))) struct Limited {
+        @Test func inherits() async {}
+        struct Nested { @Test func nestedInherits() async {} }
+    }
+    @MainActor struct Unlimited {
+        @Test func needsOne() {}
+        func helper() async {}
+    }
+    @Suite struct Plain {
+        @Test func syncIsFine() {}
+        @Test func asyncNeedsOne() async {}
+    }
+    extension Plain { @Test func extended() async {} }
+    @Test func afterSuites() async {}
+    """
+    #expect(testsMissingTimeLimit(in: suites) == ["needsOne", "asyncNeedsOne", "extended", "afterSuites"])
+    let trivia = """
+    // @Test func commented() async {}
+    let text = "@Test func quoted() async {}"
+    @Test(arguments: [{ () async in 1 }]) func closureArgument() {}
+    @Test func defaultClosure(value: () async -> Void = {}) {}
+    @Test func body() { Task { await work() } }
+    """
+    #expect(testsMissingTimeLimit(in: trivia).isEmpty)
+}
+
+/// #672: every async or AppKit test in the package and App test sources carries a limit.
+@Test func TestTimeLimitPolicy672EveryAsyncOrAppKitTestHasALimit() throws {
+    let tests = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let appTests = tests.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("AppTests")
+    var scanned = 0
+    var missing: [String] = []
+    for directory in [tests, appTests] {
+        let files = try #require(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        #expect(files.count > 20, "scanned \(directory.path)")
+        for file in files {
+            scanned += 1
+            for name in testsMissingTimeLimit(in: try String(contentsOf: file, encoding: .utf8)) {
+                missing.append("\(file.lastPathComponent):\(name)")
+            }
+        }
+    }
+    #expect(scanned > 300)
+    let deferred = Set(missing).intersection(timeLimitDeferredFor144)
+    #expect(deferred.count == timeLimitDeferredFor144.count, "stale #144 deferral: \(timeLimitDeferredFor144.subtracting(deferred).sorted())")
+    let untimed = Set(missing).intersection(deliberatelyUntimedTests)
+    #expect(untimed.count == deliberatelyUntimedTests.count, "stale untimed exemption: \(deliberatelyUntimedTests.subtracting(untimed).sorted())")
+    missing.removeAll { deferred.contains($0) || untimed.contains($0) }
+    #expect(missing.isEmpty, "\(missing.count) async/AppKit tests lack a time limit: \(missing.prefix(40))")
+}
+
+/// #400 proves the condition-wait helpers' wall-clock bound, which applies only to untimed tests. A limit
+/// on these turns the never-true run-loop wait into a main-actor spin until cancellation, which starves
+/// every other main-actor test in the full run. They must stay untimed.
+private let deliberatelyUntimedTests: Set<String> = [
+    "ConditionWaitTests.swift:i400UntimedWaitKeepsItsBounds",
+    "ConditionWaitTests.swift:i400UntimedRunLoopKeepsItsBounds",
+]
+
+/// #672 left these alone because the #144 branch edits ShortcutCatalogTests.swift.
+/// Add `.timeLimit(.minutes(2))` to them and delete this list once #144 has landed.
+private let timeLimitDeferredFor144: Set<String> = Set([
+    "issue219ShortcutCatalogMatchesLiveSourcesAndKeycaps",
+    "issue219ShortcutCatalogUsesSimplifiedChinese",
+    "issue219ShortcutCatalogFollowsImplementedFlagAndMenuAvailability",
+    "issue219ShortcutCatalogKeepsAllRowsWithChineseMenuTitles",
+    "issue219ShortcutCatalogKeepsRowsWhenMenuActionsAreRetitled",
+    "issue284ShortcutCatalogNamesTheSurvivingHalfOfAPairedRow",
+    "issue284ShortcutCatalogUsesTheFirstKeyedItemWhenAnActionRepeats",
+    "issue284ShortcutCatalogResolvesMenuItemsToListedSources",
+    "zoomKeycapsAllResolve",
+].map { "ShortcutCatalogTests.swift:\($0)" })

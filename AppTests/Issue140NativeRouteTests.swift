@@ -52,7 +52,7 @@ private func issue140RouteServices(_ base: URL) async throws -> (AccessServices,
         motionPolicy: MotionPolicy(source: Issue140MotionSource()))
 }
 
-@Test @MainActor func issue140SearchedViewerRejectsOutOfSetFolderSuccessor() throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue140SearchedViewerRejectsOutOfSetFolderSuccessor() throws {
     let controller = issue140Controller()
     let window = try #require(controller.window)
     defer { window.close() }
@@ -70,7 +70,7 @@ private func issue140RouteServices(_ base: URL) async throws -> (AccessServices,
     #expect(controller.session.previewSet?.itemIDs.contains(b) == false)
 }
 
-@Test @MainActor func issue140FrozenPreviewRejectsOutOfSetFolderSuccessorThenEmpties() throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue140FrozenPreviewRejectsOutOfSetFolderSuccessorThenEmpties() throws {
     let controller = issue140Controller()
     let window = try #require(controller.window)
     defer { window.close() }

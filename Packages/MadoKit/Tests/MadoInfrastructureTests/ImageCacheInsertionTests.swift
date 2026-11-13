@@ -47,7 +47,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
 }
 
 @Suite struct ImageCacheInsertionTests {
-    @Test func cacheRejectsMismatchedIdentityAndRevision() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheRejectsMismatchedIdentityAndRevision() async throws {
         let cache = ImageMemoryCache(capacity: 64), a = cacheKey(1), b = cacheKey(2)
         let ap = try cachePixels(marker: 1), bp = try cachePixels(marker: 2)
         await cache.insert(cacheImage(ap, key: a), for: a)
@@ -70,7 +70,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
         #expect(await cache.usage() == ImageCacheUsage(entries: 2, previewBytes: 0, detailBytes: 32))
     }
 
-    @Test func cacheDuplicateCompletionCanonicalizesStoredBuffer() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheDuplicateCompletionCanonicalizesStoredBuffer() async throws {
         let cache = ImageMemoryCache(capacity: 64), key = cacheKey(1)
         let first = await cache.lookup(key), second = await cache.lookup(key)
         let a = try cachePixels(marker: 1), b = try cachePixels(marker: 2)
@@ -83,7 +83,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
         #expect(await cache.image(for: key)?.image === a)
     }
 
-    @Test func cacheCancellationAtHitAndCompletionCannotDeliverOrInsert() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheCancellationAtHitAndCompletionCannotDeliverOrInsert() async throws {
         let cache = ImageMemoryCache(capacity: 100_000), decoder = CacheCountingDecoder()
         let pipeline = ImageIOPipeline(decoder: decoder, cache: cache, cacheTrace: CacheCancelOnHit())
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)
@@ -104,7 +104,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
         #expect(await cache.image(for: key) == nil)
     }
 
-    @Test func cacheFailureAndResourceLimitInsertNothing() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheFailureAndResourceLimitInsertNothing() async throws {
         let cache = ImageMemoryCache(capacity: 100_000), a = cacheKey(1), ap = try cachePixels()
         await cache.insert(cacheImage(ap, key: a), for: a)
         let decoder = CacheFailingDecoder(), file = fixture("coordinate-grid.png")
@@ -147,7 +147,7 @@ private struct CacheCancelOnHit: ResourceSnapshotTracing {
         #expect(await cache.usage().entries == 1)
     }
 
-    @Test func cacheChangedDuringDecodeDoesNotInsert() async throws {
+    @Test(.timeLimit(.minutes(2))) func cacheChangedDuringDecodeDoesNotInsert() async throws {
         let tree = try IdentityTree(); defer { tree.remove() }
         try Data(contentsOf: fixture("orientation-1.tiff")).write(to: tree.file)
         let decoder = CacheMutatingDecoder(), cache = ImageMemoryCache(capacity: 1_000_000)

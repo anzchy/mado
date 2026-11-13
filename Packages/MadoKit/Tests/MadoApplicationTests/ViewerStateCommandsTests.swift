@@ -19,7 +19,7 @@ import MadoApplication
     func navigate(_ direction: NavigationDirection) { navigations += 1 }
 }
 
-@Test @MainActor func statesEmptyCommandPolicyAndHideInspectorException() {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesEmptyCommandPolicyAndHideInspectorException() {
     let host = EmptyCommandsHost(), router = CommandRouter()
     let session = ViewerSession(host: host)
     #expect(session.imageStatus == .empty)

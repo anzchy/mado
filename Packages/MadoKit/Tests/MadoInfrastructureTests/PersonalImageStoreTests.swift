@@ -12,7 +12,7 @@ private func personalStoreDirectory() -> URL {
 }
 private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_000_000 + seconds) }
 
-@Test func personalImageStoreRecentsBoundOrderUnique() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecentsBoundOrderUnique() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     for seed in UInt64(1)...20 {
@@ -34,7 +34,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(PersonalImageStore.recentLimit == 50)
 }
 
-@Test func personalImageStoreRecentsOrderByVisitTime() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecentsOrderByVisitTime() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let (a, b) = (personalRef("a.jpg"), personalRef("b.jpg"))
@@ -50,7 +50,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(try await back.recents().map(\.viewedAt) == [at(6), at(2)])
 }
 
-@Test func personalImageStoreRecentsBoundaries() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecentsBoundaries() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let store = PersonalImageStore(url: base.appendingPathComponent("p.json"))
@@ -68,7 +68,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(shifted.count == 50 && shifted.first?.ref == refs[50] && !shifted.contains { $0.ref == refs[0] })
 }
 
-@Test func personalImageStoreRevisitMovesToFrontAndRefreshesFingerprint() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRevisitMovesToFrontAndRefreshesFingerprint() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let store = PersonalImageStore(url: base.appendingPathComponent("p.json"))
@@ -80,7 +80,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(recents.first?.viewedAt == at(3) && recents.first?.ref.fileNumber == 9)
 }
 
-@Test func personalImageStoreToggleFavoriteInvolution() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreToggleFavoriteInvolution() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let store = PersonalImageStore(url: base.appendingPathComponent("p.json"))
@@ -106,7 +106,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(try await many.favorites() == refs.reversed())
 }
 
-@Test func personalImageStoreRelaunchRoundTrip() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRelaunchRoundTrip() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let path = base.appendingPathComponent("support/personal-images.json")
@@ -127,7 +127,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(await !relaunched.storeCorrupt)
 }
 
-@Test func personalImageStoreCorruptRecoversToSidecar() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreCorruptRecoversToSidecar() async throws {
     let fm = FileManager.default
     for bytes in [Data("{nope".utf8)] {
         let base = personalStoreDirectory()
@@ -161,7 +161,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     }
 }
 
-@Test func personalImageStoreLeavesRecentFoldersUntouched() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreLeavesRecentFoldersUntouched() async throws {
     let fm = FileManager.default
     let base = personalStoreDirectory()
     defer { try? fm.removeItem(at: base) }
@@ -181,7 +181,7 @@ private func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: 1_700_0
     #expect(try await store.recents().allSatisfy { $0.ref.rootID == personalStoreRoot.id && $0.ref.relativePath.hasSuffix(".jpg") })
 }
 
-@Test func personalImageStoreFileHoldsRefsOnly() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreFileHoldsRefsOnly() async throws {
     let fm = FileManager.default
     let base = personalStoreDirectory()
     defer { try? fm.removeItem(at: base) }
@@ -219,7 +219,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)
 }
 
-@Test func personalImageStoreTransientReadErrorWritesNothing() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreTransientReadErrorWritesNothing() async throws {
     let fm = FileManager.default
     let base = personalStoreDirectory()
     defer { try? fm.removeItem(at: base) }
@@ -259,7 +259,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(try await damaged.favorites() == [a])
 }
 
-@Test func personalImageStoreRecoveredWritesSurviveRepair() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecoveredWritesSurviveRepair() async throws {
     let fm = FileManager.default
     let (a, b, c, d) = (personalRef("a.jpg"), personalRef("b.jpg"), personalRef("c.jpg"), personalRef("d.jpg"))
     let (x, y) = (personalRef("x.jpg"), personalRef("y.jpg"))
@@ -330,7 +330,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(try await PersonalImageStore(url: bound.path).recents() == newest)
 }
 
-@Test func personalImageStoreTwoInstancesKeepEveryWrite() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreTwoInstancesKeepEveryWrite() async throws {
     let fm = FileManager.default
     let base = personalStoreDirectory()
     defer { try? fm.removeItem(at: base) }
@@ -352,7 +352,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(try await fresh.recents().map(\.ref) == (150..<200).reversed().map { personalRef("v\($0).jpg") })
 }
 
-@Test func personalImageStoreRevisitRefreshesFavoriteFileNumber() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRevisitRefreshesFavoriteFileNumber() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let path = base.appendingPathComponent("personal-images.json")
@@ -367,7 +367,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(try await PersonalImageStore(url: path).favorites().map(\.fileNumber) == [1, 9])
 }
 
-@Test func personalImageStoreKeepsUnicodeSpellingsApart() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreKeepsUnicodeSpellingsApart() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let store = PersonalImageStore(url: base.appendingPathComponent("p.json"))
@@ -381,7 +381,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(try await store.recents().map(\.ref.itemID) == [unified.itemID, compatibility.itemID])
 }
 
-@Test func personalImageStoreOldRevisitStaysKept() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreOldRevisitStaysKept() async throws {
     let base = personalStoreDirectory()
     defer { try? FileManager.default.removeItem(at: base) }
     let store = PersonalImageStore(url: base.appendingPathComponent("p.json"))
@@ -394,7 +394,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     #expect(recents.contains { $0.ref == personalRef("v0.jpg") })
 }
 
-@Test func personalImageStoreRecoveryRemovalSurvivesRepair() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecoveryRemovalSurvivesRepair() async throws {
     let fm = FileManager.default
     let (a, b) = (personalRef("a.jpg"), personalRef("b.jpg"))
     // The last of n toggles made during recovery decides: odd adds A back, even leaves it removed.
@@ -421,7 +421,7 @@ private func setPermissions(_ url: URL, _ mode: Int) throws {
     }
 }
 
-@Test func personalImageStoreRecoveryVisitSurvivesRepairOnce() async throws {
+@Test(.timeLimit(.minutes(2))) func personalImageStoreRecoveryVisitSurvivesRepairOnce() async throws {
     let fm = FileManager.default
     let base = personalStoreDirectory()
     defer { try? fm.removeItem(at: base) }

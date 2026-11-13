@@ -5,7 +5,7 @@ import MadoApplication
 @testable import MadoMacUI
 
 /// #443: the pinned design follows the App's existing action focus, including 24F's retry.
-@Test func i443PinnedActiveStatesHaveExactlyOneInitialAction() throws {
+@Test(.timeLimit(.minutes(2))) func i443PinnedActiveStatesHaveExactlyOneInitialAction() throws {
     let loading = try i443HTML("folder-loading")
     #expect(try i443FocusLabels(String(loading.components(separatedBy: "<template")[0])) == ["取消读取"])
     #expect(try i443FocusLabels(i443Template("failed", in: loading)) == ["重试"])
@@ -13,7 +13,7 @@ import MadoApplication
 }
 
 /// Component focus capability, not App-controller initial-focus routing. Browser checks cover initial HTML focus.
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func i443PinnedActionsSupportNativeFocusInBothAppearances(dark: Bool) throws {
     _ = NSApplication.shared
     let frame = NSRect(x: 0, y: 0, width: 1280, height: 800)

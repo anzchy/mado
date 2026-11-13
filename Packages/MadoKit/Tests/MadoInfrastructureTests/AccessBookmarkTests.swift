@@ -26,7 +26,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     }
 }
 
-@Test func accessBookmarksSurviveRelaunchRefreshStaleAndReportFailures() async throws {
+@Test(.timeLimit(.minutes(2))) func accessBookmarksSurviveRelaunchRefreshStaleAndReportFailures() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -65,7 +65,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func accessFileGrantNeverPersistsAndCorruptStoreIsReported() async throws {
+@Test(.timeLimit(.minutes(2))) func accessFileGrantNeverPersistsAndCorruptStoreIsReported() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -95,7 +95,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func accessAcquireRefreshesNewlyStaleBookmarkAndRejectsLostRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func accessAcquireRefreshesNewlyStaleBookmarkAndRejectsLostRoot() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -126,7 +126,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     #expect(differentID != id)
 }
 
-@Test func accessRejectsNonFolderAndLaterBookmarkResolutionFailure() async throws {
+@Test(.timeLimit(.minutes(2))) func accessRejectsNonFolderAndLaterBookmarkResolutionFailure() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -144,7 +144,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func accessRelocatedRootSharesResolvedScopeAcrossConcurrentLeases() async throws {
+@Test(.timeLimit(.minutes(2))) func accessRelocatedRootSharesResolvedScopeAcrossConcurrentLeases() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }
@@ -170,7 +170,7 @@ final class FakeBookmarks: BookmarkCoding, @unchecked Sendable {
     #expect(scope.counts == [2, 2])
 }
 
-@Test func accessIncompatiblePrimaryAndCorruptRecoveryStillAllowFileGrants() async throws {
+@Test(.timeLimit(.minutes(2))) func accessIncompatiblePrimaryAndCorruptRecoveryStillAllowFileGrants() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: base) }

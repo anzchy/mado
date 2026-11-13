@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@MainActor @Test func loadTiersPreviewViewportGrowThenSourceWithoutDowngrade() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadTiersPreviewViewportGrowThenSourceWithoutDowngrade() async {
     let session = ViewerSession(), host = LoadHost(), pipeline = LoadPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let url = URL(fileURLWithPath: "/tiers.png")
@@ -48,7 +48,7 @@ private actor RefiningPipeline: ImagePipeline {
     }
     func release() { pending?.resume(); pending = nil }
 }
-@MainActor @Test func loadTiersRetainPreviewWhileHigherTierIsActuallyInFlight() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadTiersRetainPreviewWhileHigherTierIsActuallyInFlight() async {
     let session = ViewerSession(), host = LoadHost(), pipeline = RefiningPipeline(), access = LoadLeases()
     session.imageLoader.host = host
     let file = URL(fileURLWithPath: "/refining.png")

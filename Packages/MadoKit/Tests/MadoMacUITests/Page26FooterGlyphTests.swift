@@ -31,7 +31,7 @@ private func fix1PinnedFooterGlyphs(_ name: String) throws -> [String] {
     return root.subviews.lazy.compactMap { fix1FooterName($0) }.first
 }
 
-@Test @MainActor func i354Fix1FooterUsesPinnedEmDashAcrossLostTransitions() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354Fix1FooterUsesPinnedEmDashAcrossLostTransitions() async throws {
     for (name, count) in [("empty-folder", 1), ("search-empty", 1), ("folder-loading", 2), ("permission-denied", 1)] {
         let glyphs = try fix1PinnedFooterGlyphs(name)
         #expect(glyphs.count == count)

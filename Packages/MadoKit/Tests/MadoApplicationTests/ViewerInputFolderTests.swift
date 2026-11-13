@@ -8,7 +8,7 @@ private let folderB = URL(fileURLWithPath: "/photos/B.png")
 private let folderC = URL(fileURLWithPath: "/photos/C.png")
 private let requestedFolder = URL(fileURLWithPath: "/outside", isDirectory: true)
 
-@Test @MainActor func inputFolderPromptCancelPreservesShowingEmptyAndFrozenSet() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFolderPromptCancelPreservesShowingEmptyAndFrozenSet() async {
     for state in 0...2 {
         let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
         if state == 1 { await host.input([folderA], intent: intent) }
@@ -49,7 +49,7 @@ private let requestedFolder = URL(fileURLWithPath: "/outside", isDirectory: true
     }
 }
 
-@Test @MainActor func inputFolderPlusImageUsesFilePolicyWithoutPromptOrGrant() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFolderPlusImageUsesFilePolicyWithoutPromptOrGrant() async {
     let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
     await host.input([requestedFolder, folderA], intent: intent)
     #expect(host.session.imageLoader.presented?.fileURL == folderA)
@@ -67,7 +67,7 @@ private let requestedFolder = URL(fileURLWithPath: "/outside", isDirectory: true
     await host.finish()
 }
 
-@Test @MainActor func inputFolderSupersedesSuspendedProbeWithoutLateEffects() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFolderSupersedesSuspendedProbeWithoutLateEffects() async {
     for stage in ["root", "acquire", "header", "release"] {
         for failure in 0...3 {
             let host = InputFileSetHost(), intent = AccessIntent()

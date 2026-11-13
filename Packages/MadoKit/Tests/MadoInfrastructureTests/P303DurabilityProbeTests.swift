@@ -37,7 +37,7 @@ private actor P303LeaseObservingPipeline: ImagePipeline {
     }
 }
 
-@Test func p303SameSizeSameTimeReplacementNeedsDurableContentEvidence() async throws {
+@Test(.timeLimit(.minutes(2))) func p303SameSizeSameTimeReplacementNeedsDurableContentEvidence() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -60,7 +60,7 @@ private actor P303LeaseObservingPipeline: ImagePipeline {
     #expect(RenderKey(itemID: item, revision: newRevision, maximumPixelSize: 128).persistentEncoding == nil)
 }
 
-@Test func p303PublicPipelineHasNoAccessLeaseParameter() async throws {
+@Test(.timeLimit(.minutes(2))) func p303PublicPipelineHasNoAccessLeaseParameter() async throws {
     let file = fixture("coordinate-grid.png")
     let root = ItemIdentityRoot(id: AccessRootID(), url: file.deletingLastPathComponent())
     let pipeline = ImageIOPipeline()
@@ -72,7 +72,7 @@ private actor P303LeaseObservingPipeline: ImagePipeline {
     #expect(request.renderKey?.itemID == .rootRelative(rootID: root.id, relativePath: file.lastPathComponent))
 }
 
-@Test func p303AccessImageSourceLeasesBeforeRealPipelineRequest() async throws {
+@Test(.timeLimit(.minutes(2))) func p303AccessImageSourceLeasesBeforeRealPipelineRequest() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

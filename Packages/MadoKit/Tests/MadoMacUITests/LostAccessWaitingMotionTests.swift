@@ -13,7 +13,7 @@ import MadoApplication
     view.waitingDot.layer?.animationKeys()?.compactMap { view.waitingDot.layer?.animation(forKey: $0) as? CAKeyframeAnimation }.first
 }
 
-@Test @MainActor func t229LostAccessWaitingPulseMatchesPinnedTimingWithoutLayoutRestart() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t229LostAccessWaitingPulseMatchesPinnedTimingWithoutLayoutRestart() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
         styleMask: [.titled], backing: .buffered, defer: false)
@@ -46,7 +46,7 @@ import MadoApplication
     #expect(view.waitingDot.layer?.opacity == 1)
 }
 
-@Test @MainActor func t229LostAccessWaitingPulseRespondsToLiveMotionAndVisibility() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t229LostAccessWaitingPulseRespondsToLiveMotionAndVisibility() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
         styleMask: [.titled], backing: .buffered, defer: false)

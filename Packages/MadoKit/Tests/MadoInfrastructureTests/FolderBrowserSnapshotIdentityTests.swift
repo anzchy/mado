@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoInfrastructure
 
-@Test func folderSnapshotResolverIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func folderSnapshotResolverIdentity() async throws {
     let fm = FileManager.default
     let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: root) }
@@ -25,7 +25,7 @@ import MadoInfrastructure
     }
 }
 
-@Test func folderSnapshotInwardSymlinkResolverIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func folderSnapshotInwardSymlinkResolverIdentity() async throws {
     let fm = FileManager.default
     let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: root) }

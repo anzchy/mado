@@ -39,7 +39,7 @@ private func t229UUIDLessFiles(_ f: T229UUIDLessFixture, scope: CountingScope,
         bookmarkIdentity: { _ in nil }, mountedVolumesProvider: { [] })
 }
 
-@Test func t229FixUUIDLessRootPublishesAtLaunchAndStaysReadable() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessRootPublishesAtLaunchAndStaysReadable() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let id = AccessRootID(), scope = CountingScope(), codec = FakeBookmarks()
     try f.save(try codec.create(for: f.root), id: id)
@@ -53,7 +53,7 @@ private func t229UUIDLessFiles(_ f: T229UUIDLessFixture, scope: CountingScope,
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func t229FixUUIDLessRootThatFailsItsRealReadIsNotPublished() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessRootThatFailsItsRealReadIsNotPublished() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let id = AccessRootID(), scope = CountingScope(), codec = FakeBookmarks()
     try f.save(try codec.create(for: f.root), id: id)
@@ -64,7 +64,7 @@ private func t229UUIDLessFiles(_ f: T229UUIDLessFixture, scope: CountingScope,
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func t229FixUUIDLessStaleRefreshKeepsRootReadable() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessStaleRefreshKeepsRootReadable() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let scope = CountingScope(), codec = FakeBookmarks()
     let files = try t229UUIDLessFiles(f, scope: scope, codec: codec)
@@ -77,7 +77,7 @@ private func t229UUIDLessFiles(_ f: T229UUIDLessFixture, scope: CountingScope,
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func t229FixUUIDLessForegroundRetryRecoversReadableRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessForegroundRetryRecoversReadableRoot() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let id = AccessRootID(), scope = CountingScope(), codec = FakeBookmarks()
     try f.save(try codec.create(for: f.root), id: id)
@@ -106,7 +106,7 @@ private final class T229UUIDLessBox: @unchecked Sendable {
     }
 }
 
-@Test func t229FixUUIDLessStaleRefreshRefusesRootThatNowReportsAUUID() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessStaleRefreshRefusesRootThatNowReportsAUUID() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let scope = CountingScope(), codec = FakeBookmarks(), resolved = T229UUIDLessBox()
     let files = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "T229",
@@ -137,7 +137,7 @@ private final class T229MissingFolderReader: FileIdentityResourceReading, @unche
 }
 
 // A missing folder reported in the POSIX domain still means "fall back", not "lost".
-@Test func t229FixRecoveryFolderPOSIXMissingErrorFallsBackToRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixRecoveryFolderPOSIXMissingErrorFallsBackToRoot() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let child = f.root.appendingPathComponent("child", isDirectory: true)
     try FileManager.default.createDirectory(at: child, withIntermediateDirectories: true)
@@ -151,7 +151,7 @@ private final class T229MissingFolderReader: FileIdentityResourceReading, @unche
     #expect(scope.counts[0] == scope.counts[1])
 }
 
-@Test func t229FixUUIDLessStaleRefreshRefusesRootWithOtherKnownIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FixUUIDLessStaleRefreshRefusesRootWithOtherKnownIdentity() async throws {
     let f = try T229UUIDLessFixture(); defer { f.remove() }
     let scope = CountingScope(), codec = FakeBookmarks()
     let saved = FileResourceIdentity(volumeUUID: "saved", fileIdentifier: "root")

@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func statesHiddenTransitionsRetireInputAndMatchFreshPresentation() {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesHiddenTransitionsRetireInputAndMatchFreshPresentation() {
     let traces: [[ViewerImageStatus]] = [
         [.empty, .showing, .empty],
         [.failed(.corruptImage, "B.jpg"), .loading("C.png"), .failed(.unsupportedFormat, "D.jpg")],
@@ -58,7 +58,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func statesHiddenAncestorBlocksActionsAndEqualRefreshKeepsFocus() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesHiddenAncestorBlocksActionsAndEqualRefreshKeepsFocus() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     scene.state.linkKeyViews(to: scene.canvas, chrome: scene.chrome)
@@ -98,7 +98,7 @@ import MadoApplication
     #expect(scene.host.opens == 1)
 }
 
-@Test @MainActor func statesHiddenLinksRefreshActualInspectorAccessibilityAndLoadingBoundary() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesHiddenLinksRefreshActualInspectorAccessibilityAndLoadingBoundary() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     // #444: page 14 has no Inspector tool; Inspector stays on View › Show Inspector (⌘I) and the 更多 menu.

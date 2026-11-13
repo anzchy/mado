@@ -30,7 +30,7 @@ import MadoCore
     func showInspector(_ visible: Bool) { scene.host.showInspector(visible) }
 }
 
-@Test @MainActor func inputFileSetFailedMemberNativeNextAndRetryPreserveIndex() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetFailedMemberNativeNextAndRetryPreserveIndex() async throws {
     let scene = StatesScene(), adapter = FileSetNativeAdapter(scene), intent = AccessIntent()
     defer { scene.session.closeImage(); scene.window.close() }
     scene.state.onRetry = { adapter.retry?.reopen { adapter.openInputImage($0, accessRequest: $1) } }

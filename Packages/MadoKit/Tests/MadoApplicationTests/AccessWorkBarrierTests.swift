@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@MainActor @Test func t229WorkPermitsRevokeBeforeLossObserversAndNeverRevive() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229WorkPermitsRevokeBeforeLossObserversAndNeverRevive() throws {
     let state = AccessState(), a = AccessRootID(), b = AccessRootID()
     state.register(a, volumeUUID: "a"); state.register(b, volumeUUID: "b")
     let old = try #require(state.permit(for: a)), other = try #require(state.permit(for: b))
@@ -27,7 +27,7 @@ import MadoApplication
     #expect(state.permit(for: a) == nil)
 }
 
-@MainActor @Test func t229SourceDiscardsHeldDecodeAndDrainsLeaseAfterIO() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229SourceDiscardsHeldDecodeAndDrainsLeaseAfterIO() async throws {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "a")
     let permit = try #require(state.permit(for: id))
@@ -45,7 +45,7 @@ import MadoApplication
     #expect(await access.count() == 0)
 }
 
-@MainActor @Test func t229IdleSourceRevocationReleasesDisplayLease() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229IdleSourceRevocationReleasesDisplayLease() async throws {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "a")
     let access = AccessProbe(), pipeline = AccessPipelineProbe(access: access)

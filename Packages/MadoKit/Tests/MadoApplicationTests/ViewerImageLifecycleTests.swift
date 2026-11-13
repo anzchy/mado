@@ -14,7 +14,7 @@ private actor FailingDetailPipeline: ImagePipeline {
         return loadImage(request.renderKey!)
     }
 }
-@MainActor @Test func loadLifecycleCloseIgnoresLateResolutionAndFailureClearsPresentedIdentity() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadLifecycleCloseIgnoresLateResolutionAndFailureClearsPresentedIdentity() async {
     let file = URL(fileURLWithPath: "/lifecycle.png"), access = LoadLeases(), host = LoadHost(), session = ViewerSession()
     session.imageLoader.host = host
     let pipeline = LoadPipeline()
@@ -37,7 +37,7 @@ private actor FailingDetailPipeline: ImagePipeline {
     func installImage(_ image: DecodedImage, fileURL: URL) { session.closeImage() }
     func imageLoadFailed(_ error: any Error) { }
 }
-@MainActor @Test func loadLifecycleHostCloseDuringInstallKeepsClosedState() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func loadLifecycleHostCloseDuringInstallKeepsClosedState() async {
     let session = ViewerSession(), pipeline = LoadPipeline(), access = LoadLeases()
     let host = ClosingImageHost(session)
     session.imageLoader.host = host

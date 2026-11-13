@@ -14,7 +14,7 @@ func mismatches(root: URL, hashes: [String: String]) throws -> [String] {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() != hashes[path]
     }
 }
-@Test func designRegistryPinsSources() throws {
+@Test(.timeLimit(.minutes(2))) func designRegistryPinsSources() throws {
     let json = try registry()
     let hashes = json["sourcesSha256"] as! [String: String]
     #expect(DesignRegistry.schema == json["schema"] as! String)
@@ -39,7 +39,7 @@ func mismatches(root: URL, hashes: [String: String]) throws -> [String] {
         try original.write(to: file)
     }
 }
-@Test func designRoleNamesAreUniqueInRegistrySource() throws {
+@Test(.timeLimit(.minutes(2))) func designRoleNamesAreUniqueInRegistrySource() throws {
     let source = try String(contentsOf: designRepo.appendingPathComponent("design/picsee-ui-system/native/TOKEN_REGISTRY.json"), encoding: .utf8)
     let json = try registry()["colors"] as! [String: Any]
     for role in DesignColor.allCases {

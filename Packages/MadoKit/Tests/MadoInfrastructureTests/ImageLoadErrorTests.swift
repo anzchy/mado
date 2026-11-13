@@ -4,7 +4,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func loadErrorsClassifyRealInputs() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsClassifyRealInputs() async throws {
     let text = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
     try Data("This is not an image".utf8).write(to: text)
     defer { try? FileManager.default.removeItem(at: text) }
@@ -22,7 +22,7 @@ import MadoCore
     }
 }
 
-@Test func loadErrorsCarryKnownIdentityAndRevision() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsCarryKnownIdentityAndRevision() async throws {
     let item = ItemID.ephemeral(UUID())
     let revision = FileRevision(byteCount: 123, modificationDate: nil)
     let key = RenderKey(itemID: item, revision: revision, maximumPixelSize: 128)
@@ -53,7 +53,7 @@ func loadError(_ kind: ImageLoadError.Kind) -> @Sendable (any Error) -> Bool {
     { ($0 as? ImageLoadError)?.kind == kind }
 }
 
-@Test func loadErrorsRejectPNGWithoutEndChunk() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsRejectPNGWithoutEndChunk() async throws {
     let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
     defer { try? FileManager.default.removeItem(at: file) }
     let complete = try Data(contentsOf: fixture("alpha-gradient.png"))
@@ -89,7 +89,7 @@ private struct LoadFailureDecoder: ImageDecoding {
     func decode(_ request: ImageDecodeRequest) throws -> DecodedImage { throw failure }
 }
 
-@Test func loadErrorsKeepContextAndPassThroughAccessErrors() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsKeepContextAndPassThroughAccessErrors() async throws {
     let failures: [(any Error, ImageLoadError.Kind)] = [
         (ImageDecodeError.invalidRequest, .sourceChanged), (ImageDecodeError.unreadableImage, .corruptImage),
         (ImageDecodeError.budgetExceeded, .resourceLimit), (CancellationError(), .cancelled)
@@ -118,7 +118,7 @@ private struct DisappearingResourceReader: FileIdentityResourceReading {
     }
 }
 
-@Test func loadErrorsSourceDisappearingAfterIdentityKeepsKnownContext() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsSourceDisappearingAfterIdentityKeepsKnownContext() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let item = ItemID.rootRelative(rootID: tree.id, relativePath: "b.png")
     let revision = FileRevision(byteCount: 5, modificationDate: nil)
@@ -143,7 +143,7 @@ private struct RemovingAfterDecode: ImageDecoding {
     }
 }
 
-@Test func loadErrorsRealMissingSourceKeepsPreparedContext() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsRealMissingSourceKeepsPreparedContext() async throws {
     for afterDecode in [false, true] {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tiff")
         try FileManager.default.copyItem(at: fixture("orientation-1.tiff"), to: url)
@@ -168,7 +168,7 @@ private struct ResourceReadingFailure: ItemIdentityResolving {
     func identity(for fileURL: URL) async throws -> ItemID { throw failure }
 }
 
-@Test func loadErrorsPreserveFoundationPermissionErrors() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsPreserveFoundationPermissionErrors() async throws {
     for failure in [NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError),
                     NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))] {
         for atIdentity in [true, false] {
@@ -191,7 +191,7 @@ private struct RealReadingThenRemoving: FileIdentityResourceReading {
     }
 }
 
-@Test func loadErrorsMissingUnpreparedSourceRetainsResolvedItem() async throws {
+@Test(.timeLimit(.minutes(2))) func loadErrorsMissingUnpreparedSourceRetainsResolvedItem() async throws {
     let tree = try IdentityTree(); defer { tree.remove() }
     let resolver = FileItemIdentityResolver(root: tree.scope, reader: RealReadingThenRemoving())
     let pipeline = ImageIOPipeline(identityResolver: resolver)

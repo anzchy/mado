@@ -4,7 +4,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func p304AuditMalformedEvictionRowCannotDeleteOutsideCache() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditMalformedEvictionRowCannotDeleteOutsideCache() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -50,7 +50,7 @@ import MadoCore
     #expect(sqlite3_column_int(statement, 0) == 0)
 }
 
-@Test func p304AuditStoreAndTouchShareOneRecencyOrder() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditStoreAndTouchShareOneRecencyOrder() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -81,7 +81,7 @@ import MadoCore
     #expect(try await limited.load(tickets[2]).map { _ in true } == true)
 }
 
-@Test func p304AuditMissingPayloadRowsConvergeWithoutEvictingLiveImages() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditMissingPayloadRowsConvergeWithoutEvictingLiveImages() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -120,7 +120,7 @@ import MadoCore
     #expect(sqlite3_column_int(statement, 0) == 2)
 }
 
-@Test func p304DeleteFailureDoesNotOverEvictAndConvergesNextPass() async throws {
+@Test(.timeLimit(.minutes(2))) func p304DeleteFailureDoesNotOverEvictAndConvergesNextPass() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -174,7 +174,7 @@ import MadoCore
     #expect(sqlite3_column_int(statement, 0) == 2)
 }
 
-@Test func p304AuditHealthyLockedIndexIsNeverUnlinked() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditHealthyLockedIndexIsNeverUnlinked() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -222,7 +222,7 @@ private actor P304AuditGate {
     func release() { releaseWaiter?.resume() }
 }
 
-@Test func p304AuditOrphanSweepCannotDeleteNewlyCommittedPayload() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditOrphanSweepCannotDeleteNewlyCommittedPayload() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -252,7 +252,7 @@ private actor P304AuditGate {
     #expect(try warm.map { try rgba($0.image) } == rgba(images[1].image))
 }
 
-@Test func p304AuditCancelledSameKeyWriterCannotDeleteHeldReaderPayload() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditCancelledSameKeyWriterCannotDeleteHeldReaderPayload() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -283,7 +283,7 @@ private actor P304AuditGate {
     #expect(try warm.map { try rgba($0.image) } == expected)
 }
 
-@Test func p304AuditRecencyOrderPersistsAcrossCacheActors() async throws {
+@Test(.timeLimit(.minutes(2))) func p304AuditRecencyOrderPersistsAcrossCacheActors() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

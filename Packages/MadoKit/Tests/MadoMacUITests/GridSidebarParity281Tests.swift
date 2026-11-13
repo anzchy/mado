@@ -13,7 +13,7 @@ import MadoInfrastructure
     return nil
 }
 
-@Test @MainActor func issue281SidebarRowsAndAddFolderMatchPinnedFrames() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281SidebarRowsAndAddFolderMatchPinnedFrames() throws {
     let design = try PinnedDesign.page("grid-light")
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
     let root = URL(fileURLWithPath: "/tmp/Images")
@@ -59,7 +59,7 @@ import MadoInfrastructure
     #expect(abs(actual.blueComponent - expected.blue) < 0.01)
 }
 
-@Test @MainActor func issue281SidebarDividerMatchesPinnedEdgeInLightAndDark() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281SidebarDividerMatchesPinnedEdgeInLightAndDark() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 1280, height: 772),
             preferencesStore: InMemoryDisplayPreferencesStore())
@@ -73,7 +73,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281AddFolderUsesSidebarContentBoxAtResponsiveWidths() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281AddFolderUsesSidebarContentBoxAtResponsiveWidths() throws {
     for (width, padding) in [(1280.0, 12.0), (1051.0, 12.0), (1050.0, 8.0), (720.0, 8.0), (480.0, 8.0)] {
         let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: width, height: 772),
             preferencesStore: InMemoryDisplayPreferencesStore())

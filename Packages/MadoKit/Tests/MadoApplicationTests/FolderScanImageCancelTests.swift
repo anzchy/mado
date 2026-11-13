@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test(arguments: ["scanning", "completed", "pending-complete", "pending-error"])
+@Test(.timeLimit(.minutes(2)), arguments: ["scanning", "completed", "pending-complete", "pending-error"])
 @MainActor func folderFixImageCancelRetiresContext(ending: String) async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession()
     host.hasImage = false; session.host = host
@@ -41,7 +41,7 @@ import MadoCore
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderFixFailedImageStillOffersNext() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderFixFailedImageStillOffersNext() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession()
     host.hasImage = false; session.host = host; session.folderScan = fixture.coordinator
     fixture.coordinator.host = host

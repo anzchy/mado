@@ -63,7 +63,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     return result
 }
 
-@Test func p303DiskCacheReopensAndSeparatesSourceContent() async throws {
+@Test(.timeLimit(.minutes(2))) func p303DiskCacheReopensAndSeparatesSourceContent() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -94,7 +94,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(try await reopened.load(ticket).map { _ in true } == nil)
 }
 
-@Test func p303DiskCacheHitIsMaterializedBeforeDraw() async throws {
+@Test(.timeLimit(.minutes(2))) func p303DiskCacheHitIsMaterializedBeforeDraw() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -158,7 +158,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(hitMinimum * 3 < lazyMinimum)
 }
 
-@Test func p303ValidForeignPayloadAndBrokenIndexAreCacheMisses() async throws {
+@Test(.timeLimit(.minutes(2))) func p303ValidForeignPayloadAndBrokenIndexAreCacheMisses() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -199,7 +199,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(try await ThumbnailDiskCache(directory: cacheDirectory).load(ticket).map { _ in true } == nil)
 }
 
-@Test func p303StoredPayloadDropsSourceMetadata() async throws {
+@Test(.timeLimit(.minutes(2))) func p303StoredPayloadDropsSourceMetadata() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -256,7 +256,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(Set(chunkTypes).isDisjoint(with: ["eXIf", "tEXt", "zTXt", "iTXt"]))
 }
 
-@Test func p303SourceEligibilityIsBoundedAndCancellationStopsHashing() async throws {
+@Test(.timeLimit(.minutes(2))) func p303SourceEligibilityIsBoundedAndCancellationStopsHashing() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -286,7 +286,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("cache").path))
 }
 
-@Test func p303MissingPayloadRebuildsAndChangedSourceCannotPublishOldTicket() async throws {
+@Test(.timeLimit(.minutes(2))) func p303MissingPayloadRebuildsAndChangedSourceCannotPublishOldTicket() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -329,7 +329,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(!FileManager.default.fileExists(atPath: rejectedDirectory.path))
 }
 
-@Test func p303SourceChangedDuringPayloadPublicationLeavesNoIndexedImage() async throws {
+@Test(.timeLimit(.minutes(2))) func p303SourceChangedDuringPayloadPublicationLeavesNoIndexedImage() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -357,7 +357,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(!FileManager.default.fileExists(atPath: cacheDirectory.appendingPathComponent("index.sqlite3").path))
 }
 
-@Test func p303UnopenableIndexCannotDeliverPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func p303UnopenableIndexCannotDeliverPixels() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -376,7 +376,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(try await cache.load(ticket).map { _ in true } == nil)
 }
 
-@Test func p303DamagedIndexDimensionsCannotAlterDeliveredSourceSize() async throws {
+@Test(.timeLimit(.minutes(2))) func p303DamagedIndexDimensionsCannotAlterDeliveredSourceSize() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -398,7 +398,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(try await cache.load(ticket).map { _ in true } == nil)
 }
 
-@Test func p304NextAccessRepairsOrphanAndDamagedRowWithoutChangingSource() async throws {
+@Test(.timeLimit(.minutes(2))) func p304NextAccessRepairsOrphanAndDamagedRowWithoutChangingSource() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -435,7 +435,7 @@ private func pngPaddedToExactLength(_ source: Data, targetLength: Int) throws ->
     #expect(try await reopened.load(ticket).map { _ in true } == nil)
 }
 
-@Test func p304RecentReadSurvivesHighLowWaterEviction() async throws {
+@Test(.timeLimit(.minutes(2))) func p304RecentReadSurvivesHighLowWaterEviction() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -485,7 +485,7 @@ private actor P304ReadGate {
     func release() { releaseWaiter?.resume() }
 }
 
-@Test func p304HeldReaderKeepsPayloadDuringOtherCacheEviction() async throws {
+@Test(.timeLimit(.minutes(2))) func p304HeldReaderKeepsPayloadDuringOtherCacheEviction() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -519,7 +519,7 @@ private actor P304ReadGate {
     #expect(try await pending.value == true)
 }
 
-@Test func p304CorruptIndexRebuildsFromUnchangedSource() async throws {
+@Test(.timeLimit(.minutes(2))) func p304CorruptIndexRebuildsFromUnchangedSource() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -543,7 +543,7 @@ private actor P304ReadGate {
     #expect(try Data(contentsOf: file) == sourceBytes)
 }
 
-@Test func p304CancelledReadReleasesPayloadForEviction() async throws {
+@Test(.timeLimit(.minutes(2))) func p304CancelledReadReleasesPayloadForEviction() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -575,7 +575,7 @@ private actor P304ReadGate {
     #expect(!FileManager.default.fileExists(atPath: heldPayload.path))
 }
 
-@Test func p304WarmPixelsSurviveIndexBecomingUnavailableAfterRowRead() async throws {
+@Test(.timeLimit(.minutes(2))) func p304WarmPixelsSurviveIndexBecomingUnavailableAfterRowRead() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

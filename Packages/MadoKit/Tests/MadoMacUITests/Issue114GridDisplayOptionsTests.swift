@@ -118,7 +118,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
 
 /// One #114 grid window at a time: other suites still run concurrently while the loops below yield (#316 f89a0cab).
 @Suite(.serialized) struct Issue114GridDisplayOptionsTests {
-    @Test @MainActor func issue114GridDefaultOptionsMatchTodayAtParityViewports() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridDefaultOptionsMatchTodayAtParityViewports() async throws {
         #expect(GridDisplayOptions() == GridDisplayOptions(DisplayPreferences()))
         for width: CGFloat in [1280, 1050, 800, 720, 480] {
             let untouched = try Issue114GridFixture(width: width)
@@ -141,7 +141,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         }
     }
 
-    @Test @MainActor func issue114GridColumnsAt1280FollowCSSFormula() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridColumnsAt1280FollowCSSFormula() async throws {
         let fixture = try Issue114GridFixture(width: 1280, sidebar: false)
         defer { fixture.close() }
         #expect(abs(fixture.grid.collectionView.enclosingScrollView!.contentSize.width - 2 * 24 - 1232) < 0.5)
@@ -156,7 +156,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         }
     }
 
-    @Test @MainActor func issue114GridColumnsMonotonicAndFormulaAcrossWidths() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridColumnsMonotonicAndFormulaAcrossWidths() async throws {
         for width: CGFloat in [721, 800, 1050, 1051, 1280, 1599, 1600, 1920] {
             for sidebar in [true, false] {
                 let fixture = try Issue114GridFixture(width: width, sidebar: sidebar, count: 24)
@@ -192,7 +192,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         }
     }
 
-    @Test @MainActor func issue114GridNarrowViewportsIgnoreSize() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridNarrowViewportsIgnoreSize() async throws {
         for width: CGFloat in [481, 600, 720] {
             let fixture = try Issue114GridFixture(width: width)
             defer { fixture.close() }
@@ -216,7 +216,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         }
     }
 
-    @Test @MainActor func issue114GridGeometryIsPathIndependent() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridGeometryIsPathIndependent() async throws {
         let targets = [GridDisplayOptions(thumbnailSize: 140, showFileNames: true, fit: .fill),
                        GridDisplayOptions(thumbnailSize: 280, showFileNames: false, fit: .fit),
                        GridDisplayOptions(thumbnailSize: 170, showFileNames: false, fit: .fill)]
@@ -237,7 +237,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         }
     }
 
-    @Test @MainActor func issue114GridNamesToggleRoundTripsFrames() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridNamesToggleRoundTripsFrames() throws {
         let fixture = try Issue114GridFixture(width: 1280, sidebar: false)
         defer { fixture.close() }
         fixture.grid.setCurrentItemID(fixture.entries[0].itemID)
@@ -269,7 +269,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         #expect(try snapshot() == on)
     }
 
-    @Test @MainActor func issue114GridFitGravityAppliesToVisibleAndReusedItems() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridFitGravityAppliesToVisibleAndReusedItems() throws {
         let fixture = try Issue114GridFixture(width: 1280, sidebar: false)
         defer { fixture.close() }
         fixture.set(GridDisplayOptions(fit: .fit))
@@ -371,7 +371,7 @@ private let issue114Sizes: [Double] = Array(stride(from: 140.0, through: 280.0, 
         #expect(renewed.contains { visibleAt220.contains($0) }, "an item visible at 220 was requested again")
     }
 
-    @Test @MainActor func issue114GridSelectionAndCurrentSurviveOptionChanges() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114GridSelectionAndCurrentSurviveOptionChanges() throws {
         let fixture = try Issue114GridFixture(width: 1280, sidebar: false)
         defer { fixture.close() }
         let ids = fixture.entries.map(\.itemID)

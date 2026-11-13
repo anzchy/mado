@@ -28,7 +28,7 @@ private func p303SolidTIFF(_ url: URL, red: CGFloat) throws {
     #expect(CGImageDestinationFinalize(destination))
 }
 
-@Test func p303AccessSourceReopensFromDiskButDeniedAccessAndPublicPipelineDoNotHit() async throws {
+@Test(.timeLimit(.minutes(2))) func p303AccessSourceReopensFromDiskButDeniedAccessAndPublicPipelineDoNotHit() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -65,7 +65,7 @@ private func p303SolidTIFF(_ url: URL, red: CGFloat) throws {
     #expect(reopenedDecoder.count == 1)
 }
 
-@Test func p303AccessSourceSameSizeSameTimeReplacementDecodesNewPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func p303AccessSourceSameSizeSameTimeReplacementDecodesNewPixels() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -98,7 +98,7 @@ private func p303SolidTIFF(_ url: URL, red: CGFloat) throws {
     #expect(try rgba(old.image) != rgba(fresh.image))
 }
 
-@Test func p303FileGrantNeverCreatesPersistentThumbnail() async throws {
+@Test(.timeLimit(.minutes(2))) func p303FileGrantNeverCreatesPersistentThumbnail() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
@@ -115,7 +115,7 @@ private func p303SolidTIFF(_ url: URL, red: CGFloat) throws {
     #expect(!FileManager.default.fileExists(atPath: cacheDirectory.path))
 }
 
-@Test func p303InPlaceSameRevisionChangeNeverPersistsWarmMemoryPixels() async throws {
+@Test(.timeLimit(.minutes(2))) func p303InPlaceSameRevisionChangeNeverPersistsWarmMemoryPixels() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

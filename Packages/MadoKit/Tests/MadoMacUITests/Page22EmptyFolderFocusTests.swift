@@ -6,7 +6,7 @@ import MadoInfrastructure
 @testable import MadoMacUI
 
 /// A watched refresh or a recents reload repeats the same page-22 request; keyboard focus must stay on its control.
-@Test @MainActor func page22RepeatedRequestKeepsFocusedControl() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22RepeatedRequestKeepsFocusedControl() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800), styleMask: [.borderless],
                           backing: .buffered, defer: false)
@@ -34,7 +34,7 @@ import MadoInfrastructure
 
 /// gpt M1: a live change (a child added or removed, a relative time ticking) keeps focus on the same folder's control,
 /// and falls back to the control now at the focused position when that folder is gone.
-@Test @MainActor func page22ChangedRequestKeepsFocusByFolderIdentity() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func page22ChangedRequestKeepsFocusByFolderIdentity() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800), styleMask: [.borderless],
                           backing: .buffered, defer: false)

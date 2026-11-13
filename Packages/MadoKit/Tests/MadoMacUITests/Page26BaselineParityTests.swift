@@ -5,7 +5,7 @@ import MadoApplication
 
 /// #354 rows 6/7: permission-denied.html footer and .mock-primary.
 /// This baseline runs before production changes; one window per test, yielding between cases.
-@Test @MainActor func i354LostFooterAndAppearanceAlreadyMatch() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354LostFooterAndAppearanceAlreadyMatch() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
                           styleMask: [.titled], backing: .buffered, defer: false)
@@ -60,7 +60,7 @@ import MadoApplication
     return view.subviews.lazy.compactMap { i354FindField(identifier, in: $0) }.first
 }
 
-@Test @MainActor func i354PrimaryButtonAlreadyUsesRegular13AndEightSixteenPadding() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354PrimaryButtonAlreadyUsesRegular13AndEightSixteenPadding() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
                           styleMask: [.titled], backing: .buffered, defer: false)

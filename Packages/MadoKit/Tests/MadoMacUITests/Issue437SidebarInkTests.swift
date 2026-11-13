@@ -59,7 +59,7 @@ import Testing
     #expect(mismatches == 0, "visible plus matches both pinned SVG arms at full opacity")
 }
 
-@Test @MainActor func issue437SidebarPaintsPinnedGlyphsAndColoursAcrossAppearanceChanges() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue437SidebarPaintsPinnedGlyphsAndColoursAcrossAppearanceChanges() throws {
     _ = NSApplication.shared
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
     tree.viewportWidth = 1280
@@ -106,7 +106,7 @@ import Testing
     }
 }
 
-@Test @MainActor func issue437SidebarControlsKeepDisabledAccessibilityAndFocus() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue437SidebarControlsKeepDisabledAccessibilityAndFocus() throws {
     let tree = GridSidebarTreeView(frame: NSRect(x: 0, y: 0, width: 196, height: 732))
     for id in ["grid.sidebar.add-folder", "grid.sidebar.add-folder-plus"] {
         let button = try #require(issue437Control(id, in: tree))

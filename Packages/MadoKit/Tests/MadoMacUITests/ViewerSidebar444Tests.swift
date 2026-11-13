@@ -114,7 +114,7 @@ import MadoCore
     return loop
 }
 
-@Test(arguments: [NSSize(width: 800, height: 680), NSSize(width: 960, height: 800),
+@Test(.timeLimit(.minutes(2)), arguments: [NSSize(width: 800, height: 680), NSSize(width: 960, height: 800),
                   NSSize(width: 1280, height: 800), NSSize(width: 1600, height: 680)])
 @MainActor func i444ViewerFramesPartitionContentWidth(size: NSSize) {
     for sidebarWidth in [160.0, 200, 240, 320] {
@@ -137,7 +137,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func i444ViewerModeHidesGridOnlyParts() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ViewerModeHidesGridOnlyParts() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     #expect(scene.shell.mode == .viewerSidebar)
@@ -150,7 +150,7 @@ import MadoCore
     #expect(scene.shell.sidebar.frame.width == 196)
 }
 
-@Test @MainActor func i444UnavailableOrHiddenSidebarKeepsFullWidthViewer() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444UnavailableOrHiddenSidebarKeepsFullWidthViewer() {
     for (available, visible) in [(false, true), (true, false)] {
         let scene = Sidebar444Scene(visible: visible, available: available)
         defer { scene.close() }
@@ -160,7 +160,7 @@ import MadoCore
     }
 }
 
-@Test(arguments: [160.0, 320.0], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [160.0, 320.0], [false, true])
 @MainActor func i444SidebarToggleRoundTripIsIdentity(sidebarWidth: Double, inspector: Bool) {
     let scene = Sidebar444Scene(sidebarWidth: sidebarWidth, inspector: inspector)
     defer { scene.close() }
@@ -184,7 +184,7 @@ import MadoCore
     }
 }
 
-@Test(arguments: [true, false], [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false], [false, true])
 @MainActor func i444ViewerGridRoundTripRestoresShellGeometry(visible: Bool, inspector: Bool) {
     let scene = Sidebar444Scene(visible: visible, inspector: inspector)
     defer { scene.close() }
@@ -236,7 +236,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func i444CompactWidthsKeepPodsClearOfSidebar(inspector: Bool) {
     var rows: [(NSSize, Double)] = stride(from: 160.0, through: 320, by: 8).map { (NSSize(width: 800, height: 680), $0) }
     for width: CGFloat in [238, 400, 477, 478, 479, 513, 514, 515] {
@@ -255,7 +255,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 }
 
 /// A live resize with the sidebar shown: every step keeps the pods on the canvas, and widening brings the sidebar back.
-@Test @MainActor func i444LiveResizeKeepsPodsClearAndRestoresTheSidebar() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444LiveResizeKeepsPodsClearAndRestoresTheSidebar() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     for width: CGFloat in [1280, 900, 600, 515, 514, 479, 478, 477, 400, 238, 477, 478, 600, 1280] {
@@ -268,7 +268,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 
 /// #444 fix round 2 (device smoke smoke444-20261104-1053): the limit shrinks or grows between live resizes, and the
 /// shell must draw its sidebar at the width the canvas was laid out beside. Single sizes never caught the stale width.
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func i444ResizeSequenceKeepsDrawnSidebarAtTheCanvasEdge(inspector: Bool) {
     let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640), inspector: inspector)
     defer { scene.close() }
@@ -305,7 +305,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 /// laid out at the minimum's negative room (238 − 318 = −80) while the canvas came back beside a 196 pt sidebar. The
 /// device hit it when a resize delivered two steps below the sidebar's room: the hidden shell is laid out at the second
 /// step with the first step's limit. Two steps (240×210, then 238×200) make that order deterministic here.
-@Test(arguments: [NSSize(width: 960, height: 640), NSSize(width: 640, height: 480), NSSize(width: 480, height: 400)],
+@Test(.timeLimit(.minutes(2)), arguments: [NSSize(width: 960, height: 640), NSSize(width: 640, height: 480), NSSize(width: 480, height: 400)],
       [false, true])
 @MainActor func i444RestoringFromTheMinimumKeepsTheSidebarInsideTheWindow(target: NSSize, inspector: Bool) {
     let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640), inspector: inspector)
@@ -336,7 +336,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 /// #444 fix round 2: a sidebar hidden only because the window is too narrow keeps the user's choice. The toggle still
 /// reads 隐藏侧栏 (value 1), and that is what comes back when the window grows. Pressing it there hides the sidebar for
 /// good, so the wider window shows no sidebar either.
-@Test @MainActor func i444TooNarrowSidebarToggleKeepsTheUsersChoice() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444TooNarrowSidebarToggleKeepsTheUsersChoice() throws {
     let scene = Sidebar444Scene(size: NSSize(width: 960, height: 640))
     defer { scene.close() }
     let toggle = try #require(scene.chrome.tools.first { $0.kind == .intent(.toggleSidebar) })
@@ -360,7 +360,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 
 /// The shell does not stretch with the window in the viewer: until the presentation lays it out again it keeps its
 /// width, so the folder tree is never laid out at the parent's width.
-@Test @MainActor func i444ViewerSidebarShellDoesNotAutoresizeItsWidth() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ViewerSidebarShellDoesNotAutoresizeItsWidth() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     // The App's grid shell stretches with the window; enter the viewer again with that mask.
@@ -379,7 +379,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 }
 
 /// The overlay answers only inside its own bounds, even where a pod's frame reaches past them.
-@Test @MainActor func i444OverlayHitTestStaysInsideItsBounds() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444OverlayHitTestStaysInsideItsBounds() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     let pod = scene.chrome.groups[0]
@@ -390,7 +390,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     #expect(scene.chrome.hitTest(inside) != nil)
 }
 
-@Test @MainActor func i444HitTestRightOfSidebarNeverReturnsShell() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444HitTestRightOfSidebarNeverReturnsShell() {
     let scene = Sidebar444Scene(sidebarWidth: 240)
     defer { scene.close() }
     let w: CGFloat = 240, height = scene.content.bounds.height
@@ -418,7 +418,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     return DecodedImage(image: try #require(context.makeImage()), sourcePixelSize: size)
 }
 
-@Test @MainActor func i444CanvasWidthChangeRefitsImage() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444CanvasWidthChangeRefitsImage() throws {
     let scene = Sidebar444Scene(sidebarWidth: 240) { CanvasView(frame: .zero, session: $0) }
     defer { scene.close() }
     let canvas = try #require(scene.canvas as? CanvasView)
@@ -441,7 +441,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     #expect(requests.last == narrow, "showing the sidebar again refits to the first size")
 }
 
-@Test @MainActor func i444DividerAdjustInViewerClampsPersistsAndRelaysOut() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444DividerAdjustInViewerClampsPersistsAndRelaysOut() {
     let scene = Sidebar444Scene(sidebarWidth: 196)
     defer { scene.close() }
     for (requested, stored) in [(100.0, 160.0), (160, 160), (241, 241), (320, 320), (500, 320), (.infinity, 320)] {
@@ -454,7 +454,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
-@Test @MainActor func i444IsGridSurfaceTruthTableAndGridOnlyHooksInert() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444IsGridSurfaceTruthTableAndGridOnlyHooksInert() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     let viewerState = scene.state.frame
@@ -473,7 +473,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     }
 }
 
-@Test @MainActor func i444ViewerKeyLoopVisitsSidebarAfterToolsOnlyWhenShown() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444ViewerKeyLoopVisitsSidebarAfterToolsOnlyWhenShown() throws {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     let divider = try #require(scene.divider)
@@ -495,7 +495,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
     #expect((scene.window.firstResponder as? NSView)?.isDescendant(of: scene.shell) != true)
 }
 
-@Test @MainActor func i444HidingSidebarWithFocusedRowFocusesCanvas() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444HidingSidebarWithFocusedRowFocusesCanvas() throws {
     for useDivider in [false, true] {
         let scene = Sidebar444Scene()
         defer { scene.close() }
@@ -515,7 +515,7 @@ private func sidebar444Width(_ preferred: CGFloat, content: CGFloat) -> CGFloat 
 /// would be the sidebar, not the canvas, so Esc and the arrows would stop reaching the viewer (#444 App regression).
 enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 
-@Test(arguments: [true, false], Sidebar444FocusPlace.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: [true, false], Sidebar444FocusPlace.allCases)
 @MainActor func i444EnteringViewerMovesGridFocusToCanvas(sidebarShown: Bool, place: Sidebar444FocusPlace) {
     let scene = Sidebar444Scene(visible: sidebarShown)
     defer { scene.close() }
@@ -550,7 +550,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 
 /// Returning to the grid must not lay the grid out inside the viewer's narrow sidebar frame: a zero-width grid traps
 /// in NSCollectionViewFlowLayout (itemSize.width > 0), seen via 返回网格 in the App.
-@Test(arguments: [NSSize(width: 800, height: 680), NSSize(width: 1280, height: 800)], [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [NSSize(width: 800, height: 680), NSSize(width: 1280, height: 800)], [true, false])
 @MainActor func i444ReturningToGridNeverLaysOutANarrowGrid(size: NSSize, sidebarShown: Bool) {
     let scene = Sidebar444Scene(size: size, visible: sidebarShown)
     defer { scene.close() }
@@ -570,7 +570,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 
 /// The folder tree reloads its rows while the viewer shows it (counts and children arrive late); the viewer's loop
 /// canvas → tools → sidebar → canvas must take in the new rows instead of keeping the replaced ones.
-@Test(arguments: [2, 5])
+@Test(.timeLimit(.minutes(2)), arguments: [2, 5])
 @MainActor func i444SidebarTreeReloadInViewerKeepsTheKeyLoop(children: Int) {
     let scene = Sidebar444Scene()
     defer { scene.close() }
@@ -586,7 +586,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 
 /// The sidebar leaving the viewer some other way than ⌃⌘S (the preview stops being a folder preview) while a row
 /// holds focus hands focus to the canvas, not to the hidden sidebar.
-@Test @MainActor func i444SidebarBecomingUnavailableWithRowFocusHandsFocusToCanvas() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444SidebarBecomingUnavailableWithRowFocusHandsFocusToCanvas() throws {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     let row = try #require(scene.shell.viewerSidebarKeyViews.last)
@@ -600,7 +600,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 }
 
 /// A hidden grid shell outside the viewer (the Home) leaves the state surface over the whole content.
-@Test @MainActor func i444GridLayoutWithHiddenShellGivesStateTheContent() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i444GridLayoutWithHiddenShellGivesStateTheContent() {
     let scene = Sidebar444Scene()
     defer { scene.close() }
     scene.presentation.showGrid(reading: false)
@@ -612,7 +612,7 @@ enum Sidebar444FocusPlace: Sendable, CaseIterable { case grid, main, footer }
 
 /// Owner decision 2026-11-04 (#444): the viewer's sidebar is independent of the grid's and starts hidden on entry;
 /// toggling it in the viewer never changes the grid's, and returning to the grid shows the grid's sidebar as it was.
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func i444ViewerSidebarStartsHiddenAndLeavesTheGridsAlone(gridVisible: Bool) {
     let scene = Sidebar444Scene(visible: false, gridVisible: gridVisible)
     defer { scene.close() }

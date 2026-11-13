@@ -31,7 +31,7 @@ import MadoInfrastructure
 
 /// GRID-02; owner confirmation in #345 (2026-11-02): last viewed Current Item on return,
 /// "same as without a wrap". This test deliberately never crosses a sequence boundary.
-@Test(arguments: [1, 3], [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [1, 3], [false, true]) @MainActor
 func issue492ReturningFromViewerFollowsLastViewedImage(arrowCount: Int, returnViaButton: Bool) throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/issue492")

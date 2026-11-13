@@ -20,7 +20,7 @@ import MadoApplication
     func showInspector(_ visible: Bool) { inspector = visible }
 }
 
-@Test @MainActor func sessionRouterPreviewAndEscape() {
+@Test(.timeLimit(.minutes(2))) @MainActor func sessionRouterPreviewAndEscape() {
     let router = CommandRouter(implementedCommands: Set(CommandID.allCases))
     let host = FakeSessionHost()
     let session = ViewerSession(host: host)
@@ -96,7 +96,7 @@ import MadoApplication
     #expect(!router.route(.search, from: .key, to: session))
 }
 
-@Test @MainActor func sessionChromeLocksAndWindowIsolation() {
+@Test(.timeLimit(.minutes(2))) @MainActor func sessionChromeLocksAndWindowIsolation() {
     let clock = FakeViewerClock()
     let store = InMemoryDisplayPreferencesStore()
     let host = FakeSessionHost()
@@ -167,7 +167,7 @@ import MadoApplication
     #expect(initial.displayPreferences.alwaysShowTools)
 }
 
-@Test @MainActor func sessionContextTargetSurvivesSelectionChange() {
+@Test(.timeLimit(.minutes(2))) @MainActor func sessionContextTargetSurvivesSelectionChange() {
     let session = ViewerSession()
     let ids = sessionItems()
     session.beginBrowsing(items: ids, sourceVersion: .init(1), scrollAnchor: nil)

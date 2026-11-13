@@ -16,7 +16,7 @@ import MadoCore
     func clearFolderImageForNoMatches() { cleared += 1 }
 }
 
-@Test(arguments: ["png", "none", "restore"])
+@Test(.timeLimit(.minutes(2)), arguments: ["png", "none", "restore"])
 @MainActor func folderReadingConditionChangeDuringRememberDoesNotReopenExcludedFirst(selection: String) async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost(), coordinator = fixture.coordinator
     coordinator.host = host
@@ -46,7 +46,7 @@ import MadoCore
     }
 }
 
-@Test(arguments: ["jpg", "unchanged", "loop"])
+@Test(.timeLimit(.minutes(2)), arguments: ["jpg", "unchanged", "loop"])
 @MainActor func folderReadingRetainedFirstDuringRememberOpensExactlyOnce(action: String) async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost(), coordinator = fixture.coordinator
     let session = ViewerSession()
@@ -71,7 +71,7 @@ import MadoCore
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderReadingUnchangedConditionsDuringRememberStillOpenFirst(loopMenu: Bool) async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost(), coordinator = fixture.coordinator
     let session = ViewerSession()
@@ -91,7 +91,7 @@ import MadoCore
     #expect(session.displayPreferences.loopThroughImages == loopMenu)
 }
 
-@Test @MainActor func folderReadingCompletedSnapshotOpensNameFirstOnce() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderReadingCompletedSnapshotOpensNameFirstOnce() async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost(), session = ViewerSession()
     fixture.coordinator.host = host; session.folderScan = fixture.coordinator
     let task = fixture.coordinator.begin(folder: fixture.folder, rootID: fixture.id)
@@ -115,7 +115,7 @@ import MadoCore
     #expect(await fixture.access.balance == [1, 1])
 }
 
-@Test @MainActor func folderReadingEmptyCompletionAndRootInput() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderReadingEmptyCompletionAndRootInput() async throws {
     for inputImage in [false, true] {
         let fixture = FolderScanFixture(), host = FolderReadingHost(), session = ViewerSession()
         session.folderScan = fixture.coordinator; fixture.coordinator.host = host
@@ -132,7 +132,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func folderReadingFalseAuthorityBeforeAndAfterRemember() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderReadingFalseAuthorityBeforeAndAfterRemember() async throws {
     for falseAfterRemember in [false, true] {
         let fixture = FolderScanFixture(), host = FolderReadingHost()
         fixture.coordinator.host = host
@@ -154,7 +154,7 @@ import MadoCore
     #expect(!fixture.coordinator.isEmptyFolder && host.opens.isEmpty)
 }
 
-@Test(arguments: ["cancel-remember", "replace-remember", "cancel-open"])
+@Test(.timeLimit(.minutes(2)), arguments: ["cancel-remember", "replace-remember", "cancel-open"])
 @MainActor func folderReadingReentrantEffectsRemainGenerationGuarded(action: String) async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost()
     fixture.coordinator.host = host
@@ -189,7 +189,7 @@ private struct FolderReadingOneBatchScanner: FolderScanning {
     }
 }
 
-@Test @MainActor func folderReadingRememberErrorEndsAndReleases() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderReadingRememberErrorEndsAndReleases() async {
     let access = FolderScanCountingLeases(root: URL(fileURLWithPath: "/folder-reading"))
     let coordinator = FolderScanCoordinator(access: access, scanner: FolderReadingOneBatchScanner()), host = FolderReadingHost()
     coordinator.host = host
@@ -202,7 +202,7 @@ private struct FolderReadingOneBatchScanner: FolderScanning {
     #expect(await access.balance == [1, 1])
 }
 
-@Test @MainActor func folderReadingCancelRestoresPriorLoader() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func folderReadingCancelRestoresPriorLoader() async throws {
     for showing in [false, true] {
         let fixture = FolderScanFixture(), host = FolderNavigationHost(), session = ViewerSession(host: FolderNavigationHost())
         session.host = host; session.folderScan = fixture.coordinator
@@ -247,7 +247,7 @@ private actor FolderReadingOriginBarrier {
     func finish() { ending?.resume(); ending = nil }
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 @MainActor func folderReadingCancelledOriginCannotPresent(hasBatch: Bool) async throws {
     let fixture = FolderScanFixture(), host = FolderReadingHost(), originBarrier = FolderReadingOriginBarrier()
     fixture.coordinator.host = host

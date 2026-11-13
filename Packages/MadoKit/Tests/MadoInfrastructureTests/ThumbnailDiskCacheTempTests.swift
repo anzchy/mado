@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoInfrastructure
 
-@Test func p304OwnedStaleTempFilesAreSweptWithoutTouchingOtherFiles() async throws {
+@Test(.timeLimit(.minutes(2))) func p304OwnedStaleTempFilesAreSweptWithoutTouchingOtherFiles() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

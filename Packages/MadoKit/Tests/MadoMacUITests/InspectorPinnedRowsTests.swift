@@ -52,7 +52,7 @@ private func peakGlyphColor(_ pixels: NSBitmapImageRep, x: Range<Int>, y: Range<
 
 // The pinned pages give a 48 px label column, 7 px column gap, dt=--color-muted,
 // dd=--color-text. A long probe exposes the value-column origin via wrapping.
-@Test @MainActor func issue136SmokeMeasuredLabelColumnKeepsSevenPointValueGap() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136SmokeMeasuredLabelColumnKeepsSevenPointValueGap() throws {
     _ = NSApplication.shared
     for panelWidth in [195, 220] {
         let contentWidth = CGFloat(panelWidth - 34)
@@ -88,7 +88,7 @@ private func peakGlyphColor(_ pixels: NSBitmapImageRep, x: Range<Int>, y: Range<
     }
 }
 
-@Test @MainActor func issue136PinnedInspectorRendersEveryEnglishAndChineseFieldInColumns() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136PinnedInspectorRendersEveryEnglishAndChineseFieldInColumns() throws {
     _ = NSApplication.shared
     for (pageName, theme) in [("viewer-inspector", DesignTheme.dark),
                               ("viewer-inspector-light", DesignTheme.light)] {
@@ -169,7 +169,7 @@ private func peakGlyphColor(_ pixels: NSBitmapImageRep, x: Range<Int>, y: Range<
     }
 }
 
-@Test @MainActor func issue136PinnedInspectorValueColumnStartsAtCSSGap() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136PinnedInspectorValueColumnStartsAtCSSGap() throws {
     _ = NSApplication.shared
     for (pageName, theme) in [("viewer-inspector", DesignTheme.dark),
                               ("viewer-inspector-light", DesignTheme.light)] {

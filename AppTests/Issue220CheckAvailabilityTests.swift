@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 
 // Audit r1 M1: 立即检查 follows the updater's canCheckForUpdates, as Sparkle's own menu validation would.
-@MainActor @Test func issue220CheckNowFollowsUpdaterAvailability() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220CheckNowFollowsUpdaterAvailability() throws {
     let port = FakeUpdatePort()
     port.canCheckForUpdates = false
     let panel = issue220Panel(port)
@@ -29,7 +29,7 @@ import MadoApplication
     #expect(check.isEnabled, "refreshed when the section is shown")
 }
 
-@MainActor @Test func issue220CheckNowAvailabilityIsIgnoredWithoutPort() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue220CheckNowAvailabilityIsIgnoredWithoutPort() throws {
     let panel = issue220Panel(nil)
     defer { panel.window.close() }
     let check = try #require(issue220View("settings.update.now", in: panel) as? NSButton)

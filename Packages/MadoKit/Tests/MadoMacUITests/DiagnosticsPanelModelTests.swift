@@ -403,7 +403,7 @@ private func traitSets(_ view: some View) -> [String] {
     }
 }
 
-@Test @MainActor func diagnosticsPanelSectionTitlesAreHeadings() {
+@Test(.timeLimit(.minutes(2))) @MainActor func diagnosticsPanelSectionTitlesAreHeadings() {
     let heading = traitSets(Text("x").accessibilityAddTraits(.isHeader))
     #expect(heading.count == 1)
     #expect(traitSets(Text("x")).isEmpty)
@@ -412,7 +412,7 @@ private func traitSets(_ view: some View) -> [String] {
     }
 }
 
-@Test @MainActor func diagnosticsPanelViewLaysOutUnknownAndMeasuredRows() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func diagnosticsPanelViewLaysOutUnknownAndMeasuredRows() async throws {
     _ = NSApplication.shared
     let sleeper = ManualSleeper()
     let model = DiagnosticsPanelModel(source: ScriptedDiagnostics([fullSnapshot]), sleep: { try await sleeper.sleep($0) })
@@ -447,7 +447,7 @@ private func accessibilityLabelDump(_ view: some View) -> String? {
     return ([lines[start]] + body).joined(separator: "\n")
 }
 
-@Test @MainActor func diagnosticsPanelHeadingsCarryTheirTitleAsLabel() {
+@Test(.timeLimit(.minutes(2))) @MainActor func diagnosticsPanelHeadingsCarryTheirTitleAsLabel() {
     #expect(accessibilityLabelDump(Text("x").accessibilityAddTraits(.isHeader)) == nil)
     for title in DiagnosticsPanelModel(source: ScriptedDiagnostics([fullSnapshot])).sections.map(\.title) {
         let label = accessibilityLabelDump(DiagnosticsPanelView.sectionTitle(title))
@@ -455,7 +455,7 @@ private func accessibilityLabelDump(_ view: some View) -> String? {
     }
 }
 
-@Test @MainActor func diagnosticsPanelNotesNameTheDiskCacheBoundary() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func diagnosticsPanelNotesNameTheDiskCacheBoundary() throws {
     let sections = DiagnosticsPanelModel(source: ScriptedDiagnostics([fullSnapshot])).sections
     #expect(sections.first { $0.id == "memory" }?.note == memoryLookupNote)
     #expect(sections.first { $0.id == "disk" }?.note == diskLookupNote)

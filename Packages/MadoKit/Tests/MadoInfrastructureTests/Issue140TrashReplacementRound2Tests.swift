@@ -35,7 +35,7 @@ private struct Issue140AlwaysStartedScope: SecurityScope {
 
 #if MADO_TRASH_INTEGRATION
 // #672: real DesktopServices Trash; runs only in `node scripts/tdd/trash-lane.mjs`.
-@Test func issue140TrashedOldInodeYieldsToLiveSamePathReplacement() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140TrashedOldInodeYieldsToLiveSamePathReplacement() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: base, withIntermediateDirectories: true)
@@ -69,7 +69,7 @@ private struct Issue140AlwaysStartedScope: SecurityScope {
     await source.close()
 }
 
-@Test func issue140UnreadableSamePathReplacementNeedsReconnection() async throws {
+@Test(.timeLimit(.minutes(2))) func issue140UnreadableSamePathReplacementNeedsReconnection() async throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: base, withIntermediateDirectories: true)

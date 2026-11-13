@@ -11,7 +11,7 @@ private struct ReplacingDecoder: ImageDecoding {
         return try ImageIODecoder().decode(request)
     }
 }
-@Test func changedSourceCannotOutgrowItsAdmittedReservation() async throws {
+@Test(.timeLimit(.minutes(2))) func changedSourceCannotOutgrowItsAdmittedReservation() async throws {
     let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("png")
     defer { try? FileManager.default.removeItem(at: file) }
     try Data(contentsOf: fixture("alpha-gradient.png")).write(to: file)
@@ -29,7 +29,7 @@ private struct RevisionChangingDecoder: ImageDecoding {
         return image
     }
 }
-@Test func decodedResultCarriesPostDecodeRevision() async throws {
+@Test(.timeLimit(.minutes(2))) func decodedResultCarriesPostDecodeRevision() async throws {
     let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("png")
     defer { try? FileManager.default.removeItem(at: file) }
     try Data(contentsOf: fixture("alpha-gradient.png")).write(to: file)

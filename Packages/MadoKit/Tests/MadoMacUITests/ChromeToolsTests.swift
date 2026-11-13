@@ -21,7 +21,7 @@ import MadoApplication
     func navigate(_ direction: NavigationDirection) { navigation.append(direction) }
 }
 
-@Test @MainActor func chromeThreeGroupsRouteAndReflectActualScale() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeThreeGroupsRouteAndReflectActualScale() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     let session = ViewerSession(host: host)

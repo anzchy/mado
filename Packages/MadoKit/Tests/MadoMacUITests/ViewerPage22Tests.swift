@@ -24,7 +24,7 @@ private let genericHeading = "Drop a photo folder here"
     a.map(ObjectIdentifier.init) == b.map(ObjectIdentifier.init)
 }
 
-@Test @MainActor func viewerEmptyFolderRendersPage22Subfolders() {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerEmptyFolderRendersPage22Subfolders() {
     let (window, host) = viewerStateHost()
     defer { window.close() }
     host.setEmptyFolderPage(EmptyFolderPage(subfolders: viewerSubfolders, recents: [], includeSubfoldersAvailable: true))
@@ -42,7 +42,7 @@ private let genericHeading = "Drop a photo folder here"
     #expect(refusing.isEmpty)
 }
 
-@Test @MainActor func viewerEmptyFolderRendersPage22RecentsAndBarePage() {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerEmptyFolderRendersPage22RecentsAndBarePage() {
     let (window, host) = viewerStateHost()
     defer { window.close() }
     let now = Date(timeIntervalSince1970: 1_615_809_600)
@@ -64,7 +64,7 @@ private let genericHeading = "Drop a photo folder here"
     #expect(sameViews(host.buttons, page.keyViews), "updated in place without a status change")
 }
 
-@Test @MainActor func viewerPage22LeavesWithItsStatus() {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerPage22LeavesWithItsStatus() {
     let (window, host) = viewerStateHost()
     defer { window.close() }
     host.setEmptyFolderPage(EmptyFolderPage(subfolders: viewerSubfolders, recents: [], includeSubfoldersAvailable: true))
@@ -82,7 +82,7 @@ private let genericHeading = "Drop a photo folder here"
     #expect(host.isHidden, "the grid surface shows its own page 22")
 }
 
-@Test @MainActor func viewerPage22ControlsReceiveClicks() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func viewerPage22ControlsReceiveClicks() throws {
     let (window, host) = viewerStateHost()
     defer { window.close() }
     host.setEmptyFolderPage(EmptyFolderPage(subfolders: viewerSubfolders, recents: [], includeSubfoldersAvailable: true))

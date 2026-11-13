@@ -19,7 +19,7 @@ private func issue344NondefaultPreferences(loop: Bool) -> DisplayPreferences {
     try body(defaults)
 }
 
-@Test @MainActor func issue344LegacyLoopPreferencePreservesOtherValues() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344LegacyLoopPreferencePreservesOtherValues() throws {
     #expect(!DisplayPreferences().loopThroughImages)
     let fields: [String: Any] = ["alwaysShowTools": true, "filmstripExpanded": true, "appearance": "dark",
         "gridSidebarWidth": 284, "gridSidebarVisible": false, "folderSort": "size", "folderSortDirection": "descending"]
@@ -36,7 +36,7 @@ private func issue344NondefaultPreferences(loop: Bool) -> DisplayPreferences {
     }
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue344LoopPreferenceRoundTripAndPrefilledSession(loop: Bool) throws {
     let expected = issue344NondefaultPreferences(loop: loop)
     let data = try JSONEncoder().encode(expected)
@@ -48,7 +48,7 @@ func issue344LoopPreferenceRoundTripAndPrefilledSession(loop: Bool) throws {
     #expect(session.displayPreferences == expected)
 }
 
-@Test @MainActor func issue344LoopPreferenceRealDefaultsRelaunch() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue344LoopPreferenceRealDefaultsRelaunch() throws {
     try issue344WithDefaults { defaults in
         let store = UserDefaultsDisplayPreferencesStore(defaults: defaults)
         #expect(!store.value.loopThroughImages)
@@ -65,7 +65,7 @@ func issue344LoopPreferenceRoundTripAndPrefilledSession(loop: Bool) throws {
     }
 }
 
-@Test(arguments: [0, 99]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [0, 99]) @MainActor
 func issue344LoopPreferenceProtectsUnsupportedSchema(version: Int) throws {
     issue344WithDefaults { defaults in
         let data = Data("{\"schemaVersion\":\(version),\"future\":\"keep these exact bytes\"}".utf8)

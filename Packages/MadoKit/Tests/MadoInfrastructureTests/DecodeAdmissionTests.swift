@@ -24,7 +24,7 @@ func decodeKey(_ number: Int) -> RenderKey {
 }
 let tinyRequest = ImageDecodeRequest(fileURL: URL(fileURLWithPath: "/unused"), maximumPixelSize: 1)
 
-@Test func admissionReservesCurrentSlotAndAllPermitsAtomically() async throws {
+@Test(.timeLimit(.minutes(2))) func admissionReservesCurrentSlotAndAllPermitsAtomically() async throws {
     let executor = ControlledExecutor()
     let admission = DecodeAdmission(configuration: DecodeConfiguration(budget: 30), executor: executor, decoder: TinyDecoder())
     let a = await admission.subscribe(tinyRequest, key: decodeKey(1), cost: 10, heavy: true, priority: .visible)

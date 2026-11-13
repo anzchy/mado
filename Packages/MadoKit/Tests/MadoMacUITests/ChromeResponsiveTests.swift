@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeFloatingGroupsFollowPanelMetricsInBothAppearances() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeFloatingGroupsFollowPanelMetricsInBothAppearances() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 1280, height: 800),
         styleMask: .borderless, backing: .buffered, defer: false)
@@ -48,7 +48,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func chromeNavigationMeasuresRealContentAndTruncatesAtCap() {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeNavigationMeasuresRealContentAndTruncatesAtCap() {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: NSRect(x: 0, y: 0, width: 1280, height: 800),
         session: ViewerSession(host: ChromeToolsHost()))
@@ -66,7 +66,7 @@ import MadoApplication
     #expect(overlay.groups[1].frame.midX == overlay.bounds.midX)
 }
 
-@Test @MainActor func chromeResponsiveResizeKeepsEveryControlHitDistinct() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeResponsiveResizeKeepsEveryControlHitDistinct() throws {
     _ = NSApplication.shared
     let effects = ChromeToolsHost()
     let session = ViewerSession(host: effects)

@@ -19,7 +19,7 @@ private func page26CatalogValue(_ key: String, _ language: String) throws -> Str
 
 /// #354 rows2/3: production catalog, not a hand-authored layout-only copy.
 /// permission-denied.html case-missing: max-width460, text-wrap:balance, 13px/1.7.
-@Test @MainActor func i354CatalogTitlesAndMissingDetailMatchPinnedDesign() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354CatalogTitlesAndMissingDetailMatchPinnedDesign() throws {
     for (key, chinese) in [("Can’t Find “%@”", "找不到“%@”"), ("Unable to Access “%@”", "无法访问“%@”")] {
         #expect(try page26CatalogValue(key, "en") == key)
         let translated = try page26CatalogValue(key, "zh-Hans")
@@ -36,7 +36,7 @@ private func page26CatalogValue(_ key: String, _ language: String) throws -> Str
     #expect(try page26CatalogValue("Mado can’t find “%@”. Choose its location, or choose another folder to continue.", "en") == "It may have been deleted, put in the Trash, or be on a different disk. If it’s elsewhere, choose it at its new location to continue.")
 }
 
-@Test @MainActor func i354ProductionMissingDetailHasTwoBalancedUnclippedLines() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354ProductionMissingDetailHasTwoBalancedUnclippedLines() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false

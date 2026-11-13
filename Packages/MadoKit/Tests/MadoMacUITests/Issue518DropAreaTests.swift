@@ -6,7 +6,7 @@ import MadoApplication
 
 /// Page22 .drop-outline is positioned against recovery-scroll, independently
 /// of the inset recovery-state stack. mainContent already excludes footer40.
-@Test @MainActor func issue518StackInsetsPreserveFullDropArea() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518StackInsetsPreserveFullDropArea() throws {
     _ = NSApplication.shared
     let pageDesign = try PinnedDesign.page("empty-folder")
     let inset = try pageDesign.length(".drop-outline", "inset", viewport: 1280)
@@ -112,7 +112,7 @@ import MadoApplication
     func resetSpringLoading() { }
 }
 
-@Test @MainActor func issue518Fix3PopulatedRecentListAndPaddingRouteFolderDrops() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue518Fix3PopulatedRecentListAndPaddingRouteFolderDrops() throws {
     _ = NSApplication.shared
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),

@@ -8,7 +8,7 @@ import MadoApplication
         timestamp: 0, windowNumber: tool.window?.windowNumber ?? 0, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
 }
 
-@Test @MainActor func chromeLocksViewHoverPressAndOutsideRelease() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeLocksViewHoverPressAndOutsideRelease() throws {
     _ = NSApplication.shared
     let clock = ChromeViewClock()
     let host = ChromeToolsHost()

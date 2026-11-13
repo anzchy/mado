@@ -91,7 +91,7 @@ private let setE = URL(fileURLWithPath: "/photos/E.png")
     }
 }
 
-@Test @MainActor func inputFileSetMovesEnabledAndNeverFallsBackToFolderNavigation() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetMovesEnabledAndNeverFallsBackToFolderNavigation() async {
     for entry in [CommandEntry.key, .menu, .button] {
         let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
         await host.input([setC, setB, setA], intent: intent)
@@ -128,7 +128,7 @@ private let setE = URL(fileURLWithPath: "/photos/E.png")
     #expect(host.session.isEnabled(.escape) == false)
 }
 
-@Test @MainActor func inputFileSetEscapePrecedenceAndLifetimePreserveFrozenMembers() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetEscapePrecedenceAndLifetimePreserveFrozenMembers() async {
     let host = InputFileSetHost(), intent = AccessIntent()
     let grid = ItemID.ephemeral(UUID())
     host.session.beginBrowsing(items: [grid], sourceVersion: PreviewSourceVersion(1), scrollAnchor: grid)
@@ -161,7 +161,7 @@ private let setE = URL(fileURLWithPath: "/photos/E.png")
     await host.finish()
 }
 
-@Test @MainActor func inputFileSetRejectedUnsupportedAndRetryKeepPosition() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetRejectedUnsupportedAndRetryKeepPosition() async {
     for failure in [ImageLoadError.Kind.corruptImage, .unsupportedFormat] {
         let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
         await pipeline.fail(setB, ImageLoadError(failure))
@@ -193,7 +193,7 @@ private let setE = URL(fileURLWithPath: "/photos/E.png")
     }
 }
 
-@Test @MainActor func inputFileSetMembersDeferScopeAndPartialExclusionsDoNotNotice() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetMembersDeferScopeAndPartialExclusionsDoNotNotice() async {
     let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
     host.covered = [setA]
     let external = URL(fileURLWithPath: "/outside/B.png")
@@ -230,7 +230,7 @@ private struct FileSetSlowPipeline: ImagePipeline {
     }
     func image(for request: ImageDecodeRequest) async throws -> DecodedImage { try await pipeline.image(for: request) }
 }
-@Test @MainActor func inputFileSetNewBatchSupersedesPendingSingleProbe() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetNewBatchSupersedesPendingSingleProbe() async {
     for failure in 0...3 {
         let pipeline = InputPipeline(), gate = InputGate()
         let slow = FileSetSlowPipeline(pipeline: pipeline, gate: gate)
@@ -251,7 +251,7 @@ private struct FileSetSlowPipeline: ImagePipeline {
     }
 }
 
-@Test @MainActor func inputFileSetOwnerCommandsAtEndsDoNothing() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputFileSetOwnerCommandsAtEndsDoNothing() async {
     let host = InputFileSetHost(), intent = AccessIntent()
     await host.input([setA, setB], intent: intent)
     host.session.perform(.previous, from: .key)

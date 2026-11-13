@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func statesEmptyContentRoutesOpenAndIgnoresUnrelatedRecents() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesEmptyContentRoutesOpenAndIgnoresUnrelatedRecents() throws {
     _ = NSApplication.shared
     let host = ChromeToolsHost()
     host.hasImage = false; host.canNavigate = false

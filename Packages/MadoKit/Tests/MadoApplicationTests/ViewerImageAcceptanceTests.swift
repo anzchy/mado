@@ -19,7 +19,7 @@ private actor AcceptancePipeline: ImagePipeline {
             itemID: mode == .missingItem ? nil : (mode == .item ? .ephemeral(UUID()) : key.itemID))
     }
 }
-@MainActor @Test(arguments: AcceptanceMismatch.allCases) func loadAcceptanceRejectsWrongOrMissingIdentityAndKeepsCompleteKey(mode: AcceptanceMismatch) async {
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: AcceptanceMismatch.allCases) func loadAcceptanceRejectsWrongOrMissingIdentityAndKeepsCompleteKey(mode: AcceptanceMismatch) async {
     let trace = PreviewRecorder(), session = ViewerSession(imageLoader: ViewerImageLoader(trace: trace))
     let host = LoadHost(), pipeline = AcceptancePipeline(mode), access = LoadLeases()
     session.imageLoader.host = host
@@ -56,7 +56,7 @@ private actor LoadOpenGate {
     }
     func release() { pending?.resume(returning: source); pending = nil }
 }
-@MainActor @Test(arguments: [false, true]) func loadLateOpenerCannotInstallAfterNewOpenOrClose(close: Bool) async throws {
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [false, true]) func loadLateOpenerCannotInstallAfterNewOpenOrClose(close: Bool) async throws {
     let a = URL(fileURLWithPath: "/A"), b = URL(fileURLWithPath: "/B")
     let access = LoadLeases(), pipeline = LoadPipeline(), host = LoadHost(), session = ViewerSession()
     session.imageLoader.host = host

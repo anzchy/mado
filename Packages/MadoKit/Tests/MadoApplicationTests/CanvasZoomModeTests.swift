@@ -16,7 +16,7 @@ import MadoApplication
     func showInspector(_ visible: Bool) { effects.showInspector(visible) }
 }
 
-@Test @MainActor func canvasZoomModeRouterEffectsAndSessionIsolation() {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasZoomModeRouterEffectsAndSessionIsolation() {
     let router = CommandRouter()
     let host = CanvasZoomHost()
     let first = ViewerSession(host: host)
@@ -52,7 +52,7 @@ import MadoApplication
     #expect(first.zoomMode == .fit)
 }
 
-@Test @MainActor func canvasTwoLiveSessionsKeepIndependentZoom() {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasTwoLiveSessionsKeepIndependentZoom() {
     let firstHost = CanvasZoomHost(), secondHost = CanvasZoomHost()
     let first = ViewerSession(host: firstHost), second = ViewerSession(host: secondHost)
     let router = CommandRouter()

@@ -41,7 +41,7 @@ private struct Issue364PinnedScaleLabel: View {
     return try #require(image.dataProvider?.data) as Data
 }
 
-@Test @MainActor func issue364ScaleLabelsMatchPinnedPlainAppearanceAndFit() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue364ScaleLabelsMatchPinnedPlainAppearanceAndFit() throws {
     _ = NSApplication.shared
     let design = try PinnedDesign.page("viewer-controls")
     #expect(try design.exactDeclaration(".zoom-label", "background") == "transparent")
@@ -119,7 +119,7 @@ private struct Issue364PinnedScaleLabel: View {
 
 /// Real pointer hover needs a moving cursor (signed device smoke). This drives the installed view's
 /// `onHover` handler and checks the rendered fill, sampled inside the label.
-@Test @MainActor func issue364InstalledScaleIndicatorRendersHoverHandlerState() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue364InstalledScaleIndicatorRendersHoverHandlerState() throws {
     _ = NSApplication.shared
     for theme in DesignTheme.allCases {
         var scale = ScaleIndicator(actualPixels: false, theme: theme) {}

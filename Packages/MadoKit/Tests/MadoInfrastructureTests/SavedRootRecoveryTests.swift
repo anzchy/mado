@@ -28,7 +28,7 @@ private actor T229SavedRootMounts: DiskMountPort {
     func events() -> AsyncStream<DiskMountEvent> { AsyncStream { $0.finish() } }
 }
 
-@Test func t229RootOnlyVerificationRecoversOfflineEnrichedSavedFolderNotVolumeURL() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RootOnlyVerificationRecoversOfflineEnrichedSavedFolderNotVolumeURL() async throws {
     let f = try T229SavedRootFixture(); defer { f.remove() }
     let bookmark = try SystemSecurityScope().create(for: f.root)
     let volume = AccessProbeFactGatherer.bookmarkVolume(in: bookmark)
@@ -51,7 +51,7 @@ private actor T229SavedRootMounts: DiskMountPort {
     #expect(try Data(contentsOf: f.store.url) == bytes)
 }
 
-@Test func t229RootOnlyVerificationRetriesSavedBytesAfterFailedResolveAndRejectsWrongUUID() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RootOnlyVerificationRetriesSavedBytesAfterFailedResolveAndRejectsWrongUUID() async throws {
     let f = try T229SavedRootFixture(); defer { f.remove() }
     let id = AccessRootID(), scope = CountingScope(), codec = FakeBookmarks()
     let bookmark = try codec.create(for: f.root)
@@ -77,7 +77,7 @@ private actor T229SavedRootMounts: DiskMountPort {
     #expect(try Data(contentsOf: f.store.url) == bytes)
 }
 
-@Test func t229RootOnlyVerificationKeepsOfflineLegacyUnknownAfterMatchingMount() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RootOnlyVerificationKeepsOfflineLegacyUnknownAfterMatchingMount() async throws {
     let f = try T229SavedRootFixture(); defer { f.remove() }
     let legacy = try f.root.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
     #expect(AccessProbeFactGatherer.bookmarkIdentity(in: legacy) == nil)
@@ -94,7 +94,7 @@ private actor T229SavedRootMounts: DiskMountPort {
     #expect(scope.counts == [0, 0])
 }
 
-@MainActor @Test func t229RootRecoveryCannotCommitAcrossExplicitGrantVersionChange() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RootRecoveryCannotCommitAcrossExplicitGrantVersionChange() async throws {
     let f = try T229SavedRootFixture(); defer { f.remove() }
     let scope = CountingScope(), codec = FakeBookmarks()
     let volume = AccessProbeVolume(uuid: "111", url: f.base, name: "Photos")

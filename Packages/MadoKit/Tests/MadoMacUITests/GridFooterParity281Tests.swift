@@ -41,7 +41,7 @@ import MadoInfrastructure
     return (shell, grid, window)
 }
 
-@Test @MainActor func issue281FooterLeftStatusAndSpaceHintMatchPinnedFrames() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281FooterLeftStatusAndSpaceHintMatchPinnedFrames() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         let (shell, grid, window) = try issue281FooterScene(width: 1280, appearance: appearance)
         defer { window.close() }
@@ -77,7 +77,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281SpaceHintUsesPinnedMaxWidthBreakpoint() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281SpaceHintUsesPinnedMaxWidthBreakpoint() throws {
     for (width, visible) in [(801.0, true), (800.0, false)] {
         let (shell, _, window) = try issue281FooterScene(width: width)
         defer { window.close() }
@@ -86,7 +86,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281SearchEditorDoesNotOverlapHintOrStatusInEnglishAndChinese() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281SearchEditorDoesNotOverlapHintOrStatusInEnglishAndChinese() throws {
     for language in ["en", "zh-Hans"] {
         let (shell, _, window) = try issue281FooterScene(width: 1280)
         defer { window.close() }
@@ -113,7 +113,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281FooterStatusUsesPinnedResponsiveWidths() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281FooterStatusUsesPinnedResponsiveWidths() throws {
     let cases: [(width: CGFloat, fileWidth: CGFloat, countGap: CGFloat, countHidden: Bool)] = [
         (1280, 240, 12, false), (801, 240, 12, false), (800, 180, 7, false),
         (721, 180, 7, false), (720, 140, 7, false), (481, 140, 7, false), (480, 90, 7, true),
@@ -130,7 +130,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281FooterCountFollowsShortNameWithoutTruncation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281FooterCountFollowsShortNameWithoutTruncation() throws {
     let (shell, grid, window) = try issue281FooterScene(width: 1280)
     defer { window.close() }
     let other = try #require(grid.displayedItemIDs.first)
@@ -155,7 +155,7 @@ import MadoInfrastructure
 
 /// Device parity-281-282-10301650 FAIL-1/FAIL-5: `DSC_0341.j…`, `12 张…`, `正在读…`. An NSTextField draws its text 2pt
 /// inside its frame, so a frame only as wide as the intrinsic text truncates it. The CSS boxes are the text boxes.
-@Test @MainActor func issue281FooterLabelsFitTheirCellsAfterControllerUpdates() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281FooterLabelsFitTheirCellsAfterControllerUpdates() throws {
     let (shell, grid, window) = try issue281FooterScene(width: 1280)
     defer { window.close() }
     let file = try #require(issue281FooterView("grid.current-file-status", in: shell) as? NSTextField)
@@ -199,7 +199,7 @@ import MadoInfrastructure
 }
 
 /// Audit F1: a long search summary must not take the filename's slot, hidden (480pt) or beside the editor (800pt).
-@Test @MainActor func issue281LongSearchSummaryLeavesTheFilenameSlot() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281LongSearchSummaryLeavesTheFilenameSlot() throws {
     let term = String(repeating: "DSC_034", count: 12)
     do {
         let (shell, _, window) = try issue281FooterScene(width: 480)
@@ -233,7 +233,7 @@ import MadoInfrastructure
     }
 }
 
-@Test @MainActor func issue281FooterTextIsCentredInFortyPointFooter() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue281FooterTextIsCentredInFortyPointFooter() throws {
     let (shell, _, window) = try issue281FooterScene(width: 1280)
     defer { window.close() }
     let file = try #require(issue281FooterView("grid.current-file-status", in: shell) as? NSTextField)

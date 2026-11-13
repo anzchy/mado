@@ -25,7 +25,7 @@ private enum RecoveryPresentation: Equatable {
     }
 }
 
-@MainActor @Test func p201RecoveryBrowseRoutesCurrentURLInsteadOfRecentReference() {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201RecoveryBrowseRoutesCurrentURLInsteadOfRecentReference() {
     let id = AccessRootID(); let other = AccessRootID()
     let old = URL(fileURLWithPath: "/fixtures/old", isDirectory: true)
     let unrelated = URL(fileURLWithPath: "/fixtures/unrelated", isDirectory: true)
@@ -46,7 +46,7 @@ private enum RecoveryPresentation: Equatable {
     #expect(host.lastError == nil)
 }
 
-@MainActor @Test(arguments: [0, 1, 2, 3])
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3])
 func p201RecoveryReconnectRoutesCompleteOriginalContextAndCanBrowseAgain(variation: Int) {
     let originalID = AccessRootID(); let otherID = AccessRootID()
     let old = URL(fileURLWithPath: "/fixtures/old", isDirectory: true)
@@ -69,7 +69,7 @@ func p201RecoveryReconnectRoutesCompleteOriginalContextAndCanBrowseAgain(variati
     #expect(host.lastError == nil)
 }
 
-@MainActor @Test(arguments: [FileAccessError.startFailed, .outsideRoot])
+@MainActor @Test(.timeLimit(.minutes(2)), arguments: [FileAccessError.startFailed, .outsideRoot])
 func p201RecoveryServiceErrorRoutesActualFailureWithoutGrant(error: FileAccessError) {
     let id = AccessRootID()
     let folder = URL(fileURLWithPath: "/fixtures/old", isDirectory: true)
@@ -86,7 +86,7 @@ func p201RecoveryServiceErrorRoutesActualFailureWithoutGrant(error: FileAccessEr
 
 private struct RecoveryProbeError: Error, Equatable { let code: Int }
 
-@MainActor @Test func p201Fix1RecoveryOnlyMatchingRootFailureReconnects() {
+@MainActor @Test(.timeLimit(.minutes(2))) func p201Fix1RecoveryOnlyMatchingRootFailureReconnects() {
     let id = AccessRootID(); let other = AccessRootID()
     let folder = URL(fileURLWithPath: "/fixtures/holiday", isDirectory: true)
     let recent = RecentFolder(rootID: id, url: folder, displayName: "Holiday")

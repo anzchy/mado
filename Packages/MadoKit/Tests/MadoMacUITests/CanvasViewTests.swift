@@ -72,7 +72,7 @@ import MadoApplication
         clickCount: 1, pressure: 1))
 }
 
-@Test @MainActor func canvasViewFitDragResizeAndWindowGuard() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewFitDragResizeAndWindowGuard() throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
     let retryGeneration = UUID()
@@ -118,7 +118,7 @@ import MadoApplication
     #expect(canvas.session.zoomMode == .fit)
 }
 
-@Test @MainActor func canvasViewThemesMessagesFocusAndPublicInput() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewThemesMessagesFocusAndPublicInput() throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
     #expect(CanvasView(coder: NSCoder()) == nil)
@@ -202,7 +202,7 @@ import MadoApplication
     override var mouseLocationOutsideOfEventStream: NSPoint { pointer }
 }
 
-@Test @MainActor func canvasViewZoomCommandsUsePointerAndDetachedViewport() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewZoomCommandsUsePointerAndDetachedViewport() throws {
     _ = NSApplication.shared
     let session = ViewerSession()
     let canvas = CanvasView(frame: .init(x: 0, y: 0, width: 432, height: 232), session: session)
@@ -245,7 +245,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func canvasViewClipsEnlargedImageToItsFrame() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewClipsEnlargedImageToItsFrame() throws {
     _ = NSApplication.shared
     let parent = CanvasTestSurround(frame: .init(x: 0, y: 0, width: 140, height: 140))
     let canvas = CanvasView(frame: .init(x: 20, y: 20, width: 100, height: 100), session: ViewerSession())
@@ -263,7 +263,7 @@ import MadoApplication
     #expect(inside.redComponent > 0.9 && inside.greenComponent < 0.1)
 }
 
-@Test @MainActor func canvasViewOpeningGenerationRetriesAndSourceDetail() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewOpeningGenerationRetriesAndSourceDetail() throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
     // One path, two explicit opens. Revision retries reuse the explicit open's generation.
@@ -310,7 +310,7 @@ import MadoApplication
     #expect(requested == [4000])
 }
 
-@Test @MainActor func canvasViewFitsDecodedDisplayedPortrait() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func canvasViewFitsDecodedDisplayedPortrait() throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
     // EXIF 5–8 swap the stored 800×400 size. The pipeline supplies displayed 400×800.
@@ -321,7 +321,7 @@ import MadoApplication
 }
 
 /// #348: each ⌘ zoom key leaves the canvas exactly where its bare key does, pointer inside or outside.
-@Test @MainActor func cmdZoomKeysMatchBareKeys() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func cmdZoomKeysMatchBareKeys() throws {
     _ = NSApplication.shared
     var hosts: [CanvasTestHost] = [] // ViewerSession.host is weak.
     func stack() throws -> (CanvasView, ViewerSession, CanvasPointerWindow) {
@@ -411,7 +411,7 @@ import MadoApplication
     return (content, tool)
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue527CanvasRejectsForwardedPressWithoutFocusOrPan(staleDrag: Bool) throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
@@ -459,7 +459,7 @@ func issue527CanvasRejectsForwardedPressWithoutFocusOrPan(staleDrag: Bool) throw
     #expect(canvas.session.inspectorFocus.focus == .tools)
 }
 
-@Test @MainActor func issue527CanvasDirectHitStillFocusesAndPans() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue527CanvasDirectHitStillFocusesAndPans() throws {
     let (canvas, window, host) = canvasHost()
     defer { window.close(); withExtendedLifetime(host) {} }
     let (content, tool) = try issue527CanvasSurround(canvas, window)

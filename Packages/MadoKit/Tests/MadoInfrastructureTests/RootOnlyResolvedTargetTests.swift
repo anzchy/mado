@@ -10,7 +10,7 @@ private actor T229ResolvedTargetMounts: DiskMountPort {
     func events() -> AsyncStream<DiskMountEvent> { AsyncStream { $0.finish() } }
 }
 
-@Test func t229RootOnlyResolvedTargetNeverRebasesAlreadyResolvedRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229RootOnlyResolvedTargetNeverRebasesAlreadyResolvedRoot() async throws {
     let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: base) }
     let oldRoot = base.appendingPathComponent("old-mount/chosen", isDirectory: true)

@@ -22,7 +22,7 @@ import Testing
     scene.state.layoutSubtreeIfNeeded()
 }
 
-@Test @MainActor func issue92EmptyActionsInlineAtWideEnglishAndChineseSizes() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92EmptyActionsInlineAtWideEnglishAndChineseSizes() throws {
     let scene = StatesScene(width: 1280)
     defer { scene.window.close() }
     for size in [NSSize(width: 1280, height: 800), NSSize(width: 800, height: 600)] {
@@ -42,7 +42,7 @@ import Testing
     }
 }
 
-@Test @MainActor func issue92EmptyActionsRemainContainedAtCompactSize() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue92EmptyActionsRemainContainedAtCompactSize() throws {
     let scene = StatesScene(width: 360)
     defer { scene.window.close() }
     scene.state.display(.empty)

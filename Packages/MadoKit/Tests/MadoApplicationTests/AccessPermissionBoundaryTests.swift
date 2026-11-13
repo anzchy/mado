@@ -49,7 +49,7 @@ private actor T229PermissionPipeline: ThumbnailCacheProviding {
     func imageFresh(for request: ImageDecodeRequest) -> DecodedImage { image(for: request) }
 }
 
-@Test(arguments: ["prepare", "load", "store"]) func t229CachePermissionFailureCannotBecomeFallbackPixels(phase: String) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: ["prepare", "load", "store"]) func t229CachePermissionFailureCannotBecomeFallbackPixels(phase: String) async throws {
     let access = AccessProbe(), pipeline = T229PermissionPipeline(phase: phase)
     let source = try await AccessImageSource.open(.fileGrant(URL(fileURLWithPath: "/tmp/t229-permission.png")),
         access: access, pipeline: pipeline)
@@ -67,7 +67,7 @@ private actor T229PermissionPipeline: ThumbnailCacheProviding {
     #expect(!AccessReadFailure.isPermissionDenied(CancellationError()))
 }
 
-@MainActor @Test func t229SourceTagsBothDecodeAndDurableHitWithCapturedPermit() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229SourceTagsBothDecodeAndDurableHitWithCapturedPermit() async throws {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "a")
     let permit = try #require(state.permit(for: id))

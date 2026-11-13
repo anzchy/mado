@@ -3,7 +3,7 @@ import AppKit
 import Testing
 @testable import MadoMacUI
 
-@MainActor @Test func designCompositionsRenderAndRespectInputPolicy() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func designCompositionsRenderAndRespectInputPolicy() throws {
     for theme in DesignTheme.allCases {
         for input in [ComponentInput.forced, .live] {
             for state: ComponentState in [[], .hover, .pressed, .selected, .keyboardFocused, .disabled, [.selected, .keyboardFocused]] {

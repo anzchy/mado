@@ -66,7 +66,7 @@ private func diskPortVolume(_ uuid: String?, path: String, name: String = "Photo
     AccessProbeVolume(uuid: uuid, url: URL(fileURLWithPath: path, isDirectory: true), name: name)
 }
 
-@MainActor @Test func t229DiskPortDefaultProviderIncludesTheRealTemporaryDirectoryVolume() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229DiskPortDefaultProviderIncludesTheRealTemporaryDirectoryVolume() async throws {
     let center = NotificationCenter()
     let port = SystemDiskMountPort(center: center)
     defer { port.stop() }

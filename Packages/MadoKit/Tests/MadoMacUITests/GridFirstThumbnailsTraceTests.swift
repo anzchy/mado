@@ -300,7 +300,7 @@ private actor HeldTraceLoads {
         .end(1, .complete, visible: visible.count, shown: visible.count, failed: 0)], "\(fixture.trace.events)")
 }
 
-@Test @MainActor func p308FirstThumbnailsDefaultsToTheSignpostTrace() {
+@Test(.timeLimit(.minutes(2))) @MainActor func p308FirstThumbnailsDefaultsToTheSignpostTrace() {
     _ = NSApplication.shared
     let grid = GridBrowserView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
     #expect(grid.thumbnailTrace is SignpostGridThumbnailTrace)
@@ -312,7 +312,7 @@ private actor HeldTraceLoads {
 }
 
 /// The exact strings the parser reads, from the one table both sides use.
-@Test func p308FirstThumbnailsMessagesMatchTheSharedTable() throws {
+@Test(.timeLimit(.minutes(2))) func p308FirstThumbnailsMessagesMatchTheSharedTable() throws {
     let table = try p308SignpostMessages()
     #expect(GridFirstThumbnailsMessage.begin(generation: 7, items: 5000) == table["GridFirstThumbnails.begin"])
     #expect(GridFirstThumbnailsMessage.end(generation: 7, outcome: .complete, visible: 24, shown: 23, failed: 1)

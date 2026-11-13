@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 import MadoInfrastructure
 
-@MainActor @Test func issue215HelpMenuMovesDiagnosticsAndReportsBugTemplate() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue215HelpMenuMovesDiagnosticsAndReportsBugTemplate() throws {
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu
     var openedURLs: [URL] = []

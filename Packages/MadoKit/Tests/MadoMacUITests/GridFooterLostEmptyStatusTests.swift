@@ -78,7 +78,7 @@ private let lostEmptyNow = Date(timeIntervalSince1970: 0)
 
 private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
 
-@Test(arguments: lostEmptyCauses, lostEmptySizes)
+@Test(.timeLimit(.minutes(2)), arguments: lostEmptyCauses, lostEmptySizes)
 @MainActor func lostAccessFooterShowsDashAndUnavailable(cause: AccessLossCause, size: (Int, Int)) throws {
     let (window, shell) = lostEmptyShell(width: CGFloat(size.0), height: CGFloat(size.1))
     defer { window.close() }
@@ -94,7 +94,7 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
     #expect(shell.searchButton.isEnabled == searchBefore && shell.sortButton.isEnabled == sortBefore)
 }
 
-@Test(arguments: [AccessLossCause.notFound, .accessExpired])
+@Test(.timeLimit(.minutes(2)), arguments: [AccessLossCause.notFound, .accessExpired])
 @MainActor func lostAccessIgnoresStaleFileAndCount(cause: AccessLossCause) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -127,7 +127,7 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
 }
 
 /// GridViewerPresentation forwards the grid's current file as `name ?? ""`: an empty grid on page 22 or 26 sends "".
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func lostAndEmptyIgnoreLateEmptyFileName(lost: Bool) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -142,7 +142,7 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
 }
 
 /// CanvasWindowController.restoreEmptyFolderEntry hides the tree with `showFolder(nil)` and never clears it.
-@Test @MainActor func showFolderLeavesLostAccessFooter() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func showFolderLeavesLostAccessFooter() throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
     shell.setCurrentFile("kept.png")
@@ -157,7 +157,7 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
     lostEmptySlot(footer.count, "4 images", "after count")
 }
 
-@Test(arguments: ["", "img1.png", String(repeating: "长文件名", count: 30) + ".png"], lostEmptySizes)
+@Test(.timeLimit(.minutes(2)), arguments: ["", "img1.png", String(repeating: "长文件名", count: 30) + ".png"], lostEmptySizes)
 @MainActor func emptyFolderFooterShowsDashAndZeroImages(stored: String, size: (Int, Int)) throws {
     let (window, shell) = lostEmptyShell(width: CGFloat(size.0), height: CGFloat(size.1))
     defer { window.close() }
@@ -180,7 +180,7 @@ private let lostEmptySizes: [(Int, Int)] = [(1280, 772), (800, 680)]
 
 enum LostElsewhere: CaseIterable, Sendable { case none, lostParent, lostChild }
 
-@Test(arguments: LostElsewhere.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: LostElsewhere.allCases)
 @MainActor func nonEmptyFolderFooterUnchanged(elsewhere: LostElsewhere) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -206,7 +206,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
     if page != .empty { lostEmptyLose(shell, .diskNotConnected) }
 }
 
-@Test(arguments: LostEmptyPage.allCases, LostEmptyRead.allCases)
+@Test(.timeLimit(.minutes(2)), arguments: LostEmptyPage.allCases, LostEmptyRead.allCases)
 @MainActor func readStatusTakesPrecedenceOverLostAndEmpty(page: LostEmptyPage, read: LostEmptyRead) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -222,7 +222,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
     lostEmptySlot(footer.count, page == .empty ? "0 images" : "Unavailable", "\(page) after \(read) count")
 }
 
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func lostBeatsEmptyFolder(lostFirst: Bool) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -233,7 +233,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
     try lostEmptyExpectLost(shell, "empty ended")
 }
 
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func treeClearLeavesLostAccessFooter(throughSearchTerm: Bool) throws {
     let (window, shell) = lostEmptyShell()
     defer { window.close() }
@@ -250,7 +250,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
     lostEmptySlot(footer.count, "4 images", "after count")
 }
 
-@Test(arguments: [true, false], [480, 481])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false], [480, 481])
 @MainActor func narrowFooterKeepsDashHidesCount(lost: Bool, width: Int) throws {
     let (window, shell) = lostEmptyShell(width: CGFloat(width), height: 680)
     defer { window.close() }
@@ -264,7 +264,7 @@ enum LostEmptyRead: CaseIterable, Sendable { case reading, failed }
 }
 
 /// A live page 22 or 26 resized across the 480 pt footer: the count hides at 480 and returns at 481.
-@Test(arguments: [true, false])
+@Test(.timeLimit(.minutes(2)), arguments: [true, false])
 @MainActor func resizeAcross480KeepsPageFooter(lost: Bool) throws {
     let (window, shell) = lostEmptyShell(width: 481, height: 680)
     defer { window.close() }
@@ -369,7 +369,7 @@ private struct LostEmptySplitMix64 {
 /// below. A 1280×772 window per sequence for 128 sequences held the main actor long enough that, on the slower CI
 /// runner, other main-actor tests passed their 120 s time limits. Each sequence starts from an explicit reset, checked against a fresh model, so a reused shell is
 /// only a longer sequence of the same ops; it still yields the main actor between sequences.
-@Test @MainActor func footerStatusTransitionsRestoreStoredFooter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func footerStatusTransitionsRestoreStoredFooter() async throws {
     var random = LostEmptySplitMix64(state: 332)
     var recoveries: [String: Int] = [:], seen: Set<String> = []
     let (window, shell) = lostEmptyShell()

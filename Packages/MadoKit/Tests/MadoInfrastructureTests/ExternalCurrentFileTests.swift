@@ -5,7 +5,7 @@ import MadoCore
 @testable import MadoApplication
 @testable import MadoInfrastructure
 
-@Test @MainActor func issue140RenameKeepsCurrentIdentityAndReplacementChangesRevision() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140RenameKeepsCurrentIdentityAndReplacementChangesRevision() async throws {
     let f = try WatchFixture(folders: ["root/F"]); defer { f.remove() }
     let root = f.url("root"), folder = f.url("root/F")
     let old = f.url("root/F/a.png"), renamed = f.url("root/F/z.png")
@@ -56,7 +56,7 @@ private func issue140PNG(red: UInt8) throws -> Data {
     return try #require(bitmap.representation(using: .png, properties: [:]))
 }
 
-@Test @MainActor func issue140MovedRootFollowsBookmarkAndDeletedCurrentChoosesNeighbor() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140MovedRootFollowsBookmarkAndDeletedCurrentChoosesNeighbor() async throws {
     let f = try WatchFixture(folders: ["root"]); defer { f.remove() }
     let root = f.url("root"), moved = f.url("moved")
     for name in ["a.png", "b.png", "c.png"] {
@@ -106,7 +106,7 @@ private func issue140PNG(red: UInt8) throws -> Data {
     coordinator.end()
 }
 
-@Test @MainActor func issue140MovedRootRebasesNestedFolderWithoutEnumeratingParent() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140MovedRootRebasesNestedFolderWithoutEnumeratingParent() async throws {
     let f = try WatchFixture(folders: ["root/sub"]); defer { f.remove() }
     let root = f.url("root"), moved = f.url("moved")
     try Data().write(to: root.appendingPathComponent("sub/a.png"))

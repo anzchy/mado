@@ -99,7 +99,7 @@ private actor FailingSidebarEnumerator: SidebarFolderEnumerating {
     }
 }
 
-@Test @MainActor func sidebarFailuresLeaveUnknownCountsBlankAndKeepOtherRows() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarFailuresLeaveUnknownCountsBlankAndKeepOtherRows() async throws {
     let root = URL(fileURLWithPath: "/tmp/sidebar-failure")
     let child = root.appendingPathComponent("Child")
     for mode in [FailingSidebarEnumerator.Mode.listingCancelled, .listingFailed,
@@ -145,7 +145,7 @@ private actor FixedSidebarEnumerator: SidebarFolderEnumerating {
     }
 }
 
-@Test @MainActor func sidebarParentCurrentAndChildAllUseDirectCounter() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func sidebarParentCurrentAndChildAllUseDirectCounter() async throws {
     let root = URL(fileURLWithPath: "/tmp/Root")
     let current = root.appendingPathComponent("Current")
     let child = current.appendingPathComponent("Child")

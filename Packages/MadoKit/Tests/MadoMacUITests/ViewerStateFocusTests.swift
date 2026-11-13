@@ -133,7 +133,7 @@ private actor StateFocusGate {
 }
 
 // Reverse canvas→Inspector uses the separately approved minimal Session.tab branch.
-@Test(arguments: [0, 1, 2, 3], [false, true]) @MainActor func statesFocusTraversesEveryStateInBothDirections(_ mode: Int, _ inspectorVisible: Bool) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3], [false, true]) @MainActor func statesFocusTraversesEveryStateInBothDirections(_ mode: Int, _ inspectorVisible: Bool) async throws {
     let scene = StateFocusScene()
     defer { scene.close() }
     await scene.prepare(mode)
@@ -159,7 +159,7 @@ private actor StateFocusGate {
     #expect(scene.window.prematureCanvasRequests == 0)
 }
 
-@Test(arguments: [0, 1, 2, 3]) @MainActor func statesFocusRecallsThenEscapesOneLevelAndRepairsReplacement(_ mode: Int) async throws {
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3]) @MainActor func statesFocusRecallsThenEscapesOneLevelAndRepairsReplacement(_ mode: Int) async throws {
     let scene = StateFocusScene()
     defer { scene.close() }
     await scene.prepare(mode)
@@ -205,7 +205,7 @@ private actor StateFocusGate {
     #expect(scene.session.imageLoader.generation == generation)
 }
 
-@Test @MainActor func statesFocusKeyboardActivationIgnoresUnknownDisabledAndHiddenInputs() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesFocusKeyboardActivationIgnoresUnknownDisabledAndHiddenInputs() async throws {
     let scene = StateFocusScene()
     defer { scene.close() }
     await scene.prepare(0)
@@ -262,7 +262,7 @@ private actor StateFocusGate {
     #expect(!ViewerStateFocus.move(reverse: false, entering: true, state: detached, chrome: failure.chrome))
 }
 
-@Test @MainActor func statesFocusMaskDrawsOpaqueCenterAndRoundedTransparentCorner() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesFocusMaskDrawsOpaqueCenterAndRoundedTransparentCorner() async throws {
     let scene = StateFocusScene()
     defer { scene.close() }
     await scene.prepare(0)

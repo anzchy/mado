@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func p204R4RetryAfterNavigationKeepsCurrentImageAndSnapshotOrder() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R4RetryAfterNavigationKeepsCurrentImageAndSnapshotOrder() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let coordinator = fixture.coordinator, session = ViewerSession(host: host)
     session.folderScan = coordinator; coordinator.host = host
@@ -32,7 +32,7 @@ import MadoCore
     #expect(await fixture.access.balance == [2, 2])
 }
 
-@Test @MainActor func p204R4GridProjectionKeepsCompleteGridUntilNewerCompleteSnapshot() {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R4GridProjectionKeepsCompleteGridUntilNewerCompleteSnapshot() {
     let rootID = AccessRootID(rawValue: UUID())
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-rescan")
     let root = ItemIdentityRoot(id: rootID, url: folder)
@@ -62,7 +62,7 @@ import MadoCore
     #expect(grid.selectedItemID == b.itemID)
 }
 
-@Test @MainActor func p204R4GridRecursiveToggleReadsCancelsAndFails() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R4GridRecursiveToggleReadsCancelsAndFails() async throws {
     let fixture = FolderScanFixture(), host = FolderNavigationHost()
     let coordinator = fixture.coordinator, session = ViewerSession(host: host)
     session.folderScan = coordinator; coordinator.host = host
@@ -99,7 +99,7 @@ import MadoCore
     #expect(coordinator.recursiveEnabled && session.imageStatus != .readingFolder)
 }
 
-@Test @MainActor func p204R4GridToggleWithoutScanLeavesNoRestorePoint() {
+@Test(.timeLimit(.minutes(2))) @MainActor func p204R4GridToggleWithoutScanLeavesNoRestorePoint() {
     let fixture = FolderScanFixture(), session = ViewerSession(host: FolderNavigationHost())
     session.folderScan = fixture.coordinator
     session.enterFolderGrid(items: [], sourceVersion: .init(0))

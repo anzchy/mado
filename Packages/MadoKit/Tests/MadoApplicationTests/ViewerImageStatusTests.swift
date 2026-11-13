@@ -43,7 +43,7 @@ private let statusExamples: [StatusExample] = [
     #expect(ViewerImageStatus(phase: example.phase, fileName: example.name, failure: example.failure) == example.expected)
 }
 
-@Test @MainActor func statesStatusNeverPresentsPreviousImage() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func statesStatusNeverPresentsPreviousImage() async {
     let session = ViewerSession(), pipeline = LoadPipeline(), access = LoadLeases(), host = LoadHost()
     session.imageLoader.host = host
     #expect(session.imageStatus == .empty)

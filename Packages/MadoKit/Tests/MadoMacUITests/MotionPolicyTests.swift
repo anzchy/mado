@@ -61,7 +61,7 @@ private struct MotionComponentProbe: View {
     view.displayIfNeeded()
 }
 
-@Test @MainActor func motionPolicyInitialAndLiveFlagTransitions() {
+@Test(.timeLimit(.minutes(2))) @MainActor func motionPolicyInitialAndLiveFlagTransitions() {
     for initial in [false, true] {
         let source = MotionSource(initial)
         let policy = MotionPolicy(source: source)
@@ -73,7 +73,7 @@ private struct MotionComponentProbe: View {
     }
 }
 
-@Test @MainActor func motionPolicyWeakLifetimeAndLateSourceNotification() {
+@Test(.timeLimit(.minutes(2))) @MainActor func motionPolicyWeakLifetimeAndLateSourceNotification() {
     var source: MotionSource? = MotionSource(true)
     var policy: MotionPolicy? = MotionPolicy(source: source!)
     weak var weakPolicy = policy
@@ -86,7 +86,7 @@ private struct MotionComponentProbe: View {
     #expect(weakSource == nil)
 }
 
-@Test @MainActor func motionPolicyHostedEnvironmentAndLiveState() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func motionPolicyHostedEnvironmentAndLiveState() throws {
     for initial in [false, true] {
         let source = MotionSource(initial)
         let policy = MotionPolicy(source: source)
@@ -108,7 +108,7 @@ private struct MotionComponentProbe: View {
     }
 }
 
-@Test @MainActor func motionPolicyNilWrapperPreservesInheritedEnvironment() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func motionPolicyNilWrapperPreservesInheritedEnvironment() throws {
     for inherited in [false, true] {
         let host = NSHostingView(rootView: MotionPolicyContent(policy: nil) { MotionComponentProbe() }
             .environment(\.designReduceMotion, inherited))
@@ -133,7 +133,7 @@ private struct MotionComponentProbe: View {
     func focusChromeTool(reverse: Bool, entering: Bool) -> Bool { false }
 }
 
-@Test @MainActor func motionPolicyChromeKeepsPolicyOnRefreshAndTogglesSynchronously() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func motionPolicyChromeKeepsPolicyOnRefreshAndTogglesSynchronously() throws {
     let source = MotionSource(true)
     let policy = MotionPolicy(source: source)
     let clock = MotionClock()

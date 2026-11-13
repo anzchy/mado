@@ -35,7 +35,7 @@ private actor GridThumbnailPipeline: ImagePipeline {
     }
 }
 
-@Test func gridThumbnailPriorityTravelsThroughAuthorizedLeaseAndCloses() async throws {
+@Test(.timeLimit(.minutes(2))) func gridThumbnailPriorityTravelsThroughAuthorizedLeaseAndCloses() async throws {
     let root = ItemIdentityRoot(id: AccessRootID(), url: URL(fileURLWithPath: "/tmp/grid-priority"))
     let access = GridThumbnailAccess(root: root)
     let source = try await AccessImageSource.open(.root(root.id, file: root.url.appendingPathComponent("a.png")),

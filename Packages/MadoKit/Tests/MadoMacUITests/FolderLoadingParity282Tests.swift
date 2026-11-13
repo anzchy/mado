@@ -42,7 +42,7 @@ private func issue282PathEndpoints(_ path: CGPath) -> (start: CGPoint, end: CGPo
     return (start, end)
 }
 
-@Test @MainActor func issue282ReadingContentMatchesPinnedFramesAndCancelStyle() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282ReadingContentMatchesPinnedFramesAndCancelStyle() throws {
     for (appearanceName, designAppearance) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
         let design = try PinnedDesign.page("folder-loading", appearance: designAppearance)
         let scene = StatesScene(width: 1084)
@@ -100,7 +100,7 @@ private func issue282PathEndpoints(_ path: CGPath) -> (start: CGPoint, end: CGPo
 /// ring's centre after the late frame changes (host moved onto the main frame, window resized, sidebar toggled).
 /// Reduce Motion is pinned per case; the machine's setting must not decide the result (the PR #304 CI
 /// runner reported no spin, the path taken only when Reduce Motion reads as on).
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue282ReadingRingSpinsAroundTheHeadingCentreAfterLateFrames(reduceMotion: Bool) throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
@@ -155,11 +155,11 @@ func issue282ReadingRingSpinsAroundTheHeadingCentreAfterLateFrames(reduceMotion:
     try expectCentred("sidebar shown and resized")
 }
 
-@Test @MainActor func issue282ReadingProgressViewIsNotDecodable() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282ReadingProgressViewIsNotDecodable() {
     #expect(ReadingProgressView(coder: NSCoder()) == nil)
 }
 
-@Test @MainActor func issue282ReadingRingUsesAccentSegmentAndStopsForReduceMotion() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282ReadingRingUsesAccentSegmentAndStopsForReduceMotion() throws {
     for (page, appearanceName) in [("folder-loading", NSAppearance.Name.aqua), ("folder-loading", .darkAqua)] {
         let design = try PinnedDesign.page(page, appearance: appearanceName == .aqua ? "light" : "dark")
         let view = ReadingProgressView(frame: NSRect(x: 0, y: 0, width: 28, height: 28))
@@ -207,7 +207,7 @@ func issue282ReadingRingSpinsAroundTheHeadingCentreAfterLateFrames(reduceMotion:
     }
 }
 
-@Test @MainActor func issue282ReadingRingUpdatesRotationWhenReduceMotionChanges() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue282ReadingRingUpdatesRotationWhenReduceMotionChanges() {
     let view = ReadingProgressView(frame: NSRect(x: 0, y: 0, width: 28, height: 28))
     #expect(view.notificationCenter === NSWorkspace.shared.notificationCenter)
     var reduceMotion = false

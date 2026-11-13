@@ -75,7 +75,7 @@ struct ReconnectFixture {
     func remove() { try? FileManager.default.removeItem(at: base) }
 }
 
-@Test func p201ReconnectFailedRootKeepsIdentityAndSurvivesRelaunch() async throws {
+@Test(.timeLimit(.minutes(2))) func p201ReconnectFailedRootKeepsIdentityAndSurvivesRelaunch() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let codec = ReconnectBookmarks(); let scope = ReconnectScope()
     let first = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "A")
@@ -105,7 +105,7 @@ struct ReconnectFixture {
     #expect(scope.balanced)
 }
 
-@Test func p201ReconnectMissingRecordUsesSuppliedID() async throws {
+@Test(.timeLimit(.minutes(2))) func p201ReconnectMissingRecordUsesSuppliedID() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks(); let id = AccessRootID()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: f.store, buildSHA: "current")
@@ -121,7 +121,7 @@ struct ReconnectFixture {
     #expect(scope.balanced)
 }
 
-@Test(arguments: [false, true], ["start", "directory", "bookmark", "save"])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true], ["start", "directory", "bookmark", "save"])
 func p201ReconnectFailuresPreserveLiveAndFailedState(failed: Bool, kind: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -171,7 +171,7 @@ private final class ReconnectPhaseWitness: @unchecked Sendable {
     var createsScoped = true
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201ReconnectScopePrecedesDirectoryBookmarkAndPersistence(denied: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -205,7 +205,7 @@ func p201ReconnectScopePrecedesDirectoryBookmarkAndPersistence(denied: Bool) asy
     #expect(scope.balanced)
 }
 
-@Test(arguments: ["direct", "slash", "alias", "nested", "prefix"])
+@Test(.timeLimit(.minutes(2)), arguments: ["direct", "slash", "alias", "nested", "prefix"])
 func p201ReconnectRejectsOnlyExactOtherRoot(kind: String) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()
@@ -243,7 +243,7 @@ func p201ReconnectRejectsOnlyExactOtherRoot(kind: String) async throws {
     #expect(scope.balanced)
 }
 
-@Test(arguments: [false, true])
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func p201ReconnectMatchesPostScopeSymlinkIdentity(collision: Bool) async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     let scope = ReconnectScope(); let codec = ReconnectBookmarks()

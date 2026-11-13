@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 
-@Test func issue606StateFormatterRedactsPathsAndPreservesWindowFields() {
+@Test(.timeLimit(.minutes(3))) func issue606StateFormatterRedactsPathsAndPreservesWindowFields() {
     let windows = [ConditionWaitWindowState(className: "NSWindow", title: "/Users/alice/Private Photos/photo.jpg",
         isVisible: true, level: 3, attachedSheet: "_NSAlertPanel /tmp/secret/Grant",
         alertText: ["Access /Users/alice/Private Photos/photo.jpg", "Open “file:///home/bob/private/Folder”"])]
@@ -18,7 +18,7 @@ import Testing
     #expect(formatted.split(separator: "\n").count == 2)
 }
 
-@Test func issue606StateRedactionIsIdempotentAndKeepsSafeText() {
+@Test(.timeLimit(.minutes(3))) func issue606StateRedactionIsIdempotentAndKeepsSafeText() {
     for text in ["Browsing Needs Folder Access", "/tmp/private/photo.jpg", "~/Photos/photo.jpg",
                  "file:///Users/alice/Private%20Photos/photo.jpg", "Open “/home/bob/Private Photos/Folder”",
                  "/Users/alice", "first\nsecond\tthird"] {
@@ -36,7 +36,7 @@ import Testing
 }
 
 // Catch expected helper failures: this tests the integration without leaving a failing test on main.
-@Test @MainActor func issue606WaitFailuresIncludeAppKitState() async throws {
+@Test(.timeLimit(.minutes(3))) @MainActor func issue606WaitFailuresIncludeAppKitState() async throws {
     _ = NSApplication.shared
     do {
         try await Task.detached {

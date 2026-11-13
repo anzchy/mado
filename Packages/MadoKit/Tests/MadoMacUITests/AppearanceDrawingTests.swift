@@ -15,7 +15,7 @@ import MadoApplication
 }
 
 @Suite(.serialized) @MainActor struct AppearanceDrawingTests {
-    @Test func appearanceDrawingLifecycleInvalidatesCanvas() {
+    @Test(.timeLimit(.minutes(2))) func appearanceDrawingLifecycleInvalidatesCanvas() {
         _ = NSApplication.shared
         let canvas = CanvasView(frame: .init(x: 0, y: 0, width: 320, height: 240), session: ViewerSession())
         let window = NSWindow(contentRect: .init(x: -20000, y: -20000, width: 320, height: 240),
@@ -29,7 +29,7 @@ import MadoApplication
         #expect(canvas.needsDisplay)
     }
 
-    @Test func appearanceDrawingSystemManualCrossProductAtLifecycle() throws {
+    @Test(.timeLimit(.minutes(2))) func appearanceDrawingSystemManualCrossProductAtLifecycle() throws {
         let application = NSApplication.shared
         let original = application.appearance
         defer { application.appearance = original }

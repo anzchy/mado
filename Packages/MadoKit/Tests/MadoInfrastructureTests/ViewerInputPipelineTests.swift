@@ -4,7 +4,7 @@ import MadoCore
 import MadoApplication
 import MadoInfrastructure
 
-@MainActor @Test func inputAdmissionRealFixtureProbeKinds() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func inputAdmissionRealFixtureProbeKinds() async throws {
     let scope = CountingScope()
     let store = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: store) }
@@ -107,7 +107,7 @@ private final class InputReplacementScope: SecurityScope, @unchecked Sendable {
     func showInspector(_ visible: Bool) { }
 }
 
-@Test @MainActor func inputAtomicReplacementPreservesFileGrantAndRootMembers() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputAtomicReplacementPreservesFileGrantAndRootMembers() async throws {
     for scoped in [false, true] {
         let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
@@ -177,7 +177,7 @@ private final class InputReplacementScope: SecurityScope, @unchecked Sendable {
     }
 }
 
-@Test @MainActor func inputAtomicReplacementRejectsCompletePNGChunksWithoutEndMarker() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func inputAtomicReplacementRejectsCompletePNGChunksWithoutEndMarker() async throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }
@@ -199,7 +199,7 @@ private final class InputReplacementScope: SecurityScope, @unchecked Sendable {
     #expect(try Data(contentsOf: file) == complete.dropLast(12))
 }
 
-@Test @MainActor func issue73ReadableDropSessionOpensEmptyThenReplacesAndRejectsZIP() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue73ReadableDropSessionOpensEmptyThenReplacesAndRejectsZIP() async throws {
     let tree = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: tree, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tree) }

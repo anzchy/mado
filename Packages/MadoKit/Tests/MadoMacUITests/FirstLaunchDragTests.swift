@@ -32,7 +32,7 @@ import MadoApplication
     func resetSpringLoading() { }
 }
 
-@Test @MainActor func p316B4DragCallbackTracksAcceptedLifecycle() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4DragCallbackTracksAcceptedLifecycle() throws {
     _ = NSApplication.shared
     let board = NSPasteboard.withUniqueName()
     defer { board.releaseGlobally() }
@@ -56,7 +56,7 @@ import MadoApplication
     #expect(events == [true, false, true, false, true, false])
 }
 
-@Test @MainActor func p316B4AppearanceDragAndAccessibilityPresentation() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4AppearanceDragAndAccessibilityPresentation() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let launch = try #require(scene.state.subviews.compactMap { $0 as? FirstLaunchView }.first)
@@ -91,7 +91,7 @@ import MadoApplication
     #expect(!children.contains { $0.accessibilityIdentifier().hasPrefix("first-launch.wall") })
 }
 
-@Test @MainActor func p316B4RejectedDragNeverHighlights() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4RejectedDragNeverHighlights() throws {
     _ = NSApplication.shared
     let board = NSPasteboard.withUniqueName()
     defer { board.releaseGlobally() }
@@ -107,7 +107,7 @@ import MadoApplication
 }
 
 
-@Test @MainActor func p316B4LiveAccessibilityChangeRefreshesVisibleScreen() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4LiveAccessibilityChangeRefreshesVisibleScreen() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let launch = try #require(scene.state.subviews.compactMap { $0 as? FirstLaunchView }.first)
@@ -127,7 +127,7 @@ import MadoApplication
     #expect(wall.alphaValue == 0)
 }
 
-@Test @MainActor func p316B4PhotosDoNotInterceptFileDrags() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4PhotosDoNotInterceptFileDrags() throws {
     let scene = StatesScene()
     defer { scene.window.close() }
     let wall = try #require(b4View("first-launch.wall", in: scene.state))
@@ -139,7 +139,7 @@ import MadoApplication
     #expect((drop.registeredDraggedTypes ?? []).contains(.fileURL))
 }
 
-@Test @MainActor func p316B4AppearanceResolvesLayerColours() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func p316B4AppearanceResolvesLayerColours() throws {
     let fixtureRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("B4PinnedDesign")
     let source = fixtureRoot.appendingPathComponent("a/b/c/d/source.swift").path
     let light = try PinnedDesign.page("b4-first-launch", source: source)
@@ -165,7 +165,7 @@ import MadoApplication
     try dark.assertColor(colour(drop.layer?.backgroundColor), ".rt.over .drop", "background", viewport: 960)
 }
 
-@Test @MainActor func issue314OverrideRestylesFirstLaunchImmediately() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue314OverrideRestylesFirstLaunchImmediately() throws {
     _ = NSApplication.shared
     let launch = FirstLaunchView(frame: NSRect(x: 0, y: 0, width: 960, height: 640),
         openButton: ViewerStateButton(frame: .zero))

@@ -5,7 +5,7 @@ import MadoApplication
 
 private enum T229AdmissionError: Error, Equatable { case rejected }
 
-@MainActor @Test func t229StateReauthorizationMutatesUnderFenceAndPublishesOutsideIt() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229StateReauthorizationMutatesUnderFenceAndPublishesOutsideIt() throws {
     let state = AccessState(), id = AccessRootID(), lock = NSLock()
     state.register(id, volumeUUID: "111")
     state.diskUnmounted(volumeUUID: "111")
@@ -35,7 +35,7 @@ private enum T229AdmissionError: Error, Equatable { case rejected }
     #expect(state.permit(for: id)?.isCurrent == true)
 }
 
-@MainActor @Test func t229RejectedGrantFenceCannotChangeStateOrPublishRecovery() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RejectedGrantFenceCannotChangeStateOrPublishRecovery() {
     let state = AccessState(), id = AccessRootID()
     state.register(id, volumeUUID: "111")
     state.diskUnmounted(volumeUUID: "111")

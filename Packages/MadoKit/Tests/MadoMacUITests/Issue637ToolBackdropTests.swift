@@ -4,11 +4,11 @@ import MadoCore
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func issue637BackdropRasterRejectsArchivedConstruction() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropRasterRejectsArchivedConstruction() {
     #expect(ChromeBackdropRasterView(coder: NSKeyedArchiver(requiringSecureCoding: false)) == nil)
 }
 
-@Test @MainActor func issue637ScaleAccessibilityLabelsMatchVisibleModes() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637ScaleAccessibilityLabelsMatchVisibleModes() {
     #expect(ScaleIndicator.modeLabel(actualPixels: false, customZoom: nil) == "Fit window")
     #expect(ScaleIndicator.modeLabel(actualPixels: true, customZoom: nil) == "1:1 · 100%")
     #expect(ScaleIndicator.modeLabel(actualPixels: false, customZoom: 1.25) == "125%")
@@ -74,7 +74,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue637BackdropKeepsPreviousBlurUntilNewGenerationCompletes() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637BackdropKeepsPreviousBlurUntilNewGenerationCompletes() async throws {
     _ = NSApplication.shared
     let first = try issue637ToolImage(grey: 69.0 / 255)
     let second = try issue637ToolImage(grey: 226.0 / 255)
@@ -101,7 +101,7 @@ import MadoApplication
     #expect(abs(updated.redComponent - 226.0 / 255) < 2.0 / 255)
 }
 
-@Test @MainActor func issue637ToolBackdropFlatGreyCoverageAllGroupsThemesAndTiers() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637ToolBackdropFlatGreyCoverageAllGroupsThemesAndTiers() async throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), session: ViewerSession())
     let toolFrames = overlay.tools.map(\.frame)
@@ -176,7 +176,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue637ToolBackdropPatternSmoothsAndNeverBlursControls() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637ToolBackdropPatternSmoothsAndNeverBlursControls() async throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), session: ViewerSession())
     let stripes = try issue637ToolImage(grey: 0.5, stripes: true)
@@ -201,7 +201,7 @@ import MadoApplication
     #expect(surface.isHidden)
 }
 
-@Test @MainActor func issue637ToolBackdropNewestFrameWinsAndHiddenGroupsClear() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637ToolBackdropNewestFrameWinsAndHiddenGroupsClear() async throws {
     _ = NSApplication.shared
     let overlay = ViewerChromeOverlay(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), session: ViewerSession())
     overlay.setToolBackgroundOpacity(30)
@@ -223,7 +223,7 @@ import MadoApplication
     #expect(abs(restored.redComponent - 226.0 / 255) < 2.0 / 255)
 }
 
-@Test @MainActor func issue637ToolBackdropSurfaceKeepsCanvasVerticalAlignment() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue637ToolBackdropSurfaceKeepsCanvasVerticalAlignment() async throws {
     _ = NSApplication.shared
     let size = CGSize(width: 1280, height: 800)
     let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))

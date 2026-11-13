@@ -214,7 +214,7 @@ private struct StepClock: Clock {
 
 private struct TeardownProbe: Error {}
 
-@Test func i392AsyncTeardownRunsAfterTheBodyReturnsOrThrows() async throws {
+@Test(.timeLimit(.minutes(2))) func i392AsyncTeardownRunsAfterTheBodyReturnsOrThrows() async throws {
     var log: [String] = []
     let value = try await withAsyncTeardown { log.append("body"); return 7 } teardown: { await Task.yield(); log.append("teardown") }
     #expect(value == 7)

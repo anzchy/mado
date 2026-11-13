@@ -4,7 +4,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func chromeNativePressAndFocusReachSharedComponentRendering() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeNativePressAndFocusReachSharedComponentRendering() throws {
     _ = NSApplication.shared
     let host = ChromeRecallViewHost()
     let session = ViewerSession(host: host)

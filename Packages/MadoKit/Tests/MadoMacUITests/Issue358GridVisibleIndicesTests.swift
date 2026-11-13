@@ -23,7 +23,7 @@ import MadoCore
     }
 }
 
-@Test @MainActor func issue358GridVisibleIndicesIgnoreSupplementaryAttributes() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue358GridVisibleIndicesIgnoreSupplementaryAttributes() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/issue358-grid")
     let rootID = AccessRootID(rawValue: UUID())

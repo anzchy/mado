@@ -6,7 +6,7 @@ import MadoApplication
 
 /// #354: the SVG is 32×32/viewBox24, stroke1.3; issue dimensions describe ink.
 /// Independent oracle uses CoreGraphics tangent arcs rather than native artwork helpers.
-@Test @MainActor func i354RecoveryArtworkMatchesPinnedSVGInk() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354RecoveryArtworkMatchesPinnedSVGInk() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680),
                           styleMask: [.titled], backing: .buffered, defer: false)
@@ -135,7 +135,7 @@ private func i354SVGMask(_ cause: AccessLossCause) throws -> [Bool] {
 
 /// #354 fix1 M1: unlike the alpha oracle above, this renders the actual image view's tint.
 /// The optional mutation is test-owned and is explicitly reported as mutant RED evidence.
-@Test @MainActor func i354RecoveryIconViewRendersPinnedTemplateTint() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i354RecoveryIconViewRendersPinnedTemplateTint() async throws {
     _ = NSApplication.shared
     let mutant = ProcessInfo.processInfo.environment["PICSEE_I354_TINT_NEGATIVE_CONTROL"] == "1"
     print("i354 tint evidence mode=\(mutant ? "mutant-RED non-template black-tint" : "normal baseline/restored production")")

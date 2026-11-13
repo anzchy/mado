@@ -21,7 +21,7 @@ import MadoApplication
         context: nil, eventNumber: number, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
 }
 
-@Test @MainActor func chromePointerWindowDispatchReleasesFocusButTabKeepsLock() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromePointerWindowDispatchReleasesFocusButTabKeepsLock() throws {
     _ = NSApplication.shared
     let clock = ChromeViewClock()
     let host = ChromeRecallViewHost()

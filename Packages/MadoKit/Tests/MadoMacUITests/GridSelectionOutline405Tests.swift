@@ -25,7 +25,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue405OutlineRendersAboveTileOnlyWhenSelected() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405OutlineRendersAboveTileOnlyWhenSelected() throws {
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
         _ = NSApplication.shared
         let folder = URL(fileURLWithPath: "/tmp/mado-405-outline-walk")
@@ -71,7 +71,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue405OutlineAndNameTintFollowStateAcrossCellDomain() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405OutlineAndNameTintFollowStateAcrossCellDomain() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-405-outline-domain")
     let entry = FolderEntry(url: folder.appendingPathComponent("DSC_0342.jpg"),
@@ -97,7 +97,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func issue405OutlineRenderedColourMatchesPinnedAccent() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue405OutlineRenderedColourMatchesPinnedAccent() throws {
     for (page, appearance) in [("grid-multiselect", NSAppearance.Name.aqua), ("grid-dark", .darkAqua)] {
         let design = try PinnedDesign.page(page)
         // `.photo-cell.is-selected .thumbnail-wrap{box-shadow:inset 0 0 0 1px var(--color-accent)}`.

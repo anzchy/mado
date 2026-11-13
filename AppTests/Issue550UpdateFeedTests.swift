@@ -13,7 +13,7 @@ import Testing
     func observe(_ onChange: @escaping @MainActor () -> Void) { callback = onChange }
 }
 
-@MainActor @Test func issue550MissingFeedDisablesUpdatesWithoutConstructingSparkle() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550MissingFeedDisablesUpdatesWithoutConstructingSparkle() {
     for info: [String: Any] in [[:], ["SUFeedURL": ""], ["SUFeedURL": " \n\t"]] {
         let native = FeedController()
         var constructions = 0
@@ -32,7 +32,7 @@ import Testing
     }
 }
 
-@MainActor @Test func issue550ConfiguredFeedKeepsUpdateStateAndOperations() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550ConfiguredFeedKeepsUpdateStateAndOperations() {
     let native = FeedController()
     let port = SparkleUpdatePort(infoDictionary: ["SUFeedURL": "https://example.com/feed.xml"], makeController: { native })
     #expect(port.canCheckForUpdates)
@@ -49,13 +49,13 @@ import Testing
     #expect(notifications == 2)
 }
 
-@MainActor @Test func issue550RealSparkleControllerCanBeConstructedStopped() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550RealSparkleControllerCanBeConstructedStopped() {
     let port = SparkleUpdatePort(infoDictionary: ["SUFeedURL": "https://example.com/feed.xml"])
     #expect(!port.canCheckForUpdates)
     #expect(port.lastUpdateCheckDate == nil)
 }
 
-@MainActor @Test func issue550RealMissingFeedPortStartAndCheckRemainUnavailable() {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue550RealMissingFeedPortStartAndCheckRemainUnavailable() {
     let port = SparkleUpdatePort(infoDictionary: [:])
     port.start()
     port.checkForUpdates()

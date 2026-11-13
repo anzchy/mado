@@ -17,7 +17,7 @@ private let issue492Traces: [Issue492Trace] = [
     .init(start: 0, steps: [.next, .previous], end: 0, wraps: false)
 ]
 
-@Test(arguments: issue492Traces) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: issue492Traces) @MainActor
 private func issue492SingleReturnTransfersSelection(trace: Issue492Trace) throws {
     let ids = sessionItems(5), session = ViewerSession(), router = CommandRouter()
     let host = FakeSessionHost(); session.host = host
@@ -38,7 +38,7 @@ private func issue492SingleReturnTransfersSelection(trace: Issue492Trace) throws
     #expect(session.currentItemID == ids[trace.end])
 }
 
-@Test(arguments: [0, 1, 2, 3]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [0, 1, 2, 3]) @MainActor
 func issue492MultiReturnConservesPicks(trace: Int) throws {
     let ids = sessionItems(5), session = ViewerSession(), router = CommandRouter()
     let host = FakeSessionHost(); session.host = host
@@ -64,7 +64,7 @@ func issue492MultiReturnConservesPicks(trace: Int) throws {
     #expect(session.currentItemID == end)
 }
 
-@Test(arguments: [false, true], [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true], [false, true]) @MainActor
 func issue492NoPageRestoresConcreteScroll(multi: Bool, blockedPage: Bool) throws {
     let ids = sessionItems(5), session = ViewerSession(), router = CommandRouter()
     let host = FakeSessionHost(); session.host = host
@@ -83,7 +83,7 @@ func issue492NoPageRestoresConcreteScroll(multi: Bool, blockedPage: Bool) throws
     #expect(session.scrollAnchor == ids[1])
 }
 
-@Test @MainActor func issue492MultiDeletedScrollAnchorRestoresNil() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue492MultiDeletedScrollAnchorRestoresNil() throws {
     let ids = sessionItems(5), session = ViewerSession(), router = CommandRouter()
     let host = FakeSessionHost(); session.host = host
     defer { withExtendedLifetime(host) {} }
@@ -101,7 +101,7 @@ func issue492NoPageRestoresConcreteScroll(multi: Bool, blockedPage: Bool) throws
     #expect(session.scrollAnchor == nil)
 }
 
-@Test(arguments: [false, true]) @MainActor
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor
 func issue492MultiShrinkRetainsEntryClassification(deleteBeforePage: Bool) throws {
     let ids = sessionItems(5), session = ViewerSession(), router = CommandRouter()
     let host = FakeSessionHost(); session.host = host

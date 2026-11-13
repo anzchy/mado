@@ -1,7 +1,7 @@
 import Testing
 import MadoApplication
 
-@Test @MainActor func inspectorFocusTransitions() {
+@Test(.timeLimit(.minutes(2))) @MainActor func inspectorFocusTransitions() {
     let host = FakeSessionHost()
     let session = ViewerSession(host: host)
     #expect(!session.inspectorFocus.isVisible)

@@ -8,7 +8,7 @@ private func fixDirectory() -> URL {
     FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 }
 
-@Test func t216FixDowngradeReupgradeArraysAndLegacyRecentFixture() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixDowngradeReupgradeArraysAndLegacyRecentFixture() async throws {
     let base = fixDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let rootPath = base.appendingPathComponent("roots.json")
@@ -40,7 +40,7 @@ private func fixDirectory() -> URL {
     #expect(try JSONDecoder().decode([RecentFolder].self, from: Data(contentsOf: recentPath)).contains(newFolder))
 }
 
-@Test @MainActor func t216FixDowngradeReupgradeDisplayPreferences() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func t216FixDowngradeReupgradeDisplayPreferences() throws {
     let suite = "mado.schema.fix.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -54,7 +54,7 @@ private func fixDirectory() -> URL {
     #expect(UserDefaultsDisplayPreferencesStore(defaults: defaults).value.appearance == .light)
 }
 
-@Test func t216FixExplicitNullPersonalVersionIsCorrupt() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixExplicitNullPersonalVersionIsCorrupt() async throws {
     let base = fixDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let path = base.appendingPathComponent("personal.json")
@@ -66,7 +66,7 @@ private func fixDirectory() -> URL {
     #expect(try Data(contentsOf: path) == bytes)
 }
 
-@Test func t216FixUnsupportedRootsAllowSessionGrantAndRecent() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixUnsupportedRootsAllowSessionGrantAndRecent() async throws {
     let f = try ReconnectFixture(); defer { f.remove() }
     try FileManager.default.createDirectory(at: f.store.url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let futureRoots = Data(#"{"schemaVersion":99,"items":[{"future":true}]}"#.utf8)
@@ -90,7 +90,7 @@ private func fixDirectory() -> URL {
     #expect(try await RecentFolderStore(url: recentPath).load().isEmpty)
 }
 
-@Test func t216FixInterimEnvelopeAndOldRecoveryRemainVisible() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixInterimEnvelopeAndOldRecoveryRemainVisible() async throws {
     let base = fixDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let first = AccessRootRecord(id: AccessRootID(), bookmark: Data("first".utf8), displayName: "first", creatingBuildSHA: "new", createdAt: .init(timeIntervalSinceReferenceDate: 0))
@@ -112,7 +112,7 @@ private func fixDirectory() -> URL {
     #expect(try await RecentFolderStore(url: recentPath).load() == [old, current])
 }
 
-@Test func t216FixLiteralOriginMainRecentBytesDecode() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixLiteralOriginMainRecentBytesDecode() async throws {
     // Captured from origin/main's JSONEncoder for a fixed RecentFolder (same core model).
     let bytes = Data(#"[{"displayName":"legacy","openedAt":0,"url":"file:\/\/\/tmp\/legacy","rootID":{"rawValue":"11111111-2222-4333-8444-555555555555"}}]"#.utf8)
     let base = fixDirectory(); defer { try? FileManager.default.removeItem(at: base) }
@@ -128,7 +128,7 @@ private func fixDirectory() -> URL {
     #expect(item.openedAt == Date(timeIntervalSinceReferenceDate: 0))
 }
 
-@Test func t216FixUnsupportedArrayAndEmptyMarkerStayUntouched() async throws {
+@Test(.timeLimit(.minutes(2))) func t216FixUnsupportedArrayAndEmptyMarkerStayUntouched() async throws {
     let base = fixDirectory(); defer { try? FileManager.default.removeItem(at: base) }
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let rootPath = base.appendingPathComponent("roots.json")

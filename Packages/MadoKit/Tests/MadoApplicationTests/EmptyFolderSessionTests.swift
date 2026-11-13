@@ -3,13 +3,13 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func sessionWithoutFolderSourceIsNotEmptyFolder() {
+@Test(.timeLimit(.minutes(2))) @MainActor func sessionWithoutFolderSourceIsNotEmptyFolder() {
     #expect(!ViewerSession().isEmptyFolder)
 }
 
 /// Owner decision C (#137): an empty folder session reports `.emptyFolder`, not the generic `.empty`, but only while
 /// nothing else is presented: an opening image or a reading scan wins.
-@Test @MainActor func emptyFolderStatusOnlyWhileNothingElseIsPresented() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func emptyFolderStatusOnlyWhileNothingElseIsPresented() async throws {
     let fixture = FolderScanFixture(), session = ViewerSession()
     session.folderScan = fixture.coordinator
     #expect(session.imageStatus == .empty, "no scan yet")

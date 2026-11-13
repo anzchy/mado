@@ -86,7 +86,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     AccessProbeVolume(uuid: uuid, url: URL(fileURLWithPath: "/Volumes/Photos"), name: name)
 }
 
-@Test func t229VerifyRejectsSameNameWrongUUIDBeforeTrustingOldMountPoint() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRejectsSameNameWrongUUIDBeforeTrustingOldMountPoint() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let scope = T229Scope(), codec = T229BookmarkCodec()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: fixture.store, buildSHA: "T229",
@@ -107,7 +107,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     #expect(absent.rootURL == nil)
 }
 
-@Test func t229VerifyRetriesSavedBookmarkAfterFailedResolveRemovedPublishedRoot() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRetriesSavedBookmarkAfterFailedResolveRemovedPublishedRoot() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let scope = T229Scope(), codec = T229BookmarkCodec()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: fixture.store, buildSHA: "T229",
@@ -130,7 +130,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     #expect(try Data(contentsOf: fixture.store.url) == originalBytes)
 }
 
-@Test func t229VerifyRequiresStartedScopeContainedFolderAndRealDirectoryListing() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRequiresStartedScopeContainedFolderAndRealDirectoryListing() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let scope = T229Scope(), codec = T229BookmarkCodec()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: fixture.store, buildSHA: "T229",
@@ -151,7 +151,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     #expect(scope.counts.0 == scope.counts.1 + 1) // the rejected start is the sole unmatched attempt
 }
 
-@Test func t229VerifyRejectsResolvedRootOnDifferentVolumeUUID() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRejectsResolvedRootOnDifferentVolumeUUID() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let scope = T229Scope(), codec = T229BookmarkCodec()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: fixture.store, buildSHA: "T229",
@@ -163,7 +163,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     #expect(scope.counts.0 == scope.counts.1)
 }
 
-@Test func t229VerifyRejectsReplacementAtSamePathWithDifferentInode() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRejectsReplacementAtSamePathWithDifferentInode() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let original = FileResourceIdentity(volumeUUID: "111", fileIdentifier: "old-inode")
     let replacement = FileResourceIdentity(volumeUUID: "111", fileIdentifier: "new-inode")
@@ -179,7 +179,7 @@ private func volume(_ uuid: String?, name: String = "Photos") -> AccessProbeVolu
     #expect(scope.counts.0 == scope.counts.1)
 }
 
-@Test func t229FakeDiskPortCarriesUnmountAndMountUUIDEvents() async throws {
+@Test(.timeLimit(.minutes(2))) func t229FakeDiskPortCarriesUnmountAndMountUUIDEvents() async throws {
     let port = T229Mounts([volume("111")])
     let stream = await port.events()
     var iterator = stream.makeAsyncIterator()
@@ -223,7 +223,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(await nextEvent(in: await port.events()) == .unmounted(volume("111")))
 }
 
-@Test func t229VerifyRebasesSavedChildAfterFailedResolveAndRemountAtNewPath() async throws {
+@Test(.timeLimit(.minutes(2))) func t229VerifyRebasesSavedChildAfterFailedResolveAndRemountAtNewPath() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let scope = T229Scope(), codec = T229BookmarkCodec()
     let access = try FileAccess(scope: scope, bookmarks: codec, store: fixture.store, buildSHA: "T229",
@@ -244,7 +244,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(scope.counts.0 == scope.counts.1)
 }
 
-@Test func t229OfflineLaunchRetainsOnlyPathHintForLaterRemount() async throws {
+@Test(.timeLimit(.minutes(2))) func t229OfflineLaunchRetainsOnlyPathHintForLaterRemount() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let codec = T229BookmarkCodec(), scope = T229Scope()
     let id = AccessRootID()
@@ -266,7 +266,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(scope.counts.0 == scope.counts.1)
 }
 
-@Test func t229SystemBookmarkCarriesRootIdentityAndLegacyBookmarkDoesNot() throws {
+@Test(.timeLimit(.minutes(2))) func t229SystemBookmarkCarriesRootIdentityAndLegacyBookmarkDoesNot() throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let bookmark = try SystemSecurityScope().create(for: fixture.root)
     let actual = try URLIdentityResourceReader().identity(for: fixture.root)
@@ -282,7 +282,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(resolved.url.standardizedFileURL == fixture.root.standardizedFileURL)
 }
 
-@Test func t229LegacyBookmarkResolutionAfterOriginalMovesAndPathIsReplaced() async throws {
+@Test(.timeLimit(.minutes(2))) func t229LegacyBookmarkResolutionAfterOriginalMovesAndPathIsReplaced() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let originalIdentity = try URLIdentityResourceReader().identity(for: fixture.root)
     let original = try #require(originalIdentity)
@@ -317,7 +317,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     }
 }
 
-@Test func t229MountedLegacyBookmarkKeepsNormalBrowsingWithoutRefresh() async throws {
+@Test(.timeLimit(.minutes(2))) func t229MountedLegacyBookmarkKeepsNormalBrowsingWithoutRefresh() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let legacy = try fixture.root.bookmarkData(options: [.withSecurityScope],
         includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -347,7 +347,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(uuid == volume.uuid)
 }
 
-@Test func t229MountedLegacyBookmarkRecoversAfterTransientScopeFailureInSameSession() async throws {
+@Test(.timeLimit(.minutes(2))) func t229MountedLegacyBookmarkRecoversAfterTransientScopeFailureInSameSession() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let legacy = try fixture.root.bookmarkData(options: [.withSecurityScope],
         includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -371,7 +371,7 @@ func t229SystemDiskMountPortBuffersEventUntilSubscriberStarts() async {
     #expect(scope.counts.0 == scope.counts.1 + 1)
 }
 
-@Test func t229OfflineLegacyBookmarkStaysUnknownUntilReselected() async throws {
+@Test(.timeLimit(.minutes(2))) func t229OfflineLegacyBookmarkStaysUnknownUntilReselected() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let legacy = try fixture.root.bookmarkData(options: [.withSecurityScope],
         includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -410,7 +410,7 @@ private final class T229StaleBookmarkCodec: BookmarkCoding, @unchecked Sendable 
     }
 }
 
-@Test func t229OfflineStaleBookmarkDoesNotRefreshAbandonedMountPoint() async throws {
+@Test(.timeLimit(.minutes(2))) func t229OfflineStaleBookmarkDoesNotRefreshAbandonedMountPoint() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let id = AccessRootID()
     let original = Data(fixture.root.path.utf8)
@@ -426,7 +426,7 @@ private final class T229StaleBookmarkCodec: BookmarkCoding, @unchecked Sendable 
     #expect(try fixture.store.load().first?.bookmark == original)
 }
 
-@Test func t229StaleLaunchRejectsReplacementBeforeRefreshingSavedIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func t229StaleLaunchRejectsReplacementBeforeRefreshingSavedIdentity() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let id = AccessRootID()
     let bytes = Data(fixture.root.path.utf8)
@@ -445,7 +445,7 @@ private final class T229StaleBookmarkCodec: BookmarkCoding, @unchecked Sendable 
     #expect(scope.counts.0 == scope.counts.1)
 }
 
-@Test func t229ExplicitReselectionReplacesSessionLegacyIdentity() async throws {
+@Test(.timeLimit(.minutes(2))) func t229ExplicitReselectionReplacesSessionLegacyIdentity() async throws {
     let fixture = try T229Fixture(); defer { fixture.remove() }
     let legacy = try fixture.root.bookmarkData(options: [.withSecurityScope],
         includingResourceValuesForKeys: nil, relativeTo: nil)

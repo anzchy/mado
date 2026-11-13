@@ -65,7 +65,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: Down past the last visible row scrolls the minimum amount, to the bottom edge.
-@Test @MainActor func issue187DownPastVisibleRowsScrollsCurrentItemToBottomEdge() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187DownPastVisibleRowsScrollsCurrentItemToBottomEdge() {
     let fixture = GridArrowScrollFixture()
     #expect(fixture.columns > 1)
     #expect(fixture.visible.origin.y == 0)
@@ -75,7 +75,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: Up above the first visible row scrolls the minimum amount, to the top edge.
-@Test @MainActor func issue187UpAboveVisibleRowsScrollsCurrentItemToTopEdge() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187UpAboveVisibleRowsScrollsCurrentItemToTopEdge() {
     let fixture = GridArrowScrollFixture()
     for _ in 0..<30 { fixture.press(125) }
     #expect(fixture.visible.origin.y > 0)
@@ -85,7 +85,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: moving within the visible rows does not scroll, at the top and at a scrolled offset.
-@Test @MainActor func issue187ArrowsWithinVisibleRowsDoNotScroll() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187ArrowsWithinVisibleRowsDoNotScroll() {
     let fixture = GridArrowScrollFixture()
     for key: UInt16 in [124, 125, 123, 126] {
         fixture.press(key)
@@ -104,7 +104,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: an arrow that cannot move (clamped at either end) does not scroll, even with the Current Item off-screen.
-@Test @MainActor func issue187ClampedArrowDoesNotScroll() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187ClampedArrowDoesNotScroll() {
     let fixture = GridArrowScrollFixture()
     fixture.grid.restoreContentOffset(NSPoint(x: 0, y: 900))
     for key: UInt16 in [126, 123] {
@@ -123,7 +123,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: ⇧ and ⌘ arrows keep the Current Item visible too, and Left/Right wrap across rows into view.
-@Test @MainActor func issue187ModifiedAndHorizontalArrowsKeepCurrentItemVisible() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187ModifiedAndHorizontalArrowsKeepCurrentItemVisible() {
     let fixture = GridArrowScrollFixture()
     for modifiers: NSEvent.ModifierFlags in [.shift, .command] {
         for _ in 0..<12 { fixture.pressChecked(125, modifiers) }
@@ -138,7 +138,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: a seeded walk of mixed arrows keeps the scroll law at every step.
-@Test(arguments: [UInt64(1), 7, 187]) @MainActor func issue187SeededArrowWalkKeepsScrollLaw(seed: UInt64) {
+@Test(.timeLimit(.minutes(2)), arguments: [UInt64(1), 7, 187]) @MainActor func issue187SeededArrowWalkKeepsScrollLaw(seed: UInt64) {
     let fixture = GridArrowScrollFixture()
     var state = seed
     for _ in 0..<80 {
@@ -149,7 +149,7 @@ import MadoApplication
 }
 
 /// #187 AC-3: restore paths do not scroll into view: Esc-return's offset, activation, selection sync and scrollTo.
-@Test @MainActor func issue187RestoredOffsetSurvivesUntilAnArrowMove() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187RestoredOffsetSurvivesUntilAnArrowMove() {
     let fixture = GridArrowScrollFixture()
     fixture.grid.restoreContentOffset(NSPoint(x: 0, y: 900))
     fixture.grid.activate(currentItemID: fixture.grid.itemID(at: 0))
@@ -171,7 +171,7 @@ import MadoApplication
 }
 
 /// #187: arrows in an empty grid neither crash nor scroll.
-@Test @MainActor func issue187ArrowsInEmptyGridDoNothing() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187ArrowsInEmptyGridDoNothing() {
     let fixture = GridArrowScrollFixture(count: 0)
     for key: UInt16 in [123, 124, 125, 126] { fixture.press(key) }
     #expect(fixture.grid.currentItemID == nil)
@@ -179,7 +179,7 @@ import MadoApplication
 }
 
 /// #187 AC-1: with scroll view content insets (a titlebar or bar over the grid), the tile clears the insets too.
-@Test @MainActor func issue187ArrowScrollClearsContentInsets() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue187ArrowScrollClearsContentInsets() {
     let fixture = GridArrowScrollFixture()
     let scrollView = fixture.grid.collectionView.enclosingScrollView!
     scrollView.automaticallyAdjustsContentInsets = false
@@ -204,7 +204,7 @@ import MadoApplication
 }
 
 /// #345 / GRID-02: id-based reveal follows the same minimum-distance law as arrows.
-@Test @MainActor func issue345IDRevealIsMinimalAndIdempotent() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue345IDRevealIsMinimalAndIdempotent() {
     let fixture = GridArrowScrollFixture()
     let grid = fixture.grid, scroll = grid.collectionView.enclosingScrollView!
     scroll.automaticallyAdjustsContentInsets = false

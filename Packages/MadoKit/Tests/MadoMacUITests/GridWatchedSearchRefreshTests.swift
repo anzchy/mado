@@ -10,7 +10,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     func read(_ url: URL, access: AccessRequest) async throws -> InspectorMetadata { .init() }
 }
 
-@Test @MainActor func issue136Combo2DirectSearchReconcilesInspectorCurrentAndEmpty() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136Combo2DirectSearchReconcilesInspectorCurrentAndEmpty() {
     let scene = SearchedRefreshScene()
     let model = InspectorModel(reader: ComboInspectorReader())
     let a = scene.entry("match-a.jpg"), d = scene.entry("match-d.jpg")
@@ -36,7 +36,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     #expect(model.name == d.url.lastPathComponent)
 }
 
-@Test @MainActor func issue136ComboWatchedRefreshSynchronizesInspectorCurrentAndEmpty() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue136ComboWatchedRefreshSynchronizesInspectorCurrentAndEmpty() {
     let scene = SearchedRefreshScene()
     let model = InspectorModel(reader: ComboInspectorReader())
     scene.session.setInspectorVisible(true)
@@ -118,7 +118,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     }
 }
 
-@Test @MainActor func watchedSearchedGridKeepsNearestSurvivorAndSearchFocus() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func watchedSearchedGridKeepsNearestSurvivorAndSearchFocus() async {
     let scene = SearchedRefreshScene()
     let entries = ["match-a.jpg", "match-b.jpg", "match-c.jpg", "match-d.jpg"].map(scene.entry)
     scene.begin(scene.snapshot(entries, 1), term: "match", current: entries[2].itemID)
@@ -140,7 +140,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     #expect(scene.grid.displayedItemIDs == [entries[0], entries[1], entries[3]].map(\.itemID))
 }
 
-@Test @MainActor func watchedSearchFallsBackWhenFullListSurvivorIsFilteredOut() {
+@Test(.timeLimit(.minutes(2))) @MainActor func watchedSearchFallsBackWhenFullListSurvivorIsFilteredOut() {
     let scene = SearchedRefreshScene()
     let a = scene.entry("match-a.jpg"), hidden = scene.entry("other-b.jpg")
     let c = scene.entry("match-c.jpg"), d = scene.entry("match-d.jpg")
@@ -153,7 +153,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     #expect(scene.grid.displayedItemIDs == [c.itemID, d.itemID])
 }
 
-@Test @MainActor func watchedSearchViewerReturnKeepsOnlyMatchesForNavigationAndStatus() {
+@Test(.timeLimit(.minutes(2))) @MainActor func watchedSearchViewerReturnKeepsOnlyMatchesForNavigationAndStatus() {
     let scene = SearchedRefreshScene(), router = CommandRouter()
     let cat1 = scene.entry("cat-1.jpg"), dog = scene.entry("dog.jpg")
     let cat2 = scene.entry("cat-2.jpg"), cat3 = scene.entry("cat-3.jpg")
@@ -174,7 +174,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     #expect(Array(scene.host.opened.suffix(3)) == [cat2, cat3, cat2].map(\.itemID))
 }
 
-@Test @MainActor func watchedSearchViewerReturnShowsNoResultWhenLastMatchDisappears() {
+@Test(.timeLimit(.minutes(2))) @MainActor func watchedSearchViewerReturnShowsNoResultWhenLastMatchDisappears() {
     let scene = SearchedRefreshScene(), router = CommandRouter()
     let cat = scene.entry("cat.jpg"), dog = scene.entry("dog.jpg")
     scene.begin(scene.snapshot([cat, dog], 1), term: "cat", current: cat.itemID)
@@ -191,7 +191,7 @@ private struct ComboInspectorReader: InspectorMetadataReading {
     #expect(!router.route(.preview, from: .key, to: scene.session))
 }
 
-@Test @MainActor func issue140WatchedFilenameSearchRenameThenDeleteKeepsFocusAndMatch() {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue140WatchedFilenameSearchRenameThenDeleteKeepsFocusAndMatch() {
     let scene = SearchedRefreshScene()
     let a = scene.entry("match-a.jpg"), b = scene.entry("match-b.jpg")
     let c = scene.entry("match-c.jpg"), hidden = scene.entry("other.jpg")

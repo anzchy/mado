@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoInfrastructure
 
-@Test func identityScopeSharesRootResolverAcrossRequests() async throws {
+@Test(.timeLimit(.minutes(2))) func identityScopeSharesRootResolverAcrossRequests() async throws {
     let file = fixture("coordinate-grid.png")
     let root = ItemIdentityRoot(id: AccessRootID(), url: file.deletingLastPathComponent())
     let pipeline = ImageIOPipeline()
@@ -59,7 +59,7 @@ private struct ScopePipelineProbe: ImagePipeline {
         return try await pipeline.image(for: request)
     }
 }
-@MainActor @Test func identityScopeSessionsUseLeaseRootAndAcquireBeforePipeline() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func identityScopeSessionsUseLeaseRootAndAcquireBeforePipeline() async {
     let file = fixture("alpha-gradient.png")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000041")!), url: file.deletingLastPathComponent())
     let access = ScopeLeaseProbe(root), pipeline = ImageIOPipeline()
@@ -83,7 +83,7 @@ private struct ScopePipelineProbe: ImagePipeline {
     #expect(acquired.count == 9 && released.count == 9)
     for lease in acquired { #expect(released.filter { $0 == lease }.count == 1) }
 }
-@Test func identityScopeRenameAssociationIsSharedAndRootLocationsCanChange() async throws {
+@Test(.timeLimit(.minutes(2))) func identityScopeRenameAssociationIsSharedAndRootLocationsCanChange() async throws {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }

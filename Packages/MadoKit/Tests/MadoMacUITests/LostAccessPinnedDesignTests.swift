@@ -55,7 +55,7 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     return NSDictionary(dictionary: entry).isEqual(to: expected)
 }
 
-@Test private func t320LostAccessManifestEntryFixtures() throws {
+@Test(.timeLimit(.minutes(2))) private func t320LostAccessManifestEntryFixtures() throws {
     let page: [String: Any] = [
         "name": "permission-denied", "title": "26 目录权限失效",
         "file": "permission-denied.html", "sha256": lostAccessPinnedPageSHA256,
@@ -106,7 +106,7 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     #expect(try !lostAccessManifestEntryRemainsExact(manifest([unrelated])))
 }
 
-@Test @MainActor private func t229LostAccessPinnedSourceRemainsExact() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor private func t229LostAccessPinnedSourceRemainsExact() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .appendingPathComponent("../../../..").standardizedFileURL
     let directory = root.appendingPathComponent("design/prototypes/picsee-browser/states")
@@ -116,7 +116,7 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     #expect(try lostAccessManifestEntryRemainsExact(manifest))
 }
 
-@Test(arguments: LostAccessCase.all) @MainActor private func t229LostAccessPinnedNativeComposition(_ sample: LostAccessCase) throws {
+@Test(.timeLimit(.minutes(2)), arguments: LostAccessCase.all) @MainActor private func t229LostAccessPinnedNativeComposition(_ sample: LostAccessCase) throws {
     _ = NSApplication.shared
     let size = NSSize(width: CGFloat(sample.width), height: CGFloat(sample.height))
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
@@ -210,7 +210,7 @@ private func lostAccessManifestEntryRemainsExact(_ data: Data) throws -> Bool {
     #expect(bitmap.pixelsWide > 0 && bitmap.pixelsHigh > 0)
 }
 
-@Test @MainActor private func t229LostAccessActionsUseNativeFocusAndRetireOldControls() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor private func t229LostAccessActionsUseNativeFocusAndRetireOldControls() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 680), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false

@@ -22,7 +22,7 @@ private struct T229SavedGrantFixture {
     func remove() { try? FileManager.default.removeItem(at: base) }
 }
 
-@Test func t229SavedGrantSnapshotCapturesOneRecordVolumeAndLocation() async throws {
+@Test(.timeLimit(.minutes(2))) func t229SavedGrantSnapshotCapturesOneRecordVolumeAndLocation() async throws {
     let fixture = try T229SavedGrantFixture(); defer { fixture.remove() }
     let id = try await fixture.files.grant(folder: fixture.folder)
     let snapshot = try #require(await fixture.files.savedGrantSnapshot(id))
@@ -34,7 +34,7 @@ private struct T229SavedGrantFixture {
     #expect(await fixture.files.savedGrantSnapshot(AccessRootID()) == nil)
 }
 
-@Test func t229SavedGrantVersionRejectsSameBytesGrantAndExplicitReconnect() async throws {
+@Test(.timeLimit(.minutes(2))) func t229SavedGrantVersionRejectsSameBytesGrantAndExplicitReconnect() async throws {
     let fixture = try T229SavedGrantFixture(); defer { fixture.remove() }
     let id = try await fixture.files.grant(folder: fixture.folder)
     let first = try #require(await fixture.files.savedGrantSnapshot(id))
@@ -54,7 +54,7 @@ private struct T229SavedGrantFixture {
     #expect(reconnected.rootURL == other)
 }
 
-@Test func t229SavedGrantVersionIsPerRootAndStaleRefreshInvalidatesIt() async throws {
+@Test(.timeLimit(.minutes(2))) func t229SavedGrantVersionIsPerRootAndStaleRefreshInvalidatesIt() async throws {
     let fixture = try T229SavedGrantFixture(volumeUUID: nil); defer { fixture.remove() }
     let id = try await fixture.files.grant(folder: fixture.folder)
     let other = fixture.base.appendingPathComponent("Other", isDirectory: true)
@@ -72,7 +72,7 @@ private struct T229SavedGrantFixture {
     #expect(refreshed.record.bookmark == first.record.bookmark)
 }
 
-@Test func t229SavedGrantVersionInvalidatesBeforeFailedPersistence() async throws {
+@Test(.timeLimit(.minutes(2))) func t229SavedGrantVersionInvalidatesBeforeFailedPersistence() async throws {
     let fixture = try T229SavedGrantFixture(); defer { fixture.remove() }
     let id = try await fixture.files.grant(folder: fixture.folder)
     let first = try #require(await fixture.files.savedGrantSnapshot(id))

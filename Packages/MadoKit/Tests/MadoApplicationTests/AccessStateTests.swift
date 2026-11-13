@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 import MadoApplication
 
-@MainActor @Test func t229AccessStateMatchesUnmountByUUIDAndNotifiesEveryObserverOnce() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateMatchesUnmountByUUIDAndNotifiesEveryObserverOnce() {
     let access = AccessState()
     let a = AccessRootID(), b = AccessRootID()
     access.register(a, volumeUUID: "111")
@@ -31,7 +31,7 @@ import MadoApplication
     access.removeObserver(rightID)
 }
 
-@MainActor @Test func t229AccessStateGeneratedTracesPreserveCountersAndRejectOldStamps() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateGeneratedTracesPreserveCountersAndRejectOldStamps() {
     // All 5^4 traces, with an oracle independent of AccessState's storage.
     enum Event: Int, CaseIterable { case unmountA, mountA, verifyA, failA, unmountB }
     let alphabet = Event.allCases
@@ -95,7 +95,7 @@ import MadoApplication
     }
 }
 
-@MainActor @Test func t229AccessStateRejectsStaleDecodeThumbnailMetadataAndScanDelivery() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateRejectsStaleDecodeThumbnailMetadataAndScanDelivery() {
     enum Work: CaseIterable { case decode, thumbnail, metadata, scan }
     let access = AccessState()
     let root = AccessRootID(), other = AccessRootID()
@@ -117,7 +117,7 @@ import MadoApplication
     #expect(delivered.count == Work.allCases.count)
 }
 
-@MainActor @Test func t229AccessStateDelayedVerificationCannotResurrectSecondEject() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateDelayedVerificationCannotResurrectSecondEject() {
     let access = AccessState()
     let root = AccessRootID()
     access.register(root, volumeUUID: "111")
@@ -134,7 +134,7 @@ import MadoApplication
     access.removeObserver(observer)
 }
 
-@MainActor @Test func t229AccessStateRootFailureDoesNotLoseReadableOtherRootOrSelfHeal() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateRootFailureDoesNotLoseReadableOtherRootOrSelfHeal() {
     let access = AccessState()
     let a = AccessRootID(), b = AccessRootID()
     access.register(a, volumeUUID: "111")
@@ -151,7 +151,7 @@ import MadoApplication
     #expect(access.snapshot(for: b)?.availability == .readable)
 }
 
-@MainActor @Test func t229AccessStateUnknownAndRetiredRootStampsNeverBecomeAdmissible() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229AccessStateUnknownAndRetiredRootStampsNeverBecomeAdmissible() {
     let access = AccessState()
     let root = AccessRootID()
     let unknown = access.stamp(for: root)
@@ -168,7 +168,7 @@ import MadoApplication
 }
 
 
-@MainActor @Test func t229RootFailureRejectsAnotherRootsCurrentStamp() {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229RootFailureRejectsAnotherRootsCurrentStamp() {
     let state = AccessState(), a = AccessRootID(), b = AccessRootID()
     state.register(a, volumeUUID: "111")
     state.register(b, volumeUUID: "222")
@@ -190,7 +190,7 @@ import MadoApplication
     #expect(events == [.lost(a, counter: 1), .lost(b, counter: 1)])
 }
 
-@MainActor @Test func t229ReplacementRegistrationRevokesPriorAuthorityAndWakeRetriesOnlyLostMountedRoots() throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func t229ReplacementRegistrationRevokesPriorAuthorityAndWakeRetriesOnlyLostMountedRoots() throws {
     let state = AccessState(), root = AccessRootID()
     #expect(state.recoveryAttempt(for: root) == nil)
     state.register(root, volumeUUID: "old")

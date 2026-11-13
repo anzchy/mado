@@ -123,7 +123,7 @@ private actor HomeOpeningGate {
 
 private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
 
-@Test(arguments: [false, true]) @MainActor func i331ShownStateLawHoldsOverEveryShortSequence(_ hidesOnHome: Bool) {
+@Test(.timeLimit(.minutes(2)), arguments: [false, true]) @MainActor func i331ShownStateLawHoldsOverEveryShortSequence(_ hidesOnHome: Bool) {
     _ = NSApplication.shared
     let session = ViewerSession()
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 960, height: 640),
@@ -164,7 +164,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     }
 }
 
-@Test @MainActor func i331DefaultOverlayIgnoresHomeInTheRealHost() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i331DefaultOverlayIgnoresHomeInTheRealHost() {
     let scene = HomeChromeScene(hidesOnHome: false)
     defer { scene.window.close() }
     #expect(scene.session.imageStatus == .empty)
@@ -173,7 +173,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     #expect(scene.state.buttons.first?.accessibilityIdentifier() == "state.open")
 }
 
-@Test @MainActor func i331ColdHomeHidesControlsAndKeepsOpenInTheLoop() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i331ColdHomeHidesControlsAndKeepsOpenInTheLoop() {
     let scene = HomeChromeScene(hidesOnHome: true)
     defer { scene.window.close() }
     #expect(scene.session.imageStatus == .empty)
@@ -182,7 +182,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     #expect(loopIDs(scene.canvas) == ["state.open"])
 }
 
-@Test @MainActor func i331TabOnHomeFocusesOpenAndControlsStayHidden() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i331TabOnHomeFocusesOpenAndControlsStayHidden() throws {
     let scene = HomeChromeScene(hidesOnHome: true)
     defer { scene.window.close() }
     scene.session.updateFocus(.canvas)
@@ -243,7 +243,7 @@ private enum HomeOp: CaseIterable { case show, hide, home, notHome, refresh }
     #expect(!keyLoop(from: scene.canvas).contains { $0 is NSButton && !($0 is ChromeToolView) })
 }
 
-@Test @MainActor func i331NonEmptyStatusesKeepControlsAndRefreshNeverRevealsOnHome() {
+@Test(.timeLimit(.minutes(2))) @MainActor func i331NonEmptyStatusesKeepControlsAndRefreshNeverRevealsOnHome() {
     let scene = HomeChromeScene(hidesOnHome: true)
     defer { scene.window.close() }
     scene.chrome.refresh(filename: "A.png", position: "1 / 2")

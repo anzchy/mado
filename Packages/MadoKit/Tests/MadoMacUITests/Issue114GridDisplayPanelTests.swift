@@ -127,7 +127,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
 @Suite(.serialized) struct Issue114GridDisplayPanelTests {
     // MARK: Toggle
 
-    @Test @MainActor func issue114PanelToggleParityAndPressedState() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelToggleParityAndPressedState() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         let button = f.shell.displayButton
@@ -150,7 +150,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         }
     }
 
-    @Test @MainActor func issue114PanelEscAndCloseReturnFocusToDisplayButton() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelEscAndCloseReturnFocusToDisplayButton() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         f.click()
@@ -177,7 +177,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
 
     // MARK: Panel ⇄ store ⇄ grid
 
-    @Test @MainActor func issue114PanelSliderWritesNormalizedSizeAndGrid() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelSliderWritesNormalizedSizeAndGrid() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         f.click()
@@ -201,7 +201,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(f.counter.values.count == 2)
     }
 
-    @Test @MainActor func issue114PanelCheckboxAndPopupWriteStoreAndGrid() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelCheckboxAndPopupWriteStoreAndGrid() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         f.click()
@@ -226,7 +226,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(f.counter.values.count == 3)
     }
 
-    @Test @MainActor func issue114PanelReflectsExternalStoreWrites() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelReflectsExternalStoreWrites() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         f.click()
@@ -261,7 +261,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(f.counter.values.count == 3)
     }
 
-    @Test @MainActor func issue114PanelShellPushesStoredOptionsToAttachedGrid() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelShellPushesStoredOptionsToAttachedGrid() throws {
         var stored = DisplayPreferences()
         stored.thumbnailSize = 260
         stored.showFileNames = false
@@ -275,7 +275,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(f.counter.values.isEmpty, "applying stored options writes nothing")
     }
 
-    @Test @MainActor func issue114PanelShellObserverIsWeak() {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelShellObserverIsWeak() {
         _ = NSApplication.shared
         let store = InMemoryDisplayPreferencesStore()
         weak var probe: GridShellView?
@@ -289,7 +289,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(store.value.thumbnailSize == 150)
     }
 
-    @Test @MainActor func issue114PanelAndSettingsWritesPreserveConcurrentFields() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelAndSettingsWritesPreserveConcurrentFields() throws {
         let f = try Issue114PanelFixture()
         defer { f.close() }
         f.click()
@@ -319,7 +319,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
 
     // MARK: Panel layout (page 15, light, @1x, 1280×800)
 
-    @Test @MainActor func issue114PanelPinnedGeometryAndHeader() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelPinnedGeometryAndHeader() throws {
         let design = try PinnedDesign.page("grid-display")
         let f = try Issue114PanelFixture(sidebar: true)
         defer { f.close() }
@@ -372,7 +372,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect(abs(weight - NSFont.Weight.medium.rawValue) < 0.01)
     }
 
-    @Test @MainActor func issue114PanelRowMetricsViaExactDeclaration() throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelRowMetricsViaExactDeclaration() throws {
         let design = try PinnedDesign.page("grid-display")
         #expect(try design.exactDeclaration(".setting-row", "padding") == "10px 2px")
         let minHeight = try #require(issue114Pixels(try design.exactDeclaration(".setting-row", "min-height")))
@@ -409,7 +409,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
                 "checkbox \(checkbox), intrinsic \(panel.namesCheckbox.intrinsicContentSize)")
     }
 
-    @Test @MainActor func issue114PanelNarrowShellStaysInside() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelNarrowShellStaysInside() async throws {
         for (width, expected) in [(CGFloat(290), CGFloat(266)), (238, 214)] {
             let f = try Issue114PanelFixture(width: width)
             defer { f.close() }
@@ -433,7 +433,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         }
     }
 
-    @Test @MainActor func issue114PanelContentPressureEnAndZh() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelContentPressureEnAndZh() async throws {
         let languages: [(String, String, [String], [String])] = [
             ("en", "Display and Appearance", ["Thumbnail Size", "Show File Names", "Thumbnails"],
              ["Fill and Crop", "Fit Entire Image"]),
@@ -469,7 +469,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
 
     // MARK: Footer button and key loop
 
-    @Test @MainActor func issue114PanelFooterButtonImplementedAt481And480() {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelFooterButtonImplementedAt481And480() {
         _ = NSApplication.shared
         for (width, buttonWidth, inset) in [(CGFloat(481), CGFloat(30), CGFloat(12)), (480, 26, 7)] {
             let shell = GridShellView(frame: NSRect(x: 0, y: 0, width: width, height: 680),
@@ -495,7 +495,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         #expect([EntryPoint.favorites, .recents, .footerInfo].allSatisfy { $0.state == .comingSoon })
     }
 
-    @Test @MainActor func issue114PanelKeyLoopContainsDisplayButtonOnce() async {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelKeyLoopContainsDisplayButtonOnce() async {
         _ = NSApplication.shared
         for actions in [true, false] {
             for emptyShown in [true, false] {
@@ -537,7 +537,7 @@ private let issue114ComingSoonMarkers = ["Coming Soon", "即将推出"]
         }
     }
 
-    @Test @MainActor func issue114PanelDisplayButtonLiveWhenFooterActionsOff() async throws {
+    @Test(.timeLimit(.minutes(2))) @MainActor func issue114PanelDisplayButtonLiveWhenFooterActionsOff() async throws {
         let cases: [(String, (GridShellView) -> Void)] = [
             ("footer actions off", { $0.setFooterActionsEnabled(false) }),
             ("empty folder page", { $0.setEmptyFolderState(true, recents: [], now: Date()) }),

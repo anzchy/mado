@@ -25,7 +25,7 @@ import MadoApplication
     weak var session: ViewerSession?
 }
 
-@Test @MainActor func gridPresentationRestoresReconciledMultiSelectionAndOffsetAfterSpaceEscape() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridPresentationRestoresReconciledMultiSelectionAndOffsetAfterSpaceEscape() throws {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-preview-presentation")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -67,7 +67,7 @@ import MadoApplication
     #expect(grid.contentOffset == offset)
 }
 
-@Test @MainActor func gridSpaceEntryKeepsMultiSelectionAndUsesVisibleGridOrder() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSpaceEntryKeepsMultiSelectionAndUsesVisibleGridOrder() {
     _ = NSApplication.shared
     let folder = URL(fileURLWithPath: "/tmp/mado-space-entry")
     let root = ItemIdentityRoot(id: AccessRootID(rawValue: UUID()), url: folder)
@@ -90,7 +90,7 @@ import MadoApplication
     #expect(session.previewSet?.itemIDs == [ids[1], ids[5]])
 }
 
-@Test @MainActor func gridSpaceEntryWithoutSnapshotDropsStaleSelection() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSpaceEntryWithoutSnapshotDropsStaleSelection() {
     _ = NSApplication.shared
     let session = ViewerSession()
     let id = ItemID.ephemeral(UUID())
@@ -145,7 +145,7 @@ import MadoApplication
     }
 }
 
-@Test @MainActor func resumeReadingFooterShowsReadingOnTheFailedSurface() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func resumeReadingFooterShowsReadingOnTheFailedSurface() throws {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     f.showFailedSurface()
     let before = f.footer
@@ -160,7 +160,7 @@ import MadoApplication
     #expect(!f.shell.isHidden && !f.presentation.isGridVisible)
 }
 
-@Test @MainActor func resumeReadingFooterLeavesTheFooterWhenNoReadStarts() {
+@Test(.timeLimit(.minutes(2))) @MainActor func resumeReadingFooterLeavesTheFooterWhenNoReadStarts() {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     f.showFailedSurface()
     let before = f.footer
@@ -169,7 +169,7 @@ import MadoApplication
     #expect(f.footer.count == "3 images" && !f.shell.folderTree.showsZeroForUnknownCurrent)
 }
 
-@Test @MainActor func resumeReadingFooterLeavesAHiddenShellHidden() {
+@Test(.timeLimit(.minutes(2))) @MainActor func resumeReadingFooterLeavesAHiddenShellHidden() {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     f.presentation.showViewer()
     let before = f.footer
@@ -179,7 +179,7 @@ import MadoApplication
     #expect(f.footer.count == "3 images" && !f.shell.folderTree.showsZeroForUnknownCurrent)
 }
 
-@Test @MainActor func resumeReadingFooterLeavesTheVisibleGridFooter() {
+@Test(.timeLimit(.minutes(2))) @MainActor func resumeReadingFooterLeavesTheVisibleGridFooter() {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     #expect(f.presentation.isGridVisible)
     let before = f.footer
@@ -190,7 +190,7 @@ import MadoApplication
 }
 
 /// Page 24F-A → page 24: Retry removes both the failure dash and its AX status.
-@Test @MainActor func i142WI1RetryClearsFailedSidebarCountAndAccessibility() async throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func i142WI1RetryClearsFailedSidebarCountAndAccessibility() async throws {
     let f = ResumeReadingFixture(); defer { f.window.close() }
     f.showFailedSurface()
     for _ in 0..<2 {

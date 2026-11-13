@@ -29,7 +29,7 @@ import MadoApplication
         isARepeat: false, keyCode: code))
 }
 
-@Test @MainActor func chromeRecallViewBandsAndNativeResponder() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeRecallViewBandsAndNativeResponder() throws {
     _ = NSApplication.shared
     let clock = ChromeViewClock()
     let host = ChromeRecallViewHost()

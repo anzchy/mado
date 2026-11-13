@@ -22,7 +22,7 @@ import MadoApplication
 }
 
 /// S5: changing the selected role cannot transfer a read's mask to another folder.
-@Test @MainActor func issue454ExplicitTargetPreservesNonTargetCountsAcrossRoleChanges() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue454ExplicitTargetPreservesNonTargetCountsAcrossRoleChanges() throws {
     let shell = target454Shell()
     let parent = URL(fileURLWithPath: "/target454/Parent")
     let current = parent.appendingPathComponent("Current")
@@ -50,7 +50,7 @@ import MadoApplication
 }
 
 /// S5: masking retains the latest model value through callbacks and rebuilt rows.
-@Test @MainActor func issue454ExplicitTargetRoundTripsUnknownZeroPositiveAndLateCounts() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue454ExplicitTargetRoundTripsUnknownZeroPositiveAndLateCounts() throws {
     let folder = URL(fileURLWithPath: "/target454/Reading")
     let sibling = URL(fileURLWithPath: "/target454/Sibling")
     for initial in [nil, 0, 12] as [Int?] {
@@ -76,7 +76,7 @@ import MadoApplication
 }
 
 /// S5: failure clears the old target; Retry supplies the failed folder again.
-@Test @MainActor func issue454ExplicitTargetFailureRetryAndCompletionKeepPrecedence() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue454ExplicitTargetFailureRetryAndCompletionKeepPrecedence() throws {
     let folder = URL(fileURLWithPath: "/target454/Failed")
     let other = URL(fileURLWithPath: "/target454/Other")
     for initial in [nil, 0, 3] as [Int?] {
@@ -103,7 +103,7 @@ import MadoApplication
 }
 
 /// The independently counted sidebar is not overwritten by the main projection's total.
-@Test @MainActor func issue454ExplicitTargetKeepsSidebarCountProvenance() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue454ExplicitTargetKeepsSidebarCountProvenance() throws {
     let shell = target454Shell()
     let grid = GridBrowserView(frame: shell.mainFrame)
     shell.mainContent.addSubview(grid)

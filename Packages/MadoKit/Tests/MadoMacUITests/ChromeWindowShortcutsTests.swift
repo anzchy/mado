@@ -8,7 +8,7 @@ import MadoApplication
     func windowShouldClose(_ sender: NSWindow) -> Bool { requests += 1; return false }
 }
 
-@Test @MainActor func chromeWindowCloseShortcutWorksWithHiddenAndVisibleControls() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func chromeWindowCloseShortcutWorksWithHiddenAndVisibleControls() throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 640, height: 680),
         styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)

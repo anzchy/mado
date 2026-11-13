@@ -77,7 +77,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
 }
 
 @Suite struct ImageCacheConflictResolutionTests {
-    @Test func issue122CancellationAfterRevalidatedMissReleasesTicket() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122CancellationAfterRevalidatedMissReleasesTicket() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let pipeline = ImageIOPipeline(cache: cache, cacheTrace: Issue122CancelOnMiss())
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)
@@ -117,7 +117,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         await pipeline.unpin(current)
     }
 
-    @Test func issue122StalePinnedRevisionDoesNotForceReread() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122StalePinnedRevisionDoesNotForceReread() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let old = cacheKey(125)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R1"))
@@ -134,7 +134,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         await cache.unpin(old)
     }
 
-    @Test func issue122CancellationAfterCacheMissReleasesTicket() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122CancellationAfterCacheMissReleasesTicket() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let pipeline = ImageIOPipeline(cache: cache, cacheTrace: Issue122CancelOnMiss())
         let request = try await pipeline.request(for: fixture("coordinate-grid.png"), maximumPixelSize: 16)
@@ -144,7 +144,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         #expect(await cache.pendingCount() == 0)
     }
 
-    @Test func issue122LateOldPinCannotEraseNewerRevisionObservation() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122LateOldPinCannotEraseNewerRevisionObservation() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let old = cacheKey(123)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R1"))
@@ -165,7 +165,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         }
     }
 
-    @Test func issue122PinRecordProtectsUnpinnedCurrentRevision() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122PinRecordProtectsUnpinnedCurrentRevision() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let old = cacheKey(124)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R1"))
@@ -192,7 +192,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         }
     }
 
-    @Test func issue122CancelledCacheActorLookupKeepsOtherTicket() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122CancelledCacheActorLookupKeepsOtherTicket() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let old = cacheKey(120)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R1"))
@@ -260,7 +260,7 @@ private func issue58Write(_ name: String, to file: URL) throws {
         await cache.unpin(current)
     }
 
-    @Test func issue122FreshCurrentObservationHealsPinnedRevisionAfterDelayedOldLookup() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue122FreshCurrentObservationHealsPinnedRevisionAfterDelayedOldLookup() async throws {
         let cache = ImageMemoryCache(capacity: 1_000_000)
         let old = cacheKey(122)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R1"))
@@ -497,7 +497,7 @@ extension ImageCacheConflictResolutionTests {
         #expect(await access.acquired.count == access.released.count)
     }
 
-    @Test func issue58OnlyLiveMatchingObservationCanRequestResolution() async throws {
+    @Test(.timeLimit(.minutes(2))) func issue58OnlyLiveMatchingObservationCanRequestResolution() async throws {
         let cache = ImageMemoryCache(capacity: 64), old = cacheKey(1), other = cacheKey(2)
         let current = issue58RevisionKey(old, revision: FileRevision(byteCount: 42, modificationDate: nil, resourceIdentifier: "R2"))
         let pixels = try cachePixels(marker: 2)

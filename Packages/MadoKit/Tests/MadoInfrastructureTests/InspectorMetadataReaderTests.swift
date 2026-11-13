@@ -21,7 +21,7 @@ private actor BrokenInspectorLease: AccessLeasing {
     func release(_ lease: AccessLease) {}
 }
 
-@Test func issue136CancellationReachesImageIOWorker() async throws {
+@Test(.timeLimit(.minutes(2))) func issue136CancellationReachesImageIOWorker() async throws {
     let reader = ImageIOInspectorMetadataReader(access: InspectorLease(), workerStarted: {
         // Cancel before handler registration, so onCancel runs even if the worker
         // has already finished. An asynchronous notification can arrive too late.
@@ -37,7 +37,7 @@ private actor BrokenInspectorLease: AccessLeasing {
     }
 }
 
-@Test func issue136InspectorReadsRealImageHeaderAndAttributes() async throws {
+@Test(.timeLimit(.minutes(2))) func issue136InspectorReadsRealImageHeaderAndAttributes() async throws {
     let url = fixture("landscape-3x2.png")
     let reader = ImageIOInspectorMetadataReader(access: InspectorLease(), pipeline: ImageIOPipeline())
     let value = try await reader.read(url, access: .fileGrant(url))
@@ -48,7 +48,7 @@ private actor BrokenInspectorLease: AccessLeasing {
     #expect(value.byteSize == Int64(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize!))
 }
 
-@Test func issue136InspectorReportsUnreadableAndNoPermissionSeparately() async {
+@Test(.timeLimit(.minutes(2))) func issue136InspectorReportsUnreadableAndNoPermissionSeparately() async {
     let lease = InspectorLease(), reader = ImageIOInspectorMetadataReader(access: lease)
     let url = fixture("not-an-image.jpg")
     do { _ = try await reader.read(url, access: .fileGrant(url)); Issue.record("Expected unreadable") }
@@ -58,7 +58,7 @@ private actor BrokenInspectorLease: AccessLeasing {
     catch { #expect(error as? InspectorReadError == .noPermission) }
 }
 
-@Test func issue136InspectorMissingFileAndUnexpectedLeaseErrorAreUnreadable() async {
+@Test(.timeLimit(.minutes(2))) func issue136InspectorMissingFileAndUnexpectedLeaseErrorAreUnreadable() async {
     let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     do {
         _ = try await ImageIOInspectorMetadataReader(access: InspectorLease()).read(missing, access: .fileGrant(missing))

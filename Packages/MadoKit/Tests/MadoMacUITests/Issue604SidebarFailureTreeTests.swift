@@ -3,7 +3,7 @@ import Testing
 import MadoApplication
 @testable import MadoMacUI
 
-@Test @MainActor func issue604FailureProjectionKeepsSiblingDepthAndCountOwnership() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue604FailureProjectionKeepsSiblingDepthAndCountOwnership() throws {
     _ = NSApplication.shared
     let parent = URL(fileURLWithPath: "/tmp/Parent")
     let locked = parent.appendingPathComponent("Locked")

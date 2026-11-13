@@ -3,7 +3,7 @@ import Testing
 import MadoCore
 @testable import MadoApplication
 
-@Test @MainActor func gridSearchCurrentClearAndWindowReset() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridSearchCurrentClearAndWindowReset() {
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-search-state")
     let rootID = AccessRootID(rawValue: UUID())
     let root = ItemIdentityRoot(id: rootID, url: folder)
@@ -33,7 +33,7 @@ import MadoCore
     #expect(search.preferredCurrentItemID == nil)
 }
 
-@Test @MainActor func clearingSearchKeepsUserChosenMatchThenFallsBackWhenRemoved() {
+@Test(.timeLimit(.minutes(2))) @MainActor func clearingSearchKeepsUserChosenMatchThenFallsBackWhenRemoved() {
     let folder = URL(fileURLWithPath: "/tmp/mado-grid-search-chosen")
     let rootID = AccessRootID(rawValue: UUID())
     let root = ItemIdentityRoot(id: rootID, url: folder)

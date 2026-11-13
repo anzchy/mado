@@ -28,7 +28,7 @@ private actor CoverageLog {
 }
 
 // #161: the grid passes its tile to the loader and accepts the source-ratio edge, not only the 2× fallback.
-@Test @MainActor func gridThumbnailAcceptsAspectEdgeAndRejectsOtherEdges() async {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridThumbnailAcceptsAspectEdgeAndRejectsOtherEdges() async {
     let snapshot = coverageSnapshot(count: 5)
     let tile = ThumbnailCoverage(width: 424, height: 296)
     // 0: 3:2 at 444; 1: portrait at 636; 2: orientation-6 upright 128×96 at its edge; 3: fallback; 4: neither.
@@ -55,7 +55,7 @@ private actor CoverageLog {
     scheduler.stop()
 }
 
-@Test @MainActor func gridCellInstallsAspectEdgeWithinCeilingOnly() {
+@Test(.timeLimit(.minutes(2))) @MainActor func gridCellInstallsAspectEdgeWithinCeilingOnly() {
     _ = NSApplication.shared
     let entry = coverageSnapshot(count: 1).navigationEntries[0]
     let cell = GridPhotoItem()

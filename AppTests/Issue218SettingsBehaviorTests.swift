@@ -13,7 +13,7 @@ import MadoMacUI
     return nil
 }
 
-@MainActor @Test func issue218DisplaySectionControlsAreLiveAndSelectingWritesNothing() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218DisplaySectionControlsAreLiveAndSelectingWritesNothing() throws {
     let preferences = InMemoryDisplayPreferencesStore()
     let defaults = UserDefaults(suiteName: "issue218-future-\(UUID().uuidString)")!
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),
@@ -39,7 +39,7 @@ import MadoMacUI
     #expect(preferences.value == DisplayPreferences())
 }
 
-@MainActor @Test func issue218SettingsTextFitsPinnedContentFrames() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218SettingsTextFitsPinnedContentFrames() throws {
     let preferences = InMemoryDisplayPreferencesStore()
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),
         appearanceAdapter: WindowAppearanceAdapter(preferencesStore: preferences),
@@ -63,7 +63,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue218CommandCommaReusesSettingsWindow() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218CommandCommaReusesSettingsWindow() throws {
     _ = NSApplication.shared
     let preferences = InMemoryDisplayPreferencesStore()
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),
@@ -86,7 +86,7 @@ import MadoMacUI
     #expect(NSApp.windows.filter { $0 === first }.count == 1)
 }
 
-@MainActor @Test func issue218PinnedSidebarSurfaceInLightAndDark() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218PinnedSidebarSurfaceInLightAndDark() throws {
     let preferences = InMemoryDisplayPreferencesStore()
     let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),
         appearanceAdapter: WindowAppearanceAdapter(preferencesStore: preferences),
@@ -151,7 +151,7 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test func issue218LongestCatalogLabelsFitPinnedColumnsInEnglishAndChinese() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue218LongestCatalogLabelsFitPinnedColumnsInEnglishAndChinese() throws {
     let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("App/Resources/Localizable.xcstrings")
     let data = try Data(contentsOf: file)
