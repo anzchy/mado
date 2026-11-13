@@ -241,12 +241,14 @@ import Testing
     #expect(missing.isEmpty, "\(missing.count) async/AppKit tests lack a time limit: \(missing.prefix(40))")
 }
 
-/// #400 proves the condition-wait helpers' wall-clock bound, which applies only to untimed tests. A limit
-/// on these turns the never-true run-loop wait into a main-actor spin until cancellation, which starves
-/// every other main-actor test in the full run. They must stay untimed.
+/// These tests prove a condition-wait helper's wall-clock bound or its timeout failure, and that bound applies
+/// only to untimed tests (#400). A limit on them turns the never-true wait into a main-actor spin until
+/// cancellation: in the package run it starves every other main-actor test, and in the App run (#672 hosted run
+/// 43391375017) `issue606WaitFailuresIncludeAppKitState` spun until its own 3-minute limit. They must stay untimed.
 private let deliberatelyUntimedTests: Set<String> = [
     "ConditionWaitTests.swift:i400UntimedWaitKeepsItsBounds",
     "ConditionWaitTests.swift:i400UntimedRunLoopKeepsItsBounds",
+    "Issue606ConditionWaitStateTests.swift:issue606WaitFailuresIncludeAppKitState",
 ]
 
 /// #672 left these alone because the #144 branch edits ShortcutCatalogTests.swift.
