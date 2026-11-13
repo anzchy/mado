@@ -313,7 +313,7 @@ private struct Issue219PaintedText {
             view.layoutSubtreeIfNeeded()
             try #require(view.cardViews.count == 3)
             let actual = view.cardViews.flatMap { $0.rowViews.map(\.nameLabel.stringValue) }
-            #expect(actual.count == 20)
+            #expect(actual.count == issue219ExpectedRows.count)
             for (name, expected) in zip(actual, issue219ExpectedRows) {
                 #expect(name == (language == .english ? expected.3[0] : expected.4[0]))
             }

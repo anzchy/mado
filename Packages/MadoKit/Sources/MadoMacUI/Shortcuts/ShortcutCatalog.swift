@@ -99,6 +99,7 @@ public struct ShortcutCatalog: Sendable {
             keyRow("grid-arrows", ["←", "→", "↑", "↓"], "Move Current", "移动当前项"),
             commandRow([.preview], "Preview Current Item", "用大图查看当前项"),
             commandRow([.enter], "Open Current Item", "打开当前项"),
+            keyRow("grid-context-menu", ["⌃", "Return"], "Image Context Menu", "图片上下文菜单"),
             menuRow("focusGridSearch:", "Search Current Folder", "搜索当前文件夹", requiredCommand: .search),
             menuRow("toggleSidebar:", "Show / Hide Sidebar", "显示 / 隐藏侧栏"),
         ].compactMap { $0 }

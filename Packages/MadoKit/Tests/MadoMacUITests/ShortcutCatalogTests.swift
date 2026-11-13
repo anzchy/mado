@@ -49,6 +49,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     ("grid", ["key:grid-arrows"], ["←", "→", "↑", "↓"], ["Move Current"], ["移动当前项"]),
     ("grid", ["command:preview"], ["Space"], ["Preview Current Item"], ["用大图查看当前项"]),
     ("grid", ["command:enter"], ["Return"], ["Open Current Item"], ["打开当前项"]),
+    ("grid", ["key:grid-context-menu"], ["⌃", "Return"], ["Image Context Menu"], ["图片上下文菜单"]),
     ("grid", ["menu:Search current folder"], ["⌘", "F"], ["Search Current Folder"], ["搜索当前文件夹"]),
     ("grid", ["menu:Hide sidebar"], ["⌃", "⌘", "S"], ["Show / Hide Sidebar"], ["显示 / 隐藏侧栏"]),
     ("viewer", ["command:previous", "command:next"], ["←", "→"], ["Previous / Next Image"], ["上一张 / 下一张"]),
@@ -123,7 +124,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     }
     let catalog = ShortcutCatalog(menu: menu, language: .simplifiedChinese)
     let actual = issue219Flatten(catalog)
-    #expect(actual.count == 20)
+    #expect(actual.count == issue219ExpectedRows.count)
     for (row, expected) in zip(actual, issue219ExpectedRows) {
         #expect(row.1 == expected.1)
         #expect(row.2 == expected.2)
@@ -138,10 +139,10 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     try #require(view.items.first { $0.title == "Enter Full Screen" }).title = "Exit Full Screen"
     let catalog = ShortcutCatalog(menu: menu, language: .english)
     let sources = issue219Flatten(catalog).flatMap(\.1)
-    #expect(sources.count == 22)
+    #expect(sources.count == 23)
     #expect(sources.filter { $0 == "menu:Hide sidebar" }.count == 1)
     #expect(sources.filter { $0 == "menu:Enter Full Screen" }.count == 1)
-    #expect(issue219Flatten(catalog).count == 20)
+    #expect(issue219Flatten(catalog).count == issue219ExpectedRows.count)
 }
 
 @Test @MainActor func issue284ShortcutCatalogNamesTheSurvivingHalfOfAPairedRow() {

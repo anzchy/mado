@@ -1,6 +1,11 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Image Context Menu":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Image Context Menu"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"图片上下文菜单"}}}},
+    "Quick Look":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Quick Look"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"快速查看"}}}},
+    "Show in Finder":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Show in Finder"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在访达中显示"}}}},
+    "Copy Path":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Copy Path"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"拷贝路径"}}}},
+    "Get Info":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Get Info"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"图片信息"}}}},
     "Can’t Find “%@”": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Can’t Find “%@”"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"找不到“%@”"}}}},
     "Unable to Access “%@”": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Unable to Access “%@”"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法访问“%@”"}}}},
     "Not Found":{"localizations":{"en":{"stringUnit":{"state":"translated","value":"Not Found"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"找不到"}}}},
