@@ -1894,7 +1894,8 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             if self.session.mode == .browsing, !self.gridView.isHidden {
                 _ = self.window?.makeFirstResponder(self.gridView.collectionView)
             }
-            self.activeImageContextMenu = nil
+            // AppKit sends a chosen item's action after menuDidClose. Keep its weak target
+            // alive until the next menu replaces it or the window closes.
         }
         controller.updateAvailability()
         activeImageContextMenu = controller

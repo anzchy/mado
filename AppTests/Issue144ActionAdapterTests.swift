@@ -71,7 +71,11 @@ func issue144MenuCopyUsesCapturedUnselectedTargetAfterCurrentChanges() async thr
     controller.session.select(ids[2])
     let item = menu.items[3]
     #expect(item.isEnabled)
-    _ = NSApp.sendAction(try #require(item.action), to: item.target, from: item)
+    menu.delegate?.menuWillOpen?(menu)
+    menu.delegate?.menuDidClose?(menu)
+    #expect(!controller.session.isMenuTracking)
+    let closedMenuTarget = try #require(item.target)
+    _ = NSApp.sendAction(try #require(item.action), to: closedMenuTarget, from: item)
     try await waitUntil("copy delivered") { !copier.calls.isEmpty }
     #expect(copier.calls == [[try #require(grid.entry(for: ids[3])).url]])
 
