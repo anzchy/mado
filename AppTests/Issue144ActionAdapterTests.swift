@@ -219,3 +219,41 @@ func issue144MenuQuickLookRestoresGridScrollLikeSpace() async throws {
     #expect(controller.route(.escape, from: .key))
     #expect(grid.contentOffset == originalOffset)
 }
+
+@Test(.timeLimit(.minutes(3))) @MainActor
+func issue144SingleImageMenuQuickLookKeepsCapturedFolderRange() async throws {
+    _ = NSApplication.shared
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent("issue144-range-\(UUID().uuidString)")
+    let folder = base.appendingPathComponent("Images")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: base) }
+    let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("TestAssets/synthetic/landscape-3x2.png")
+    let data = try Data(contentsOf: fixture)
+    for i in 0..<6 { try data.write(to: folder.appendingPathComponent(String(format: "%03d.png", i))) }
+    let scope = SystemSecurityScope()
+    let access = try FileAccess(scope: scope, bookmarks: scope,
+        store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue144-range")
+    let services = AccessServices(files: access,
+        recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")), browser: FolderBrowser(),
+        watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
+        accessServices: Task { services }, motionPolicy: MotionPolicy(source: Issue144Motion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    controller.openGrantedFolder(folder)
+    try await waitUntil("grid ready", between: { window.contentView?.layoutSubtreeIfNeeded() }) {
+        controller.gridSearchAvailable && (issue144Grid(window.contentView)?.displayedItemIDs.count ?? 0) == 6
+    }
+    let grid = try #require(issue144Grid(window.contentView))
+    let ids = grid.displayedItemIDs
+    controller.session.select(ids[0])
+    let menu = try #require(controller.makeGridImageContextMenu(for: ids[3]))
+    let item = menu.items[0]
+    _ = NSApp.sendAction(try #require(item.action), to: item.target, from: item)
+    await controller.waitForGridImageContextAction()
+    #expect(controller.session.previewSet?.itemIDs == ids)
+    #expect(controller.session.previewSet?.currentItemID == ids[3])
+    #expect(controller.route(.next, from: .key))
+    #expect(controller.session.previewSet?.currentItemID == ids[4])
+}

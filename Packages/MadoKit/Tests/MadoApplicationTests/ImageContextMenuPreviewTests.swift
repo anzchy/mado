@@ -12,7 +12,7 @@ import MadoApplication
     session.focus(ids[0])
     let single = ImageContextMenu(clickedItemID: ids[3], selection: session.selection, entries: entries)
     session.focus(ids[5])
-    session.preview(single)
+    session.preview(single, availableItemIDs: ids)
     #expect(session.previewSet?.itemIDs == ids)
     #expect(session.previewSet?.currentItemID == ids[3])
 
@@ -22,7 +22,7 @@ import MadoApplication
     session.select(ids[4], modifier: .command)
     let multi = ImageContextMenu(clickedItemID: ids[2], selection: session.selection, entries: entries)
     session.select(ids[0])
-    session.preview(multi)
+    session.preview(multi, availableItemIDs: ids)
     #expect(session.previewSet?.itemIDs == [ids[1], ids[2], ids[4]])
     #expect(session.previewSet?.currentItemID == ids[4])
 }
