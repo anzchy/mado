@@ -1935,6 +1935,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
                         guard !entries.isEmpty else { return }
                         switch action {
                         case .quickLook:
+                            guard self.session.mode == .browsing, !self.gridView.isHidden else { return }
                             self.prepareGridPreview()
                             // The clicked item must survive the disk check above. A single
                             // target still previews the captured folder range; a multi-selection
