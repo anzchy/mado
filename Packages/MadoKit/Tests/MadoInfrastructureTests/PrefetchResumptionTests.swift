@@ -48,7 +48,7 @@ private final class SteppedPressureTime: @unchecked Sendable {
     }
 }
 
-@Suite(.timeLimit(.minutes(2))) struct PrefetchResumptionTests {
+@Suite(.timeLimit(.minutes(1))) struct PrefetchResumptionTests {
     private static func pipeline(_ time: SteppedPressureTime, delay: TimeInterval = 5) -> ImageIOPipeline {
         ImageIOPipeline(configuration: DecodeConfiguration(pressureRecoveryDelay: delay),
             pressureClock: { time.now }, pressureSleep: { try await time.sleep($0) })
@@ -88,13 +88,19 @@ private final class SteppedPressureTime: @unchecked Sendable {
         #expect(time.requested == [1])
     }
 
-    // R1 1.4e: the default sleep waits on the real clock for a short recovery delay.
-    @Test func pipelinePrefetchResumptionUsesTheRealClockByDefault() async throws {
-        let pipeline = ImageIOPipeline(configuration: DecodeConfiguration(pressureRecoveryDelay: 0.05))
+    // #673: the injected clock owns both the recovery deadline and the pending sleep.
+    @Test func pipelinePrefetchResumptionStaysBlockedUntilInjectedDeadline() async throws {
+        let time = SteppedPressureTime(), pipeline = Self.pipeline(time)
         await pipeline.memoryPressure(.warning)
         await pipeline.memoryPressure(.normal)
+        let waiting = Task { await pipeline.prefetchResumes() }
+        #expect(try await time.waitFor(asked: 1))
+        time.advance(by: 4.999)
         #expect(await !pipeline.cache.permits(.prefetch))
-        await pipeline.prefetchResumes()
+        #expect(time.sleeping == 1)
+        time.advance(by: 0.001)
+        await waiting.value
+        #expect(time.requested == [5])
         #expect(await pipeline.cache.permits(.prefetch))
     }
 
@@ -109,5 +115,17 @@ private final class SteppedPressureTime: @unchecked Sendable {
         for _ in 0..<20 { await Task.yield() }
         #expect(time.requested == [5])
         #expect(time.sleeping == 0)
+    }
+}
+
+@Suite(.timeLimit(.minutes(2))) struct PrefetchDefaultClockTests {
+    // R1 1.4e: the default sleep waits on the real clock for a short recovery delay.
+    @Test func pipelinePrefetchResumptionUsesTheRealClockByDefault() async throws {
+        let pipeline = ImageIOPipeline(configuration: DecodeConfiguration(pressureRecoveryDelay: 0.05))
+        await pipeline.memoryPressure(.warning)
+        await pipeline.memoryPressure(.normal)
+        #expect(await !pipeline.cache.permits(.prefetch))
+        await pipeline.prefetchResumes()
+        #expect(await pipeline.cache.permits(.prefetch))
     }
 }

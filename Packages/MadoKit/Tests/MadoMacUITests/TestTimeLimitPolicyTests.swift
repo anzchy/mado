@@ -1,6 +1,26 @@
 import Foundation
 import Testing
 
+@Test func TestTimeLimitPolicy673InjectedClockFamilyCanUseOneMinute() {
+    let source = """
+    @Suite(.timeLimit(.minutes(1))) struct PrefetchResumptionTests {
+        @Test func controlled() async {
+            let time = SteppedPressureTime()
+            let pipeline = ImageIOPipeline(pressureClock: { time.now }, pressureSleep: { try await time.sleep($0) })
+            _ = await pipeline.prefetchResumes()
+        }
+    }
+    """
+    #expect(packageTimeLimitViolations(in: source, fileName: "PrefetchResumptionTests.swift").isEmpty)
+    #expect(packageTimeLimitViolations(in: source, fileName: "OtherTests.swift") == [.minutes(1)])
+    let extra = source + "\n@Test(.timeLimit(.minutes(1))) func unrelated() {}"
+    #expect(packageTimeLimitViolations(in: extra, fileName: "PrefetchResumptionTests.swift") == [.minutes(1), .minutes(1)])
+    let wrongSuite = source.replacingOccurrences(of: "struct PrefetchResumptionTests", with: "struct OtherTests")
+    #expect(packageTimeLimitViolations(in: wrongSuite, fileName: "PrefetchResumptionTests.swift") == [.minutes(1)])
+    let seconds = source + "\n@Test(.timeLimit(.seconds(30))) func unrelated() {}"
+    #expect(packageTimeLimitViolations(in: seconds, fileName: "PrefetchResumptionTests.swift").contains(.unrecognised))
+}
+
 @Test func TestTimeLimitPolicyMinuteSpellingsAndBoundary() {
     let oneMinuteSources = [
         ".timeLimit(.minutes(1))",
@@ -80,11 +100,10 @@ import Testing
     var limits = 0
     for file in files {
         let source = try String(contentsOf: file, encoding: .utf8)
-        for declaration in scanTimeLimits(in: source) {
-            limits += 1
-            #expect(!declaration.violatesPolicy,
-                    "\(file.lastPathComponent): \(declaration) must be recognised literal minutes >= 2 for CI queueing")
-        }
+        limits += scanTimeLimits(in: source).count
+        let violations = packageTimeLimitViolations(in: source, fileName: file.lastPathComponent)
+        #expect(violations.isEmpty,
+                "\(file.lastPathComponent): \(violations) must be recognised literal minutes >= 2 for CI queueing, except #673's named one-minute suite")
     }
     #expect(limits > 100, "found \(limits) time limits")
 }
