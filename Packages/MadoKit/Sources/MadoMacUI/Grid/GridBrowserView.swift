@@ -279,7 +279,8 @@ private enum GridPageMove {
         window?.makeFirstResponder(self)
     }
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 36, event.modifierFlags.contains(.control) {
+        let contextModifiers = event.modifierFlags.intersection([.control, .command, .option, .shift])
+        if event.keyCode == 36, contextModifiers == .control {
             onKeyboardContextMenu?()
             return
         }

@@ -18,6 +18,17 @@ test('the shortcut page equals the implemented commands', () => {
   assert.deepEqual(check(), []);
 });
 
+test('i144 Control-Return is a listed grid menu entry', () => {
+  assert.match(readRepo(FILES.page), /data-shortcut="key:grid-context-menu"[^\n]*<kbd>⌃<\/kbd><kbd>Return<\/kbd>/);
+  assert.deepEqual(check(), []);
+});
+
+test('i144 checker rejects a changed grid menu modifier', () => {
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift',
+    replaceOnce('contextModifiers == .control', 'contextModifiers == .command')),
+  /key:grid-context-menu: .*GridBrowserView\.swift no longer matches/);
+});
+
 test('a newly implemented CommandID that the page lacks fails', () => {
   const read = withChange(FILES.commandID, s => s
     .replace('case preview, previous,', 'case rotate, preview, previous,')
