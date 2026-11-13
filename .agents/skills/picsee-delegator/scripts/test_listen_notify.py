@@ -42,6 +42,32 @@ def claude_screen(*box, label=" picsee-delegator ─"):
     return "\r\n".join(lines) + "\r\n"
 
 
+class LockAlertStatusTests(unittest.TestCase):
+    """#672: heavy-lock budget alerts beside the listeners directory need the delegator."""
+
+    def test_open_lock_alerts_are_attention_until_acknowledged(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            delegator = Path(temporary)
+            listeners = delegator / "listeners"
+            listeners.mkdir()
+            self.assertEqual(listen_notify.listener_status(listeners), ([], False))
+            alerts = delegator / "lock-alerts"
+            (alerts / "acked").mkdir(parents=True)
+            record = {"id": "a" * 32, "phase": "cleanup", "cleanup": "incomplete",
+                      "budgetSeconds": 600, "pid": 41, "pgid": 41}
+            (alerts / "acked" / "old.json").write_text(json.dumps(record))
+            self.assertEqual(listen_notify.listener_status(listeners), ([], False))
+            (alerts / ("a" * 32 + ".json")).write_text(json.dumps(record))
+            (alerts / "broken.json").write_text("{")
+            lines, attention = listen_notify.listener_status(listeners)
+            self.assertTrue(attention)
+            self.assertEqual(lines, [
+                "attention lock-alert {} phase=cleanup cleanup=incomplete budget=600s pid=41 pgid=41 file={}".format(
+                    "a" * 32, alerts / ("a" * 32 + ".json")),
+                "attention lock-alert broken state=invalid file={}".format(alerts / "broken.json"),
+            ])
+
+
 class ListenerTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()

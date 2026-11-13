@@ -277,6 +277,76 @@ def publish_status(path, invocation, cleanup, result, timed_out, drain_expired=F
         return False
 
 
+def wall_time(seconds):
+    return time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime(seconds))
+
+
+def survivor_details(rows):
+    """PID/PGID/state/RSS for owned rows, or None when the state cannot be read."""
+    if rows is None:
+        return None
+    if not rows:
+        return []
+    try:
+        query = subprocess.run(['ps', '-o', 'pid=,pgid=,stat=,rss=', '-p', ','.join(str(pid) for pid, _ in rows)],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    details = []
+    for line in query.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 4 and fields[0].isdigit() and fields[1].isdigit() and fields[3].isdigit():
+            details.append({'pid': int(fields[0]), 'pgid': int(fields[1]),
+                            'state': fields[2], 'rssKiB': int(fields[3])})
+    return details
+
+
+class LockAlert:
+    """#672: tell the delegator, through its status loop, that a holder exceeded its budget.
+
+    Writes ~/.picsee/herdr/delegator/lock-alerts/<invocation>.json (0600) and appends one
+    line to attention.log beside it; `listen-notify.py status` reports open alerts as
+    attention. PICSEE_HEAVY_ALERT_DIR overrides the delegator directory. Without it, only
+    the machine lock (~/.picsee/locks/heavy.lock) alerts: test fixtures on private lock
+    files time out on purpose and must not reach the real attention channel. Alert failures
+    are reported on stderr and never change the job's result.
+    """
+
+    @staticmethod
+    def directory_for(lock, fd):
+        chosen = os.environ.get('PICSEE_HEAVY_ALERT_DIR')
+        if chosen:
+            return Path(chosen)
+        machine = Path.home() / '.picsee/locks/heavy.lock'
+        if fd is not None and os.path.abspath(lock) == os.path.abspath(machine):
+            return Path.home() / '.picsee/herdr/delegator'
+        return None
+
+    def __init__(self, record, base):
+        self.record = record
+        self.directory = base / 'lock-alerts'
+        self.path = self.directory / f"{record['id']}.json"
+        self.log = base / 'attention.log'
+
+    def publish(self, first):
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            temporary = self.path.with_name(self.path.name + '.tmp')
+            with os.fdopen(os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600), 'w') as output:
+                json.dump(self.record, output, indent=2)
+                output.write('\n')
+            os.replace(temporary, self.path)
+            if first:
+                record = self.record
+                with self.log.open('a') as log:
+                    log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} heavy-lock holder exceeded "
+                              f"its {record['budgetSeconds']:g}s budget; pid {record['pid']} pgid {record['pgid']}; "
+                              f"alert {self.path}; run listen-notify.py status\n")
+            print(f'[heavy-lock] lock-age alert: {self.path}', file=sys.stderr, flush=True)
+        except OSError as error:
+            print(f'[heavy-lock] lock-age alert failed: {error}', file=sys.stderr, flush=True)
+
+
 def reraise(signum):
     signal.signal(signum, signal.SIG_DFL)
     os.kill(os.getpid(), signum)
@@ -639,6 +709,7 @@ def supervised_main():
         elif inherited_flock:
             passed.append(int(inherited_flock))
         launched = time.monotonic()
+        launched_wall = time.time()
         execution_deadline = min(launched + budget, parent_deadline) if nested else launched + budget
         def publish_root_before_exec():
             # A supervisor killed during Popen cannot strand an unidentified
@@ -686,9 +757,29 @@ def supervised_main():
             if time.monotonic() >= execution_deadline:
                 timed_out = True
                 print(f'[heavy-lock] execution timeout after {budget:g}s', file=sys.stderr, flush=True)
+                alert = None
+                alert_dir = None if nested else LockAlert.directory_for(lock, fd)
+                if alert_dir is not None:
+                    alert = LockAlert({
+                        'kind': 'heavy-lock-budget-exceeded', 'id': invocation, 'phase': 'deadline',
+                        'command': command, 'cwd': os.getcwd(), 'budgetSeconds': budget,
+                        'startedAt': wall_time(launched_wall), 'deadlineAt': wall_time(launched_wall + budget),
+                        'exceededAt': wall_time(time.time()), 'supervisor': os.getpid(), 'pid': child.pid,
+                        'pgid': root, 'groups': sorted(groups), 'hosts': sorted(hosts),
+                        'survivorsAtDeadline': survivor_details(rows), 'cleanup': None,
+                        'survivorsAfterCleanup': None, 'retainedLocks': None}, alert_dir)
+                    alert.publish(first=True)
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
                                                    flock_required, ancestor_control_fd, unknown) else 'incomplete'
+                if alert is not None:
+                    retained = cleanup != 'complete' or unknown[0]
+                    after = [] if cleanup == 'complete' else survivor_details(owned_state(root, groups, hosts, excluded))
+                    alert.record.update({
+                        'phase': 'cleanup', 'cleanup': cleanup, 'survivorsAfterCleanup': after,
+                        'retainedLocks': ([{'kind': 'picsee-flock', 'path': str(lock), 'retained': retained}] if fd is not None else []) +
+                                         ([{'kind': 'mdpro-directory', 'path': str(shared), 'retained': retained}] if acquired else [])})
+                    alert.publish(first=False)
                 break
             if rows is None:
                 if result is not None:
