@@ -248,7 +248,7 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
                 os.close(fd)
 
 
-def publish_status(path, invocation, cleanup, result, timed_out):
+def publish_status(path, invocation, cleanup, result, timed_out, drain_expired=False):
     if not path:
         return True
     destination = Path(path)
@@ -258,7 +258,8 @@ def publish_status(path, invocation, cleanup, result, timed_out):
             raise OSError('injected status publication failure')
         with os.fdopen(os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as output:
             json.dump({'id': invocation, 'supervisor': os.getpid(), 'cleanup': cleanup,
-                       'commandExit': result, 'timedOut': timed_out}, output)
+                       'commandExit': result, 'timedOut': timed_out,
+                       'drainExpired': drain_expired}, output)
             output.write('\n')
             output.flush()
             os.fsync(output.fileno())
@@ -537,6 +538,7 @@ def supervised_main():
     retain_shared = False
     result = 70
     timed_out = False
+    drain_expired = False
     guardian_lost = False
     cleanup = 'incomplete'
     child = None
@@ -707,6 +709,7 @@ def supervised_main():
                     heartbeat = now + 60
                 if now - draining >= drain_seconds:
                     print('[heavy-lock] drain timed out; terminating survivors', file=sys.stderr, flush=True)
+                    drain_expired = True
                     cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                        parent_control, session, excluded, guardian_write,
                                                        flock_required, ancestor_control_fd, unknown) else 'incomplete'
@@ -718,7 +721,7 @@ def supervised_main():
         retain_shared = known_cleanup != 'complete'
         if known_cleanup == 'complete':
             child.wait()
-        if not publish_status(status_path, invocation, cleanup, result, timed_out):
+        if not publish_status(status_path, invocation, cleanup, result, timed_out, drain_expired):
             return 70
         if private_fd is not None:
             try:
@@ -726,7 +729,8 @@ def supervised_main():
                     raise OSError('injected status publication failure')
                 record = (json.dumps({'kind': 'status', 'id': invocation,
                                       'supervisor': os.getpid(), 'cleanup': cleanup,
-                                      'commandExit': result, 'timedOut': timed_out}) + '\n').encode()
+                                      'commandExit': result, 'timedOut': timed_out,
+                                      'drainExpired': drain_expired}) + '\n').encode()
                 if len(record) > os.fpathconf(private_fd, 'PC_PIPE_BUF') or \
                         os.write(private_fd, record) != len(record):
                     raise OSError('short private status record')

@@ -30,7 +30,7 @@ const CRASH_RECORDS = [
 
 // Only completed summaries prove tests actually ran. Each stream is parsed
 // independently so interleaved partial stdout/stderr cannot forge a summary.
-function parseOutput(text) {
+export function parseOutput(text) {
   const clean = text.replace(/\x1b\[[0-9;]*m/g, "").replace(/\r/g, "");
   const lines = clean.split("\n");
   const crash = lines.some(line => CRASH_RECORDS.some(record => record.test(line)));
@@ -138,7 +138,7 @@ function reraise(signal) {
   process.kill(process.pid, /** @type {NodeJS.Signals} */ (signal));
 }
 
-function supervisedStdio(env) {
+export function supervisedStdio(env) {
   const stdio=['inherit','pipe','pipe'];
   if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return stdio;
   for(const name of ['PICSEE_HEAVY_CONTROL_FD','PICSEE_HEAVY_FLOCK_FD']){
@@ -162,7 +162,7 @@ function main(argv) {
   const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
   let attempt;
   try {
-    attempt=spawnAttested(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: supervisedStdio(process.env) });
+    attempt=spawnAttested(lock, ["swift", "test", "--package-path", "Packages/MadoKit", "--filter", filter], { stdio: supervisedStdio(process.env) }, { rejectDrain: true });
   } catch(error) {
     process.stderr.write(`swift-lane: ${error.message}\n`);
     process.exitCode=70;
