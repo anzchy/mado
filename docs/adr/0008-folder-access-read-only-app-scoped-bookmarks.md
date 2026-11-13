@@ -11,6 +11,8 @@ app-scope bookmark 由本应用重启后恢复用户授予的范围。File Grant
 
 2026-10-26 修订：上述 File Grant “绝不写 bookmark”仅适用于持久化存储；#140 按用户新决定在会话内存中暂存单文件 security-scoped bookmark 以跟随外部重命名，绝不枚举父目录或写入 Access Root 存储。见 [ADR-0011](0011-session-file-grant-bookmark-recovery.md)。
 
+2026-11-13 修订：为标注副本直接写回授权文件夹，entitlement 按 P5-04 改为 `files.user-selected.read-write`，见 [ADR-020](0020-annotation-saves-a-flattened-copy-into-writable-access-roots.md)。
+
 ## Considered Options
 
 - Full Disk Access：扩大访问范围且依赖系统设置，拒绝。

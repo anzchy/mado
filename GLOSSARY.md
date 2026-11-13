@@ -91,6 +91,44 @@ _Avoid_: playlist, range, "all images" when only a selection was meant
 The single language every piece of text in Mado appears in, including the text macOS draws for it: Follow System, English or Simplified Chinese. Follow System means Simplified Chinese when the system prefers Chinese, English otherwise.
 _Avoid_: locale, region, "translation" for the setting itself
 
+### Text Recognition
+
+**On-device Recognition**（本机识别）:
+Text recognition that Mado performs on the Mac itself, without sending the image anywhere.
+_Avoid_: offline OCR, Live Text (when the engine is meant)
+
+**Cloud Recognition**（云识别）:
+Text recognition by an outside OCR service, using the user's own key; the image leaves the Mac.
+_Avoid_: online OCR, Baidu OCR (when the general concept is meant)
+
+### Capture
+
+**Capture**（截图）:
+An image of the screen, or part of it, that Mado takes on the user's command.
+_Avoid_: screenshot (as a separate term), snap, grab
+
+**Capture Bar**（截图工具条）:
+The small floating toolbar for taking a Capture, which stays available when no Mado window is open and can collapse to a menu bar icon.
+_Avoid_: Minibar, helper (when the visible bar is meant), floating toolbar
+
+**Capture Thumbnail**（截图缩略图）:
+The short-lived corner preview shown after a Capture, offering the next steps for that one Capture.
+_Avoid_: quick access overlay, preview (Preview Set means something else)
+
+**Capture Folder**（截图文件夹）:
+The folder new Captures are saved to; ~/Downloads unless the user changes it.
+_Avoid_: screenshot location, output folder
+
+### Annotation
+
+**Annotate Mode**（标注模式）:
+The state of a viewer window in which the user draws marks over the current image instead of browsing.
+_Avoid_: edit mode, markup, editor
+
+**Annotated Copy**（标注副本）:
+A new image file, next to the original and named with "-annotated", holding the original with the marks merged in.
+_Avoid_: edited image, overwrite, project file
+
 ## Relationships
 
 - The **Home** has no **Bottom Bar**; every window with a folder open shows it, including the **Reading State**, an empty folder, a failed read and **Lost Access**.
@@ -112,6 +150,13 @@ _Avoid_: locale, region, "translation" for the setting itself
 - **Lost Access** belongs to the **Access Root** as a whole; one unreadable subfolder or image inside it is not Lost Access.
 - **Lost Access** with cause Unknown is shown as plain 「无法访问此文件夹」; Mado never guesses a cause.
 - A **Recent Item** confers no access; reopening one outside every **Access Root** asks the user to grant its folder.
+- **Cloud Recognition** runs only after the user has agreed to uploads once and while its global switch is on; without a key, without network or out of quota, Mado uses **On-device Recognition** and says so on the result.
+- Selecting text on an image always uses **On-device Recognition**; **Cloud Recognition** runs only when the user explicitly asks to recognise text.
+- A **Capture** is saved to the **Capture Folder** unless saving is turned off, in which case it lives only on the clipboard until the user saves it from its **Capture Thumbnail**.
+- Recognising text straight from the **Capture Bar** never saves the **Capture**.
+- Opening a **Capture** in Mado gives a **File Grant** for that one file; browsing the other Captures needs the **Capture Folder** to be an **Access Root**.
+- Any image open in Mado can enter **Annotate Mode**, not only a **Capture**.
+- Saving in **Annotate Mode** always produces an **Annotated Copy**; the original image is never replaced, and the marks cannot be edited again after saving.
 
 ## Example dialogue
 

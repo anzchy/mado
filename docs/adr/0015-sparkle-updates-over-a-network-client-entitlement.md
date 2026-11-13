@@ -7,6 +7,8 @@ date: 2026-10-28
 
 关联：DIST-01、DIST-04、DIST-05；计划 P6-06、P6-08、§5 v0.0.1 门槛（对外分发）；[ADR-013](0013-build-by-user-journey-slices.md)。
 
+2026-11-13 修订：云识别（用户自填 key、明确同意后上传图片）是唯一例外，见 [ADR-019](0019-cloud-text-recognition-with-user-key-and-consent.md)。
+
 ## 决定
 
 - **更新方式：** picsee v0.0.1 起用 Sparkle 2 自动更新。
