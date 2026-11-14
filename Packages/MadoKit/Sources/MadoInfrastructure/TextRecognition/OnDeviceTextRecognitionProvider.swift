@@ -67,6 +67,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation)
             try await withTaskCancellationHandler {
                 await beforePerform()
+                try Task.checkCancellation()
                 try performRequest(handler, request)
             } onCancel: {
                 if let cancelRequest { cancelRequest(request) }
