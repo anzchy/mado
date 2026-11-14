@@ -18,14 +18,14 @@ private func isFalse(_ value: Any?) -> Bool {
     return !number.boolValue
 }
 
-// ADR-015 (2026-10-30 addendum): sandbox, read-only user files, app-scope bookmarks, network.client,
-// and Sparkle's installer mach-lookup exception — nothing else.
+// ADR-015 (2026-10-30 addendum) and ADR-020: sandbox, read-write user-selected files (for the Annotated Copy),
+// app-scope bookmarks, network.client, and Sparkle's installer mach-lookup exception — nothing else.
 @Test func issue220EntitlementsAreExactlyTheFiveDecidedKeys() throws {
     let entitlements = try plist("App/Resources/Mado.entitlements")
     let mach = "com.apple.security.temporary-exception.mach-lookup.global-name"
     let flags = [
         "com.apple.security.app-sandbox",
-        "com.apple.security.files.user-selected.read-only",
+        "com.apple.security.files.user-selected.read-write",
         "com.apple.security.files.bookmarks.app-scope",
         "com.apple.security.network.client",
     ]

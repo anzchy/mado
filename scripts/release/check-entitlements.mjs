@@ -4,7 +4,7 @@
  *
  *   node scripts/release/check-entitlements.mjs <Mado.app> --configuration release|debug [--expect-bundle-id ID]
  *
- * Release: exactly sandbox, user-selected read-only, app-scope bookmarks, network.client (all true) and
+ * Release: exactly sandbox, user-selected read-write (ADR-020), app-scope bookmarks, network.client (all true) and
  * Sparkle's mach-lookup exception with exactly `<bundle id>-spks` and `<bundle id>-spki`.
  * Debug: the same, plus Xcode's development-signing `get-task-allow = true` if present.
  */
@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const FLAGS = [
   "com.apple.security.app-sandbox",
-  "com.apple.security.files.user-selected.read-only",
+  "com.apple.security.files.user-selected.read-write",
   "com.apple.security.files.bookmarks.app-scope",
   "com.apple.security.network.client",
 ];
