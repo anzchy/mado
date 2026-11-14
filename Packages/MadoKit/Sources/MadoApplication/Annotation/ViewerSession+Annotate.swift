@@ -18,6 +18,8 @@ extension ViewerSession {
         guard annotateMode == nil, canEnterAnnotateMode else { return }
         annotateMode = AnnotateModeState(itemID: currentItemID, fileURL: imageLoader.fileURL)
         annotateMode?.tool = .rectangle
+        // #690 fix r1: page 39's strip and image reserve sit where the Inspector would; it closes on entering.
+        if inspectorFocus.isVisible { setInspectorVisible(false) }
     }
 
     /// V and R: only inside Annotate Mode.

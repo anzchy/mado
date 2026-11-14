@@ -101,3 +101,26 @@ private func fold(_ name: String) -> String {
         #expect(AnnotatedCopyPlan.refusesDirectWrite(error) == (error == .permissionDenied), "\(error)")
     }
 }
+
+/// #690 fix r1 (gpt M1, opus M2): the name the sheet showed is written when it is still free; a clash re-plans.
+@Test(.timeLimit(.minutes(2))) func issue690PlanKeepsThePreferredNameWhileFree() {
+    let shown = AnnotatedCopyPlan.name(for: "photo.jpg", existing: ["photo-annotated.jpg"], writableTypes: writable)
+    #expect(shown.name == "photo-annotated-2.jpg")
+    // The first copy was removed since: the shown -2 is still free and is kept, not the lower -annotated.
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: [], writableTypes: writable, preferring: shown) == shown)
+    // Another process took -2 (case-folded): re-planned to the next free name.
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: ["photo-annotated.jpg", "PHOTO-annotated-2.JPG"],
+                                   writableTypes: writable, preferring: shown).name == "photo-annotated-3.jpg")
+    // A preferred name for another original or type is ignored.
+    let other = AnnotatedCopyPlan.name(for: "other.jpg", existing: [], writableTypes: writable).numbered(5)
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: [], writableTypes: writable, preferring: other).name
+            == "photo-annotated.jpg")
+    let png = AnnotatedCopyName(stem: "photo", pathExtension: "jpg", type: .png, number: 4)
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: [], writableTypes: writable, preferring: png).name
+            == "photo-annotated.jpg")
+    let ext = AnnotatedCopyName(stem: "photo", pathExtension: "jpeg", type: .jpeg, number: 4)
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: [], writableTypes: writable, preferring: ext).name
+            == "photo-annotated.jpg")
+    #expect(AnnotatedCopyPlan.name(for: "photo.jpg", existing: [], writableTypes: writable, preferring: nil).name
+            == "photo-annotated.jpg")
+}

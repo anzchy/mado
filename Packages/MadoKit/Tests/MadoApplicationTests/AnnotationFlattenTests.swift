@@ -190,3 +190,83 @@ private func near(_ a: [UInt8], _ b: [UInt8], tolerance: Int = 2) -> Bool {
     #expect(first == second)
     #expect(first != upright(source, 6), "the mark was drawn")
 }
+
+// MARK: #690 fix r1 (opus M6): the copy keeps the source's colour space and depth outside the marks.
+
+/// A 40×40 opaque image filled with `pixel` (components in `space`, `bpc` bits, premultipliedLast).
+private func filled(_ pixel: [Double], space: CGColorSpace, bpc: Int, float: Bool = false) -> CGImage {
+    let context = CGContext(data: nil, width: 40, height: 40, bitsPerComponent: bpc, bytesPerRow: 0, space: space,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | (float ? CGBitmapInfo.floatComponents.rawValue : 0))!
+    context.setFillColor(CGColor(colorSpace: space, components: pixel.map { CGFloat($0) } + [1])!)
+    context.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+    return context.makeImage()!
+}
+
+/// One pixel of `image` (top-left origin) drawn into a 1×1 context of `space` and depth: a same-space read is exact.
+private func components(_ image: CGImage, x: Int, y: Int, space: CGColorSpace, bpc: Int, float: Bool = false) -> [Double] {
+    let context = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: bpc, bytesPerRow: 0, space: space,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | (float ? CGBitmapInfo.floatComponents.rawValue : 0))!
+    context.interpolationQuality = .none
+    context.draw(image, in: CGRect(x: -x, y: y - image.height + 1, width: image.width, height: image.height))
+    let data = context.data!
+    switch (bpc, float) {
+    // Without a byte-order flag CoreGraphics stores components big-endian, floats included.
+    case (32, true): return (0..<3).map { Double(Float(bitPattern: UInt32(bigEndian: data.load(fromByteOffset: $0 * 4, as: UInt32.self)))) }
+    case (16, _): return (0..<3).map { Double(UInt16(bigEndian: data.load(fromByteOffset: $0 * 2, as: UInt16.self))) }
+    default: return (0..<3).map { Double(data.load(fromByteOffset: $0, as: UInt8.self)) }
+    }
+}
+
+private let corner = [AnnotationMark(rect: CGRect(x: 2, y: 2, width: 8, height: 8))]
+
+@Test(.timeLimit(.minutes(2))) func issue690FlattenKeepsDisplayP3() throws {
+    let p3 = CGColorSpace(name: CGColorSpace.displayP3)!
+    // P3's own green lies outside sRGB: an sRGB flatten would clip it.
+    let source = filled([0, 1, 0], space: p3, bpc: 8)
+    let flat = try AnnotationFlattener.flatten(source, orientation: 1, marks: corner)
+    #expect(flat.colorSpace?.name == CGColorSpace.displayP3)
+    #expect(flat.bitsPerComponent == 8)
+    #expect(components(flat, x: 30, y: 30, space: p3, bpc: 8) == [0, 255, 0])
+    // The mark is still page 39's red, converted into P3.
+    let edge = components(flat, x: 2, y: 5, space: sRGB, bpc: 8)
+    #expect(abs(edge[0] - 220) <= 4 && abs(edge[1] - 38) <= 4 && abs(edge[2] - 38) <= 4, "\(edge)")
+}
+
+@Test(.timeLimit(.minutes(2))) func issue690FlattenKeeps16Bit() throws {
+    let p3 = CGColorSpace(name: CGColorSpace.displayP3)!
+    let source = filled([Double(0x1234) / 65535, Double(0xABCD) / 65535, Double(0x0101) / 65535], space: p3, bpc: 16)
+    let before = components(source, x: 30, y: 30, space: p3, bpc: 16)
+    let flat = try AnnotationFlattener.flatten(source, orientation: 6, marks: corner)
+    #expect(flat.bitsPerComponent == 16)
+    #expect(flat.colorSpace?.name == CGColorSpace.displayP3)
+    #expect(components(flat, x: 30, y: 30, space: p3, bpc: 16) == before)
+    #expect(before[0] != (before[0] / 257).rounded() * 257, "the fixture value is not representable in 8 bits")
+}
+
+@Test(.timeLimit(.minutes(2))) func issue690FlattenKeepsFloatHDR() throws {
+    let hdr = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+    let source = filled([1.5, 0.25, 0.125], space: hdr, bpc: 32, float: true)
+    let flat = try AnnotationFlattener.flatten(source, orientation: 1, marks: corner)
+    #expect(flat.bitmapInfo.contains(.floatComponents))
+    #expect(flat.colorSpace?.name == CGColorSpace.extendedLinearSRGB)
+    #expect(components(flat, x: 30, y: 30, space: hdr, bpc: 32, float: true) == [1.5, 0.25, 0.125])
+}
+
+@Test(.timeLimit(.minutes(2))) func issue690FlattenFallsBackToSRGB8() throws {
+    let cmyk = CGColorSpaceCreateDeviceCMYK()
+    let cmykContext = CGContext(data: nil, width: 40, height: 40, bitsPerComponent: 8, bytesPerRow: 0, space: cmyk,
+                                bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+    cmykContext.setFillColor(CGColor(colorSpace: cmyk, components: [0, 0, 0, 0.5, 1])!)
+    cmykContext.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+    let grey = CGColorSpaceCreateDeviceGray()
+    let greyContext = CGContext(data: nil, width: 40, height: 40, bitsPerComponent: 16, bytesPerRow: 0, space: grey,
+                                bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+    greyContext.setFillColor(gray: 0.5, alpha: 1)
+    greyContext.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+    for source in [cmykContext.makeImage()!, greyContext.makeImage()!] {
+        let flat = try AnnotationFlattener.flatten(source, orientation: 1, marks: corner)
+        #expect(flat.colorSpace?.name == CGColorSpace.sRGB)
+        #expect(flat.bitsPerComponent == 8)
+        #expect(!flat.bitmapInfo.contains(.floatComponents))
+    }
+}

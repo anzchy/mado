@@ -21,10 +21,13 @@ open class CanvasView: NSView {
     private var preserveKeyboardFocusRingForOpening = false
     public var onResolutionNeeded: ((Int) -> Void)?
     /// #690: points kept free on the right for the Annotate strip; the fit uses the area to its left.
-    /// Changing it refits only in fit mode; a zoomed or 1:1 image stays where it is.
+    /// Growing it (⌘E) always refits, whatever the zoom, so the strip never covers the image (fix r1); shrinking it
+    /// (leaving) refits only in fit mode, so a zoom chosen inside the mode stays.
     public var trailingReserve: CGFloat = 0 {
         didSet {
-            guard trailingReserve != oldValue, sourceSize.width > 0, session.zoomMode == .fit else { return }
+            guard trailingReserve != oldValue, sourceSize.width > 0,
+                  trailingReserve > oldValue || session.zoomMode == .fit else { return }
+            if session.zoomMode != .fit { session.beginCanvasImage() }
             fit()
             needsDisplay = true
             requestDetail()

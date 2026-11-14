@@ -526,13 +526,27 @@ private func approximately(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat = 1) -
         viewport: CGSize(width: 1280, height: 800), backingScale: window.backingScaleFactor).zoom)
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue690CanvasReserveIgnoredWhenZoomed() throws {
-    let (canvas, window, host) = try page39Canvas()
-    defer { window.close(); withExtendedLifetime(host) {} }
-    #expect(CommandRouter().route(.actualPixels, from: .key, to: canvas.session))
-    let before = canvas.backdropFrame.transform
-    canvas.trailingReserve = 64
-    let after = canvas.backdropFrame.transform
-    #expect(after.zoom == before.zoom && after.origin == before.origin)
-    #expect(canvas.trailingReserve == 64)
+/// #690 fix r1 (opus M5): ⌘E refits into the area left of the strip whatever the zoom, so the strip never covers
+/// the image; zoom stays available inside the mode and leaving keeps it.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690CanvasReserveRefitsWhenZoomed() throws {
+    for command in [CommandID.actualPixels, .zoomIn] {
+        let (canvas, window, host) = try page39Canvas()
+        defer { window.close(); withExtendedLifetime(host) {} }
+        let fitted = canvas.backdropFrame.transform
+        #expect(CommandRouter().route(command, from: .key, to: canvas.session))
+        #expect(canvas.session.zoomMode != .fit)
+        canvas.trailingReserve = 64
+        let entered = canvas.backdropFrame.transform
+        let expected = CanvasTransform.fitted(source: CGSize(width: 1600, height: 2400), viewport: canvas.bounds.size,
+                                              backingScale: Double(window.backingScaleFactor), trailingReserve: 64)
+        #expect(entered.zoom == expected.zoom && entered.origin == expected.origin, "\(command)")
+        #expect(canvas.session.zoomMode == .fit)
+        #expect(entered.origin.x + 1600 * entered.zoom / entered.backingScale <= canvas.bounds.width - 64)
+        // Zooming inside the mode stays where the user put it; leaving does not refit a zoomed image.
+        #expect(CommandRouter().route(.actualPixels, from: .key, to: canvas.session))
+        let zoomed = canvas.backdropFrame.transform
+        canvas.trailingReserve = 0
+        #expect(canvas.backdropFrame.transform.zoom == zoomed.zoom && canvas.backdropFrame.transform.origin == zoomed.origin)
+        _ = fitted
+    }
 }

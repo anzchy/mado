@@ -15,7 +15,8 @@ import MadoCore
     func performCanvasZoom(_ command: CommandID, from entry: CommandEntry) -> Double? { nil }
     func requestOpen() {}
     func applyFocus(_ focus: FocusContext) {}
-    func showInspector(_ visible: Bool) {}
+    var inspector: [Bool] = []
+    func showInspector(_ visible: Bool) { inspector.append(visible) }
     func presentGridItem(_ id: ItemID) { presented.append(id) }
     func returnToGrid() { returnedToGrid += 1 }
     func performAnnotatedCopySave(_ request: AnnotateSaveRequest) { saves.append(request) }
@@ -655,4 +656,27 @@ private let photoSize = CGSize(width: 1600, height: 2400)
         #expect(AnnotateKeyPolicy.action(key: key, modifiers: mods, active: false, typing: false) == nil, "seed \(seed)")
         #expect(AnnotateKeyPolicy.action(key: key, modifiers: mods, active: true, typing: true) == nil, "seed \(seed)")
     }
+}
+
+/// #690 fix r1 (gpt M2): the Inspector closes on entering and stays closed while annotating, so page 39's strip and
+/// image reserve never sit under it.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690EnteringClosesTheInspector() async {
+    let showing = await Showing.make()
+    let session = showing.session
+    session.setInspectorVisible(true)
+    #expect(session.isEnabled(.inspector))
+    showing.host.inspector = []
+    session.enterAnnotateMode()
+    #expect(session.isAnnotating)
+    #expect(!session.inspectorFocus.isVisible)
+    #expect(showing.host.inspector == [false])
+    #expect(!session.isEnabled(.inspector))
+    #expect(!showing.router.route(.inspector, from: .key, to: session))
+    #expect(!session.inspectorFocus.isVisible)
+    _ = session.requestLeaveAnnotateMode(.escape)
+    #expect(session.isEnabled(.inspector))
+    // Entering with the Inspector already closed does not tell the host again.
+    showing.host.inspector = []
+    session.enterAnnotateMode()
+    #expect(showing.host.inspector.isEmpty)
 }

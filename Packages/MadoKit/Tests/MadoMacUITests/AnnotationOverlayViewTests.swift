@@ -176,3 +176,19 @@ private let page39Mark = AnnotationMark(rect: CGRect(x: 150, y: 575, width: 312.
     try drag(overlay, from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
     #expect(added == [], "an inactive overlay never draws marks")
 }
+
+/// #690 fix r1 (gpt M2): the overlay takes clicks only over the image [352, 16, 512, 768]; the rest of the window
+/// (the Inspector, the empty canvas) gets them as without Annotate Mode.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690OverlayHitsOnlyTheImage() throws {
+    let (overlay, window) = overlayHost()
+    defer { window.close() }
+    for inside in [CGPoint(x: 600, y: 400), CGPoint(x: 352, y: 16), CGPoint(x: 863.5, y: 783.5)] {
+        #expect(overlay.hitTest(inside) === overlay, "\(inside)")
+    }
+    for outside in [CGPoint(x: 100, y: 400), CGPoint(x: 1000, y: 400), CGPoint(x: 351.5, y: 400),
+                    CGPoint(x: 864, y: 400), CGPoint(x: 600, y: 15.5), CGPoint(x: 600, y: 784)] {
+        #expect(overlay.hitTest(outside) == nil, "\(outside)")
+    }
+    overlay.transform = nil
+    #expect(overlay.hitTest(CGPoint(x: 600, y: 400)) == nil, "no image placed yet")
+}

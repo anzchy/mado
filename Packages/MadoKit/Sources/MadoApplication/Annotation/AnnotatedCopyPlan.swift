@@ -44,7 +44,10 @@ public enum AnnotatedCopyPlan {
     /// `<stem>-annotated.<ext>`, then `-annotated-2`, `-3`: the smallest number free in `existing`, compared
     /// without case and Unicode normalisation differences. Keeps the original type when `writableTypes` has it,
     /// otherwise PNG.
-    public static func name(for sourceName: String, existing: [String], writableTypes: Set<UTType>) -> AnnotatedCopyName {
+    /// `preferring` is a name shown earlier (the unsaved-marks sheet): it is kept while it is still free and names the
+    /// same original and type, so 存储 writes what the sheet said (#690 fix r1).
+    public static func name(for sourceName: String, existing: [String], writableTypes: Set<UTType>,
+                            preferring preferred: AnnotatedCopyName? = nil) -> AnnotatedCopyName {
         let ext = (sourceName as NSString).pathExtension
         let stem = ext.isEmpty ? sourceName : String(sourceName.dropLast(ext.count + 1))
         let sourceType = ext.isEmpty ? nil : UTType(filenameExtension: ext)
@@ -55,6 +58,7 @@ public enum AnnotatedCopyPlan {
             first = AnnotatedCopyName(stem: stem, pathExtension: "png", type: .png)
         }
         let taken = Set((existing + [sourceName]).map(folded))
+        if let preferred, preferred.numbered(1) == first, !taken.contains(folded(preferred.name)) { return preferred }
         var number = 1
         while taken.contains(folded(first.numbered(number).name)) { number += 1 }
         return first.numbered(number)
