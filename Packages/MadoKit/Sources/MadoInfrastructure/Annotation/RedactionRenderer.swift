@@ -160,9 +160,11 @@ public enum RedactionRenderer {
         }
 
         /// Square cells `cell` pixels wide start at the area's top-left corner; cells at the far edges are clipped
-        /// to the area. Each cell takes the mean of its pixels in the source's
+        /// to the area, and a cell wider than the area is the area (a huge strength must not overflow `left + cell`).
+        /// Each cell takes the mean of its pixels in the source's
         /// own space and depth, colour weighted by alpha (the premultiplied mean), rounded for integer components.
         mutating func pixelate(_ area: PixelArea, cell: Int) {
+            let cell = min(cell, max(area.maxX - area.minX, area.maxY - area.minY))
             for top in stride(from: area.minY, to: area.maxY, by: cell) {
                 for left in stride(from: area.minX, to: area.maxX, by: cell) {
                     let xs = left..<min(left + cell, area.maxX), ys = top..<min(top + cell, area.maxY)
