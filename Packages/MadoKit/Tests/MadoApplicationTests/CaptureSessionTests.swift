@@ -6,10 +6,12 @@ import MadoInfrastructure
 private struct FixedScreen: CaptureScreenPort {
     let png: Data
     func captureCurrentDisplayPNG() async throws -> Data { png }
+    func capturePNG(request: CaptureRequest) async throws -> Data { png }
 }
 
 private struct FailedScreen: CaptureScreenPort {
     func captureCurrentDisplayPNG() async throws -> Data { throw CocoaError(.fileReadUnknown) }
+    func capturePNG(request: CaptureRequest) async throws -> Data { throw CocoaError(.fileReadUnknown) }
 }
 
 private actor MemoryFiles: CaptureFilePort {
