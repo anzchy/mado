@@ -71,7 +71,7 @@ test('evidence renderer scans privacy and record writer requires a real comment 
   assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify', `${f.base}.json`))).head, f.base);
 });
 
-function check(f, head, extra = []) {
+function check(f, head, extra = ['--issue', '648']) {
   return run('node', [script('evidence.mjs'), 'check', '--head', head, ...extra], f.dir);
 }
 function recordFor(f, data) {
@@ -90,19 +90,36 @@ test('manual check passes on a complete record for the head, also via --worktree
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, new RegExp(`^OK head=${f.head()} issue=648 comment=https://github\\.com/anzchy/mado/issues/648#issuecomment-9$`, 'm'));
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-check-cwd-')); t.after(() => fs.rmSync(other, { recursive: true, force: true }));
-  const remote = run('node', [script('evidence.mjs'), 'check', '--head', f.head().slice(0, 9), '--worktree', f.dir], other);
+  const remote = run('node', [script('evidence.mjs'), 'check', '--head', f.head().slice(0, 9), '--issue', '648', '--worktree', f.dir], other);
   assert.equal(remote.status, 0, remote.stderr);
 });
 
-test('manual check fails on a stale head: record for an older commit, or --head not the worktree HEAD', t => {
+test('manual check at the worktree HEAD applies the clean-tree check and says so', t => {
+  const f = fixture(t);
+  recordFor(f, {});
+  const ok = check(f, f.head());
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /^case=at-head /m);
+});
+
+test('manual check after a rebase: the audited head record still passes once the worktree HEAD moved on', t => {
   const f = fixture(t);
   recordFor(f, {});
   const old = f.head();
-  assert.equal(check(f, old).status, 0);
   fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testTwo() {}\n'); f.commit();
-  const stale = check(f, old);
-  assert.equal(stale.status, 1);
-  assert.match(stale.stderr, /not the worktree HEAD/);
+  const moved = check(f, old);
+  assert.equal(moved.status, 0, moved.stderr);
+  assert.match(moved.stdout, new RegExp(`^case=head-moved worktree HEAD ${f.head()} is not ${old}`, 'm'));
+  assert.match(moved.stdout, new RegExp(`^OK head=${old} issue=648 `, 'm'));
+  fs.appendFileSync(path.join(f.dir, 'sample.test.swift'), '// dirty, but the worktree is no longer at the audited head\n');
+  assert.equal(check(f, old).status, 0);
+});
+
+test('manual check fails when there is no record for the head', t => {
+  const f = fixture(t);
+  recordFor(f, {});
+  const old = f.head();
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testTwo() {}\n'); f.commit();
   const missing = check(f, f.head());
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /no mado-verify record/);
@@ -126,12 +143,38 @@ test('manual check fails on a missing or foreign commentUrl', t => {
   recordFor(f, {});
   const file = path.join(f.dir, '.build/mado-verify', `${f.head()}.json`);
   const record = JSON.parse(fs.readFileSync(file, 'utf8'));
-  for (const commentUrl of [undefined, '', 'https://github.com/anzchy/mado/issues/649#issuecomment-9', 'https://example.com/x']) {
+  for (const commentUrl of [undefined, '', 'https://github.com/anzchy/mado/issues/649#issuecomment-9', 'https://example.com/x',
+    'https://github.com/someone/mado/issues/648#issuecomment-9', 'https://github.com/anzchy/other/issues/648#issuecomment-9']) {
     fs.writeFileSync(file, JSON.stringify({ ...record, commentUrl }));
     const r = check(f, f.head());
     assert.equal(r.status, 1, String(commentUrl));
     assert.match(r.stderr, /commentUrl/);
   }
+});
+
+test('record refuses a comment URL from another repository with the same issue number', t => {
+  const f = fixture(t);
+  const source = path.join(f.dir, '.build/input.json');
+  fs.mkdirSync(path.dirname(source), { recursive: true });
+  for (const commentUrl of ['https://github.com/someone/mado/issues/648#issuecomment-9', 'https://github.com/anzchy/picsee-fork/issues/648#issuecomment-9']) {
+    fs.writeFileSync(source, JSON.stringify({ issue: 648, task: 'i648', branch: 'test', head: f.head(), integrity: 'none', byType: [], notVerified: ['none'], commentUrl, gates: gates() }));
+    const r = run('node', [script('evidence.mjs'), 'record', source], f.dir);
+    assert.notEqual(r.status, 0, commentUrl);
+    assert.match(r.stderr, /anzchy\/mado/);
+  }
+});
+
+test('manual check requires --issue and fails when the record is for another issue', t => {
+  const f = fixture(t);
+  recordFor(f, {});
+  const none = check(f, f.head(), []);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /--issue/);
+  const wrong = check(f, f.head(), ['--issue', '649']);
+  assert.equal(wrong.status, 1);
+  assert.match(wrong.stderr, /record is for issue #648, not #649/);
+  assert.equal(check(f, f.head(), ['--issue', 'x']).status, 1);
+  assert.equal(check(f, f.head(), ['--issue', '648']).status, 0);
 });
 
 test('manual check fails on tracked changes and on bad usage', t => {
@@ -171,6 +214,13 @@ test('a Codex apptests NOT VERIFIED entry passes the check with a warning; other
   assert.match(ok.stdout, /owner-gates/);
   recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, exitCode: 70, notVerified: '' } : g) });
   assert.match(check(f, f.head()).stderr, /failed apptests: 70/);
+  for (const exitCode of [1, 2, 65]) {
+    recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, exitCode, notVerified: reason } : g) });
+    const failed = check(f, f.head());
+    assert.equal(failed.status, 1, `exit ${exitCode}`);
+    assert.match(failed.stderr, new RegExp(`failed apptests: ${exitCode}`));
+    assert.doesNotMatch(failed.stdout, /NOT VERIFIED/);
+  }
   recordFor(f, { gates: gates().map(g => g.name === 'swift' ? { ...g, exitCode: 1, notVerified: reason } : g) });
   assert.match(check(f, f.head()).stderr, /failed swift: 1/);
 });

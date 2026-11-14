@@ -3,10 +3,15 @@ export const MANDATORY_GATES = Object.freeze(['diffcheck', 'swift', 'lcov', 'xco
 
 // Codex sandboxed panes cannot get a key window, so hosted App focus tests cannot run there. Such a run is recorded as
 // NOT VERIFIED with a reason; the delegator's owner-gates run in the desktop session is the binding App test result.
+// Only the environment-failure exit (70: no hosted result / no key window) qualifies; a test failure (1) or any other
+// non-zero exit stays a failure whatever the reason says.
 export const NOT_VERIFIABLE = Object.freeze(['apptests']);
+export const ENVIRONMENT_EXIT = 70;
+
+const notVerifiedEscape = g => NOT_VERIFIABLE.includes(g.name) && g.exitCode === ENVIRONMENT_EXIT && typeof g.notVerified === 'string' && g.notVerified.trim() !== '';
 
 export function notVerifiedGates(gates) {
-  return Array.isArray(gates) ? gates.filter(g => g && NOT_VERIFIABLE.includes(g.name) && g.exitCode !== 0 && typeof g.notVerified === 'string' && g.notVerified.trim()) : [];
+  return Array.isArray(gates) ? gates.filter(g => g && notVerifiedEscape(g)) : [];
 }
 
 export function gateVerdict(gates) {
@@ -23,7 +28,7 @@ export function gateVerdict(gates) {
   for (const name of MANDATORY_GATES) {
     const gate = byName.get(name);
     if (!gate) problems.push(`missing ${name}`);
-    else if (gate.exitCode !== 0 && !(NOT_VERIFIABLE.includes(name) && typeof gate.notVerified === 'string' && gate.notVerified.trim())) problems.push(`failed ${name}: ${gate.exitCode}`);
+    else if (gate.exitCode !== 0 && !notVerifiedEscape(gate)) problems.push(`failed ${name}: ${gate.exitCode}`);
   }
   return { complete: problems.length === 0, problems };
 }
