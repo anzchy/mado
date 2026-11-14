@@ -353,8 +353,13 @@ public enum AnnotatePaint {
     public override var isFlipped: Bool { true }
     public override var mouseDownCanMoveWindow: Bool { false }
 
-    /// Inactive, every event passes through to the canvas.
-    public override func hitTest(_ point: NSPoint) -> NSView? { isActive ? super.hitTest(point) : nil }
+    /// Only the image takes clicks (#690 fix r1): inactive, or outside the image, every event passes through to the
+    /// canvas and the window's other views (the Inspector, the strip).
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isActive, let transform else { return nil }
+        let image = viewRect(CGRect(origin: .zero, size: imageSize), transform)
+        return image.contains(convert(point, from: superview)) ? super.hitTest(point) : nil
+    }
 
     private var pointsPerImagePixel: Double {
         guard let transform else { return 1 }
@@ -518,8 +523,11 @@ public enum AnnotatePaint {
     public let cancelButton: NSButton = AnnotateButton(style: .bordered)
     public let saveButton: NSButton = AnnotateButton(style: .primary)
     public var onChoice: ((AnnotateLeaveChoice) -> Void)?
+    /// The copy 存储 writes, named in the body; a fresh plan replaces it in place.
+    public var plannedName: String { didSet { showPlannedName() } }
 
     public init(originalName: String, plannedName: String) {
+        self.plannedName = plannedName
         super.init(frame: .zero)
         setAccessibilityIdentifier("annotate.leave-sheet")
         panelBackground(panel)
@@ -530,14 +538,7 @@ public enum AnnotatePaint {
         titleField.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         titleField.textColor = DesignColor.textPrimary.nsColor
         titleField.lineBreakMode = .byTruncatingMiddle
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.minimumLineHeight = 18
-        paragraph.maximumLineHeight = 18
-        bodyField.attributedStringValue = NSAttributedString(
-            string: String(format: String(localized: "Save keeps the original unchanged and saves a copy as %@. Don't Save discards these marks."),
-                           plannedName),
-            attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DesignColor.textSecondary.nsColor,
-                         .paragraphStyle: paragraph])
+        showPlannedName()
         discardButton.title = String(localized: "Don't Save")
         cancelButton.title = String(localized: "Cancel")
         saveButton.title = String(localized: "Save")
@@ -554,6 +555,17 @@ public enum AnnotatePaint {
         addSubview(panel)
         layoutPanel()
     }
+    private func showPlannedName() {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = 18
+        paragraph.maximumLineHeight = 18
+        bodyField.attributedStringValue = NSAttributedString(
+            string: String(format: String(localized: "Save keeps the original unchanged and saves a copy as %@. Don't Save discards these marks."),
+                           plannedName),
+            attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DesignColor.textSecondary.nsColor,
+                         .paragraphStyle: paragraph])
+    }
+
     required init?(coder: NSCoder) { nil }
 
     public override var isFlipped: Bool { true }

@@ -143,3 +143,13 @@ import MadoApplication
     #expect(sheet.panel.accessibilityRole() == .sheet || sheet.panel.accessibilityRole() == .group)
     #expect(sheet.accessibilityIdentifier() == "annotate.leave-sheet")
 }
+
+/// #690 fix r1: the sheet names the copy 存储 will write; a fresh plan replaces the name in place.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690SheetPlannedNameUpdates() {
+    let sheet = AnnotateLeaveSheetView(originalName: "DSC_0342.jpg", plannedName: "DSC_0342-annotated.jpg")
+    #expect(sheet.plannedName == "DSC_0342-annotated.jpg")
+    sheet.plannedName = "DSC_0342-annotated-3.jpg"
+    #expect(sheet.bodyField.stringValue.contains("DSC_0342-annotated-3.jpg"))
+    #expect(!sheet.bodyField.stringValue.contains("DSC_0342-annotated.jpg"))
+    #expect(sheet.titleField.stringValue.contains("DSC_0342.jpg"))
+}

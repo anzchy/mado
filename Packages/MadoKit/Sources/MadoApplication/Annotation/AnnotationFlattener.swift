@@ -8,9 +8,10 @@ public enum AnnotationFlattener {
     /// `orientation` is the EXIF orientation (1…8) of `image`; the result is upright and has no orientation.
     public static func flatten(_ image: CGImage, orientation: Int, marks: [AnnotationMark]) throws -> CGImage {
         let size = uprightSize(width: image.width, height: image.height, orientation: orientation)
-        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let format = BitmapFormat(image)
+        let markSpace = CGColorSpace(name: CGColorSpace.sRGB)!
         // A very large image can exceed what CoreGraphics allocates; that is reported, not trapped.
-        guard let context = bitmap(size, space: space) else { throw Failure.contextUnavailable }
+        guard let context = bitmap(size, format: format) else { throw Failure.contextUnavailable }
         let height = CGFloat(size.height)
         context.saveGState()
         context.concatenate(uprightTransform(width: CGFloat(image.width), height: CGFloat(image.height),
@@ -20,7 +21,7 @@ public enum AnnotationFlattener {
         context.restoreGState()
         for mark in marks {
             let style = mark.style
-            context.setStrokeColor(CGColor(colorSpace: space, components: [style.red, style.green, style.blue, 1])!)
+            context.setStrokeColor(CGColor(colorSpace: markSpace, components: [style.red, style.green, style.blue, 1])!)
             context.setLineWidth(style.lineWidth)
             // Marks use a top-left origin; CoreGraphics draws from the bottom left.
             let rect = mark.rect
@@ -30,9 +31,36 @@ public enum AnnotationFlattener {
         return result
     }
 
-    private static func bitmap(_ size: (width: Int, height: Int), space: CGColorSpace) -> CGContext? {
-        CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    /// The copy keeps the source's RGB colour space (Display P3, extended ranges) and depth: 8-bit, 16-bit, or 32-bit
+    /// float for float (HDR) sources, so pixels outside the marks are unchanged (#690 fix r1). Sources without an RGB
+    /// colour space CoreGraphics can draw into (grey, CMYK, none) fall back to sRGB 8-bit, which can hold the red marks.
+    struct BitmapFormat {
+        let space: CGColorSpace
+        let bitsPerComponent: Int
+        let bitmapInfo: UInt32
+
+        init(_ image: CGImage) {
+            let premultipliedLast = CGImageAlphaInfo.premultipliedLast.rawValue
+            guard let space = image.colorSpace, space.model == .rgb, space.supportsOutput else {
+                self.init(space: CGColorSpace(name: CGColorSpace.sRGB)!, bitsPerComponent: 8, bitmapInfo: premultipliedLast)
+                return
+            }
+            if image.bitmapInfo.contains(.floatComponents) {
+                self.init(space: space, bitsPerComponent: 32,
+                          bitmapInfo: premultipliedLast | CGBitmapInfo.floatComponents.rawValue)
+            } else {
+                self.init(space: space, bitsPerComponent: image.bitsPerComponent > 8 ? 16 : 8, bitmapInfo: premultipliedLast)
+            }
+        }
+
+        private init(space: CGColorSpace, bitsPerComponent: Int, bitmapInfo: UInt32) {
+            self.space = space; self.bitsPerComponent = bitsPerComponent; self.bitmapInfo = bitmapInfo
+        }
+    }
+
+    private static func bitmap(_ size: (width: Int, height: Int), format: BitmapFormat) -> CGContext? {
+        CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: format.bitsPerComponent,
+                  bytesPerRow: 0, space: format.space, bitmapInfo: format.bitmapInfo)
     }
 
     /// The displayed size of an image with this EXIF orientation.

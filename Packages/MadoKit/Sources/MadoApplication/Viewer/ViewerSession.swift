@@ -281,7 +281,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     /// The binding modifier matters in Grid: the same zoom IDs also have bare viewer alternates.
     public func isEnabled(_ command: CommandID, commandModified: Bool = false) -> Bool {
         // #690: Annotate Mode keeps the image; browsing and opening are off, zoom and the Inspector stay.
-        if annotateMode != nil, [.previous, .next, .preview, .enter, .search, .open].contains(command) { return false }
+        if annotateMode != nil, [.previous, .next, .preview, .enter, .search, .open, .inspector].contains(command) { return false }
         if mode == .browsing, command.commandKey != nil {
             return commandModified && command != .fit && inspectorFocus.focus != .textInput
         }
