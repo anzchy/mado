@@ -53,6 +53,45 @@ private final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
     var created: [Data] { lock.withLock { made } }
 }
 
+/// Page 39's numbers assume a 1280×800 content area, but AppKit constrains a window's frame to its screen: on a CI
+/// runner with a 1024×768 screen the window came out 1024×674 (run 43573974743). `CommandWindow` gains one
+/// `constrainFrameRect(_:to:)` at runtime that returns the rect unchanged for the windows registered here and calls
+/// `NSWindow`'s own for every other window, so these tests no longer depend on the host screen. (`CommandWindow` is
+/// final, and swapping one window's class clashes with AppKit's KVO subclass.)
+private enum Issue690Frames {
+    nonisolated(unsafe) static let unconstrained = NSHashTable<NSWindow>.weakObjects()
+    /// Proof runs only: `ISSUE690_SCREEN_STUB=1` makes every other `CommandWindow` clamp like the CI runner's
+    /// 1024×768 screen (visible 1024×674), and with `ISSUE690_SCREEN_STUB=only` the test window too.
+    static let stub = ProcessInfo.processInfo.environment["ISSUE690_SCREEN_STUB"]
+    static let screen = NSRect(x: 0, y: 0, width: 1024, height: 674)
+    static let installed: Void = {
+        let selector = #selector(NSWindow.constrainFrameRect(_:to:))
+        typealias Constrain = @convention(c) (NSWindow, Selector, NSRect, NSScreen?) -> NSRect
+        let inherited = unsafeBitCast(class_getMethodImplementation(NSWindow.self, selector), to: Constrain.self)
+        let block: @convention(block) (NSWindow, NSRect, NSScreen?) -> NSRect = { window, rect, screen in
+            if stub == "only" { return clamped(rect) }
+            if unconstrained.contains(window) { return rect }
+            return stub == "1" ? clamped(rect) : inherited(window, selector, rect, screen)
+        }
+        let method = class_getInstanceMethod(NSWindow.self, selector)!
+        precondition(class_addMethod(CommandWindow.self, selector, imp_implementationWithBlock(block),
+                                     method_getTypeEncoding(method)), "CommandWindow now overrides constrainFrameRect")
+    }()
+    static func clamped(_ rect: NSRect) -> NSRect {
+        var frame = rect
+        frame.size.width = min(frame.width, screen.width)
+        frame.size.height = min(frame.height, screen.height)
+        frame.origin.x = max(screen.minX, min(frame.minX, screen.maxX - frame.width))
+        frame.origin.y = max(screen.minY, min(frame.minY, screen.maxY - frame.height))
+        return frame
+    }
+}
+
+@MainActor private func issue690UnconstrainFrame(_ window: NSWindow) {
+    _ = Issue690Frames.installed
+    Issue690Frames.unconstrained.add(window)
+}
+
 /// Real grants, folder scanning and ImageIO loading in an Access Root, with the window kept ordered out.
 @MainActor private final class Issue690Context {
     let base: URL, folder: URL, first: URL, second: URL
@@ -101,8 +140,12 @@ private final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
         menu = CommandMenu(preferencesStore: InMemoryDisplayPreferencesStore(), openWithoutWindow: {},
             openSettings: {}, openDiagnostics: {}, windowController: { controller })
         let window = try #require(controller.window)
+        issue690UnconstrainFrame(window)
         window.setContentSize(NSSize(width: 1280, height: 800))
         window.orderOut(nil)
+        let size = window.contentView?.bounds.size
+        try #require(size == NSSize(width: 1280, height: 800) || Issue690Frames.stub == "only",
+                     "the page-39 window keeps 1280×800 whatever the host screen (\(String(describing: size)))")
         controller.openInput([first])
         try await waitUntil("a.png shown with its folder scanned", timeout: .seconds(60)) {
             controller.session.imageStatus == .showing && controller.session.imageLoader.fileURL == self.first
