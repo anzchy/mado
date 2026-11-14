@@ -1,0 +1,41 @@
+{
+  "$comment": "Known-flaky node tooling tests (mado-verify SKILL.md step 1). Exactly one listed failure: rerun only it twice with node --test --test-name-pattern=<pattern> <file>; both reruns must pass. Anything else is a failure. App-test quarantine stays in scripts/ci/known-flaky.mjs.",
+  "flakes": [
+    {
+      "file": "scripts/tdd/app-lane.test.mjs",
+      "name": "discoveryOuterCancelAndTimeoutDrainRegisteredGroup",
+      "pattern": "^discoveryOuterCancelAndTimeoutDrainRegisteredGroup$",
+      "why": "heavy-lock discovery timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    },
+    {
+      "file": "scripts/tdd/app-lane.test.mjs",
+      "name": "discovery does not accept successful root exit while a pipe-less descendant remains alive",
+      "pattern": "^discovery does not accept successful root exit while a pipe-less descendant remains alive$",
+      "why": "heavy-lock discovery timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    },
+    {
+      "file": "scripts/tdd/app-lane.test.mjs",
+      "name": "actual checked discovery preserves native ownership after hard death (managed-wrapper)",
+      "pattern": "^actual checked discovery preserves native ownership after hard death \\(managed-wrapper\\)$",
+      "why": "heavy-lock discovery timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    },
+    {
+      "file": "scripts/tdd/app-lane.test.mjs",
+      "name": "actual checked discovery preserves native ownership after hard death (nested-wrapper)",
+      "pattern": "^actual checked discovery preserves native ownership after hard death \\(nested-wrapper\\)$",
+      "why": "heavy-lock discovery timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    },
+    {
+      "file": "scripts/tdd/app-lane.test.mjs",
+      "name": "actual checked discovery preserves native ownership after hard death (managed-caller)",
+      "pattern": "^actual checked discovery preserves native ownership after hard death \\(managed-caller\\)$",
+      "why": "heavy-lock discovery timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    },
+    {
+      "file": "scripts/tdd/unit-lane.test.mjs",
+      "name": "i632M1 fallback validates a known orphan when the full interrupt process query fails",
+      "pattern": "^i632M1 fallback validates a known orphan when the full interrupt process query fails$",
+      "why": "process-query timing on a loaded machine; the delegator reran it by hand before 2026-11-14"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Reproduce an App-test flake on CI
 
+Known-flaky local node tooling tests (heavy-lock discovery, process queries) are listed in `.agents/skills/mado-verify/known-flakes.json`; the two-rerun procedure is mado-verify SKILL.md step 1. This page covers App tests on CI.
+
 Reproduce before fixing. Reproduce on CI first: a local pass does not rule out a runner timing problem (#597, #587).
 Push the diagnostic branch, then dispatch one test ×20 or the full bundle ×5:
 
