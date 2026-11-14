@@ -230,24 +230,29 @@ private func mark(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, width:
     #expect(AnnotationGeometry.hitTest(CGPoint(x: 300, y: 100 - 5 - 1), marks: marks) == nil)
 }
 
+/// #692 fix r1 (opus L1): ←/→/↑/↓ nudge through `translate`, the one move the app uses; the #690 assertions are kept.
+private func nudge(_ rect: CGRect, dx: Int, dy: Int, imageSize: CGSize) -> CGRect {
+    AnnotationGeometry.translate(AnnotationMark(rect: rect), by: CGVector(dx: dx, dy: dy), imageSize: imageSize).rect
+}
+
 @Test(.timeLimit(.minutes(2))) func nudgeSteps() {
     let rect = CGRect(x: 100, y: 100, width: 50, height: 50)
-    #expect(AnnotationGeometry.nudge(rect, dx: 1, dy: 0, imageSize: page39Image).origin == CGPoint(x: 101, y: 100))
-    #expect(AnnotationGeometry.nudge(rect, dx: -10, dy: 0, imageSize: page39Image).origin == CGPoint(x: 90, y: 100))
-    #expect(AnnotationGeometry.nudge(rect, dx: 0, dy: 1, imageSize: page39Image).origin == CGPoint(x: 100, y: 101))
-    #expect(AnnotationGeometry.nudge(rect, dx: 0, dy: -10, imageSize: page39Image).origin == CGPoint(x: 100, y: 90))
-    #expect(AnnotationGeometry.nudge(rect, dx: 1, dy: 0, imageSize: page39Image).size == rect.size)
+    #expect(nudge(rect, dx: 1, dy: 0, imageSize: page39Image).origin == CGPoint(x: 101, y: 100))
+    #expect(nudge(rect, dx: -10, dy: 0, imageSize: page39Image).origin == CGPoint(x: 90, y: 100))
+    #expect(nudge(rect, dx: 0, dy: 1, imageSize: page39Image).origin == CGPoint(x: 100, y: 101))
+    #expect(nudge(rect, dx: 0, dy: -10, imageSize: page39Image).origin == CGPoint(x: 100, y: 90))
+    #expect(nudge(rect, dx: 1, dy: 0, imageSize: page39Image).size == rect.size)
 }
 
 @Test(.timeLimit(.minutes(2))) func nudgeClampsAtImageEdge() {
     let left = CGRect(x: 0, y: 20, width: 30, height: 40)
-    #expect(AnnotationGeometry.nudge(left, dx: -1, dy: 0, imageSize: page39Image) == left)
+    #expect(nudge(left, dx: -1, dy: 0, imageSize: page39Image) == left)
     let right = CGRect(x: 1570, y: 20, width: 30, height: 40)
-    #expect(AnnotationGeometry.nudge(right, dx: 10, dy: 0, imageSize: page39Image) == right)
+    #expect(nudge(right, dx: 10, dy: 0, imageSize: page39Image) == right)
     let bottom = CGRect(x: 10, y: 2395, width: 30, height: 5)
-    #expect(AnnotationGeometry.nudge(bottom, dx: 0, dy: 10, imageSize: page39Image) == bottom)
+    #expect(nudge(bottom, dx: 0, dy: 10, imageSize: page39Image) == bottom)
     let nearEdge = CGRect(x: 5, y: 20, width: 30, height: 40)
-    #expect(AnnotationGeometry.nudge(nearEdge, dx: -10, dy: 0, imageSize: page39Image).minX == 0)
+    #expect(nudge(nearEdge, dx: -10, dy: 0, imageSize: page39Image).minX == 0)
 }
 
 @Test(.timeLimit(.minutes(2))) func nudgeRoundTripProperty() {
@@ -261,10 +266,10 @@ private func mark(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, width:
         let axes = steps.map { _ in Bool.random(using: &random) }
         var rect = start
         for (step, horizontal) in zip(steps, axes) {
-            rect = AnnotationGeometry.nudge(rect, dx: horizontal ? step : 0, dy: horizontal ? 0 : step, imageSize: page39Image)
+            rect = nudge(rect, dx: horizontal ? step : 0, dy: horizontal ? 0 : step, imageSize: page39Image)
         }
         for (step, horizontal) in zip(steps, axes).reversed() {
-            rect = AnnotationGeometry.nudge(rect, dx: horizontal ? -step : 0, dy: horizontal ? 0 : -step, imageSize: page39Image)
+            rect = nudge(rect, dx: horizontal ? -step : 0, dy: horizontal ? 0 : -step, imageSize: page39Image)
         }
         #expect(rect == start, "seed \(seed)")
     }
