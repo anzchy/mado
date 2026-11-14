@@ -9,9 +9,10 @@ import MadoCore
 public enum RedactionRenderer {
     public enum Failure: Error, Equatable { case contextUnavailable }
 
-    /// `rect` is in image pixels with the origin at the top left, like an annotation mark.
+    /// `rect` is in image pixels with the origin at the top left, like an annotation mark. A mosaic weaker than
+    /// `RedactionStyle.minimumMosaicStrength` is drawn at the minimum.
     public static func render(_ image: CGImage, rect: CGRect, style: RedactionStyle) throws -> CGImage {
-        switch style {
+        switch style.enforced {
         case .solid: try redact(image, rect: rect) { pixels, area in pixels.fill(area) }
         case .mosaic(let strength): try pixelate(image, rect: rect, cell: strength)
         }

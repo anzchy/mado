@@ -111,3 +111,11 @@ that is auditor evidence, not a second host run by this implementer. Mac mini re
 `check.py --output <dir>` optionally saves `check.txt`; the default check writes nothing.
 `check_lock.py --output <dir>` selects its disposable probe parent. Run committed fail-closed regressions
 with `python3 -m unittest discover -s scripts/testassets -p 'test_*.py'`. No added runtime dependency is required.
+
+## Redaction text samples (#693)
+
+The minimum mosaic strength is measured on body text rendered at test time, not on a committed file: tier-①
+fixtures all come from the fontless Python generator (and `check.py` rejects anything else), while system text
+depends on the host's fonts. `RedactionTextSamples.swift` in `MadoInfrastructureTests` renders one line of
+English and one of Chinese with the system UI font at 13/15/17 pt, @1x and @2x, black on white. Method and
+results: `docs/validation/P7-693-mosaic-minimum.md`.
