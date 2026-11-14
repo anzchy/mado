@@ -506,10 +506,12 @@ class OwnerGatesDesignTests(unittest.TestCase):
                     path.write_text("#!/bin/sh\n" + text)
                     path.chmod(0o755)
 
-                for folder in ("agents", "tdd", "ledger"):
+                for folder in ("agents", "tdd", "ledger", "name-checks", "ci"):
                     directory = work / "scripts" / folder
                     directory.mkdir(exist_ok=True)
                     (directory / "fixture.test.mjs").write_text("// command fixture\n")
+                (work / "scripts/ci/name-checks-ci.test.mjs").write_text("// command fixture\n")
+                (work / "node_modules").mkdir()
                 executable(work / "scripts/heavy-lock.sh", 'export TEST_HEAVY_HELD=1\nexec "$@"\n')
                 (work / "scripts/tdd/swift-lcov.sh").write_text("echo 'LF:1\nLH:1\nFNF:1\nFNH:1' > coverage/lcov.info\n")
                 for command in ("xcodegen", "xcodebuild", "node"):
@@ -556,15 +558,18 @@ class OwnerGatesExitTests(unittest.TestCase):
                 path.write_text("#!/bin/sh\n" + text)
                 path.chmod(0o755)
             executable(work / "scripts/heavy-lock.sh", 'exec "$@"\n')
-            for directory in ("agents", "tdd", "ledger"):
+            for directory in ("agents", "tdd", "ledger", "name-checks", "ci"):
                 folder = work / "scripts" / directory
                 folder.mkdir(exist_ok=True)
                 (folder / "fixture.test.mjs").write_text("// fixture\n")
+            (work / "scripts/ci/name-checks-ci.test.mjs").write_text("// fixture\n")
+            (work / "node_modules").mkdir()
             for command, lane in (("swift", "swift"), ("xcodegen", "xcodegen"), ("xcodebuild", "xcodebuild"),
                                   ("npm", "design"), ("node", "node")):
                 executable(first / command, f'''lane={lane}
 [ "$lane" = node ] && [ "$1" = scripts/ci/package-coverage-local.mjs ] && lane=lcov
-[ "$lane" = node ] && [ "$1" != --test ] && [ "$lane" != lcov ] && lane=ledger
+[ "$lane" = node ] && [ "$1" = scripts/tdd/unit-lane.mjs ] && lane=swift
+[ "$lane" = node ] && [ "$1" != --test ] && lane=ledger
 [ "$FAIL_LANE" = "$lane" ] && exit 7
 [ "$FAIL_LANE" = missing ] && [ "$lane" = xcodegen ] && exec picsee_missing_tool_423
 [ "$lane" = swift ] && echo 'Test run with 1 tests passed'
@@ -592,6 +597,8 @@ exec "{real_git}" "$@"
                     expected = {lane: 0 for lane in lanes}
                     if fail:
                         expected[{"missing": "xcodegen"}.get(fail, fail)] = 127 if fail == "missing" else 7
+                    if fail == "swift":
+                        expected["lcov"] = 1  # coverage is never evaluated after a failed Swift run
                     self.assertEqual(statuses, [f"{lane}={expected[lane]}" for lane in lanes])
                     self.assertEqual(result.returncode, 1 if fail else 0, result.stdout + result.stderr)
                     self.assertEqual(summary[-1], "DONE")
