@@ -58,7 +58,9 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    stored list; then drop items already in flight or overlapping files, and pick by journey order (plan §1.6,
    ADR-013) within the in-flight cap and auditor capacity. Why: `docs/knowledge/owner-questions.md`.
 2. **Brief** — copy [templates/brief-template.md](references/templates/brief-template.md) to
-   `~/.picsee/herdr/<impl>/<item>-brief.md`. For UI work, fill the per-state design and evidence fields in
+   `~/.picsee/herdr/<impl>/<item>-brief.md`. Every brief starts from the template and keeps its
+   `## Verify (mado-verify)` section; a hand-written brief copies that section verbatim (the briefs for #682, #683,
+   #687, #690 and #692 omitted it and were never verified). There is no hook. For UI work, fill the per-state design and evidence fields in
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the
    implementer must turn into the first RED. Late assertions drove P3-01, P3-10 and #136 past the round cap. Read the code before
@@ -85,13 +87,16 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    See [the listener procedure](references/guide.md#durable-listener-notification). Scope stops → approve minimal hunks in an amendment file.
    Fixture-only test mistakes → approve. Network hang → `herdr pane send-keys <pane> Escape`, then "resume…".
    Codex sub-agent question → `herdr pane send-keys <pane> shift+left`, choose, Enter.
-4. **Audit** — before dispatch, check the handoff's mado-verify issue comment link covers its final head SHA. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
+4. **Audit** — before dispatch, run `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>`
+   for the handoff's final head and confirm the printed comment URL is the one in the handoff; a failure returns the item to
+   the implementer. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
    fails closed (`design≠0`). A summary without `DONE` is no evidence. Exit 1 means a lane failed even with `DONE`;
    inspect the lane exit codes printed to stdout and the summary file, fix failures and rerun before pushing.
-5. **Apply verdict** — merge both verdicts. C/H block → fix + fresh-context confirm by each auditor; at most 2 auditor rounds
+5. **Apply verdict** — merge both verdicts. Every fix brief requires a new mado-verify run and comment on the fix head
+   (fix template). C/H block → fix + fresh-context confirm by each auditor; at most 2 auditor rounds
    per item (blind audit + one confirm). C/H still open after round 2 → stop and ask the user whether to continue. User-visible/AC Medium → one fix round, no
    confirm. Other Medium/Low → PR "Still open". If consulting
    [confirm-and-fix-templates.md](references/templates/confirm-and-fix-templates.md), fill its `<auditor>` placeholders
@@ -119,7 +124,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
 8. **PR & merge** — body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. Build Gates with
    `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt > run.json`, then
    `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the seven owner-gates lanes (including `design-check`) and CI
-   `app-tests`. App PASS requires supplied matching --head, exported event other than workflow_dispatch, exported attempt=1,
+   `app-tests` (the local `apptests=` lane gives an app-tests row only without `--ci`). App PASS requires supplied matching --head, exported event other than workflow_dispatch, exported attempt=1,
    a completed run, one completed successful App job and one completed successful
    Run App tests step. An otherwise successful candidate missing --head/event/attempt is NOT VERIFIED with the field named.
    Failed/cancelled jobs cannot borrow step success. Docs-only/build-only are reasoned NOT RUN;
@@ -135,6 +140,8 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    before merge** (user 2026-10-27, #175): you, not the implementer, drive one flow through the changed path in a
    signed build of the PR head under the GUI lock; `FAIL` blocks, `NOT VERIFIED` needs a named blocker and the user's
    OK, App code changed since → redo. The smoke promotes no ledger row; full parity stays batched (step 9).
+   Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>` for the audited
+   head in the implementer's worktree; after a rebase, step 6's `CODE same` links the PR head to that audited head.
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
    to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
