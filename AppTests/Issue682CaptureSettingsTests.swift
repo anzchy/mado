@@ -158,7 +158,7 @@ private extension NSView {
     let expected = ["capture.grip", "capture.region", "capture.window", "capture.screen", "capture.text", "capture.mado", "capture.collapse"]
     let actual = bar.subviews.compactMap { $0.accessibilityIdentifier() }.filter { expected.contains($0) }
     #expect(actual == expected)
-    for id in ["capture.region", "capture.window", "capture.text", "capture.collapse"] {
+    for id in ["capture.text", "capture.collapse"] {
         let button = try #require(bar.subviews.first { $0.accessibilityIdentifier() == id } as? NSButton)
         #expect(!button.isEnabled)
         #expect(button.toolTip?.contains("⌃") != true)

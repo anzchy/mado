@@ -1,11 +1,14 @@
 import AppKit
 import MadoMacUI
 
-/// The expanded #680 page 37 toolbar. Later tickets enable the placeholder actions.
+/// The expanded #680 page 37 toolbar.
 @MainActor final class CaptureBarView: NSVisualEffectView {
     init(localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
-         captureAction: @escaping () -> Void) {
+         captureAction: @escaping () -> Void,
+         regionAction: @escaping () -> Void = {}, windowAction: @escaping () -> Void = {}) {
         self.captureAction = captureAction
+        self.regionAction = regionAction
+        self.windowAction = windowAction
         self.localize = localize
         super.init(frame: NSRect(x: 0, y: 0, width: 0, height: 40))
         material = .popover
@@ -19,8 +22,8 @@ import MadoMacUI
         addButton("", symbol: "circle.grid.2x3", id: "capture.grip", x: x, width: 32, enabled: false)
         x += 34
         for (key, symbol, id, enabled) in [
-            ("Region Capture", "camera.viewfinder", "capture.region", false),
-            ("Window Capture", "macwindow", "capture.window", false),
+            ("Region Capture", "camera.viewfinder", "capture.region", true),
+            ("Window Capture", "macwindow", "capture.window", true),
             ("Full Screen Capture", "display", "capture.screen", true),
             ("Recognize Text", "text.viewfinder", "capture.text", false)
         ] {
@@ -44,6 +47,8 @@ import MadoMacUI
     required init?(coder: NSCoder) { nil }
 
     private let captureAction: () -> Void
+    private let regionAction: () -> Void
+    private let windowAction: () -> Void
     private let localize: (String) -> String
 
     private func titleWidth(_ title: String) -> CGFloat {
@@ -67,6 +72,11 @@ import MadoMacUI
     }
 
     @objc private func activate(_ sender: NSButton) {
-        if sender.accessibilityIdentifier() == "capture.screen" { captureAction() }
+        switch sender.accessibilityIdentifier() {
+        case "capture.region": regionAction()
+        case "capture.window": windowAction()
+        case "capture.screen": captureAction()
+        default: break
+        }
     }
 }

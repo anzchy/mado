@@ -30,6 +30,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var panel: NSPanel?
     private var statusPanel: NSPanel?
     private var status: NSTextField?
+    private var selectionPanels: [CaptureSelectionPanel] = []
     private let session = CaptureSession(screen: ScreenCaptureKitScreen(), files: MadoInfrastructure.DownloadsCaptureFilePort())
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
 
@@ -39,7 +40,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
             NSApp.terminate(nil)
             return
         }
-        let bar = CaptureBarView { [weak self] in self?.capture() }
+        let bar = CaptureBarView(captureAction: { [weak self] in self?.capture() },
+                                 regionAction: { [weak self] in self?.startSelection(.region) },
+                                 windowAction: { [weak self] in self?.startSelection(.window) })
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: bar.frame.width, height: 40),
                             styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
         panel.isFloatingPanel = true
@@ -84,22 +87,86 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     @objc private func capture() {
+        capture(request: nil)
+    }
+
+    private func startSelection(_ mode: CaptureSelectionPanel.Mode) {
+        guard selectionPanels.isEmpty else { return }
+        let point = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main,
+              let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        else { return }
+        if mode == .region {
+            showSelection(on: screen, displayID: displayID, mode: mode, windows: [])
+        } else {
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let excluded = Set(NSApp.windows.compactMap { UInt32(exactly: $0.windowNumber) })
+                    let windows = try await ScreenCaptureKitScreen().selectableWindows(excluding: excluded)
+                    showSelection(on: screen, displayID: displayID, mode: mode, windows: windows)
+                } catch {
+                    report(error)
+                }
+            }
+        }
+    }
+
+    private func showSelection(on screen: NSScreen, displayID: UInt32, mode: CaptureSelectionPanel.Mode,
+                               windows: [ScreenCaptureKitScreen.WindowCandidate]) {
+        let screens = mode == .window ? NSScreen.screens : [screen]
+        for item in screens {
+            let id = (item.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? displayID
+            let overlay = CaptureSelectionPanel(screen: item, displayID: id, mode: mode, windows: windows) {
+                [weak self] target in
+                guard let self else { return }
+                let overlayIDs = Set(selectionPanels.compactMap { UInt32(exactly: $0.windowNumber) })
+                selectionPanels.forEach { $0.orderOut(nil) }
+                selectionPanels.removeAll()
+                guard let target else { return }
+                let barIDs = Set([panel, statusPanel].compactMap { $0.flatMap { UInt32(exactly: $0.windowNumber) } })
+                let request = CaptureRequest(target: target, barWindowIDs: barIDs,
+                                             overlayWindowIDs: overlayIDs)
+                capture(request: request)
+            }
+            selectionPanels.append(overlay)
+        }
+        selectionPanels.first { $0.frame.contains(NSEvent.mouseLocation) }?.makeKey()
+    }
+
+    private func capture(request: CaptureRequest?) {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let url = try await session.capture()
-                status?.stringValue = String(format: String(localized: "Saved %@"), url.lastPathComponent)
-            } catch ScreenCaptureKitScreen.Failure.permissionNotAsked {
-                status?.stringValue = String(localized: "Allow Mado to record the screen in System Settings, then try Capture again.")
-            } catch ScreenCaptureKitScreen.Failure.permissionDenied {
-                status?.stringValue = String(localized: "Screen capture requires Screen Recording permission, which is currently denied. System Settings has been opened.")
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-            } catch CaptureSessionError.busy {
-                status?.stringValue = String(localized: "Capture in progress")
+                let url: URL
+                if let request { url = try await session.capture(request: request) }
+                else { url = try await session.capture() }
+                var copied = false
+                if let png = try? Data(contentsOf: url) {
+                    NSPasteboard.general.clearContents()
+                    copied = NSPasteboard.general.setData(png, forType: .png)
+                }
+                let message = copied ? "Saved %@" : "Saved %@, but clipboard copy failed"
+                status?.stringValue = String(format: String(localized: String.LocalizationValue(message)), url.lastPathComponent)
             } catch {
-                status?.stringValue = String(format: String(localized: "Capture failed: %@"), error.localizedDescription)
+                report(error)
             }
             statusPanel?.orderFrontRegardless()
         }
+    }
+
+    private func report(_ error: Error) {
+        switch error {
+        case ScreenCaptureKitScreen.Failure.permissionNotAsked:
+            status?.stringValue = String(localized: "Allow Mado to record the screen in System Settings, then try Capture again.")
+        case ScreenCaptureKitScreen.Failure.permissionDenied:
+            status?.stringValue = String(localized: "Screen capture requires Screen Recording permission, which is currently denied. System Settings has been opened.")
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        case CaptureSessionError.busy:
+            status?.stringValue = String(localized: "Capture in progress")
+        default:
+            status?.stringValue = String(format: String(localized: "Capture failed: %@"), error.localizedDescription)
+        }
+        statusPanel?.orderFrontRegardless()
     }
 }

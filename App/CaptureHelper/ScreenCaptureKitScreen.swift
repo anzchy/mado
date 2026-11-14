@@ -5,6 +5,10 @@ import ScreenCaptureKit
 import MadoApplication
 
 struct ScreenCaptureKitScreen: CaptureScreenPort {
+    struct WindowCandidate: Sendable {
+        let id: UInt32
+        let frame: CGRect
+    }
     struct TestDisplay: Sendable {
         let width: Int
         let height: Int
@@ -25,7 +29,7 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
     }
     enum Failure: Error {
         case permissionDenied, permissionNotAsked
-        case displayUnavailable
+        case displayUnavailable, windowUnavailable, regionUnavailable
         case pngEncodingFailed
     }
 
@@ -38,6 +42,93 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
             return try pngData(from: context.makeImage()!)
         }
+        let point = await MainActor.run { NSEvent.mouseLocation }
+        let displayID: UInt32? = await MainActor.run {
+            guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else { return nil }
+            return (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        }
+        guard let displayID else { throw Failure.displayUnavailable }
+        let ownIDs = await MainActor.run { Set(NSApp.windows.compactMap { UInt32(exactly: $0.windowNumber) }) }
+        return try await capturePNG(request: CaptureRequest(target: .fullScreen(displayID: displayID),
+                                                             barWindowIDs: ownIDs, overlayWindowIDs: []))
+    }
+
+    func capturePNG(request: CaptureRequest) async throws -> Data {
+        try checkPermission()
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let configuration = SCStreamConfiguration()
+        let filter: SCContentFilter
+        var crop: CGRect?
+        switch request.target {
+        case let .window(windowID):
+            guard !request.excludedWindowIDs.contains(windowID),
+                  let window = content.windows.first(where: { $0.windowID == windowID && $0.isOnScreen && $0.windowLayer == 0 })
+            else { throw Failure.windowUnavailable }
+            filter = SCContentFilter(desktopIndependentWindow: window)
+            let windowFrame = window.frame
+            let scale = await MainActor.run {
+                let primaryTop = NSScreen.screens.first?.frame.maxY ?? 0
+                let center = CGPoint(x: windowFrame.midX, y: primaryTop - windowFrame.midY)
+                return NSScreen.screens.first { $0.frame.contains(center) }?.backingScaleFactor ?? 1
+            }
+            configuration.width = Int((windowFrame.width * scale).rounded(.up))
+            configuration.height = Int((windowFrame.height * scale).rounded(.up))
+        case let .fullScreen(displayID), let .region(_, displayID, _, _):
+            guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+                throw Failure.displayUnavailable
+            }
+            let excluded = content.windows.filter { request.excludedWindowIDs.contains($0.windowID) }
+            filter = SCContentFilter(display: display, excludingWindows: excluded)
+            let scale: CGFloat
+            if case let .region(_, _, _, requestedScale) = request.target {
+                scale = requestedScale
+            } else {
+                scale = await MainActor.run {
+                    NSScreen.screens.first {
+                        ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+                    }?.backingScaleFactor ?? 1
+                }
+            }
+            let pixels = pixelDimensions(width: display.width, height: display.height, scale: Double(scale))
+            configuration.width = pixels.0
+            configuration.height = pixels.1
+            if case .region = request.target {
+                guard let pixelRect = request.regionPixelRect else { throw Failure.regionUnavailable }
+                if #available(macOS 15, *) {
+                    configuration.sourceRect = CGRect(x: pixelRect.minX / scale, y: pixelRect.minY / scale,
+                                                      width: pixelRect.width / scale, height: pixelRect.height / scale)
+                    configuration.width = Int(pixelRect.width)
+                    configuration.height = Int(pixelRect.height)
+                } else {
+                    crop = pixelRect
+                }
+            }
+        }
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        if let crop {
+            guard let cropped = image.cropping(to: crop) else { throw Failure.regionUnavailable }
+            return try pngData(from: cropped)
+        }
+        return try pngData(from: image)
+    }
+
+    func selectableWindows(excluding excludedIDs: Set<UInt32>) async throws -> [WindowCandidate] {
+        try checkPermission()
+        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        let order = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                     as? [[String: Any]] ?? []).enumerated().reduce(into: [UInt32: Int]()) { result, entry in
+            if let id = (entry.element[kCGWindowNumber as String] as? NSNumber)?.uint32Value {
+                result[id] = entry.offset
+            }
+        }
+        return content.windows.filter {
+            $0.isOnScreen && $0.windowLayer == 0 && !excludedIDs.contains($0.windowID)
+                && $0.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier
+        }.map { WindowCandidate(id: $0.windowID, frame: $0.frame) }
+            .sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
+    }
+
+    private func checkPermission() throws {
         let defaults = UserDefaults(suiteName: CaptureBarIdentity.appGroupID)
         let preflight = CGPreflightScreenCaptureAccess()
         let previouslyRequested = defaults?.bool(forKey: CaptureBarIdentity.permissionRequestedKey) == true
@@ -54,28 +145,6 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
         case .denied: throw Failure.permissionDenied
         case .notAsked: throw Failure.permissionNotAsked
         }
-        let point = await MainActor.run { NSEvent.mouseLocation }
-        let displayInfo: (UInt32, CGFloat)? = await MainActor.run {
-            guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main,
-                  let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-            else { return nil }
-            return (id, screen.backingScaleFactor)
-        }
-        guard let (displayID, scale) = displayInfo
-        else { throw Failure.displayUnavailable }
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
-            throw Failure.displayUnavailable
-        }
-        let helperWindowIDs = await MainActor.run { NSApp.windows.map { UInt32($0.windowNumber) } }
-        let ownWindows = content.windows.filter { helperWindowIDs.contains($0.windowID) }
-        let filter = SCContentFilter(display: scDisplay, excludingWindows: ownWindows)
-        let configuration = SCStreamConfiguration()
-        let pixels = pixelDimensions(width: scDisplay.width, height: scDisplay.height, scale: Double(scale))
-        configuration.width = pixels.0
-        configuration.height = pixels.1
-        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-        return try pngData(from: image)
     }
 
     private func pngData(from image: CGImage) throws -> Data {

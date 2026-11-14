@@ -2,6 +2,7 @@ import Foundation
 
 public protocol CaptureScreenPort: Sendable {
     func captureCurrentDisplayPNG() async throws -> Data
+    func capturePNG(request: CaptureRequest) async throws -> Data
 }
 
 public protocol CaptureFilePort: Sendable {
@@ -34,11 +35,19 @@ public actor CaptureSession {
     }
 
     public func capture() async throws -> URL {
+        try await capturePNG { try await self.screen.captureCurrentDisplayPNG() }
+    }
+
+    public func capture(request: CaptureRequest) async throws -> URL {
+        try await capturePNG { try await self.screen.capturePNG(request: request) }
+    }
+
+    private func capturePNG(_ capture: () async throws -> Data) async throws -> URL {
         guard !isCapturing else { throw CaptureSessionError.busy }
         isCapturing = true
         defer { isCapturing = false }
 
-        let png = try await screen.captureCurrentDisplayPNG()
+        let png = try await capture()
         try Task.checkCancellation()
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
