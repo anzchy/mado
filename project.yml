@@ -98,6 +98,7 @@ targets:
           - Retry442Tests.swift
           - KeyWindowFixture.swift
           - KeyWindowFixtureTests.swift
+      - path: App/CaptureHelper/CaptureBarView.swift
     dependencies:
       - package: MadoKit
         product: MadoCore
@@ -124,6 +125,8 @@ targets:
     dependencies:
       - package: MadoKit
         product: MadoApplication
+      - package: MadoKit
+        product: MadoMacUI
     settings:
       base:
         PRODUCT_NAME: MadoCaptureHelper

@@ -10,7 +10,7 @@ enum SettingsSection: String, CaseIterable {
         case .general: String(localized: "General")
         case .display: String(localized: "Display")
         case .cache: String(localized: "Cache")
-        case .capture: String(localized: "Screenshots")
+        case .capture: "截图"
         case .update: String(localized: "Updates")
         case .about: String(localized: "About")
         }
@@ -95,7 +95,7 @@ private actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var updateAutomatic: NSButton!
     private var updateCheck: NSButton!
     private var updateLastChecked: NSTextField!
-    private var captureEnabled: NSButton!
+    private var captureEnabled: NSSwitch!
     private var captureDetails: [NSView] = []
     private let captureControl: CaptureBarControl
 
@@ -233,21 +233,85 @@ private actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
     private func buildCapture() {
         let pane = panes[.capture]!
-        captureEnabled = NSButton(checkboxWithTitle: String(localized: "Show Capture Bar"),
-                                  target: self, action: #selector(changeCapture(_:)))
-        captureEnabled.frame = NSRect(x: 162, y: 392, width: 280, height: 24)
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 580, height: 420))
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.setAccessibilityIdentifier("settings.capture.scroll")
+        let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: 1124))
+        scroll.documentView = form
+        pane.addSubview(scroll)
+
+        @discardableResult func field(_ text: String, top: CGFloat, height: CGFloat = 24, id: String? = nil,
+                   labelColumn: Bool = false, muted: Bool = false) -> NSTextField {
+            let result = label(text, role: "uiSmall", muted: muted)
+            result.textColor = muted ? DesignColor.textSecondary.nsColor : DesignColor.textPrimary.nsColor
+            result.frame = NSRect(x: labelColumn ? 26 : 162, y: 1124 - top - height,
+                                  width: labelColumn ? 120 : 392, height: height)
+            if labelColumn { result.alignment = .right }
+            if let id { result.setAccessibilityIdentifier(id) }
+            form.addSubview(result)
+            if top >= 105 { captureDetails.append(result) }
+            return result
+        }
+        func disabledButton(_ title: String, top: CGFloat, id: String, x: CGFloat = 162, width: CGFloat = 140) {
+            let button = NSButton(title: title, target: nil, action: nil)
+            button.frame = NSRect(x: x, y: 1124 - top - 24, width: width, height: 24)
+            button.isEnabled = false
+            button.alphaValue = 0.45
+            button.setAccessibilityIdentifier(id)
+            form.addSubview(button)
+            captureDetails.append(button)
+        }
+        field("截图工具条", top: 10, height: 20, muted: true)
+        field("截图工具条", top: 50, labelColumn: true)
+        captureEnabled = NSSwitch(frame: NSRect(x: 162, y: 1124 - 50 - 18, width: 32, height: 18))
+        captureEnabled.controlSize = .mini
+        captureEnabled.target = self
+        captureEnabled.action = #selector(changeCapture(_:))
         captureEnabled.setAccessibilityIdentifier("settings.capture.enabled")
-        pane.addSubview(captureEnabled)
-        let status = label(String(localized: "Screen Recording: Unknown"), role: "uiSmall", muted: true)
-        status.frame = NSRect(x: 162, y: 347, width: 390, height: 24)
-        status.setAccessibilityIdentifier("settings.capture.permission-status")
-        pane.addSubview(status)
-        captureDetails.append(status)
-        let note = label("在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。", role: "uiSmall", muted: true)
-        note.frame = NSRect(x: 162, y: 292, width: 390, height: 52)
-        note.setAccessibilityIdentifier("settings.capture.permission-note")
-        pane.addSubview(note)
-        captureDetails.append(note)
+        captureEnabled.setAccessibilityLabel("显示截图工具条")
+        form.addSubview(captureEnabled)
+        let switchText = field("显示截图工具条", top: 49)
+        switchText.frame.origin.x = 202
+        field("登录时启动", top: 105, labelColumn: true)
+        disabledButton("登录时启动截图工具条", top: 105, id: "settings.capture.login")
+        field("录屏权限", top: 155, labelColumn: true)
+        field("未知", top: 155, id: "settings.capture.permission-status", muted: true)
+        if #available(macOS 15, *) {
+            field("在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。",
+                  top: 184, height: 42, id: "settings.capture.permission-note", muted: true)
+        }
+        field("截图之后", top: 255, height: 20, muted: true)
+        field("截图文件夹", top: 290, id: "settings.capture.folder-label", labelColumn: true)
+        let folder = field("~/Downloads", top: 290, id: "settings.capture.folder")
+        folder.font = DesignMetrics.font("uiSmall", monospaced: true)
+        disabledButton("更改…", top: 290, id: "settings.capture.folder-change", x: 264, width: 72)
+        field("存储到文件夹", top: 335, labelColumn: true)
+        disabledButton("截图后存到截图文件夹", top: 335, id: "settings.capture.after-save", width: 220)
+        field("拷贝到剪贴板", top: 380, labelColumn: true)
+        disabledButton("截图后拷贝到剪贴板", top: 380, id: "settings.capture.after-copy", width: 220)
+        field("截图之后", top: 425, labelColumn: true)
+        disabledButton("不执行其他操作", top: 425, id: "settings.capture.after-action", width: 180)
+        field("全局快捷键", top: 475, height: 20, muted: true)
+        for (index, name) in ["区域截图", "窗口截图", "全屏截图", "截图并识别文字", "显示 / 收起工具条"].enumerated() {
+            let top = CGFloat(510 + index * 40)
+            field(name, top: top, labelColumn: true)
+            disabledButton("未设置", top: top, id: index == 0 ? "settings.capture.shortcut-region" : "settings.capture.shortcut-\(index)", width: 96)
+        }
+        let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 805, width: 528, height: 80))
+        ocr.setAccessibilityIdentifier("settings.capture.ocr")
+        form.addSubview(ocr)
+        let ocrTitle = label("文字识别", role: "uiSmall", muted: true)
+        ocrTitle.frame = NSRect(x: 0, y: 50, width: 120, height: 20)
+        ocr.addSubview(ocrTitle)
+        let ocrInfo = label("云端识别 · 未填写密钥", role: "uiSmall", muted: true)
+        ocrInfo.frame = NSRect(x: 136, y: 22, width: 392, height: 24)
+        ocr.addSubview(ocrInfo)
+        let ocrCloud = NSButton(title: "云端识别", target: nil, action: nil)
+        ocrCloud.frame = NSRect(x: 136, y: 0, width: 120, height: 24)
+        ocrCloud.isEnabled = false
+        ocrCloud.setAccessibilityIdentifier("settings.capture.ocr-cloud")
+        ocr.addSubview(ocrCloud)
         refreshCapture()
     }
 
@@ -256,10 +320,10 @@ private actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let enabled = UserDefaults(suiteName: CaptureBarIdentity.appGroupID)?
             .bool(forKey: CaptureBarIdentity.enabledKey) == true
         captureEnabled.state = enabled ? .on : .off
-        for detail in captureDetails { detail.alphaValue = enabled ? 1 : 0.45 }
+        for detail in captureDetails { detail.alphaValue = enabled && !(detail is NSButton) ? 1 : 0.45 }
     }
 
-    @objc private func changeCapture(_ sender: NSButton) {
+    @objc private func changeCapture(_ sender: NSSwitch) {
         let enabled = sender.state == .on
         sender.isEnabled = false
         Task {
