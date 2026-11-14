@@ -663,7 +663,7 @@ public actor FileAccess: AccessLeasing {
             guard FileManager.default.isReadableFile(atPath: file.path) else {
                 throw FileAccessError.needsFileReconnection(file)
             }
-            if let data = try? bookmarks.create(for: file) {
+            if let data = try? bookmarks.createFileGrant(for: file) {
                 fileBookmarks[key] = FileGrantBookmark(data: data, resource: current)
             }
             return file
@@ -677,7 +677,7 @@ public actor FileAccess: AccessLeasing {
             if resolved.stale {
                 let session = try ScopeSession(scope: scope, url: resolved.url, rootID: nil)
                 defer { session.stop() }
-                fileBookmarks[original.standardizedFileURL]?.data = try bookmarks.create(for: resolved.url)
+                fileBookmarks[original.standardizedFileURL]?.data = try bookmarks.createFileGrant(for: resolved.url)
             }
             return resolved.url
         } catch FileAccessError.fileDeleted(let file) { throw FileAccessError.fileDeleted(file) }
@@ -933,7 +933,7 @@ public actor FileAccess: AccessLeasing {
             if case .fileGrant(let file) = request, FileManager.default.fileExists(atPath: url.path),
                fileBookmarks[file.standardizedFileURL] == nil {
                 do {
-                    let data = try bookmarks.create(for: url)
+                    let data = try bookmarks.createFileGrant(for: url)
                     fileBookmarks[file.standardizedFileURL] = FileGrantBookmark(data: data,
                         resource: try? resourceReader.identity(for: url))
                 } catch {

@@ -24,9 +24,8 @@ private final class Issue610NativeBoundary: @unchecked Sendable {
     private var requests: [(URL.BookmarkCreationOptions, Set<URLResourceKey>?)] = []
     func create(_ url: URL, options: URL.BookmarkCreationOptions, keys: Set<URLResourceKey>?) throws -> Data {
         lock.withLock { requests.append((options, keys)) }
-        guard options.contains(.withSecurityScope), options.contains(.securityScopeAllowOnlyReadAccess) else {
-            throw CocoaError(.fileReadUnknown)
-        }
+        // #690: Access Roots are writable, File Grants read-only; both must stay security scoped.
+        guard options.contains(.withSecurityScope) else { throw CocoaError(.fileReadUnknown) }
         return try url.bookmarkData(options: options, includingResourceValuesForKeys: keys, relativeTo: nil)
     }
     var observations: [(URL.BookmarkCreationOptions, Set<URLResourceKey>?)] { lock.withLock { requests } }
@@ -88,7 +87,7 @@ func issue610SystemBookmarkIdentityRoundTrip(isDirectory: Bool) throws {
 }
 
 @Test(arguments: [false, true])
-func issue610ProbeReadOnlyBookmarksRoundTrip(enriched: Bool) throws {
+func issue610ProbeFolderBookmarksRoundTrip(enriched: Bool) throws {
     let f = try Issue610Fixture(); defer { f.remove() }
     let native = Issue610NativeBoundary()
     let gatherer = AccessProbeFactGatherer(bookmarkCreation: native.creation)
@@ -107,12 +106,45 @@ func issue610ProbeReadOnlyBookmarksRoundTrip(enriched: Bool) throws {
     }
     let requests = native.observations
     #expect(requests.count == 1)
-    #expect(requests.allSatisfy { $0.0.contains(.withSecurityScope) && $0.0.contains(.securityScopeAllowOnlyReadAccess) })
+    // #690: the probe checks folders the way Access Roots are stored, which are now writable.
+    #expect(requests.allSatisfy { $0.0 == [.withSecurityScope] })
     if enriched {
         #expect(requests.allSatisfy { Set($0.1 ?? []) == [.volumeUUIDStringKey, .volumeURLKey, .volumeNameKey] })
     } else {
         #expect(requests.allSatisfy { $0.1 == nil })
     }
+}
+
+/// #690 (ADR-020): a folder Access Root is stored writable so ⌘S can write into it after a relaunch; a File Grant
+/// (one file opened from Finder) stays read-only, since its copy goes through the save panel.
+@Test(.timeLimit(.minutes(2))) func issue690FolderRootBookmarksAreWritableFileGrantsReadOnly() async throws {
+    let f = try Issue610Fixture(); defer { f.remove() }
+    let native = Issue610NativeBoundary()
+    let access = try FileAccess(scope: CountingScope(), bookmarks: SystemSecurityScope(bookmarkCreation: native.creation),
+        store: f.store, buildSHA: "issue690")
+    let folder = f.base.appendingPathComponent("Trip", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let id = try await access.grant(folder: folder)
+    _ = try await access.reconnect(id, folder: folder)
+    let rootRequests = native.observations
+    #expect(rootRequests.count == 2)
+    #expect(rootRequests.allSatisfy { $0.0 == [.withSecurityScope] })
+    let lease = try await access.acquire(.fileGrant(f.file))
+    await access.release(lease)
+    let grantRequests = native.observations.dropFirst(rootRequests.count)
+    #expect(grantRequests.count == 1)
+    #expect(grantRequests.allSatisfy { $0.0 == [.withSecurityScope, .securityScopeAllowOnlyReadAccess] })
+    // The stored root holds the writable bookmark that was created last.
+    #expect(await access.records().map(\.id) == [id])
+}
+
+/// The protocol default keeps every other BookmarkCoding creating File Grants the way it creates roots.
+@Test func issue690BookmarkCodingFileGrantDefaultsToCreate() throws {
+    struct Plain: BookmarkCoding {
+        func create(for url: URL) throws -> Data { Data(url.lastPathComponent.utf8) }
+        func resolve(_ data: Data) throws -> ResolvedBookmark { ResolvedBookmark(url: URL(fileURLWithPath: "/"), stale: false) }
+    }
+    #expect(try Plain().createFileGrant(for: URL(fileURLWithPath: "/tmp/x.png")) == Data("x.png".utf8))
 }
 
 @Test(arguments: [0, 1, 2])
