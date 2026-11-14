@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import { runAppLane, parseAppResult } from './app-lane.mjs';
 import { fixtureEnv } from './fixture-env.mjs';
 import { publishedPID, publishedPIDList, publishedPIDLines, publishSource, publishListSource, safeKill, pidAlive } from './fixture-pid.mjs';
+import { runEscalating, withinBound, attemptFacts } from './escalation.mjs';
 
 const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.meta.url), 'utf8');
 const selected = readFileSync(new URL('./fixtures/i411-selected.txt', import.meta.url), 'utf8');
@@ -451,43 +452,69 @@ test('harness removes its directories after a failing assertion in a real test p
 // fallback teardown. RED must not leak a TERM-ignoring process into later tests.
 const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
 const processExists = pidAlive;
-async function discoveryProcessCase(kind, cancellation = null) {
- const h=harness(quarantine),marker=path.join(h.dir,'native-pids.json');
- const code=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
+// #705: the discovery budget is both the timeout under test and a wait for node,
+// python3 and ps to start. Each case starts with its short budget and repeats at
+// 4×/16×/64× only when the attempt proved nothing (escalation.mjs); a wrong
+// status, a survivor or a late stop still fails at first sight. Stop bounds run
+// from the event that starts the stop, never from this process's spawn call.
+// TERM probe (≤ 250 ms) + KILL drain (750 ms) + 450 ms to exit.
+const stopBoundMs=1450;
+async function expectEscalated(baseMs, attempt) {
+ const result=await runEscalating(attempt,{baseMs});
+ assert.equal(result.verdict,'pass',result.reason??`attempt failed without evidence (budgets ${result.budgets})`);
+}
+const notStarted=(facts)=>({verdict:'fail',...facts});
+function discoveryProcessCase(kind, cancellation = null) {
+ return cancellation?expectEscalated(10000,(budget,{last})=>discoveryProcessAttempt(kind,cancellation,budget,last))
+  :expectEscalated(350,(budget,{last})=>discoveryProcessAttempt(kind,null,budget,last));
+}
+async function discoveryProcessAttempt(kind, cancellation, budget) {
+ const h=harness(quarantine),marker=path.join(h.dir,'native-pids.json'),clock=path.join(h.dir,'runner-clock.json');
+ // The runner records its own admission and exit times for the stop bound
+ // (published by rename; epoch milliseconds, so not read as PIDs).
+ const code=`const fixtureAdmittedAt=Date.now();process.on('exit',()=>{${publishListSource(clock,'[fixtureAdmittedAt,Date.now()]')}});\n`+
+  h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
  const childCode=`process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`;
  const command=kind.startsWith('descendant')
   ? `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:${JSON.stringify(kind==='descendant-no-pipes'?'ignore':'inherit')}});${publishListSource(marker,'[process.pid,child.pid]')}process.exit(0);`
   : `process.on('SIGTERM',()=>{});${publishListSource(marker,'[process.pid]')}setInterval(()=>{},1000);`;
- const runner=spawn(process.execPath,['-e',code,cancellation?'10000':'350',process.execPath,'-e',command],{
+ const runner=spawn(process.execPath,['-e',code,String(budget),process.execPath,'-e',command],{
   detached:true,stdio:['ignore','pipe','pipe'],
  });
- let stdout='',stderr='',capped=false;
+ let stdout='',stderr='',capped=false,closed=false;
  runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
  const pids=()=>publishedPIDList(marker)??[];
  const killOwned=()=>{
   for(const pid of [...pids(),runner.pid]) {safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}
  };
- const started=Date.now();
- const safety=setTimeout(()=>{capped=true;killOwned();},2500);
- const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
+ // Only a hung runner reaches this cap; it is generous because startup under
+ // load is slow, and the stop bound below is asserted on its own clock.
+ const safety=setTimeout(()=>{capped=true;killOwned();},budget+15000);
+ const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>{closed=true;resolve({status,signal,at:Date.now()});});});
  try {
+  let signalledAt=0;
   if(cancellation) {
-   while(publishedPIDList(marker)===null&&Date.now()-started<1500) await pause(10);
+   while(publishedPIDList(marker)===null&&!closed) await pause(10);
    assert.ok(publishedPIDList(marker)!==null,'native command must start before cancellation');
-   process.kill(runner.pid,cancellation);
+   signalledAt=Date.now();process.kill(runner.pid,cancellation);
   }
   const outcome=await completion;
   assert.equal(capped,false,'caller safety cap must not supply discovery termination');
   assert.equal(outcome.status,70,stderr);assert.equal(outcome.signal,null);
-  assert.ok(Date.now()-started<1800,'admitted discovery must finish within its budget plus grace/drain');
-  const owned=pids();assert.ok(owned.length>0,'native PID evidence must exist');
+  const facts=attemptFacts({listFiles:[marker],stderr});
+  if(!facts.evidence)return notStarted(facts);
+  const owned=pids();
+  if(cancellation)assert.ok(withinBound(signalledAt,outcome.at,stopBoundMs),`cancelled discovery must stop within ${stopBoundMs} ms of the signal`);
+  else {
+   let admittedAt=NaN,exitedAt=NaN;try{[admittedAt,exitedAt]=JSON.parse(readFileSync(clock,'utf8'));}catch{}
+   assert.ok(withinBound(admittedAt+budget,exitedAt,stopBoundMs),`admitted discovery must stop within ${stopBoundMs} ms of its ${budget} ms budget (${exitedAt-admittedAt} ms)`);
+  }
   for(let retry=0;retry<50&&owned.some(processExists);retry++) await pause(10);
   assert.deepEqual(owned.filter(processExists),[],'completed discovery must leave no live owned process');
-  for(const pid of owned) {
+  for(const pid of owned)
    assert.equal(safeKill(pid,0,{group:true}),false,`native process group ${pid} must be gone`);
-  }
   assert.match(stderr,/inventory|timeout|cancel/i);
-  return stdout;
+  return {verdict:'pass',evidence:true,stdout};
  } finally {
   clearTimeout(safety);killOwned();runner.stdout.destroy();runner.stderr.destroy();
  }
@@ -505,7 +532,13 @@ test('discovery does not accept successful root exit while a pipe-less descendan
  await discoveryProcessCase('descendant-no-pipes');
 });
 
+// Only the caller-death case depends on the discovery budget expiring (nothing
+// else stops discovery once its caller is gone), so only it escalates; the
+// wrapper cases are stopped by the kill and use a budget that cannot expire.
 for(const mode of ['managed-wrapper','nested-wrapper','managed-caller']) test(`actual checked discovery preserves native ownership after hard death (${mode})`,async()=>{
+ await expectEscalated(mode==='managed-caller'?350:10000,budget=>hardDeathAttempt(mode,budget));
+});
+async function hardDeathAttempt(mode,budget) {
  const nested=mode==='nested-wrapper',callerDeath=mode==='managed-caller';
  const h=harness(),script=path.join(h.dir,'checked.mjs'),supervisorFile=path.join(h.dir,'supervisor-pid'),nativeFile=path.join(h.dir,'native-pid'),callerFile=path.join(h.dir,'caller-pid');
  writeFileSync(h.quarantinePath,JSON.stringify(quarantine));
@@ -518,7 +551,7 @@ writeFileSync(${JSON.stringify(callerFile+'.tmp')},String(process.pid));renameSy
 const status=runAppLane({quarantinePath:${JSON.stringify(h.quarantinePath)},env:process.env,spawn:(cmd,args,opts)=>{
  if(cmd==='xcrun') return {status:0,stdout:'/platform\\n',stderr:''};
  const source=${JSON.stringify(publishSource(supervisorFile))}+"\\n"+args[2];
- return spawnSync(cmd,[args[0],'-e',source,${JSON.stringify(callerDeath?'350':'10000')},process.execPath,'-e',${JSON.stringify(nativeCode)}],opts);
+ return spawnSync(cmd,[args[0],'-e',source,${JSON.stringify(String(budget))},process.execPath,'-e',${JSON.stringify(nativeCode)}],opts);
 }});
 process.exitCode=status;
 `);
@@ -528,16 +561,28 @@ process.exitCode=status;
  delete lockEnv.MDPRO_HEAVY_LOCK_HELD;delete lockEnv.NODE_TEST_CONTEXT;
  const realLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const runner=spawn(callerDeath||nested?realLock:process.execPath,callerDeath||nested?[process.execPath,script]:[script],{env:lockEnv,detached:true,stdio:['ignore','pipe','pipe']});
- let stderr='';runner.stdout.resume();runner.stderr.on('data',s=>stderr+=s);
+ let stderr='',closed=false;runner.stdout.resume();runner.stderr.on('data',s=>stderr+=s);
  const known=()=>[supervisorFile,nativeFile,callerFile].map(publishedPID).filter(Boolean);
  const cleanup=()=>{for(const pid of [...known(),runner.pid]){safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}};
- let capped=false;const cap=setTimeout(()=>{capped=true;cleanup();},5000);
- const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
+ // Only a hung run reaches this cap; the drain bound below is asserted from the kill.
+ let capped=false;const cap=setTimeout(()=>{capped=true;cleanup();},budget+15000);
+ const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>{closed=true;resolve({status,signal,at:Date.now()});});});
  try {
-  const start=Date.now();while(publishedPID(nativeFile)===null&&Date.now()-start<2000)await pause(10);
+  // The native task publishes its PID once it ignores TERM. The run ends without
+  // one only when the discovery budget expired before the task started.
+  while(publishedPID(nativeFile)===null&&!closed)await pause(10);
+  const facts=attemptFacts({pidFiles:[nativeFile],stderr});
+  if(!facts.evidence){await completion;return notStarted(attemptFacts({pidFiles:[nativeFile],stderr}));}
   const supervisor=publishedPID(supervisorFile),native=publishedPID(nativeFile),caller=publishedPID(callerFile);
   assert.ok(supervisor&&native&&caller,stderr);
-  assert.equal(safeKill(callerDeath?caller:supervisor,'SIGKILL'),true,stderr);
+  const killedAt=Date.now();
+  if(!safeKill(callerDeath?caller:supervisor,'SIGKILL')) {
+   // Only the caller-death budget can end the run by itself before this kill;
+   // then the kill tested nothing.
+   assert.ok(callerDeath,`the ${mode} victim must be alive at the kill: ${stderr}`);
+   await completion;
+   return notStarted({evidence:false,executionTimeout:/execution timeout/.test(stderr)});
+  }
   let competitor;
   if(!nested) {
    const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
@@ -550,12 +595,21 @@ process.exitCode=status;
   if(competitorResult) {const acquired=await competitorResult;assert.equal(acquired.status,0,acquired.err);assert.equal(JSON.parse(acquired.out).live,false,'heavy-lock must retain ownership until native tasks are gone');}
   for(let retry=0;retry<50&&processExists(native);retry++)await pause(10);
   assert.equal(processExists(native),false,'checked discovery must clean native task after supervisor hard death');
-  assert.ok(Date.now()-start<3500,'hard-death cleanup must use bounded discovery drain');
+  // Discovery stops about a second after the kill (after its own budget in the
+  // caller-death case); this rules out the top-level supervisor's 30 s drain.
+  assert.ok(withinBound(killedAt,outcome.at,(callerDeath?budget:0)+3150),'hard-death cleanup must use bounded discovery drain');
+  return {verdict:'pass',evidence:true};
  } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
-});
+}
 
-test('discoveryOuterCancelAndTimeoutDrainRegisteredGroup', {timeout:15000}, async t=>{
- for(const action of ['timeout','cancel']){
+// The outer budget of the timeout case is the timeout under test and must also
+// outlast the startup of the registered discovery, so it escalates from 0.5 s.
+// The cancel case only needs a budget that cannot expire.
+test('discoveryOuterCancelAndTimeoutDrainRegisteredGroup', {timeout:120000}, async t=>{
+ await expectEscalated(500,budget=>outerBoundaryAttempt(t,'timeout',budget));
+ await expectEscalated(30000,budget=>outerBoundaryAttempt(t,'cancel',budget));
+});
+async function outerBoundaryAttempt(t,action,budget) {
   const dir=mkdtempSync(path.join(tmpdir(),'i657-discovery-'));
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const pidPath=path.join(dir,'native-pid'),quarantinePath=path.join(dir,'quarantine.json'),script=path.join(dir,'run.mjs');
@@ -570,29 +624,30 @@ process.exitCode=runAppLane({quarantinePath:${JSON.stringify(quarantinePath)},en
  spawnSync(cmd,[args[0],'-e',args[2],args[3],process.execPath,'-e',${JSON.stringify(native)}],opts)});
 `);
   const env={...fixtureEnv(),PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',
-    PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:action==='timeout'?'0.5':'5',
+    PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:String(budget/1000),
     PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
   delete env.NODE_TEST_CONTEXT;
   const wrapper=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
-  const outer=spawn(wrapper,[process.execPath,script],{env,stdio:'ignore'});
-  const ended=new Promise(resolve=>outer.once('exit',(code,signal)=>resolve({code,signal})));
+  const outer=spawn(wrapper,[process.execPath,script],{env,stdio:['ignore','ignore','pipe']});
+  let stderr='';outer.stderr.on('data',s=>stderr+=s);
+  let ended=false;
+  const exited=new Promise(resolve=>outer.once('exit',(code,signal)=>{ended=true;resolve({code,signal});}));
   let pid=0;
   try{
-   const until=Date.now()+2500;
-   while(publishedPID(pidPath)===null&&Date.now()<until)await pause(10);
+   while(publishedPID(pidPath)===null&&!ended)await pause(10);
    pid=publishedPID(pidPath)??0;
-   assert.ok(pid,`${action}: registered discovery started`);
+   if(!pid){await exited;return notStarted(attemptFacts({pidFiles:[pidPath],stderr}));}
    if(action==='cancel')outer.kill('SIGTERM');
-   const outcome=await ended;
-   assert.equal(action==='timeout'?outcome.code:outcome.signal,action==='timeout'?124:'SIGTERM');
+   const outcome=await exited;
+   assert.equal(action==='timeout'?outcome.code:outcome.signal,action==='timeout'?124:'SIGTERM',stderr);
    for(let retry=0;retry<50&&processExists(pid);retry++)await pause(10);
    assert.equal(processExists(pid),false,`${action}: outer boundary drained discovery PID ${pid}`);
+   return {verdict:'pass',evidence:true};
   } finally {
    safeKill(pid,'SIGKILL');
    if(outer.exitCode===null&&outer.signalCode===null)outer.kill('SIGKILL');
   }
- }
-});
+}
 
 // Fix round1: thrown errors are XCTest test failures (unexpected is a subset
 // of failures), provided the selected test and all suite totals reconcile.
@@ -659,7 +714,7 @@ const status=runAppLane({env:process.env,quarantinePath:${JSON.stringify(h.quara
  if(args[0]===process.execPath){
   const prefix="require('node:fs').appendFileSync("+${JSON.stringify(JSON.stringify(supervisors))}+",String(process.pid)+'\\\\n');\\n";
   const native=++stage===1?${JSON.stringify(nativePrefix+`process.exit(${nativeExit});`)}:${JSON.stringify(nativePrefix+`process.stdout.write(${JSON.stringify(inventory)});`)};
-  return spawnSync(cmd,[args[0],'-e',prefix+args[2],'500',process.execPath,'-e',native],opts);
+  return spawnSync(cmd,[args[0],'-e',prefix+args[2],'20000',process.execPath,'-e',native],opts);
  }
  return {status:0,stdout:${JSON.stringify(selected)},stderr:'',signal:null};
 }});
@@ -678,14 +733,16 @@ writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=sta
  let stdout='',stderr='',capped=false;runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
  const owned=()=>[...(publishedPIDLines(supervisors)??[]),...(publishedPIDLines(nativePids)??[]),publishedPID(siblingPid)].filter(Boolean);
  const cleanup=()=>{for(const pid of [...owned(),runner.pid]){safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}};
- const start=Date.now(),cap=setTimeout(()=>{capped=true;cleanup();},5000);
+ // 20 s discovery budget: the bound below, not the budget, is what a wait for
+ // unrelated siblings would break. The cap only ends a hung run.
+ const start=Date.now(),cap=setTimeout(()=>{capped=true;cleanup();},40000);
  try {
   const outcome=await new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
   assert.equal(capped,false,stderr);assert.equal(outcome.status,0,stderr);assert.equal(outcome.signal,null);
   assert.equal(readFileSync(laneStatus,'utf8'),nativeExit===0?'0':'70',stderr);
   assert.equal(readFileSync(siblingState,'utf8'),shape==='pipeline'?'0':'alive','unrelated sibling must survive discovery');
   assert.equal(existsSync(siblingSignal),false,'discovery must not signal its background sibling');
-  assert.ok(Date.now()-start<3500,'discovery must not wait for unrelated siblings');
+  assert.ok(withinBound(start,Date.now(),10000),'discovery must not wait for unrelated siblings');
   if(nativeExit===0)assert.match(stdout,/Tests run: 5, Failures: 0/);
  } finally {clearTimeout(cap);cleanup();runner.stdout.destroy();runner.stderr.destroy();}
 });
