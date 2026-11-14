@@ -54,7 +54,28 @@ test('delegator loop: briefs keep the Verify section; record check before audit 
   assert.match(step(2), /hand-written brief/);
   assert.match(step(4), /evidence\.mjs check --head <sha>/);
   assert.match(step(5), /mado-verify/);
-  assert.match(step(8), /evidence\.mjs check --head <sha>/);
+  assert.match(step(8), /evidence\.mjs check --head <(?:audited-)?sha>/);
+});
+
+test('delegator check steps pin the issue, open the comment by hand, and handle a rebase (fix round 1)', () => {
+  const skill = read('.agents/skills/picsee-delegator/SKILL.md');
+  const step = n => skill.slice(skill.indexOf(`\n${n}. **`), skill.indexOf(`\n${n + 1}. **`));
+  assert.match(step(4), /evidence\.mjs check --head <sha> --issue <n>/);
+  assert.match(step(4), /open the comment by hand/);
+  assert.match(step(8), /evidence\.mjs check --head <audited-sha> --issue <n>/);
+  assert.match(step(8), /CODE same/);
+  assert.match(step(8), /CODE differ[^.]*new\s+mado-verify run/);
+  assert.match(section(read(`${templates}/brief-template.md`), '## Verify (mado-verify)'), /check --head <sha> --issue <n>/);
+  const verifySkill = read('.agents/skills/mado-verify/SKILL.md');
+  assert.match(verifySkill, /check --head <sha> --issue <n>/);
+  assert.match(verifySkill, /anzchy\/mado/);
+  assert.match(verifySkill, /exit(?:s| code)? 70/);
+});
+
+test('ui-parity contract names the local apptests lane and keeps CI as the app-tests row source', () => {
+  const contract = read('docs/agents/ui-parity-contract.md');
+  assert.doesNotMatch(contract, /owner-gates 不设本地 App lane/);
+  assert.match(contract, /owner-gates[^。]*本地 `apptests` lane[^。]*heavy-lock[^。]*gates-rows\.mjs --ci/);
 });
 
 test('SKILL.md step 1 runs App tests the CI way and names the Codex key-window limit', () => {
