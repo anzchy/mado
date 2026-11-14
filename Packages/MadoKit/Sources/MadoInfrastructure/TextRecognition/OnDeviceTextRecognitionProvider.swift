@@ -41,13 +41,13 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     public init() {
         performRequest = { handler, request in try handler.perform([request]) }
         beforePerform = {}
-        cancelRequest = Self.cancelVisionRequest
+        cancelRequest = { request in request.cancel() }
     }
 
     init(
         performRequest: @escaping @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void,
         beforePerform: @escaping @Sendable () async -> Void = {},
-        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void = Self.cancelVisionRequest
+        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void
     ) {
         self.performRequest = performRequest
         self.beforePerform = beforePerform
@@ -72,9 +72,11 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             }
             try Task.checkCancellation()
 
-            let boxes = (request.results ?? []).compactMap { observation -> RecognizedTextBox? in
-                guard let candidate = observation.topCandidates(1).first else { return nil }
-                return RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox)
+            var boxes: [RecognizedTextBox] = []
+            for observation in request.results ?? [] {
+                if let candidate = observation.topCandidates(1).first {
+                    boxes.append(RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox))
+                }
             }
             return Self.readingOrder(boxes).map(\.text).joined(separator: "\n")
         }
@@ -112,7 +114,4 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
         return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation)!)
     }
 
-    private static func cancelVisionRequest(_ request: VNRecognizeTextRequest) {
-        request.cancel()
-    }
 }
