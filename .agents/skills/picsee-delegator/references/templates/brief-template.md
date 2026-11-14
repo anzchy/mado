@@ -2,7 +2,7 @@
 
 You are **<implementer>**. New task, fresh session. Worktree `~/Documents/mac-app/picsee-wt/<implementer>`.
 Branch: `git fetch origin && git switch -c <branch> origin/main` (main ≥ <sha7>). Issue #<n>.
-Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path>` before dispatch. This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
+Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` before dispatch (pass `<task-branch>` when the implementer will create or switch to a branch other than the worktree's current one). This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first

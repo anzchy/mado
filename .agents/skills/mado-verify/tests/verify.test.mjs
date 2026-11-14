@@ -174,3 +174,16 @@ test('a Codex apptests NOT VERIFIED entry passes the check with a warning; other
   recordFor(f, { gates: gates().map(g => g.name === 'swift' ? { ...g, exitCode: 1, notVerified: reason } : g) });
   assert.match(check(f, f.head()).stderr, /failed swift: 1/);
 });
+
+test('mark-target prefers an explicit task branch over the worktree current branch', t => {
+  const f = fixture(t), target = `${f.dir}-target`;
+  t.after(() => fs.rmSync(target, { recursive: true, force: true }));
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'pane-home-branch', target], f.dir).status, 0);
+  const handoff = path.join(f.dir, 'round-handoff.md');
+  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'tooling/i651-task'], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))).branch, 'tooling/i651-task');
+  const bad = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'bad..branch'], f.dir);
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /invalid branch/);
+});

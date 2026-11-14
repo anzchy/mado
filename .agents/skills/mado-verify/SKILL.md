@@ -15,7 +15,7 @@ It exits 0 and prints `OK head=… issue=… comment=…` only when `<wt>` is cl
 
 ## 0. Define scope
 
-Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. The delegator writes `<session-cwd git toplevel>/.build/mado-verify/target-worktree` before dispatch with `scripts/mark-target.mjs`; check its JSON `{worktree, branch, issue, task, handoff}` against the brief, and do not rewrite it as an implementer. The old one-line format is invalid. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
+Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. The delegator writes `<session-cwd git toplevel>/.build/mado-verify/target-worktree` before dispatch with `scripts/mark-target.mjs`; check its JSON `{worktree, branch, issue, task, handoff}` against the brief (`branch` is the task branch when the delegator passed one), and do not rewrite it as an implementer. The old one-line format is invalid. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
 
 ## 1. Gate ladder
 
