@@ -7,7 +7,7 @@ import MadoMacUI
          captureAction: @escaping () -> Void) {
         self.captureAction = captureAction
         self.localize = localize
-        super.init(frame: NSRect(x: 0, y: 0, width: 562, height: 40))
+        super.init(frame: NSRect(x: 0, y: 0, width: 0, height: 40))
         material = .popover
         blendingMode = .behindWindow
         state = .active
@@ -25,20 +25,20 @@ import MadoMacUI
             ("Recognize Text", "text.viewfinder", "capture.text", false)
         ] {
             let title = localize(key)
-            let width = max(87, titleWidth(title) + 18 + 6 + 12)
+            let width = titleWidth(title) + 10 + 6 + 18 + 10
             addButton(title, symbol: symbol, id: id, x: x, width: width, enabled: enabled)
             x += width + 2
         }
         let divider = NSBox(frame: NSRect(x: x + 2, y: 10, width: 1, height: 20))
         divider.boxType = .separator
         addSubview(divider)
-        x += 5
+        x += 7
         let mado = localize("Open Mado")
-        let madoWidth = max(83, titleWidth(mado) + 18 + 6 + 12)
+        let madoWidth = titleWidth(mado) + 10 + 6 + 18 + 10
         addButton(mado, symbol: "photo", id: "capture.mado", x: x, width: madoWidth, enabled: false)
         x += madoWidth + 2
         addButton("", symbol: "chevron.up", id: "capture.collapse", x: x, width: 32, enabled: false)
-        frame.size.width = max(562, x + 36)
+        frame.size.width = x + 32 + 4
     }
 
     required init?(coder: NSCoder) { nil }

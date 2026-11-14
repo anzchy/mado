@@ -35,10 +35,19 @@ func captureCatalog(_ locale: String) throws -> [String: String] {
         let collapse = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.collapse" } as? NSButton)
         #expect(grip.accessibilityLabel() == catalog["Drag Capture Bar"])
         #expect(collapse.accessibilityLabel() == catalog["Collapse to Menu Bar"])
+        if locale == "zh-Hans" {
+            for id in ["capture.region", "capture.window", "capture.screen", "capture.text"] {
+                let button = try #require(bar.subviews.first { $0.accessibilityIdentifier() == id } as? NSButton)
+                #expect(button.frame.width == 92)
+            }
+            let mado = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.mado" } as? NSButton)
+            #expect(mado.frame.width == 103)
+            #expect(collapse.frame.maxX == 558)
+        }
         for id in ["capture.region", "capture.window", "capture.screen", "capture.text", "capture.mado"] {
             let button = try #require(bar.subviews.first { $0.accessibilityIdentifier() == id } as? NSButton)
             let textWidth = (button.title as NSString).size(withAttributes: [.font: button.font!]).width
-            #expect(textWidth + 18 + 6 + 12 <= button.frame.width)
+            #expect(textWidth.rounded(.up) + 10 + 6 + 18 + 10 == button.frame.width)
         }
     }
 }
