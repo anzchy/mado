@@ -14,6 +14,8 @@ import MadoInfrastructure
     func chooseSaveLocation(folder: URL, name: String, type: UTType, window: NSWindow?) async -> URL?
     func showSaved(_ url: URL, window: NSWindow?)
     func showSaveFailure(_ error: AnnotatedCopyError, window: NSWindow?)
+    /// ADR-006: the system open panel on a root whose stored bookmark refused a write; nil when cancelled.
+    func regrantFolder(_ folder: URL, window: NSWindow?) async -> URL?
 }
 
 /// What to do once a leave that asked 存储/不存储/取消 has been answered (and any save has finished).
@@ -62,6 +64,28 @@ struct AnnotatePendingLeave {
         panel.nameFieldStringValue = name
         panel.allowedContentTypes = [type]
         panel.canCreateDirectories = true
+        let response: NSApplication.ModalResponse
+        if let window, window.isVisible {
+            response = await withCheckedContinuation { continuation in
+                panel.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+            }
+        } else {
+            response = panel.runModal()
+        }
+        return response == .OK ? panel.url : nil
+    }
+
+    /// ADR-006: the system open panel on the folder, as for any grant; choosing it again replaces the stored bookmark.
+    func regrantFolder(_ folder: URL, window: NSWindow?) async -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = String(localized: "Grant Folder Access")
+        panel.prompt = String(localized: "Grant Folder")
+        panel.message = String(format: String(localized: "To save the annotated copy in “%@”, grant access to this folder again."),
+                               folder.lastPathComponent)
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = folder
         let response: NSApplication.ModalResponse
         if let window, window.isVisible {
             response = await withCheckedContinuation { continuation in
@@ -267,26 +291,40 @@ extension CanvasWindowController {
         } catch let error as AnnotatedCopyError { throw error }
         catch FileAccessError.fileDeleted(_) { throw .sourceMissing }
         catch { throw FileManager.default.fileExists(atPath: source.path) ? .accessLost : .sourceMissing }
-        do {
-            let flat = try AnnotationFlattener.flatten(original.image, orientation: original.orientation, marks: marks)
-            return AnnotateSource(image: flat, orientation: 1)
-        } catch { throw .encodeFailed }
+        // Full-size flattening runs off the main actor (gpt M3); only the result comes back to the window.
+        let flatten = annotateFlatten
+        let task = Task.detached(priority: .userInitiated) {
+            AnnotateSource(image: try flatten(original.image, original.orientation, marks), orientation: 1)
+        }
+        do { return try await task.value }
+        catch { throw .encodeFailed }
+    }
+
+    /// The copy's name: a fresh listing of the folder (inside an Access Root) plus this window's own saves, which a
+    /// File Grant cannot list. `preferring` keeps a name shown earlier while it is still free (gpt M1, opus M2).
+    func annotatePlannedCopyName(for source: URL, services: AccessServices, root: AccessRootID?,
+                                 preferring preferred: AnnotatedCopyName? = nil) async -> AnnotatedCopyName {
+        let folder = source.deletingLastPathComponent()
+        var existing = annotateViews.savedNames
+        if let root {
+            existing += (try? await services.files.withLease(.root(root, file: folder)) { _ in
+                try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            }) ?? []
+        }
+        return AnnotatedCopyPlan.name(for: source.lastPathComponent, existing: existing,
+                                      writableTypes: ImageIOWritableTypes.all, preferring: preferred)
     }
 
     private func runAnnotatedCopySave(_ request: AnnotateSaveRequest) async -> AnnotateSaveResult {
         guard let source = request.fileURL else { return .failed(.sourceMissing) }
+        // The name the unsaved-marks sheet showed, if 存储 answered it.
+        let shown = annotateViews.shownName
+        annotateViews.shownName = nil
         do throws(AnnotatedCopyError) {
             let (services, access, root) = try await annotateAccess(source)
             let flat = try await annotateFlattened(source, marks: request.marks, services: services, access: access)
             let folder = source.deletingLastPathComponent()
-            let existing: [String]
-            if let root {
-                existing = (try? await services.files.withLease(.root(root, file: folder)) { _ in
-                    try FileManager.default.contentsOfDirectory(atPath: folder.path)
-                }) ?? []
-            } else { existing = [] }
-            let planned = AnnotatedCopyPlan.name(for: source.lastPathComponent, existing: existing,
-                                                 writableTypes: ImageIOWritableTypes.all)
+            let planned = await annotatePlannedCopyName(for: source, services: services, root: root, preferring: shown)
             let writer = AnnotatedCopyWriter(leases: services.files)
             switch request.destination(folder: folder, name: planned.name, access: root == nil ? .fileGrant : .accessRoot) {
             case .direct:
@@ -295,10 +333,19 @@ extension CanvasWindowController {
                                                          source: source, request: access))
                 } catch {
                     guard error == .permissionDenied else { throw error }
-                    // A refused direct write opens the prefilled panel for the same ⌘S (ADR-020).
-                    return try await annotatePanelSave(flat, planned: planned, folder: folder, source: source,
-                                                       access: access, writer: writer, afterRefusal: true)
                 }
+                // A root stored read-only (before ADR-020) refuses the write: re-grant it once and retry (ADR-006).
+                if let root, let regranted = await annotateRegrant(root, source: source, services: services) {
+                    do throws(AnnotatedCopyError) {
+                        return .saved(try await writer.write(flat.image, folder: folder, target: .create(planned),
+                                                             source: source, request: regranted))
+                    } catch {
+                        guard error == .permissionDenied else { throw error }
+                    }
+                }
+                // Still refused, or not re-granted: the prefilled panel for the same ⌘S (ADR-020).
+                return try await annotatePanelSave(flat, planned: planned, folder: folder, source: source,
+                                                   access: access, writer: writer, afterRefusal: true)
             case .savePanel:
                 return try await annotatePanelSave(flat, planned: planned, folder: folder, source: source,
                                                    access: access, writer: writer, afterRefusal: request.directRefused)
@@ -306,6 +353,17 @@ extension CanvasWindowController {
         } catch {
             return .failed(error)
         }
+    }
+
+    /// The system open panel on the root folder. Only the same folder (by identity) replaces the stored bookmark, now
+    /// writable; another folder becomes a root of its own and the copy goes through the save panel. nil when cancelled
+    /// or when the selection cannot be granted.
+    private func annotateRegrant(_ root: AccessRootID, source: URL, services: AccessServices) async -> AccessRequest? {
+        guard let folder = await services.files.rootURL(root),
+              let chosen = await annotateUI.regrantFolder(folder, window: window),
+              let result = try? await services.reselect(root, folder: chosen, reference: nil), result.restored,
+              let covering = await services.files.rootCovering(source) else { return nil }
+        return .root(covering, file: source)
     }
 
     private func annotatePanelSave(_ flat: AnnotateSource, planned: AnnotatedCopyName, folder: URL, source: URL,

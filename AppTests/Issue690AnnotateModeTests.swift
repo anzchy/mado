@@ -17,6 +17,13 @@ import MadoMacUI
     var panelRequests: [(folder: URL, name: String, type: UTType)] = []
     var saved: [URL] = []
     var failures: [AnnotatedCopyError] = []
+    /// #690 fix r1: the open panel that re-grants a root after a refused direct write; nil cancels.
+    var regrant: (@MainActor (URL) -> URL?)?
+    var regrantRequests: [URL] = []
+    func regrantFolder(_ folder: URL, window: NSWindow?) async -> URL? {
+        regrantRequests.append(folder)
+        return regrant?(folder)
+    }
     func askToLeave(_ reason: AnnotateLeaveReason, window: NSWindow?,
                     answer reply: @escaping @MainActor (AnnotateLeaveChoice) -> Void) {
         asked.append(reason)
@@ -30,10 +37,28 @@ import MadoMacUI
     func showSaveFailure(_ error: AnnotatedCopyError, window: NSWindow?) { failures.append(error) }
 }
 
+/// The real system bookmarks, recording every Access Root bookmark created so a re-grant's replacement is visible.
+private final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
+    private let system = SystemSecurityScope()
+    private let lock = NSLock()
+    private var made: [Data] = []
+    var requiresEmbeddedIdentity: Bool { system.requiresEmbeddedIdentity }
+    func create(for url: URL) throws -> Data {
+        let data = try system.create(for: url)
+        lock.withLock { made.append(data) }
+        return data
+    }
+    func createFileGrant(for url: URL) throws -> Data { try system.createFileGrant(for: url) }
+    func resolve(_ data: Data) throws -> ResolvedBookmark { try system.resolve(data) }
+    var created: [Data] { lock.withLock { made } }
+}
+
 /// Real grants, folder scanning and ImageIO loading in an Access Root, with the window kept ordered out.
 @MainActor private final class Issue690Context {
     let base: URL, folder: URL, first: URL, second: URL
     let services: AccessServices
+    let bookmarks = Issue690Bookmarks()
+    let granted: Bool
     let ui = Issue690FakeUI()
     var controller: CanvasWindowController!
     var menu: CommandMenu!
@@ -43,7 +68,9 @@ import MadoMacUI
 
     /// `size` writes a real grey PNG of that size instead of the 400×600 fixture (#690 WI-6, page 39's 1600×2400);
     /// `existing` adds more copies of it under those names before the folder is scanned.
-    init(size: CGSize? = nil, existing: [String] = []) async throws {
+    /// `grant: false` leaves the folder without an Access Root, so the image opens as a File Grant.
+    init(size: CGSize? = nil, existing: [String] = [], grant: Bool = true) async throws {
+        granted = grant
         previousMenu = NSApplication.shared.mainMenu
         base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         folder = base.appendingPathComponent("Trip")
@@ -56,9 +83,9 @@ import MadoMacUI
         let folder = folder
         for url in [first, second] + existing.map({ folder.appendingPathComponent($0) }) { try data.write(to: url) }
         let scope = SystemSecurityScope()
-        let access = try FileAccess(scope: scope, bookmarks: scope,
+        let access = try FileAccess(scope: scope, bookmarks: bookmarks,
             store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue690")
-        _ = try await access.grant(folder: folder)
+        if grant { _ = try await access.grant(folder: folder) }
         services = AccessServices(files: access, recent: RecentFolderStore(url: base.appendingPathComponent("recent.json")),
             browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
     }
@@ -79,7 +106,7 @@ import MadoMacUI
         controller.openInput([first])
         try await waitUntil("a.png shown with its folder scanned", timeout: .seconds(60)) {
             controller.session.imageStatus == .showing && controller.session.imageLoader.fileURL == self.first
-                && controller.session.folderScan?.sourceSnapshot?.isComplete == true
+                && (!self.granted || controller.session.folderScan?.sourceSnapshot?.isComplete == true)
         }
         return controller
     }
@@ -895,5 +922,217 @@ private func issue690CatalogValue(_ key: String, _ language: String) throws -> S
             #expect(found == value, "\(key)")
             #expect(!found.contains("即将推出"), "\(key): tools owned by #692/#693 are disabled, not labelled")
         }
+    }
+}
+
+/// Polls on the main actor for at most `seconds`; false when the condition never held (a RED run fails fast instead
+/// of waiting for the test's time limit).
+@MainActor private func issue690Eventually(_ seconds: Double = 30, _ condition: () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(seconds)
+    while !condition() {
+        if Date() >= deadline { return false }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return true
+}
+
+/// A flatten that waits until the main actor lets it go: run on the main actor it would block the very signal it waits
+/// for (gpt M3). Records whether it ran on the main thread.
+private final class Issue690FlattenGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let release = DispatchSemaphore(value: 0)
+    private var calls: [Bool] = []
+    var entered: Int { lock.withLock { calls.count } }
+    var onMain: [Bool] { lock.withLock { calls } }
+    func open() { release.signal() }
+    var flatten: @Sendable (CGImage, Int, [AnnotationMark]) throws -> CGImage {
+        { [self] image, orientation, marks in
+            lock.withLock { calls.append(pthread_main_np() != 0) }
+            _ = release.wait(timeout: .now() + 15)
+            return try AnnotationFlattener.flatten(image, orientation: orientation, marks: marks)
+        }
+    }
+}
+
+/// #690 fix r1: the re-grant of read-only roots (F1), one planned copy name (gpt M1 / opus M2), flattening off the main
+/// actor (gpt M3) and the copy in the Grid and later Preview Sets (opus M3, AC-4).
+@MainActor @Suite(.serialized) struct Issue690FixRoundTests {
+    /// F1 / ADR-006: a refused direct write inside a stored root asks once for the root folder; the new grant
+    /// replaces the stored bookmark and the same ⌘S writes directly.
+    @Test(.timeLimit(.minutes(3))) func issue690DeniedRootRegrantsAndWritesDirectly() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let controller = try await context.open()
+        let before = await context.services.files.records()
+        #expect(before.count == 1)
+        let createdBefore = context.bookmarks.created.count
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: context.folder.path)
+        context.ui.regrant = { folder in
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: context.folder.path)
+            return folder
+        }
+        controller.enterAnnotateMode()
+        context.mark()
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.saved.count == 1 || !context.ui.failures.isEmpty })
+        #expect(context.ui.regrantRequests.map { $0.resolvingSymlinksInPath().path }
+                == [context.folder.resolvingSymlinksInPath().path])
+        #expect(context.ui.saved.map(\.lastPathComponent) == ["a-annotated.png"])
+        #expect(context.ui.panelRequests.isEmpty && context.ui.failures.isEmpty)
+        #expect(controller.session.annotateMode?.directRefused == false)
+        let after = await context.services.files.records()
+        #expect(after.map(\.id) == before.map(\.id))
+        #expect(context.bookmarks.created.count == createdBefore + 1, "the re-grant created one new root bookmark")
+        #expect(after.first?.bookmark == context.bookmarks.created.last, "the stored bookmark is the new one")
+    }
+
+    /// Cancel, a second refusal, another folder, or a selection that cannot be granted: no further attempt, the
+    /// prefilled save panel instead; the re-grant is asked once per ⌘S.
+    @Test(.timeLimit(.minutes(3)), arguments: ["cancel", "deniedAgain", "otherFolder", "notAFolder"])
+    func issue690RegrantFallsBackToThePanel(_ answer: String) async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let controller = try await context.open()
+        let other = context.base.appendingPathComponent("Other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: context.folder.path)
+        context.ui.regrant = { folder in
+            switch answer {
+            case "cancel": return nil
+            case "deniedAgain": return folder
+            case "otherFolder":
+                try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: context.folder.path)
+                return other
+            default: return context.first
+            }
+        }
+        controller.enterAnnotateMode()
+        context.mark()
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { !context.ui.failures.isEmpty || !context.ui.saved.isEmpty })
+        #expect(context.ui.regrantRequests.count == 1, "\(answer)")
+        #expect(context.ui.panelRequests.map(\.name) == ["a-annotated.png"], "\(answer)")
+        #expect(context.ui.failures == [.permissionDenied], "\(answer): the cancelled panel reports the refusal")
+        #expect(context.ui.saved.isEmpty, "\(answer): nothing was written directly")
+        #expect(!context.exists("a-annotated.png"), "\(answer)")
+        #expect(controller.session.annotateMode?.directRefused == true)
+        // The next ⌘S goes to the panel without asking again.
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.panelRequests.count == 2 })
+        #expect(context.ui.regrantRequests.count == 1)
+    }
+
+    /// gpt M1 / opus M2: the sheet names the copy from a fresh listing, and 存储 writes exactly that name.
+    @Test(.timeLimit(.minutes(3))) func issue690SheetNameIsTheWrittenName() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        // Created after the folder scan, by another app.
+        try Data(contentsOf: context.second).write(to: context.folder.appendingPathComponent("a-annotated.png"))
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        let sheet = try context.sheet()
+        #expect(await issue690Eventually { sheet.bodyField.stringValue.contains("a-annotated-2.png") },
+                "\(sheet.bodyField.stringValue)")
+        sheet.saveButton.performClick(nil)
+        #expect(await issue690Eventually { !controller.session.isAnnotating })
+        #expect(try context.names() == ["a-annotated-2.png", "a-annotated.png", "a.png", "b.png"])
+    }
+
+    /// The name the sheet showed is taken before 存储: the write re-plans to the next free name and never touches
+    /// the other file; the written name is what is reported.
+    @Test(.timeLimit(.minutes(3))) func issue690SheetNameTakenBeforeSaveReplans() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        let sheet = try context.sheet()
+        #expect(sheet.bodyField.stringValue.contains("a-annotated.png"))
+        let other = context.folder.appendingPathComponent("a-annotated.png")
+        try Data(contentsOf: context.second).write(to: other)
+        sheet.saveButton.performClick(nil)
+        #expect(await issue690Eventually { !controller.session.isAnnotating })
+        #expect(try context.names() == ["a-annotated-2.png", "a-annotated.png", "a.png", "b.png"])
+        #expect(try Data(contentsOf: other) == Data(contentsOf: context.second), "the other app's file is untouched")
+        #expect(controller.annotateViews.savedNames == ["a-annotated-2.png"])
+    }
+
+    /// opus M2: a File Grant image's second ⌘S proposes `-annotated-2`; a copy saved under another name does not count.
+    @Test(.timeLimit(.minutes(3))) func issue690FileGrantSecondSaveProposesAnnotated2() async throws {
+        let context = try await Issue690Context(grant: false)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        context.mark()
+        context.ui.panelChoice = context.folder.appendingPathComponent("a-annotated.png")
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.saved.count == 1 })
+        context.mark(CGRect(x: 20, y: 20, width: 40, height: 40))
+        context.ui.panelChoice = context.folder.appendingPathComponent("x.png")
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.saved.count == 2 })
+        context.mark(CGRect(x: 30, y: 30, width: 40, height: 40))
+        context.ui.panelChoice = nil
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.panelRequests.count == 3 })
+        #expect(context.ui.panelRequests.map(\.name) == ["a-annotated.png", "a-annotated-2.png", "a-annotated-2.png"])
+        #expect(context.ui.regrantRequests.isEmpty, "a File Grant has no root to re-grant")
+    }
+
+    /// gpt M3: ⌘S and ⌘C flatten off the main actor; the window keeps answering while a large flatten runs.
+    @Test(.timeLimit(.minutes(3))) func issue690FlattenRunsOffTheMainActor() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let controller = try await context.open()
+        let gate = Issue690FlattenGate()
+        controller.annotateFlatten = gate.flatten
+        controller.enterAnnotateMode()
+        context.mark()
+        controller.saveAnnotatedCopy()
+        let start = Date()
+        #expect(await issue690Eventually { gate.entered == 1 })
+        #expect(Date().timeIntervalSince(start) < 10, "the main actor polled while the flatten was blocked")
+        #expect(controller.session.annotateMode?.isSaving == true)
+        gate.open()
+        #expect(await issue690Eventually { context.ui.saved.count == 1 })
+        controller.copy(nil)
+        #expect(await issue690Eventually { gate.entered == 2 })
+        gate.open()
+        #expect(await issue690Eventually { context.pasteboard.canReadObject(forClasses: [NSImage.self], options: nil) })
+        #expect(gate.onMain == [false, false])
+    }
+
+    /// opus M3 (AC-4): after ⌘S and leaving, the copy takes its normal name-sort place in the folder's order (Mado's
+    /// order, `localizedStandardCompare` on lowercased names, puts `a-annotated.png` before `a.png`), and browsing the
+    /// folder afterwards steps through it.
+    @Test(.timeLimit(.minutes(3))) func issue690CopyJoinsTheGridAndLaterPreviewSets() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        context.mark()
+        controller.saveAnnotatedCopy()
+        #expect(await issue690Eventually { context.ui.saved.count == 1 })
+        context.ui.answer = .discard
+        try context.key("\u{1b}", code: 53)
+        #expect(!controller.session.isAnnotating)
+        func names() -> [String]? {
+            controller.session.folderScan?.sourceSnapshot?.navigationEntries.map(\.url.lastPathComponent)
+        }
+        let sorted = ["a.png", "b.png", "a-annotated.png"].sorted {
+            $0.lowercased().localizedStandardCompare($1.lowercased()) == .orderedAscending
+        }
+        #expect(sorted == ["a-annotated.png", "a.png", "b.png"])
+        #expect(await issue690Eventually { names() == sorted }, "\(names() ?? [])")
+        func shown() -> String? { controller.session.imageLoader.fileURL?.lastPathComponent }
+        try context.arrow(leftArrow)
+        #expect(await issue690Eventually { shown() == "a-annotated.png" }, "\(shown() ?? "-")")
+        try context.arrow(rightArrow)
+        #expect(await issue690Eventually { shown() == "a.png" })
+        try context.arrow(rightArrow)
+        #expect(await issue690Eventually { shown() == "b.png" })
     }
 }

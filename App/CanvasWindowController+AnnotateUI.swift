@@ -18,6 +18,8 @@ struct AnnotateWindowViews {
     var chromeWasHidden: Bool?
     /// Names this window saved in the folder; the scan may not have seen them yet.
     var savedNames: [String] = []
+    /// The copy name the unsaved-marks sheet shows; 存储 writes it while it is still free (gpt M1, opus M2).
+    var shownName: AnnotatedCopyName?
 }
 
 /// Page 39's in-window surfaces: the unsaved-marks sheet and the 「已存储为」 confirmation. The save panel and the
@@ -48,6 +50,10 @@ struct AnnotateWindowViews {
 
     func showSaveFailure(_ error: AnnotatedCopyError, window: NSWindow?) {
         native.showSaveFailure(error, window: window)
+    }
+
+    func regrantFolder(_ folder: URL, window: NSWindow?) async -> URL? {
+        await native.regrantFolder(folder, window: window)
     }
 }
 
@@ -172,19 +178,34 @@ extension CanvasWindowController {
     func presentAnnotateLeaveSheet(answer: @escaping @MainActor (AnnotateLeaveChoice) -> Void) -> Bool {
         guard let content = window?.contentView, let source = session.annotateMode?.fileURL else { return false }
         annotateViews.sheet?.removeFromSuperview()
-        let sheet = AnnotateLeaveSheetView(originalName: source.lastPathComponent,
-                                           plannedName: annotatePlannedName(for: source))
+        let scanned = annotateScannedName(for: source)
+        let sheet = AnnotateLeaveSheetView(originalName: source.lastPathComponent, plannedName: scanned.name)
         sheet.onChoice = { [weak self, weak sheet] choice in
             guard let self, let sheet, self.annotateViews.sheet === sheet else { return }
             sheet.removeFromSuperview()
             self.annotateViews.sheet = nil
+            if choice != .save { self.annotateViews.shownName = nil }
             answer(choice)
             self.syncAnnotateUI()
         }
         content.addSubview(sheet)
         annotateViews.sheet = sheet
+        annotateViews.shownName = scanned
         syncAnnotateUI()
+        refreshAnnotateSheetName(sheet, source: source)
         return true
+    }
+
+    /// Replaces the scan's name with one planned from a fresh listing, the way the save plans it.
+    private func refreshAnnotateSheetName(_ sheet: AnnotateLeaveSheetView, source: URL) {
+        Task { [weak self, weak sheet] in
+            guard let self, let services = try? await self.accessServices.value else { return }
+            let root = await services.files.rootCovering(source)
+            let fresh = await self.annotatePlannedCopyName(for: source, services: services, root: root)
+            guard let sheet, self.annotateViews.sheet === sheet else { return }
+            sheet.plannedName = fresh.name
+            self.annotateViews.shownName = fresh
+        }
     }
 
     /// Keys while the sheet is up: Esc is 取消, Return is 存储, and nothing else reaches the mode.
@@ -198,15 +219,14 @@ extension CanvasWindowController {
         return true
     }
 
-    /// The name 存储 will use, planned from the folder scan and this window's saves; the save itself re-plans
-    /// from a fresh listing of the folder.
-    private func annotatePlannedName(for source: URL) -> String {
+    /// The name shown at once, from the folder scan and this window's saves, until the fresh listing arrives.
+    private func annotateScannedName(for source: URL) -> AnnotatedCopyName {
         let folder = source.deletingLastPathComponent().standardizedFileURL.path
         let scanned = session.folderScan?.sourceSnapshot?.entries
             .filter { $0.url.deletingLastPathComponent().standardizedFileURL.path == folder }
             .map(\.url.lastPathComponent) ?? []
         return AnnotatedCopyPlan.name(for: source.lastPathComponent, existing: scanned + annotateViews.savedNames,
-                                      writableTypes: ImageIOWritableTypes.all).name
+                                      writableTypes: ImageIOWritableTypes.all)
     }
 
     /// The Session also leaves Annotate Mode on its own (a failed image, a folder change); the views follow.
