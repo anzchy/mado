@@ -42,3 +42,28 @@ func issue687FixSameRowSortsLeftToRight() {
     ]
     #expect(orderedText(boxes) == ["left", "right", "next"])
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue687FixOrderingUsesStableTieBreakers() {
+    let boxes = [
+        box("z", x: 0.2, y: 0.5, h: 0.02),
+        box("a", x: 0.2, y: 0.5, h: 0.02),
+        box("left", x: 0.1, y: 0.505, h: 0.015),
+        box("lower at same x", x: 0.2, y: 0.495, h: 0.02)
+    ]
+    let expected = ["left", "a", "z", "lower at same x"]
+    #expect(orderedText(boxes) == expected)
+    #expect(orderedText(boxes.reversed()) == expected)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue687FixEqualTopDifferentXUsesXOrder() {
+    let boxes = [box("right", x: 0.5, y: 0.5), box("left", x: 0.1, y: 0.5)]
+    #expect(orderedText(boxes) == ["left", "right"])
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue687FixSameXOnOneRowUsesVerticalPosition() {
+    let boxes = [box("lower", x: 0.1, y: 0.495, h: 0.02), box("upper", x: 0.1, y: 0.5, h: 0.02)]
+    #expect(orderedText(boxes) == ["upper", "lower"])
+}
