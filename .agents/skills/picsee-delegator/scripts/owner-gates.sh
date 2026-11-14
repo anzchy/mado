@@ -5,7 +5,8 @@
 #   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
 #   / the Swift "Test run with N tests" line / DONE
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
-# A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree or head mismatch.
+# A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
+# changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
 # The Swift, Xcode build and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
 # design:check needs npm ci --ignore-scripts and Playwright Chromium in the gated worktree;
 # without either prerequisite it fails closed (design != 0).
@@ -21,6 +22,13 @@ export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 cd $wt 2>/dev/null || { echo "no worktree $wt" > $s || summary_error; exit 2; }
 [[ "$(git rev-parse HEAD 2>/dev/null)" == "$(git rev-parse "$sha" 2>/dev/null)" ]] || { echo "head mismatch" > $s || summary_error; exit 2; }
+# Gates read the working tree, so refuse anything that is not exactly the committed head (#687a run i687b
+# gated a conflict marker mid-rebase). Untracked files (.build, node_modules) are allowed.
+refuse() { echo "owner-gates: refused: $1" > $s || summary_error; echo "owner-gates: refused: $1" >&2; exit 2; }
+for op in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
+  [[ -e "$(git rev-parse --git-path ${op%%:*} 2>/dev/null)" ]] && refuse "${op#*:} in progress in $wt; finish or abort it and rerun on the committed head"
+done
+[[ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] || refuse "tracked changes in $wt; commit or stash them and rerun in a clean worktree at the head"
 hl=$wt/scripts/heavy-lock.sh
 failed=0
 lane_result() {

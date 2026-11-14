@@ -481,6 +481,68 @@ class OwnerGatesRefusalTests(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("no worktree", summary)
 
+    def unclean_case(self, setup):
+        """Run owner-gates on a fresh repo after setup(work, git_dir); return (rc, summary, out files)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            work, out = root / "work", root / "out"
+            work.mkdir()
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+            git(work, "init", "-q", "-b", "main", env=env)
+            (work / "tracked.txt").write_text("base\n")
+            git(work, "add", "tracked.txt", env=env)
+            git(work, "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture", env=env)
+            setup(work, work / ".git")
+            result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")), str(work), "HEAD", "t", "HEAD"],
+                                    capture_output=True, text=True, timeout=20,
+                                    env={**env, "PICSEE_GATES_OUT": str(out)})
+            summary = (out / "t-summary.txt").read_text()
+            return result.returncode, summary, sorted(p.name for p in out.iterdir()), result
+
+    def test_unclean_worktree_is_refused_before_any_lane(self):
+        """Gates read the working tree: a dirty tree or an unfinished rebase/merge/cherry-pick is not the head."""
+        def dirty(work, _):
+            (work / "tracked.txt").write_text("edited\n")
+
+        def staged(work, _):
+            (work / "tracked.txt").write_text("staged\n")
+            git(work, "add", "tracked.txt")
+
+        def rebase(_, git_dir):
+            (git_dir / "rebase-merge").mkdir()
+
+        def rebase_apply(_, git_dir):
+            (git_dir / "rebase-apply").mkdir()
+
+        def merge(_, git_dir):
+            (git_dir / "MERGE_HEAD").write_text("0" * 40 + "\n")
+
+        def cherry_pick(_, git_dir):
+            (git_dir / "CHERRY_PICK_HEAD").write_text("0" * 40 + "\n")
+
+        for name, setup, reason in (("dirty", dirty, "tracked changes"), ("staged", staged, "tracked changes"),
+                                    ("rebase", rebase, "rebase in progress"),
+                                    ("rebase-apply", rebase_apply, "rebase in progress"),
+                                    ("merge", merge, "merge in progress"),
+                                    ("cherry-pick", cherry_pick, "cherry-pick in progress")):
+            with self.subTest(name):
+                rc, summary, files, result = self.unclean_case(setup)
+                self.assertEqual(rc, 2, result.stdout + result.stderr)
+                self.assertIn(reason, summary)
+                self.assertIn(reason, result.stderr)
+                self.assertNotIn("DONE", summary)
+                self.assertNotIn("swift=", summary)
+                self.assertEqual(files, ["t-summary.txt"])
+
+    def test_untracked_files_do_not_block_a_clean_head(self):
+        """Untracked build output (.build, node_modules) is not a tracked change."""
+        def untracked(work, _):
+            (work / "scratch.txt").write_text("untracked\n")
+        rc, summary, _, result = self.unclean_case(untracked)
+        self.assertNotIn("tracked changes", summary + result.stderr)
+        self.assertIn("swift=", summary)
+
 
 class OwnerGatesDesignTests(unittest.TestCase):
     """Exercise the real shell orchestration with cheap external-command fixtures."""
