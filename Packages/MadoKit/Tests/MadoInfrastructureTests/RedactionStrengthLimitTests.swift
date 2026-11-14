@@ -4,7 +4,7 @@ import MadoCore
 @testable import MadoInfrastructure
 
 /// `left + cell` overflowed for `.mosaic(strength: .max)` with a rect not at the origin, and the process trapped.
-@Test func issue693HugeMosaicStrengthDoesNotTrap() async {
+@Test(.timeLimit(.minutes(2))) func issue693HugeMosaicStrengthDoesNotTrap() async {
     await #expect(processExitsWith: .success) {
         let source = RedactionPixels.distinct(width: 12, height: 10)
         _ = try? RedactionRenderer.render(source.image, rect: CGRect(x: 5, y: 3, width: 6, height: 4),
