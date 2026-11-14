@@ -20,6 +20,17 @@ open class CanvasView: NSView {
     private var showsKeyboardFocusRing = false
     private var preserveKeyboardFocusRingForOpening = false
     public var onResolutionNeeded: ((Int) -> Void)?
+    /// #690: points kept free on the right for the Annotate strip; the fit uses the area to its left.
+    /// Changing it refits only in fit mode; a zoomed or 1:1 image stays where it is.
+    public var trailingReserve: CGFloat = 0 {
+        didSet {
+            guard trailingReserve != oldValue, sourceSize.width > 0, session.zoomMode == .fit else { return }
+            fit()
+            needsDisplay = true
+            requestDetail()
+            publishBackdrop()
+        }
+    }
     public var onBackdropChange: ((CanvasBackdropFrame) -> Void)?
     public var backdropFrame: CanvasBackdropFrame {
         let theme: DesignTheme = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
@@ -138,7 +149,8 @@ open class CanvasView: NSView {
         defer { previousViewport = bounds.size }
         guard sourceSize.width > 0 else { return }
         transform.viewportChanged(source: sourceSize, from: previousViewport, to: bounds.size,
-            backingScale: Double(window?.backingScaleFactor ?? 1), mode: session.zoomMode)
+            backingScale: Double(window?.backingScaleFactor ?? 1), mode: session.zoomMode,
+            trailingReserve: Double(trailingReserve))
         needsDisplay = true
         requestDetail()
         publishBackdrop()
@@ -230,7 +242,7 @@ open class CanvasView: NSView {
 
     private func fit() {
         transform = .fitted(source: sourceSize, viewport: bounds.size,
-                            backingScale: Double(window?.backingScaleFactor ?? 1))
+                            backingScale: Double(window?.backingScaleFactor ?? 1), trailingReserve: Double(trailingReserve))
     }
 
     /// Gesture values are testable independently of AppKit's non-constructible magnify event.

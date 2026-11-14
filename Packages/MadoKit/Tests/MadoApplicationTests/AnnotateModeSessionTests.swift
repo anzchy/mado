@@ -355,9 +355,11 @@ private let browsingCommands: Set<CommandID> = [.previous, .next, .preview, .ent
     #expect(act(.escape) == .requestLeave)
     #expect(act(.escape, .shift) == nil)
     #expect(act(.escape, typing: true) == nil, "the text field keeps its Esc")
-    for arrow: AnnotateKey in [.leftArrow, .rightArrow, .upArrow, .downArrow] {
-        #expect(act(arrow) == .swallow, "\(arrow)")
-        #expect(act(arrow, .shift) == .swallow, "\(arrow)")
+    // Addendum 5.6 (page 39, 2026-11-14): ←/→/↑/↓ nudge the selected mark, ten pixels with Shift; never change images.
+    let steps: [(AnnotateKey, Int, Int)] = [(.leftArrow, -1, 0), (.rightArrow, 1, 0), (.upArrow, 0, -1), (.downArrow, 0, 1)]
+    for (arrow, dx, dy) in steps {
+        #expect(act(arrow) == .nudge(dx: dx, dy: dy), "\(arrow)")
+        #expect(act(arrow, .shift) == .nudge(dx: dx * 10, dy: dy * 10), "\(arrow)")
         #expect(act(arrow, .command) == nil, "\(arrow)")
     }
     #expect(act(.character("e"), .command, active: false) == nil, "⌘E is left to the menu")
@@ -383,7 +385,10 @@ private let browsingCommands: Set<CommandID> = [.previous, .next, .preview, .ent
     session.selectAnnotateTool(.rectangle)
     #expect(session.annotateMode == nil)
     session.enterAnnotateMode()
-    #expect(session.annotateMode?.tool == nil)
+    // Page 39's pinned bare URL shows the rectangle tool pressed on entry (addendum 2026-11-14).
+    #expect(session.annotateMode?.tool == .rectangle)
+    session.selectAnnotateTool(.select)
+    #expect(session.annotateMode?.tool == .select)
     session.selectAnnotateTool(.rectangle)
     #expect(session.annotateMode?.tool == .rectangle)
     session.addAnnotationMark(mk(1))
@@ -474,4 +479,180 @@ private let browsingCommands: Set<CommandID> = [.previous, .next, .preview, .ent
     let plain = try AnnotationFlattener.flatten(image, orientation: 6, marks: [])
     #expect(copy.width == 4 && copy.height == 6)
     #expect(copy.dataProvider?.data as Data? == plain.dataProvider?.data as Data?, "no marks outside the mode")
+}
+
+// MARK: - #690 WI-5: the select tool, selection and nudge (addendum 5.5, 5.6)
+
+private let photoSize = CGSize(width: 1600, height: 2400)
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateEnterSelectsRectangle() async {
+    let session = await Showing.make().session
+    session.enterAnnotateMode()
+    #expect(session.annotateMode?.tool == .rectangle)
+    #expect(session.annotateMode?.selectedMark == nil)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateNewMarkIsSelected() async {
+    let session = await Showing.make().session
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(1))
+    #expect(session.annotateMode?.selectedMark == 0)
+    session.addAnnotationMark(mk(2))
+    #expect(session.annotateMode?.selectedMark == 1)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateSelectAndClearSelection() async {
+    let session = await Showing.make().session
+    session.selectAnnotationMark(0)
+    #expect(session.annotateMode == nil, "nothing outside the mode")
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(1)); session.addAnnotationMark(mk(2))
+    session.selectAnnotationMark(0)
+    #expect(session.annotateMode?.selectedMark == 0)
+    session.selectAnnotationMark(nil)
+    #expect(session.annotateMode?.selectedMark == nil)
+    session.selectAnnotationMark(1)
+    session.selectAnnotationMark(5)
+    #expect(session.annotateMode?.selectedMark == 1, "an index outside the marks is ignored")
+    session.selectAnnotationMark(-1)
+    #expect(session.annotateMode?.selectedMark == 1)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateNudgeMovesSelectedOnly() async {
+    let showing = await Showing.make()
+    let session = showing.session
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(100)); session.addAnnotationMark(mk(200))
+    session.selectAnnotationMark(0)
+    let presented = showing.host.presented
+    #expect(session.nudgeSelectedAnnotation(dx: 1, dy: 0, imageSize: photoSize))
+    #expect(session.annotateMode?.document.marks.map(\.rect.origin) == [CGPoint(x: 101, y: 100), CGPoint(x: 200, y: 200)])
+    #expect(session.annotateMode?.document.marks.map(\.rect.size) == [CGSize(width: 10, height: 10), CGSize(width: 10, height: 10)])
+    #expect(session.annotateMode?.selectedMark == 0)
+    #expect(session.currentItemID == showing.ids[1] && session.imageLoader.fileURL == Showing.url)
+    #expect(showing.host.presented == presented)
+    #expect(session.annotateMode?.document.hasUnsavedMarks == true)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateNudgeWithoutSelectionChangesNothing() async {
+    let showing = await Showing.make()
+    let session = showing.session
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(100))
+    session.selectAnnotationMark(nil)
+    let before = session.annotateMode
+    let presented = showing.host.presented
+    #expect(!session.nudgeSelectedAnnotation(dx: 1, dy: 0, imageSize: photoSize))
+    #expect(session.annotateMode == before)
+    #expect(session.currentItemID == showing.ids[1] && showing.host.presented == presented)
+    _ = session.requestLeaveAnnotateMode(.escape); session.resolveAnnotatePrompt(.discard)
+    #expect(!session.nudgeSelectedAnnotation(dx: 1, dy: 0, imageSize: photoSize), "nothing outside the mode")
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateNudgeIsUndoable() async {
+    let session = await Showing.make().session
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(100))
+    for _ in 0..<3 { session.nudgeSelectedAnnotation(dx: 0, dy: 10, imageSize: photoSize) }
+    #expect(session.annotateMode?.document.marks.first?.rect.origin == CGPoint(x: 100, y: 130))
+    for _ in 0..<3 { session.undoAnnotation() }
+    #expect(session.annotateMode?.document.marks == [mk(100)])
+    for _ in 0..<3 { session.redoAnnotation() }
+    #expect(session.annotateMode?.document.marks.first?.rect.origin == CGPoint(x: 100, y: 130))
+    #expect(session.annotateMode?.document.marks.count == 1)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateUndoRemovingSelectedClearsSelection() async {
+    let session = await Showing.make().session
+    session.enterAnnotateMode()
+    session.addAnnotationMark(mk(1))
+    #expect(session.annotateMode?.selectedMark == 0)
+    session.undoAnnotation()
+    #expect(session.annotateMode?.document.marks == [])
+    #expect(session.annotateMode?.selectedMark == nil)
+    session.redoAnnotation()
+    let selected = session.annotateMode?.selectedMark
+    #expect(selected == nil || selected == 0)
+}
+
+@Test(.timeLimit(.minutes(2))) func annotationDocumentReplaceUndoable() {
+    var document = AnnotationDocument()
+    document.add(mk(1))
+    let r1 = document.replace(at: 0, with: mk(7))
+    #expect(r1)
+    #expect(document.marks == [mk(7)] && document.hasUnsavedMarks)
+    let r2 = document.undo()
+    #expect(r2)
+    #expect(document.marks == [mk(1)])
+    let r3 = document.redo()
+    #expect(r3)
+    #expect(document.marks == [mk(7)])
+    let undo = document.canUndo, redo = document.canRedo
+    let r4 = document.replace(at: 3, with: mk(9))
+    #expect(!r4)
+    let r5 = document.replace(at: -1, with: mk(9))
+    #expect(!r5)
+    #expect(document.marks == [mk(7)] && document.canUndo == undo && document.canRedo == redo)
+    document.markSaved()
+    let r6 = document.replace(at: 0, with: mk(8))
+    #expect(r6)
+    #expect(document.hasUnsavedMarks, "a replacement is a change")
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func annotateSelectionInvariantProperty() async {
+    let showing = await Showing.make()
+    let session = showing.session
+    for seed in UInt64(1)...300 {
+        session.enterAnnotateMode()
+        var random = AnnotationRandom(seed: seed)
+        for _ in 0..<40 {
+            switch Int.random(in: 0..<6, using: &random) {
+            case 0: session.addAnnotationMark(mk(Int.random(in: 0...1500, using: &random)))
+            case 1:
+                let index = Int.random(in: -1...5, using: &random)
+                session.selectAnnotationMark(index < 0 ? nil : index)
+            case 2: session.nudgeSelectedAnnotation(dx: Int.random(in: -10...10, using: &random),
+                                                    dy: Int.random(in: -10...10, using: &random), imageSize: photoSize)
+            case 3: session.undoAnnotation()
+            case 4: session.redoAnnotation()
+            default: session.selectAnnotateTool(Bool.random(using: &random) ? .select : .rectangle)
+            }
+            let state = session.annotateMode
+            #expect(state?.selectedMark.map { $0 >= 0 && $0 < state!.document.marks.count } ?? true, "seed \(seed)")
+            #expect(state?.document.marks.allSatisfy { CGRect(origin: .zero, size: photoSize).contains($0.rect) } == true,
+                    "seed \(seed)")
+            #expect(session.currentItemID == showing.ids[1], "seed \(seed)")
+        }
+        while session.undoAnnotation() {}
+        #expect(session.annotateMode?.document.marks == [], "seed \(seed)")
+        _ = session.requestLeaveAnnotateMode(.escape); session.resolveAnnotatePrompt(.discard)
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func annotateKeyPolicyVAndNudges() {
+    func act(_ key: AnnotateKey, _ mods: AnnotateKeyModifiers = [], active: Bool = true, typing: Bool = false)
+        -> AnnotateKeyAction? { AnnotateKeyPolicy.action(key: key, modifiers: mods, active: active, typing: typing) }
+    #expect(act(.character("v")) == .selectTool)
+    #expect(act(.character("V"), .shift) == .selectTool)
+    #expect(act(.character("v"), typing: true) == nil)
+    #expect(act(.character("v"), active: false) == nil)
+    #expect(act(.character("v"), .command) == nil)
+    #expect(act(.character("v"), .option) == nil)
+    #expect(act(.character("v"), .control) == nil)
+    #expect(act(.leftArrow) == .nudge(dx: -1, dy: 0))
+    #expect(act(.upArrow, .shift) == .nudge(dx: 0, dy: -10))
+    #expect(act(.downArrow, .option) == nil)
+    #expect(act(.rightArrow, typing: true) == nil)
+}
+
+@Test(.timeLimit(.minutes(2))) func annotateKeyPolicyVNeverConsumedOutsideMode() {
+    let keys: [AnnotateKey] = [.leftArrow, .rightArrow, .upArrow, .downArrow] + "vVrR".map { .character(String($0)) }
+    let all: [AnnotateKeyModifiers] = [[], .shift, .command, .option, .control, [.command, .shift]]
+    for seed in UInt64(0)..<500 {
+        var random = AnnotationRandom(seed: seed)
+        let key = keys[Int.random(in: 0..<keys.count, using: &random)]
+        let mods = all[Int.random(in: 0..<all.count, using: &random)]
+        #expect(AnnotateKeyPolicy.action(key: key, modifiers: mods, active: false, typing: false) == nil, "seed \(seed)")
+        #expect(AnnotateKeyPolicy.action(key: key, modifiers: mods, active: true, typing: true) == nil, "seed \(seed)")
+    }
 }

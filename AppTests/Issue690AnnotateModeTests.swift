@@ -138,11 +138,12 @@ private func issue690Image(_ url: URL) throws -> CGImage {
     return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
 }
 
-/// The mark's left edge at (100, 150) is drawn in the default red; the centre (200, 200) keeps the original.
+/// The mark's left edge at (100, 150) is drawn in page 39's fixed red #dc2626 (B7, #690 WI-5); the centre (200, 200)
+/// keeps the original.
 private func issue690ExpectFlattened(_ image: CGImage, original: CGImage) throws {
     #expect(image.width == original.width && image.height == original.height)
     let edge = try issue690Pixel(image, x: 100, y: 150)
-    #expect(edge[0] > 240 && edge[1] < 80 && edge[2] < 80, "mark edge \(edge)")
+    #expect(abs(Int(edge[0]) - 220) <= 4 && abs(Int(edge[1]) - 38) <= 4 && abs(Int(edge[2]) - 38) <= 4, "mark edge \(edge)")
     let centre = try issue690Pixel(image, x: 200, y: 200), originalCentre = try issue690Pixel(original, x: 200, y: 200)
     #expect(centre == originalCentre)
 }

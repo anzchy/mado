@@ -25,6 +25,9 @@ public enum AnnotateLeaveOutcome: Equatable, Sendable {
 }
 
 public enum AnnotateTool: Sendable {
+    /// V: picks a mark to nudge.
+    case select
+    /// R: draws a rectangle.
     case rectangle
 }
 
@@ -60,6 +63,8 @@ public struct AnnotateModeState: Equatable, Sendable {
     public let fileURL: URL?
     public internal(set) var document = AnnotationDocument()
     public internal(set) var tool: AnnotateTool?
+    /// The mark ←/→/↑/↓ nudge; nil or an index into `document.marks`.
+    public internal(set) var selectedMark: Int?
     /// The reason waiting for an answer to 存储/不存储/取消.
     public internal(set) var prompt: AnnotateLeaveReason?
     /// The revision an in-flight save started from, and the leave it completes.
@@ -83,7 +88,7 @@ public struct AnnotateModeState: Equatable, Sendable {
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.itemID == rhs.itemID && lhs.fileURL == rhs.fileURL && lhs.document == rhs.document && lhs.tool == rhs.tool
-            && lhs.prompt == rhs.prompt && lhs.saving?.revision == rhs.saving?.revision
+            && lhs.selectedMark == rhs.selectedMark && lhs.prompt == rhs.prompt && lhs.saving?.revision == rhs.saving?.revision
             && lhs.saving?.leave == rhs.saving?.leave && lhs.directRefused == rhs.directRefused
             && lhs.lastSaveError == rhs.lastSaveError && lhs.lastSavedURL == rhs.lastSavedURL
     }
@@ -105,9 +110,9 @@ public struct AnnotateKeyModifiers: OptionSet, Sendable {
 }
 
 public enum AnnotateKeyAction: Equatable, Sendable {
-    case selectRectangle, undo, redo, requestLeave
-    /// Consumed without effect: ←/→ never change images while annotating (nudging is #692).
-    case swallow
+    case selectRectangle, selectTool, undo, redo, requestLeave
+    /// ←/→/↑/↓ move the selected mark by one image pixel, ten with Shift (5.6); never a change of image.
+    case nudge(dx: Int, dy: Int)
 }
 
 public enum AnnotateKeyPolicy {
@@ -117,10 +122,20 @@ public enum AnnotateKeyPolicy {
         let command = modifiers.contains(.command)
         switch key {
         case .escape: return modifiers.isEmpty ? .requestLeave : nil
-        case .leftArrow, .rightArrow, .upArrow, .downArrow: return command ? nil : .swallow
+        case .leftArrow, .rightArrow, .upArrow, .downArrow:
+            guard modifiers.isDisjoint(with: [.command, .control, .option]) else { return nil }
+            let step = modifiers.contains(.shift) ? 10 : 1
+            switch key {
+            case .leftArrow: return .nudge(dx: -step, dy: 0)
+            case .rightArrow: return .nudge(dx: step, dy: 0)
+            case .upArrow: return .nudge(dx: 0, dy: -step)
+            default: return .nudge(dx: 0, dy: step)
+            }
         case .character(let text):
             let letter = text.lowercased()
-            if letter == "r", modifiers.isDisjoint(with: [.command, .control, .option]) { return .selectRectangle }
+            let plain = modifiers.isDisjoint(with: [.command, .control, .option])
+            if letter == "r", plain { return .selectRectangle }
+            if letter == "v", plain { return .selectTool }
             if letter == "z", command, modifiers.isDisjoint(with: [.control, .option]) {
                 return modifiers.contains(.shift) ? .redo : .undo
             }
