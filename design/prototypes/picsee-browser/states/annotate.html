@@ -14,12 +14,15 @@
   The image is fitted to the area left of it (right inset 64 px, 16 px margins), so the strip never covers the image.
   Strip order (spec #680 stories 39–59, grilling 4.3/4.7): 选择 | 箭头 矩形 文字 荧光笔 画笔 遮挡 裁剪 序号 | 撤销 重做 |
   拷贝 存储 | 完成. Hover tips (title) carry the single-letter shortcuts of decision 5.5: V A R T H P M C N; 拷贝 ⌘C,
-  存储 ⌘S, 完成 Esc. Marks use the fixed annotation red (the light value of --color-danger, #dc2626) in both
-  appearances: marks are image content and the flattened Annotated Copy must not depend on the app appearance
-  (#680 r1 decision Q8). In windows too short for the strip it scrolls inside itself (max-height). Buttons do nothing. Radii, shadows and colours use the design tokens.
+  存储 ⌘S, 完成 Esc. Every mark paint is fixed and the same in both appearances, with no theme token: annotation red #dc2626
+  (the light value of --color-danger) for strokes, fills and text, and white #fff for the step number and the text
+  mark's halo. Marks are image content and the flattened Annotated Copy must not depend on the app appearance
+  (#680 r1 decision Q8, r2). The redaction slider carries no numeric range or value: the minimum strength is
+  measured by the #693 implementer on test assets and recorded in its acceptance (grilling 5.3). The drawn mosaic
+  is illustrative only. In windows too short for the strip it scrolls inside itself (max-height). Buttons do nothing. Radii, shadows and colours use the design tokens.
   ⌘S follows the #680 decision of 2026-11-13: stay in Annotate Mode on the original and confirm 「已存储为 <name>」 with
   在访达中显示; the open Preview Set does not change.
-  The bare URL is the pinned main case: the rectangle tool active with four marks, light. Sub-cases, by query:
+  The bare URL is the pinned main case: the rectangle tool active with five marks (two rectangles, an arrow, step 1 and a text mark), light. Sub-cases, by query:
     ?tool=redact         the redaction tool active: options popover left of the strip with 马赛克/实色块, 强度 and the
                          permanent reversibility hint (5.4) with 改用实色块; a mosaic mark over the gate's plaque
     ?tool=redact&style=solid   实色块 chosen: 「纯黑色块，不可还原。」, the plaque covered by a solid box
@@ -123,8 +126,8 @@
     <path d="M446 640 L492 572"/><path d="M479 576 L492 572 L495 586"/>
   </g>
   <circle cx="752" cy="300" r="14" fill="currentColor"/>
-  <text x="752" y="305.5" text-anchor="middle" font-size="15" fill="var(--color-on-accent)">1</text>
-  <text x="376" y="670" font-size="18" fill="currentColor" stroke="var(--color-panel)" stroke-width="3" paint-order="stroke">从这里上岸</text>
+  <text x="752" y="305.5" text-anchor="middle" font-size="15" fill="#fff">1</text>
+  <text x="376" y="670" font-size="18" fill="currentColor" stroke="#fff" stroke-width="3" paint-order="stroke">从这里上岸</text>
 </svg>
 
 <div class="annotate-strip" id="annotate-strip" role="toolbar" aria-orientation="vertical" aria-label="标注工具">
@@ -151,7 +154,7 @@
 <div class="tool-options" id="tool-options" role="dialog" aria-label="遮挡选项" hidden>
   <b>遮挡</b>
   <span class="segmented"><button type="button" data-style="mosaic" aria-pressed="true">马赛克</button><button type="button" data-style="solid" aria-pressed="false">实色块</button></span>
-  <label data-mosaic-only>强度 <input type="range" min="4" max="40" value="12" aria-label="马赛克强度"></label>
+  <label data-mosaic-only>强度 <input type="range" aria-label="马赛克强度"></label>
   <p class="reversible-hint" data-mosaic-only>强度低的马赛克可能被还原出文字；真正保密的内容请用实色块。 <button type="button" class="link">改用实色块</button></p>
   <p class="muted" data-solid-only hidden>纯黑色块，不可还原。</p>
 </div>
@@ -190,7 +193,7 @@
   const box = $(solid ? 'solid' : 'mosaic');
   Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }); box.hidden = false;
   if (!solid) {
-    // Mosaic at strength 12: one block per 12 image pixels (4 px on screen at scale 0.32 ≈ 12 × 0.32).
+    // Illustrative mosaic only: the block size is a drawing choice, not a strength value (grilling 5.3; #693 measures it).
     const img = $('annotate-image'), s = 0.32, block = 12;
     const paint = () => {
       const c = box, sw = Math.ceil(r.w / s / block), sh = Math.ceil(r.h / s / block);

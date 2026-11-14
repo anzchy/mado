@@ -18,10 +18,12 @@
   The bare URL is the pinned main case: saving on, the thumbnail at rest, light. Sub-cases, by query:
     ?hover=1             the pointer over the thumbnail: dark overlay with 拷贝, 标注, 在 Mado 中打开, 识别文字, 移到废纸篓
     ?save=off            saving off, pointer over the thumbnail: 存储 first, then 拷贝, 标注, 在 Mado 中打开, 识别文字;
-                         the status line says the image is only on the clipboard (Delete when unsaved is not decided)
+                         the status line says the image is only on the clipboard; no 移到废纸篓 and no discard (#680 r1 Q3)
     ?kind=text           after 截图并识别文字: the notice 「已拷贝 N 个字符」 with the engine tag, no thumbnail
     ?kind=text&panel=1   the notice clicked: the editable recognised-text panel with 拷贝
-    ?kind=notext         no text found: 「没有找到文字 · 剪贴板没有改变」
+    ?kind=text&engine=cloud   the same notice after Cloud Recognition: the engine tag reads 百度云识别, so the result
+                         always names the engine that ran (grilling 3.2; combines with panel=1)
+    ?kind=notext         no text found: 「未找到文字 · 剪贴板没有改变」 (EXT-05)
     ?theme=dark          dark tokens (combines with the others)
 -->
   <style data-stitch-inlined="_ds/picsee-ui-system/tokens/globals.css">:root{--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-focus-ring: var(--color-accent);--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--font-sans: "SF Pro Text", "Avenir Next", "Helvetica Neue", sans-serif;--font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;--title-bar-height: 38px;--traffic-lights-end: 0px;--traffic-lights-clearance: 0px;--traffic-lights-clearance-main: 0px;--sidebar-width: 220px;--sidebar-width-min: 180px;--main-min-width: 320px;--bottom-tabs-height: 36px;--editor-content-width: 780px;--content-padding: 40px;--editor-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--editor-font-size: 16px;--editor-line-height: 1.6;--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: #6b7280;--color-bg-secondary: #f6f7fb;--color-bg-tertiary: #eeeff3;--color-on-accent: #fff;--color-scrim: rgba(15, 23, 42, 0.35);--font-size-ui-sm: 12px;--font-size-ui: 13px;--font-size-ui-lg: 14px;--font-size-title: 16px;--radius-inner: 4px;--radius-control: 6px;--radius-popover: 10px;--motion-duration-fast: 150ms;} @media (prefers-reduced-motion: reduce){:root{--motion-duration-fast: 0ms;}} *{box-sizing: border-box;} html, body, #root{height: 100%;} body{margin: 0;font-family: var(--font-sans);background: var(--color-bg);color: var(--color-text);} body.tauri-macos{--traffic-lights-end: 78px;--traffic-lights-clearance: calc(var(--traffic-lights-end) - 16px);--traffic-lights-clearance-main: calc(var(--traffic-lights-end) + 2px);} a{color: inherit;text-decoration: none;}</style>
@@ -127,11 +129,11 @@
     </div>
     <button type="button" class="close" id="thumb-close" aria-label="关闭缩略图" title="关闭缩略图" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
-  <div class="status" id="status">已存到 <span class="mono">~/下载</span> · 已拷贝</div>
+  <div class="status" id="status">已存到 <span class="mono">~/Downloads</span> · 已拷贝</div>
 </div>
 
 <button type="button" class="notice" id="notice-text" hidden><svg class="ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg><span>已拷贝 <span id="char-count">0</span> 个字符</span><span class="engine">本机识别</span></button>
-<div class="notice" id="notice-notext" role="status" hidden><svg class="warn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>没有找到文字 · 剪贴板没有改变</div>
+<div class="notice" id="notice-notext" role="status" hidden><svg class="warn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>未找到文字 · 剪贴板没有改变</div>
 
 <div class="panel" id="panel" role="dialog" aria-label="识别出的文字" hidden>
   <div class="head">识别出的文字 <span class="engine">本机识别</span><button type="button" class="icon-only" aria-label="关闭" title="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
@@ -142,12 +144,13 @@ https://example.com/agenda</textarea>
   <div class="foot">可以修改后再拷贝<button type="button" class="btn primary">拷贝</button></div>
 </div>
 <script>
-// Static state page. ?hover=1, ?save=off, ?kind=text|notext, ?panel=1 and ?theme=dark select a sub-case (see the header comment).
+// Static state page. ?hover=1, ?save=off, ?kind=text|notext, ?engine=cloud, ?panel=1 and ?theme=dark select a sub-case (see the header comment).
 (() => {
   const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
   if (q.get('theme') === 'dark') document.documentElement.className = 'theme-dark';
   const kind = q.get('kind'), saveOff = q.get('save') === 'off';
   $('char-count').textContent = $('recognised').value.replace(/\s/g, '').length;
+  if (q.get('engine') === 'cloud') for (const e of document.querySelectorAll('.engine')) e.textContent = '百度云识别';
   if (kind === 'text' || kind === 'notext') {
     const corner = $('corner'), notice = $(kind === 'text' ? 'notice-text' : 'notice-notext');
     corner.dataset.kind = kind; corner.replaceChildren(notice); notice.hidden = false;

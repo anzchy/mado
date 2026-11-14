@@ -292,7 +292,7 @@ const JOURNEYS = [
     steps: [
       { p: 'settings', q: 'section=capture', note: '设置 →「截图」（在「更新」之前）：打开「显示截图工具条」。第一次截图时 macOS 请求录屏权限，只给截图助手',
         branches: [
-          { id: 'J5-bar-off', p: 'settings', q: 'section=capture&bar=off', title: '35 设置 · 截图 · 工具条关闭', t: '工具条关闭：其余截图设置变灰、不可编辑（5.2）', outs: [
+          { id: 'J5-bar-off', p: 'settings', q: 'section=capture&bar=off', title: '35 设置 · 截图 · 工具条关闭', t: '工具条关闭：截图之后与快捷键变灰、不可编辑（5.2）；文字识别仍可改', outs: [
               { k: '打开「显示截图工具条」→ 回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
           { id: 'J5-ocr', loop: true, p: 'settings', q: 'section=capture&scroll=ocr', title: '35 设置 · 截图 · 文字识别', t: '填写百度密钥，允许云端识别（EXT-04）', outs: [
               { k: '「保存到钥匙串」，回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
@@ -302,14 +302,14 @@ const JOURNEYS = [
           { id: 'J5-denied', p: 'capture-bar', q: 'state=denied', title: '37 录屏权限被拒绝', t: '录屏权限被拒绝', outs: [
               { k: '「打开系统设置」允许后 → 回到 37', to: 'capture-bar' }] },
           { id: 'J5-collapse', loop: true, p: 'capture-bar', q: 'state=collapsed', title: '37 收起到菜单栏', t: '收起到菜单栏', outs: [
-              { k: '菜单栏图标 →「显示截图工具条」，回到 37', to: 'capture-bar' }],
-            variants: [['state=menu', '菜单栏图标的菜单'], ['hover=region', '悬停提示']] },
+              { k: '点菜单栏图标恢复工具条，回到 37', to: 'capture-bar' }],
+            variants: [['hover=region', '悬停提示']] },
         ] },
       { p: 'capture-thumbnail', t: '区域 / 窗口 / 全屏截图<br>[⌃⇧⌘1] [⌃⇧⌘2] [⌃⇧⌘3]', note: '存到截图文件夹并拷贝；约 5 秒后消失，悬停时保持；可拖到其他 App',
         branches: [
           { id: 'J5-text', p: 'capture-thumbnail', q: 'kind=text', title: '38 文字已拷贝', t: '「识别文字」或 [⌃⇧⌘4]', outs: [
               { k: '只拷贝文字、不存图；点通知可查看和修改 → 回到 37', from: 'capture-bar', to: 'capture-bar' }],
-            variants: [['kind=text&panel=1', '点开的文字面板'], ['kind=notext', '没有找到文字']] },
+            variants: [['kind=text&panel=1', '点开的文字面板'], ['kind=text&engine=cloud', '百度云识别的结果'], ['kind=notext', '未找到文字']] },
           { id: 'J5-save-off', p: 'capture-thumbnail', q: 'save=off', title: '38 存储关闭', t: '「存储到文件夹」关闭：缩略图多出「存储」（3.5）', outs: [
               { k: '「标注」先存到截图文件夹，再进入 39', from: 'capture-bar', to: 'annotate' }] },
           { id: 'J5-dismiss', t: '不操作，或点 ×', to: '缩略图消失，截图已在截图文件夹和剪贴板里' },
