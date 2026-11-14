@@ -8,6 +8,7 @@ private final class VisionRequestProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var optionsObserved = false
     private var cancelled = 0
+    private var performed = 0
     let blocked = DispatchSemaphore(value: 0)
 
     func recordOptions(_ request: VNRecognizeTextRequest) {
@@ -23,6 +24,8 @@ private final class VisionRequestProbe: @unchecked Sendable {
     }
     var configured: Bool { lock.lock(); defer { lock.unlock() }; return optionsObserved }
     var cancelCount: Int { lock.lock(); defer { lock.unlock() }; return cancelled }
+    func recordPerform() { lock.lock(); performed += 1; lock.unlock() }
+    var performCount: Int { lock.lock(); defer { lock.unlock() }; return performed }
 }
 
 private func contractImage() throws -> Data {
@@ -55,7 +58,7 @@ func issue687FixCancellationReachesActiveVisionRequest() async throws {
     let provider = OnDeviceTextRecognitionProvider(
         performRequest: { _, _ in
             entered.continuation.yield(())
-            _ = probe.blocked.wait(timeout: .now() + 3)
+            probe.blocked.wait()
             throw NSError(domain: "VisionContract", code: 78)
         },
         cancelRequest: { probe.recordCancel($0) }
@@ -67,4 +70,29 @@ func issue687FixCancellationReachesActiveVisionRequest() async throws {
     do { _ = try await task.value; Issue.record("Expected cancellation") }
     catch { #expect(error as? TextRecognitionError == .cancelled) }
     #expect(probe.cancelCount == 1)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue687CancelBeforeRequestEntryNeverStartsVision() async throws {
+    let probe = VisionRequestProbe()
+    let entered = AsyncStream<Void>.makeStream()
+    let release = AsyncStream<Void>.makeStream()
+    let provider = OnDeviceTextRecognitionProvider(
+        performRequest: { _, _ in
+            probe.recordPerform()
+            throw NSError(domain: "VisionContract", code: 79)
+        },
+        beforePerform: {
+            entered.continuation.yield(())
+            for await _ in release.stream { break }
+        }
+    )
+    let bytes = try contractImage()
+    let task = Task { try await provider.recognise(bytes) }
+    for await _ in entered.stream { break }
+    task.cancel()
+    release.continuation.yield(())
+    do { _ = try await task.value; Issue.record("Expected cancellation") }
+    catch { #expect(error as? TextRecognitionError == .cancelled) }
+    #expect(probe.performCount == 0)
 }
