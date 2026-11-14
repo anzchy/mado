@@ -208,3 +208,45 @@ private final class Issue573DenyTarget: SecurityScope, @unchecked Sendable {
         controller.session.imageLoader.presented?.fileURL.standardizedFileURL == plain.standardizedFileURL
     }
 }
+
+@Test(.timeLimit(.minutes(3))) @MainActor func issue695SecondRecoveryKeepsFirstSheetAnswer() async throws {
+    let (tree, target, link, plain, _, controller, window, scope) = try issue573DeniedSetFixture(deniedFirst: false)
+    defer { window.close(); try? FileManager.default.removeItem(at: tree) }
+    try await issue695NavigateToDeniedMember(controller, window: window, plain: plain, denied: link)
+    let first = try #require(window.attachedSheet)
+    controller.requestFileReconnection(target)
+    #expect(window.attachedSheet === first)
+    window.endSheet(first, returnCode: .alertFirstButtonReturn)
+    try await waitUntil("first recovery should still open Choose File") { window.attachedSheet is NSOpenPanel }
+    let panel = try #require(window.attachedSheet as? NSOpenPanel)
+    scope.denyEnabled = false
+    controller.completeFileReconnection(target, original: target)
+    try await waitUntil("first sheet answer should recover the denied member") {
+        controller.session.imageLoader.presented?.fileURL.standardizedFileURL == target.standardizedFileURL
+    }
+    #expect(controller.session.filePreviewSet?.members == [plain, target])
+    window.endSheet(panel, returnCode: .cancel)
+}
+
+@Test(.timeLimit(.minutes(3))) @MainActor func issue695DeniedChosenFileKeepsSetAndShowsRecoveryNotice() async throws {
+    let (tree, target, link, plain, _, controller, window, _) = try issue573DeniedSetFixture(deniedFirst: false)
+    defer { window.close(); try? FileManager.default.removeItem(at: tree) }
+    try await issue695NavigateToDeniedMember(controller, window: window, plain: plain, denied: link)
+    let alert = try #require(window.attachedSheet)
+    window.endSheet(alert, returnCode: .alertFirstButtonReturn)
+    try await waitUntil("Choose File panel should appear") { window.attachedSheet is NSOpenPanel }
+    let panel = try #require(window.attachedSheet as? NSOpenPanel)
+    controller.completeFileReconnection(target, original: target)
+    window.endSheet(panel, returnCode: .cancel)
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .seconds(5))
+    let reconnect = String(localized: "Choose this image again to reconnect access.")
+    while !(window.attachedSheet?.contentView.map(issue573SheetLabels) ?? []).contains(reconnect)
+        && clock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(controller.session.filePreviewSet?.members == [plain, target])
+    #expect(controller.session.filePreviewSet?.index == 1)
+    #expect(controller.session.imageLoader.presented == nil)
+    #expect(issue573SheetLabels(try #require(window.attachedSheet?.contentView)).contains(reconnect))
+}

@@ -133,6 +133,21 @@ actor InputPipeline: ImagePipeline {
 }
 private let inputA = URL(fileURLWithPath: "/photos/A.png")
 private let inputB = URL(fileURLWithPath: "/photos/B.jpg")
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue695FailedReplacementLeasePreservesSetAndReportsFailure() async {
+    let host = InputHost(access: InputLeases(fails: true)), intent = AccessIntent()
+    let chosen = URL(fileURLWithPath: "/photos/chosen.png")
+    host.session.filePreviewSet = FilePreviewSet(files: [inputA, inputB])
+    _ = host.session.filePreviewSet?.move(forward: true)
+    await host.session.recoverFilePreviewSetMember(inputB, with: chosen,
+        operation: intent.begin(), admission: inputAdmission(host.access, host.pipeline), host: host)
+    #expect(host.session.filePreviewSet?.members == [inputA, inputB])
+    #expect(host.session.filePreviewSet?.index == 1)
+    #expect(host.opens.isEmpty)
+    #expect(!host.notices.isEmpty)
+    #expect(host.notices == [.accessFailed])
+    #expect(await host.access.requests == [.fileGrant(chosen)])
+}
 private func inputAdmission(_ access: InputLeases, _ pipeline: InputPipeline, root: AccessRootID? = nil,
                             rootGate: InputGate? = nil) -> ViewerInputAdmission {
     ViewerInputAdmission(access: access, pipeline: pipeline, maximumPixelSize: 960) { _ in
