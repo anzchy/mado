@@ -373,6 +373,8 @@ public enum AnnotatePaint {
     /// #692: text editing ended: the edited mark's index (nil for a new one), the text, the origin (image pixels)
     /// and the style for a new mark.
     public var onCommitText: ((Int?, String, CGPoint, AnnotationStyle) -> Void)?
+    /// #692 fix r1: the typed text changed (the window refreshes 存储).
+    public var onTextChange: (() -> Void)?
     /// #692 fix r1: a mark's accessibility 删除 action.
     public var onDelete: ((Int) -> Void)?
     public private(set) var textEditor: NSTextField?
@@ -644,7 +646,10 @@ public enum AnnotatePaint {
         return true
     }
 
-    public func controlTextDidChange(_ notification: Notification) { placeTextEditor() }
+    public func controlTextDidChange(_ notification: Notification) {
+        placeTextEditor()
+        onTextChange?()
+    }
 
     public func controlTextDidEndEditing(_ notification: Notification) { commitText() }
 

@@ -76,7 +76,7 @@ extension CanvasWindowController {
         annotateViews.overlay?.selectedMark = state.selectedMark
         annotateViews.overlay?.tool = state.tool
         annotateViews.strip?.update(AnnotateStripState(tool: state.tool, canUndo: state.document.canUndo,
-            canRedo: state.document.canRedo, canSave: session.canSaveAnnotatedCopy, canCopy: state.fileURL != nil))
+            canRedo: state.document.canRedo, canSave: session.canSaveAnnotatedCopy || annotatePendingText, canCopy: state.fileURL != nil))
         if let confirmed = annotateViews.confirmedMarks, confirmed != state.document.marks { dismissAnnotateConfirmation() }
     }
 
@@ -104,6 +104,8 @@ extension CanvasWindowController {
             self.session.deleteSelectedAnnotation()
             self.syncAnnotateUI()
         }
+        // #692 fix r1: 存储 follows ⌘S while the text is typed.
+        overlay.onTextChange = { [weak self] in self?.syncAnnotateUI() }
         overlay.onCommitText = { [weak self] index, text, origin, style in
             guard let self else { return }
             self.session.commitAnnotationText(text, at: origin, editing: index, style: style)
