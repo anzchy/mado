@@ -86,8 +86,12 @@ export const KEY_SITES = {
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
-// Files that read typed characters for keys the page does not list, each with its reason.
-export const CHARACTER_EXCLUSIONS = { 'App/CanvasWindowController+Annotate.swift': ANNOTATE_ONLY };
+// Files that read typed characters for keys the page does not list: the one site each may read them at, and why.
+// Any other read in the same file fails, so a new typed-key handler there still needs a page row (#690 fix r1).
+export const CHARACTER_EXCLUSIONS = {
+  'App/CanvasWindowController+Annotate.swift': {
+    reason: ANNOTATE_ONLY, anchor: /default: \.character\(event\.charactersIgnoringModifiers \?\? ""\)/g },
+};
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
  * (with or without a leading !), and .onKeyPress(.name). */
@@ -235,7 +239,13 @@ export function codeShortcuts(read) {
         found += [...source.matchAll(/keyEquivalent: "((?:[^"\\]|\\.)+)"/g)].length;
         found += [...source.matchAll(/\("[^"]+", "[^"]+:", "[^"]+"\)/g)].length;
         if (/\.keyboardShortcut\(/.test(source)) problems.push(`${rel} uses .keyboardShortcut, which this check does not read`);
-        if (/charactersIgnoringModifiers|\.specialKey\b/.test(source) && !CHARACTER_FILES.includes(rel) && !CHARACTER_EXCLUSIONS[rel])
+        const typedReads = [...source.matchAll(/charactersIgnoringModifiers|\.specialKey\b/g)].length;
+        const exclusion = CHARACTER_EXCLUSIONS[rel];
+        if (exclusion) {
+          const sites = [...source.matchAll(exclusion.anchor)].length;
+          if (sites !== 1) problems.push(`${rel} no longer reads typed characters at ${exclusion.anchor}`);
+          else if (typedReads !== 1) problems.push(`${rel} reads typed characters outside its declared site ${exclusion.anchor}`);
+        } else if (typedReads > 0 && !CHARACTER_FILES.includes(rel))
           problems.push(`${rel} reads typed characters, which this check does not read`);
         const sites = keySites(source), declared = KEY_SITES[rel] ?? {};
         for (const line of sites.unread) problems.push(`${rel} reads a key code in a shape this check does not read: ${line}`);
