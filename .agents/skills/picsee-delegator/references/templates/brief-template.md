@@ -2,7 +2,7 @@
 
 You are **<implementer>**. New task, fresh session. Worktree `~/Documents/mac-app/picsee-wt/<implementer>`.
 Branch: `git fetch origin && git switch -c <branch> origin/main` (main ≥ <sha7>). Issue #<n>.
-Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task>` before dispatch. This writes JSON `{worktree, branch, issue, task}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
+Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path>` before dispatch. This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first
@@ -73,17 +73,20 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
   implementation; the handoff maps row → test.
 - Changing an existing assertion: only where it asserts the old behaviour; list before/after/why.
 
-## Gates (paste decisive lines)
-```sh
-export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage
-sh scripts/tdd/swift-lcov.sh      # coverage/lcov.info: sum LF/LH and FNF/FNH → 100% lines and functions
-xcodegen generate
-scripts/heavy-lock.sh xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
-node --test --test-reporter=spec scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs
-node scripts/ledger/build.mjs --check
-```
-Only the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call.
+## Gates
+Follow `.agents/skills/mado-verify/SKILL.md` step 1: a clean worktree at the committed head, `git diff --check`, then
+this branch's `.agents/skills/picsee-delegator/scripts/owner-gates.sh <worktree> <head-sha> <prefix>` (Swift, coverage,
+xcodegen, unsigned build, the full App tests when the change is App-facing, node, ledger, diff check, design). Known
+flakes: only the two-rerun procedure in step 1. Paste the summary lines and decisive log lines in the handoff. Only
+the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call, in the foreground.
+
+## Verify (mado-verify) — mandatory, keep this section in every brief
+- Claude runs `/mado-verify`; Codex and Kimi follow `.agents/skills/mado-verify/SKILL.md` step by step.
+- Run it on the final head of the first handoff **and on the final head of every fix round**; a new commit needs a new
+  evidence comment and record (`.build/mado-verify/<head>.json`).
+- The handoff names the evidence comment URL and the full head SHA it covers. The delegator checks both with
+  `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>` before audit and before
+  merge; a failed check returns the item to you.
 
 ## Device smoke (implementer smoke, not validation) — only if the brief needs it
 `pgrep -x Mado` first; never kill a Mado you didn't start; `~/Applications/Mado.app` is off limits; no
@@ -98,7 +101,7 @@ resolving and explaining the changed specification; never commit BROKEN evidence
 No push, PR, branch switch/deletion, `rm -r`, other worktrees.
 
 ## Handoff
-Done when: the handoff includes the mado-verify evidence comment link and the exact final head SHA it covers.
+Done when: the handoff includes the mado-verify evidence comment URL and the exact final head SHA it covers (see Verify).
 `~/.picsee/herdr/<implementer>/<item>-handoff.md`: design; AC table (AC → proving test); RED/GREEN or receipts;
 changed existing assertions; gates output; `git diff --stat origin/main..HEAD`; production lines per target; NOT
 VERIFIED list; open questions. Reply DONE with the path.
