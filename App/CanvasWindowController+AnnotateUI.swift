@@ -92,6 +92,17 @@ extension CanvasWindowController {
             self?.session.selectAnnotationMark(index)
             self?.syncAnnotateUI()
         }
+        overlay.onReplace = { [weak self] index, mark in
+            self?.session.replaceAnnotationMark(at: index, with: mark)
+            self?.syncAnnotateUI()
+        }
+        overlay.onCommitText = { [weak self] index, text, origin, style in
+            guard let self else { return }
+            self.session.commitAnnotationText(text, at: origin, editing: index, style: style)
+            // The keys go back to the canvas, so the next Esc and letters act on Annotate Mode again.
+            self.applyFocus(.canvas)
+            self.syncAnnotateUI()
+        }
         content.addSubview(overlay)
         let strip = AnnotateStripView(frame: .zero)
         strip.onAction = { [weak self] action in self?.performAnnotateStripAction(action) }
@@ -124,6 +135,7 @@ extension CanvasWindowController {
     }
 
     private func performAnnotateStripAction(_ action: AnnotateStripAction) {
+        commitAnnotateText()
         switch action {
         case .tool(let tool): session.selectAnnotateTool(tool)
         case .undo: session.undoAnnotation()

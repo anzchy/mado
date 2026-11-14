@@ -8,7 +8,7 @@ import MadoInfrastructure
 import MadoMacUI
 
 /// Records every native Annotate surface; answers the prompt and the panel as each test sets.
-@MainActor private final class Issue690FakeUI: AnnotateNativeUI {
+@MainActor final class Issue690FakeUI: AnnotateNativeUI {
     var asked: [AnnotateLeaveReason] = []
     /// Answered at once when set; otherwise the answer waits in `pending`.
     var answer: AnnotateLeaveChoice?
@@ -38,7 +38,7 @@ import MadoMacUI
 }
 
 /// The real system bookmarks, recording every Access Root bookmark created so a re-grant's replacement is visible.
-private final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
+final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
     private let system = SystemSecurityScope()
     private let lock = NSLock()
     private var made: [Data] = []
@@ -58,7 +58,7 @@ private final class Issue690Bookmarks: BookmarkCoding, @unchecked Sendable {
 /// `constrainFrameRect(_:to:)` at runtime that returns the rect unchanged for the windows registered here and calls
 /// `NSWindow`'s own for every other window, so these tests no longer depend on the host screen. (`CommandWindow` is
 /// final, and swapping one window's class clashes with AppKit's KVO subclass.)
-private enum Issue690Frames {
+enum Issue690Frames {
     nonisolated(unsafe) static let unconstrained = NSHashTable<NSWindow>.weakObjects()
     /// Proof runs only: `ISSUE690_SCREEN_STUB=1` makes every other `CommandWindow` clamp like the CI runner's
     /// 1024×768 screen (visible 1024×674), and with `ISSUE690_SCREEN_STUB=only` the test window too.
@@ -87,13 +87,13 @@ private enum Issue690Frames {
     }
 }
 
-@MainActor private func issue690UnconstrainFrame(_ window: NSWindow) {
+@MainActor func issue690UnconstrainFrame(_ window: NSWindow) {
     _ = Issue690Frames.installed
     Issue690Frames.unconstrained.add(window)
 }
 
 /// Real grants, folder scanning and ImageIO loading in an Access Root, with the window kept ordered out.
-@MainActor private final class Issue690Context {
+@MainActor final class Issue690Context {
     let base: URL, folder: URL, first: URL, second: URL
     let services: AccessServices
     let bookmarks = Issue690Bookmarks()
@@ -200,7 +200,7 @@ private enum Issue690Frames {
 }
 
 /// sRGB bytes of one pixel, top-left origin.
-private func issue690Pixel(_ image: CGImage, x: Int, y: Int) throws -> [UInt8] {
+func issue690Pixel(_ image: CGImage, x: Int, y: Int) throws -> [UInt8] {
     var bytes = [UInt8](repeating: 0, count: 4)
     let context = try #require(CGContext(data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
@@ -208,7 +208,7 @@ private func issue690Pixel(_ image: CGImage, x: Int, y: Int) throws -> [UInt8] {
     return Array(bytes.prefix(3))
 }
 
-private func issue690Image(_ url: URL) throws -> CGImage {
+func issue690Image(_ url: URL) throws -> CGImage {
     let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
     return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
 }
@@ -466,7 +466,7 @@ private func issue690ExpectFlattened(_ image: CGImage, original: CGImage) throws
 // MARK: - #690 WI-6: page 39 in the viewer window
 
 /// A lossless mid-grey PNG of `size`.
-private func issue690GreyPNG(_ size: CGSize) throws -> Data {
+func issue690GreyPNG(_ size: CGSize) throws -> Data {
     let width = Int(size.width), height = Int(size.height)
     let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
@@ -480,7 +480,7 @@ private func issue690GreyPNG(_ size: CGSize) throws -> Data {
     return data as Data
 }
 
-private let page39Size = CGSize(width: 1600, height: 2400)
+let page39Size = CGSize(width: 1600, height: 2400)
 private let rightArrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
 private let leftArrow = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
 
@@ -556,7 +556,7 @@ extension Issue690Context {
 /// Page 39's rectangle drawn by the drag (400,200)→(500,300) at zoom 0.32, origin (352, 16).
 private let page39DragRect = CGRect(x: 150, y: 575, width: 312.5, height: 312.5)
 
-private func issue690CatalogValue(_ key: String, _ language: String) throws -> String {
+func issue690CatalogValue(_ key: String, _ language: String) throws -> String {
     let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("App/Resources/Localizable.xcstrings")
     let root = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
@@ -697,8 +697,8 @@ private func issue690CatalogValue(_ key: String, _ language: String) throws -> S
         #expect(controller.session.annotateMode?.tool == .select)
         strip.button(.rectangle).performClick(nil)
         #expect(controller.session.annotateMode?.tool == .rectangle)
-        strip.button(.arrow).performClick(nil)
-        #expect(controller.session.annotateMode?.tool == .rectangle, "a tool owned by #692 stays disabled")
+        strip.button(.redact).performClick(nil)
+        #expect(controller.session.annotateMode?.tool == .rectangle, "a tool owned by #693 stays disabled")
         try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
         strip.button(.undo).performClick(nil)
         #expect(controller.session.annotateMode?.document.marks == [])
@@ -970,7 +970,7 @@ private func issue690CatalogValue(_ key: String, _ language: String) throws -> S
 
 /// Polls on the main actor for at most `seconds`; false when the condition never held (a RED run fails fast instead
 /// of waiting for the test's time limit).
-@MainActor private func issue690Eventually(_ seconds: Double = 30, _ condition: () -> Bool) async -> Bool {
+@MainActor func issue690Eventually(_ seconds: Double = 30, _ condition: () -> Bool) async -> Bool {
     let deadline = Date().addingTimeInterval(seconds)
     while !condition() {
         if Date() >= deadline { return false }

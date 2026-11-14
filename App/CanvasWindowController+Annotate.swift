@@ -133,7 +133,19 @@ extension CanvasWindowController {
             && session.canEnterAnnotateMode
     }
     var canSaveAnnotatedCopyFromMenu: Bool {
-        session.canSaveAnnotatedCopy && window?.attachedSheet == nil && !annotateSheetShown
+        (session.canSaveAnnotatedCopy || annotatePendingText) && window?.attachedSheet == nil && !annotateSheetShown
+    }
+
+    /// #692: text being typed that ⌘S would commit first, so the first text mark can be saved straight away.
+    private var annotatePendingText: Bool {
+        guard let overlay = annotateViews.overlay, overlay.isEditingText, session.annotateMode?.isSaving == false,
+              let text = overlay.textEditor?.stringValue else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// #692: ends text editing before anything that acts on the marks (save, a strip action, leaving).
+    func commitAnnotateText() {
+        annotateViews.overlay?.commitText()
     }
 
     /// ⌘E.
@@ -146,6 +158,8 @@ extension CanvasWindowController {
     /// ⌘S: stays in Annotate Mode.
     func saveAnnotatedCopy() {
         guard canSaveAnnotatedCopyFromMenu else { return }
+        commitAnnotateText()
+        guard session.canSaveAnnotatedCopy else { syncAnnotateUI(); return }
         session.saveAnnotatedCopy()
         syncAnnotateUI()
     }
@@ -158,12 +172,28 @@ extension CanvasWindowController {
         return false
     }
 
-    /// Keys inside Annotate Mode: V, R, Esc, ⌘Z/⇧⌘Z, and ←/→/↑/↓ nudging the selected mark (never changing
-    /// images). While page 39's sheet is up it takes every key. nil leaves the key to browsing.
+    /// Keys inside Annotate Mode: the tool letters V A R T H P N, ⌫/⌦, Esc, ⌘Z/⇧⌘Z, and ←/→/↑/↓ nudging the
+    /// selected mark (never changing images). While page 39's sheet is up it takes every key; while text is typed
+    /// every plain key goes to the text and Esc only ends the typing; Esc during a drag only cancels it (#692).
+    /// nil leaves the key to browsing.
     func consumeAnnotateKey(_ event: NSEvent) -> Bool? {
         guard session.isAnnotating, window?.attachedSheet == nil, !menuTracking() else { return nil }
         if consumeAnnotateSheetKey(event) { return true }
+        let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+        if let overlay = annotateViews.overlay, overlay.isEditingText {
+            guard plain else { return nil }
+            guard event.keyCode == 53 else { return false }
+            commitAnnotateText()
+            syncAnnotateUI()
+            return true
+        }
+        if event.keyCode == 53, plain, annotateViews.overlay?.cancelDrag() == true {
+            syncAnnotateUI()
+            return true
+        }
         let key: AnnotateKey = switch event.keyCode {
+        case 51: .delete
+        case 117: .forwardDelete
         case 53: .escape
         case 123: .leftArrow
         case 124: .rightArrow
@@ -185,7 +215,9 @@ extension CanvasWindowController {
         case .undo: session.undoAnnotation()
         case .redo: session.redoAnnotation()
         case .selectTool: session.selectAnnotateTool(.select)
-        case .chooseTool, .deleteSelection: return nil
+        case .chooseTool(let tool): session.selectAnnotateTool(tool)
+        // ⌫/⌦ stay consumed without a selection too.
+        case .deleteSelection: session.deleteSelectedAnnotation()
         // ←/→/↑/↓ stay consumed even without a selection, so they never change images.
         case .nudge(let dx, let dy): nudgeAnnotation(dx: dx, dy: dy)
         case .requestLeave:
@@ -202,6 +234,13 @@ extension CanvasWindowController {
         guard session.isAnnotating else { return false }
         if let sheet = annotateViews.sheet {
             sheet.cancelButton.performClick(nil)
+            return true
+        }
+        // #692: Esc first ends the typing, then a drag; only then does it leave.
+        if annotateViews.overlay?.isEditingText == true || annotateViews.overlay?.isDragging == true {
+            commitAnnotateText()
+            annotateViews.overlay?.cancelDrag()
+            syncAnnotateUI()
             return true
         }
         guard session.inspectorFocus.focus == .canvas else { return false }
@@ -241,6 +280,7 @@ extension CanvasWindowController {
     func leaveAnnotateMode(_ reason: AnnotateLeaveReason, proceed: @escaping @MainActor () -> Void,
                            refused: @escaping @MainActor () -> Void = {}) {
         guard annotatePendingLeave == nil, session.annotateMode?.isSaving != true else { refused(); return }
+        commitAnnotateText()
         defer { syncAnnotateUI() }
         switch session.requestLeaveAnnotateMode(reason) {
         case .proceed: proceed()
@@ -426,12 +466,12 @@ extension CanvasWindowController: NSMenuItemValidation {
     /// Edit › Undo/Redo/Copy reach the window controller only when no text field claims them.
     /// Page 39's sheet blocks them like a native sheet would.
     @objc func undo(_ sender: Any?) {
-        guard !annotateSheetShown else { return }
+        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true else { return }
         session.undoAnnotation()
         syncAnnotateUI()
     }
     @objc func redo(_ sender: Any?) {
-        guard !annotateSheetShown else { return }
+        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true else { return }
         session.redoAnnotation()
         syncAnnotateUI()
     }
@@ -441,7 +481,8 @@ extension CanvasWindowController: NSMenuItemValidation {
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        let state = annotateSheetShown ? nil : session.annotateMode
+        // While text is typed, Undo and Redo belong to the text, never to the marks (#692).
+        let state = annotateSheetShown || annotateViews.overlay?.isEditingText == true ? nil : session.annotateMode
         switch item.action {
         case #selector(undo(_:)): return state?.document.canUndo == true
         case #selector(redo(_:)): return state?.document.canRedo == true
