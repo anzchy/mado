@@ -26,7 +26,9 @@ func issue687FixOrientationSixRecognisesUprightText() async throws {
 func issue687FixOversizeInputIsCappedAndRecognised() async throws {
     let bytes = try fixFixture("mixed-oversize.jpg")
     let (prepared, _) = try OnDeviceTextRecognitionProvider.preparedImage(bytes)
-    #expect(max(prepared.width, prepared.height) <= 4096)
+    // Round 2 replaces the long-edge cap with a short-edge and total-pixel cap.
+    #expect(max(prepared.width, prepared.height) <= 5000)
+    #expect(prepared.width * prepared.height <= 40_000_000)
     let text = try await OnDeviceTextRecognitionProvider().recognise(bytes)
     #expect(text.contains("Hello Mado"))
 }
