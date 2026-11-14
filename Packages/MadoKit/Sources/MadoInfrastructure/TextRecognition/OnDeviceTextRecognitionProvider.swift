@@ -15,19 +15,20 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             if $0.bounds.minX != $1.bounds.minX { return $0.bounds.minX < $1.bounds.minX }
             return $0.text < $1.text
         }
-        var rows: [(anchor: CGRect, boxes: [RecognizedTextBox])] = []
+        var rows: [[RecognizedTextBox]] = []
         for box in sorted {
             if let index = rows.firstIndex(where: { row in
-                let overlap = min(row.anchor.maxY, box.bounds.maxY) - max(row.anchor.minY, box.bounds.minY)
-                return overlap > 0.5 * min(row.anchor.height, box.bounds.height)
+                guard let previous = row.last else { return false }
+                let overlap = min(previous.bounds.maxY, box.bounds.maxY) - max(previous.bounds.minY, box.bounds.minY)
+                return overlap > 0.5 * min(previous.bounds.height, box.bounds.height)
             }) {
-                rows[index].boxes.append(box)
+                rows[index].append(box)
             } else {
-                rows.append((anchor: box.bounds, boxes: [box]))
+                rows.append([box])
             }
         }
         return rows.flatMap { row in
-            row.boxes.sorted {
+            row.sorted {
                 if $0.bounds.minX != $1.bounds.minX { return $0.bounds.minX < $1.bounds.minX }
                 if $0.bounds.maxY != $1.bounds.maxY { return $0.bounds.maxY > $1.bounds.maxY }
                 return $0.text < $1.text
