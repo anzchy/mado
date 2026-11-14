@@ -43,14 +43,6 @@ public enum AnnotationGeometry {
         let t = squared == 0 ? 0 : max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / squared))
         return hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
     }
-
-    /// Moves `rect` by whole image pixels, kept inside the image without changing its size.
-    public static func nudge(_ rect: CGRect, dx: Int, dy: Int, imageSize: CGSize) -> CGRect {
-        var moved = rect
-        moved.origin.x = min(max(0, rect.minX + CGFloat(dx)), max(0, imageSize.width - rect.width))
-        moved.origin.y = min(max(0, rect.minY + CGFloat(dy)), max(0, imageSize.height - rect.height))
-        return moved
-    }
 }
 
 /// #692: a handle of the selected mark. Rectangles, highlighter and pen strokes have the eight box handles; an arrow
