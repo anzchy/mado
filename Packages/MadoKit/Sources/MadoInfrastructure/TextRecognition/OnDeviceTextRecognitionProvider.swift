@@ -36,18 +36,22 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     }
     private let performRequest: @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void
     private let beforePerform: @Sendable () async -> Void
+    private let cancelRequest: @Sendable (VNRecognizeTextRequest) -> Void
 
     public init() {
         performRequest = { handler, request in try handler.perform([request]) }
         beforePerform = {}
+        cancelRequest = { $0.cancel() }
     }
 
     init(
         performRequest: @escaping @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void,
-        beforePerform: @escaping @Sendable () async -> Void = {}
+        beforePerform: @escaping @Sendable () async -> Void = {},
+        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void = { $0.cancel() }
     ) {
         self.performRequest = performRequest
         self.beforePerform = beforePerform
+        self.cancelRequest = cancelRequest
     }
 
     public func recognise(_ image: Data) async throws(TextRecognitionError) -> String {
@@ -64,7 +68,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
                 await beforePerform()
                 try performRequest(handler, request)
             } onCancel: {
-                request.cancel()
+                cancelRequest(request)
             }
             try Task.checkCancellation()
 
@@ -77,7 +81,9 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
 
         do {
             return try await withTaskCancellationHandler {
-                try await worker.value
+                let text = try await worker.value
+                if Task.isCancelled { throw CancellationError() }
+                return text
             } onCancel: {
                 worker.cancel()
             }
@@ -87,7 +93,8 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             throw error
         } catch {
             if Task.isCancelled { throw .cancelled }
-            throw .recognitionFailed
+            let detail = error as NSError
+            throw .recognitionFailed(domain: detail.domain, code: detail.code)
         }
     }
 

@@ -86,7 +86,7 @@ func issue687VisionUnexpectedRequestFailureIsTyped() async throws {
         _ = try await provider.recognise(recognitionFixture("mixed.png"))
         Issue.record("Expected recognitionFailed")
     } catch {
-        #expect(error as? TextRecognitionError == .recognitionFailed)
+        #expect(error as? TextRecognitionError == .recognitionFailed(domain: "vision-test", code: 1))
     }
 }
 
