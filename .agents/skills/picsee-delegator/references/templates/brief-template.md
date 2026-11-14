@@ -85,7 +85,7 @@ the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call, i
 - Run it on the final head of the first handoff **and on the final head of every fix round**; a new commit needs a new
   evidence comment and record (`.build/mado-verify/<head>.json`).
 - The handoff names the evidence comment URL and the full head SHA it covers. The delegator checks both with
-  `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>` before audit and before
+  `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --issue <n> --worktree <wt>` before audit and before
   merge; a failed check returns the item to you.
 
 ## Device smoke (implementer smoke, not validation) — only if the brief needs it

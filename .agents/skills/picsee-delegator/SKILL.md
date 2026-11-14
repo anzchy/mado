@@ -87,8 +87,9 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    See [the listener procedure](references/guide.md#durable-listener-notification). Scope stops → approve minimal hunks in an amendment file.
    Fixture-only test mistakes → approve. Network hang → `herdr pane send-keys <pane> Escape`, then "resume…".
    Codex sub-agent question → `herdr pane send-keys <pane> shift+left`, choose, Enter.
-4. **Audit** — before dispatch, run `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>`
-   for the handoff's final head and confirm the printed comment URL is the one in the handoff; a failure returns the item to
+4. **Audit** — before dispatch, run `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --issue <n> --worktree <wt>`
+   for the handoff's final head and the brief's issue, and confirm the printed comment URL is the one in the handoff; the
+   script does not fetch the comment, so open the comment by hand and check it names that head. A failure returns the item to
    the implementer. A `WARNING apptests NOT VERIFIED` line (Codex panes have no key window) means your own owner-gates
    `apptests=` result below is the binding App test evidence. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
@@ -141,8 +142,10 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    before merge** (user 2026-10-27, #175): you, not the implementer, drive one flow through the changed path in a
    signed build of the PR head under the GUI lock; `FAIL` blocks, `NOT VERIFIED` needs a named blocker and the user's
    OK, App code changed since → redo. The smoke promotes no ledger row; full parity stays batched (step 9).
-   Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>` for the audited
-   head in the implementer's worktree; after a rebase, step 6's `CODE same` links the PR head to that audited head.
+   Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <audited-sha> --issue <n> --worktree <wt>`
+   for the **audited** head in the implementer's worktree (it prints `case=head-moved` once a rebase moved that worktree).
+   The PR head after a rebase is covered by step 6's `rebase-verify.sh` `CODE same`; a `CODE differ` rebase needs a new
+   mado-verify run on the new head, and the check for that head, before merge.
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
    to register, `gh pr checks --watch`, then `gh pr merge --rebase` (authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
