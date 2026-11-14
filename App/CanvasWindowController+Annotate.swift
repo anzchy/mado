@@ -143,6 +143,9 @@ extension CanvasWindowController {
         return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// #692 fix r1: a move or resize is held on the overlay.
+    var annotateDragging: Bool { annotateViews.overlay?.isDragging == true }
+
     /// #692: ends text editing before anything that acts on the marks (save, a strip action, leaving).
     func commitAnnotateText() {
         annotateViews.overlay?.commitText()
@@ -210,6 +213,14 @@ extension CanvasWindowController {
         let focus = focusContext
         guard let action = AnnotateKeyPolicy.action(key: key, modifiers: modifiers, active: true,
                                                     typing: focus == .textInput) else { return nil }
+        // #692 fix r1: a held move or resize writes its mark back by index on mouse-up, so nothing may change the
+        // marks under it; these keys are consumed and ignored until the mouse is released.
+        if annotateDragging {
+            switch action {
+            case .undo, .redo, .deleteSelection, .nudge: return true
+            default: break
+            }
+        }
         switch action {
         case .selectRectangle: session.selectAnnotateTool(.rectangle)
         case .undo: session.undoAnnotation()
@@ -466,12 +477,12 @@ extension CanvasWindowController: NSMenuItemValidation {
     /// Edit › Undo/Redo/Copy reach the window controller only when no text field claims them.
     /// Page 39's sheet blocks them like a native sheet would.
     @objc func undo(_ sender: Any?) {
-        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true else { return }
+        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true, !annotateDragging else { return }
         session.undoAnnotation()
         syncAnnotateUI()
     }
     @objc func redo(_ sender: Any?) {
-        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true else { return }
+        guard !annotateSheetShown, annotateViews.overlay?.isEditingText != true, !annotateDragging else { return }
         session.redoAnnotation()
         syncAnnotateUI()
     }
@@ -481,8 +492,10 @@ extension CanvasWindowController: NSMenuItemValidation {
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        // While text is typed, Undo and Redo belong to the text, never to the marks (#692).
-        let state = annotateSheetShown || annotateViews.overlay?.isEditingText == true ? nil : session.annotateMode
+        // While text is typed, Undo and Redo belong to the text, never to the marks (#692); during a held move or
+        // resize they are off (#692 fix r1).
+        let blocked = annotateSheetShown || annotateViews.overlay?.isEditingText == true || annotateDragging
+        let state = blocked ? nil : session.annotateMode
         switch item.action {
         case #selector(undo(_:)): return state?.document.canUndo == true
         case #selector(redo(_:)): return state?.document.canRedo == true
