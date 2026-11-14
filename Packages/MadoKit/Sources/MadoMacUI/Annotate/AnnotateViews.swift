@@ -21,8 +21,6 @@ public struct AnnotateStripState: Equatable, Sendable {
 
 /// Fixed paints that are not theme tokens.
 public enum AnnotatePaint {
-    /// Page 39's annotation red #dc2626, the same in both appearances (#680 r1 Q8).
-    public static var mark: NSColor { NSColor(srgbRed: 220.0 / 255, green: 38.0 / 255, blue: 38.0 / 255, alpha: 1) }
     /// `--color-running-text` #16a34a, the same in both appearances; the ✓ of the save confirmation. Not a
     /// DesignColor token: the registry has no running-text entry yet (#690 Still open).
     public static var confirmationTick: NSColor { NSColor(srgbRed: 22.0 / 255, green: 163.0 / 255, blue: 74.0 / 255, alpha: 1) }
@@ -532,7 +530,7 @@ public enum AnnotatePaint {
             case .text:
                 if let hit = AnnotationGeometry.hitTest(transform.viewToImage(end), marks: marks), marks[hit].kind == .text {
                     let mark = marks[hit]
-                    beginEditing(index: hit, text: mark.text, origin: mark.points.first ?? mark.rect.origin, style: mark.style)
+                    beginEditing(index: hit, text: mark.text, origin: mark.anchor, style: mark.style)
                 } else {
                     beginEditing(index: nil, text: "", origin: transform.viewToImage(end), style: screenStyle)
                 }

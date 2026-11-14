@@ -136,7 +136,7 @@ extension AnnotationGeometry {
         case .bottom: return CGPoint(x: r.midX, y: r.maxY)
         case .bottomLeft: return CGPoint(x: r.minX, y: r.maxY)
         case .left: return CGPoint(x: r.minX, y: r.midY)
-        case .tail: return mark.points.first ?? r.origin
+        case .tail: return mark.anchor
         case .tip: return mark.points.last ?? r.origin
         }
     }

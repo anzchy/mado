@@ -91,7 +91,7 @@ extension ViewerSession {
             annotateMode?.selectedMark = index
             return deleteSelectedAnnotation()
         }
-        return replaceAnnotationMark(at: index, with: measured(old.points.first ?? old.rect.origin, old.style))
+        return replaceAnnotationMark(at: index, with: measured(old.anchor, old.style))
     }
 
     @discardableResult public func undoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.undo() ?? false) }

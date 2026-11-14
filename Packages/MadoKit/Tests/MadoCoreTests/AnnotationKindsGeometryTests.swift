@@ -225,6 +225,10 @@ private func px(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: (x - 352) / 
     let arrow = AnnotationMark.arrow(tail: CGPoint(x: 1, y: 2), tip: CGPoint(x: 30, y: 40))
     #expect(AnnotationGeometry.handlePoint(.tail, of: arrow) == CGPoint(x: 1, y: 2))
     #expect(AnnotationGeometry.handlePoint(.tip, of: arrow) == CGPoint(x: 30, y: 40))
+    // A mark without points falls back to its bounds' origin for the anchor and both arrow handles.
+    #expect(rect.anchor == CGPoint(x: 10, y: 20) && arrow.anchor == CGPoint(x: 1, y: 2))
+    #expect(AnnotationGeometry.handlePoint(.tail, of: rect) == CGPoint(x: 10, y: 20))
+    #expect(AnnotationGeometry.handlePoint(.tip, of: rect) == CGPoint(x: 10, y: 20))
 }
 
 @Test(.timeLimit(.minutes(2))) func issue692ResizeRectangleByEveryHandle() {

@@ -559,3 +559,28 @@ private let boxMark = AnnotationMark(rect: CGRect(x: 100, y: 100, width: 400, he
     #expect(commits == ["one", "two"])
     #expect(!overlay.isEditingText)
 }
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue692ReturnAndEscapeEndTypingAndTheFieldGrowsWithTheText() throws {
+    let (overlay, window) = host()
+    defer { window.close() }
+    var commits: [String] = []
+    overlay.onCommitText = { _, text, _, _ in commits.append(text) }
+    overlay.tool = .text
+    try click(overlay, CGPoint(x: 600, y: 400))
+    let field = try #require(overlay.textEditor)
+    let narrow = field.frame.width
+    field.stringValue = "a much longer line of annotation text"
+    overlay.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+    #expect(field.frame.width > narrow, "the field widens as the text grows")
+    #expect(abs(field.frame.minX - 600) <= 4, "and keeps its origin")
+    let textView = NSTextView()
+    #expect(!overlay.control(field, textView: textView, doCommandBy: #selector(NSResponder.moveLeft(_:))))
+    #expect(overlay.isEditingText && commits.isEmpty, "other commands stay with the field")
+    #expect(overlay.control(field, textView: textView, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+    #expect(!overlay.isEditingText && commits == ["a much longer line of annotation text"], "Return commits")
+    try click(overlay, CGPoint(x: 700, y: 500))
+    overlay.textEditor?.stringValue = "esc"
+    let second = try #require(overlay.textEditor)
+    #expect(overlay.control(second, textView: textView, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+    #expect(!overlay.isEditingText && commits.last == "esc", "Esc commits too; it does not discard")
+}
