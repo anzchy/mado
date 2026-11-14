@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSy
 import path from 'node:path';
 import os from 'node:os';
 import { loadManifest, discoveryVerdict, parseListing, scenarioFilter, swiftFlags, TRASH_LIMITS } from './trash-lane.mjs';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const root = process.cwd();
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'mado-trash-lane-'));
@@ -123,7 +124,7 @@ else if(mode==='orphan'){
 
 function environment() {
   const home = mkdtempSync(path.join(scratch, 'home-'));
-  const env = { ...process.env, HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'),
+  const env = { ...fixtureEnv(), HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'),
     PICSEE_MDPRO_LOCK: 'off', MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '',
     PICSEE_HEAVY_LOCK_EXEC_SECS: '30' };
   delete env.PICSEE_HEAVY_CONTROL_FD;

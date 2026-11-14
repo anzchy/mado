@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { UNIT_LIMITS } from './unit-lane.mjs';
 import { coverageAtomicSwiftArgs, coverageAtomicScratchPath } from '../ci/coverage-atomic.mjs';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const launcher = path.join(root, 'scripts/tdd/unit-lane.mjs');
@@ -40,7 +41,7 @@ if(process.env.MODE==='hang'){
  process.exit(Number(process.env.STATUS||0));
 }
 `, { mode: 0o755 });
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'),
+  const env = { ...fixtureEnv(), PATH: `${bin}:${process.env.PATH}`, PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'),
     PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'), PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
     ATTEMPTS: path.join(dir, 'attempts'), STARTED: path.join(dir, 'started'), LEADER: path.join(dir, 'leader'), HELPER: path.join(dir, 'helper') };
   return { dir, env };
@@ -297,7 +298,7 @@ if(args.includes('-A')){
  }
 }else{const r=cp.spawnSync('/bin/ps',args,{encoding:'utf8',maxBuffer:64*1024*1024});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exitCode=r.status??1;}
 `);
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, M1_MODE: mode,
+  const env = { ...fixtureEnv(), PATH: `${bin}:${process.env.PATH}`, M1_MODE: mode,
     PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '7200',
     M1_OWNED: files.owned, M1_LEADER_READY: files.leaderReady, M1_HELPER_READY: files.helperReady,

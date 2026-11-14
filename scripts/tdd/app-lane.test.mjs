@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { runAppLane, parseAppResult } from './app-lane.mjs';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.meta.url), 'utf8');
 const selected = readFileSync(new URL('./fixtures/i411-selected.txt', import.meta.url), 'utf8');
@@ -68,7 +69,7 @@ test('heldAndUnheldLanesPreservePassAndAssertionFailure App',()=>{
  writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  for(const held of [false,true]) for(const fault of [false,true]){
-  const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),APP_EXIT:'0',
+  const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),APP_EXIT:'0',
    APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',
    PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',APP_STATUS_FAULT:fault?'1':'0'};
   writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nif(process.env.APP_STATUS_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
@@ -89,7 +90,7 @@ test('native App completed assertion failure retains one count in both HELD mode
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(process.env.APP_FIXTURE));process.exitCode=1;\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
- const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
+ const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
   PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  for(const held of [false,true]){
@@ -106,7 +107,7 @@ function appNativeFailureHarness(extraEnv={}){
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst fs=require('node:fs');process.stdout.write(fs.readFileSync(process.env.APP_FIXTURE));process.stderr.write('[heavy-lock] complete cleanup\\n');if(process.env.APP_HANG==='1'||process.env.APP_CANCEL==='1'){process.on('SIGTERM',()=>process.exit(1));fs.writeFileSync(process.env.APP_PID,String(process.pid));if(process.env.APP_CANCEL==='1')process.kill(process.ppid,'SIGTERM');setInterval(()=>{},1000);}process.exitCode=1;\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
- const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
+ const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
   APP_PID:path.join(dir,'pid'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',
   PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
  const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:20000});
@@ -141,7 +142,7 @@ test('appDrainExpiryWithSurvivingDescendantHasNoGreenGate',()=>{
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst fs=require('node:fs');const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(process.env.APP_PID,String(c.pid));process.stdout.write(fs.readFileSync(process.env.APP_FIXTURE));process.exit(0);\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
- const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
+ const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
   APP_EVIDENCE:path.join(dir,'evidence.log'),APP_PID:path.join(dir,'pid'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',
   PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.1',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'};
  const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:20000});
@@ -165,7 +166,7 @@ test('repeatWorkerWrappedNativeSpawnCannotBypassCleanupStatus',()=>{
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(process.env.APP_FIXTURE));\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runAppIteration} from ${JSON.stringify(new URL('../ci/app-repeat-worker.mjs',import.meta.url).href)};\nprocess.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runAppIteration({evidencePath:process.env.APP_EVIDENCE});\n`);
- const env={...process.env,PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
+ const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
   APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
@@ -430,7 +431,7 @@ if(process.env.PICSEE_I524_CLEANUP_PROBE) test('cleanup failure sentinel',()=>{
 });
 test('harness removes its directories after a failing assertion in a real test process',()=>{
  const h=harness();const marker=path.join(h.dir,'child-directory.txt');
- const childEnv={...process.env,PICSEE_I524_CLEANUP_PROBE:marker};
+ const childEnv={...fixtureEnv(),PICSEE_I524_CLEANUP_PROBE:marker};
  delete childEnv.NODE_TEST_CONTEXT; // The subprocess is a new runner, not a recursive worker.
  const child=spawnSync(process.execPath,['--test','--test-name-pattern=cleanup failure sentinel',fileURLToPath(import.meta.url)],{
   encoding:'utf8',timeout:10000,env:childEnv,
@@ -520,7 +521,7 @@ const status=runAppLane({quarantinePath:${JSON.stringify(h.quarantinePath)},env:
 }});
 process.exitCode=status;
 `);
- const lockEnv={...process.env,PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
+ const lockEnv={...fixtureEnv(),PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
  if(nested){lockEnv.PICSEE_HEAVY_LOCK_HELD='1';lockEnv.PICSEE_HEAVY_CI_TOP_LEVEL='1';lockEnv.GITHUB_ACTIONS='true';}
  else delete lockEnv.PICSEE_HEAVY_LOCK_HELD;
  delete lockEnv.MDPRO_HEAVY_LOCK_HELD;delete lockEnv.NODE_TEST_CONTEXT;
@@ -561,12 +562,12 @@ test('discoveryOuterCancelAndTimeoutDrainRegisteredGroup', {timeout:15000}, asyn
   writeFileSync(script,`
 import {spawnSync} from 'node:child_process';
 import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
-const env={...process.env,PICSEE_HEAVY_LOCK_EXEC_SECS:'5'};
+const env={...process.env,PICSEE_HEAVY_LOCK_EXEC_SECS:'5'}; /* fixture-env: sanitized — this job's handoff is the fixture supervisor's own */
 process.exitCode=runAppLane({quarantinePath:${JSON.stringify(quarantinePath)},env,
  spawn:(cmd,args,opts)=>cmd==='xcrun'?{status:0,stdout:'/platform\\n',stderr:''}:
  spawnSync(cmd,[args[0],'-e',args[2],args[3],process.execPath,'-e',${JSON.stringify(native)}],opts)});
 `);
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',
+  const env={...fixtureEnv(),PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',
     PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:action==='timeout'?'0.5':'5',
     PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
   delete env.NODE_TEST_CONTEXT;
@@ -668,7 +669,7 @@ writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=sta
  writeFileSync(shell,shape==='pipeline'
   ? `${node} ${quotedLane} | /bin/cat\nstatus=$?\nprintf '%s' "$status" > ${shellQuote(siblingState)}\nexit "$status"\n`
   : `${node} ${shellQuote(sibling)} >/dev/null 2>&1 &\nsibling=$!\nwhile [ ! -s ${shellQuote(siblingPid)} ]; do sleep 0.01; done\n${node} ${quotedLane}\nif kill -0 "$sibling" 2>/dev/null; then printf alive; else printf dead; fi > ${shellQuote(siblingState)}\nkill -KILL "$sibling" 2>/dev/null\nwait "$sibling" 2>/dev/null\nexit 0\n`);
- const env={...process.env,PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
+ const env={...fixtureEnv(),PICSEE_HEAVY_LOCK:path.join(h.dir,'heavy.lock'),PICSEE_MDPRO_LOCK:path.join(h.dir,'shared.lock'),PICSEE_HEAVY_LOCK_WAIT_SECS:'5'};
  delete env.PICSEE_HEAVY_LOCK_HELD;delete env.MDPRO_HEAVY_LOCK_HELD;delete env.NODE_TEST_CONTEXT;
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const runner=spawn(lock,['/bin/sh',shell],{env,detached:true,stdio:['ignore','pipe','pipe']});
@@ -805,7 +806,7 @@ test('CLI forwards positional arguments and inherited filter into validation',()
  writeFileSync(path.join(dir,'xcrun'),'#!/bin/sh\nexit 0\n',{mode:0o755});
  for(const [argv,env] of [[[' '],{}],[['keep','extra'],{}],[[],{PICSEE_APP_FILTER:' '}]]) {
   const run=spawnSync(process.execPath,[fileURLToPath(new URL('./app-lane.mjs',import.meta.url)),...argv],{
-   encoding:'utf8',env:{...process.env,PATH:dir+path.delimiter+process.env.PATH,PICSEE_APP_FILTER:undefined,...env},timeout:10000,
+   encoding:'utf8',env:{...fixtureEnv(),PATH:dir+path.delimiter+process.env.PATH,PICSEE_APP_FILTER:undefined,...env},timeout:10000,
   });
   assert.equal(run.status,64,run.stderr);assert.match(run.stderr,/filter|usage/);assert.doesNotMatch(run.stdout,/Tests run:/);
  }
@@ -941,7 +942,7 @@ test('i587 UTC expiry is independent of the process timezone',()=>{
  try {
  for(const TZ of ['Pacific/Kiritimati','Etc/GMT+12']) {
   const r=spawnSync(process.execPath,['--test','--test-name-pattern','^i587 UTC expiry probe$',fileURLToPath(import.meta.url)],{
-   encoding:'utf8',timeout:30000,env:{...process.env,TZ,I587_TZ_PROBE:'1'},
+   encoding:'utf8',timeout:30000,env:{...fixtureEnv(),TZ,I587_TZ_PROBE:'1'},
   });
   assert.equal(r.status,0,`${TZ}\n${r.stdout}\n${r.stderr}`);
   assert.match(r.stdout,/i587 UTC expiry probe/);
@@ -1094,7 +1095,7 @@ function hostedNativeHarness(held,failed,fault,descendant=false, extraEnv={}){
  writeFileSync(path.join(dir,'xcrun'),`#!${process.execPath}\nconst failed=process.env.HOST_FAIL==='1';const summary={totalTestCount:1,passedTests:failed?0:1,failedTests:failed?1:0,skippedTests:0,testFailures:failed?[{testName:'hostProof()'}]:[],result:failed?'Failed':'Passed'};const tree={testNodes:[{nodeType:'Test Case',nodeIdentifier:'hostProof()',result:failed?'Failed':'Passed'}]};process.stdout.write(JSON.stringify(process.argv.includes('summary')?summary:tree));\n`,{mode:0o755});
  const launcher=path.join(dir,'lane.mjs');
  writeFileSync(launcher,`import {runHostedAppLane} from ${JSON.stringify(new URL('./hosted-app-lane.mjs',import.meta.url).href)};\nif(process.env.HOST_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runHostedAppLane({selected:['hostProof()'],evidencePath:process.env.HOST_EVIDENCE}).status;\n`);
- const env={...process.env,PATH:`${dir}:${process.env.PATH}`,HOST_FAIL:failed?'1':'0',HOST_FAULT:fault?'1':'0',HOST_DESCENDANT:descendant?'1':'0',HOST_PID:path.join(dir,'pid'),HOST_EVIDENCE:path.join(dir,'evidence.log'),
+ const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,HOST_FAIL:failed?'1':'0',HOST_FAULT:fault?'1':'0',HOST_DESCENDANT:descendant?'1':'0',HOST_PID:path.join(dir,'pid'),HOST_EVIDENCE:path.join(dir,'evidence.log'),
   PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});

@@ -5,6 +5,7 @@ import {existsSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} fr
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
 const alive=pid=>{
@@ -55,7 +56,7 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
       `const mark=spawnSync(${JSON.stringify(lock)},['--mark-host-unknown'],`+
       `{env:process.env,stdio,timeout:2000});if(mark.status!==0)process.exit(73);`+
       `writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{},1000);\n`);
-    const env={...process.env,PICSEE_HEAVY_LOCK:lockPath,PICSEE_MDPRO_LOCK:'off',
+    const env={...fixtureEnv(),PICSEE_HEAVY_LOCK:lockPath,PICSEE_MDPRO_LOCK:'off',
       PICSEE_HEAVY_LOCK_WAIT_SECS:'0.3',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
       PICSEE_HEAVY_LOCK_EXEC_SECS:trigger==='timeout'?'0.9':'5',PICSEE_HEAVY_STATUS_PATH:statusPath,
       ...(mode==='ci'?{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1'}:
