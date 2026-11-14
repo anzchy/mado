@@ -28,52 +28,58 @@ private func recognitionFixture(_ name: String) throws -> Data {
     return try Data(contentsOf: root.appendingPathComponent("TestAssets/TextRecognition/\(name)"))
 }
 
-@Test(.timeLimit(.minutes(2)))
-func issue687VisionRecognisesChineseAndEnglishInReadingOrder() async throws {
-    let provider = OnDeviceTextRecognitionProvider()
-    let text = try await provider.recognise(recognitionFixture("mixed.png"))
-    #expect(text.contains("中文"))
-    #expect(text.contains("Hello Mado"))
-    #expect(text.contains("\n"))
-    let chinese = try #require(text.range(of: "中文"))
-    let english = try #require(text.range(of: "Hello Mado"))
-    #expect(chinese.lowerBound < english.lowerBound)
-    let side = try #require(text.range(of: "SIDE"))
-    #expect(chinese.lowerBound < side.lowerBound)
-    #expect(side.lowerBound < english.lowerBound)
-}
-
-@Test(.timeLimit(.minutes(2)))
-func issue687VisionBlankImageIsEmpty() async throws {
-    let provider = OnDeviceTextRecognitionProvider()
-    let text = try await provider.recognise(recognitionFixture("blank.png"))
-    #expect(text.isEmpty)
-}
-
-@Test(.timeLimit(.minutes(2)))
-func issue687VisionInvalidImageIsTypedError() async {
-    let provider = OnDeviceTextRecognitionProvider()
-    do {
-        _ = try await provider.recognise(Data([0x00, 0x01, 0x02]))
-        Issue.record("Expected invalidImage")
-    } catch {
-        #expect(error == .invalidImage)
+/// Tests that run the real Vision recogniser. #706: at most one runs at a time, so on a
+/// runner with few CPUs they cannot crowd each other out of Vision's own queues.
+/// `OnDeviceTextRecognitionFixTests.swift` adds more tests to this suite.
+@Suite(.serialized)
+struct OnDeviceRealVisionTests {
+    @Test(.timeLimit(.minutes(2)))
+    func issue687VisionRecognisesChineseAndEnglishInReadingOrder() async throws {
+        let provider = OnDeviceTextRecognitionProvider()
+        let text = try await provider.recognise(recognitionFixture("mixed.png"))
+        #expect(text.contains("中文"))
+        #expect(text.contains("Hello Mado"))
+        #expect(text.contains("\n"))
+        let chinese = try #require(text.range(of: "中文"))
+        let english = try #require(text.range(of: "Hello Mado"))
+        #expect(chinese.lowerBound < english.lowerBound)
+        let side = try #require(text.range(of: "SIDE"))
+        #expect(chinese.lowerBound < side.lowerBound)
+        #expect(side.lowerBound < english.lowerBound)
     }
-}
 
-@Test(.timeLimit(.minutes(2)))
-func issue687VisionPreCancelledTaskIsTypedError() async throws {
-    let bytes = try recognitionFixture("mixed.png")
-    let provider = OnDeviceTextRecognitionProvider()
-    let task = Task {
-        withUnsafeCurrentTask { $0?.cancel() }
-        return try await provider.recognise(bytes)
+    @Test(.timeLimit(.minutes(2)))
+    func issue687VisionBlankImageIsEmpty() async throws {
+        let provider = OnDeviceTextRecognitionProvider()
+        let text = try await provider.recognise(recognitionFixture("blank.png"))
+        #expect(text.isEmpty)
     }
-    do {
-        _ = try await task.value
-        Issue.record("Expected cancelled")
-    } catch {
-        #expect(error as? TextRecognitionError == .cancelled)
+
+    @Test(.timeLimit(.minutes(2)))
+    func issue687VisionInvalidImageIsTypedError() async {
+        let provider = OnDeviceTextRecognitionProvider()
+        do {
+            _ = try await provider.recognise(Data([0x00, 0x01, 0x02]))
+            Issue.record("Expected invalidImage")
+        } catch {
+            #expect(error == .invalidImage)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func issue687VisionPreCancelledTaskIsTypedError() async throws {
+        let bytes = try recognitionFixture("mixed.png")
+        let provider = OnDeviceTextRecognitionProvider()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await provider.recognise(bytes)
+        }
+        do {
+            _ = try await task.value
+            Issue.record("Expected cancelled")
+        } catch {
+            #expect(error as? TextRecognitionError == .cancelled)
+        }
     }
 }
 
