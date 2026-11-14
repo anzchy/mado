@@ -135,7 +135,7 @@ public enum AnnotatePaint {
     static let contentHeight: CGFloat = 508
     private static let tools: [AnnotateStripItem] = [.select, .arrow, .rectangle, .text, .highlighter, .pen, .redact,
                                                      .crop, .step, .undo, .redo]
-    private static let unimplemented: Set<AnnotateStripItem> = [.arrow, .text, .highlighter, .pen, .redact, .crop, .step]
+    private static let unimplemented: Set<AnnotateStripItem> = [.redact, .crop]
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -219,11 +219,16 @@ public enum AnnotatePaint {
         }
     }
 
-    /// Only keys Mado handles get a letter; the tools of #692/#693 show their bare name.
+    /// Only keys Mado handles get a letter; the tools of #693 show their bare name.
     private static func shortcut(_ item: AnnotateStripItem) -> String? {
         switch item {
         case .select: "V"
+        case .arrow: "A"
         case .rectangle: "R"
+        case .text: "T"
+        case .highlighter: "H"
+        case .pen: "P"
+        case .step: "N"
         case .undo: "⌘Z"
         case .redo: "⇧⌘Z"
         case .copy: "⌘C"
@@ -253,9 +258,12 @@ public enum AnnotatePaint {
     public func update(_ state: AnnotateStripState) {
         self.state = state
         for (item, button) in buttons {
+            if let tool = Self.tool(item) {
+                button.isEnabled = true
+                setPressed(button, state.tool == tool)
+                continue
+            }
             switch item {
-            case .select: button.isEnabled = true; setPressed(button, state.tool == .select)
-            case .rectangle: button.isEnabled = true; setPressed(button, state.tool == .rectangle)
             case .undo: button.isEnabled = state.canUndo
             case .redo: button.isEnabled = state.canRedo
             case .copy: button.isEnabled = state.canCopy
@@ -263,6 +271,19 @@ public enum AnnotatePaint {
             case .done: button.isEnabled = true
             default: button.isEnabled = false; setPressed(button, false)
             }
+        }
+    }
+
+    private static func tool(_ item: AnnotateStripItem) -> AnnotateTool? {
+        switch item {
+        case .select: .select
+        case .arrow: .arrow
+        case .rectangle: .rectangle
+        case .text: .text
+        case .highlighter: .highlighter
+        case .pen: .pen
+        case .step: .step
+        default: nil
         }
     }
 
@@ -276,14 +297,14 @@ public enum AnnotatePaint {
         guard sender.isEnabled, let item = buttons.first(where: { $0.value === sender })?.key,
               !Self.unimplemented.contains(item) else { return }
         update(state)
-        let action: AnnotateStripAction = switch item {
-        case .select: .tool(.select)
-        case .rectangle: .tool(.rectangle)
-        case .undo: .undo
+        let action: AnnotateStripAction = if let tool = Self.tool(item) { .tool(tool) } else {
+            switch item {
+            case .undo: .undo
         case .redo: .redo
         case .copy: .copy
-        case .save: .save
-        default: .done
+            case .save: .save
+            default: .done
+            }
         }
         onAction?(action)
     }
@@ -330,19 +351,51 @@ public enum AnnotatePaint {
 
 // MARK: - Marks
 
-/// Draws the marks over the canvas and turns drags into rectangles and clicks into selections. View points are
-/// top-left; `transform` maps image pixels to them.
-@MainActor public final class AnnotationOverlayView: NSView {
+/// Draws the marks over the canvas through the copy's renderer, so screen and copy look the same (#692), and turns
+/// drags and clicks into marks, selections, moves, resizes and text. View points are top-left; `transform` maps image
+/// pixels to them.
+@MainActor public final class AnnotationOverlayView: NSView, NSTextFieldDelegate {
     public var isActive = false
     public var marks: [AnnotationMark] = [] { didSet { if marks != oldValue { needsDisplay = true } } }
     public var selectedMark: Int? { didSet { if selectedMark != oldValue { needsDisplay = true } } }
-    public var tool: AnnotateTool?
-    public var transform: CanvasTransform? { didSet { needsDisplay = true } }
+    /// Changing the tool drops a drag in progress and ends text editing (#692).
+    public var tool: AnnotateTool? {
+        didSet {
+            guard tool != oldValue else { return }
+            cancelDrag()
+            commitText()
+        }
+    }
+    public var transform: CanvasTransform? { didSet { needsDisplay = true; placeTextEditor() } }
     public var imageSize: CGSize = .zero
     public var onAddMark: ((AnnotationMark) -> Void)?
     public var onSelect: ((Int?) -> Void)?
-    private var dragStart: CGPoint?
-    private var dragCurrent: CGPoint?
+    /// #692: a move or resize of mark `index`, once on mouse-up; a plain click never calls it.
+    public var onReplace: ((Int, AnnotationMark) -> Void)?
+    /// #692: text editing ended: the edited mark's index (nil for a new one), the text, the origin (image pixels)
+    /// and the style for a new mark.
+    public var onCommitText: ((Int?, String, CGPoint, AnnotationStyle) -> Void)?
+    public private(set) var textEditor: NSTextField?
+    public var isEditingText: Bool { editing != nil }
+    /// The text mark being edited (hidden while its field is up); nil for a new one or none.
+    public var editingMark: Int? { editing?.index }
+    public var isDragging: Bool { drag != nil }
+
+    private enum Drag {
+        /// A rectangle, arrow, highlighter or pen: every sample, in view points.
+        case create(AnnotateTool, [CGPoint])
+        case move(Int, from: CGPoint, original: AnnotationMark)
+        case resize(Int, AnnotationHandle, original: AnnotationMark)
+        /// Select on empty canvas, a step marker or a text click: acts on mouse-up.
+        case click
+    }
+    private var drag: Drag?
+    /// What the drag would commit now: a replacement for `index`, or a new mark.
+    private var preview: (index: Int?, mark: AnnotationMark)?
+    private var editing: (index: Int?, origin: CGPoint, style: AnnotationStyle)?
+
+    private static let handleSize: CGFloat = 7
+    private static let handleReach: CGFloat = 6
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -358,7 +411,9 @@ public enum AnnotatePaint {
     public override func hitTest(_ point: NSPoint) -> NSView? {
         guard isActive, let transform else { return nil }
         let image = viewRect(CGRect(origin: .zero, size: imageSize), transform)
-        return image.contains(convert(point, from: superview)) ? super.hitTest(point) : nil
+        let local = convert(point, from: superview)
+        if let textEditor, textEditor.frame.contains(local) { return super.hitTest(point) }
+        return image.contains(local) ? super.hitTest(point) : nil
     }
 
     private var pointsPerImagePixel: Double {
@@ -366,67 +421,220 @@ public enum AnnotatePaint {
         return transform.zoom / transform.backingScale
     }
 
+    private var screenStyle: AnnotationStyle { .forScreen(pointsPerImagePixel: pointsPerImagePixel) }
+
     private func viewRect(_ rect: CGRect, _ transform: CanvasTransform) -> CGRect {
         let a = transform.imageToView(rect.origin), b = transform.imageToView(CGPoint(x: rect.maxX, y: rect.maxY))
         return CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y)
     }
 
+    // MARK: Drawing
+
     public override func draw(_ dirtyRect: NSRect) {
-        guard let transform else { return }
+        guard let transform, let context = NSGraphicsContext.current?.cgContext else { return }
+        var shown = marks
+        if let preview {
+            if let index = preview.index, shown.indices.contains(index) { shown[index] = preview.mark }
+            else if preview.index == nil { shown.append(preview.mark) }
+        }
         let scale = pointsPerImagePixel
-        for mark in marks {
-            let path = NSBezierPath(rect: viewRect(mark.rect, transform))
-            path.lineWidth = mark.style.lineWidth * scale
-            NSColor(srgbRed: mark.style.red, green: mark.style.green, blue: mark.style.blue, alpha: 1).setStroke()
-            path.stroke()
-        }
-        if let selectedMark, marks.indices.contains(selectedMark) {
-            let mark = marks[selectedMark]
-            let outset = mark.style.lineWidth * scale / 2 + 2
-            let path = NSBezierPath(rect: viewRect(mark.rect, transform).insetBy(dx: -outset, dy: -outset))
-            path.lineWidth = 1
-            path.setLineDash([4, 3], count: 2, phase: 0)
-            effectiveAppearance.performAsCurrentDrawingAppearance { DesignColor.accent.nsColor.setStroke() }
-            path.stroke()
-        }
-        if tool == .rectangle, let dragStart, let dragCurrent,
-           let rect = AnnotationGeometry.rect(from: dragStart, to: dragCurrent, transform: transform, imageSize: imageSize) {
-            let path = NSBezierPath(rect: viewRect(rect, transform))
-            path.lineWidth = AnnotationStyle.screenLineWidth
-            AnnotatePaint.mark.setStroke()
-            path.stroke()
+        context.saveGState()
+        context.translateBy(x: transform.origin.x, y: transform.origin.y)
+        context.scaleBy(x: scale, y: scale)
+        AnnotationRenderer.draw(shown, in: context, hiding: editing?.index)
+        context.restoreGState()
+
+        guard let selectedMark, shown.indices.contains(selectedMark), selectedMark != editing?.index else { return }
+        let mark = shown[selectedMark]
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let outset = AnnotationMetrics.drawnWidth(mark) * scale / 2 + 2
+            let outline = NSBezierPath(rect: viewRect(mark.rect, transform).insetBy(dx: -outset, dy: -outset))
+            outline.lineWidth = 1
+            outline.setLineDash([4, 3], count: 2, phase: 0)
+            DesignColor.accent.nsColor.setStroke()
+            outline.stroke()
+            for handle in AnnotationGeometry.handles(for: mark.kind) {
+                let centre = transform.imageToView(AnnotationGeometry.handlePoint(handle, of: mark))
+                let size = Self.handleSize
+                let square = NSBezierPath(rect: CGRect(x: centre.x - size / 2, y: centre.y - size / 2, width: size, height: size))
+                NSColor.white.setFill()
+                square.fill()
+                square.lineWidth = 1
+                DesignColor.accent.nsColor.setStroke()
+                square.stroke()
+            }
         }
     }
 
+    // MARK: Mouse
+
     public override func mouseDown(with event: NSEvent) {
-        guard isActive, transform != nil else { return }
+        guard isActive, let transform, let tool else { return }
+        // A click while typing only ends the typing (#692 O12).
+        if commitText() { return }
         let point = convert(event.locationInWindow, from: nil)
-        dragStart = point
-        dragCurrent = point
+        switch tool {
+        case .select:
+            if let selectedMark, marks.indices.contains(selectedMark),
+               let handle = handle(at: point, of: marks[selectedMark], transform) {
+                drag = .resize(selectedMark, handle, original: marks[selectedMark])
+            } else if let hit = AnnotationGeometry.hitTest(transform.viewToImage(point), marks: marks) {
+                drag = .move(hit, from: point, original: marks[hit])
+            } else {
+                drag = .click
+            }
+        case .rectangle, .arrow, .highlighter, .pen:
+            drag = .create(tool, [point])
+        case .text, .step:
+            drag = .click
+        }
     }
 
     public override func mouseDragged(with event: NSEvent) {
-        guard isActive, dragStart != nil else { return }
-        dragCurrent = convert(event.locationInWindow, from: nil)
-        if tool == .rectangle { needsDisplay = true }
+        guard isActive, let drag, let transform else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        switch drag {
+        case .create(let tool, var points):
+            points.append(point)
+            self.drag = .create(tool, points)
+            preview = candidate(tool, points, transform).map { (nil, $0) }
+        case .move(let index, let start, let original):
+            preview = (index, moved(original, from: start, to: point))
+        case .resize(let index, let handle, let original):
+            preview = (index, AnnotationGeometry.resize(original, handle: handle, to: transform.viewToImage(point),
+                                                        imageSize: imageSize))
+        case .click:
+            return
+        }
+        needsDisplay = true
     }
 
     public override func mouseUp(with event: NSEvent) {
-        guard isActive, let start = dragStart, let transform else { return }
+        guard isActive, let drag, let transform else { return }
         let end = convert(event.locationInWindow, from: nil)
-        dragStart = nil
-        dragCurrent = nil
+        self.drag = nil
+        preview = nil
         needsDisplay = true
+        switch drag {
+        case .create(let tool, var points):
+            if points.last != end { points.append(end) }
+            if let mark = candidate(tool, points, transform) { onAddMark?(mark) }
+        case .move(let index, let start, let original):
+            let mark = moved(original, from: start, to: end)
+            if mark == original { onSelect?(index) } else { onReplace?(index, mark) }
+        case .resize(let index, let handle, let original):
+            let mark = AnnotationGeometry.resize(original, handle: handle, to: transform.viewToImage(end), imageSize: imageSize)
+            if mark != original { onReplace?(index, mark) }
+        case .click:
+            switch tool {
+            case .step:
+                onAddMark?(AnnotationGeometry.step(at: end, transform: transform, imageSize: imageSize, style: screenStyle))
+            case .text:
+                if let hit = AnnotationGeometry.hitTest(transform.viewToImage(end), marks: marks), marks[hit].kind == .text {
+                    let mark = marks[hit]
+                    beginEditing(index: hit, text: mark.text, origin: mark.points.first ?? mark.rect.origin, style: mark.style)
+                } else {
+                    beginEditing(index: nil, text: "", origin: transform.viewToImage(end), style: screenStyle)
+                }
+            default:
+                onSelect?(AnnotationGeometry.hitTest(transform.viewToImage(end), marks: marks))
+            }
+        }
+    }
+
+    /// Drops the drag in progress: no mark, no replace on mouse-up. False when there was none.
+    @discardableResult public func cancelDrag() -> Bool {
+        guard drag != nil else { return false }
+        drag = nil
+        preview = nil
+        needsDisplay = true
+        return true
+    }
+
+    private func candidate(_ tool: AnnotateTool, _ points: [CGPoint], _ transform: CanvasTransform) -> AnnotationMark? {
+        guard let first = points.first, let last = points.last else { return nil }
         switch tool {
         case .rectangle:
-            guard let rect = AnnotationGeometry.rect(from: start, to: end, transform: transform, imageSize: imageSize)
-            else { return }
-            onAddMark?(AnnotationMark(rect: rect, style: .forScreen(pointsPerImagePixel: pointsPerImagePixel)))
-        case .select:
-            onSelect?(AnnotationGeometry.hitTest(transform.viewToImage(end), marks: marks))
-        case .arrow, .text, .highlighter, .pen, .step, nil:
-            return
+            return AnnotationGeometry.rect(from: first, to: last, transform: transform, imageSize: imageSize)
+                .map { AnnotationMark(rect: $0, style: screenStyle) }
+        case .arrow:
+            return AnnotationGeometry.arrow(from: first, to: last, transform: transform, imageSize: imageSize, style: screenStyle)
+        case .highlighter, .pen:
+            return AnnotationGeometry.stroke(tool == .pen ? .pen : .highlighter, through: points, transform: transform,
+                                             imageSize: imageSize, style: screenStyle)
+        case .select, .text, .step:
+            return nil
         }
+    }
+
+    private func moved(_ mark: AnnotationMark, from start: CGPoint, to point: CGPoint) -> AnnotationMark {
+        let scale = pointsPerImagePixel
+        return AnnotationGeometry.translate(mark, by: CGVector(dx: (point.x - start.x) / scale, dy: (point.y - start.y) / scale),
+                                            imageSize: imageSize)
+    }
+
+    private func handle(at point: CGPoint, of mark: AnnotationMark, _ transform: CanvasTransform) -> AnnotationHandle? {
+        AnnotationGeometry.handles(for: mark.kind).first { handle in
+            let centre = transform.imageToView(AnnotationGeometry.handlePoint(handle, of: mark))
+            return abs(centre.x - point.x) <= Self.handleReach && abs(centre.y - point.y) <= Self.handleReach
+        }
+    }
+
+    // MARK: Text
+
+    private func beginEditing(index: Int?, text: String, origin: CGPoint, style: AnnotationStyle) {
+        let field = NSTextField(string: text)
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
+        field.font = NSFont.systemFont(ofSize: AnnotationMetrics.textFontSize * style.unit * pointsPerImagePixel, weight: .semibold)
+        field.textColor = NSColor(srgbRed: style.red, green: style.green, blue: style.blue, alpha: 1)
+        field.setAccessibilityLabel(String(localized: "Annotation Text"))
+        field.setAccessibilityIdentifier("annotate.text-field")
+        field.delegate = self
+        editing = (index, origin, style)
+        textEditor = field
+        addSubview(field)
+        placeTextEditor()
+        needsDisplay = true
+        window?.makeFirstResponder(field)
+    }
+
+    private func placeTextEditor() {
+        guard let textEditor, let editing, let transform else { return }
+        let origin = transform.imageToView(editing.origin)
+        let size = textEditor.intrinsicContentSize
+        let width = max(40, textEditor.attributedStringValue.size().width + 16)
+        textEditor.frame = CGRect(x: origin.x, y: origin.y, width: width.rounded(.up), height: size.height.rounded(.up))
+    }
+
+    /// Ends text editing, reporting the text once. False when nothing was being edited.
+    @discardableResult public func commitText() -> Bool {
+        guard let editing, let field = textEditor else { return false }
+        let text = field.stringValue
+        self.editing = nil
+        textEditor = nil
+        if window?.firstResponder === field.currentEditor() { window?.makeFirstResponder(self) }
+        field.delegate = nil
+        field.removeFromSuperview()
+        needsDisplay = true
+        onCommitText?(editing.index, text, editing.origin, editing.style)
+        return true
+    }
+
+    public func controlTextDidChange(_ notification: Notification) { placeTextEditor() }
+
+    public func controlTextDidEndEditing(_ notification: Notification) { commitText() }
+
+    /// Return and Esc end the typing; Esc does not leave Annotate Mode (#692).
+    public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard selector == #selector(NSResponder.insertNewline(_:)) || selector == #selector(NSResponder.cancelOperation(_:))
+        else { return false }
+        commitText()
+        return true
     }
 }
 
