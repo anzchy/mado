@@ -42,6 +42,23 @@ public struct ViewerInputAdmission: Sendable {
 }
 
 extension ViewerSession {
+    public func recoverFilePreviewSetMember(_ expected: URL, with chosen: URL,
+                                            operation: AccessOperation, admission: ViewerInputAdmission,
+                                            host: any ViewerInputHost) async {
+        guard operation.isCurrent, let set = filePreviewSet, set.current == expected else { return }
+        let result = await admission.probe(chosen, operation: operation)
+        guard operation.isCurrent, filePreviewSet?.current == expected else { return }
+        if case .open(let request) = result {
+            var members = set.members
+            members[set.index] = chosen
+            var recovered = FilePreviewSet(files: members)
+            for _ in 0..<set.index { _ = recovered.move(forward: true) }
+            filePreviewSet = recovered
+            host.openInputImage(chosen, accessRequest: request)
+        } else if result == .unsupported {
+            host.showInputNotice(.unsupported(chosen.lastPathComponent))
+        }
+    }
     public func openInput(_ urls: [URL], operation: AccessOperation, admission: ViewerInputAdmission,
                           host: any ViewerInputHost) async {
         guard operation.isCurrent else { return }

@@ -158,6 +158,8 @@ private final class Issue573DenyTarget: SecurityScope, @unchecked Sendable {
     let setKept = controller.session.filePreviewSet != nil
     #expect(setKept, "#695 Choose File must keep the multi-file preview set")
     guard setKept else { return }
+    #expect(controller.session.filePreviewSet?.members == [plain, target])
+    #expect(controller.session.filePreviewSet?.index == 1)
     let navigated = CommandRouter().route(.previous, from: .key, to: controller.session)
     #expect(navigated,
         "#695 previous navigation must reach the plain member after Choose File")
@@ -175,6 +177,8 @@ private final class Issue573DenyTarget: SecurityScope, @unchecked Sendable {
     let setKept = controller.session.filePreviewSet != nil
     #expect(setKept, "#695 Choose File must keep the multi-file preview set for a plain file")
     guard setKept else { return }
+    #expect(controller.session.filePreviewSet?.members == [plain, target])
+    #expect(controller.session.filePreviewSet?.index == 1)
     let navigated = CommandRouter().route(.previous, from: .key, to: controller.session)
     #expect(navigated,
         "#695 previous navigation must reach the plain member after plain-file recovery")
@@ -194,6 +198,8 @@ private final class Issue573DenyTarget: SecurityScope, @unchecked Sendable {
     let setKept = controller.session.filePreviewSet != nil
     #expect(setKept, "#695 Cancel must keep the multi-file preview set")
     guard setKept else { return }
+    #expect(controller.session.filePreviewSet?.members == [plain, link.resolvingSymlinksInPath()])
+    #expect(controller.session.filePreviewSet?.index == 1)
     let navigated = CommandRouter().route(.previous, from: .key, to: controller.session)
     #expect(navigated,
         "#695 previous navigation must reach the plain member after Cancel")
