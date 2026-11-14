@@ -29,6 +29,8 @@ public enum AnnotateTool: Sendable {
     case select
     /// R: draws a rectangle.
     case rectangle
+    /// #692: A arrow, T text, H highlighter, P pen, N numbered step marker.
+    case arrow, text, highlighter, pen, step
 }
 
 /// How a save that the host performed ended.
@@ -98,6 +100,8 @@ public struct AnnotateModeState: Equatable, Sendable {
 public enum AnnotateKey: Equatable, Sendable {
     case character(String)
     case escape, leftArrow, rightArrow, upArrow, downArrow
+    /// #692: ⌫ and ⌦ delete the selected mark.
+    case delete, forwardDelete
 }
 
 public struct AnnotateKeyModifiers: OptionSet, Sendable {
@@ -113,6 +117,10 @@ public enum AnnotateKeyAction: Equatable, Sendable {
     case selectRectangle, selectTool, undo, redo, requestLeave
     /// ←/→/↑/↓ move the selected mark by one image pixel, ten with Shift (5.6); never a change of image.
     case nudge(dx: Int, dy: Int)
+    /// #692: A T H P N choose page 39's other tools.
+    case chooseTool(AnnotateTool)
+    /// #692: ⌫/⌦ delete the selected mark; without a selection nothing changes.
+    case deleteSelection
 }
 
 public enum AnnotateKeyPolicy {
@@ -122,6 +130,7 @@ public enum AnnotateKeyPolicy {
         let command = modifiers.contains(.command)
         switch key {
         case .escape: return modifiers.isEmpty ? .requestLeave : nil
+        case .delete, .forwardDelete: return modifiers.isEmpty ? .deleteSelection : nil
         case .leftArrow, .rightArrow, .upArrow, .downArrow:
             guard modifiers.isDisjoint(with: [.command, .control, .option]) else { return nil }
             let step = modifiers.contains(.shift) ? 10 : 1
@@ -136,6 +145,11 @@ public enum AnnotateKeyPolicy {
             let plain = modifiers.isDisjoint(with: [.command, .control, .option])
             if letter == "r", plain { return .selectRectangle }
             if letter == "v", plain { return .selectTool }
+            if letter == "a", plain { return .chooseTool(.arrow) }
+            if letter == "t", plain { return .chooseTool(.text) }
+            if letter == "h", plain { return .chooseTool(.highlighter) }
+            if letter == "p", plain { return .chooseTool(.pen) }
+            if letter == "n", plain { return .chooseTool(.step) }
             if letter == "z", command, modifiers.isDisjoint(with: [.control, .option]) {
                 return modifiers.contains(.shift) ? .redo : .undo
             }

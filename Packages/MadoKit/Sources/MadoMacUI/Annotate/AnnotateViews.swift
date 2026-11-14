@@ -424,7 +424,7 @@ public enum AnnotatePaint {
             onAddMark?(AnnotationMark(rect: rect, style: .forScreen(pointsPerImagePixel: pointsPerImagePixel)))
         case .select:
             onSelect?(AnnotationGeometry.hitTest(transform.viewToImage(end), marks: marks))
-        case nil:
+        case .arrow, .text, .highlighter, .pen, .step, nil:
             return
         }
     }

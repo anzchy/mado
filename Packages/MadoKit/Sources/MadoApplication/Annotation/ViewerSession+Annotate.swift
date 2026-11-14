@@ -44,13 +44,54 @@ extension ViewerSession {
     @discardableResult public func nudgeSelectedAnnotation(dx: Int, dy: Int, imageSize: CGSize) -> Bool {
         guard var state = annotateMode, let index = state.selectedMark,
               state.document.marks.indices.contains(index) else { return false }
-        var mark = state.document.marks[index]
-        let moved = AnnotationGeometry.nudge(mark.rect, dx: dx, dy: dy, imageSize: imageSize)
-        guard moved != mark.rect else { return false }
-        mark.rect = moved
-        state.document.replace(at: index, with: mark)
+        let mark = state.document.marks[index]
+        let moved = AnnotationGeometry.translate(mark, by: CGVector(dx: dx, dy: dy), imageSize: imageSize)
+        guard moved != mark else { return false }
+        state.document.replace(at: index, with: moved)
         annotateMode = state
         return true
+    }
+
+    /// #692: a move or resize released, or a text mark re-measured; one undoable change that keeps the selection.
+    @discardableResult public func replaceAnnotationMark(at index: Int, with mark: AnnotationMark) -> Bool {
+        guard var state = annotateMode, state.document.marks.indices.contains(index),
+              state.document.marks[index] != mark else { return false }
+        state.document.replace(at: index, with: mark)
+        state.selectedMark = index
+        annotateMode = state
+        return true
+    }
+
+    /// #692 ⌫/⌦: removes the selected mark; without a selection nothing changes.
+    @discardableResult public func deleteSelectedAnnotation() -> Bool {
+        guard var state = annotateMode, let index = state.selectedMark, state.document.remove(at: index) else { return false }
+        state.selectedMark = nil
+        annotateMode = state
+        return true
+    }
+
+    /// #692: ends editing a text mark. New text adds a mark at `origin` (image pixels); empty text adds nothing, and
+    /// emptying an existing mark (`editing`) deletes it. An edit keeps the mark's origin and style and re-measures it.
+    @discardableResult public func commitAnnotationText(_ text: String, at origin: CGPoint, editing index: Int?,
+                                                        style: AnnotationStyle) -> Bool {
+        guard let state = annotateMode else { return false }
+        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        func measured(_ origin: CGPoint, _ style: AnnotationStyle) -> AnnotationMark {
+            .text(text, origin: origin, size: AnnotationRenderer.textSize(text, fontSize: AnnotationMetrics.textFontSize * style.unit),
+                  style: style)
+        }
+        guard let index else {
+            guard !empty else { return false }
+            addAnnotationMark(measured(origin, style))
+            return true
+        }
+        guard state.document.marks.indices.contains(index) else { return false }
+        let old = state.document.marks[index]
+        if empty {
+            annotateMode?.selectedMark = index
+            return deleteSelectedAnnotation()
+        }
+        return replaceAnnotationMark(at: index, with: measured(old.points.first ?? old.rect.origin, old.style))
     }
 
     @discardableResult public func undoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.undo() ?? false) }
