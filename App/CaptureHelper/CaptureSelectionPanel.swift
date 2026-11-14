@@ -47,6 +47,8 @@ import MadoApplication
     private let mode: CaptureSelectionPanel.Mode
     private let windows: [(id: UInt32, rect: CGRect)]
     var finish: (CaptureRequest.Target?) -> Void
+    /// Selection ends once: after Esc, a pick or a region, later events change nothing.
+    private var finished = false
     private var anchor: CGPoint?
     private var selection: CGRect?
     private var hovered: (id: UInt32, rect: CGRect)?
@@ -88,7 +90,17 @@ import MadoApplication
         addCursorRect(bounds, cursor: mode == .region ? .crosshair : .pointingHand)
     }
 
+    private func complete(_ target: CaptureRequest.Target?) {
+        guard !finished else { return }
+        finished = true
+        anchor = nil
+        selection = nil
+        needsDisplay = true
+        finish(target)
+    }
+
     override func mouseDown(with event: NSEvent) {
+        guard !finished else { return }
         let point = convert(event.locationInWindow, from: nil)
         switch mode {
         case .region:
@@ -96,13 +108,13 @@ import MadoApplication
             selection = nil
         case .window:
             updateHover(at: point)
-            if let hovered { finish(.window(windowID: hovered.id)) }
+            if let hovered { complete(.window(windowID: hovered.id)) }
         }
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard mode == .region, let anchor else { return }
+        guard mode == .region, !finished, let anchor else { return }
         let point = convert(event.locationInWindow, from: nil)
         selection = CGRect(x: min(anchor.x, point.x), y: min(anchor.y, point.y),
                            width: abs(point.x - anchor.x), height: abs(point.y - anchor.y))
@@ -114,14 +126,14 @@ import MadoApplication
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard mode == .region else { return }
+        guard mode == .region, !finished else { return }
         defer { anchor = nil }
         guard let rect = selection, rect.width > 0, rect.height > 0 else { cancel(); return }
         let global = rect.offsetBy(dx: screenFrame.minX, dy: screenFrame.minY)
-        finish(.region(rect: global, displayID: displayID, displayFrame: screenFrame, scale: scale))
+        complete(.region(rect: global, displayID: displayID, displayFrame: screenFrame, scale: scale))
     }
 
-    func cancel() { finish(nil) }
+    func cancel() { complete(nil) }
 
     private func updateHover(at point: CGPoint) {
         hovered = windows.first { $0.rect.contains(point) }

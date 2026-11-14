@@ -9,9 +9,15 @@ public struct CaptureRequest: Sendable {
 
     public let target: Target
     public let excludedWindowIDs: Set<UInt32>
+    /// Visible Capture Bar windows: the capture must exclude them, so they must still exist.
+    public let barWindowIDs: Set<UInt32>
+    /// Overlays and never-shown helper windows: excluded when they still exist, skipped when gone.
+    public let overlayWindowIDs: Set<UInt32>
 
     public init(target: Target, barWindowIDs: Set<UInt32>, overlayWindowIDs: Set<UInt32>) {
         self.target = target
+        self.barWindowIDs = barWindowIDs
+        self.overlayWindowIDs = overlayWindowIDs
         self.excludedWindowIDs = barWindowIDs.union(overlayWindowIDs)
     }
 

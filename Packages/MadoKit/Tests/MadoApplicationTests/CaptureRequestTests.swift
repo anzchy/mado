@@ -143,3 +143,10 @@ private actor RecordingFiles: CaptureFilePort {
     let request = CaptureRequest(target: .fullScreen(displayID: 7), barWindowIDs: [], overlayWindowIDs: [])
     #expect(request.cropDisplayImage(image) == nil)
 }
+
+@Test(.timeLimit(.minutes(2))) func issue683RequestKeepsBarAndOverlayIDsApart() {
+    let request = CaptureRequest(target: .fullScreen(displayID: 7), barWindowIDs: [11, 12], overlayWindowIDs: [12, 13])
+    #expect(request.barWindowIDs == [11, 12])
+    #expect(request.overlayWindowIDs == [12, 13])
+    #expect(request.excludedWindowIDs == [11, 12, 13])
+}
