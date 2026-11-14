@@ -26,12 +26,14 @@ import MadoApplication
     let file = submenu("File")
     add("Open…", "o", "invoke:", to: file)
     add("Close", "w", "performClose:", to: file)
+    add("Save Annotated Copy", "s", "saveAnnotatedCopy:", to: file)
     let edit = submenu("Edit")
     add("Undo", "z", "undo:", to: edit)
     add("Redo", "z", "redo:", to: edit, modifiers: [.command, .shift])
     let view = submenu("View")
     add("Search current folder", "f", "focusGridSearch:", to: view)
     add("Hide sidebar", "s", "toggleSidebar:", to: view, modifiers: [.control, .command])
+    add("Annotate", "e", "enterAnnotate:", to: view)
     add("Enter Full Screen", "f", "toggleFullScreen:", to: view, modifiers: [.control, .command])
     let window = submenu("Window")
     add("Minimize", "m", "performMiniaturize:", to: window)
@@ -58,6 +60,8 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     ("viewer", ["command:actualPixels"], ["1"], ["Actual Pixels"], ["实际像素"]),
     ("viewer", ["command:zoomIn", "command:zoomOut"], ["+", "−"], ["Zoom In / Out"], ["放大 / 缩小"]),
     ("viewer", ["key:viewer-tab"], ["Tab"], ["Recall Tools"], ["唤回工具"]),
+    ("viewer", ["menu:Annotate"], ["⌘", "E"], ["Annotate"], ["标注"]),
+    ("viewer", ["menu:Save Annotated Copy"], ["⌘", "S"], ["Save Annotated Copy"], ["存储标注副本"]),
     ("viewer", ["command:inspector"], ["⌘", "I"], ["Image Information"], ["图片信息"]),
     ("viewer", ["menu:Enter Full Screen"], ["⌃", "⌘", "F"], ["Toggle Full Screen"], ["进入 / 退出全屏"]),
 ]
@@ -139,7 +143,7 @@ let issue219ExpectedRows: [(String, [String], [String], [String], [String])] = [
     try #require(view.items.first { $0.title == "Enter Full Screen" }).title = "Exit Full Screen"
     let catalog = ShortcutCatalog(menu: menu, language: .english)
     let sources = issue219Flatten(catalog).flatMap(\.1)
-    #expect(sources.count == 23)
+    #expect(sources.count == 25)
     #expect(sources.filter { $0 == "menu:Hide sidebar" }.count == 1)
     #expect(sources.filter { $0 == "menu:Enter Full Screen" }.count == 1)
     #expect(issue219Flatten(catalog).count == issue219ExpectedRows.count)

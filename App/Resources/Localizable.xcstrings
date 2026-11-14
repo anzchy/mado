@@ -3680,7 +3680,22 @@
     },
     "Drop a photo folder here": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Drop a photo folder here"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"把照片文件夹拖到这里"}}}},
     "Release to open": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Release to open"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"松开即可打开"}}}},
-    "or press ⌘O": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"or press ⌘O"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"或按 ⌘O"}}}}
+    "or press ⌘O": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"or press ⌘O"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"或按 ⌘O"}}}},
+    "Annotate":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Annotate"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"标注"}}}},
+    "Save Annotated Copy":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Save Annotated Copy"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"存储标注副本"}}}},
+    "Save the annotated copy before leaving?":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Save the annotated copy before leaving?"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"离开前存储标注副本吗？"}}}},
+    "Your marks will be lost if you don't save them.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Your marks will be lost if you don't save them."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"如果不存储，标注将会丢失。"}}}},
+    "Save":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Save"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"存储"}}}},
+    "Don't Save":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Don't Save"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"不存储"}}}},
+    "Saved as %@":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Saved as %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已存储为 %@"}}}},
+    "The annotated copy wasn't saved.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The annotated copy wasn't saved."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"标注副本未存储。"}}}},
+    "Mado isn't allowed to write in this folder.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Mado isn't allowed to write in this folder."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mado 没有写入此文件夹的权限。"}}}},
+    "There isn't enough space on the disk.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"There isn't enough space on the disk."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"磁盘空间不足。"}}}},
+    "The folder is no longer available.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The folder is no longer available."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此文件夹已不可用。"}}}},
+    "The original image is no longer available.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The original image is no longer available."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"原图已不可用。"}}}},
+    "The annotated copy can't replace the original image.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The annotated copy can't replace the original image."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"标注副本不能替换原图。"}}}},
+    "Mado no longer has access to this folder.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Mado no longer has access to this folder."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mado 已无法访问此文件夹。"}}}},
+    "The file couldn't be written.":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The file couldn't be written."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法写入文件。"}}}}
   },
   "version": "1.0"
 }

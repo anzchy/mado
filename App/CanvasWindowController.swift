@@ -152,7 +152,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     let inspector: InspectorModel
     private let motionPolicy: MotionPolicy
     private let router = CommandRouter()
-    private let accessServices: Task<AccessServices, Error>
+    let accessServices: Task<AccessServices, Error>
     private var navigationTask: Task<Void, Never>?
     private var standaloneGrantURL: URL?
     private var standaloneWake: FileGrantWakeObservation?
@@ -184,6 +184,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var accessAnnouncementObserver: ((String) -> Void)?
     var menuTracking: () -> Bool = { false }
     var appearanceAdapter: WindowAppearanceAdapter?
+    // #690 Annotate Mode wiring lives in CanvasWindowController+Annotate.swift.
+    var annotateUI: any AnnotateNativeUI = AlertAnnotateUI()
+    var annotateSaveTask: Task<Void, Never>?
+    var annotatePendingLeave: AnnotatePendingLeave?
+    var annotatePasteboard: NSPasteboard = .general
+    var annotateTerminateReply: (Bool) -> Void = { NSApp.reply(toApplicationShouldTerminate: $0) }
 
     override func showWindow(_ sender: Any?) {
         imageContextWindowClosed = false
@@ -271,6 +277,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             // A viewer page-22 tile has no grid root yet; the empty folder's scan root covers its children.
             guard let self, let rootID = self.gridFolderRoot ?? self.session.folderScan?.sourceSnapshot?.version.rootID
             else { return }
+            guard self.annotateAllowsImageChange(retry: { [weak self] in self?.gridShell.onSelectFolder?(folder) }) else { return }
             self.openFolder(folder, rootID: rootID)
         }
         gridShell.session = session
@@ -1503,6 +1510,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func openRecent(_ folder: RecentFolder) {
+        guard annotateAllowsImageChange(retry: { [weak self] in self?.openRecent(folder) }) else { return }
         // A folder entry records the File Preview Set before ending it, so Cancel Reading can walk it again.
         inputIntent.invalidate()
         let operation = accessIntent.begin()
@@ -1817,7 +1825,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
 extension CanvasWindowController: ViewerSessionNavigationHost {
     var inspectorVisible: Bool { session.inspectorFocus.isVisible }
     var hasImage: Bool { canvas.hasImage }
-    private var focusContext: FocusContext {
+    var focusContext: FocusContext {
         let controls: [NSView] = stateHost.buttons + chromeOverlay.tools
         if let view = window?.firstResponder as? NSView,
            controls.contains(where: { view === $0 || view.isDescendant(of: $0) }) { return .tools }
@@ -1873,6 +1881,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         }
         session.updateFocus(focusContext)
         session.setMenuTracking(menuTracking())
+        if command == .escape, routeAnnotateEscape() { return true }
         // Bare ←/→ arrive as menu key equivalents as well as canvas keys.
         if command == .previous || command == .next, window?.currentEvent?.type == .keyDown {
             return canvas.preservingKeyboardFocusRing { router.route(command, from: entry, to: session) }
@@ -2282,6 +2291,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         stateHost.refresh()
     }
     private func consumePanelKey(_ event: NSEvent) -> Bool {
+        if let handled = consumeAnnotateKey(event) { return handled }
         if waitingAccessPosition != nil, window?.attachedSheet == nil, !menuTracking(), event.keyCode == 53 { return true }
         // #114: an open Display panel gets first refusal of Esc and Tab, ahead of the Inspector and grid rules.
         if let gridShell, window?.attachedSheet == nil, !menuTracking(),
@@ -2520,6 +2530,7 @@ extension CanvasWindowController: AccessRecoveryHost {
 // Native input effects; classification and admission belong to the Session.
 extension CanvasWindowController: ViewerInputHost {
     func openInput(_ urls: [URL]) {
+        guard annotateAllowsImageChange(retry: { [weak self] in self?.openInput(urls) }) else { return }
         let operation = inputIntent.begin()
         Task { [weak self] in
             guard let self else { return }

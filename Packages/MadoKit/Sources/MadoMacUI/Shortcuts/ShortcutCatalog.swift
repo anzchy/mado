@@ -31,6 +31,8 @@ private let shortcutMenuSourceIDs = [
     "focusGridSearch:": "Search current folder",
     "toggleSidebar:": "Hide sidebar",
     "toggleFullScreen:": "Enter Full Screen",
+    "enterAnnotate:": "Annotate",
+    "saveAnnotatedCopy:": "Save Annotated Copy",
 ]
 
 public struct ShortcutCatalog: Sendable {
@@ -112,6 +114,8 @@ public struct ShortcutCatalog: Sendable {
             commandRow([.zoomIn, .zoomOut], "Zoom In / Out", "放大 / 缩小",
                 singleNames: [("Zoom In", "放大"), ("Zoom Out", "缩小")]),
             keyRow("viewer-tab", ["Tab"], "Recall Tools", "唤回工具"),
+            menuRow("enterAnnotate:", "Annotate", "标注"),
+            menuRow("saveAnnotatedCopy:", "Save Annotated Copy", "存储标注副本"),
             commandRow([.inspector], "Image Information", "图片信息"),
             menuRow("toggleFullScreen:", "Toggle Full Screen", "进入 / 退出全屏"),
         ].compactMap { $0 }

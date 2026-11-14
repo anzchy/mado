@@ -47,6 +47,8 @@ export const KEY_HANDLERS = [
 const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Space, Return), not a command';
 const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
 const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissal, not a command';
+// #690: R, Esc and the swallowed arrows act only inside Annotate Mode; the page lists ⌘E, which enters it.
+const ANNOTATE_ONLY = 'only in Annotate Mode';
 export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
     123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
@@ -70,9 +72,13 @@ export const KEY_SITES = {
     36: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
+  'App/CanvasWindowController+Annotate.swift': { 53: { excluded: ANNOTATE_ONLY }, 123: { excluded: ANNOTATE_ONLY },
+    124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY } },
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
+// Files that read typed characters for keys the page does not list, each with its reason.
+export const CHARACTER_EXCLUSIONS = { 'App/CanvasWindowController+Annotate.swift': ANNOTATE_ONLY };
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
  * (with or without a leading !), and .onKeyPress(.name). */
@@ -220,7 +226,7 @@ export function codeShortcuts(read) {
         found += [...source.matchAll(/keyEquivalent: "((?:[^"\\]|\\.)+)"/g)].length;
         found += [...source.matchAll(/\("[^"]+", "[^"]+:", "[^"]+"\)/g)].length;
         if (/\.keyboardShortcut\(/.test(source)) problems.push(`${rel} uses .keyboardShortcut, which this check does not read`);
-        if (/charactersIgnoringModifiers|\.specialKey\b/.test(source) && !CHARACTER_FILES.includes(rel))
+        if (/charactersIgnoringModifiers|\.specialKey\b/.test(source) && !CHARACTER_FILES.includes(rel) && !CHARACTER_EXCLUSIONS[rel])
           problems.push(`${rel} reads typed characters, which this check does not read`);
         const sites = keySites(source), declared = KEY_SITES[rel] ?? {};
         for (const line of sites.unread) problems.push(`${rel} reads a key code in a shape this check does not read: ${line}`);
