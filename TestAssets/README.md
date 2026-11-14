@@ -1,7 +1,9 @@
 # Reproducible image fixtures
 
+`TextRecognition/mixed.png` and `TextRecognition/blank.png` are small generated PNG fixtures for #687's real Vision tests. The mixed image has `中文测试` and `SIDE` on the first row and `Hello Mado` on the second, drawn in a macOS system font on white; the blank image is white at the same 1000×340 size. They contain no personal images and are separate from the P0 tier-① manifest.
+
 These are test data, not App resources. P0-07 has no user-visible ledger row. Nothing here is wired into a
-Swift/App target. Python ≥3.9 and its standard library generate all synthetic files; no Pillow, host fonts,
+Swift/App target. For the P0-07 manifest corpus, Python ≥3.9 and its standard library generate all synthetic files; no Pillow, host fonts,
 platform image encoder, network or clock is involved. PNG compression uses the host zlib; its runtime
 version and the Python version are recorded in the manifest. The fixed 5×7 glyphs are authored in the generator.
 Generated fixtures are dedicated to CC0-1.0. No Git LFS is used in this repository.
