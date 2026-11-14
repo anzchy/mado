@@ -23,16 +23,13 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     public func recognise(_ image: Data) async throws(TextRecognitionError) -> String {
         let worker = Task.detached(priority: .userInitiated) { () throws -> String in
             try Task.checkCancellation()
-            guard let source = CGImageSourceCreateWithData(image as CFData, nil),
-                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                throw TextRecognitionError.invalidImage
-            }
+            let (cgImage, orientation) = try Self.preparedImage(image)
 
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.recognitionLanguages = ["zh-Hans", "en-US"]
             request.usesLanguageCorrection = true
-            let handler = VNImageRequestHandler(cgImage: cgImage)
+            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation)
             try await withTaskCancellationHandler {
                 await beforePerform()
                 try performRequest(handler, request)
@@ -75,5 +72,19 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             return left.boundingBox.midY > right.boundingBox.midY
         }
         return left.boundingBox.minX < right.boundingBox.minX
+    }
+
+    static func preparedImage(_ image: Data) throws -> (CGImage, CGImagePropertyOrientation) {
+        guard let source = CGImageSourceCreateWithData(image as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 4096,
+                kCGImageSourceCreateThumbnailWithTransform: false
+              ] as CFDictionary) else {
+            throw TextRecognitionError.invalidImage
+        }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let rawOrientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+        return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation) ?? .up)
     }
 }
