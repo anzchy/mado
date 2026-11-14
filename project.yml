@@ -99,6 +99,7 @@ targets:
           - KeyWindowFixture.swift
           - KeyWindowFixtureTests.swift
       - path: App/CaptureHelper/CaptureBarView.swift
+      - path: App/CaptureHelper/ScreenCaptureKitScreen.swift
     dependencies:
       - package: MadoKit
         product: MadoCore
@@ -126,6 +127,8 @@ targets:
     dependencies:
       - package: MadoKit
         product: MadoApplication
+      - package: MadoKit
+        product: MadoInfrastructure
       - package: MadoKit
         product: MadoMacUI
     settings:
