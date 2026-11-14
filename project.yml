@@ -24,6 +24,7 @@ targets:
       - path: App
         excludes:
           - Resources/Mado.entitlements
+          - CaptureHelper
     dependencies:
       - package: MadoKit
         product: MadoCore
@@ -34,6 +35,13 @@ targets:
       - package: MadoKit
         product: MadoMacUI
       - package: Sparkle
+      - target: MadoCaptureHelper
+        embed: true
+        link: false
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/LoginItems
     settings:
       base:
         PRODUCT_NAME: Mado
@@ -78,6 +86,7 @@ targets:
           - MadoApp.swift
           - Info.plist
           - Resources
+          - CaptureHelper
       - path: AppTests
         excludes:
           - HostedAppProofTests.swift
@@ -104,6 +113,26 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.tests
         CODE_SIGNING_ALLOWED: NO
+  MadoCaptureHelper:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/CaptureHelper
+        excludes:
+          - Info.plist
+          - CaptureHelper.entitlements
+    dependencies:
+      - package: MadoKit
+        product: MadoApplication
+    settings:
+      base:
+        PRODUCT_NAME: MadoCaptureHelper
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.capture-helper
+        MARKETING_VERSION: 0.0.1
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/CaptureHelper/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/CaptureHelper/CaptureHelper.entitlements
   MadoHostedFocusTests:
     type: bundle.unit-test
     platform: macOS
