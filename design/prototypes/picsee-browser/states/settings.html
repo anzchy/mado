@@ -15,11 +15,12 @@
   from the throwaway prototype design/prototypes/capture-proto/settings.html on branch prototype/680-capture-ui
   (96b47f79); owner 2026-11-13: 「A A A .the fourth: …」. Four groups in one form: 截图工具条, 截图之后, 全局快捷键,
   文字识别; the pane scrolls inside the fixed window. Its controls are drawn as the target state of #682, not greyed.
-  With the bar off, the rest of the bar, after-capture and shortcut groups are greyed and not editable but stay visible
-  (5.2); 文字识别 stays editable. The macOS 15+ line under the Screen Recording status is verbatim from 5.7.
+  With the bar off, every other setting on the tab (the rest of the bar group, 截图之后, 全局快捷键 and 文字识别) is
+  greyed and not editable but stays visible (5.2, owner 「变灰，不能改」; #680 r1 decision Q10). The cloud-recognition
+  switch is drawn off with 未填写密钥: it turns on only after keys are saved and consent is given (ADR-0019; r1 Q11). The macOS 15+ line under the Screen Recording status is verbatim from 5.7.
   The bare URL is the pinned main case: 通用, light. Sub-cases, by query:
     ?section=general|display|capture|cache|update|about   that section selected
-    ?section=capture&bar=off                              截图 with the Capture Bar off: dependent settings greyed (5.2)
+    ?section=capture&bar=off                              截图 with the Capture Bar off: every other setting greyed (5.2)
     ?section=capture&scroll=ocr                           截图 scrolled to 文字识别
     ?theme=dark                                           dark tokens
 -->
@@ -164,10 +165,10 @@
           <span></span><span><span class="hint">不会占用系统的 ⌘⇧3 / ⌘⇧4 / ⌘⇧5。<button type="button" class="link">恢复默认</button></span></span>
         </div>
       </div>
-      <div class="capture-group" data-group="ocr" id="capture-ocr">
+      <div class="capture-group" data-group="ocr" id="capture-ocr" data-bar-dependent>
         <h3>文字识别</h3>
         <div class="form">
-          <span class="l">云端识别</span><span><span class="inline"><button type="button" class="switch on" role="switch" aria-checked="true" aria-label="允许「识别文字」使用云端服务"></button>允许「识别文字」使用云端服务<span class="pill">未填写密钥</span></span><span class="hint">云端识别会把要识别的那张图片上传到百度。只有在你点「识别文字」、同意过一次、并且下面的开关打开时才会上传；在图片上直接选字永远只用本机识别。<button type="button" class="link">百度服务条款</button></span></span>
+          <span class="l">云端识别</span><span><span class="inline"><button type="button" class="switch" role="switch" aria-checked="false" aria-label="允许「识别文字」使用云端服务"></button>允许「识别文字」使用云端服务<span class="pill">未填写密钥</span></span><span class="hint">云端识别会把要识别的那张图片上传到百度。只有在你点「识别文字」、同意过一次、并且下面的开关打开时才会上传；在图片上直接选字永远只用本机识别。<button type="button" class="link">百度服务条款</button></span></span>
           <span class="l">服务</span><span class="inline"><button type="button" class="popup" aria-label="识别服务" aria-haspopup="listbox">百度 OCR<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></span>
           <span class="l">密钥</span><span><span class="inline wrap"><input class="field" placeholder="API Key" aria-label="API Key"><input class="field" type="password" placeholder="Secret Key" aria-label="Secret Key"><button type="button" class="btn">保存到钥匙串</button></span><span class="hint">密钥存在钥匙串里。</span></span>
           <span></span><span class="hint">没有密钥、离线或额度用完时改用本机识别，结果会标明用了哪个引擎。</span>
