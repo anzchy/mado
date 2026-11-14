@@ -4,6 +4,36 @@ import MadoApplication
 @preconcurrency import Vision
 
 public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding {
+    struct RecognizedTextBox {
+        let text: String
+        let bounds: CGRect
+    }
+
+    static func readingOrder(_ boxes: [RecognizedTextBox]) -> [RecognizedTextBox] {
+        let sorted = boxes.sorted {
+            if $0.bounds.maxY != $1.bounds.maxY { return $0.bounds.maxY > $1.bounds.maxY }
+            if $0.bounds.minX != $1.bounds.minX { return $0.bounds.minX < $1.bounds.minX }
+            return $0.text < $1.text
+        }
+        var rows: [(anchor: CGRect, boxes: [RecognizedTextBox])] = []
+        for box in sorted {
+            if let index = rows.firstIndex(where: { row in
+                let overlap = min(row.anchor.maxY, box.bounds.maxY) - max(row.anchor.minY, box.bounds.minY)
+                return overlap > 0.5 * min(row.anchor.height, box.bounds.height)
+            }) {
+                rows[index].boxes.append(box)
+            } else {
+                rows.append((anchor: box.bounds, boxes: [box]))
+            }
+        }
+        return rows.flatMap { row in
+            row.boxes.sorted {
+                if $0.bounds.minX != $1.bounds.minX { return $0.bounds.minX < $1.bounds.minX }
+                if $0.bounds.maxY != $1.bounds.maxY { return $0.bounds.maxY > $1.bounds.maxY }
+                return $0.text < $1.text
+            }
+        }
+    }
     private let performRequest: @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void
     private let beforePerform: @Sendable () async -> Void
 
@@ -38,17 +68,11 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             }
             try Task.checkCancellation()
 
-            var observations: [VNRecognizedTextObservation] = []
-            if let results = request.results {
-                observations = results.sorted(by: Self.isBefore)
+            let boxes = (request.results ?? []).compactMap { observation -> RecognizedTextBox? in
+                guard let candidate = observation.topCandidates(1).first else { return nil }
+                return RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox)
             }
-            var lines: [String] = []
-            for observation in observations {
-                if let candidate = observation.topCandidates(1).first {
-                    lines.append(candidate.string)
-                }
-            }
-            return lines.joined(separator: "\n")
+            return Self.readingOrder(boxes).map(\.text).joined(separator: "\n")
         }
 
         do {
@@ -65,13 +89,6 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             if Task.isCancelled { throw .cancelled }
             throw .recognitionFailed
         }
-    }
-
-    private static func isBefore(_ left: VNRecognizedTextObservation, _ right: VNRecognizedTextObservation) -> Bool {
-        if abs(left.boundingBox.midY - right.boundingBox.midY) > 0.02 {
-            return left.boundingBox.midY > right.boundingBox.midY
-        }
-        return left.boundingBox.minX < right.boundingBox.minX
     }
 
     static func preparedImage(_ image: Data) throws -> (CGImage, CGImagePropertyOrientation) {
