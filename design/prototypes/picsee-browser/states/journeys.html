@@ -163,6 +163,7 @@ const FALLBACK = {
   'components': ['30 组件与状态', 1280, 800], 'grid-context-menu': ['31 图片右键菜单 · C', 1280, 800], 'grid-multiselect': ['32 基础多选 · C', 1280, 800],
   'viewer-filmstrip': ['33 胶片条展开 · C', 1280, 800], 'viewer-inspector-light': ['34 图片信息 · 浅色 · C', 1280, 800],
   'settings': ['35 设置 · B', 1280, 800], 'shortcuts': ['36 键盘快捷键 · C', 1280, 800],
+  'capture-bar': ['37 截图工具条 · A', 1280, 800], 'capture-thumbnail': ['38 截图缩略图 · A', 1280, 800], 'annotate': ['39 标注模式 · D', 1280, 800],
 };
 // Work packages / issues and ledger IDs per page, from plan §1.3 and §1.6. No implementation status: that is the ledger's.
 const WP = {
@@ -171,20 +172,22 @@ const WP = {
   'image-error': 'P1-07 · P2-03', 'viewer-filmstrip': 'P2-06 #106', 'search-empty': 'P3-10', 'grid-multiselect': 'P3-09', 'grid-context-menu': 'P3-12 #144',
   'viewer-inspector': 'P3-13 · P5-01', 'viewer-inspector-light': 'P3-13', 'grid-display': 'P3-11 #114', 'grid-dark': 'P1-09 · P3-10',
   'keyboard-focus': 'P0-09 · P1-08 · P6-04', 'compact-grid': 'P3-10 · P6-04', 'components': 'P0-08',
-  'settings': '#218 · #114 · #220 · #221', 'shortcuts': '#215 · #219',
+  'settings': '#218 · #114 · #220 · #221 · P7-10 #682 #685 · P7-12 #689', 'shortcuts': '#215 · #219',
+  'capture-bar': 'P7-10 #682 #683 #685 · P7-01 #687', 'capture-thumbnail': 'P7-10 #684 #686 · P7-01 #687 · P7-11 #694', 'annotate': 'P7-11 #690 #692 #693',
 };
 const LEDGER = {
   'first-launch': 'OPEN-01/08', 'folder-loading': 'FOLDER-01/05', 'grid-light': 'GRID-01/02', 'empty-folder': 'FOLDER-08',
   'permission-denied': 'ACCESS-03/04 · FOLDER-09', 'viewer-quiet': 'CHROME-01', 'viewer-controls': 'CHROME-02', 'original-size': 'VIEW-02/04',
   'image-error': 'OPEN-05', 'viewer-filmstrip': 'FILM-01', 'search-empty': 'GRID-07', 'grid-multiselect': 'GRID-04/05', 'grid-context-menu': 'GRID-09/10/11',
   'viewer-inspector': 'INFO-01/02', 'viewer-inspector-light': 'INFO-01', 'grid-display': 'PREF-03', 'grid-dark': 'PREF-01', 'keyboard-focus': 'A11Y-02',
-  'compact-grid': 'GRID-08', 'settings': 'PREF-01/03 · CACHE-03', 'shortcuts': 'CMD-01',
+  'compact-grid': 'GRID-08', 'settings': 'PREF-01/03 · CACHE-03 · CAP-01 · EXT-04', 'shortcuts': 'CMD-01',
+  'capture-bar': 'CAP-01 · EXT-05', 'capture-thumbnail': 'CAP-02 · EXT-05', 'annotate': 'EDIT-07/08',
 };
 // A page that a later design replaces. The card stays the state page; the overlay names the replacement (not a branch).
 const REPLACED = {};
 
 const K = s => s.replace(/\[([^\]]+)\]/g, '<kbd>$1</kbd>');   // [Esc] → App shortcut
-// Entrances into J1/J2 (plan §1.6, ledger OPEN-*/ACCESS-01). The last column is where the user lands.
+// Entrances into J1/J2 and J5 (plan §1.6, ledger OPEN-*/ACCESS-01, CAP-01, EDIT-07). The last column is where the user lands.
 // A single image (ADR-0010, OPEN-03/04, ACCESS-01): inside an access root the folder scan starts without a prompt;
 // outside every root only this image is usable until → asks for access.
 const IN_ROOT = '13 大图（<a href="#J2">J2</a>），这一张为当前项，不弹授权，同目录开始扫描；[Esc] → 24（尚未扫描完时）→ 11，当前项仍是这一张（ADR-0010）';
@@ -198,11 +201,14 @@ const ENTRIES = [
   ['把一张图片拖进窗口，所在文件夹在授权范围内', 'OPEN-04 · ACCESS-01', IN_ROOT],
   ['把一张图片拖进窗口，所在文件夹不在授权范围内', 'OPEN-04 · ACCESS-01', NOT_IN_ROOT],
   ['文件菜单「打开最近使用」，或 22 的「最近打开」', 'OPEN-06', '24 → 11；授权已失效时 → 26（<a href="#J1">J1 支线</a>）'],
+  ['截图工具条打开后，点工具条或按全局快捷键 [⌃⇧⌘1]–[⌃⇧⌘4]（没有 Mado 窗口也可以）', 'CAP-01 · EXT-05', '38 截图缩略图；识别文字时只有文字通知（<a href="#J5">J5</a>）'],
+  ['在大图按 [⌘E]，或点缩略图上的「标注」', 'EDIT-07', '39 标注模式（<a href="#J5">J5</a>）'],
 ];
 // A journey: main steps left to right (`t` is the trigger on the arrow INTO the step). `end` is the closing step of the
 // success path. Branches hang below a step and are not part of the main path. A branch with a state page lists its
 // outcomes in `outs`: `k` is what the user does and where it lands (shown as a ↩ edge), `to` is the destination page,
-// `from` the page before the step when it is not the step itself, `q` the branch page's query for that outcome. Each
+// `from` the page before the step when it is not the step itself, `q` the branch page's query for that outcome, `toQ`
+// the destination's query. A step or `end` may carry `q`: its card opens that sub-case, and its branches start there. Each
 // outcome plays on its own: from → branch page (or the step, for a branch without a card) → to. A branch without a
 // state page only declares `to` as text. `loop` marks optional actions that return to the same step; `variants` are
 // sub-cases of the branch page, opened by query; `title` replaces the card title when the state is not the page's own.
@@ -281,6 +287,48 @@ const JOURNEYS = [
       branches: [{ id: 'J4-shortcuts', p: 'shortcuts', t: '帮助 →「键盘快捷键」（任何时候）', outs: [{ k: '[⌘W] 关闭窗口 → 回到 11', to: 'grid-light' }] },
                  { id: 'J4-library', ph: ['个人收藏 / 最近查看', '还没有状态稿。点侧栏「个人收藏」或「最近查看」，网格只显示这些图片（GRID-12、GRID-17，P3-14 #115）。'],
                    t: '点侧栏「个人收藏」/「最近查看」', to: '点侧栏里的文件夹 → 11；来自失效文件夹的图片 → 26' }] } },
+  { id: 'J5', name: '截图与标注', goal: '截一张图，标出重点，存成不覆盖原图的标注副本', stages: ['打开截图工具条', '截图', '缩略图', '标注', '存储副本'],
+    wps: 'P7-10 #682 #683 #684 #685 #686 · P7-01 #687 #688 · P7-12 #689 · P7-11 #690 #692 #693 #694；账簿 CAP-01/02 · EDIT-07/08 · EXT-01/04/05（EXT-01 在图片上选字，没有状态稿）',
+    steps: [
+      { p: 'settings', q: 'section=capture', note: '设置 →「截图」（在「更新」之前）：打开「显示截图工具条」。第一次截图时 macOS 请求录屏权限，只给截图助手',
+        branches: [
+          { id: 'J5-bar-off', p: 'settings', q: 'section=capture&bar=off', title: '35 设置 · 截图 · 工具条关闭', t: '工具条关闭：其余截图设置变灰、不可编辑（5.2）', outs: [
+              { k: '打开「显示截图工具条」→ 回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
+          { id: 'J5-ocr', loop: true, p: 'settings', q: 'section=capture&scroll=ocr', title: '35 设置 · 截图 · 文字识别', t: '填写百度密钥，允许云端识别（EXT-04）', outs: [
+              { k: '「保存到钥匙串」，回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
+        ] },
+      { p: 'capture-bar', t: '打开「显示截图工具条」', note: '工具条浮在所有窗口上，可拖动；关掉 Mado 窗口也在',
+        branches: [
+          { id: 'J5-denied', p: 'capture-bar', q: 'state=denied', title: '37 录屏权限被拒绝', t: '录屏权限被拒绝', outs: [
+              { k: '「打开系统设置」允许后 → 回到 37', to: 'capture-bar' }] },
+          { id: 'J5-collapse', loop: true, p: 'capture-bar', q: 'state=collapsed', title: '37 收起到菜单栏', t: '收起到菜单栏', outs: [
+              { k: '菜单栏图标 →「显示截图工具条」，回到 37', to: 'capture-bar' }],
+            variants: [['state=menu', '菜单栏图标的菜单'], ['hover=region', '悬停提示']] },
+        ] },
+      { p: 'capture-thumbnail', t: '区域 / 窗口 / 全屏截图<br>[⌃⇧⌘1] [⌃⇧⌘2] [⌃⇧⌘3]', note: '存到截图文件夹并拷贝；约 5 秒后消失，悬停时保持；可拖到其他 App',
+        branches: [
+          { id: 'J5-text', p: 'capture-thumbnail', q: 'kind=text', title: '38 文字已拷贝', t: '「识别文字」或 [⌃⇧⌘4]', outs: [
+              { k: '只拷贝文字、不存图；点通知可查看和修改 → 回到 37', from: 'capture-bar', to: 'capture-bar' }],
+            variants: [['kind=text&panel=1', '点开的文字面板'], ['kind=notext', '没有找到文字']] },
+          { id: 'J5-save-off', p: 'capture-thumbnail', q: 'save=off', title: '38 存储关闭', t: '「存储到文件夹」关闭：缩略图多出「存储」（3.5）', outs: [
+              { k: '「标注」先存到截图文件夹，再进入 39', from: 'capture-bar', to: 'annotate' }] },
+          { id: 'J5-dismiss', t: '不操作，或点 ×', to: '缩略图消失，截图已在截图文件夹和剪贴板里' },
+          { id: 'J5-trash', t: '移到废纸篓', to: '文件进废纸篓，可在废纸篓恢复；缩略图消失' },
+          { id: 'J5-open', t: '在 Mado 中打开', to: '13 大图（<a href="#J2">J2</a>），这一张为当前项；第一次会请求截图文件夹授权' },
+        ] },
+      { p: 'annotate', t: '「标注」<br>或在大图按 [⌘E]', note: '工具条在右边竖排，图片适应左边区域；字母键切换工具 V A R T H P M C N',
+        branches: [
+          { id: 'J5-unsaved', p: 'annotate', q: 'sheet=unsaved', title: '39 未存储的标注', t: '有未存储的标记时按 [Esc] 或「完成」', outs: [
+              { k: '「存储」→ 另存为 -annotated 副本，回到大图 13', to: 'viewer-quiet' },
+              { k: '「不存储」→ 丢弃标记，回到大图 13', to: 'viewer-quiet' },
+              { k: '「取消」→ 留在 39', to: 'annotate' }] },
+          { id: 'J5-redact', loop: true, p: 'annotate', q: 'tool=redact', title: '39 遮挡', t: '遮挡 [M]：马赛克或实色块', outs: [
+              { k: '选别的工具，回到 39', to: 'annotate' }],
+            variants: [['tool=redact&style=solid', '实色块']] },
+        ] },
+    ],
+    end: { p: 'annotate', q: 'saved=1', t: '[⌘S] 存储', note: '另存为 DSC_0342-annotated.jpg，原图不变；留在标注模式，打开的预览集不变（#680）',
+      branches: [{ id: 'J5-finder', t: '在访达中显示', to: '访达打开并选中标注副本；回到 Mado 时仍在标注模式' }] } },
 ];
 const REF = { pages: ['grid-dark', 'keyboard-focus', 'compact-grid', 'components'],
   note: '这些页面不是某一步，而是每条旅程都要满足的约束：深色外观、键盘焦点、小窗口布局和组件状态（计划 §1.6）。' };
@@ -307,21 +355,21 @@ function card(n, q, note, extra, title) {
     <div class="cap"><b>${esc(name)}</b>${tags}</div>${note ? `<div class="note">${K(note)}</div>` : ''}</button>`;
 }
 function arrow(t) { return `<div class="arrow"><div class="lab">${K(t || '')}</div><div class="line"></div></div>`; }
-function branch(b, from) {
+function branch(b, from, fromQ) {
   const body = b.p ? card(b.p, b.q, '', b.p === 'image-error' || (b.p === 'permission-denied' && !b.q) || b.q === 'case=failed' ? '<span class="tag err">异常</span>' : '', b.title)
     : b.ph ? `<div class="edge placeholder"><b>${esc(b.ph[0])}</b><span>${esc(b.ph[1])}</span></div>` : '';
   const variants = (b.variants || []).map(([q, label]) => `<button data-page="${b.p}" data-query="${esc(q)}">${esc(label)}</button>`).join('');
   const rets = b.outs
-    ? b.outs.map((o, k) => `<div class="ret">${RET}<span>${K(o.k)}<br><button class="bplay" data-play-branch="${b.id}" data-out="${k}" data-from="${from}" aria-label="播放：${esc(plain(o.k))}">▶ 播放</button></span></div>`).join('')
+    ? b.outs.map((o, k) => `<div class="ret">${RET}<span>${K(o.k)}<br><button class="bplay" data-play-branch="${b.id}" data-out="${k}" data-from="${from}"${fromQ ? ` data-from-q="${esc(fromQ)}"` : ''} aria-label="播放：${esc(plain(o.k))}">▶ 播放</button></span></div>`).join('')
     : `<div class="ret">${RET}<span><b>回到</b> ${K(b.to)}</span></div>`;
   return `<div class="branch${b.loop ? ' loop' : ''}" data-branch="${b.id}" data-to="${esc(b.outs ? b.outs.map(o => plain(o.k)).join('；') : plain(b.to))}">
     <div class="down"><span>${b.loop ? '可选 · ' : ''}${K(b.t)}</span></div>${body}
     ${variants ? `<div class="variants">其他情况：${variants}</div>` : ''}${rets}</div>`;
 }
-function column(p, note, branches) {
+function column(p, note, branches, q) {
   const loops = branches.filter(b => b.loop), rest = branches.filter(b => !b.loop);
-  return `<div class="col">${card(p, '', note)}${rest.map(b => branch(b, p)).join('')}`
-    + (loops.length ? `<div class="loop-label">可选，可反复（不是必经步骤）</div>${loops.map(b => branch(b, p)).join('')}` : '') + '</div>';
+  return `<div class="col">${card(p, q || '', note)}${rest.map(b => branch(b, p, q)).join('')}`
+    + (loops.length ? `<div class="loop-label">可选，可反复（不是必经步骤）</div>${loops.map(b => branch(b, p, q)).join('')}` : '') + '</div>';
 }
 const mainPath = j => j.steps.map(s => s.p).concat(j.end ? [j.end.p] : []);
 const allBranches = j => j.steps.concat(j.end ? [j.end] : []).flatMap(s => s.branches || []);
@@ -332,8 +380,8 @@ function render() {
   const entry = `<section class="journey" id="ENTRY"><div class="jhead"><span class="no">入口</span><h2>从哪里进入</h2><span class="goal">每个入口落到哪一步（计划 §1.6，账簿 OPEN-*、ACCESS-01）</span></div>
     <table class="entries"><thead><tr><th>用户做了什么</th><th>账簿</th><th>落到</th></tr></thead><tbody>${ENTRIES.map(([a, id, to]) => `<tr><td>${K(a)}</td><td class="id">${id}</td><td>${K(to)}</td></tr>`).join('')}</tbody></table></section>`;
   const out = [entry].concat(JOURNEYS.map(j => {
-    const parts = j.steps.map((s, k) => { mark(s); return (k ? arrow(s.t) : '') + column(s.p, s.note, s.branches || []); }).join('')
-      + (j.end ? (mark(j.end), arrow(j.end.t) + column(j.end.p, j.end.note, j.end.branches || [])) : '');
+    const parts = j.steps.map((s, k) => { mark(s); return (k ? arrow(s.t) : '') + column(s.p, s.note, s.branches || [], s.q); }).join('')
+      + (j.end ? (mark(j.end), arrow(j.end.t) + column(j.end.p, j.end.note, j.end.branches || [], j.end.q)) : '');
     return `<section class="journey" id="${j.id}" data-main='${JSON.stringify(mainPath(j))}'><div class="jhead"><span class="no">${j.id}</span><h2>${j.name}</h2><span class="goal">目标：${j.goal}</span>
       <button class="play" data-play="${j.id}">▶ 播放主路径</button><span class="wps">工作包：${j.wps}</span></div>
       <div class="stages">${j.stages.map(s => `<span>${s}</span>`).join('<span class="sep">→</span>')}</div>
@@ -370,17 +418,17 @@ function open(list, title, from) {
 }
 function close() { P('player').classList.remove('open'); P('player').hidden = true; P('p-frame').innerHTML = ''; if (opener) opener.focus(); }
 // Success path only: the main steps and the closing step. Branches are never inlined.
-const journeySeq = j => j.steps.map((s, k) => ({ p: s.p, t: k ? s.t : '起点' })).concat(j.end ? [{ p: j.end.p, t: j.end.t }] : []);
+const journeySeq = j => j.steps.map((s, k) => ({ p: s.p, q: s.q || '', t: k ? s.t : '起点' })).concat(j.end ? [{ p: j.end.p, q: j.end.q || '', t: j.end.t }] : []);
 // One branch outcome: from → the branch page (or the step itself, for a branch without a card) → its destination.
-const branchSeq = (b, o, step) => [{ p: o.from || step, t: '起点' },
-  b.p ? { p: b.p, q: o.q || b.q || '', t: b.t, title: b.title } : { p: step, t: b.at },
-  { p: o.to, t: '↩ ' + (b.p ? '' : plain(b.t) + ' · ') + o.k }];
+const branchSeq = (b, o, step, stepQ = '') => [{ p: o.from || step, q: o.from ? '' : stepQ, t: '起点' },
+  b.p ? { p: b.p, q: o.q || b.q || '', t: b.t, title: b.title } : { p: step, q: stepQ, t: b.at },
+  { p: o.to, q: o.toQ || '', t: '↩ ' + (b.p ? '' : plain(b.t) + ' · ') + o.k }];
 document.addEventListener('click', e => {
   const pl = e.target.closest('[data-play]');
   if (pl) { const j = JOURNEYS.find(x => x.id === pl.dataset.play); return open(journeySeq(j), `${j.id} ${j.name} · 主路径`, pl); }
   const bp = e.target.closest('[data-play-branch]');
   if (bp) { const id = bp.dataset.playBranch, j = JOURNEYS.find(x => allBranches(x).some(b => b.id === id)), b = allBranches(j).find(x => x.id === id);
-            return open(branchSeq(b, b.outs[+bp.dataset.out], bp.dataset.from), `${j.id} 支线 · ${plain(b.t)}`, bp); }
+            return open(branchSeq(b, b.outs[+bp.dataset.out], bp.dataset.from, bp.dataset.fromQ), `${j.id} 支线 · ${plain(b.t)}`, bp); }
   const c = e.target.closest('[data-page]');
   if (c && !c.closest('#player')) open([{ p: c.dataset.page, q: c.dataset.query || '', t: '', title: c.dataset.title }], c.dataset.title || info(c.dataset.page).title, c);
 });
