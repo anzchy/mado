@@ -46,6 +46,17 @@ export const KEY_HANDLERS = [
     anchor: /if letter == "v", plain \{ return \.selectTool \}/, keys: ['V'] },
   { id: 'key:annotate-rectangle', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
     anchor: /if letter == "r", plain \{ return \.selectRectangle \}/, keys: ['R'] },
+  // #692: 箭头 A, 文字 T, 荧光笔 H, 画笔 P, 序号 N, also only inside Annotate Mode.
+  { id: 'key:annotate-arrow', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "a", plain \{ return \.chooseTool\(\.arrow\) \}/, keys: ['A'] },
+  { id: 'key:annotate-text', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "t", plain \{ return \.chooseTool\(\.text\) \}/, keys: ['T'] },
+  { id: 'key:annotate-highlighter', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "h", plain \{ return \.chooseTool\(\.highlighter\) \}/, keys: ['H'] },
+  { id: 'key:annotate-pen', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "p", plain \{ return \.chooseTool\(\.pen\) \}/, keys: ['P'] },
+  { id: 'key:annotate-step', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "n", plain \{ return \.chooseTool\(\.step\) \}/, keys: ['N'] },
 ];
 // Every key code handled outside the menus, per file: the page row it belongs to, or why it has none. A code found in a
 // file and not declared here fails, and so does a declared code the file no longer handles.
@@ -79,8 +90,10 @@ export const KEY_SITES = {
     36: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
+  // #692: ⌫ (51) and ⌦ (117) delete the selected mark.
   'App/CanvasWindowController+Annotate.swift': { 53: { excluded: ANNOTATE_ONLY }, 123: { excluded: ANNOTATE_ONLY },
-    124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY } },
+    124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY },
+    51: { excluded: ANNOTATE_ONLY }, 117: { excluded: ANNOTATE_ONLY } },
   'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
     76: { excluded: ANNOTATE_SHEET } },
   'App/CaptureHelper/CaptureSelectionPanel.swift': { 53: { excluded: 'Esc cancels a transient helper Capture selection, not a Mado command' } },
