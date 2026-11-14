@@ -13,8 +13,13 @@ public enum RedactionRenderer {
     public static func render(_ image: CGImage, rect: CGRect, style: RedactionStyle) throws -> CGImage {
         switch style {
         case .solid: try redact(image, rect: rect) { pixels, area in pixels.fill(area) }
-        case .mosaic(let strength): try redact(image, rect: rect) { pixels, area in pixels.pixelate(area, cell: strength) }
+        case .mosaic(let strength): try pixelate(image, rect: rect, cell: strength)
         }
+    }
+
+    /// Mosaic with square cells exactly `cell` pixels wide, before the minimum strength is applied.
+    static func pixelate(_ image: CGImage, rect: CGRect, cell: Int) throws -> CGImage {
+        try redact(image, rect: rect) { pixels, area in pixels.pixelate(area, cell: cell) }
     }
 
     /// Draws `image` into a top-left pixel buffer, applies `change` to the covered pixels and returns the result.
@@ -80,6 +85,19 @@ public enum RedactionRenderer {
             }
         }
 
-        mutating func pixelate(_ area: PixelArea, cell: Int) {}
+        /// Square cells `cell` pixels wide start at the area's top-left corner; cells at the far edges are clipped
+        /// to the area. Each cell takes the rounded mean of its pixels, channel by channel in premultiplied form.
+        mutating func pixelate(_ area: PixelArea, cell: Int) {
+            for top in stride(from: area.minY, to: area.maxY, by: cell) {
+                for left in stride(from: area.minX, to: area.maxX, by: cell) {
+                    let xs = left..<min(left + cell, area.maxX), ys = top..<min(top + cell, area.maxY)
+                    var sums = [0, 0, 0, 0]
+                    for y in ys { for x in xs { for c in 0..<4 { sums[c] += Int(bytes[(y * width + x) * 4 + c]) } } }
+                    let count = xs.count * ys.count
+                    let mean = sums.map { UInt8(($0 + count / 2) / count) }
+                    for y in ys { for x in xs { for c in 0..<4 { bytes[(y * width + x) * 4 + c] = mean[c] } } }
+                }
+            }
+        }
     }
 }
