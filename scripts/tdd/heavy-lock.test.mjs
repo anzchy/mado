@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { runAttestedSync } from './status-channel.mjs';
 import { fixtureEnv } from './fixture-env.mjs';
+import { publishedPIDLines, safeKill, pidAlive } from './fixture-pid.mjs';
 
 const root = process.cwd();
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'picsee-lock-tests-'));
@@ -196,6 +197,30 @@ redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
   assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
   assert.equal((await run(['true'],env)).code,0);
 });
+
+// #705 T1: a job stopped at its deadline may still be forking (a build tool
+// starting compilers). One KILL per stop misses a member forked after that
+// snapshot: its parent is gone, nothing signals it again, the stop reports
+// survivors and keeps the shared lock. KILL must repeat until the group is empty.
+redTest('timeoutKillsMembersForkedAfterTheKillSnapshot', async () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS:'1', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.2'};
+  const manifest = path.join(env.HOME, 'forked-pids');
+  // Each forked member appends its PID in one write; the forker ignores TERM and never stops forking.
+  const forker = `process.on('SIGTERM',()=>{});const {spawn}=require('node:child_process'),fs=require('node:fs');` +
+    `setInterval(()=>{const c=spawn('/bin/sleep',['7'],{stdio:'ignore'});c.unref();fs.appendFileSync(${JSON.stringify(manifest)},c.pid+'\\n');},4);`;
+  try {
+    const result = await run([process.execPath,'-e',forker],env);
+    assert.match(result.output,/execution timeout/);
+    assert.equal(result.code,124,result.output);
+    assert.doesNotMatch(result.output,/incomplete cleanup/);
+    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,'a complete cleanup releases the shared lock');
+    const forked = publishedPIDLines(manifest) ?? [];
+    assert.ok(forked.length > 10, `the job kept forking (${forked.length} members)`);
+    assert.deepEqual(forked.filter(pidAlive), [], 'every forked member is gone');
+  } finally {
+    for (const pid of publishedPIDLines(manifest) ?? []) safeKill(pid, 'SIGKILL');
+  }
+}, {timeout:30000});
 
 redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_MDPRO_LOCK:'off'};

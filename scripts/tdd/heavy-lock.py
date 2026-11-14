@@ -482,8 +482,13 @@ def stop_owned(child, root, groups, hosts, grace, control, session, excluded=0,
             if not sent_term:
                 signal_owned(rows, signal.SIGTERM)
                 sent_term = True
-            if time.monotonic() - started >= grace and killed_at is None:
-                killed_at = time.monotonic()
+            if time.monotonic() - started >= grace:
+                # After the grace, KILL every member of each fresh snapshot
+                # (#705 T1). A single KILL misses members forked between that
+                # snapshot and their parent's death; they appear only in a later
+                # one. The 5 s window below still bounds an unkillable group.
+                if killed_at is None:
+                    killed_at = time.monotonic()
                 signal_owned(rows, signal.SIGKILL)
         now = time.monotonic()
         if killed_at is None and now - started >= grace:
