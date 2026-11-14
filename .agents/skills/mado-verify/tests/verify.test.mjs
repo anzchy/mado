@@ -160,3 +160,17 @@ test('manual check requires the apptests gate; a recorded skip is exit 0 with th
   recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, keyLine: 'apptests=skip (no App-facing change)' } : g) });
   assert.equal(check(f, f.head()).status, 0);
 });
+
+test('a Codex apptests NOT VERIFIED entry passes the check with a warning; other gates cannot use it', t => {
+  const f = fixture(t);
+  const reason = 'Codex sandbox: NSApp.isActive=false keyWindow=nil';
+  recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, exitCode: 70, notVerified: reason } : g) });
+  const ok = check(f, f.head());
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /apptests NOT VERIFIED: Codex sandbox/);
+  assert.match(ok.stdout, /owner-gates/);
+  recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, exitCode: 70, notVerified: '' } : g) });
+  assert.match(check(f, f.head()).stderr, /failed apptests: 70/);
+  recordFor(f, { gates: gates().map(g => g.name === 'swift' ? { ...g, exitCode: 1, notVerified: reason } : g) });
+  assert.match(check(f, f.head()).stderr, /failed swift: 1/);
+});

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { gateVerdict } from './gate-policy.mjs';
+import { gateVerdict, notVerifiedGates } from './gate-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
 function privacyHits(body) {
@@ -47,6 +47,7 @@ function check(args) {
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${current} issue=${record.issue} comment=${record.commentUrl}`);
+  for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is the binding result`);
 }
 try {
   if (mode === 'check') { check(process.argv.slice(3)); process.exit(0); }

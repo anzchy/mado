@@ -3,9 +3,9 @@
 # implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
 # ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
 #   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild=
-#   / apptests= (full App test target via xcodebuild test when the merge-base diff touches App/, AppTests/, project.yml or
-#   Packages/MadoKit/Sources/MadoMacUI/; else "apptests=skip (no App-facing change)") plus its "apptests: … Test run with N
-#   tests …" lines / node= / ledger= / diffcheck= / design= / the Swift "Test run with N tests" line / DONE
+#   / apptests= (xcodebuild build-for-testing + scripts/tdd/app-lane.mjs, no filter, when the merge-base diff touches App/,
+#   AppTests/, project.yml or Packages/MadoKit/Sources/MadoMacUI/; else "apptests=skip (no App-facing change)") plus
+#   "apptests: Tests run: N, Failures: F, …" / node= / ledger= / diffcheck= / design= / the Swift "Test run with N tests" line / DONE
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
@@ -65,7 +65,9 @@ echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
   > $o/$p-xcodebuild.log 2>&1; lane_result xcodebuild $?
-# App tests: the full App test target (no filter) when the diff from the merge-base is App-facing (#702, #701).
+# App tests: the full App lane as CI runs it, when the diff from the merge-base is App-facing (#702, #701).
+# Plain `xcodebuild test` hangs on the mini (bundle instance / runner connection, exit 65), so: build-for-testing,
+# then scripts/tdd/app-lane.mjs with no filter (retained MadoAppTests group + MadoHostedFocusTests group; exit 0/1/70).
 app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
 if ! mb=$(git merge-base "$base" HEAD 2>/dev/null) || [[ -z "$mb" ]]; then
   echo "apptests: cannot compute merge-base of $base and HEAD" > $o/$p-apptests.log
@@ -73,15 +75,21 @@ if ! mb=$(git merge-base "$base" HEAD 2>/dev/null) || [[ -z "$mb" ]]; then
 elif ! git diff --name-only "$mb" HEAD | grep -Eq "$app_facing"; then
   echo "apptests=skip (no App-facing change)" >> $s || summary_error
 else
-  $hl xcodebuild test -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
-    > $o/$p-apptests.log 2>&1
+  $hl xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
+    -derivedDataPath .build/dd-ci > $o/$p-apptests.log 2>&1
   app_code=$?
-  if (( app_code == 0 )) && ! grep -Eq 'Test run with [0-9]+ tests? .*passed' $o/$p-apptests.log; then
-    echo "apptests: exit 0 but no 'Test run with N tests … passed' line; treated as failure" >> $o/$p-apptests.log
-    app_code=1
+  if (( app_code != 0 )); then
+    echo "apptests: build-for-testing failed (exit $app_code); App lane not run" >> $o/$p-apptests.log
+  else
+    env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs >> $o/$p-apptests.log 2>&1
+    app_code=$?
+    if (( app_code == 0 )) && ! grep -Eq '^Tests run: [1-9][0-9]*, Failures: 0' $o/$p-apptests.log; then
+      echo "apptests: exit 0 but no 'Tests run: N' line with N > 0 and no failures; treated as failure" >> $o/$p-apptests.log
+      app_code=1
+    fi
   fi
   lane_result apptests $app_code
-  grep -E 'Test run with [0-9]+ tests?' $o/$p-apptests.log | sed 's/^/apptests: /' >> $s || summary_error
+  grep -E '^Tests run: [0-9]+' $o/$p-apptests.log | tail -1 | sed 's/^/apptests: /' >> $s || summary_error
 fi
 node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?

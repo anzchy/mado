@@ -670,17 +670,24 @@ exec "{real_git}" "$@"
 
 
 class OwnerGatesAppTestsTests(unittest.TestCase):
-    """The apptests lane runs the full App test target when the diff from the merge-base is App-facing (#702, #701)."""
+    """The apptests lane runs the full App lane as CI does when the merge-base diff is App-facing (#702, #701).
 
-    def run_case(self, changed_path, rc=0, output="\u2714 Test run with 12 tests in 3 suites passed after 1.0 seconds.\n"):
+    Plain `xcodebuild test` hangs on the mini (bundle instance / runner connection, exit 65), so the lane is
+    build-for-testing plus scripts/tdd/app-lane.mjs with no filter, both under heavy-lock."""
+
+    COUNT = "Tests run: 412, Failures: 0, Errors: 0, Skipped: 0\n"
+
+    def run_case(self, changed_path, rc=0, output=COUNT, build_rc=0):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             work, out, tools = root / "work", root / "out", root / "tools"
             first = root / "home/.picsee/tools/xcodegen/bin"
             for path in (work, out, tools, first, work / "scripts/tdd", work / "node_modules"):
                 path.mkdir(parents=True, exist_ok=True)
+            calls = root / "calls"
             env = {**os.environ, "HOME": str(root / "home"), "PICSEE_GATES_OUT": str(out),
-                   "APP_RC": str(rc), "APP_OUT": output, "XCODEBUILD_ARGS": str(root / "xcodebuild-args"),
+                   "APP_RC": str(rc), "APP_OUT": output, "BUILD_RC": str(build_rc), "CALLS": str(calls),
+                   "PICSEE_APP_FILTER": "leftoverFilter",
                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
             for folder in ("agents", "tdd", "ledger", "name-checks", "ci"):
@@ -706,32 +713,41 @@ class OwnerGatesAppTestsTests(unittest.TestCase):
             (tools / "owner-gates.sh").write_text(Path(__file__).with_name("owner-gates.sh").read_text())
             for command in ("xcodegen", "npm"):
                 executable(first / command, "exit 0\n")
-            executable(first / "node", '[ "$1" = scripts/tdd/unit-lane.mjs ] && echo "Test run with 1 tests passed"\nexit 0\n')
-            executable(first / "xcodebuild", '''[ "$1" = test ] || exit 0
+            executable(first / "node", '''[ "$1" = scripts/tdd/unit-lane.mjs ] && echo "Test run with 1 tests passed"
+if [ "$1" = scripts/tdd/app-lane.mjs ]; then
+  [ "$TEST_HEAVY_HELD" = 1 ] || exit 91
+  echo "node $* filter=${PICSEE_APP_FILTER-unset}" >> "$CALLS"
+  printf '%s' "$APP_OUT"
+  exit "$APP_RC"
+fi
+exit 0
+''')
+            executable(first / "xcodebuild", '''[ "$1" = build ] && exit 0
 [ "$TEST_HEAVY_HELD" = 1 ] || exit 91
-printf '%s\\n' "$@" > "$XCODEBUILD_ARGS"
-printf '%s' "$APP_OUT"
-exit "$APP_RC"
+echo "xcodebuild $*" >> "$CALLS"
+[ "$1" = build-for-testing ] && exit "$BUILD_RC"
+exit 66
 ''')
             result = subprocess.run(["zsh", str(tools / "owner-gates.sh"), str(work), "HEAD", "t", base],
                                     capture_output=True, text=True, env=env, timeout=20)
             summary = (out / "t-summary.txt").read_text().splitlines()
-            args = (root / "xcodebuild-args").read_text().splitlines() if (root / "xcodebuild-args").exists() else None
+            ran = calls.read_text().splitlines() if calls.exists() else []
             log = (out / "t-apptests.log").read_text() if (out / "t-apptests.log").exists() else None
-            return result, summary, args, log
+            return result, summary, ran, log
 
-    def test_app_facing_paths_run_the_full_app_test_target_under_heavy_lock(self):
+    def test_app_facing_paths_build_for_testing_then_run_the_full_app_lane(self):
         for changed in ("App/Feature.swift", "App/Resources/Localizable.xcstrings", "AppTests/FeatureTests.swift",
                         "project.yml", "Packages/MadoKit/Sources/MadoMacUI/View.swift"):
             with self.subTest(changed):
-                result, summary, args, log = self.run_case(changed)
+                result, summary, ran, log = self.run_case(changed)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual(args, ["test", "-scheme", "Mado", "-destination", "platform=macOS",
-                                        "CODE_SIGNING_ALLOWED=NO", "-derivedDataPath", ".build/dd-ci"])
-                self.assertNotIn("-only-testing", "\n".join(args))
+                self.assertEqual(ran, [
+                    "xcodebuild build-for-testing -scheme Mado -destination platform=macOS CODE_SIGNING_ALLOWED=NO "
+                    "-derivedDataPath .build/dd-ci",
+                    "node scripts/tdd/app-lane.mjs filter=unset"])
                 self.assertIn("apptests=0", summary)
-                self.assertIn("apptests: \u2714 Test run with 12 tests in 3 suites passed after 1.0 seconds.", summary)
-                self.assertIn("Test run with 12 tests", log)
+                self.assertIn("apptests: Tests run: 412, Failures: 0, Errors: 0, Skipped: 0", summary)
+                self.assertIn("Tests run: 412", log)
                 self.assertLess(summary.index("xcodebuild=0"), summary.index("apptests=0"))
                 self.assertLess(summary.index("apptests=0"), summary.index("node=0"))
                 self.assertEqual(summary[-1], "DONE")
@@ -740,26 +756,36 @@ exit "$APP_RC"
         for changed in ("Packages/MadoKit/Sources/MadoCore/Model.swift", "docs/notes.md", "scripts/agents/tool.mjs",
                         "Applications.md"):
             with self.subTest(changed):
-                result, summary, args, log = self.run_case(changed)
+                result, summary, ran, log = self.run_case(changed)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIsNone(args)
+                self.assertEqual(ran, [])
                 self.assertIn("apptests=skip (no App-facing change)", summary)
                 self.assertEqual(summary[-1], "DONE")
 
-    def test_failed_app_tests_fail_the_run_and_copy_the_result_line(self):
-        failed = "\u2718 Test run with 12 tests in 3 suites failed after 1.0 seconds with 5 issues.\n"
-        result, summary, _, _ = self.run_case("App/Feature.swift", rc=65, output=failed)
+    def test_app_lane_exit_codes_pass_through_with_the_count_line(self):
+        for rc, output in ((1, "Tests run: 412, Failures: 5, Errors: 0, Skipped: 0\n"),
+                           (70, "app-lane combined: hosted group did not start\n")):
+            with self.subTest(rc):
+                result, summary, _, _ = self.run_case("App/Feature.swift", rc=rc, output=output)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"apptests={rc}", summary)
+                self.assertIn(f"apptests={rc}", result.stdout)
+                if rc == 1:
+                    self.assertIn("apptests: " + output.strip(), summary)
+                self.assertEqual(summary[-1], "DONE")
+
+    def test_failed_build_for_testing_skips_the_lane_run_and_fails(self):
+        result, summary, ran, log = self.run_case("App/Feature.swift", build_rc=65)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("apptests=65", summary)
-        self.assertIn("apptests: " + failed.strip(), summary)
-        self.assertIn("apptests=65", result.stdout)
-        self.assertEqual(summary[-1], "DONE")
+        self.assertEqual(len(ran), 1)
+        self.assertIn("build-for-testing failed", log)
 
-    def test_a_pass_without_a_test_run_line_is_a_failure(self):
-        result, summary, _, log = self.run_case("App/Feature.swift", output="** TEST SUCCEEDED **\n")
+    def test_a_pass_without_a_count_line_is_a_failure(self):
+        result, summary, _, log = self.run_case("App/Feature.swift", output="done\n")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("apptests=1", summary)
-        self.assertIn("no 'Test run with N tests", log)
+        self.assertIn("no 'Tests run: N' line", log)
 
 
 class ResolvePart3Tests(unittest.TestCase):
