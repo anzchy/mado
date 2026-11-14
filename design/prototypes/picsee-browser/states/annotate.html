@@ -14,7 +14,9 @@
   The image is fitted to the area left of it (right inset 64 px, 16 px margins), so the strip never covers the image.
   Strip order (spec #680 stories 39–59, grilling 4.3/4.7): 选择 | 箭头 矩形 文字 荧光笔 画笔 遮挡 裁剪 序号 | 撤销 重做 |
   拷贝 存储 | 完成. Hover tips (title) carry the single-letter shortcuts of decision 5.5: V A R T H P M C N; 拷贝 ⌘C,
-  存储 ⌘S, 完成 Esc. Marks use --color-danger. Buttons do nothing. Radii, shadows and colours use the design tokens.
+  存储 ⌘S, 完成 Esc. Marks use the fixed annotation red (the light value of --color-danger, #dc2626) in both
+  appearances: marks are image content and the flattened Annotated Copy must not depend on the app appearance
+  (#680 r1 decision Q8). In windows too short for the strip it scrolls inside itself (max-height). Buttons do nothing. Radii, shadows and colours use the design tokens.
   ⌘S follows the #680 decision of 2026-11-13: stay in Annotate Mode on the original and confirm 「已存储为 <name>」 with
   在访达中显示; the open Preview Set does not change.
   The bare URL is the pinned main case: the rectangle tool active with four marks, light. Sub-cases, by query:
@@ -69,7 +71,8 @@
   /* Annotate D: the vertical tool strip docked on the right edge. */
   .annotate-strip { position: absolute; z-index: 5; right: 12px; top: 50%; transform: translateY(-50%); width: 48px; display: flex; flex-direction: column; align-items: center; gap: 2px;
                     padding: 4px; border-radius: var(--radius-popover); background: color-mix(in srgb, var(--color-panel) 72%, transparent);
-                    backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation)); box-shadow: var(--shadow-soft); }
+                    backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation)); box-shadow: var(--shadow-soft);
+                    max-height: calc(100% - 24px); overflow-y: auto; }
   .annotate-strip .hsep { flex: none; width: 24px; height: 1px; margin: 4px 0; background: var(--color-border); }
   .tool { flex: none; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; }
   .tool[aria-pressed="true"] { background: var(--color-accent-fill); color: var(--color-on-accent); }
@@ -113,7 +116,7 @@
 <img class="annotate-image" id="annotate-image" src="assets/images/b3525a0437e56edf3a3f.jpg" alt="DSC_0342.jpg">
 <canvas class="mosaic" id="mosaic" data-redact hidden></canvas>
 <div class="solid" id="solid" data-redact hidden></div>
-<svg class="marks" viewBox="0 0 1280 800" width="1280" height="800" aria-label="标记" role="img" style="color: var(--color-danger)">
+<svg class="marks" viewBox="0 0 1280 800" width="1280" height="800" aria-label="标记" role="img" style="color: #dc2626">
   <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
     <rect id="mark-plaque" x="560" y="312" width="96" height="70" rx="1"/>
     <rect x="528" y="442" width="176" height="60" rx="1"/>

@@ -11,8 +11,9 @@
   The page is a whole screen (1280×800 = one display): a desktop with the system menu bar, another app's window, and the
   Capture Bar floating above them. Content from spec #680 and grilling 2.1–2.4: region, window and full-screen capture,
   capture and recognise text, Open Mado (no delayed capture); a drag handle; collapse to the menu bar icon. The bar is
-  drawn at an example position (centred, 32 px below the menu bar): the default position is not decided, and the bar
-  remembers where it is dragged. Buttons do nothing. Radii, shadows and colours use the design tokens.
+  drawn at its default position: top centre, 32 px below the menu bar, on the display with the pointer. After a drag
+  the position is remembered per display (grilling 2.2; #680 r1 decision Q1). #682 asserts the bar's size and
+  internals, not its screen position. Buttons do nothing. Radii, shadows and colours use the design tokens.
   The bare URL is the pinned main case: the bar expanded, light. Sub-cases, by query:
     ?hover=region        the pointer over 区域截图: hover fill and its tooltip (name and shortcut)
     ?state=collapsed     collapsed: no bar, only the menu bar icon
