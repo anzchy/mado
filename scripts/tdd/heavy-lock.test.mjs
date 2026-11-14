@@ -222,6 +222,30 @@ redTest('timeoutKillsMembersForkedAfterTheKillSnapshot', async () => {
   }
 }, {timeout:30000});
 
+// #705 T2: a job killed by SIGKILL (jetsam on a full machine, kill -9) must exit
+// 128+9, not crash the supervisor on signal.signal(SIGKILL) into a traceback and
+// exit 1, the status of an ordinary test failure. The lock is released after.
+redTest('jobKilledBySigkillExits137WithoutTraceback', async () => {
+  const env = environment();
+  const result = await run(['/bin/sh','-c','kill -KILL $$'],env);
+  assert.equal(result.signal,null,result.output);
+  assert.equal(result.code,137,result.output);
+  assert.doesNotMatch(result.output,/Traceback|OSError|Invalid argument/);
+  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,'the shared lock is released');
+  const next = await run(['/bin/sh','-c','echo admitted'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'10'});
+  assert.equal(next.code,0,next.output);
+  assert.match(next.output,/admitted/);
+}, {timeout:30000});
+
+// Catchable job signals keep their existing report: the supervisor re-raises them.
+test('job killed by a catchable signal is still re-raised', async () => {
+  for (const sig of ['TERM','INT','HUP']) {
+    const result = await run(['/bin/sh','-c',`kill -${sig} $$`],environment());
+    assert.equal(result.signal,`SIG${sig}`,`${sig}: ${result.output}`);
+    assert.doesNotMatch(result.output,/Traceback/);
+  }
+}, {timeout:30000});
+
 redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid'), outerGroup=path.join(env.HOME,'outer-group');
