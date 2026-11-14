@@ -72,6 +72,10 @@ public struct AnnotationMark: Hashable, Sendable {
         self.kind = kind; self.rect = rect; self.points = points; self.text = text; self.style = style
     }
 
+    /// The first point (an arrow's tail, a text mark's origin, a step's centre), or the rect's origin for a mark
+    /// without points.
+    public var anchor: CGPoint { points.first ?? rect.origin }
+
     public static func arrow(tail: CGPoint, tip: CGPoint, style: AnnotationStyle = .default) -> AnnotationMark {
         AnnotationMark(kind: .arrow, rect: bounds([tail, tip]), points: [tail, tip], text: "", style: style)
     }
