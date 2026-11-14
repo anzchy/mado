@@ -49,6 +49,19 @@ private actor CaptureBarTestPreferences: CaptureBarPreferencePort {
     #expect(note.stringValue == "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots.")
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func issue682CaptureSettingsFirstShowStartsAtTop() throws {
+    let panel = captureSettingsFixture()
+    defer { panel.window.close() }
+    panel.select(.capture)
+    panel.show()
+    let scroll = try #require(captureSettingsView("settings.capture.scroll", in: panel) as? NSScrollView)
+    let document = try #require(scroll.documentView)
+    let toggle = try #require(captureSettingsView("settings.capture.enabled", in: panel) as? NSSwitch)
+    let expectedTop = document.frame.height - scroll.contentView.bounds.height
+    #expect(abs(scroll.contentView.bounds.origin.y - expectedTop) <= 1)
+    #expect(document.visibleRect.intersects(toggle.frame))
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue682CaptureDesignRowsMatchPinnedSettings() throws {
     let panel = captureSettingsFixture()
     defer { panel.window.close() }
