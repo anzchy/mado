@@ -5,11 +5,17 @@ description: Verify an implementation before handoff with Mado's gate ladder, te
 
 # mado-verify
 
-Run before an implementer handoff. Claude invokes `/mado-verify`; Codex follows this file. The project `.claude/settings.json` installs an overlay-gated Stop hook with no argument: it runs in every Claude session but acts only when the session checkout or dispatch target has the implementor role overlay. The implementer-agent frontmatter also installs a Stop hook with `--role-source claude-agent` (converted to SubagentStop when spawned). A Claude implementer session with an overlay may receive both callbacks. The skill carries no hooks. Codex uses the tracked `.codex/hooks.json`; it must be reviewed and trusted in `/hooks` before it runs. A hook is a backstop; the delegator checks the comment link and final head.
+Run before an implementer handoff, on the final head of the first handoff and again on the final head of every fix round. Claude invokes `/mado-verify`; Codex follows this file. There is no hook: the brief requires this skill (the `## Verify (mado-verify)` section of the brief template), and the delegator checks the record and the issue comment for the final head before audit and before merge with the manual check below.
+
+```sh
+node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> [--worktree <wt>]
+```
+
+It exits 0 and prints `OK head=… issue=… comment=…` only when `<wt>` is clean, its HEAD is `<sha>`, `.build/mado-verify/<head>.json` exists for that head, every mandatory gate passed, and `commentUrl` is an issue comment on the recorded issue. Anything else (stale head, failed or missing gate, missing comment) exits 1 with the reason.
 
 ## 0. Define scope
 
-Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. The delegator writes `<session-cwd git toplevel>/.build/mado-verify/target-worktree` before dispatch with `scripts/mark-target.mjs`; check its JSON `{worktree, branch, issue, task, handoff}` against the brief, and do not rewrite it as an implementer. The old one-line format is invalid. The Stop hook checks both the session checkout and that target worktree, including branch, issue and handoff identity. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
+Read the brief, the relevant `docs/feature-ledger.md` acceptance rows, and `git diff --name-status origin/main..HEAD`. The delegator writes `<session-cwd git toplevel>/.build/mado-verify/target-worktree` before dispatch with `scripts/mark-target.mjs`; check its JSON `{worktree, branch, issue, task, handoff}` against the brief, and do not rewrite it as an implementer. The old one-line format is invalid. List applicable layers and write `n/a: <reason>` for each layer that does not apply. Tooling work may have no ledger row. Pin the merge-base and final head SHA.
 
 ## 1. Gate ladder
 
@@ -32,7 +38,7 @@ Create `.build/mado-verify` first, then run `node .agents/skills/mado-verify/scr
 
 ## 4. Issue evidence and record
 
-Fill [`evidence-template.md`](evidence-template.md), preserving its headings and tables. Put structured fields in a JSON input accepted by `scripts/evidence.mjs`; each gate must have a `name`, `command`, and integer `exitCode`. The shared mandatory names live in `scripts/gate-policy.mjs`. `render` checks personal paths and key-like strings, and `post` refuses to call `gh issue comment` if the privacy scan hits. Read the rendered body before posting. `node .../evidence.mjs post <input.json>` posts text to the issue in the brief. Copy the returned comment URL into `commentUrl`, then `node .../evidence.mjs record <input.json>` writes `.build/mado-verify/<head>.json` (gitignored). Failed or incomplete gates can be recorded as evidence but never satisfy the Stop hook. A new commit needs a new comment and record. Put comment URL and covered head SHA in handoff.
+Fill [`evidence-template.md`](evidence-template.md), preserving its headings and tables. Put structured fields in a JSON input accepted by `scripts/evidence.mjs`; each gate must have a `name`, `command`, and integer `exitCode`. The shared mandatory names live in `scripts/gate-policy.mjs`. `render` checks personal paths and key-like strings, and `post` refuses to call `gh issue comment` if the privacy scan hits. Read the rendered body before posting. `node .../evidence.mjs post <input.json>` posts text to the issue in the brief. Copy the returned comment URL into `commentUrl`, then `node .../evidence.mjs record <input.json>` writes `.build/mado-verify/<head>.json` (gitignored). Failed or incomplete gates can be recorded as evidence but never satisfy `evidence.mjs check`. A new commit needs a new comment and record. Put comment URL and covered head SHA in handoff.
 
 For a UI change, screenshots of base and head must use the same state, window size, appearance and scale, and only `TestAssets` content. Scan the crop for private filenames, photos, notifications and other windows. The implementer supplies an exact capture command and output directory. The delegator in the desktop session uploads before/after images via `/browse` into issue comments; `gh` cannot upload comment attachments. The implementer's text and the delegator's images may be separate comments on the same issue. Mark screenshots NOT VERIFIED until uploaded. Do not commit screenshots.
 

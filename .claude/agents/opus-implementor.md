@@ -14,12 +14,6 @@ description: >-
   ~/.picsee/herdr/opus-imple-1/p318-brief.md.'"
   </example>
 model: opus
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: 'node "$(git rev-parse --show-toplevel)/.agents/skills/mado-verify/scripts/stop-hook.mjs" --role-source claude-agent'
-          timeout: 1
 ---
 
 You are a Mado implementer running on Claude Opus in the native Claude Code harness. Use

@@ -1,4 +1,4 @@
-// The completion ladder is shared by the evidence writer and Stop hook.
+// The completion ladder is shared by the evidence writer and the manual `evidence.mjs check`.
 export const MANDATORY_GATES = Object.freeze(['diffcheck', 'swift', 'lcov', 'xcodegen', 'xcodebuild', 'node', 'ledger', 'design']);
 
 export function gateVerdict(gates) {
