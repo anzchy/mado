@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { runAppLane, parseAppResult } from './app-lane.mjs';
 import { fixtureEnv } from './fixture-env.mjs';
+import { publishedPID, publishedPIDList, publishedPIDLines, publishSource, publishListSource, safeKill, pidAlive } from './fixture-pid.mjs';
 
 const baseline = readFileSync(new URL('./fixtures/i411-baseline.txt', import.meta.url), 'utf8');
 const selected = readFileSync(new URL('./fixtures/i411-selected.txt', import.meta.url), 'utf8');
@@ -113,6 +114,12 @@ function appNativeFailureHarness(extraEnv={}){
  const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:20000});
  return {r,pidPath:env.APP_PID};
 }
+// The fixture's native process published its PID and is gone (#705: never probe 0).
+function assertPublishedGone(file) {
+ const pid=publishedPID(file);
+ assert.ok(pid,`fixture must publish a complete PID in ${file}`);
+ assert.equal(pidAlive(pid),false,`fixture process ${pid} must be gone`);
+}
 test('publishedUnknownCleanupRejectsCompletedAppAssertion',()=>{
  const {r}=appNativeFailureHarness({PICSEE_HEAVY_FAULT_QUERY:'1'});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
@@ -126,14 +133,14 @@ test('appExecutionTimeoutHasNoValidRed',()=>{
  assert.match(r.stderr,/execution timeout/);
  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
  assertInvalidRed(r);
- assert.throws(()=>process.kill(Number(readFileSync(pidPath,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(pidPath);
 });
 test('appCancellationHasNoValidRed',()=>{
  const {r,pidPath}=appNativeFailureHarness({APP_CANCEL:'1'});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/status-channel: invalid supervisor exit/);
  assertInvalidRed(r);
- assert.throws(()=>process.kill(Number(readFileSync(pidPath,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(pidPath);
 });
 // #672 fix r1 (AC-2): a leader that exits green while its group survives past
 // the drain is stopped by force; the App gate must not count that run.
@@ -151,7 +158,7 @@ test('appDrainExpiryWithSurvivingDescendantHasNoGreenGate',()=>{
  assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/status-channel: drain expired/);
  assertInvalidRed(r);
- assert.throws(()=>process.kill(Number(readFileSync(env.APP_PID,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(env.APP_PID);
 });
 test('hostedDrainExpiryWithSurvivingDescendantHasNoGreenGate',()=>{
  const r=hostedNativeHarness(false,false,false,false,{HOST_DRAIN:'1',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.1'});
@@ -159,7 +166,7 @@ test('hostedDrainExpiryWithSurvivingDescendantHasNoGreenGate',()=>{
  assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/status-channel: drain expired/);
  assertInvalidRed(r,/hosted-app-lane Tests run:/);
- assert.throws(()=>process.kill(Number(readFileSync(r.pidPath,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(r.pidPath);
 });
 test('repeatWorkerWrappedNativeSpawnCannotBypassCleanupStatus',()=>{
  const dir=mkdtempSync(path.join(tmpdir(),'i657-repeat-wrap-'));temporaryDirectories.add(dir);
@@ -443,35 +450,30 @@ test('harness removes its directories after a failing assertion in a real test p
 // Audit regression: safely cap the caller, then inspect live processes before
 // fallback teardown. RED must not leak a TERM-ignoring process into later tests.
 const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
-const processExists = pid => {
- try {process.kill(pid,0);return true;} catch(error) {if(error.code==='ESRCH')return false;throw error;}
-};
+const processExists = pidAlive;
 async function discoveryProcessCase(kind, cancellation = null) {
  const h=harness(quarantine),marker=path.join(h.dir,'native-pids.json');
  const code=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
  const childCode=`process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`;
  const command=kind.startsWith('descendant')
-  ? `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:${JSON.stringify(kind==='descendant-no-pipes'?'ignore':'inherit')}});require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid,child.pid]));process.exit(0);`
-  : `process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid]));setInterval(()=>{},1000);`;
+  ? `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:${JSON.stringify(kind==='descendant-no-pipes'?'ignore':'inherit')}});${publishListSource(marker,'[process.pid,child.pid]')}process.exit(0);`
+  : `process.on('SIGTERM',()=>{});${publishListSource(marker,'[process.pid]')}setInterval(()=>{},1000);`;
  const runner=spawn(process.execPath,['-e',code,cancellation?'10000':'350',process.execPath,'-e',command],{
   detached:true,stdio:['ignore','pipe','pipe'],
  });
  let stdout='',stderr='',capped=false;
  runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
- const pids=()=>existsSync(marker)?JSON.parse(readFileSync(marker,'utf8')):[];
+ const pids=()=>publishedPIDList(marker)??[];
  const killOwned=()=>{
-  for(const pid of [...pids(),runner.pid]) {
-   try {process.kill(-pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
-   try {process.kill(pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
-  }
+  for(const pid of [...pids(),runner.pid]) {safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}
  };
  const started=Date.now();
  const safety=setTimeout(()=>{capped=true;killOwned();},2500);
  const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
  try {
   if(cancellation) {
-   while(!existsSync(marker)&&Date.now()-started<1500) await pause(10);
-   assert.ok(existsSync(marker),'native command must start before cancellation');
+   while(publishedPIDList(marker)===null&&Date.now()-started<1500) await pause(10);
+   assert.ok(publishedPIDList(marker)!==null,'native command must start before cancellation');
    process.kill(runner.pid,cancellation);
   }
   const outcome=await completion;
@@ -482,8 +484,7 @@ async function discoveryProcessCase(kind, cancellation = null) {
   for(let retry=0;retry<50&&owned.some(processExists);retry++) await pause(10);
   assert.deepEqual(owned.filter(processExists),[],'completed discovery must leave no live owned process');
   for(const pid of owned) {
-   let groupExists=false;try {process.kill(-pid,0);groupExists=true;} catch(error) {if(error.code!=='ESRCH')throw error;}
-   assert.equal(groupExists,false,`native process group ${pid} must be gone`);
+   assert.equal(safeKill(pid,0,{group:true}),false,`native process group ${pid} must be gone`);
   }
   assert.match(stderr,/inventory|timeout|cancel/i);
   return stdout;
@@ -508,15 +509,15 @@ for(const mode of ['managed-wrapper','nested-wrapper','managed-caller']) test(`a
  const nested=mode==='nested-wrapper',callerDeath=mode==='managed-caller';
  const h=harness(),script=path.join(h.dir,'checked.mjs'),supervisorFile=path.join(h.dir,'supervisor-pid'),nativeFile=path.join(h.dir,'native-pid'),callerFile=path.join(h.dir,'caller-pid');
  writeFileSync(h.quarantinePath,JSON.stringify(quarantine));
- const nativeCode=`process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(nativeFile)},String(process.pid));setInterval(()=>{},1000);`;
+ const nativeCode=`process.on('SIGTERM',()=>{});${publishSource(nativeFile)}setInterval(()=>{},1000);`;
  writeFileSync(script,`
 import {spawnSync} from 'node:child_process';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,renameSync} from 'node:fs';
 import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
-writeFileSync(${JSON.stringify(callerFile)},String(process.pid));
+writeFileSync(${JSON.stringify(callerFile+'.tmp')},String(process.pid));renameSync(${JSON.stringify(callerFile+'.tmp')},${JSON.stringify(callerFile)});
 const status=runAppLane({quarantinePath:${JSON.stringify(h.quarantinePath)},env:process.env,spawn:(cmd,args,opts)=>{
  if(cmd==='xcrun') return {status:0,stdout:'/platform\\n',stderr:''};
- const source="require('node:fs').writeFileSync("+${JSON.stringify(JSON.stringify(supervisorFile))}+",String(process.pid));\\n"+args[2];
+ const source=${JSON.stringify(publishSource(supervisorFile))}+"\\n"+args[2];
  return spawnSync(cmd,[args[0],'-e',source,${JSON.stringify(callerDeath?'350':'10000')},process.execPath,'-e',${JSON.stringify(nativeCode)}],opts);
 }});
 process.exitCode=status;
@@ -528,18 +529,19 @@ process.exitCode=status;
  const realLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const runner=spawn(callerDeath||nested?realLock:process.execPath,callerDeath||nested?[process.execPath,script]:[script],{env:lockEnv,detached:true,stdio:['ignore','pipe','pipe']});
  let stderr='';runner.stdout.resume();runner.stderr.on('data',s=>stderr+=s);
- const known=()=>[supervisorFile,nativeFile,callerFile].filter(existsSync).map(p=>Number(readFileSync(p,'utf8')));
- const cleanup=()=>{for(const pid of [...known(),runner.pid])for(const target of [-pid,pid])try{process.kill(target,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}};
+ const known=()=>[supervisorFile,nativeFile,callerFile].map(publishedPID).filter(Boolean);
+ const cleanup=()=>{for(const pid of [...known(),runner.pid]){safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}};
  let capped=false;const cap=setTimeout(()=>{capped=true;cleanup();},5000);
  const completion=new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
  try {
-  const start=Date.now();while(!existsSync(nativeFile)&&Date.now()-start<2000)await pause(10);
-  assert.ok(existsSync(nativeFile),stderr);const [supervisor,native]=known();
-  process.kill(callerDeath?Number(readFileSync(callerFile,'utf8')):supervisor,'SIGKILL');
+  const start=Date.now();while(publishedPID(nativeFile)===null&&Date.now()-start<2000)await pause(10);
+  const supervisor=publishedPID(supervisorFile),native=publishedPID(nativeFile),caller=publishedPID(callerFile);
+  assert.ok(supervisor&&native&&caller,stderr);
+  assert.equal(safeKill(callerDeath?caller:supervisor,'SIGKILL'),true,stderr);
   let competitor;
   if(!nested) {
    const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
-   competitor=spawn(lock,[process.execPath,'-e',`let live=true;try{process.kill(${native},0);}catch(e){if(e.code==='ESRCH')live=false;else throw e;}console.log(JSON.stringify({live}));`],{env:lockEnv,stdio:['ignore','pipe','pipe']});
+   competitor=spawn(lock,[process.execPath,'-e',`let live=false;try{live=process.kill(${native},0);}catch(e){if(e.code!=='ESRCH')throw e;}console.log(JSON.stringify({live}));`],{env:lockEnv,stdio:['ignore','pipe','pipe']});
   }
   const competitorResult=competitor?new Promise((resolve,reject)=>{let out='',err='';competitor.stdout.on('data',s=>out+=s);competitor.stderr.on('data',s=>err+=s);competitor.once('error',reject);competitor.once('close',status=>resolve({status,out,err}));}):null;
   const outcome=await completion;assert.equal(capped,false,stderr);
@@ -558,7 +560,7 @@ test('discoveryOuterCancelAndTimeoutDrainRegisteredGroup', {timeout:15000}, asyn
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const pidPath=path.join(dir,'native-pid'),quarantinePath=path.join(dir,'quarantine.json'),script=path.join(dir,'run.mjs');
   writeFileSync(quarantinePath,JSON.stringify(quarantine));
-  const native=`process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(pidPath)},String(process.pid));setInterval(()=>{},1000);`;
+  const native=`process.on('SIGTERM',()=>{});${publishSource(pidPath)}setInterval(()=>{},1000);`;
   writeFileSync(script,`
 import {spawnSync} from 'node:child_process';
 import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};
@@ -577,16 +579,16 @@ process.exitCode=runAppLane({quarantinePath:${JSON.stringify(quarantinePath)},en
   let pid=0;
   try{
    const until=Date.now()+2500;
-   while(!existsSync(pidPath)&&Date.now()<until)await pause(10);
-   assert.ok(existsSync(pidPath),`${action}: registered discovery started`);
-   pid=Number(readFileSync(pidPath,'utf8'));
+   while(publishedPID(pidPath)===null&&Date.now()<until)await pause(10);
+   pid=publishedPID(pidPath)??0;
+   assert.ok(pid,`${action}: registered discovery started`);
    if(action==='cancel')outer.kill('SIGTERM');
    const outcome=await ended;
    assert.equal(action==='timeout'?outcome.code:outcome.signal,action==='timeout'?124:'SIGTERM');
    for(let retry=0;retry<50&&processExists(pid);retry++)await pause(10);
    assert.equal(processExists(pid),false,`${action}: outer boundary drained discovery PID ${pid}`);
   } finally {
-   if(pid&&processExists(pid))try{process.kill(pid,'SIGKILL');}catch{}
+   safeKill(pid,'SIGKILL');
    if(outer.exitCode===null&&outer.signalCode===null)outer.kill('SIGKILL');
   }
  }
@@ -664,7 +666,7 @@ const status=runAppLane({env:process.env,quarantinePath:${JSON.stringify(h.quara
 writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=status;
 `);
  const sibling=path.join(h.dir,'sibling.cjs');
- writeFileSync(sibling,`process.on('SIGTERM',()=>{require('node:fs').writeFileSync(${JSON.stringify(siblingSignal)},'TERM');process.exit(19);});require('node:fs').writeFileSync(${JSON.stringify(siblingPid)},String(process.pid));setInterval(()=>{},1000);`);
+ writeFileSync(sibling,`process.on('SIGTERM',()=>{require('node:fs').writeFileSync(${JSON.stringify(siblingSignal)},'TERM');process.exit(19);});${publishSource(siblingPid)}setInterval(()=>{},1000);`);
  const node=shellQuote(process.execPath),quotedLane=shellQuote(lane);
  writeFileSync(shell,shape==='pipeline'
   ? `${node} ${quotedLane} | /bin/cat\nstatus=$?\nprintf '%s' "$status" > ${shellQuote(siblingState)}\nexit "$status"\n`
@@ -674,8 +676,8 @@ writeFileSync(${JSON.stringify(laneStatus)},String(status));process.exitCode=sta
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  const runner=spawn(lock,['/bin/sh',shell],{env,detached:true,stdio:['ignore','pipe','pipe']});
  let stdout='',stderr='',capped=false;runner.stdout.on('data',s=>stdout+=s);runner.stderr.on('data',s=>stderr+=s);
- const owned=()=>[supervisors,nativePids,siblingPid].filter(existsSync).flatMap(p=>readFileSync(p,'utf8').trim().split(/\s+/).filter(Boolean).map(Number));
- const cleanup=()=>{for(const pid of [...owned(),runner.pid])for(const target of [-pid,pid])try{process.kill(target,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}};
+ const owned=()=>[...(publishedPIDLines(supervisors)??[]),...(publishedPIDLines(nativePids)??[]),publishedPID(siblingPid)].filter(Boolean);
+ const cleanup=()=>{for(const pid of [...owned(),runner.pid]){safeKill(pid,'SIGKILL',{group:true});safeKill(pid,'SIGKILL');}};
  const start=Date.now(),cap=setTimeout(()=>{capped=true;cleanup();},5000);
  try {
   const outcome=await new Promise((resolve,reject)=>{runner.once('error',reject);runner.once('close',(status,signal)=>resolve({status,signal}));});
@@ -1127,14 +1129,14 @@ test('hostedExecutionTimeoutHasNoValidRed',()=>{
  assert.match(r.stderr,/execution timeout/);
  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
  assertInvalidRed(r,/hosted-app-lane Tests run:/);
- assert.throws(()=>process.kill(Number(readFileSync(r.pidPath,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(r.pidPath);
 });
 test('hostedCancellationHasNoValidRed',()=>{
  const r=hostedNativeHarness(false,true,false,false,{HOST_CANCEL:'1'});
  assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/status-channel: invalid supervisor exit/);
  assertInvalidRed(r,/hosted-app-lane Tests run:/);
- assert.throws(()=>process.kill(Number(readFileSync(r.pidPath,'utf8')),0),{code:'ESRCH'});
+ assertPublishedGone(r.pidPath);
 });
 test('hosted local derived-data override selects the available outside-Documents build',()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'i393-dd-'));temporaryDirectories.add(directory);
