@@ -13,7 +13,7 @@ import Testing
                                              timestamp: 0, windowNumber: panel.windowNumber, context: nil,
                                              characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
                                              isARepeat: false, keyCode: 53))
-    panel.keyDown(with: event)
+    panel.sendEvent(event)
     #expect(results == [true])
     #expect(NSPasteboard.general.changeCount == before)
 }

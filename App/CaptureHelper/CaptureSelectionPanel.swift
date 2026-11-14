@@ -9,7 +9,7 @@ import MadoApplication
          windows: [ScreenCaptureKitScreen.WindowCandidate] = [],
          finish: @escaping (CaptureRequest.Target?) -> Void) {
         let canvas = CaptureSelectionView(screen: screen, displayID: displayID,
-                                          mode: mode, windows: windows, finish: finish)
+                                          mode: mode, windows: windows, finish: { _ in })
         super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         isOpaque = false
@@ -19,11 +19,17 @@ import MadoApplication
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         acceptsMouseMovedEvents = true
         contentView = canvas
+        canvas.finish = { [weak self] target in
+            self?.orderOut(nil)
+            finish(target)
+        }
         makeKeyAndOrderFront(nil)
+        makeFirstResponder(canvas)
         NSCursor.crosshair.set()
     }
 
     override var canBecomeKey: Bool { true }
+    var highlightedWindowID: UInt32? { (contentView as? CaptureSelectionView)?.highlightedWindowID }
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 {
@@ -40,10 +46,12 @@ import MadoApplication
     private let scale: CGFloat
     private let mode: CaptureSelectionPanel.Mode
     private let windows: [(id: UInt32, rect: CGRect)]
-    private let finish: (CaptureRequest.Target?) -> Void
+    var finish: (CaptureRequest.Target?) -> Void
     private var anchor: CGPoint?
     private var selection: CGRect?
     private var hovered: (id: UInt32, rect: CGRect)?
+    private var trackingArea: NSTrackingArea?
+    var highlightedWindowID: UInt32? { hovered?.id }
 
     init(screen: NSScreen, displayID: UInt32, mode: CaptureSelectionPanel.Mode,
          windows: [ScreenCaptureKitScreen.WindowCandidate], finish: @escaping (CaptureRequest.Target?) -> Void) {
@@ -63,6 +71,18 @@ import MadoApplication
     }
 
     required init?(coder: NSCoder) { nil }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeAlways, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: mode == .region ? .crosshair : .pointingHand)

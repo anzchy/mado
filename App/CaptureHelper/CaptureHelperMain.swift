@@ -31,6 +31,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var statusPanel: NSPanel?
     private var status: NSTextField?
     private var selectionPanels: [CaptureSelectionPanel] = []
+    private let selectionAdmission = CaptureSelectionAdmission()
     private let session = CaptureSession(screen: ScreenCaptureKitScreen(), files: MadoInfrastructure.DownloadsCaptureFilePort())
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
 
@@ -91,11 +92,11 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     private func startSelection(_ mode: CaptureSelectionPanel.Mode) {
-        guard selectionPanels.isEmpty else { return }
+        guard selectionPanels.isEmpty, selectionAdmission.begin() else { return }
         let point = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main,
               let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-        else { return }
+        else { selectionAdmission.end(); return }
         if mode == .region {
             showSelection(on: screen, displayID: displayID, mode: mode, windows: [])
         } else {
@@ -106,6 +107,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                     let windows = try await ScreenCaptureKitScreen().selectableWindows(excluding: excluded)
                     showSelection(on: screen, displayID: displayID, mode: mode, windows: windows)
                 } catch {
+                    selectionAdmission.end()
                     report(error)
                 }
             }
@@ -114,19 +116,19 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
 
     private func showSelection(on screen: NSScreen, displayID: UInt32, mode: CaptureSelectionPanel.Mode,
                                windows: [ScreenCaptureKitScreen.WindowCandidate]) {
+        selectionAdmission.end()
         let screens = mode == .window ? NSScreen.screens : [screen]
         for item in screens {
             let id = (item.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? displayID
             let overlay = CaptureSelectionPanel(screen: item, displayID: id, mode: mode, windows: windows) {
                 [weak self] target in
                 guard let self else { return }
-                let overlayIDs = Set(selectionPanels.compactMap { UInt32(exactly: $0.windowNumber) })
+                let overlays = selectionPanels
                 selectionPanels.forEach { $0.orderOut(nil) }
                 selectionPanels.removeAll()
                 guard let target else { return }
-                let barIDs = Set([panel, statusPanel].compactMap { $0.flatMap { UInt32(exactly: $0.windowNumber) } })
-                let request = CaptureRequest(target: target, barWindowIDs: barIDs,
-                                             overlayWindowIDs: overlayIDs)
+                let request = CaptureRequestFromWindows.make(target: target,
+                    bars: [panel, statusPanel].compactMap { $0 }, overlays: overlays)
                 capture(request: request)
             }
             selectionPanels.append(overlay)
@@ -138,16 +140,11 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let url: URL
-                if let request { url = try await session.capture(request: request) }
-                else { url = try await session.capture() }
-                var copied = false
-                if let png = try? Data(contentsOf: url) {
-                    NSPasteboard.general.clearContents()
-                    copied = NSPasteboard.general.setData(png, forType: .png)
-                }
+                let result = try await session.captureResult(request: request)
+                NSPasteboard.general.clearContents()
+                let copied = NSPasteboard.general.setData(result.png, forType: .png)
                 let message = copied ? "Saved %@" : "Saved %@, but clipboard copy failed"
-                status?.stringValue = String(format: String(localized: String.LocalizationValue(message)), url.lastPathComponent)
+                status?.stringValue = String(format: String(localized: String.LocalizationValue(message)), result.url.lastPathComponent)
             } catch {
                 report(error)
             }
