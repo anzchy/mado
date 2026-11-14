@@ -37,18 +37,19 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     }
     private let performRequest: @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void
     private let beforePerform: @Sendable () async -> Void
-    private let cancelRequest: (@Sendable (VNRecognizeTextRequest) -> Void)?
+    private let cancelRequest: @Sendable (VNRecognizeTextRequest) -> Void
+    /// Vision's `perform` is synchronous and can wait on Vision's own queues; it runs here,
+    /// never on a Swift cooperative thread, so it cannot starve the pool (#706).
+    private let performQueue = DispatchQueue(label: "app.mado.text-recognition.perform", qos: .userInitiated)
 
     public init() {
-        performRequest = { handler, request in try handler.perform([request]) }
-        beforePerform = {}
-        cancelRequest = nil
+        self.init(performRequest: { handler, request in try handler.perform([request]) })
     }
 
     init(
         performRequest: @escaping @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void,
         beforePerform: @escaping @Sendable () async -> Void = {},
-        cancelRequest: (@Sendable (VNRecognizeTextRequest) -> Void)? = nil
+        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void = { $0.cancel() }
     ) {
         self.performRequest = performRequest
         self.beforePerform = beforePerform
@@ -65,13 +66,22 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             request.recognitionLanguages = ["zh-Hans", "en-US"]
             request.usesLanguageCorrection = true
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation)
+            let cancellation = PerformCancellation()
             try await withTaskCancellationHandler {
                 await beforePerform()
                 try Task.checkCancellation()
-                try performRequest(handler, request)
+                try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+                    performQueue.async {
+                        if cancellation.isCancelled { return done.resume(throwing: CancellationError()) }
+                        do { try performRequest(handler, request); done.resume() }
+                        catch { done.resume(throwing: error) }
+                    }
+                }
             } onCancel: {
-                if let cancelRequest { cancelRequest(request) }
-                else { request.cancel() }
+                // Vision's cancel can block until its detector yields; never block the
+                // canceller, which may hold the task's status lock (#706).
+                cancellation.cancel()
+                DispatchQueue.global(qos: .userInitiated).async { cancelRequest(request) }
             }
             try Task.checkCancellation()
 
@@ -144,4 +154,13 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
         }
     }
 
+}
+
+/// Marks a recognition cancelled so a perform still waiting on the serial queue never starts.
+private final class PerformCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
 }
