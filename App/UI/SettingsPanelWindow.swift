@@ -61,6 +61,12 @@ private actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
 @MainActor final class SettingsPanelWindow: NSObject, DisplayPreferencesObserver {
     private static let sectionKey = "settings.selectedSection.v1"
+
+    static func restoreCaptureBarOnLaunch() async throws {
+        let control = CaptureBarControl(preferences: AppGroupCaptureBarPreferences(),
+                                        process: WorkspaceCaptureBarProcess())
+        try await control.restoreOnMadoLaunch()
+    }
     let window: NSWindow
     private(set) var selectedSection: SettingsSection
     private let appearanceAdapter: WindowAppearanceAdapter
