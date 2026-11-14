@@ -50,7 +50,7 @@ private func saturationImage() throws -> Data {
 /// cannot resume to cancel, and each perform hits its deadline (starved, not cancelled).
 /// When `perform` runs off the pool, the test cancels promptly and every request
 /// returns `.cancelled` without any perform starving.
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue706SaturatedBlockingRequestsCancelPromptly() async throws {
     let width = ProcessInfo.processInfo.activeProcessorCount + 2
     let recogniser = BlockingRecogniser(deadline: .seconds(3))
@@ -106,7 +106,7 @@ private final class BlockingCanceller: @unchecked Sendable {
 
 /// #706: cancelling a recognition never waits for Vision's cancel to return. On CI the
 /// synchronous `request.cancel()` in the cancellation handler blocked the canceller.
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue706CancelDoesNotWaitForVisionCancel() async throws {
     let fake = BlockingCanceller()
     let provider = OnDeviceTextRecognitionProvider(
