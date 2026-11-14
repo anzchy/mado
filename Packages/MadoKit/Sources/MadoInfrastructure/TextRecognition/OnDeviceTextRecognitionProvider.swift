@@ -130,8 +130,17 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     }
 
     static func orientation(rawValue: UInt32) -> CGImagePropertyOrientation {
-        guard (1...8).contains(rawValue) else { return .up }
-        return CGImagePropertyOrientation(rawValue: rawValue) ?? .up
+        switch rawValue {
+        case 1: .up
+        case 2: .upMirrored
+        case 3: .down
+        case 4: .downMirrored
+        case 5: .leftMirrored
+        case 6: .right
+        case 7: .rightMirrored
+        case 8: .left
+        default: .up
+        }
     }
 
 }
