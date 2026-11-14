@@ -9,8 +9,6 @@ public enum AnnotationFlattener {
     public static func flatten(_ image: CGImage, orientation: Int, marks: [AnnotationMark]) throws -> CGImage {
         let size = uprightSize(width: image.width, height: image.height, orientation: orientation)
         let format = BitmapFormat(image)
-        let markSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-        // A very large image can exceed what CoreGraphics allocates; that is reported, not trapped.
         guard let context = bitmap(size, format: format) else { throw Failure.contextUnavailable }
         let height = CGFloat(size.height)
         context.saveGState()
@@ -19,14 +17,12 @@ public enum AnnotationFlattener {
         context.interpolationQuality = .none
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         context.restoreGState()
-        for mark in marks {
-            let style = mark.style
-            context.setStrokeColor(CGColor(colorSpace: markSpace, components: [style.red, style.green, style.blue, 1])!)
-            context.setLineWidth(style.lineWidth)
-            // Marks use a top-left origin; CoreGraphics draws from the bottom left.
-            let rect = mark.rect
-            context.stroke(CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height))
-        }
+        // Marks use a top-left origin; CoreGraphics draws from the bottom left. The renderer is the overlay's (#692).
+        context.saveGState()
+        context.translateBy(x: 0, y: height)
+        context.scaleBy(x: 1, y: -1)
+        AnnotationRenderer.draw(marks, in: context)
+        context.restoreGState()
         guard let result = context.makeImage() else { throw Failure.contextUnavailable }
         return result
     }
