@@ -67,3 +67,16 @@ func issue687FixSameXOnOneRowUsesVerticalPosition() {
     let boxes = [box("lower", x: 0.1, y: 0.495, h: 0.02), box("upper", x: 0.1, y: 0.5, h: 0.02)]
     #expect(orderedText(boxes) == ["upper", "lower"])
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue687Fix2TallHeadingDoesNotAbsorbBodyLines() {
+    let boxes = [
+        box("body 3", x: 0.45, y: 0.846, h: 0.012),
+        box("heading", x: 0.02, y: 0.84, h: 0.07),
+        box("body 1", x: 0.46, y: 0.885, h: 0.012),
+        box("body 2", x: 0.44, y: 0.866, h: 0.012)
+    ]
+    let expected = ["heading", "body 1", "body 2", "body 3"]
+    #expect(orderedText(boxes) == expected)
+    #expect(orderedText(boxes.reversed()) == expected)
+}
