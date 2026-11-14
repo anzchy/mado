@@ -36,3 +36,25 @@ guard let largeJPEG = CGImageDestinationCreateWithData(oversized, UTType.jpeg.id
 CGImageDestinationAddImage(largeJPEG, largeImage, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
 guard CGImageDestinationFinalize(largeJPEG) else { fatalError("JPEG") }
 try (oversized as Data).write(to: folder.appendingPathComponent("mixed-oversize.jpg"))
+
+guard let dense = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1000, pixelsHigh: 2400,
+                                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                  isPlanar: false, colorSpaceName: .deviceRGB,
+                                  bytesPerRow: 0, bitsPerPixel: 0),
+      let graphics = NSGraphicsContext(bitmapImageRep: dense) else { fatalError("dense bitmap") }
+NSGraphicsContext.saveGraphicsState()
+NSGraphicsContext.current = graphics
+NSColor.white.setFill()
+NSBezierPath(rect: CGRect(x: 0, y: 0, width: 1000, height: 2400)).fill()
+let attributes: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 34, weight: .semibold),
+    .foregroundColor: NSColor.black
+]
+for row in 0..<40 {
+    let label = String(format: "LINE %02d", row) as NSString
+    label.draw(at: CGPoint(x: row == 19 ? 250 : 50, y: 2320 - row * 58), withAttributes: attributes)
+}
+graphics.flushGraphics()
+NSGraphicsContext.restoreGraphicsState()
+guard let densePNG = dense.representation(using: .png, properties: [:]) else { fatalError("dense PNG") }
+try densePNG.write(to: folder.appendingPathComponent("dense-40.png"))

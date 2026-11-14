@@ -30,3 +30,15 @@ func issue687FixOversizeInputIsCappedAndRecognised() async throws {
     let text = try await OnDeviceTextRecognitionProvider().recognise(bytes)
     #expect(text.contains("Hello Mado"))
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue687FixDenseFortyLineFixtureKeepsIndentedRowInOrder() async throws {
+    let text = try await OnDeviceTextRecognitionProvider().recognise(fixFixture("dense-40.png"))
+    let compact = text.replacingOccurrences(of: " ", with: "")
+    let previous = try #require(compact.range(of: "LINE18"))
+    let indented = try #require(compact.range(of: "LINE19"))
+    let next = try #require(compact.range(of: "LINE20"))
+    #expect(previous.lowerBound < indented.lowerBound)
+    #expect(indented.lowerBound < next.lowerBound)
+    #expect(text.split(separator: "\n").count >= 35)
+}
