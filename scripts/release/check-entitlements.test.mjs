@@ -5,13 +5,19 @@ import { checkEntitlements, parsePlistXml } from "./check-entitlements.mjs";
 
 const bundleId = "io.github.anzchy.mado";
 
-function entitlementsXml({ extra = "", sandbox = "<true/>", omit = [], mach = [`${bundleId}-spks`, `${bundleId}-spki`] } = {}) {
+const readWrite = "com.apple.security.files.user-selected.read-write";
+const readOnly = "com.apple.security.files.user-selected.read-only";
+
+function entitlementsXml({ extra = "", sandbox = "<true/>", omit = [], readOnlyKey = false,
+  mach = [`${bundleId}-spks`, `${bundleId}-spki`] } = {}) {
+  // ADR-020: the user-selected key is read-write; `readOnlyKey` adds the retired read-only key.
   const flags = {
     "com.apple.security.app-sandbox": sandbox,
     "com.apple.security.files.bookmarks.app-scope": "<true/>",
-    "com.apple.security.files.user-selected.read-only": "<true/>",
+    [readWrite]: "<true/>",
     "com.apple.security.network.client": "<true/>",
   };
+  if (readOnlyKey) flags[readOnly] = "<true/>";
   const body = Object.entries(flags)
     .filter(([key]) => !omit.includes(key))
     .map(([key, value]) => `\t<key>${key}</key>\n\t${value}`)
@@ -79,7 +85,7 @@ test("each missing key fails and is named", () => {
   for (const key of [
     "com.apple.security.app-sandbox",
     "com.apple.security.files.bookmarks.app-scope",
-    "com.apple.security.files.user-selected.read-only",
+    readWrite,
     "com.apple.security.network.client",
   ]) {
     const problems = check(entitlementsXml({ omit: [key] }), "release");
@@ -89,6 +95,32 @@ test("each missing key fails and is named", () => {
   const problems = check(entitlementsXml({ omit: ["mach"] }), "release");
   assert.equal(problems.length, 1);
   assert.match(problems[0], /mach-lookup/);
+});
+
+test("the retired read-only key fails and read-write is missing", () => {
+  const problems = check(entitlementsXml({ omit: [readWrite], readOnlyKey: true }), "release");
+  assert.equal(problems.length, 2, problems.join("\n"));
+  assert.ok(problems.some((p) => /unexpected.*user-selected\.read-only/.test(p)), problems.join("\n"));
+  assert.ok(problems.some((p) => /missing.*user-selected\.read-write/.test(p)), problems.join("\n"));
+});
+
+test("read-only and read-write together fail", () => {
+  const problems = check(entitlementsXml({ readOnlyKey: true }), "release");
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(problems[0], /user-selected\.read-only/);
+});
+
+test("only the exact decided set passes over every subset", () => {
+  const keys = ["com.apple.security.app-sandbox", "com.apple.security.files.bookmarks.app-scope", readWrite,
+    "com.apple.security.network.client", "mach", readOnly];
+  const decided = new Set(keys.filter((key) => key !== readOnly));
+  for (let mask = 0; mask < 1 << keys.length; mask++) {
+    const present = keys.filter((_, bit) => mask & (1 << bit));
+    const omit = keys.filter((key) => key !== readOnly && !present.includes(key));
+    const problems = check(entitlementsXml({ omit, readOnlyKey: present.includes(readOnly) }), "release");
+    const exact = present.length === decided.size && present.every((key) => decided.has(key));
+    assert.equal(problems.length === 0, exact, `${present.join(",")}: ${problems.join("; ")}`);
+  }
 });
 
 test("sandbox false or a non-boolean flag fails", () => {
