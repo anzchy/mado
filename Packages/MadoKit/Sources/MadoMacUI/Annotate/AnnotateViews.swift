@@ -557,11 +557,10 @@ public enum AnnotatePaint {
                 .map { AnnotationMark(rect: $0, style: screenStyle) }
         case .arrow:
             return AnnotationGeometry.arrow(from: first, to: last, transform: transform, imageSize: imageSize, style: screenStyle)
-        case .highlighter, .pen:
+        default:
+            // Only rectangle, arrow, highlighter and pen start a `.create` drag (mouseDown), so this is a stroke.
             return AnnotationGeometry.stroke(tool == .pen ? .pen : .highlighter, through: points, transform: transform,
                                              imageSize: imageSize, style: screenStyle)
-        case .select, .text, .step:
-            return nil
         }
     }
 
