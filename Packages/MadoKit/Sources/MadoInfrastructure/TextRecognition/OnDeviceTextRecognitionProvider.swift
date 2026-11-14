@@ -36,18 +36,18 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     }
     private let performRequest: @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void
     private let beforePerform: @Sendable () async -> Void
-    private let cancelRequest: @Sendable (VNRecognizeTextRequest) -> Void
+    private let cancelRequest: (@Sendable (VNRecognizeTextRequest) -> Void)?
 
     public init() {
         performRequest = { handler, request in try handler.perform([request]) }
         beforePerform = {}
-        cancelRequest = { request in request.cancel() }
+        cancelRequest = nil
     }
 
     init(
         performRequest: @escaping @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void,
         beforePerform: @escaping @Sendable () async -> Void = {},
-        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void
+        cancelRequest: (@Sendable (VNRecognizeTextRequest) -> Void)? = nil
     ) {
         self.performRequest = performRequest
         self.beforePerform = beforePerform
@@ -68,14 +68,17 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
                 await beforePerform()
                 try performRequest(handler, request)
             } onCancel: {
-                cancelRequest(request)
+                if let cancelRequest { cancelRequest(request) }
+                else { request.cancel() }
             }
             try Task.checkCancellation()
 
             var boxes: [RecognizedTextBox] = []
-            for observation in request.results ?? [] {
-                if let candidate = observation.topCandidates(1).first {
-                    boxes.append(RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox))
+            if let results = request.results {
+                for observation in results {
+                    if let candidate = observation.topCandidates(1).first {
+                        boxes.append(RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox))
+                    }
                 }
             }
             return Self.readingOrder(boxes).map(\.text).joined(separator: "\n")
