@@ -185,19 +185,26 @@ func issue693MosaicMeansAreComputedInTheSourceSpace(format: RedactionFormat) thr
 }
 
 /// Layouts the renderer does not read directly follow #690's flattener rule: an RGB source keeps its colour space
-/// and depth (8-bit, 16-bit or 32-bit float), premultiplied RGBA; anything else becomes sRGB 8-bit.
+/// and depth (8-bit, 16-bit or 32-bit float), premultiplied RGBA; anything else becomes sRGB 8-bit. A decode array
+/// makes the layout unreadable; CoreGraphics drops an identity one (measured), so this one halves red. The redraw
+/// applies it, so outside pixels match the decoded source to within one step of the depth, clamped to 0…1 for an
+/// integer depth (CoreGraphics decodes this premultiplied source's red above 1, which 8 bits cannot hold).
 @Test(arguments: [RedactionFormat.preserved[0], RedactionFormat.preserved[2], RedactionFormat.preserved[4]])
 func issue693UnreadableRGBLayoutIsRedrawnInTheSourceSpaceAndDepth(format: RedactionFormat) throws {
-    let source = RedactionSource(format, decode: [0, 1, 0, 1, 0, 1, 0, 1])
+    let source = RedactionSource(format, decode: [0, 0.5, 0, 1, 0, 1, 0, 1])
+    #expect(source.image.decode != nil, "the source must keep its decode array, or the direct path is tested")
     let before = RedactionSource.decoded(source.image, in: format.colorSpace)
+        .map { $0.map { format.bits == 32 ? $0 : min(max($0, 0), 1) } }
+    let tolerance: Float = format.bits == 32 ? 1e-6 : Float(1 / format.maximum)
     for (style, result) in try redactions(source.image) {
         #expect(result.colorSpace?.name == source.image.colorSpace?.name, "\(style)")
-        #expect(result.bitsPerComponent == format.bits, "\(style)")
+        #expect(result.bitsPerComponent == format.bits && result.decode == nil, "\(style)")
         #expect(result.alphaInfo == .premultipliedLast, "\(style)")
         let after = RedactionSource.decoded(result, in: format.colorSpace)
         for y in 0..<RedactionSource.height {
             for x in 0..<RedactionSource.width where !(xs.contains(x) && ys.contains(y)) {
-                #expect(after[y * RedactionSource.width + x] == before[y * RedactionSource.width + x], "\(style) (\(x), \(y))")
+                let (a, b) = (after[y * RedactionSource.width + x], before[y * RedactionSource.width + x])
+                #expect(zip(a, b).allSatisfy { abs($0 - $1) <= tolerance }, "\(style) (\(x), \(y)): \(a) vs \(b)")
             }
         }
     }
