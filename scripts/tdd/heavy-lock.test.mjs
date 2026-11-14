@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, existsSync, writeFileSync, rmSync, mkdirSync
 import path from 'node:path';
 import os from 'node:os';
 import { runAttestedSync } from './status-channel.mjs';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const root = process.cwd();
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'picsee-lock-tests-'));
@@ -12,7 +13,7 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 const lock = path.join(root, 'scripts/heavy-lock.sh');
 function environment() {
   const home = mkdtempSync(path.join(scratch, 'lock-'));
-  const env = { ...process.env, HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '' };
+  const env = { ...fixtureEnv(), HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '' };
   delete env.PICSEE_HEAVY_CONTROL_FD;
   delete env.PICSEE_HEAVY_FLOCK_FD;
   return env;

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const fixtureTests = fileURLToPath(new URL('./unit-lane.test.mjs', import.meta.url));
 
@@ -22,7 +23,7 @@ if(path.basename(process.argv[1]||'')==='swift'){
 }
 `);
   // This is an independent test runner, not a recursive node:test worker.
-  const childEnv = { ...process.env };
+  const childEnv = { ...fixtureEnv() };
   delete childEnv.NODE_TEST_CONTEXT;
   const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap',
     '--test-name-pattern=full unit success and ordinary failure preserve output, status and single execution', fixtureTests], {

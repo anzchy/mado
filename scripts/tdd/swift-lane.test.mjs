@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSy
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
+import { fixtureEnv } from './fixture-env.mjs';
 
 const root = process.cwd();
 const temp = mkdtempSync(path.join(os.tmpdir(), 'mado-swift-tests-'));
@@ -59,7 +60,7 @@ function pluginTest(name, fn) {
 function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false, extraEnv = {}, timeoutMs = 10000 } = {}) {
   const attempt=mkdtempSync(path.join(temp,'attempt-'));
   const argvFile = path.join(attempt, 'argv.json');
-  const env = { ...process.env, PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
+  const env = { ...fixtureEnv(), PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
     PICSEE_HEAVY_LOCK: path.join(attempt, 'heavy.lock'), PICSEE_HEAVY_LOCK_HELD: '',
     PICSEE_MDPRO_LOCK: path.join(attempt, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
     SWIFT_START_FIXTURE: path.join(root,'scripts/tdd/fixtures/swift-pass.txt'), TRUNCATE_ROOT: truncateRoot ? '1' : '', INCOMPLETE_SWIFT: incompleteSwift ? '1' : '', CRASH_STDERR_FIXTURE: path.join(root,'scripts/tdd/fixtures/xctest-partial-crash.txt'), ARGV_FILE: argvFile, FIXTURE: path.join(root, 'scripts/tdd/fixtures', fixture + '.txt'),
@@ -123,7 +124,7 @@ test('heldAndUnheldLanesPreservePassAndAssertionFailure Swift',()=>{
 test('native Swift nested HELD retains pass and assertion counts',()=>{
  const lock=path.join(root,'scripts/heavy-lock.sh');
  for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
-  const env={...process.env,PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
+  const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
    PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
    ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures',fixture+'.txt'),SWIFT_EXIT:String(code)};
   const r=spawnSync(lock,[process.execPath,'scripts/tdd/swift-lane.mjs'],{env,encoding:'utf8',timeout:10000});
@@ -136,7 +137,7 @@ test('native Swift nested HELD rejects unpublished cleanup without counts',()=>{
  const lane=path.join(root,'scripts/tdd/swift-lane.mjs');
  const launcher=path.join(temp,'nested-status-lane.mjs');
  writeFileSync(launcher,`process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';process.argv[1]=${JSON.stringify(lane)};await import(${JSON.stringify(new URL('./swift-lane.mjs',import.meta.url).href)});`);
- const env={...process.env,PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
+ const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
   PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
   ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures/swift-pass.txt'),SWIFT_EXIT:'0'};
  const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
