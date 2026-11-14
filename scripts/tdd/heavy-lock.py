@@ -64,7 +64,9 @@ def process_rows():
     if os.environ.get('PICSEE_HEAVY_FAULT_QUERY') == '1':
         return None
     try:
-        query = subprocess.Popen(['ps', '-axo', 'pid=,pgid=,stat='],
+        # Absolute path (#705 T3): the job's PATH must not choose the program
+        # that decides whether owned members still exist.
+        query = subprocess.Popen(['/bin/ps', '-axo', 'pid=,pgid=,stat='],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             output, _ = query.communicate(timeout=1)
@@ -288,7 +290,7 @@ def survivor_details(rows):
     if not rows:
         return []
     try:
-        query = subprocess.run(['ps', '-o', 'pid=,pgid=,stat=,rss=', '-p', ','.join(str(pid) for pid, _ in rows)],
+        query = subprocess.run(['/bin/ps', '-o', 'pid=,pgid=,stat=,rss=', '-p', ','.join(str(pid) for pid, _ in rows)],
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=2)
     except (OSError, subprocess.TimeoutExpired):
         return None

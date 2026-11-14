@@ -949,6 +949,28 @@ redTest('lockAgeAlertFiresWhenHolderExceedsBudget', () => {
   assert.match(status.stdout, new RegExp(`^attention lock-alert ${alert.id} phase=cleanup cleanup=complete budget=0\\.5s pid=${alert.pid}`, 'm'));
 });
 
+// #705 T3: the supervisor's process queries must not depend on the job's PATH.
+// A ps wrapper first on PATH (slow, failing or hostile) would otherwise decide
+// whether owned members exist. Both queries run here: the membership snapshot
+// and the survivor details of the deadline alert.
+redTest('processQueryIgnoresPathPs', () => {
+  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.5', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
+  const bin = path.join(env.HOME, 'fake-bin'), sentinel = path.join(env.HOME, 'fake-ps-ran');
+  mkdirSync(bin);
+  writeFileSync(path.join(bin, 'ps'), `#!/bin/sh\necho "$@" >> '${sentinel}'\nexit 1\n`, {mode: 0o755});
+  env.PATH = `${bin}:${process.env.PATH}`;
+  // With PATH ps every query fails and the stop cannot finish; the cap ends that run.
+  const result = spawnSync(lock, ['bash', '-c', 'sleep 30 & wait', 'path-ps-fixture'], {env, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL'});
+  assert.equal(existsSync(sentinel), false, `PATH ps ran: ${existsSync(sentinel) ? readFileSync(sentinel, 'utf8') : ''}`);
+  assert.ifError(result.error);
+  assert.equal(result.status, 124, result.stderr);
+  assert.doesNotMatch(result.stderr, /unknown cleanup|incomplete cleanup/);
+  const alerts = lockAlerts(env.HOME);
+  assert.equal(alerts.length, 1, result.stderr);
+  const alert = JSON.parse(readFileSync(alerts[0], 'utf8'));
+  assert.ok(Array.isArray(alert.survivorsAtDeadline) && alert.survivorsAtDeadline.length >= 2, JSON.stringify(alert.survivorsAtDeadline));
+});
+
 redTest('lockAgeAlertKeepsRetainedLockPathsWhenCleanupIsUnknown', () => {
   const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.3', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0',
     PICSEE_HEAVY_FAULT_QUERY: '1'};
