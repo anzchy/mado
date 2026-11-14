@@ -169,6 +169,6 @@ public struct AnnotatedCopyWriter: Sendable {
 /// The image types ImageIO can encode on this system.
 public enum ImageIOWritableTypes {
     public static var all: Set<UTType> {
-        Set((CGImageDestinationCopyTypeIdentifiers() as? [String] ?? []).compactMap { UTType($0) })
+        Set((CGImageDestinationCopyTypeIdentifiers() as NSArray).compactMap { ($0 as? String).flatMap(UTType.init) })
     }
 }
