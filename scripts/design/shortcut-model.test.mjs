@@ -2,7 +2,7 @@
 // and expects the named disagreement; the first case is the repository as it is.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FILES, check, readRepo } from './shortcut-model.mjs';
+import { FILES, KEY_HANDLERS, check, readRepo } from './shortcut-model.mjs';
 
 const withChange = (file, edit) => f => (f === file ? edit(readRepo(f)) : readRepo(f));
 const replaceOnce = (from, to) => source => {
@@ -181,4 +181,30 @@ test('i690 the Annotate Mode character exclusion covers only its own file', () =
   fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift',
     source => `${source}\n// let typed = event.charactersIgnoringModifiers\n`),
   /ViewerChromeOverlay\.swift reads typed characters/);
+});
+
+const ANNOTATE_POLICY = 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift';
+
+test('i690 the page lists V and R, the Annotate Mode tools', () => {
+  const page = readRepo(FILES.page);
+  assert.match(page, /data-shortcut="key:annotate-select"[^\n]*<kbd>V<\/kbd>/);
+  assert.match(page, /data-shortcut="key:annotate-rectangle"[^\n]*<kbd>R<\/kbd>/);
+  assert.deepEqual(KEY_HANDLERS.filter(h => h.id.startsWith('key:annotate-')).map(h => [h.id, h.keys, h.file]),
+    [['key:annotate-select', ['V'], ANNOTATE_POLICY], ['key:annotate-rectangle', ['R'], ANNOTATE_POLICY]]);
+});
+
+test('i690 a page without the R row fails', () => {
+  fails(withChange(FILES.page, s => s.replace(/\n[^\n]*data-shortcut="key:annotate-rectangle"[^\n]*/, '')),
+    /key:annotate-rectangle/);
+});
+
+test('i690 a changed R key in the Annotate policy fails its anchor', () => {
+  fails(withChange(ANNOTATE_POLICY, replaceOnce('if letter == "r", plain', 'if letter == "t", plain')),
+    /key:annotate-rectangle: .*AnnotateMode\.swift no longer matches/);
+});
+
+test('i690 the unsaved-marks sheet keys are declared exclusions', () => {
+  fails(withChange('App/CanvasWindowController+AnnotateUI.swift', replaceOnce('case 36, 76:', 'case 36, 76, 49:')),
+    /CanvasWindowController\+AnnotateUI\.swift handles key code 49/);
+  assert.equal(check().filter(p => /AnnotateUI/.test(p)).length, 0);
 });

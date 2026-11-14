@@ -41,14 +41,21 @@ export const KEY_HANDLERS = [
     anchor: /if event\.keyCode == 36, contextModifiers == \.control \{/, keys: ['⌃', 'Return'] },
   { id: 'key:viewer-tab', file: 'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     anchor: /if event\.keyCode == 48 \{ onTab\?\(/, keys: ['Tab'] },
+  // #690: page 39's tools that are implemented; single letters act only inside Annotate Mode (addendum 5.5).
+  { id: 'key:annotate-select', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "v", plain \{ return \.selectTool \}/, keys: ['V'] },
+  { id: 'key:annotate-rectangle', file: 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift',
+    anchor: /if letter == "r", plain \{ return \.selectRectangle \}/, keys: ['R'] },
 ];
 // Every key code handled outside the menus, per file: the page row it belongs to, or why it has none. A code found in a
 // file and not declared here fails, and so does a declared code the file no longer handles.
 const FOCUSED_CONTROL = 'focus and activation inside a focused control (Tab, Space, Return), not a command';
 const OPEN_KEY_RING = 'Return, Space and keypad Enter open an image; here they only decide that a focus move shows no ring';
 const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissal, not a command';
-// #690: R, Esc and the swallowed arrows act only inside Annotate Mode; the page lists ⌘E, which enters it.
+// #690: Esc and the arrows (nudging the selected mark) act only inside Annotate Mode; the page lists ⌘E, which
+// enters it, and V and R, its tools (key:annotate-*).
 const ANNOTATE_ONLY = 'only in Annotate Mode';
+const ANNOTATE_SHEET = 'Esc and Return answer the unsaved-marks sheet (取消 / 存储), a sheet\'s own buttons, not a command';
 export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
     123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
@@ -74,6 +81,8 @@ export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
   'App/CanvasWindowController+Annotate.swift': { 53: { excluded: ANNOTATE_ONLY }, 123: { excluded: ANNOTATE_ONLY },
     124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY } },
+  'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
+    76: { excluded: ANNOTATE_SHEET } },
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
