@@ -28,8 +28,8 @@ struct AnnotatePendingLeave {
     var value: Bool?
 }
 
-/// Temporary native surfaces until the page-39 addendum styles the sheet and the 「已存储为」 toast:
-/// a standard NSAlert sheet and a standard NSSavePanel.
+/// The native surfaces: a standard NSSavePanel and failure alert. Page 39's sheet and confirmation
+/// (`InWindowAnnotateUI`) fall back to the alert and the announcement when the window has no content.
 @MainActor final class AlertAnnotateUI: AnnotateNativeUI {
     func askToLeave(_ reason: AnnotateLeaveReason, window: NSWindow?,
                     answer: @escaping @MainActor (AnnotateLeaveChoice) -> Void) {
@@ -73,7 +73,7 @@ struct AnnotatePendingLeave {
         return response == .OK ? panel.url : nil
     }
 
-    /// TODO-design (page 39): the 「已存储为 <name>」 toast with 在访达中显示 replaces this announcement.
+    /// The VoiceOver announcement; `InWindowAnnotateUI` adds page 39's confirmation.
     func showSaved(_ url: URL, window: NSWindow?) {
         let message = String(format: String(localized: "Saved as %@"), url.lastPathComponent)
         NSAccessibility.post(element: window ?? NSApp as Any, notification: .announcementRequested,
@@ -108,18 +108,22 @@ extension CanvasWindowController {
         !session.isAnnotating && !(window?.firstResponder is NSTextInputClient) && window?.attachedSheet == nil
             && session.canEnterAnnotateMode
     }
-    var canSaveAnnotatedCopyFromMenu: Bool { session.canSaveAnnotatedCopy && window?.attachedSheet == nil }
+    var canSaveAnnotatedCopyFromMenu: Bool {
+        session.canSaveAnnotatedCopy && window?.attachedSheet == nil && !annotateSheetShown
+    }
 
     /// ⌘E.
     func enterAnnotateMode() {
         guard canEnterAnnotateFromMenu else { return }
         session.enterAnnotateMode()
+        syncAnnotateUI()
     }
 
     /// ⌘S: stays in Annotate Mode.
     func saveAnnotatedCopy() {
         guard canSaveAnnotatedCopyFromMenu else { return }
         session.saveAnnotatedCopy()
+        syncAnnotateUI()
     }
 
     /// Opening another image, a folder or a recent folder first leaves Annotate Mode; with unsaved marks the
@@ -130,9 +134,11 @@ extension CanvasWindowController {
         return false
     }
 
-    /// Keys inside Annotate Mode: R, Esc, ⌘Z/⇧⌘Z, and ←/→/↑/↓ swallowed. nil leaves the key to browsing.
+    /// Keys inside Annotate Mode: V, R, Esc, ⌘Z/⇧⌘Z, and ←/→/↑/↓ nudging the selected mark (never changing
+    /// images). While page 39's sheet is up it takes every key. nil leaves the key to browsing.
     func consumeAnnotateKey(_ event: NSEvent) -> Bool? {
         guard session.isAnnotating, window?.attachedSheet == nil, !menuTracking() else { return nil }
+        if consumeAnnotateSheetKey(event) { return true }
         let key: AnnotateKey = switch event.keyCode {
         case 53: .escape
         case 123: .leftArrow
@@ -155,19 +161,25 @@ extension CanvasWindowController {
         case .undo: session.undoAnnotation()
         case .redo: session.redoAnnotation()
         case .selectTool: session.selectAnnotateTool(.select)
-        // ←/→/↑/↓ stay consumed so they never change images; moving the selection is wired with the strip (WI-6).
-        case .nudge: break
+        // ←/→/↑/↓ stay consumed even without a selection, so they never change images.
+        case .nudge(let dx, let dy): nudgeAnnotation(dx: dx, dy: dy)
         case .requestLeave:
             // Esc first returns focus from a panel or tool to the canvas, as outside Annotate Mode.
             guard focus == .canvas else { return nil }
             leaveAnnotateMode(.escape, proceed: {})
         }
+        syncAnnotateUI()
         return true
     }
 
     /// The menu's bare Esc reaches `route` before the window sees the key.
     func routeAnnotateEscape() -> Bool {
-        guard session.isAnnotating, session.inspectorFocus.focus == .canvas else { return false }
+        guard session.isAnnotating else { return false }
+        if let sheet = annotateViews.sheet {
+            sheet.cancelButton.performClick(nil)
+            return true
+        }
+        guard session.inspectorFocus.focus == .canvas else { return false }
         leaveAnnotateMode(.escape, proceed: {})
         return true
     }
@@ -204,6 +216,7 @@ extension CanvasWindowController {
     func leaveAnnotateMode(_ reason: AnnotateLeaveReason, proceed: @escaping @MainActor () -> Void,
                            refused: @escaping @MainActor () -> Void = {}) {
         guard annotatePendingLeave == nil, session.annotateMode?.isSaving != true else { refused(); return }
+        defer { syncAnnotateUI() }
         switch session.requestLeaveAnnotateMode(reason) {
         case .proceed: proceed()
         case .ask:
@@ -217,6 +230,7 @@ extension CanvasWindowController {
     }
 
     private func finishAnnotateLeave(_ outcome: AnnotateLeaveOutcome) {
+        defer { syncAnnotateUI() }
         guard outcome != .saving, outcome != .ask, let pending = annotatePendingLeave else { return }
         annotatePendingLeave = nil
         if outcome == .proceed { pending.proceed() } else { pending.refused() }
@@ -307,7 +321,9 @@ extension CanvasWindowController {
     }
 
     private func annotateSaveEnded(_ result: AnnotateSaveResult) {
+        if case .saved(let url) = result { annotateRecordSaved(url) }
         let outcome = session.annotateSaveFinished(result)
+        defer { syncAnnotateUI() }
         switch result {
         case .saved(let url): annotateUI.showSaved(url, window: window)
         case .failed(let error): annotateUI.showSaveFailure(error, window: window)
@@ -349,12 +365,24 @@ extension CanvasWindowController: AnnotateSaveHost {
 
 extension CanvasWindowController: NSMenuItemValidation {
     /// Edit › Undo/Redo/Copy reach the window controller only when no text field claims them.
-    @objc func undo(_ sender: Any?) { session.undoAnnotation() }
-    @objc func redo(_ sender: Any?) { session.redoAnnotation() }
-    @objc func copy(_ sender: Any?) { copyAnnotatedImage() }
+    /// Page 39's sheet blocks them like a native sheet would.
+    @objc func undo(_ sender: Any?) {
+        guard !annotateSheetShown else { return }
+        session.undoAnnotation()
+        syncAnnotateUI()
+    }
+    @objc func redo(_ sender: Any?) {
+        guard !annotateSheetShown else { return }
+        session.redoAnnotation()
+        syncAnnotateUI()
+    }
+    @objc func copy(_ sender: Any?) {
+        guard !annotateSheetShown else { return }
+        copyAnnotatedImage()
+    }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        let state = session.annotateMode
+        let state = annotateSheetShown ? nil : session.annotateMode
         switch item.action {
         case #selector(undo(_:)): return state?.document.canUndo == true
         case #selector(redo(_:)): return state?.document.canRedo == true

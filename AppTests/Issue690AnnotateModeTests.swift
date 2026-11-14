@@ -41,7 +41,9 @@ import MadoMacUI
     var replies: [Bool] = []
     let pasteboard = NSPasteboard(name: NSPasteboard.Name("mado.issue690.\(UUID().uuidString)"))
 
-    init() async throws {
+    /// `size` writes a real grey PNG of that size instead of the 400×600 fixture (#690 WI-6, page 39's 1600×2400);
+    /// `existing` adds more copies of it under those names before the folder is scanned.
+    init(size: CGSize? = nil, existing: [String] = []) async throws {
         previousMenu = NSApplication.shared.mainMenu
         base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         folder = base.appendingPathComponent("Trip")
@@ -50,8 +52,9 @@ import MadoMacUI
             .appendingPathComponent("TestAssets/synthetic/portrait-2x3.png")
         first = folder.appendingPathComponent("a.png")
         second = folder.appendingPathComponent("b.png")
-        try Data(contentsOf: fixture).write(to: first)
-        try Data(contentsOf: fixture).write(to: second)
+        let data = try size.map(issue690GreyPNG) ?? Data(contentsOf: fixture)
+        let folder = folder
+        for url in [first, second] + existing.map({ folder.appendingPathComponent($0) }) { try data.write(to: url) }
         let scope = SystemSecurityScope()
         let access = try FileAccess(scope: scope, bookmarks: scope,
             store: BookmarkStore(url: base.appendingPathComponent("roots.json")), buildSHA: "issue690")
@@ -60,11 +63,12 @@ import MadoMacUI
             browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
     }
 
-    func open() async throws -> CanvasWindowController {
+    /// `fakeUI: false` keeps the window's own Annotate surfaces (page 39's sheet and confirmation).
+    func open(fakeUI: Bool = true) async throws -> CanvasWindowController {
         let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
             accessServices: Task { self.services }, motionPolicy: MotionPolicy(source: Issue349Motion()))
         self.controller = controller
-        controller.annotateUI = ui
+        if fakeUI { controller.annotateUI = ui }
         controller.annotatePasteboard = pasteboard
         controller.annotateTerminateReply = { [weak self] in self?.replies.append($0) }
         menu = CommandMenu(preferencesStore: InMemoryDisplayPreferencesStore(), openWithoutWindow: {},
@@ -113,6 +117,7 @@ import MadoMacUI
     func close() {
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
         controller?.annotateSaveTask?.cancel()
+        if let sheet = views(AnnotateLeaveSheetView.self).first { sheet.discardButton.performClick(nil) }
         if let controller, controller.session.isAnnotating {
             ui.answer = .discard
             _ = controller.windowShouldClose(controller.window!)
@@ -385,5 +390,510 @@ private func issue690ExpectFlattened(_ image: CGImage, original: CGImage) throws
         #expect(context.ui.asked == [.changeImage, .changeImage])
         #expect(!controller.session.isAnnotating)
         try await waitUntil("b.png opened after 不存储", timeout: .seconds(60)) { controller.session.imageLoader.fileURL == context.second }
+    }
+}
+
+// MARK: - #690 WI-6: page 39 in the viewer window
+
+/// A lossless mid-grey PNG of `size`.
+private func issue690GreyPNG(_ size: CGSize) throws -> Data {
+    let width = Int(size.width), height = Int(size.height)
+    let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    context.setFillColor(CGColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    let image = try #require(context.makeImage())
+    let data = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
+}
+
+private let page39Size = CGSize(width: 1600, height: 2400)
+private let rightArrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+private let leftArrow = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+
+private func issue690Near(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat = 1) -> Bool {
+    abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance
+        && abs(a.width - b.width) <= tolerance && abs(a.height - b.height) <= tolerance
+}
+
+extension Issue690Context {
+    var content: NSView { controller.window!.contentView! }
+
+    /// Every view of `type` under the window's content view.
+    func views<T: NSView>(_ type: T.Type) -> [T] {
+        guard let root = controller?.window?.contentView else { return [] }
+        func walk(_ view: NSView) -> [T] { ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap(walk) }
+        return walk(root)
+    }
+
+    /// A view's frame in the content view, origin at the top left.
+    func topLeft(_ view: NSView) -> CGRect {
+        let rect = content.convert(view.bounds, from: view)
+        return content.isFlipped ? rect : CGRect(x: rect.minX, y: content.bounds.height - rect.maxY,
+                                                 width: rect.width, height: rect.height)
+    }
+
+    /// The shown image's frame in the canvas (top left).
+    func imageRect() throws -> CGRect {
+        let canvas = try #require(views(CanvasView.self).first)
+        let frame = canvas.backdropFrame
+        let a = frame.transform.imageToView(.zero)
+        let b = frame.transform.imageToView(CGPoint(x: frame.sourceSize.width, y: frame.sourceSize.height))
+        return CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y)
+    }
+
+    func expectImage(_ rect: CGRect, _ note: String = "", sourceLocation: SourceLocation = #_sourceLocation) throws {
+        let found = try imageRect()
+        #expect(issue690Near(found, rect), "\(note) \(found)", sourceLocation: sourceLocation)
+    }
+
+    func strip() throws -> AnnotateStripView { try #require(views(AnnotateStripView.self).first, "the strip is shown") }
+    func overlay() throws -> AnnotationOverlayView { try #require(views(AnnotationOverlayView.self).first, "the overlay") }
+    func sheet() throws -> AnnotateLeaveSheetView { try #require(views(AnnotateLeaveSheetView.self).first, "the sheet") }
+
+    func mouse(_ view: NSView, _ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+        try #require(NSEvent.mouseEvent(with: type, location: view.convert(point, to: nil), modifierFlags: [],
+            timestamp: 0, windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+            clickCount: 1, pressure: 1))
+    }
+
+    /// A drag on the overlay between two of its (top-left) points.
+    func drag(from a: CGPoint, to b: CGPoint) throws {
+        let view = try overlay()
+        view.mouseDown(with: try mouse(view, .leftMouseDown, a))
+        view.mouseDragged(with: try mouse(view, .leftMouseDragged, CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)))
+        view.mouseDragged(with: try mouse(view, .leftMouseDragged, b))
+        view.mouseUp(with: try mouse(view, .leftMouseUp, b))
+    }
+
+    func click(_ point: CGPoint) throws { try drag(from: point, to: point) }
+
+    func file(_ name: String) -> URL { folder.appendingPathComponent(name) }
+    func exists(_ name: String) -> Bool { FileManager.default.fileExists(atPath: file(name).path) }
+
+    func arrow(_ characters: String, shift: Bool = false) throws {
+        try key(characters, code: characters == rightArrow ? 124 : 123,
+                modifiers: shift ? [.numericPad, .function, .shift] : [.numericPad, .function])
+    }
+
+    /// Lets a navigation the key may have started reach the loader.
+    func settle() async throws { try await Task.sleep(for: .milliseconds(400)) }
+}
+
+/// Page 39's rectangle drawn by the drag (400,200)→(500,300) at zoom 0.32, origin (352, 16).
+private let page39DragRect = CGRect(x: 150, y: 575, width: 312.5, height: 312.5)
+
+private func issue690CatalogValue(_ key: String, _ language: String) throws -> String {
+    let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("App/Resources/Localizable.xcstrings")
+    let root = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    let strings = try #require(root["strings"] as? [String: Any])
+    let entry = try #require(strings[key] as? [String: Any], "catalog key \(key)")
+    let localizations = try #require(entry["localizations"] as? [String: Any], "\(key) localizations")
+    let localized = try #require(localizations[language] as? [String: Any], "\(key) \(language)")
+    let unit = try #require(localized["stringUnit"] as? [String: Any])
+    return try #require(unit["value"] as? String)
+}
+
+@MainActor @Suite(.serialized) struct Issue690AnnotateWindowTests {
+    @Test(.timeLimit(.minutes(3))) func issue690WindowFitStripAndRoundTrip() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        let chrome = try #require(context.views(ViewerChromeOverlay.self).first)
+        let chromeHidden = chrome.isHidden
+        try context.expectImage(CGRect(x: 384, y: 16, width: 512, height: 768))
+        try context.perform("annotate.enter.menu")
+        try context.expectImage(CGRect(x: 352, y: 16, width: 512, height: 768))
+        let strip = try context.strip()
+        #expect(issue690Near(context.topLeft(strip), CGRect(x: 1220, y: 146, width: 48, height: 508)), "\(context.topLeft(strip))")
+        #expect(strip.superview === context.content)
+        let overlay = try context.overlay()
+        #expect(overlay.isActive && context.topLeft(overlay) == context.content.bounds)
+        #expect(chrome.isHidden, "the viewer chrome steps aside for page 39")
+        try context.key("\u{1b}", code: 53)
+        #expect(!controller.session.isAnnotating)
+        try context.expectImage(CGRect(x: 384, y: 16, width: 512, height: 768))
+        #expect(strip.superview == nil && overlay.superview == nil)
+        #expect(context.views(AnnotateStripView.self).isEmpty && context.views(AnnotationOverlayView.self).isEmpty)
+        #expect(chrome.isHidden == chromeHidden)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690WindowResizeKeepsReserve() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        let window = try #require(controller.window)
+        controller.enterAnnotateMode()
+        window.setContentSize(NSSize(width: 1440, height: 900))
+        try context.expectImage(CGRect(x: 398.67, y: 16, width: 578.67, height: 868))
+        #expect(issue690Near(context.topLeft(try context.strip()), CGRect(x: 1380, y: 196, width: 48, height: 508)))
+        window.setContentSize(NSSize(width: 1280, height: 480))
+        let short = context.topLeft(try context.strip())
+        #expect(issue690Near(short, CGRect(x: 1220, y: 12, width: 48, height: 456)), "\(short)")
+        #expect(try context.imageRect().maxX <= 1280 - 64 + 1, "the image never runs under the strip")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690LeaveAfterResizeRefits() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        try #require(controller.window).setContentSize(NSSize(width: 1440, height: 900))
+        try context.key("\u{1b}", code: 53)
+        #expect(!controller.session.isAnnotating)
+        try context.expectImage(CGRect(x: 430.67, y: 16, width: 578.67, height: 868))
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690DragOnOverlayAddsSelectedMark() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        let state = try #require(controller.session.annotateMode)
+        #expect(state.document.marks.map(\.rect) == [page39DragRect])
+        #expect(state.document.marks.first.map { abs($0.style.lineWidth - 9.375) < 1e-9 } == true)
+        #expect(state.selectedMark == 0)
+        #expect(try context.overlay().marks == state.document.marks, "the overlay shows the session's marks")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690VClickArrowNudgesWithoutChangingImage() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("v", code: 9)
+        #expect(controller.session.annotateMode?.tool == .select)
+        try context.click(CGPoint(x: 300, y: 700))
+        #expect(controller.session.annotateMode?.selectedMark == nil)
+        try context.click(CGPoint(x: 450, y: 250))
+        #expect(controller.session.annotateMode?.selectedMark == 0)
+        try context.arrow(rightArrow)
+        #expect(controller.session.annotateMode?.document.marks.first?.rect.minX == 151)
+        try context.arrow(rightArrow, shift: true)
+        #expect(controller.session.annotateMode?.document.marks.first?.rect.minX == 161)
+        try context.arrow(leftArrow)
+        #expect(controller.session.annotateMode?.document.marks.first?.rect.minX == 160)
+        #expect(try context.overlay().marks.first?.rect.minX == 160)
+        try await context.settle()
+        #expect(controller.session.imageLoader.fileURL == context.first)
+        for _ in 0..<3 { #expect(controller.session.undoAnnotation()) }
+        #expect(controller.session.annotateMode?.document.marks.map(\.rect) == [page39DragRect])
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690ArrowWithoutSelectionChangesNothing() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("v", code: 9)
+        try context.click(CGPoint(x: 300, y: 700))
+        try context.arrow(rightArrow)
+        try await context.settle()
+        #expect(controller.session.annotateMode?.document.marks.map(\.rect) == [page39DragRect])
+        #expect(controller.session.imageLoader.fileURL == context.first)
+        #expect(controller.session.isAnnotating)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690KeysReleasedAfterLeaving() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        try context.key("\u{1b}", code: 53)
+        #expect(!controller.session.isAnnotating)
+        try context.arrow(rightArrow)
+        try await waitUntil("→ browses again", timeout: .seconds(60)) {
+            // Folder navigation loads the scanned (resolved, /private/var) URL.
+            controller.session.imageLoader.fileURL?.resolvingSymlinksInPath() == context.second.resolvingSymlinksInPath()
+        }
+        try context.key("v", code: 9)
+        #expect(controller.session.annotateMode == nil)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690StripButtonsDriveSession() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        let strip = try context.strip()
+        strip.button(.select).performClick(nil)
+        #expect(controller.session.annotateMode?.tool == .select)
+        strip.button(.rectangle).performClick(nil)
+        #expect(controller.session.annotateMode?.tool == .rectangle)
+        strip.button(.arrow).performClick(nil)
+        #expect(controller.session.annotateMode?.tool == .rectangle, "a tool owned by #692 stays disabled")
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        strip.button(.undo).performClick(nil)
+        #expect(controller.session.annotateMode?.document.marks == [])
+        strip.button(.redo).performClick(nil)
+        #expect(controller.session.annotateMode?.document.marks.map(\.rect) == [page39DragRect])
+        strip.button(.copy).performClick(nil)
+        try await waitUntil("the strip's Copy fills the pasteboard", timeout: .seconds(60)) {
+            NSImage(pasteboard: context.pasteboard) != nil
+        }
+        let copied = try #require(NSImage(pasteboard: context.pasteboard)?.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        #expect(copied.width == 1600 && copied.height == 2400)
+        let edge = try issue690Pixel(copied, x: 150, y: 700)
+        #expect(abs(Int(edge[0]) - 220) <= 2 && abs(Int(edge[1]) - 38) <= 2 && abs(Int(edge[2]) - 38) <= 2, "copied edge \(edge)")
+        strip.button(.save).performClick(nil)
+        try await waitUntil("the strip's Save writes the copy", timeout: .seconds(60)) {
+            context.exists("a-annotated.png") && controller.session.annotateMode?.isSaving == false
+        }
+        strip.button(.done).performClick(nil)
+        #expect(!controller.session.isAnnotating, "Done leaves at once when every mark is saved")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690StripFollowsKeys() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        controller.enterAnnotateMode()
+        let strip = try context.strip()
+        #expect(strip.button(.rectangle).state == .on && strip.button(.select).state == .off)
+        #expect(!strip.button(.undo).isEnabled)
+        try context.key("v", code: 9)
+        #expect(strip.button(.select).state == .on && strip.button(.rectangle).state == .off)
+        try context.key("r", code: 15)
+        #expect(strip.button(.rectangle).state == .on && strip.button(.select).state == .off)
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        #expect(strip.button(.undo).isEnabled && strip.button(.save).isEnabled)
+        try context.key("z", code: 6, modifiers: [.command])
+        #expect(controller.session.annotateMode?.document.marks == [])
+        #expect(!strip.button(.undo).isEnabled && strip.button(.redo).isEnabled)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SaveShowsConfirmationAndStays() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.perform("annotate.save.menu")
+        try await waitUntil("saved with the confirmation", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        #expect(context.exists("a-annotated.png"))
+        let confirmation = try #require(context.views(AnnotateSaveConfirmationView.self).first)
+        let frame = context.topLeft(confirmation)
+        #expect(frame.height == 36 && abs(frame.minY - 12) <= 1 && abs(frame.midX - 608) <= 1, "\(frame)")
+        #expect(confirmation.messageField.stringValue.contains("a-annotated.png"))
+        #expect(controller.session.isAnnotating)
+        try #require(controller.window).setContentSize(NSSize(width: 1440, height: 900))
+        #expect(abs(context.topLeft(confirmation).midX - 688) <= 1, "\(context.topLeft(confirmation))")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SecondSaveReplacesConfirmation() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        controller.saveAnnotatedCopy()
+        try await waitUntil("first confirmation", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        try context.drag(from: CGPoint(x: 600, y: 200), to: CGPoint(x: 700, y: 300))
+        #expect(context.views(AnnotateSaveConfirmationView.self).isEmpty, "a new mark dismisses the confirmation")
+        controller.saveAnnotatedCopy()
+        try await waitUntil("second confirmation", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        #expect(context.exists("a-annotated-2.png"))
+        let confirmations = context.views(AnnotateSaveConfirmationView.self)
+        #expect(confirmations.count == 1)
+        #expect(confirmations.first?.messageField.stringValue.contains("a-annotated-2.png") == true)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690RevealReceivesSavedURL() async throws {
+        let context = try await Issue690Context(size: page39Size, existing: ["a-annotated.png"])
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        var revealed: [URL] = []
+        controller.annotateRevealInFinder = { revealed.append($0) }
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        controller.saveAnnotatedCopy()
+        try await waitUntil("confirmation", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        try #require(context.views(AnnotateSaveConfirmationView.self).first).revealButton.performClick(nil)
+        let expected = context.file("a-annotated-2.png").resolvingSymlinksInPath()
+        #expect(revealed.map { $0.resolvingSymlinksInPath() } == [expected])
+        #expect(context.exists("a-annotated-2.png"))
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690ConfirmationDismissals() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        controller.saveAnnotatedCopy()
+        try await waitUntil("confirmation", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        try #require(context.views(AnnotateSaveConfirmationView.self).first).closeButton.performClick(nil)
+        #expect(context.views(AnnotateSaveConfirmationView.self).isEmpty)
+        #expect(controller.session.isAnnotating)
+        try context.drag(from: CGPoint(x: 600, y: 200), to: CGPoint(x: 700, y: 300))
+        controller.saveAnnotatedCopy()
+        try await waitUntil("confirmation again", timeout: .seconds(60)) {
+            !context.views(AnnotateSaveConfirmationView.self).isEmpty
+        }
+        try context.strip().button(.done).performClick(nil)
+        #expect(!controller.session.isAnnotating)
+        #expect(context.views(AnnotateSaveConfirmationView.self).isEmpty, "the confirmation never outlives the mode")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690EscShowsInWindowSheet() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        let window = try #require(controller.window)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        #expect(window.attachedSheet == nil, "page 39's sheet lives in the window, not as an NSAlert")
+        let sheet = try context.sheet()
+        let panel = context.topLeft(sheet.panel)
+        #expect(panel.width == 400 && panel.minY == 0 && abs(panel.midX - 640) <= 1, "\(panel)")
+        #expect(context.topLeft(sheet.scrim) == context.content.bounds)
+        #expect(sheet.titleField.stringValue.contains("a.png"))
+        #expect(sheet.bodyField.stringValue.contains("a-annotated.png"))
+        #expect(controller.session.isAnnotating)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SheetPlannedNameFromListing() async throws {
+        let context = try await Issue690Context(size: page39Size, existing: ["a-annotated.png"])
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        let body = try context.sheet().bodyField.stringValue
+        #expect(body.contains("a-annotated-2.png"), "\(body)")
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SheetBlocksKeysAndMenus() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("v", code: 9)
+        try context.click(CGPoint(x: 450, y: 250))
+        let marks = try #require(controller.session.annotateMode?.document.marks)
+        try context.key("\u{1b}", code: 53)
+        _ = try context.sheet()
+        #expect(try !context.enabled("annotate.enter.menu"))
+        #expect(try !context.enabled("annotate.save.menu"))
+        for action in [#selector(CanvasWindowController.undo(_:)), #selector(CanvasWindowController.copy(_:))] {
+            #expect(!controller.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")), "\(action)")
+        }
+        try context.key("r", code: 15)
+        #expect(controller.session.annotateMode?.tool == .select)
+        try context.arrow(rightArrow)
+        try context.key("z", code: 6, modifiers: [.command])
+        controller.undo(nil)
+        #expect(controller.session.annotateMode?.document.marks == marks)
+        try await context.settle()
+        #expect(controller.session.imageLoader.fileURL == context.first)
+        // Esc answers 取消.
+        try context.key("\u{1b}", code: 53)
+        #expect(context.views(AnnotateLeaveSheetView.self).isEmpty)
+        #expect(controller.session.isAnnotating && controller.session.annotateMode?.document.marks == marks)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SheetScrimIsTopmost() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        let undo = try context.strip().button(.undo)
+        try context.key("\u{1b}", code: 53)
+        let sheet = try context.sheet()
+        let frame = try #require(context.content.superview)
+        let undoCentre = frame.convert(CGPoint(x: undo.bounds.midX, y: undo.bounds.midY), from: undo)
+        let canvasPoint = frame.convert(CGPoint(x: 608, y: 400), from: try context.overlay())
+        for point in [undoCentre, canvasPoint] {
+            let hit = try #require(context.content.hitTest(point))
+            #expect(hit === sheet || hit.isDescendant(of: sheet), "\(hit)")
+        }
+        #expect(controller.session.annotateMode?.document.marks.count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690SheetChoices() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        try context.sheet().cancelButton.performClick(nil)
+        #expect(context.views(AnnotateLeaveSheetView.self).isEmpty)
+        #expect(controller.session.isAnnotating && controller.session.annotateMode?.document.marks.count == 1)
+        try context.key("\u{1b}", code: 53)
+        try context.sheet().discardButton.performClick(nil)
+        #expect(!controller.session.isAnnotating)
+        #expect(try context.names() == ["a.png", "b.png"])
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        try context.sheet().saveButton.performClick(nil)
+        try await waitUntil("saved, then left", timeout: .seconds(60)) { !controller.session.isAnnotating }
+        #expect(context.exists("a-annotated.png"))
+        #expect(context.views(AnnotateLeaveSheetView.self).isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(3))) func issue690EveryExitTearsDown() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open(fakeUI: false)
+        func expectTornDown(_ exit: String) throws {
+            #expect(!controller.session.isAnnotating, "\(exit)")
+            #expect(context.views(AnnotateStripView.self).isEmpty && context.views(AnnotationOverlayView.self).isEmpty,
+                    "\(exit)")
+            try context.expectImage(CGRect(x: 384, y: 16, width: 512, height: 768), exit)
+        }
+        controller.enterAnnotateMode()
+        try context.strip().button(.done).performClick(nil)
+        try expectTornDown("Done")
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.strip().button(.done).performClick(nil)
+        try context.sheet().discardButton.performClick(nil)
+        try expectTornDown("Don't Save")
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        try context.key("\u{1b}", code: 53)
+        try context.sheet().saveButton.performClick(nil)
+        try await waitUntil("saved, then left", timeout: .seconds(60)) { !controller.session.isAnnotating }
+        try expectTornDown("Save")
+    }
+
+    @Test(.timeLimit(.minutes(1))) func issue690CatalogZhHans() throws {
+        let expected: [String: String] = [
+            "Select": "选择", "Arrow": "箭头", "Rectangle": "矩形", "Text": "文字", "Highlighter": "荧光笔",
+            "Pen": "画笔", "Redact": "遮挡", "Crop": "裁剪", "Step": "序号", "Undo": "撤销", "Redo": "重做",
+            "Copy": "拷贝", "Save": "存储", "Done": "完成", "Saved as %@": "已存储为 %@",
+            "Show in Finder": "在访达中显示", "Close": "关闭", "Don't Save": "不存储", "Cancel": "取消",
+            "Annotation Tools": "标注工具",
+            "Save the annotations on “%@”?": "要存储对“%@”的标注吗？",
+            "Save keeps the original unchanged and saves a copy as %@. Don't Save discards these marks.":
+                "存储会另存为 %@，原图不变。不存储则丢弃这些标记。",
+        ]
+        for (key, value) in expected {
+            let found = try issue690CatalogValue(key, "zh-Hans")
+            #expect(found == value, "\(key)")
+            #expect(!found.contains("即将推出"), "\(key): tools owned by #692/#693 are disabled, not labelled")
+        }
     }
 }

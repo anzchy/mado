@@ -27,7 +27,8 @@ private final class FileGrantWakeObservation: @unchecked Sendable {
 /// Window intent is isolated; decode admission and buffers are shared by the pipeline.
 @MainActor
 final class CanvasWindowController: NSWindowController, NSWindowDelegate {
-    private let canvas: CanvasInputBridge
+    /// Internal for Annotate Mode's strip reserve and overlay (#690).
+    let canvas: CanvasInputBridge
     private let filesystemLogger = Logger(subsystem: "io.github.anzchy.mado", category: "filesystem")
     private let pipeline: any ImagePipeline
     private var fileURL: URL?
@@ -68,7 +69,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private let inputIntent = AccessIntent()
     private let rootScanAdmission = RootScanAdmission()
 
-    private var chromeOverlay: ViewerChromeOverlay!
+    /// Internal so Annotate Mode can step the viewer chrome aside (#690).
+    var chromeOverlay: ViewerChromeOverlay!
     private var stateHost: ViewerStateHost!
     private var lostAccessView: LostAccessStateView!
     private struct ReboundLocation {
@@ -185,11 +187,15 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var menuTracking: () -> Bool = { false }
     var appearanceAdapter: WindowAppearanceAdapter?
     // #690 Annotate Mode wiring lives in CanvasWindowController+Annotate.swift.
-    var annotateUI: any AnnotateNativeUI = AlertAnnotateUI()
+    lazy var annotateUI: any AnnotateNativeUI = InWindowAnnotateUI(controller: self)
+    /// Page 39's views while Annotate Mode is on (#690 WI-6).
+    var annotateViews = AnnotateWindowViews()
     var annotateSaveTask: Task<Void, Never>?
     var annotatePendingLeave: AnnotatePendingLeave?
     var annotatePasteboard: NSPasteboard = .general
     var annotateTerminateReply: (Bool) -> Void = { NSApp.reply(toApplicationShouldTerminate: $0) }
+    /// 在访达中显示 on page 39's confirmation; tests record it instead of driving Finder.
+    var annotateRevealInFinder: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
 
     override func showWindow(_ sender: Any?) {
         imageContextWindowClosed = false
@@ -266,7 +272,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             return owner.makeViewerMoreMenu(fileName: self.session.imageLoader.fileURL?.lastPathComponent)
         }
         content.addSubview(chromeOverlay)
-        canvas.onBackdropChange = { [weak self] frame in self?.chromeOverlay?.setBackdropFrame(frame) }
+        canvas.onBackdropChange = { [weak self] frame in
+            self?.chromeOverlay?.setBackdropFrame(frame)
+            self?.annotateBackdropChanged(frame)
+        }
         chromeOverlay.setBackdropFrame(canvas.backdropFrame)
         gridShell = GridShellView(frame: NSRect(x: 0, y: 0, width: content.bounds.width,
                                                 height: content.bounds.height - 28), preferencesStore: preferencesStore)
@@ -351,6 +360,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         lostAccessView.onChooseAnotherFolder = { [weak self] in self?.chooseAccessFolder(reselect: false) }
         gridShell.mainContent.addSubview(lostAccessView)
         observeAccessMotionPolicy()
+        observeAnnotateMode()
         content.addSubview(stateHost, positioned: .above, relativeTo: gridShell)
         content.addSubview(inspectorHost, positioned: .above, relativeTo: stateHost)
         content.addSubview(chromeOverlay, positioned: .above, relativeTo: inspectorHost)
