@@ -2,13 +2,13 @@ import Foundation
 import MadoCore
 import os
 
-public enum ViewerInputNotice: Equatable, Sendable { case unsupported(String), rejected, multipleFolders }
+public enum ViewerInputNotice: Equatable, Sendable { case unsupported(String), rejected, multipleFolders, accessFailed }
 @MainActor public protocol ViewerInputHost: AnyObject {
     func openInputImage(_ url: URL, accessRequest: AccessRequest?)
     func showInputNotice(_ notice: ViewerInputNotice)
     func promptForInputFolder(_ folder: URL)
 }
-public enum ViewerInputProbeResult: Equatable, Sendable { case open(AccessRequest), unsupported, discarded }
+public enum ViewerInputProbeResult: Equatable, Sendable { case open(AccessRequest), unsupported, failed, discarded }
 public struct ViewerInputAdmission: Sendable {
     private let access: any AccessLeasing
     private let pipeline: any ImagePipeline
@@ -19,7 +19,8 @@ public struct ViewerInputAdmission: Sendable {
         self.access = access; self.pipeline = pipeline; self.maximumPixelSize = maximumPixelSize
         self.rootCovering = rootCovering
     }
-    @MainActor public func probe(_ url: URL, operation: AccessOperation) async -> ViewerInputProbeResult {
+    @MainActor public func probe(_ url: URL, operation: AccessOperation,
+                                 requiresSuccessfulProbe: Bool = false) async -> ViewerInputProbeResult {
         do {
             let root = try await operation.wait { await rootCovering(url) }
             let request: AccessRequest = root.map { .root($0, file: url) } ?? .fileGrant(url)
@@ -33,6 +34,7 @@ public struct ViewerInputAdmission: Sendable {
             } catch {
                 try operation.check()
                 if (error as? ImageLoadError)?.kind == .unsupportedFormat { return .unsupported }
+                if requiresSuccessfulProbe { return .failed }
             }
             return .open(request)
         } catch {
@@ -46,7 +48,7 @@ extension ViewerSession {
                                             operation: AccessOperation, admission: ViewerInputAdmission,
                                             host: any ViewerInputHost) async {
         guard operation.isCurrent, let set = filePreviewSet, set.current == expected else { return }
-        let result = await admission.probe(chosen, operation: operation)
+        let result = await admission.probe(chosen, operation: operation, requiresSuccessfulProbe: true)
         guard operation.isCurrent, filePreviewSet?.current == expected else { return }
         if case .open(let request) = result {
             var members = set.members
@@ -57,6 +59,8 @@ extension ViewerSession {
             host.openInputImage(chosen, accessRequest: request)
         } else if result == .unsupported {
             host.showInputNotice(.unsupported(chosen.lastPathComponent))
+        } else if result == .failed {
+            host.showInputNotice(.accessFailed)
         }
     }
     public func openInput(_ urls: [URL], operation: AccessOperation, admission: ViewerInputAdmission,

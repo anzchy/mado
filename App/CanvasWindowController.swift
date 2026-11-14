@@ -1350,7 +1350,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         return task
     }
 
-    private func requestFileReconnection(_ original: URL) {
+    func requestFileReconnection(_ original: URL) {
+        // An existing sheet owns its answer; a later failure must not revoke that continuation.
+        if window?.attachedSheet != nil { return }
         // The presentation boundary is synchronous and precedes even an already-attached sheet.
         // Closing the loader/Inspector also advances their generations before old work can return.
         let setMember = session.filePreviewSet?.current
@@ -1795,6 +1797,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         case .multipleFolders:
             alert.messageText = String(localized: "Open One Folder at a Time")
             alert.informativeText = String(localized: "Drop or open a single folder to continue.")
+        case .accessFailed:
+            alert.messageText = String(localized: "This File Can’t Be Opened")
+            alert.informativeText = String(localized: "Choose this image again to reconnect access.")
         }
         alert.addButton(withTitle: String(localized: "OK"))
         alert.beginSheetModal(for: window)
