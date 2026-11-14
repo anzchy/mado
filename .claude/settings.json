@@ -1,18 +1,5 @@
 {
   "enabledPlugins": {
     "tdd-guardian@xiaolai": true
-  },
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.agents/skills/mado-verify/scripts/stop-hook.mjs\"",
-            "timeout": 1
-          }
-        ]
-      }
-    ]
   }
 }
