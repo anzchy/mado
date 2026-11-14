@@ -83,9 +83,9 @@ public struct CanvasTransform: Sendable {
     }
 
     public mutating func viewportChanged(source: CGSize, from old: CGSize, to new: CGSize,
-                                         backingScale: Double, mode: CanvasZoomMode) {
+                                         backingScale: Double, mode: CanvasZoomMode, trailingReserve: Double = 0) {
         if mode == .fit {
-            self = Self.fitted(source: source, viewport: new, backingScale: backingScale)
+            self = Self.fitted(source: source, viewport: new, backingScale: backingScale, trailingReserve: trailingReserve)
             return
         }
         origin = viewportOrigin ?? origin

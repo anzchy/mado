@@ -17,16 +17,51 @@ extension ViewerSession {
     public func enterAnnotateMode() {
         guard annotateMode == nil, canEnterAnnotateMode else { return }
         annotateMode = AnnotateModeState(itemID: currentItemID, fileURL: imageLoader.fileURL)
+        annotateMode?.tool = .rectangle
     }
 
-    /// R: only inside Annotate Mode.
+    /// V and R: only inside Annotate Mode.
     public func selectAnnotateTool(_ tool: AnnotateTool) { annotateMode?.tool = tool }
 
-    public func addAnnotationMark(_ mark: AnnotationMark) { annotateMode?.document.add(mark) }
+    /// A new mark becomes the selection, so ←/→/↑/↓ move it at once.
+    public func addAnnotationMark(_ mark: AnnotationMark) {
+        guard var state = annotateMode else { return }
+        state.document.add(mark)
+        state.selectedMark = state.document.marks.count - 1
+        annotateMode = state
+    }
 
-    @discardableResult public func undoAnnotation() -> Bool { annotateMode?.document.undo() ?? false }
+    /// The select tool's click; nil clears the selection, an index outside the marks is ignored.
+    public func selectAnnotationMark(_ index: Int?) {
+        guard let state = annotateMode else { return }
+        if let index, !state.document.marks.indices.contains(index) { return }
+        annotateMode?.selectedMark = index
+    }
 
-    @discardableResult public func redoAnnotation() -> Bool { annotateMode?.document.redo() ?? false }
+    /// ←/→/↑/↓: moves the selected mark inside the image as an undoable change; without a selection nothing changes.
+    @discardableResult public func nudgeSelectedAnnotation(dx: Int, dy: Int, imageSize: CGSize) -> Bool {
+        guard var state = annotateMode, let index = state.selectedMark,
+              state.document.marks.indices.contains(index) else { return false }
+        var mark = state.document.marks[index]
+        let moved = AnnotationGeometry.nudge(mark.rect, dx: dx, dy: dy, imageSize: imageSize)
+        guard moved != mark.rect else { return false }
+        mark.rect = moved
+        state.document.replace(at: index, with: mark)
+        annotateMode = state
+        return true
+    }
+
+    @discardableResult public func undoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.undo() ?? false) }
+
+    @discardableResult public func redoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.redo() ?? false) }
+
+    /// Undo and redo can remove the selected mark; the selection then clears.
+    private func keepSelectionValid(_ changed: Bool) -> Bool {
+        if let state = annotateMode, let index = state.selectedMark, index >= state.document.marks.count {
+            annotateMode?.selectedMark = nil
+        }
+        return changed
+    }
 
     /// Esc, closing the window, quitting or changing the image. Without unsaved marks the mode ends at once.
     public func requestLeaveAnnotateMode(_ reason: AnnotateLeaveReason) -> AnnotateLeaveOutcome {

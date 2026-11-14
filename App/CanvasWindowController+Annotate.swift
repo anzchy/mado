@@ -154,7 +154,9 @@ extension CanvasWindowController {
         case .selectRectangle: session.selectAnnotateTool(.rectangle)
         case .undo: session.undoAnnotation()
         case .redo: session.redoAnnotation()
-        case .swallow: break
+        case .selectTool: session.selectAnnotateTool(.select)
+        // ←/→/↑/↓ stay consumed so they never change images; moving the selection is wired with the strip (WI-6).
+        case .nudge: break
         case .requestLeave:
             // Esc first returns focus from a panel or tool to the canvas, as outside Annotate Mode.
             guard focus == .canvas else { return nil }

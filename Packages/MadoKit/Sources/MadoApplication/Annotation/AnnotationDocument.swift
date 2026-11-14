@@ -32,6 +32,17 @@ public struct AnnotationDocument: Equatable, Sendable {
         nextNode += 1
     }
 
+    /// Replaces one mark as an undoable change; an index outside the marks changes nothing.
+    @discardableResult public mutating func replace(at index: Int, with mark: AnnotationMark) -> Bool {
+        guard marks.indices.contains(index) else { return false }
+        undoStack.append(Entry(marks: marks, node: node))
+        redoStack.removeAll()
+        marks[index] = mark
+        node = nextNode
+        nextNode += 1
+        return true
+    }
+
     @discardableResult public mutating func undo() -> Bool {
         guard let entry = undoStack.popLast() else { return false }
         redoStack.append(Entry(marks: marks, node: node))

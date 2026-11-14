@@ -490,3 +490,49 @@ func issue527CanvasRejectsForwardedPressWithoutFocusOrPan(staleDrag: Bool) throw
     #expect(focusCalls == 2)
     #expect(try canvasRedBounds(canvas) == initial, "opposite direct drags restore image placement")
 }
+
+// MARK: - #690 WI-5: the fit leaves 64 pt for the Annotate strip and is restored afterwards (B1, B11)
+
+@MainActor private func page39Canvas() throws -> (CanvasView, NSWindow, CanvasTestHost) {
+    let (canvas, window, host) = canvasHost()
+    window.setContentSize(NSSize(width: 1280, height: 800))
+    canvas.setFrameSize(NSSize(width: 1280, height: 800))
+    canvas.install(try canvasImage(.init(width: 1600, height: 2400)))
+    return (canvas, window, host)
+}
+
+private func approximately(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat = 1) -> Bool {
+    abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance
+        && abs(a.width - b.width) <= tolerance && abs(a.height - b.height) <= tolerance
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690CanvasReserveRefitsAndRestores() throws {
+    let (canvas, window, host) = try page39Canvas()
+    defer { window.close(); withExtendedLifetime(host) {} }
+    #expect(try canvasRedBounds(canvas) == CGRect(x: 384, y: 16, width: 512, height: 768))
+    canvas.trailingReserve = 64
+    #expect(try canvasRedBounds(canvas) == CGRect(x: 352, y: 16, width: 512, height: 768))
+    window.setContentSize(NSSize(width: 1440, height: 900))
+    canvas.setFrameSize(NSSize(width: 1440, height: 900))
+    let resized = try canvasRedBounds(canvas)
+    #expect(approximately(resized, CGRect(x: 398.67, y: 16, width: 578.67, height: 868)), "\(resized)")
+    canvas.trailingReserve = 0
+    let restored = try canvasRedBounds(canvas)
+    #expect(approximately(restored, CGRect(x: 430.67, y: 16, width: 578.67, height: 868)), "\(restored)")
+    window.setContentSize(NSSize(width: 1280, height: 800))
+    canvas.setFrameSize(NSSize(width: 1280, height: 800))
+    #expect(try canvasRedBounds(canvas) == CGRect(x: 384, y: 16, width: 512, height: 768))
+    #expect(canvas.backdropFrame.transform.zoom == CanvasTransform.fitted(source: CGSize(width: 1600, height: 2400),
+        viewport: CGSize(width: 1280, height: 800), backingScale: window.backingScaleFactor).zoom)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue690CanvasReserveIgnoredWhenZoomed() throws {
+    let (canvas, window, host) = try page39Canvas()
+    defer { window.close(); withExtendedLifetime(host) {} }
+    #expect(CommandRouter().route(.actualPixels, from: .key, to: canvas.session))
+    let before = canvas.backdropFrame.transform
+    canvas.trailingReserve = 64
+    let after = canvas.backdropFrame.transform
+    #expect(after.zoom == before.zoom && after.origin == before.origin)
+    #expect(canvas.trailingReserve == 64)
+}
