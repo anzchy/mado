@@ -61,14 +61,14 @@ import MadoMacUI
             guard let self else { return }
             do {
                 let url = try await session.capture()
-                status?.stringValue = "已存储 \(url.lastPathComponent)"
+                status?.stringValue = String(format: String(localized: "Saved %@"), url.lastPathComponent)
             } catch ScreenCaptureKitScreen.Failure.permissionDenied {
-                status?.stringValue = "截图需要「录屏与系统录音」权限，目前被拒绝。已打开系统设置。"
+                status?.stringValue = String(localized: "Screen capture requires Screen Recording permission, which is currently denied. System Settings has been opened.")
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
             } catch CaptureSessionError.busy {
-                status?.stringValue = "截图正在进行"
+                status?.stringValue = String(localized: "Capture in progress")
             } catch {
-                status?.stringValue = "截图失败：\(error.localizedDescription)"
+                status?.stringValue = String(format: String(localized: "Capture failed: %@"), error.localizedDescription)
             }
             statusPanel?.orderFrontRegardless()
         }

@@ -14,14 +14,14 @@ import MadoMacUI
         layer?.masksToBounds = true
         setAccessibilityIdentifier("capture.bar")
         addButton("", symbol: "circle.grid.2x3", id: "capture.grip", x: 4, width: 32, enabled: false)
-        addButton("区域截图", symbol: "camera.viewfinder", id: "capture.region", x: 38, width: 95, enabled: false)
-        addButton("窗口截图", symbol: "macwindow", id: "capture.window", x: 135, width: 95, enabled: false)
-        addButton("全屏截图", symbol: "display", id: "capture.screen", x: 232, width: 95, enabled: true)
-        addButton("识别文字", symbol: "text.viewfinder", id: "capture.text", x: 329, width: 95, enabled: false)
+        addButton(String(localized: "Region Capture"), symbol: "camera.viewfinder", id: "capture.region", x: 38, width: 95, enabled: false)
+        addButton(String(localized: "Window Capture"), symbol: "macwindow", id: "capture.window", x: 135, width: 95, enabled: false)
+        addButton(String(localized: "Full Screen Capture"), symbol: "display", id: "capture.screen", x: 232, width: 95, enabled: true)
+        addButton(String(localized: "Recognize Text"), symbol: "text.viewfinder", id: "capture.text", x: 329, width: 95, enabled: false)
         let divider = NSBox(frame: NSRect(x: 428, y: 10, width: 1, height: 20))
         divider.boxType = .separator
         addSubview(divider)
-        addButton("打开 Mado", symbol: "photo", id: "capture.mado", x: 433, width: 91, enabled: false)
+        addButton(String(localized: "Open Mado"), symbol: "photo", id: "capture.mado", x: 433, width: 91, enabled: false)
         addButton("", symbol: "chevron.up", id: "capture.collapse", x: 526, width: 32, enabled: false)
     }
 
@@ -39,7 +39,7 @@ import MadoMacUI
             .withSymbolConfiguration(.init(pointSize: 18, weight: .regular))
         button.imagePosition = .imageLeading
         button.isEnabled = enabled
-        button.toolTip = title.isEmpty ? (id == "capture.grip" ? "拖动工具条" : "收起到菜单栏") : title
+        button.toolTip = title.isEmpty ? (id == "capture.grip" ? String(localized: "Drag Capture Bar") : String(localized: "Collapse to Menu Bar")) : title
         button.setAccessibilityIdentifier(id)
         addSubview(button)
     }

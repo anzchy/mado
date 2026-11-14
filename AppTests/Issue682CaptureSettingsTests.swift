@@ -34,7 +34,7 @@ import MadoMacUI
     #expect(switchButton.state == .off)
     #expect(switchButton.isEnabled)
     let note = try #require(captureSettingsView("settings.capture.permission-note", in: panel) as? NSTextField)
-    #expect(note.stringValue == "在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。")
+    #expect(note.stringValue == String(localized: "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."))
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue682CaptureDesignRowsMatchPinnedSettings() throws {
@@ -52,7 +52,7 @@ import MadoMacUI
     #expect(folderLabel.alignment == .right)
     #expect(abs(folderLabel.frame.width - 120) <= 1)
     #expect(abs(folder.frame.minX - folderLabel.frame.maxX - 16) <= 1)
-    #expect(note.stringValue == "在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。")
+    #expect(note.stringValue == String(localized: "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."))
     #expect(ocr.isEnabledForCaptureSettings)
     for id in ["settings.capture.folder-change", "settings.capture.after-save", "settings.capture.shortcut-region"] {
         let control = try #require(captureSettingsView(id, in: panel) as? NSControl)
@@ -75,11 +75,11 @@ private extension NSView {
     #expect(abs(grip.frame.height - 32) <= 1)
     let region = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.region" } as? NSButton)
     #expect(abs(region.frame.height - 32) <= 1)
-    #expect(region.title == "区域截图")
-    #expect(region.toolTip == "区域截图")
+    #expect(region.title == String(localized: "Region Capture"))
+    #expect(region.toolTip == String(localized: "Region Capture"))
     let screen = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.screen" } as? NSButton)
     #expect(screen.isEnabled)
-    #expect(screen.title == "全屏截图")
+    #expect(screen.title == String(localized: "Full Screen Capture"))
     let expected = ["capture.grip", "capture.region", "capture.window", "capture.screen", "capture.text", "capture.mado", "capture.collapse"]
     let actual = bar.subviews.compactMap { $0.accessibilityIdentifier() }.filter { expected.contains($0) }
     #expect(actual == expected)
