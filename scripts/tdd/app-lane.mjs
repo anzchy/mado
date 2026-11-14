@@ -163,9 +163,9 @@ const admitted = Date.now();
 const { spawn, spawnSync } = require('node:child_process');
 let child, exited = false, closed = false, status = 70, stopping = false, finished = false;
 let deadline, poll, escalation, drain;
-const snapshot = () => {
+const snapshot = (timeout = 250) => {
   const probe = spawnSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,stat='], {
-    encoding: 'utf8', timeout: 250, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024
+    encoding: 'utf8', timeout, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024
   });
   if (probe.error || probe.status !== 0) throw new Error('cannot inspect discovery process group');
   return { probe: probe.pid, rows: probe.stdout.trim().split('\\n').map(line => {
@@ -175,7 +175,9 @@ const snapshot = () => {
 };
 let initial, group;
 try {
-  initial = snapshot(); group = initial.rows.find(row => row.pid === process.pid)?.group;
+  // The one startup snapshot runs while the lock and interpreters are still
+  // starting, so it gets 5 s (#705 T4); polling snapshots keep 250 ms.
+  initial = snapshot(5000); group = initial.rows.find(row => row.pid === process.pid)?.group;
   if (!group) throw new Error('cannot identify discovery process group');
 } catch (error) {
   process.stderr.write('app-lane inventory startup failed: ' + error.message + '\\n');
