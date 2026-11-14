@@ -68,7 +68,7 @@ Prototype: throwaway branch `prototype/680-capture-ui` (commit 96b47f79), never 
 | # | Question | Decision (owner's choice) |
 |---|---|---|
 | 5.1 | Where the Screenshots tab sits in the Settings sidebar | Before Updates. |
-| 5.2 | The other settings on that tab when "Show capture bar" is off | Greyed out and not editable. They stay visible, so the layout does not jump. |
+| 5.2 | The other settings on that tab when "Show capture bar" is off | Greyed out and not editable. They stay visible, so the layout does not jump. **Amended 2026-11-13 (owner: 「文字识别不变灰」):** the Text Recognition group is not greyed and stays editable, because Recognise Text in the viewer does not need the bar and Cloud Recognition has one global switch (ADR-0019). Only the rest of the bar group, After Capture and the global shortcuts are greyed. |
 | 5.3 | Minimum mosaic strength | Even the weakest setting makes a full line of ordinary body text unreadable. The implementer measures the pixel value on test assets, and the ticket's acceptance records it. No number is fixed here. |
 | 5.4 | Showing that a mosaic can be reversed | A permanent line of small text sits under the strength slider whenever mosaic is chosen. The user can switch to a solid box from there. There is no dialog. |
 | 5.5 | Tool shortcut keys | Single letters, active only in Annotate Mode: V select, A arrow, R rectangle, T text, H highlighter, P pen, M redaction, C crop, N step marker. While the user is typing in a text mark, letters type text and do not switch tools. The strip's hover tips show the letters. ⌘E enters Annotate Mode. The viewer uses no bare letter keys today (Space, arrows, Esc, Return, 0, 1, +, −, Tab; letters only with ⌘), so there is no conflict. |
