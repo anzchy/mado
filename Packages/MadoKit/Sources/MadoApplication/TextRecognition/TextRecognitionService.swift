@@ -13,7 +13,7 @@ public enum TextRecognitionEngine: Sendable {
 public enum TextRecognitionError: Error, Equatable, Sendable {
     case invalidImage
     case cancelled
-    case recognitionFailed
+    case recognitionFailed(domain: String, code: Int)
 }
 
 public struct TextRecognitionResult: Sendable {
