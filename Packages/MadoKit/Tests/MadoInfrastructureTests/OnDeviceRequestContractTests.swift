@@ -39,7 +39,7 @@ func issue687FixRequestOptionsAndDiagnosticError() async throws {
     let provider = OnDeviceTextRecognitionProvider(performRequest: { _, request in
         probe.recordOptions(request)
         throw NSError(domain: "VisionContract", code: 77, userInfo: [NSLocalizedDescriptionKey: "secret image text"])
-    })
+    }, cancelRequest: { $0.cancel() })
     do { _ = try await provider.recognise(contractImage()); Issue.record("Expected request error") }
     catch {
         #expect(error as? TextRecognitionError == .recognitionFailed(domain: "VisionContract", code: 77))

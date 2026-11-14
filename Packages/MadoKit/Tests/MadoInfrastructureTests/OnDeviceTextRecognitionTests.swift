@@ -81,7 +81,7 @@ func issue687VisionPreCancelledTaskIsTypedError() async throws {
 func issue687VisionUnexpectedRequestFailureIsTyped() async throws {
     let provider = OnDeviceTextRecognitionProvider(performRequest: { _, _ in
         throw NSError(domain: "vision-test", code: 1)
-    })
+    }, cancelRequest: { $0.cancel() })
     do {
         _ = try await provider.recognise(recognitionFixture("mixed.png"))
         Issue.record("Expected recognitionFailed")
@@ -98,7 +98,8 @@ func issue687VisionCancellationDuringRequestIsTyped() async throws {
         performRequest: { _, _ in throw NSError(domain: "vision-test", code: 2) },
         beforePerform: {
             await pause.wait(entered: entered.continuation)
-        }
+        },
+        cancelRequest: { $0.cancel() }
     )
     let bytes = try recognitionFixture("mixed.png")
     let task = Task { try await provider.recognise(bytes) }
