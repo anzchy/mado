@@ -110,6 +110,20 @@ test('a new keyCode comparison in another file fails until it is declared', () =
   /SettingsPanelWindow\.swift handles key code 51, which KEY_SITES does not declare/);
 });
 
+test('capture overlay Esc exclusion does not hide another Esc handler in the same file', () => {
+  fails(withChange('App/CaptureHelper/CaptureSelectionPanel.swift',
+    replaceOnce('override var canBecomeKey: Bool { true }',
+      'override var canBecomeKey: Bool { true }\n    func secondHandler(_ event: NSEvent) { if event.keyCode == 53 { return } }')),
+  /CaptureSelectionPanel\.swift handles an undeclared second key code 53 site/);
+});
+
+test('capture overlay Esc exclusion does not hide a second switch case', () => {
+  fails(withChange('App/CaptureHelper/CaptureSelectionPanel.swift',
+    replaceOnce('override var canBecomeKey: Bool { true }',
+      'override var canBecomeKey: Bool { true }\n    func secondHandler(_ event: NSEvent) { switch event.keyCode { case 53: return; default: return } }')),
+  /CaptureSelectionPanel\.swift handles an undeclared second key code 53 site/);
+});
+
 test('a new code in a key code list fails until it is declared', () => {
   fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift',
     replaceOnce('![36, 49, 76].contains(event.keyCode)', '![36, 49, 51, 76].contains(event.keyCode)')),

@@ -83,6 +83,7 @@ export const KEY_SITES = {
     124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY } },
   'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
     76: { excluded: ANNOTATE_SHEET } },
+  'App/CaptureHelper/CaptureSelectionPanel.swift': { 53: { excluded: 'Esc cancels a transient helper Capture selection, not a Mado command' } },
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
@@ -248,6 +249,12 @@ export function codeShortcuts(read) {
         } else if (typedReads > 0 && !CHARACTER_FILES.includes(rel))
           problems.push(`${rel} reads typed characters, which this check does not read`);
         const sites = keySites(source), declared = KEY_SITES[rel] ?? {};
+        if (rel === 'App/CaptureHelper/CaptureSelectionPanel.swift') {
+          const exactCancel = /if event\.keyCode == 53 \{\s*\(contentView as\? CaptureSelectionView\)\?\.cancel\(\)/g;
+          const anchors = [...source.matchAll(exactCancel)];
+          if (anchors.length !== 1 || keySites(source.replace(exactCancel, '')).codes.has('53'))
+            problems.push(`${rel} handles an undeclared second key code 53 site or changed its Capture cancel handler`);
+        }
         for (const line of sites.unread) problems.push(`${rel} reads a key code in a shape this check does not read: ${line}`);
         for (const code of sites.codes) if (!(code in declared))
           problems.push(`${rel} handles key code ${code}, which KEY_SITES does not declare; give it a page row or an exclusion`);

@@ -18,6 +18,11 @@ public enum CaptureSessionError: Error, Equatable, Sendable {
     case busy
 }
 
+public struct CaptureResult: Sendable {
+    public let url: URL
+    public let png: Data
+}
+
 public actor CaptureSession {
     private let screen: any CaptureScreenPort
     private let files: any CaptureFilePort
@@ -35,14 +40,19 @@ public actor CaptureSession {
     }
 
     public func capture() async throws -> URL {
-        try await capturePNG { try await self.screen.captureCurrentDisplayPNG() }
+        try await capturePNG { try await self.screen.captureCurrentDisplayPNG() }.url
     }
 
     public func capture(request: CaptureRequest) async throws -> URL {
-        try await capturePNG { try await self.screen.capturePNG(request: request) }
+        try await capturePNG { try await self.screen.capturePNG(request: request) }.url
     }
 
-    private func capturePNG(_ capture: () async throws -> Data) async throws -> URL {
+    public func captureResult(request: CaptureRequest?) async throws -> CaptureResult {
+        if let request { return try await capturePNG { try await self.screen.capturePNG(request: request) } }
+        return try await capturePNG { try await self.screen.captureCurrentDisplayPNG() }
+    }
+
+    private func capturePNG(_ capture: () async throws -> Data) async throws -> CaptureResult {
         guard !isCapturing else { throw CaptureSessionError.busy }
         isCapturing = true
         defer { isCapturing = false }
@@ -66,6 +76,6 @@ public actor CaptureSession {
                 suffix += 1
             }
         } while saved == nil
-        return saved!
+        return CaptureResult(url: saved!, png: png)
     }
 }

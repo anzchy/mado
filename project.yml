@@ -101,6 +101,7 @@ targets:
       - path: App/CaptureHelper/CaptureBarView.swift
       - path: App/CaptureHelper/ScreenCaptureKitScreen.swift
       - path: App/CaptureHelper/CaptureSelectionPanel.swift
+      - path: App/CaptureHelper/CaptureFilterPlan.swift
     dependencies:
       - package: MadoKit
         product: MadoCore

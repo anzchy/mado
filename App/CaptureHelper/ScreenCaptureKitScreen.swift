@@ -55,14 +55,17 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
 
     func capturePNG(request: CaptureRequest) async throws -> Data {
         try checkPermission()
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        let plan = try CaptureFilterPlan.resolve(request,
+            availableWindowIDs: Set(content.windows.map(\.windowID)))
+        let resolved = try CaptureFilterPlan.resolveWindows(request, windows: content.windows, id: { $0.windowID })
         let configuration = SCStreamConfiguration()
         let filter: SCContentFilter
-        var crop: CGRect?
-        switch request.target {
+        var legacyCrop = false
+        switch plan.target {
         case let .window(windowID):
-            guard !request.excludedWindowIDs.contains(windowID),
-                  let window = content.windows.first(where: { $0.windowID == windowID && $0.isOnScreen && $0.windowLayer == 0 })
+            guard let window = resolved.targetWindow, window.windowID == windowID,
+                  window.isOnScreen && window.windowLayer == 0
             else { throw Failure.windowUnavailable }
             filter = SCContentFilter(desktopIndependentWindow: window)
             let windowFrame = window.frame
@@ -73,12 +76,11 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
             }
             configuration.width = Int((windowFrame.width * scale).rounded(.up))
             configuration.height = Int((windowFrame.height * scale).rounded(.up))
-        case let .fullScreen(displayID), let .region(_, displayID, _, _):
+        case let .display(displayID):
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
                 throw Failure.displayUnavailable
             }
-            let excluded = content.windows.filter { request.excludedWindowIDs.contains($0.windowID) }
-            filter = SCContentFilter(display: display, excludingWindows: excluded)
+            filter = SCContentFilter(display: display, excludingWindows: resolved.excludedWindows)
             let scale: CGFloat
             if case let .region(_, _, _, requestedScale) = request.target {
                 scale = requestedScale
@@ -100,13 +102,13 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
                     configuration.width = Int(pixelRect.width)
                     configuration.height = Int(pixelRect.height)
                 } else {
-                    crop = pixelRect
+                    legacyCrop = true
                 }
             }
         }
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-        if let crop {
-            guard let cropped = image.cropping(to: crop) else { throw Failure.regionUnavailable }
+        if legacyCrop {
+            guard let cropped = request.cropDisplayImage(image) else { throw Failure.regionUnavailable }
             return try pngData(from: cropped)
         }
         return try pngData(from: image)
