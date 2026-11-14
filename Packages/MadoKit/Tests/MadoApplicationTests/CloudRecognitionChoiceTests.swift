@@ -71,3 +71,24 @@ func issue689CloudFailureFallsBack(error: TextRecognitionError) async throws {
     #expect(result.text == "local words")
     #expect(result.fallbackReason == expected)
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue689EmptyCredentialsAndMissingProviderStayLocal() async throws {
+    let settings = ChoiceSettings(value: .init(enabled: true, consent: .granted, online: true))
+    for missing in [CloudCredentials(apiKey: "", secretKey: "secret"), CloudCredentials(apiKey: "api", secretKey: "")] {
+        let cloud = CloudCalls()
+        let service = TextRecognitionService(onDevice: LocalWords(), settings: settings, credentialStore: ChoiceKeys(value: missing), cloud: cloud)
+        #expect(try await service.recognise(Data([1]), intent: .explicit).engine == .onDevice)
+        #expect(await cloud.count == 0)
+    }
+    let service = TextRecognitionService(onDevice: LocalWords(), settings: settings, credentialStore: ChoiceKeys(value: keys))
+    #expect(try await service.recognise(Data([1]), intent: .explicit).engine == .onDevice)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689CloudCancellationIsNotFallback() async {
+    let cloud = CloudCalls(.failure(.cancelled))
+    let service = TextRecognitionService(onDevice: LocalWords(), settings: ChoiceSettings(value: .init(enabled: true, consent: .granted, online: true)), credentialStore: ChoiceKeys(value: keys), cloud: cloud)
+    do { _ = try await service.recognise(Data([1]), intent: .explicit); Issue.record("Expected cancellation") }
+    catch { #expect(error == .cancelled) }
+}
