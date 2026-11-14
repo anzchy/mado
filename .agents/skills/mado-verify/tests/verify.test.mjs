@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const skill = fileURLToPath(new URL('../', import.meta.url));
 const script = name => path.join(skill, 'scripts', name);
-const mandatoryNames = ['diffcheck', 'swift', 'lcov', 'xcodegen', 'xcodebuild', 'node', 'ledger', 'design'];
+const mandatoryNames = ['diffcheck', 'swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests', 'node', 'ledger', 'design'];
 const gates = (overrides = {}) => mandatoryNames.map(name => ({ name, command: name, exitCode: overrides[name] ?? 0 }));
 function run(cmd, args, cwd, input) {
   return spawnSync(cmd, args, { cwd, encoding: 'utf8', input });
@@ -151,4 +151,12 @@ test('mark-target writes complete dispatch identity', t => {
   const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-20261111-a', handoff], f.dir);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'feature', issue: 651, task: 'i651-20261111-a', handoff });
+});
+
+test('manual check requires the apptests gate; a recorded skip is exit 0 with the summary line', t => {
+  const f = fixture(t);
+  recordFor(f, { gates: gates().filter(g => g.name !== 'apptests') });
+  assert.match(check(f, f.head()).stderr, /missing apptests/);
+  recordFor(f, { gates: gates().map(g => g.name === 'apptests' ? { ...g, keyLine: 'apptests=skip (no App-facing change)' } : g) });
+  assert.equal(check(f, f.head()).status, 0);
 });

@@ -2,12 +2,14 @@
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
 # implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
 # ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
-#   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild= / node= / ledger= / diffcheck= / design=
-#   / the Swift "Test run with N tests" line / DONE
+#   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild=
+#   / apptests= (full App test target via xcodebuild test when the merge-base diff touches App/, AppTests/, project.yml or
+#   Packages/MadoKit/Sources/MadoMacUI/; else "apptests=skip (no App-facing change)") plus its "apptests: … Test run with N
+#   tests …" lines / node= / ledger= / diffcheck= / design= / the Swift "Test run with N tests" line / DONE
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
-# The Swift, Xcode build and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
+# The Swift, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
 # design:check needs npm ci --ignore-scripts and Playwright Chromium in the gated worktree;
 # without either prerequisite it fails closed (design != 0).
 set -u
@@ -63,6 +65,24 @@ echo >> $s || summary_error
 xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
   > $o/$p-xcodebuild.log 2>&1; lane_result xcodebuild $?
+# App tests: the full App test target (no filter) when the diff from the merge-base is App-facing (#702, #701).
+app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
+if ! mb=$(git merge-base "$base" HEAD 2>/dev/null) || [[ -z "$mb" ]]; then
+  echo "apptests: cannot compute merge-base of $base and HEAD" > $o/$p-apptests.log
+  lane_result apptests 1
+elif ! git diff --name-only "$mb" HEAD | grep -Eq "$app_facing"; then
+  echo "apptests=skip (no App-facing change)" >> $s || summary_error
+else
+  $hl xcodebuild test -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
+    > $o/$p-apptests.log 2>&1
+  app_code=$?
+  if (( app_code == 0 )) && ! grep -Eq 'Test run with [0-9]+ tests? .*passed' $o/$p-apptests.log; then
+    echo "apptests: exit 0 but no 'Test run with N tests … passed' line; treated as failure" >> $o/$p-apptests.log
+    app_code=1
+  fi
+  lane_result apptests $app_code
+  grep -E 'Test run with [0-9]+ tests?' $o/$p-apptests.log | sed 's/^/apptests: /' >> $s || summary_error
+fi
 node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?

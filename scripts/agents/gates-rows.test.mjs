@@ -867,3 +867,50 @@ for (const event of ['workflow_dispatch\n', 'pull_request\r\n']) {
     assert.equal(result.stdout, `| app-tests | NOT VERIFIED | ${head} | App tests event invalid ${run.url} |\n`);
   });
 }
+
+// Owner 2026-11-14: owner-gates gained a local apptests lane; its row comes from apptests=, never from xcodebuild=.
+const withApp = value => complete.replace('xcodebuild=0\n', `xcodebuild=0\napptests=${value}\napptests: ✔ Test run with 12 tests in 3 suites passed after 1.0 seconds.\n`);
+for (const [value, row] of [
+  ['0', `| app-tests | PASS | ${head} | owner-gates apptests=0 |`],
+  ['65', `| app-tests | FAIL | ${head} | owner-gates apptests=65 |`],
+  ['skip (no App-facing change)', '| app-tests | NOT RUN | — | owner-gates apptests=skip (no App-facing change) |'],
+]) {
+  test(`summary apptests=${value} yields one app-tests row after unsigned-build and passes the lint shape`, async t => {
+    const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+    const result = runRows(t, withApp(value), ['--head', head]);
+    assert.equal(result.status, 0, result.stderr);
+    const rows = result.stdout.trim().split('\n');
+    assert.equal(rows.length, 8);
+    assert.equal(rows.filter(line => line.startsWith('| app-tests |')).length, 1);
+    assert.equal(rows[3], row);
+    assert.equal(rows[2], `| unsigned-build | PASS | ${head} | owner-gates xcodebuild=0 |`);
+    const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling |\n| device-smoke | N/A | — | tooling |\n`;
+    assert.deepEqual(checkGates(body, head), value === '65' ? { ok: false, reason: 'app-tests is a FAIL row' } : { ok: true });
+  });
+}
+
+test('xcodebuild=0 alone never produces an app-tests row', t => {
+  const result = runRows(t, complete, ['--head', head]);
+  assert.doesNotMatch(result.stdout, /app-tests/);
+  const failedBuild = runRows(t, withApp('0').replace('xcodebuild=0', 'xcodebuild=1'), ['--head', head]);
+  assert.match(failedBuild.stdout, /^\| unsigned-build \| FAIL \| [0-9a-f]+ \| owner-gates xcodebuild=1 \|$/m);
+  assert.match(failedBuild.stdout, /^\| app-tests \| PASS \| [0-9a-f]+ \| owner-gates apptests=0 \|$/m);
+});
+
+test('with --ci the CI app-tests row stays the only app-tests row', t => {
+  const result = runCI(t, validRun(), { summary: withApp('65') });
+  assert.equal(result.status, 0, result.stderr);
+  const appRows = result.stdout.trim().split('\n').filter(line => line.startsWith('| app-tests |'));
+  assert.deepEqual(appRows, [`| app-tests | PASS | ${head} | ${validRun().url} |`]);
+});
+
+test('duplicate or malformed apptests makes every row NOT VERIFIED', t => {
+  const duplicate = runRows(t, withApp('0').replace('apptests=0\n', 'apptests=0\napptests = 1\n'), ['--head', head]);
+  const dupRows = duplicate.stdout.trim().split('\n');
+  assert.equal(dupRows.length, 8);
+  for (const row of dupRows) assert.match(row, /\| NOT VERIFIED \| [0-9a-f]+ \| owner-gates summary ambiguous \|$/);
+  const malformed = runRows(t, withApp('maybe'), ['--head', head]);
+  const badRows = malformed.stdout.trim().split('\n');
+  assert.equal(badRows.length, 8);
+  for (const row of badRows) assert.match(row, /\| NOT VERIFIED \| [0-9a-f]+ \| owner-gates summary malformed \|$/);
+});
