@@ -251,7 +251,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "89502b55ddd1174b73f1a2fc9955eb3b5597ddfa90500f6a0207ea904f99514b"
+      "sha256": "a302031f741698389c0469b5c4deac7e46e5e10e17e993c0cdbaf7f5cbc9b60b"
     },
     {
       "name": "shortcuts",
@@ -275,7 +275,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "0f4a1ed2c13c728c532be3ee67ee6d9e12473ab6d3fce7071480295d6df64f2d"
+      "sha256": "71d9744432647aad5e70fa9e6e96c5374c24bcacd06790c276ff04238e3d0b62"
     },
     {
       "name": "capture-thumbnail",
@@ -287,7 +287,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "a8c8c761c2097e4546a075adae42b9252ce0e1f4d10019cab3c21dc86d229267"
+      "sha256": "b2ae92f8d56e442e8eef336d2ac93fbc28ac76de0dbc0643f81496baf4bcbdc8"
     },
     {
       "name": "annotate",
@@ -299,7 +299,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "75a8dfaeb66dfa48309eb5fce7dbb7d97ecccea8b27fe5d0a9e607b9435114aa"
+      "sha256": "ab9e5e639239dd1dd879a96f1194fc84c40ece9a0b1a2bbd4e58a86e6ed7e155"
     }
   ]
 }
