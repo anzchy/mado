@@ -122,6 +122,7 @@ targets:
         excludes:
           - Info.plist
           - CaptureHelper.entitlements
+      - path: App/Resources/Localizable.xcstrings
     dependencies:
       - package: MadoKit
         product: MadoApplication
