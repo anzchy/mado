@@ -617,7 +617,7 @@ public enum AnnotatePaint {
         let text = field.stringValue
         self.editing = nil
         textEditor = nil
-        if window?.firstResponder === field.currentEditor() { window?.makeFirstResponder(self) }
+        if let editor = field.currentEditor(), window?.firstResponder === editor { window?.makeFirstResponder(nil) }
         field.delegate = nil
         field.removeFromSuperview()
         needsDisplay = true
