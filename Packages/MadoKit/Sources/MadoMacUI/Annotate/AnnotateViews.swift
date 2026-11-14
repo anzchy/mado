@@ -373,6 +373,8 @@ public enum AnnotatePaint {
     /// #692: text editing ended: the edited mark's index (nil for a new one), the text, the origin (image pixels)
     /// and the style for a new mark.
     public var onCommitText: ((Int?, String, CGPoint, AnnotationStyle) -> Void)?
+    /// #692 fix r1: a mark's accessibility 删除 action.
+    public var onDelete: ((Int) -> Void)?
     public private(set) var textEditor: NSTextField?
     public var isEditingText: Bool { editing != nil }
     /// The text mark being edited (hidden while its field is up); nil for a new one or none.
@@ -395,9 +397,14 @@ public enum AnnotatePaint {
     private static let handleSize: CGFloat = 7
     private static let handleReach: CGFloat = 6
 
+    /// One accessibility element per mark, kept while the mark count stays, so VoiceOver keeps its place (#692 fix r1).
+    private var markElements: [AnnotationMarkElement] = []
+
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setAccessibilityElement(false)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel(String(localized: "Annotations"))
     }
     required init?(coder: NSCoder) { nil }
 
@@ -421,9 +428,22 @@ public enum AnnotatePaint {
 
     private var screenStyle: AnnotationStyle { .forScreen(pointsPerImagePixel: pointsPerImagePixel) }
 
-    private func viewRect(_ rect: CGRect, _ transform: CanvasTransform) -> CGRect {
+    fileprivate func viewRect(_ rect: CGRect, _ transform: CanvasTransform) -> CGRect {
         let a = transform.imageToView(rect.origin), b = transform.imageToView(CGPoint(x: rect.maxX, y: rect.maxY))
         return CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y)
+    }
+
+    // MARK: Accessibility
+
+    /// The text field while typing, then one element per completed mark, in drawing order.
+    public override func accessibilityChildren() -> [Any]? {
+        let kept = markElements.prefix(marks.count)
+        markElements = Array(kept) + (kept.count..<marks.count).map { AnnotationMarkElement(overlay: self, index: $0) }
+        return (super.accessibilityChildren() ?? []) + markElements
+    }
+
+    public override func accessibilitySelectedChildren() -> [Any]? {
+        accessibilityChildren()?.filter { ($0 as? AnnotationMarkElement)?.isAccessibilitySelected() == true }
     }
 
     // MARK: Drawing
@@ -632,6 +652,69 @@ public enum AnnotatePaint {
         else { return false }
         commitText()
         return true
+    }
+}
+
+/// A completed mark for VoiceOver (#692 fix r1): its kind (a step reads 「序号 N」 with its current number), a text
+/// mark's words as the value, the selection, and the mark's view bounds as the frame. Selecting or pressing it selects
+/// the mark; the 删除 action asks the window to delete it.
+@MainActor private final class AnnotationMarkElement: NSAccessibilityElement {
+    private weak var overlay: AnnotationOverlayView?
+    private let index: Int
+
+    init(overlay: AnnotationOverlayView, index: Int) {
+        self.overlay = overlay
+        self.index = index
+        super.init()
+        setAccessibilityElement(true)
+        setAccessibilityRole(.layoutItem)
+        setAccessibilityParent(overlay)
+    }
+
+    private var mark: AnnotationMark? {
+        guard let marks = overlay?.marks, marks.indices.contains(index) else { return nil }
+        return marks[index]
+    }
+
+    override func accessibilityLabel() -> String? {
+        guard let overlay, let mark else { return nil }
+        switch mark.kind {
+        case .rectangle: return String(localized: "Rectangle")
+        case .arrow: return String(localized: "Arrow")
+        case .text: return String(localized: "Text")
+        case .highlighter: return String(localized: "Highlighter")
+        case .pen: return String(localized: "Pen")
+        case .step:
+            let number = AnnotationGeometry.stepNumbers(overlay.marks)[index] ?? 0
+            return String(format: String(localized: "Step %lld"), number)
+        }
+    }
+
+    override func accessibilityValue() -> Any? { mark?.kind == .text ? mark?.text : nil }
+
+    override func isAccessibilitySelected() -> Bool { mark != nil && overlay?.selectedMark == index }
+
+    override func setAccessibilitySelected(_ selected: Bool) {
+        guard let overlay else { return }
+        if selected { overlay.onSelect?(index) } else if overlay.selectedMark == index { overlay.onSelect?(nil) }
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        setAccessibilitySelected(true)
+        return true
+    }
+
+    override func accessibilityFrame() -> NSRect {
+        guard let overlay, let mark, let transform = overlay.transform, let window = overlay.window else { return .zero }
+        return window.convertToScreen(overlay.convert(overlay.viewRect(mark.rect, transform), to: nil))
+    }
+
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
+        [NSAccessibilityCustomAction(name: String(localized: "Delete")) { [weak self] in
+            guard let self, let overlay = self.overlay else { return false }
+            overlay.onDelete?(self.index)
+            return true
+        }]
     }
 }
 
