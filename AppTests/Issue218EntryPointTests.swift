@@ -41,8 +41,7 @@ import MadoMacUI
         "settings.display.fit.1": .settingsDisplayFitMode,
     ]
 
-    // #114 (owner: 「两者都做，共用一组偏好」): Settings 显示 is real now, so no Settings control stays greyed; the four
-    // display controls keep their declared entry points, now implemented, without a Coming Soon marker.
+    // #114 display controls are live. Only the ticket-tagged Capture placeholders may be disabled.
     for (id, entry) in expected {
         let control = try #require(settingsEntryPointView(id, in: root) as? NSControl)
         #expect(control.isEnabled, "\(id)")
@@ -56,7 +55,8 @@ import MadoMacUI
     }
 
     let disabled = disabledSettingsControls(in: root)
-    #expect(disabled.isEmpty)
+    #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }) == Set(CaptureDeferredSettingsControls.tickets.keys))
+    #expect(CaptureDeferredSettingsControls.unexpectedDisabledIDs(disabled).isEmpty)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue218AboutReportIssueOpensSharedEntryPointURL() throws {

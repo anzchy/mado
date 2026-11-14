@@ -342,21 +342,22 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let switchText = field(captureLocalize("Show Capture Bar"), top: 49, id: "settings.capture.enabled.title")
         switchText.frame.origin.x = valueX + 40
         field(captureLocalize("When enabled, Mado starts a small capture helper. Screen Recording permission belongs only to the helper; turning the switch off stops it."),
-              top: 76, height: 42, id: "settings.capture.privacy-hint", muted: true)
+              top: 76, height: 46, id: "settings.capture.privacy-hint", muted: true)
         field(captureLocalize("Start at Login"), top: 125, labelColumn: true)
         disabledSwitch(captureLocalize("Start Capture Bar at Login"), top: 125, id: "settings.capture.login")
         field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
-              top: 151, height: 24, id: "settings.capture.login-hint", muted: true)
+              top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
         field(captureLocalize("Screen Recording"), top: 190, labelColumn: true)
         capturePermissionStatus = field(captureLocalize("Unknown"), top: 190, id: "settings.capture.permission-status", muted: true)
         if #available(macOS 15, *) {
             field(captureLocalize("On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."),
-                  top: 218, height: 42, id: "settings.capture.permission-note", muted: true)
+                  top: 218, height: 46, id: "settings.capture.permission-note", muted: true)
         }
         heading(captureLocalize("After Capture"), top: 280, id: "settings.capture.heading-after", divider: true)
         field(captureLocalize("Capture Folder"), top: 315, id: "settings.capture.folder-label", labelColumn: true)
         let folder = field("~/Downloads", top: 315, id: "settings.capture.folder")
         folder.font = DesignMetrics.font("uiSmall", monospaced: true)
+        folder.frame.size.width = 94
         disabledButton(captureLocalize("Change…"), top: 315, id: "settings.capture.folder-change", x: valueX + 102, width: 72)
         field(captureLocalize("File name mado-20261113153012.png; the second capture in the same second adds -2."),
               top: 341, height: 30, id: "settings.capture.filename-hint", muted: true)
