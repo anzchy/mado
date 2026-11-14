@@ -6,6 +6,7 @@ import MadoCore
 
 /// A stored pixel layout, spelled out here independently of the renderer. `channels` names the stored components in
 /// memory order: r, g, b, a (alpha) or x (padding). Integer components are 8 or 16 bits; 32 bits means float.
+/// Grey layouts use k for the grey component.
 struct RedactionFormat: CustomTestStringConvertible, Sendable {
     let name: String
     let space: String
@@ -72,6 +73,7 @@ struct RedactionSource {
                 for (i, channel) in format.channels.enumerated() {
                     let value: Double = switch channel {
                     case "r": colour[0] * (format.premultiplied ? alpha : 1)
+                    case "k": colour[0] * (format.premultiplied ? alpha : 1)
                     case "g": colour[1] * (format.premultiplied ? alpha : 1)
                     case "b": colour[2] * (format.premultiplied ? alpha : 1)
                     case "a": alpha
@@ -181,47 +183,5 @@ func issue693MosaicMeansAreComputedInTheSourceSpace(format: RedactionFormat) thr
             let got = after[y * RedactionSource.width + x]
             for c in 0..<4 { #expect(abs(got[c] - mean[c]) <= tolerance, "(\(x), \(y)) channel \(c): \(got) vs \(mean)") }
         }
-    }
-}
-
-/// Layouts the renderer does not read directly follow #690's flattener rule: an RGB source keeps its colour space
-/// and depth (8-bit, 16-bit or 32-bit float), premultiplied RGBA; anything else becomes sRGB 8-bit. A decode array
-/// makes the layout unreadable; CoreGraphics drops an identity one (measured), so this one halves red. The redraw
-/// applies it, so outside pixels match the decoded source to within one step of the depth, clamped to 0…1 for an
-/// integer depth (CoreGraphics decodes this premultiplied source's red above 1, which 8 bits cannot hold).
-@Test(arguments: [RedactionFormat.preserved[0], RedactionFormat.preserved[2], RedactionFormat.preserved[4]])
-func issue693UnreadableRGBLayoutIsRedrawnInTheSourceSpaceAndDepth(format: RedactionFormat) throws {
-    let source = RedactionSource(format, decode: [0, 0.5, 0, 1, 0, 1, 0, 1])
-    #expect(source.image.decode != nil, "the source must keep its decode array, or the direct path is tested")
-    let before = RedactionSource.decoded(source.image, in: format.colorSpace)
-        .map { $0.map { format.bits == 32 ? $0 : min(max($0, 0), 1) } }
-    let tolerance: Float = format.bits == 32 ? 1e-6 : Float(1 / format.maximum)
-    for (style, result) in try redactions(source.image) {
-        #expect(result.colorSpace?.name == source.image.colorSpace?.name, "\(style)")
-        #expect(result.bitsPerComponent == format.bits && result.decode == nil, "\(style)")
-        #expect(result.alphaInfo == .premultipliedLast, "\(style)")
-        let after = RedactionSource.decoded(result, in: format.colorSpace)
-        for y in 0..<RedactionSource.height {
-            for x in 0..<RedactionSource.width where !(xs.contains(x) && ys.contains(y)) {
-                let (a, b) = (after[y * RedactionSource.width + x], before[y * RedactionSource.width + x])
-                #expect(zip(a, b).allSatisfy { abs($0 - $1) <= tolerance }, "\(style) (\(x), \(y)): \(a) vs \(b)")
-            }
-        }
-    }
-}
-
-@Test func issue693GreySourceIsRedrawnAsSRGB8Bit() throws {
-    let grey = CGContext(data: nil, width: 12, height: 10, bitsPerComponent: 8, bytesPerRow: 0,
-                         space: CGColorSpace(name: CGColorSpace.genericGrayGamma2_2)!,
-                         bitmapInfo: CGImageAlphaInfo.none.rawValue)!
-    grey.setFillColor(gray: 0.6, alpha: 1)
-    grey.fill(CGRect(x: 0, y: 0, width: 12, height: 10))
-    let image = grey.makeImage()!
-    for (style, result) in try redactions(image) {
-        #expect(result.colorSpace?.name == CGColorSpace.sRGB, "\(style)")
-        #expect(result.bitsPerComponent == 8 && result.alphaInfo == .premultipliedLast, "\(style)")
-        let pixels = RedactionPixels(result)
-        #expect(pixels.pixel(0, 0) == pixels.pixel(11, 9) && pixels.pixel(0, 0)[3] == 255, "\(style)")
-        if style == "solid" { #expect(pixels.pixel(4, 3) == [0, 0, 0, 255]) }
     }
 }
