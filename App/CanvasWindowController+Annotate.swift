@@ -137,7 +137,7 @@ extension CanvasWindowController {
     }
 
     /// #692: text being typed that ⌘S would commit first, so the first text mark can be saved straight away.
-    private var annotatePendingText: Bool {
+    var annotatePendingText: Bool {
         guard let overlay = annotateViews.overlay, overlay.isEditingText, session.annotateMode?.isSaving == false,
               let text = overlay.textEditor?.stringValue else { return false }
         return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
