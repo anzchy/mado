@@ -9,7 +9,7 @@ if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','script
   'scripts/ci/integration/app-repeat-process.test.mjs',
   'scripts/ci/app-repeat.test.mjs',
   'scripts/tdd/host-unknown-fix1.test.mjs',
-  'scripts/tdd/fixture-env.test.mjs'].includes(file)){
+  'scripts/tdd/fixture-env.test.mjs','scripts/tdd/fixture-pid.test.mjs'].includes(file)){
   process.stderr.write('unsupported process contract file\n');process.exit(70);
 }
 if(!name){process.stderr.write('PICSEE_HEAVY_TEST_FILTER is required\n');process.exit(70);}
