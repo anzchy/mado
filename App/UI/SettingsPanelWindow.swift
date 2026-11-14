@@ -4,15 +4,58 @@ import MadoInfrastructure
 import MadoMacUI
 
 enum SettingsSection: String, CaseIterable {
-    case general, display, cache, update, about
+    case general, display, cache, capture, update, about
     var title: String {
         switch self {
         case .general: String(localized: "General")
         case .display: String(localized: "Display")
         case .cache: String(localized: "Cache")
+        case .capture: String(localized: "Screenshots")
         case .update: String(localized: "Updates")
         case .about: String(localized: "About")
         }
+    }
+}
+
+private actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
+    private let defaults = UserDefaults(suiteName: CaptureBarIdentity.appGroupID)
+
+    func isCaptureBarEnabled() -> Bool {
+        defaults?.bool(forKey: CaptureBarIdentity.enabledKey) == true
+    }
+
+    func setCaptureBarEnabled(_ enabled: Bool) {
+        defaults?.set(enabled, forKey: CaptureBarIdentity.enabledKey)
+        defaults?.synchronize()
+    }
+}
+
+@MainActor private final class WorkspaceCaptureBarProcess: CaptureBarProcessPort {
+    enum Failure: Error { case helperMissing, didNotExit }
+
+    func startCaptureBar() async throws {
+        let url = Bundle.main.bundleURL.appendingPathComponent(
+            "Contents/Library/LoginItems/MadoCaptureHelper.app", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: url.path) else { throw Failure.helperMissing }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    func stopCaptureBar() async throws {
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID)
+        for app in apps { _ = app.terminate() }
+        for _ in 0..<50 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let survivors = NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID)
+        for app in survivors { _ = app.forceTerminate() }
+        for _ in 0..<20 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw Failure.didNotExit
     }
 }
 
@@ -46,10 +89,14 @@ enum SettingsSection: String, CaseIterable {
     private var updateAutomatic: NSButton!
     private var updateCheck: NSButton!
     private var updateLastChecked: NSTextField!
+    private var captureEnabled: NSButton!
+    private var captureDetails: [NSView] = []
+    private let captureControl: CaptureBarControl
 
     init(cache: ThumbnailDiskCache, appearanceAdapter: WindowAppearanceAdapter,
          preferencesStore: any DisplayPreferencesStore, defaults: UserDefaults,
          updates: (any AppUpdatePort)? = nil,
+         captureControl: CaptureBarControl? = nil,
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -64,6 +111,8 @@ enum SettingsSection: String, CaseIterable {
         self.aboutInfoDictionary = aboutInfoDictionary
         self.aboutLocalizedString = aboutLocalizedString
         self.updates = updates
+        self.captureControl = captureControl ?? CaptureBarControl(
+            preferences: AppGroupCaptureBarPreferences(), process: WorkspaceCaptureBarProcess())
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -101,6 +150,7 @@ enum SettingsSection: String, CaseIterable {
         }
         if section == .cache { refreshCache() }
         if section == .update { refreshUpdates() }
+        if section == .capture { refreshCapture() }
     }
 
     func preferencesDidChange(_ preferences: DisplayPreferences) {
@@ -135,7 +185,7 @@ enum SettingsSection: String, CaseIterable {
             button.setButtonType(.toggle)
             button.alignment = .left
             button.font = DesignMetrics.font("ui")
-            let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "arrow.triangle.2.circlepath", "info.circle"]
+            let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "camera.viewfinder", "arrow.triangle.2.circlepath", "info.circle"]
             button.image = NSImage(systemSymbolName: symbols[index], accessibilityDescription: nil)
             button.imagePosition = .imageLeading
             button.setAccessibilityIdentifier("settings.section.\(section.rawValue)")
@@ -152,6 +202,7 @@ enum SettingsSection: String, CaseIterable {
         buildGeneral()
         buildDisplay()
         buildCache()
+        buildCapture()
         buildUpdates()
         buildAbout()
         window.contentView = root
@@ -172,6 +223,45 @@ enum SettingsSection: String, CaseIterable {
         field.alignment = .right
         field.frame = NSRect(x: 26, y: y, width: 120, height: 24)
         pane.addSubview(field)
+    }
+
+    private func buildCapture() {
+        let pane = panes[.capture]!
+        captureEnabled = NSButton(checkboxWithTitle: String(localized: "Show Capture Bar"),
+                                  target: self, action: #selector(changeCapture(_:)))
+        captureEnabled.frame = NSRect(x: 162, y: 392, width: 280, height: 24)
+        captureEnabled.setAccessibilityIdentifier("settings.capture.enabled")
+        pane.addSubview(captureEnabled)
+        let status = label(String(localized: "Screen Recording: Unknown"), role: "uiSmall", muted: true)
+        status.frame = NSRect(x: 162, y: 347, width: 390, height: 24)
+        status.setAccessibilityIdentifier("settings.capture.permission-status")
+        pane.addSubview(status)
+        captureDetails.append(status)
+        let note = label("在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。", role: "uiSmall", muted: true)
+        note.frame = NSRect(x: 162, y: 292, width: 390, height: 52)
+        note.setAccessibilityIdentifier("settings.capture.permission-note")
+        pane.addSubview(note)
+        captureDetails.append(note)
+        refreshCapture()
+    }
+
+    private func refreshCapture() {
+        guard captureEnabled != nil else { return }
+        let enabled = UserDefaults(suiteName: CaptureBarIdentity.appGroupID)?
+            .bool(forKey: CaptureBarIdentity.enabledKey) == true
+        captureEnabled.state = enabled ? .on : .off
+        for detail in captureDetails { detail.alphaValue = enabled ? 1 : 0.45 }
+    }
+
+    @objc private func changeCapture(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        sender.isEnabled = false
+        Task {
+            do { try await captureControl.setEnabled(enabled) }
+            catch { sender.state = .off }
+            sender.isEnabled = true
+            refreshCapture()
+        }
     }
 
     private func buildGeneral() {
