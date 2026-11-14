@@ -2,7 +2,7 @@
 // and expects the named disagreement; the first case is the repository as it is.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FILES, KEY_HANDLERS, check, readRepo } from './shortcut-model.mjs';
+import { FILES, KEY_HANDLERS, KEY_SITES, check, readRepo } from './shortcut-model.mjs';
 
 const withChange = (file, edit) => f => (f === file ? edit(readRepo(f)) : readRepo(f));
 const replaceOnce = (from, to) => source => {
@@ -203,7 +203,8 @@ test('i690 the page lists V and R, the Annotate Mode tools', () => {
   const page = readRepo(FILES.page);
   assert.match(page, /data-shortcut="key:annotate-select"[^\n]*<kbd>V<\/kbd>/);
   assert.match(page, /data-shortcut="key:annotate-rectangle"[^\n]*<kbd>R<\/kbd>/);
-  assert.deepEqual(KEY_HANDLERS.filter(h => h.id.startsWith('key:annotate-')).map(h => [h.id, h.keys, h.file]),
+  assert.deepEqual(KEY_HANDLERS.filter(h => ['key:annotate-select', 'key:annotate-rectangle'].includes(h.id))
+    .map(h => [h.id, h.keys, h.file]),
     [['key:annotate-select', ['V'], ANNOTATE_POLICY], ['key:annotate-rectangle', ['R'], ANNOTATE_POLICY]]);
 });
 
@@ -239,4 +240,42 @@ test('i690 r1 the Annotate character read must stay at its anchor', () => {
   fails(withChange(ANNOTATE_KEYS, replaceOnce('default: .character(event.charactersIgnoringModifiers ?? "")',
     'default: .character(typed(event))')),
   /CanvasWindowController\+Annotate\.swift no longer reads typed characters at/);
+});
+
+// #692: 箭头 A, 文字 T, 荧光笔 H, 画笔 P, 序号 N join V and R; ⌫/⌦ delete the selected mark. All act only in Annotate Mode.
+const I692_TOOLS = [['key:annotate-arrow', 'A', '标注中：箭头'], ['key:annotate-text', 'T', '标注中：文字'],
+  ['key:annotate-highlighter', 'H', '标注中：荧光笔'], ['key:annotate-pen', 'P', '标注中：画笔'],
+  ['key:annotate-step', 'N', '标注中：序号']];
+
+test('i692 the page lists A T H P N, the new Annotate Mode tools', () => {
+  const page = readRepo(FILES.page);
+  for (const [id, key, name] of I692_TOOLS) {
+    assert.match(page, new RegExp(`data-shortcut="${id}"><span class="name">${name}</span><span class="keys"><kbd>${key}</kbd></span>`), id);
+  }
+  assert.deepEqual(KEY_HANDLERS.filter(h => I692_TOOLS.some(([id]) => id === h.id)).map(h => [h.id, h.keys, h.file]),
+    I692_TOOLS.map(([id, key]) => [id, [key], ANNOTATE_POLICY]));
+  assert.deepEqual(check(), []);
+});
+
+test('i692 the page rows follow the strip order: V A R T H P N', () => {
+  const page = readRepo(FILES.page);
+  const order = [...page.matchAll(/data-shortcut="(key:annotate-[a-z]+)"/g)].map(m => m[1]);
+  assert.deepEqual(order, ['key:annotate-select', 'key:annotate-arrow', 'key:annotate-rectangle', 'key:annotate-text',
+    'key:annotate-highlighter', 'key:annotate-pen', 'key:annotate-step']);
+});
+
+test('i692 a page without the N row fails', () => {
+  fails(withChange(FILES.page, s => s.replace(/\n[^\n]*data-shortcut="key:annotate-step"[^\n]*/, '')), /key:annotate-step/);
+});
+
+test('i692 a changed A key in the Annotate policy fails its anchor', () => {
+  fails(withChange(ANNOTATE_POLICY, replaceOnce('if letter == "a", plain', 'if letter == "q", plain')),
+    /key:annotate-arrow: .*AnnotateMode\.swift no longer matches/);
+});
+
+test('i692 delete and forward delete are declared Annotate-only key sites', () => {
+  assert.equal(KEY_SITES[ANNOTATE_KEYS][51]?.excluded, 'only in Annotate Mode');
+  assert.equal(KEY_SITES[ANNOTATE_KEYS][117]?.excluded, 'only in Annotate Mode');
+  fails(withChange(ANNOTATE_KEYS, replaceOnce('case 117: .forwardDelete', 'case 117, 116: .forwardDelete')),
+    /CanvasWindowController\+Annotate\.swift handles key code 116/);
 });
