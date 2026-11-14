@@ -56,3 +56,15 @@ test('delegator loop: briefs keep the Verify section; record check before audit 
   assert.match(step(5), /mado-verify/);
   assert.match(step(8), /evidence\.mjs check --head <sha>/);
 });
+
+test('SKILL.md step 1 runs App tests the CI way and names the Codex key-window limit', () => {
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  const step1 = skill.slice(skill.indexOf('## 1. Gate ladder'), skill.indexOf('## 2.'));
+  assert.match(step1, /build-for-testing/);
+  assert.match(step1, /scripts\/tdd\/app-lane\.mjs/);
+  assert.match(step1, /unset PICSEE_APP_FILTER/);
+  assert.doesNotMatch(step1, /xcodebuild test -scheme/);
+  assert.match(step1, /keyWindow=nil/);
+  assert.match(step1, /NOT VERIFIED/);
+  assert.match(step1, /delegator's `?owner-gates/);
+});

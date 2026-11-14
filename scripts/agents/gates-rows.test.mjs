@@ -869,7 +869,7 @@ for (const event of ['workflow_dispatch\n', 'pull_request\r\n']) {
 }
 
 // Owner 2026-11-14: owner-gates gained a local apptests lane; its row comes from apptests=, never from xcodebuild=.
-const withApp = value => complete.replace('xcodebuild=0\n', `xcodebuild=0\napptests=${value}\napptests: ✔ Test run with 12 tests in 3 suites passed after 1.0 seconds.\n`);
+const withApp = value => complete.replace('xcodebuild=0\n', `xcodebuild=0\napptests=${value}\napptests: Tests run: 412, Failures: 0, Errors: 0, Skipped: 0\n`);
 for (const [value, row] of [
   ['0', `| app-tests | PASS | ${head} | owner-gates apptests=0 |`],
   ['65', `| app-tests | FAIL | ${head} | owner-gates apptests=65 |`],

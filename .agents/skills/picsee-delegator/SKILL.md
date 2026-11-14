@@ -89,7 +89,8 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    Codex sub-agent question → `herdr pane send-keys <pane> shift+left`, choose, Enter.
 4. **Audit** — before dispatch, run `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <sha> --worktree <wt>`
    for the handoff's final head and confirm the printed comment URL is the one in the handoff; a failure returns the item to
-   the implementer. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
+   the implementer. A `WARNING apptests NOT VERIFIED` line (Codex panes have no key window) means your own owner-gates
+   `apptests=` result below is the binding App test evidence. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
