@@ -457,6 +457,8 @@ public enum AnnotatePaint {
         }
         let scale = pointsPerImagePixel
         context.saveGState()
+        // The copy ends at the bitmap edge, so the screen does too (#692 fix r1); the selection chrome is not clipped.
+        context.clip(to: viewRect(CGRect(origin: .zero, size: imageSize), transform))
         context.translateBy(x: transform.origin.x, y: transform.origin.y)
         context.scaleBy(x: scale, y: scale)
         AnnotationRenderer.draw(shown, in: context, hiding: editing?.index)
