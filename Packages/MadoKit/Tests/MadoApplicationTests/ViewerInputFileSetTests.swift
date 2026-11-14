@@ -56,6 +56,42 @@ private let setC = URL(fileURLWithPath: "/photos/C.png")
 private let setD = URL(fileURLWithPath: "/photos/D.png")
 private let setE = URL(fileURLWithPath: "/photos/E.png")
 
+@Test(.timeLimit(.minutes(2))) @MainActor func issue695RecoveredMemberKeepsSetOrderAndPosition() async {
+    let host = InputFileSetHost(), intent = AccessIntent()
+    await host.input([setA, setB, setC], intent: intent)
+    await host.move(.next)
+    await host.session.recoverFilePreviewSetMember(setB, with: setD,
+        operation: intent.current, admission: host.admission, host: host)
+    await host.session.imageLoader.loadTask?.value
+    #expect(host.session.filePreviewSet?.members == [setA, setD, setC])
+    #expect(host.session.filePreviewSet?.index == 1)
+    #expect(host.session.imageLoader.presented?.fileURL == setD)
+    await host.move(.previous)
+    #expect(host.session.imageLoader.presented?.fileURL == setA)
+    await host.move(.next)
+    #expect(host.session.imageLoader.presented?.fileURL == setD)
+    await host.finish()
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue695RejectedOrStaleReplacementDoesNotChangeSet() async {
+    let pipeline = InputPipeline(), host = InputFileSetHost(pipeline: pipeline), intent = AccessIntent()
+    await host.input([setA, setB, setC], intent: intent)
+    await host.move(.next)
+    await pipeline.fail(setD, ImageLoadError(.unsupportedFormat))
+    let original = host.session.filePreviewSet?.members
+    await host.session.recoverFilePreviewSetMember(setB, with: setD,
+        operation: intent.current, admission: host.admission, host: host)
+    #expect(host.session.filePreviewSet?.members == original)
+    #expect(host.session.filePreviewSet?.index == 1)
+    #expect(host.notices == [.unsupported("D.png")])
+    let stale = intent.current
+    intent.invalidate()
+    await host.session.recoverFilePreviewSetMember(setB, with: setE,
+        operation: stale, admission: host.admission, host: host)
+    #expect(host.session.filePreviewSet?.members == original)
+    await host.finish()
+}
+
 @Test func inputFileSetValueBoundsAndTraversalInvariant() {
     var empty = FilePreviewSet(files: [])
     #expect(empty.current == nil)

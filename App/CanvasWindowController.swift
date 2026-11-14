@@ -158,7 +158,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private var standaloneWake: FileGrantWakeObservation?
     private var standaloneReadInput: AccessOperation?
     private var standaloneReadProbe: Task<Void, Never>?
-    private var fileReconnectionContext: (original: URL, access: AccessOperation, input: AccessOperation)?
+    private var fileReconnectionContext: (original: URL, setMember: URL?, access: AccessOperation, input: AccessOperation)?
     private var standaloneWatch: (any DispatchSourceFileSystemObject)?
     private var standaloneWatchTask: Task<Void, Never>?
     private let standaloneWatchFallback = FileGrantWatchFallback()
@@ -1353,12 +1353,25 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private func requestFileReconnection(_ original: URL) {
         // The presentation boundary is synchronous and precedes even an already-attached sheet.
         // Closing the loader/Inspector also advances their generations before old work can return.
-        clearFolderImageForNoMatches()
+        let setMember = session.filePreviewSet?.current
+        if setMember != nil {
+            // A background folder scan can coexist with a file set; its ordinary clear
+            // guard must not leave the denied image visible at this recovery boundary.
+            retryIntent = nil
+            retryFromFolderScan = false
+            fileURL = nil
+            session.closeImage()
+            syncInspector()
+            canvas.showFailure()
+            WindowImageTitle.apply(to: window, imageURL: nil)
+        } else {
+            clearFolderImageForNoMatches()
+        }
         inspectorHost.isHidden = true
         chromeOverlay.refresh(session: session)
         stateHost.refresh()
         accessIntent.invalidate()
-        endInput()
+        inputIntent.invalidate()
         navigationTask?.cancel()
         standaloneReadProbe?.cancel(); standaloneReadProbe = nil
         standaloneReadInput = nil
@@ -1373,7 +1386,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         guard let window, window.attachedSheet == nil else { return }
         let operation = accessIntent.current
         let inputOperation = inputIntent.current
-        fileReconnectionContext = (original, operation, inputOperation)
+        fileReconnectionContext = (original, setMember, operation, inputOperation)
         let alert = NSAlert()
         alert.messageText = String(localized: "This File Can’t Be Opened")
         alert.informativeText = String(localized: "Choose this image again to reconnect access.")
@@ -1403,7 +1416,20 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
               context.access.isCurrent, context.input.isCurrent else { return }
         fileReconnectionContext = nil
         guard let url else { return }
-        openInput([url])
+        guard let member = context.setMember else { openInput([url]); return }
+        let operation = inputIntent.begin()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let services = try await operation.wait { try await accessServices.value }
+                let scale = window?.backingScaleFactor ?? 1
+                let maximum = max(1, Int(ceil(max(canvas.bounds.width, canvas.bounds.height) * scale)))
+                let admission = ViewerInputAdmission(access: services.files, pipeline: pipeline,
+                    maximumPixelSize: maximum, rootCovering: { await services.files.rootCovering($0) })
+                await session.recoverFilePreviewSetMember(member, with: url, operation: operation,
+                    admission: admission, host: self)
+            } catch { if operation.isCurrent { showAccessError(error) } }
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
