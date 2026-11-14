@@ -45,7 +45,7 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
 `);
   for (const name of ['xcodegen', 'xcodebuild', 'npm']) exe(name, '#!/bin/sh\nexit 0\n');
   const shell = path.join(dir, 'invoke.zsh');
-  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; fi; }
+  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; fi; }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
@@ -77,6 +77,7 @@ test('owner reports failure and timeout, rejects old coverage and completes late
     assert.match(fs.readFileSync(path.join(f.out, 'run-lcov.log'), 'utf8'), /skipped.*Swift.*failed/i);
     assert.equal(fs.existsSync(f.marker), false, 'coverage tools never consume old profile/report');
     for (const lane of ['xcodegen', 'xcodebuild', 'node', 'ledger', 'diffcheck', 'design']) assert.match(f.summary, new RegExp(`^${lane}=0$`, 'm'));
+    assert.match(f.summary, /^apptests=skip \(no App-facing change\)$/m);
     assert.equal(f.summary.match(/^DONE$/gm)?.length, 1);
     if (mode === 'hang') assert.match(fs.readFileSync(path.join(f.out, 'run-swift.log'), 'utf8'), /exit 124 \(timed out\)/);
   }

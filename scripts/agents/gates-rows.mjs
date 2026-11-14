@@ -49,16 +49,24 @@ if (!valid) {
         return value !== undefined && !/^\d+$/.test(value);
       });
       const stale = expectedHead && expectedHead.toLowerCase() !== head.toLowerCase();
-      if (ambiguous) {
-        rows.push(...lanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary ambiguous |`));
-      } else if (malformed) {
-        rows.push(...lanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary malformed |`));
+      // The local App lane (apptests=) is optional in older summaries. With --ci the CI App row is the only one.
+      const appLines = lines.filter(line => line.startsWith('apptests='));
+      const appValue = appLines[0]?.slice('apptests='.length);
+      const appRow = !ciFile && appLines.length > 0;
+      const appAmbiguous = appLines.length > 1;
+      const appMalformed = appValue !== undefined && !/^\d+$/.test(appValue) && appValue !== 'skip (no App-facing change)';
+      const summaryLanes = appRow ? [...lanes.slice(0, 3), ['app-tests', 'apptests'], ...lanes.slice(3)] : lanes;
+      if (ambiguous || appAmbiguous) {
+        rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary ambiguous |`));
+      } else if (malformed || appMalformed) {
+        rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary malformed |`));
       } else if (finalLine !== 'DONE') {
-        rows.push(...lanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary incomplete |`));
+        rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary incomplete |`));
       } else if (stale) {
-        rows.push(...lanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates stale head ${head.slice(0, 7)} |`));
+        rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates stale head ${head.slice(0, 7)} |`));
       } else {
-        rows.push(...lanes.map(([lane, key]) => {
+        rows.push(...summaryLanes.map(([lane, key]) => {
+          if (key === 'apptests' && appValue.startsWith('skip')) return `| ${lane} | NOT RUN | — | owner-gates apptests=${appValue} |`;
           const exit = lines.find(line => line.startsWith(`${key}=`))?.slice(key.length + 1);
           if (exit === undefined) return key === 'design'
             ? `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary missing ${key} |`
