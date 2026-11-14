@@ -41,13 +41,13 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     public init() {
         performRequest = { handler, request in try handler.perform([request]) }
         beforePerform = {}
-        cancelRequest = { $0.cancel() }
+        cancelRequest = Self.cancelVisionRequest
     }
 
     init(
         performRequest: @escaping @Sendable (VNImageRequestHandler, VNRecognizeTextRequest) throws -> Void,
         beforePerform: @escaping @Sendable () async -> Void = {},
-        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void = { $0.cancel() }
+        cancelRequest: @escaping @Sendable (VNRecognizeTextRequest) -> Void = Self.cancelVisionRequest
     ) {
         self.performRequest = performRequest
         self.beforePerform = beforePerform
@@ -109,6 +109,10 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
         }
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let rawOrientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
-        return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation) ?? .up)
+        return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation)!)
+    }
+
+    private static func cancelVisionRequest(_ request: VNRecognizeTextRequest) {
+        request.cancel()
     }
 }
