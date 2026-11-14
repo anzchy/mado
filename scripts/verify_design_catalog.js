@@ -16,9 +16,17 @@ const BRANCH_PLAYS={
  'J4-light':[['viewer-inspector','viewer-inspector-light','viewer-inspector']],
  'J4-settings':[['grid-display','settings?section=display','grid-display']],
  'J4-shortcuts':[['grid-light','shortcuts','grid-light']],
+ 'J5-bar-off':[['settings?section=capture','settings?section=capture&bar=off','settings?section=capture']],
+ 'J5-ocr':[['settings?section=capture','settings?section=capture&scroll=ocr','settings?section=capture']],
+ 'J5-denied':[['capture-bar','capture-bar?state=denied','capture-bar']],
+ 'J5-collapse':[['capture-bar','capture-bar?state=collapsed','capture-bar']],
+ 'J5-text':[['capture-bar','capture-thumbnail?kind=text','capture-bar']],
+ 'J5-save-off':[['capture-bar','capture-thumbnail?save=off','annotate']],
+ 'J5-unsaved':[['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','annotate']],
+ 'J5-redact':[['annotate','annotate?tool=redact','annotate']],
 };
 // Settings window, layout B (#214, spec #212): sidebar sections in order, each reachable by ?section=.
-const SETTINGS_SECTIONS=[['general','通用'],['display','显示'],['cache','缓存'],['update','更新'],['about','关于']];
+const SETTINGS_SECTIONS=[['general','通用'],['display','显示'],['cache','缓存'],['capture','截图'],['update','更新'],['about','关于']];
 // Every control in each Settings pane, in order: ready when the app has it, soon when it is greyed 「即将推出」
 // (user: 「显示但置灰」). A control left out of this list fails. Not built: PREF-03 display settings, DIST-05 updates,
 // the About links (no ledger row). Built: PREF-01 appearance, CHROME-04 always-show tools, CACHE-03 clearing the cache.
@@ -26,6 +34,8 @@ const SETTINGS_CONTROLS={
  general:[['跟随系统','ready'],['浅色','ready'],['深色','ready'],['始终显示大图工具','ready']],
  display:[['缩略图大小','soon'],['显示文件名','soon'],['填充裁剪','soon'],['完整显示','soon']],
  cache:[['清理缓存…','ready']],
+ // #680/#682: the 截图 controls are drawn as #682's target state, not greyed (brief states680).
+ capture:[['显示截图工具条','ready'],['登录时启动','ready'],['更改…','ready'],['存储到文件夹','ready'],['拷贝到剪贴板','ready'],['区域截图快捷键','ready'],['窗口截图快捷键','ready'],['全屏截图快捷键','ready'],['截图并识别文字快捷键','ready'],['显示 / 收起截图工具条快捷键','ready'],['恢复默认','ready'],['允许「识别文字」使用云端服务','ready'],['百度服务条款','ready'],['识别服务','ready'],['API Key','ready'],['Secret Key','ready'],['保存到钥匙串','ready']],
  update:[['自动检查更新','soon'],['立即检查','soon']],
  about:[['报告问题…','soon'],['隐私说明','soon'],['源代码','soon']],
 };
@@ -45,7 +55,7 @@ module.exports=async(page,{design,states,screenshot})=>{
  const errors=[],failures=[],results=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))failures.push({url:r.url(),status:r.status()})});
  await page.goto(base+'index.html');await page.getByRole('navigation',{name:'设计页面'}).waitFor();
  const catalog=await page.evaluate(async()=>{const r=await fetch('manifest.json');return r.json()});
- if(catalog.states.length!==22||await page.locator('nav button').count()!==22)throw Error('Expected 22 catalog states');
+ if(catalog.states.length!==25||await page.locator('nav button').count()!==25)throw Error('Expected 25 catalog states');
 
  // 22 and 26 are local replacements of the accepted Stitch pages (ADR-014), like 31–34.
  for(const name of ['empty-folder','permission-denied','settings','shortcuts'])if(catalog.states.find(s=>s.name===name).origin!=='local-C-adaptation')throw Error(name+' origin is not local-C-adaptation');
@@ -275,7 +285,7 @@ module.exports=async(page,{design,states,screenshot})=>{
  }
  if(subcaseFailures.length)throw Error('22/24/26 sub-cases: '+subcaseFailures.join(' | '));
  // Settings (B) and the shortcut list (C): every section and card by query, light and dark, examples labelled.
- const windowCases=[['settings.html',{section:'general'}],...SETTINGS_SECTIONS.map(([id])=>['settings.html?section='+id,{section:id}]),['settings.html?theme=dark',{section:'general',dark:true}],['settings.html?section=about&theme=dark',{section:'about',dark:true}],
+ const windowCases=[['settings.html',{section:'general'}],...SETTINGS_SECTIONS.map(([id])=>['settings.html?section='+id,{section:id}]),['settings.html?theme=dark',{section:'general',dark:true}],['settings.html?section=about&theme=dark',{section:'about',dark:true}],['settings.html?section=capture&bar=off',{section:'capture'}],['settings.html?section=capture&theme=dark',{section:'capture',dark:true}],
   ['shortcuts.html',{card:null}],...SHORTCUT_CARDS.map(([id])=>['shortcuts.html?card='+id,{card:id}]),['shortcuts.html?theme=dark',{card:null,dark:true}]];
  const windowFailures=[];
  for(const [url,want] of windowCases){
@@ -312,7 +322,7 @@ module.exports=async(page,{design,states,screenshot})=>{
  const jr=await page.goto(base+'journeys.html');if(!jr||!jr.ok())throw Error('journeys.html missing');await page.locator('section.journey#J1').waitFor();
  const journeyIssues=await page.evaluate(SETTINGS_SECTIONS=>{const issues=[];const html=document.documentElement.outerHTML;
   if(/prototype-[\w-]*\.html/.test(html))issues.push('references a prototype file');if(document.querySelector('.st')||/部分真机|仅单元|未开始/.test(document.body.innerText))issues.push('hand-typed status badges');
-  for(const id of ['ENTRY','J1','J2','J3','J4','REF'])if(!document.getElementById(id))issues.push('missing section '+id);
+  for(const id of ['ENTRY','J1','J2','J3','J4','J5','REF'])if(!document.getElementById(id))issues.push('missing section '+id);
   const rows=[...document.querySelectorAll('#ENTRY tbody tr')].map(r=>r.innerText.replace(/\s+/g,' '));if(rows.length<8)issues.push('entry table has fewer than 8 entrances');
   // ADR-0010, OPEN-03/04, ACCESS-01: a single image inside an access root scans without a prompt and Esc goes 24 → 11;
   // outside every root → asks for access and stays in the viewer, and Esc does nothing.
@@ -327,7 +337,8 @@ module.exports=async(page,{design,states,screenshot})=>{
   // Settings and Help → 键盘快捷键 are linked where they appear (#214): J4's display step and its return to the grid.
   if(!document.querySelector('[data-branch="J4-settings"] .card[data-page="settings"]'))issues.push('J4 does not link settings.html from 15');
   if(!document.querySelector('[data-branch="J4-shortcuts"] .card[data-page="shortcuts"]'))issues.push('J4 does not link shortcuts.html');
-  for(const [id] of SETTINGS_SECTIONS.filter(([id])=>id!=='display'))if(!document.querySelector('[data-branch="J4-settings"] [data-page="settings"][data-query="section='+id+'"]'))issues.push('J4-settings lacks section '+id);
+  if(!document.querySelector('#J5 .col > .card[data-page="settings"][data-query="section=capture"]'))issues.push('J5 does not start at settings.html?section=capture');
+  for(const [id] of SETTINGS_SECTIONS.filter(([id])=>id!=='display'&&id!=='capture'))if(!document.querySelector('[data-branch="J4-settings"] [data-page="settings"][data-query="section='+id+'"]'))issues.push('J4-settings lacks section '+id);
   if(/⚠ 还没挂到任何旅程/.test(document.body.innerText))issues.push('a state page is not on any journey');
   const branches=[...document.querySelectorAll('[data-branch]')];if(!branches.length)issues.push('no branches');
   for(const b of branches){if(!b.dataset.to)issues.push('branch without to: '+b.dataset.branch);else if(!b.querySelector('.ret'))issues.push('branch without return edge: '+b.dataset.branch)}
