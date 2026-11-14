@@ -9,7 +9,11 @@
 - 12 个样本全部通过的最小格子边长是 **8 个图像像素**（由 en 17pt @2x、zh 15pt @2x、zh 17pt @2x 决定，三者在 7 时 Vision 仍读出原行字符）。
 - 8…40 的每个格子边长，12 个样本中 Vision 都没有返回任何文字观测（observation 数为 0）。
 - 取值 **16**（8 的两倍）作为最小强度。16 是安全余量的选择，不是测出的阈值；余量用于未测的字体、渲染和 Vision 版本差异。
-- 钉住测试：`issue693MinimumMosaicLeavesVisionNoCharacterOfTheLine`（逐个样本：未打码时 Vision 读出全部字符；`.mosaic(strength: 1)` 被提升到 16 后，Vision 读出的字符与原行无交集）。
+- 钉住测试：`issue693MinimumMosaicLeavesVisionNoCharacterOfTheLine`（逐个样本：未打码时 Vision 读出全部字符；`.mosaic(strength: 1)` 被提升到 16 后，Vision 读出的字符与原行无交集）。它依赖宿主的 Vision 版本和系统字体，所以只在设置 `MADO_VISION_MEASURE=1` 时运行，默认 lane 与 CI 不跑（#693a fix r1）；默认 lane 里由不依赖 Vision 的纯测试守住 16：`issue693MinimumMosaicStrengthIsTheMeasuredSafeValue`、`issue693MosaicStrengthBelowTheMinimumIsClamped`、`issue693RenderClampsMosaicStrengthToTheMinimum`。设置后，若 Vision 读不出未打码的对照样本（Vision 不可用或读法不同），测试直接失败，不会空过。重跑：
+
+  ```sh
+  MADO_VISION_MEASURE=1 scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --filter issue693MinimumMosaicLeavesVisionNoCharacterOfTheLine
+  ```
 
 ## 方法
 
