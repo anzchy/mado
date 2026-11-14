@@ -106,16 +106,27 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
 
     static func preparedImage(_ image: Data) throws -> (CGImage, CGImagePropertyOrientation) {
         guard let source = CGImageSourceCreateWithData(image as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0,
               let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceThumbnailMaxPixelSize: 4096,
+                kCGImageSourceThumbnailMaxPixelSize: thumbnailLimit(width: width, height: height),
                 kCGImageSourceCreateThumbnailWithTransform: false
               ] as CFDictionary) else {
             throw TextRecognitionError.invalidImage
         }
-        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        let rawOrientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+        let rawOrientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
         return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation)!)
+    }
+
+    static func thumbnailLimit(width: Int, height: Int) -> Int {
+        let long = Double(max(width, height))
+        let short = Double(min(width, height))
+        let pixelCount = Double(width) * Double(height)
+        let scale = min(1, 4096 / short, sqrt(40_000_000 / pixelCount))
+        return max(1, Int((long * scale).rounded(.down)))
     }
 
 }

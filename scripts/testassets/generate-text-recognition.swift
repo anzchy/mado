@@ -58,3 +58,17 @@ graphics.flushGraphics()
 NSGraphicsContext.restoreGraphicsState()
 guard let densePNG = dense.representation(using: .png, properties: [:]) else { fatalError("dense PNG") }
 try densePNG.write(to: folder.appendingPathComponent("dense-40.png"))
+
+guard let tall = CGContext(data: nil, width: 1170, height: 12000,
+                           bitsPerComponent: 8, bytesPerRow: 0,
+                           space: CGColorSpaceCreateDeviceRGB(),
+                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { fatalError("tall context") }
+tall.setFillColor(CGColor(gray: 1, alpha: 1))
+tall.fill(CGRect(x: 0, y: 0, width: 1170, height: 12000))
+tall.draw(upright, in: CGRect(x: 80, y: 10900, width: 1000, height: 340))
+guard let tallImage = tall.makeImage() else { fatalError("tall image") }
+let tallData = NSMutableData()
+guard let tallJPEG = CGImageDestinationCreateWithData(tallData, UTType.jpeg.identifier as CFString, 1, nil) else { fatalError("tall JPEG") }
+CGImageDestinationAddImage(tallJPEG, tallImage, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
+guard CGImageDestinationFinalize(tallJPEG) else { fatalError("tall JPEG finalize") }
+try (tallData as Data).write(to: folder.appendingPathComponent("mixed-tall-narrow.jpg"))
