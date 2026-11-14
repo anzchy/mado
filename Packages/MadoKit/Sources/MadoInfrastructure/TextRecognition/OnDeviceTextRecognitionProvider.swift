@@ -118,7 +118,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             throw TextRecognitionError.invalidImage
         }
         let rawOrientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
-        return (cgImage, CGImagePropertyOrientation(rawValue: rawOrientation)!)
+        return (cgImage, orientation(rawValue: rawOrientation))
     }
 
     static func thumbnailLimit(width: Int, height: Int) -> Int {
@@ -127,6 +127,11 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
         let pixelCount = Double(width) * Double(height)
         let scale = min(1, 4096 / short, sqrt(40_000_000 / pixelCount))
         return max(1, Int((long * scale).rounded(.down)))
+    }
+
+    static func orientation(rawValue: UInt32) -> CGImagePropertyOrientation {
+        guard (1...8).contains(rawValue) else { return .up }
+        return CGImagePropertyOrientation(rawValue: rawValue) ?? .up
     }
 
 }
