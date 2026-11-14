@@ -102,7 +102,9 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
     }
     #expect(issue114SettingsTexts(in: pane).contains(String(localized:
         "These are the same preferences as the grid footer Display panel; changes will sync immediately.")))
-    #expect(issue114SettingsDisabled(in: root).compactMap { $0.accessibilityIdentifier() } == [])
+    let disabled = issue114SettingsDisabled(in: root)
+    #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }) == Set(CaptureDeferredSettingsControls.tickets.keys))
+    #expect(CaptureDeferredSettingsControls.unexpectedDisabledIDs(disabled).isEmpty)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue114SettingsControlsWriteStore() throws {

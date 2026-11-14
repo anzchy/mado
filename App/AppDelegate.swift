@@ -102,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.error("UI fixture staging failed: \(String(describing: error), privacy: .private)")
         }
         #endif
+        Task { [weak self] in
+            do { try await SettingsPanelWindow.restoreCaptureBarOnLaunch() }
+            catch { self?.logger.error("Capture Bar restore failed: \(String(describing: error), privacy: .private)") }
+        }
 
         commandMenu = CommandMenu(preferencesStore: displayPreferences,
                                   openWithoutWindow: { [weak self] in self?.viewer().route(.open, from: .menu) },

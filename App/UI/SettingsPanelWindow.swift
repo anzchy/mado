@@ -4,20 +4,79 @@ import MadoInfrastructure
 import MadoMacUI
 
 enum SettingsSection: String, CaseIterable {
-    case general, display, cache, update, about
+    case general, display, cache, capture, update, about
     var title: String {
         switch self {
         case .general: String(localized: "General")
         case .display: String(localized: "Display")
         case .cache: String(localized: "Cache")
+        case .capture: String(localized: "Screenshots")
         case .update: String(localized: "Updates")
         case .about: String(localized: "About")
         }
     }
 }
 
+actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
+    private let defaults = UserDefaults(suiteName: CaptureBarIdentity.appGroupID)
+
+    func isCaptureBarEnabled() -> Bool {
+        defaults?.bool(forKey: CaptureBarIdentity.enabledKey) == true
+    }
+
+    func setCaptureBarEnabled(_ enabled: Bool) {
+        defaults?.set(enabled, forKey: CaptureBarIdentity.enabledKey)
+        defaults?.synchronize()
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(CaptureBarIdentity.switchChangedNotification as CFString), nil, nil, true)
+    }
+
+    func capturePermissionState() -> CapturePermissionState? {
+        defaults?.string(forKey: CaptureBarIdentity.permissionKey).flatMap(CapturePermissionState.init(rawValue:))
+    }
+}
+
+@MainActor private final class WorkspaceCaptureBarProcess: CaptureBarProcessPort {
+    enum Failure: Error { case helperMissing, didNotExit }
+
+    func startCaptureBar() async throws {
+        let url = Bundle.main.bundleURL.appendingPathComponent(
+            "Contents/Library/LoginItems/MadoCaptureHelper.app", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: url.path) else { throw Failure.helperMissing }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    func stopCaptureBar() async throws {
+        // The shared-switch notification asks the helper to exit itself; process APIs are a fallback.
+        for _ in 0..<20 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID)
+        for app in apps { _ = app.terminate() }
+        for _ in 0..<50 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let survivors = NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID)
+        for app in survivors { _ = app.forceTerminate() }
+        for _ in 0..<20 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw Failure.didNotExit
+    }
+}
+
 @MainActor final class SettingsPanelWindow: NSObject, DisplayPreferencesObserver {
     private static let sectionKey = "settings.selectedSection.v1"
+
+    static let sharedCapturePreferences = AppGroupCaptureBarPreferences()
+    static let sharedCaptureControl = CaptureBarControl(preferences: sharedCapturePreferences,
+                                                        process: WorkspaceCaptureBarProcess())
+    static func restoreCaptureBarOnLaunch() async throws { try await sharedCaptureControl.restoreOnMadoLaunch() }
     let window: NSWindow
     private(set) var selectedSection: SettingsSection
     private let appearanceAdapter: WindowAppearanceAdapter
@@ -46,10 +105,21 @@ enum SettingsSection: String, CaseIterable {
     private var updateAutomatic: NSButton!
     private var updateCheck: NSButton!
     private var updateLastChecked: NSTextField!
+    private var captureEnabled: NSSwitch!
+    private var captureScroll: NSScrollView?
+    private var captureDetails: [NSView] = []
+    private let captureControl: CaptureBarControl
+    private let capturePreferences: any CaptureBarPreferencePort
+    private var capturePermissionStatus: NSTextField?
+    private let captureLocalize: (String) -> String
+    private var captureRefreshID = 0
 
     init(cache: ThumbnailDiskCache, appearanceAdapter: WindowAppearanceAdapter,
          preferencesStore: any DisplayPreferencesStore, defaults: UserDefaults,
          updates: (any AppUpdatePort)? = nil,
+         captureControl: CaptureBarControl? = nil,
+         capturePreferences: (any CaptureBarPreferencePort)? = nil,
+         captureLocalize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -64,6 +134,9 @@ enum SettingsSection: String, CaseIterable {
         self.aboutInfoDictionary = aboutInfoDictionary
         self.aboutLocalizedString = aboutLocalizedString
         self.updates = updates
+        self.captureControl = captureControl ?? Self.sharedCaptureControl
+        self.capturePreferences = capturePreferences ?? Self.sharedCapturePreferences
+        self.captureLocalize = captureLocalize
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -82,6 +155,10 @@ enum SettingsSection: String, CaseIterable {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refreshCache()
+        if selectedSection == .capture {
+            scrollCaptureToTop()
+            refreshCapture()
+        }
     }
 
     func select(_ section: SettingsSection) {
@@ -101,6 +178,17 @@ enum SettingsSection: String, CaseIterable {
         }
         if section == .cache { refreshCache() }
         if section == .update { refreshUpdates() }
+        if section == .capture {
+            scrollCaptureToTop()
+            refreshCapture()
+        }
+    }
+
+    private func scrollCaptureToTop() {
+        guard let scroll = captureScroll, let document = scroll.documentView else { return }
+        let top = max(0, document.frame.height - scroll.contentView.bounds.height)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: top))
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     func preferencesDidChange(_ preferences: DisplayPreferences) {
@@ -135,7 +223,7 @@ enum SettingsSection: String, CaseIterable {
             button.setButtonType(.toggle)
             button.alignment = .left
             button.font = DesignMetrics.font("ui")
-            let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "arrow.triangle.2.circlepath", "info.circle"]
+            let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "camera.viewfinder", "arrow.triangle.2.circlepath", "info.circle"]
             button.image = NSImage(systemSymbolName: symbols[index], accessibilityDescription: nil)
             button.imagePosition = .imageLeading
             button.setAccessibilityIdentifier("settings.section.\(section.rawValue)")
@@ -152,6 +240,7 @@ enum SettingsSection: String, CaseIterable {
         buildGeneral()
         buildDisplay()
         buildCache()
+        buildCapture()
         buildUpdates()
         buildAbout()
         window.contentView = root
@@ -172,6 +261,181 @@ enum SettingsSection: String, CaseIterable {
         field.alignment = .right
         field.frame = NSRect(x: 26, y: y, width: 120, height: 24)
         pane.addSubview(field)
+    }
+
+    private func buildCapture() {
+        let pane = panes[.capture]!
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 580, height: 420))
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.setAccessibilityIdentifier("settings.capture.scroll")
+        captureScroll = scroll
+        let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: 1124))
+        let captureLabels = ["Capture Bar", "Start at Login", "Screen Recording", "Capture Folder",
+                             "Save to Folder", "Copy to Clipboard", "Capture and Recognize Text",
+                             "Show / Hide Capture Bar", "Cloud Recognition"]
+        let labelWidth = max(120, captureLabels.map {
+            (captureLocalize($0) as NSString)
+                .size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
+        }.max() ?? 120)
+        let valueX = 26 + labelWidth + 16
+        scroll.documentView = form
+        pane.addSubview(scroll)
+
+        @discardableResult func field(_ text: String, top: CGFloat, height: CGFloat = 24, id: String? = nil,
+                   labelColumn: Bool = false, muted: Bool = false) -> NSTextField {
+            let result = label(text, role: "uiSmall", muted: muted)
+            result.textColor = muted ? DesignColor.textSecondary.nsColor : DesignColor.textPrimary.nsColor
+            result.frame = NSRect(x: labelColumn ? 26 : valueX, y: 1124 - top - height,
+                                  width: labelColumn ? labelWidth : 554 - valueX, height: height)
+            if labelColumn { result.alignment = .right }
+            if let id { result.setAccessibilityIdentifier(id) }
+            form.addSubview(result)
+            if top >= 105 { captureDetails.append(result) }
+            return result
+        }
+        func disabledButton(_ title: String, top: CGFloat, id: String, x: CGFloat? = nil, width: CGFloat = 140) {
+            let button = NSButton(title: title, target: nil, action: nil)
+            button.font = DesignMetrics.font("uiSmall")
+            button.frame = NSRect(x: x ?? valueX, y: 1124 - top - 24,
+                                  width: max(width, button.intrinsicContentSize.width + 12), height: 24)
+            button.isEnabled = false
+            button.alphaValue = 0.45
+            button.setAccessibilityIdentifier(id)
+            form.addSubview(button)
+            captureDetails.append(button)
+        }
+        func heading(_ text: String, top: CGFloat, id: String, divider: Bool) {
+            if divider {
+                let line = NSBox(frame: NSRect(x: 26, y: 1124 - top + 14, width: 528, height: 1))
+                line.boxType = .separator
+                form.addSubview(line)
+            }
+            let title = field(text, top: top, height: 20, id: id, muted: true)
+            title.frame.origin.x = 26
+            title.frame.size.width = 528
+            title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        }
+        func disabledSwitch(_ title: String, top: CGFloat, id: String, on: Bool = false) {
+            let toggle = NSSwitch(frame: NSRect(x: valueX, y: 1124 - top - 18, width: 32, height: 18))
+            toggle.controlSize = .mini
+            toggle.state = on ? .on : .off
+            toggle.isEnabled = false
+            toggle.alphaValue = 0.45
+            toggle.setAccessibilityIdentifier(id)
+            toggle.setAccessibilityLabel(title)
+            form.addSubview(toggle)
+            captureDetails.append(toggle)
+            let caption = field(title, top: top - 1, id: "\(id).title")
+            caption.frame.origin.x = valueX + 40
+            caption.frame.size.width = 514 - valueX
+        }
+        heading(captureLocalize("Capture Bar"), top: 10, id: "settings.capture.heading-bar", divider: false)
+        field(captureLocalize("Capture Bar"), top: 50, labelColumn: true)
+        captureEnabled = NSSwitch(frame: NSRect(x: valueX, y: 1124 - 50 - 18, width: 32, height: 18))
+        captureEnabled.controlSize = .mini
+        captureEnabled.target = self
+        captureEnabled.action = #selector(changeCapture(_:))
+        captureEnabled.setAccessibilityIdentifier("settings.capture.enabled")
+        captureEnabled.setAccessibilityLabel(captureLocalize("Show Capture Bar"))
+        form.addSubview(captureEnabled)
+        let switchText = field(captureLocalize("Show Capture Bar"), top: 49, id: "settings.capture.enabled.title")
+        switchText.frame.origin.x = valueX + 40
+        field(captureLocalize("When enabled, Mado starts a small capture helper. Screen Recording permission belongs only to the helper; turning the switch off stops it."),
+              top: 76, height: 46, id: "settings.capture.privacy-hint", muted: true)
+        field(captureLocalize("Start at Login"), top: 125, labelColumn: true)
+        disabledSwitch(captureLocalize("Start Capture Bar at Login"), top: 125, id: "settings.capture.login")
+        field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
+              top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
+        field(captureLocalize("Screen Recording"), top: 190, labelColumn: true)
+        capturePermissionStatus = field(captureLocalize("Unknown"), top: 190, id: "settings.capture.permission-status", muted: true)
+        if #available(macOS 15, *) {
+            field(captureLocalize("On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."),
+                  top: 218, height: 46, id: "settings.capture.permission-note", muted: true)
+        }
+        heading(captureLocalize("After Capture"), top: 280, id: "settings.capture.heading-after", divider: true)
+        field(captureLocalize("Capture Folder"), top: 315, id: "settings.capture.folder-label", labelColumn: true)
+        let folder = field("~/Downloads", top: 315, id: "settings.capture.folder")
+        folder.font = DesignMetrics.font("uiSmall", monospaced: true)
+        folder.frame.size.width = 94
+        disabledButton(captureLocalize("Change…"), top: 315, id: "settings.capture.folder-change", x: valueX + 102, width: 72)
+        field(captureLocalize("File name mado-20261113153012.png; the second capture in the same second adds -2."),
+              top: 341, height: 30, id: "settings.capture.filename-hint", muted: true)
+        field(captureLocalize("Save to Folder"), top: 385, labelColumn: true)
+        disabledSwitch(captureLocalize("Save captures to the Capture Folder"), top: 385, id: "settings.capture.after-save", on: true)
+        field(captureLocalize("Copy to Clipboard"), top: 423, labelColumn: true)
+        disabledSwitch(captureLocalize("Copy captures to the Clipboard"), top: 423, id: "settings.capture.after-copy", on: true)
+        heading(captureLocalize("Global Shortcuts"), top: 475, id: "settings.capture.heading-shortcuts", divider: true)
+        for (index, name) in [captureLocalize("Region Capture"), captureLocalize("Window Capture"), captureLocalize("Full Screen Capture"), captureLocalize("Capture and Recognize Text"), captureLocalize("Show / Hide Capture Bar")].enumerated() {
+            let top = CGFloat(510 + index * 38)
+            field(name, top: top, id: "settings.capture.shortcut-label-\(index)", labelColumn: true)
+            disabledButton(captureLocalize("Not Set"), top: top, id: index == 0 ? "settings.capture.shortcut-region" : "settings.capture.shortcut-\(index)", width: 96)
+        }
+        field(captureLocalize("The system shortcuts ⌘⇧3 / ⌘⇧4 / ⌘⇧5 remain available."),
+              top: 704, height: 30, id: "settings.capture.system-shortcuts-hint", muted: true)
+        let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 900, width: 528, height: 160))
+        ocr.setAccessibilityIdentifier("settings.capture.ocr")
+        form.addSubview(ocr)
+        let ocrDivider = NSBox(frame: NSRect(x: 0, y: 159, width: 528, height: 1))
+        ocrDivider.boxType = .separator
+        ocr.addSubview(ocrDivider)
+        let ocrTitle = label(captureLocalize("Text Recognition"), role: "uiSmall", muted: true)
+        ocrTitle.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        ocrTitle.frame = NSRect(x: 0, y: 130, width: 120, height: 20)
+        ocr.addSubview(ocrTitle)
+        let cloudLabel = label(captureLocalize("Cloud Recognition"), role: "uiSmall")
+        cloudLabel.alignment = .right
+        cloudLabel.frame = NSRect(x: 0, y: 96, width: 120, height: 24)
+        ocr.addSubview(cloudLabel)
+        let ocrInfo = label(captureLocalize("Cloud Recognition · No Key"), role: "uiSmall", muted: true)
+        ocrInfo.frame = NSRect(x: 176, y: 96, width: 352, height: 24)
+        ocr.addSubview(ocrInfo)
+        let ocrCloud = NSSwitch(frame: NSRect(x: 136, y: 98, width: 32, height: 18))
+        ocrCloud.controlSize = .mini
+        ocrCloud.setAccessibilityLabel(captureLocalize("Cloud Recognition"))
+        ocrCloud.isEnabled = false
+        ocrCloud.setAccessibilityIdentifier("settings.capture.ocr-cloud")
+        ocr.addSubview(ocrCloud)
+        let serviceLabel = label(captureLocalize("Service"), role: "uiSmall")
+        serviceLabel.alignment = .right
+        serviceLabel.frame = NSRect(x: 0, y: 58, width: 120, height: 24)
+        ocr.addSubview(serviceLabel)
+        let service = NSPopUpButton(frame: NSRect(x: 136, y: 58, width: 140, height: 24), pullsDown: false)
+        service.addItem(withTitle: captureLocalize("Baidu OCR"))
+        service.isEnabled = false
+        service.setAccessibilityIdentifier("settings.capture.ocr-service")
+        ocr.addSubview(service)
+        refreshCapture()
+    }
+
+    private func refreshCapture() {
+        guard captureEnabled != nil else { return }
+        captureRefreshID += 1
+        let refreshID = captureRefreshID
+        Task {
+            let enabled = await capturePreferences.isCaptureBarEnabled()
+            let permission = await capturePreferences.capturePermissionState()
+            guard refreshID == captureRefreshID else { return }
+            captureEnabled.state = enabled ? .on : .off
+            switch permission {
+            case .granted: capturePermissionStatus?.stringValue = captureLocalize("Granted")
+            case .denied: capturePermissionStatus?.stringValue = captureLocalize("Denied")
+            case .notAsked: capturePermissionStatus?.stringValue = captureLocalize("Not Asked")
+            case nil: capturePermissionStatus?.stringValue = captureLocalize("Unknown")
+            }
+            for detail in captureDetails { detail.alphaValue = enabled && !(detail is NSButton) ? 1 : 0.45 }
+        }
+    }
+
+    @objc private func changeCapture(_ sender: NSSwitch) {
+        let enabled = sender.state == .on
+        sender.isEnabled = false
+        Task {
+            do { try await captureControl.setEnabled(enabled) }
+            catch { sender.state = .off }
+            sender.isEnabled = true
+            refreshCapture()
+        }
     }
 
     private func buildGeneral() {

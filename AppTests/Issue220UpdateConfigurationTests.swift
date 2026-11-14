@@ -18,9 +18,9 @@ private func isFalse(_ value: Any?) -> Bool {
     return !number.boolValue
 }
 
-// ADR-015 (2026-10-30 addendum) and ADR-020: sandbox, read-write user-selected files (for the Annotated Copy),
-// app-scope bookmarks, network.client, and Sparkle's installer mach-lookup exception — nothing else.
-@Test func issue220EntitlementsAreExactlyTheFiveDecidedKeys() throws {
+// ADR-015 (2026-10-30 addendum), ADR-020 and ADR-018: sandbox, read-write user-selected files (for the Annotated Copy),
+// app-scope bookmarks, network.client, Sparkle's installer mach-lookup exception, and the approved Capture App Group: exactly six keys.
+@Test func issue220EntitlementsAreExactlyTheSixDecidedKeys() throws {
     let entitlements = try plist("App/Resources/Mado.entitlements")
     let mach = "com.apple.security.temporary-exception.mach-lookup.global-name"
     let flags = [
@@ -29,11 +29,13 @@ private func isFalse(_ value: Any?) -> Bool {
         "com.apple.security.files.bookmarks.app-scope",
         "com.apple.security.network.client",
     ]
-    #expect(Set(entitlements.keys) == Set(flags + [mach]))
+    let group = "com.apple.security.application-groups"
+    #expect(Set(entitlements.keys) == Set(flags + [mach, group]))
     for key in flags { #expect(isTrue(entitlements[key]), "\(key) must be Boolean true") }
     let names = try #require(entitlements[mach] as? [String])
     #expect(names.count == 2)
     #expect(Set(names) == ["$(PRODUCT_BUNDLE_IDENTIFIER)-spks", "$(PRODUCT_BUNDLE_IDENTIFIER)-spki"])
+    #expect(entitlements[group] as? [String] == ["GRT84NAK4T.io.github.anzchy.mado.capture"])
 }
 
 @Test func issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() throws {
