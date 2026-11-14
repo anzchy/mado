@@ -35,7 +35,7 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         }
     }
     /// While a viewed set is open, its reconciler owns deletion successors.
-    public var allowsFolderScanPresentation: Bool { previewSet == nil && filePreviewSet == nil }
+    public var allowsFolderScanPresentation: Bool { previewSet == nil && filePreviewSet == nil && annotateMode == nil }
     public internal(set) var filePreviewSet: FilePreviewSet? {
         didSet { if oldValue != nil && filePreviewSet == nil { applyPreferredFolderSort() } }
     }
@@ -46,6 +46,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public private(set) var inspectorFocus = InspectorFocus()
     public private(set) var chrome: ViewerChromeState
     public private(set) var isMenuTracking = false
+    /// #690: Annotate Mode on the shown image; nil outside it.
+    public internal(set) var annotateMode: AnnotateModeState?
     private var orderedItemIDs: [ItemID] = []
     var folderEntryRestore: FolderEntryRestorePoint?
     private var sourceVersion = PreviewSourceVersion(0)
@@ -139,6 +141,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
            let next = old[(index + 1)...].first(where: alive.contains) ?? old[..<index].last(where: alive.contains) {
             selection.focus(next, in: items)
         }
+        // #690: while annotating, the Preview Set stays on the annotated image; leaving the mode reconciles it.
+        guard annotateMode == nil else { return }
         let previous = previewSet?.currentItemID
         previewSet?.reconcile(availableItemIDs: items)
         if previous != previewSet?.currentItemID, previous != nil {
@@ -276,12 +280,14 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public func advanceChrome() { chrome.advance(to: clock.now); synchronizeChrome() }
     /// The binding modifier matters in Grid: the same zoom IDs also have bare viewer alternates.
     public func isEnabled(_ command: CommandID, commandModified: Bool = false) -> Bool {
+        // #690: Annotate Mode keeps the image; browsing and opening are off, zoom and the Inspector stay.
+        if annotateMode != nil, [.previous, .next, .preview, .enter, .search, .open].contains(command) { return false }
         if mode == .browsing, command.commandKey != nil {
             return commandModified && command != .fit && inspectorFocus.focus != .textInput
         }
         return switch command {
         case .fit, .actualPixels, .zoomIn, .zoomOut: imageCommandsAvailable
-        case .escape: inspectorFocus.focus != .canvas || canReturnToSource
+        case .escape: inspectorFocus.focus != .canvas || canReturnToSource || annotateMode != nil
         case .open: true
         case .inspector: inspectorFocus.isVisible || imageCommandsAvailable || (mode == .browsing && currentItemID != nil)
         case .preview, .enter: mode == .browsing && !orderedItemIDs.isEmpty
@@ -301,7 +307,10 @@ public enum ViewerMode: Sendable { case browsing, viewing }
         }
     }
     /// #444: Esc (with canvas focus) and 返回网格 return to the grid of a folder preview, or a single image to its folder.
-    public var canReturnToSource: Bool { (filePreviewSet == nil && previewSet?.origin != nil) || canReturnSingleImage }
+    /// #690: not while annotating; Esc there asks to leave Annotate Mode instead.
+    public var canReturnToSource: Bool {
+        annotateMode == nil && ((filePreviewSet == nil && previewSet?.origin != nil) || canReturnSingleImage)
+    }
     /// The return part of Esc, without its keyboard-focus step: 返回网格 returns even when a tool holds focus.
     public func returnToSource() {
         if filePreviewSet == nil, let origin = previewSet?.origin {
@@ -363,6 +372,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 inspectorFocus.escape()
                 syncFocusLock()
                 host?.applyFocus(.canvas)
+            } else if annotateMode != nil {
+                _ = requestLeaveAnnotateMode(.escape)
             } else {
                 returnToSource()
             }
