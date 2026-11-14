@@ -185,6 +185,7 @@ extension CanvasWindowController {
         case .undo: session.undoAnnotation()
         case .redo: session.redoAnnotation()
         case .selectTool: session.selectAnnotateTool(.select)
+        case .chooseTool, .deleteSelection: return nil
         // ←/→/↑/↓ stay consumed even without a selection, so they never change images.
         case .nudge(let dx, let dy): nudgeAnnotation(dx: dx, dy: dy)
         case .requestLeave:
