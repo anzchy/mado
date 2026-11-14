@@ -171,3 +171,14 @@ test('a bare fit key on the page without the ⌘ form fails', () => {
   fails(withChange(FILES.page, replaceOnce('<kbd>⌘</kbd><kbd>9</kbd><kbd>0</kbd>', '<kbd>0</kbd>')),
     /command:fit \(适应窗口\) shows 0, the code has ⌘ 9 0/);
 });
+
+test('i690 the page lists ⌘E and ⌘S for Annotate Mode', () => {
+  assert.match(readRepo(FILES.page), /data-shortcut="menu:Annotate"[^\n]*<kbd>⌘<\/kbd><kbd>E<\/kbd>/);
+  assert.match(readRepo(FILES.page), /data-shortcut="menu:Save Annotated Copy"[^\n]*<kbd>⌘<\/kbd><kbd>S<\/kbd>/);
+});
+
+test('i690 the Annotate Mode character exclusion covers only its own file', () => {
+  fails(withChange('Packages/MadoKit/Sources/MadoMacUI/Chrome/ViewerChromeOverlay.swift',
+    source => `${source}\n// let typed = event.charactersIgnoringModifiers\n`),
+  /ViewerChromeOverlay\.swift reads typed characters/);
+});

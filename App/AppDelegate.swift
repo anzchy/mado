@@ -144,6 +144,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController?.reconcileStandaloneImage()
     }
 
+    /// #690: quitting with unsaved Annotate Mode marks asks 存储/不存储/取消 first.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        windowController?.annotateShouldTerminate() ?? .terminateNow
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         #if DEBUG
         if AccessProbeRunner.isRequested(arguments: launchArguments) { return }

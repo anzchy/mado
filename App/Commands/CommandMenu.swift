@@ -226,6 +226,13 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         addFolderItem(.loop, to: view)
         addFolderItem(.recursive, to: view)
         view.addItem(.separator())
+        // #690: Annotate Mode on the shown image (⌘E); R, Esc and ⌘S work inside it.
+        let annotate = view.addItem(withTitle: String(localized: "Annotate"), action: #selector(enterAnnotate(_:)), keyEquivalent: "e")
+        annotate.keyEquivalentModifierMask = [.command]
+        annotate.target = self
+        annotate.identifier = NSUserInterfaceItemIdentifier("annotate.enter.menu")
+        annotate.setAccessibilityIdentifier("annotate.enter.menu")
+        view.addItem(.separator())
         let fullScreen = view.addItem(withTitle: String(localized: "Enter Full Screen"),
             action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fullScreen.keyEquivalentModifierMask = [.control, .command]
@@ -236,6 +243,12 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         file.addItem(recentItem)
         setRecentFolders([], onOpen: { _ in })
         ChromeWindowCommands.addClose(to: file)
+        let saveCopy = file.addItem(withTitle: String(localized: "Save Annotated Copy"), action: #selector(saveAnnotatedCopy(_:)),
+            keyEquivalent: "s")
+        saveCopy.keyEquivalentModifierMask = [.command]
+        saveCopy.target = self
+        saveCopy.identifier = NSUserInterfaceItemIdentifier("annotate.save.menu")
+        saveCopy.setAccessibilityIdentifier("annotate.save.menu")
         let windows = submenu(String(localized: "Window"))
         windows.addItem(withTitle: String(localized: "Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windows.addItem(withTitle: String(localized: "Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
@@ -329,6 +342,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
     }
 
     @objc private func showSettings(_ item: NSMenuItem) { openSettings() }
+    @objc private func enterAnnotate(_ item: NSMenuItem) { windowController()?.enterAnnotateMode() }
+    @objc private func saveAnnotatedCopy(_ item: NSMenuItem) { windowController()?.saveAnnotatedCopy() }
     @objc private func showDiagnostics(_ item: NSMenuItem) { openDiagnostics() }
     @objc private func showShortcuts(_ item: NSMenuItem) { openShortcuts() }
     @objc private func reportIssue(_ item: NSMenuItem) { openURL(EntryPoint.reportIssueURL) }
@@ -375,6 +390,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(showSettings(_:)) || item.action == #selector(showDiagnostics(_:))
             || item.action == #selector(showShortcuts(_:)) || item.action == #selector(reportIssue(_:)) { return true }
+        if item.action == #selector(enterAnnotate(_:)) { return windowController()?.canEnterAnnotateFromMenu == true }
+        if item.action == #selector(saveAnnotatedCopy(_:)) { return windowController()?.canSaveAnnotatedCopyFromMenu == true }
         if let raw = item.representedObject as? String, let entry = EntryPoint(rawValue: raw), entry.state == .comingSoon {
             item.isEnabled = false
             item.keyEquivalent = ""
