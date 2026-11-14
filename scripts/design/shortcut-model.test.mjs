@@ -208,3 +208,21 @@ test('i690 the unsaved-marks sheet keys are declared exclusions', () => {
     /CanvasWindowController\+AnnotateUI\.swift handles key code 49/);
   assert.equal(check().filter(p => /AnnotateUI/.test(p)).length, 0);
 });
+
+const ANNOTATE_KEYS = 'App/CanvasWindowController+Annotate.swift';
+
+test('i690 r1 a new typed-character handler in the Annotate file fails', () => {
+  fails(withChange(ANNOTATE_KEYS, s => `${s}\nfunc extra(_ event: NSEvent) -> Bool { event.charactersIgnoringModifiers == "x" }\n`),
+    /CanvasWindowController\+Annotate\.swift reads typed characters outside its declared site/);
+});
+
+test('i690 r1 a new special-key read in the Annotate file fails', () => {
+  fails(withChange(ANNOTATE_KEYS, s => `${s}\nfunc extra(_ event: NSEvent) -> Bool { event.specialKey == .home }\n`),
+    /CanvasWindowController\+Annotate\.swift reads typed characters outside its declared site/);
+});
+
+test('i690 r1 the Annotate character read must stay at its anchor', () => {
+  fails(withChange(ANNOTATE_KEYS, replaceOnce('default: .character(event.charactersIgnoringModifiers ?? "")',
+    'default: .character(typed(event))')),
+  /CanvasWindowController\+Annotate\.swift no longer reads typed characters at/);
+});
