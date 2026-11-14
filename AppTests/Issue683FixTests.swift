@@ -20,10 +20,11 @@ import MadoApplication
     }
 }
 
+// Round 2 (opus F2): only a missing bar window fails; a gone overlay is skipped.
 @Test(.timeLimit(.minutes(3))) func issue683FilterPlanRefusesMissingExcludedWindow() {
     let request = CaptureRequest(target: .fullScreen(displayID: 7), barWindowIDs: [21], overlayWindowIDs: [23])
     #expect(throws: CaptureFilterPlan.Failure.missingExcludedWindow) {
-        try CaptureFilterPlan.resolve(request, availableWindowIDs: [21])
+        try CaptureFilterPlan.resolve(request, availableWindowIDs: [23])
     }
 }
 

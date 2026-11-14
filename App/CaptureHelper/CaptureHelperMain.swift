@@ -124,21 +124,24 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 [weak self] target in
                 guard let self else { return }
                 let overlays = selectionPanels
+                guard !overlays.isEmpty else { return }  // another display's panel already finished
                 selectionPanels.forEach { $0.orderOut(nil) }
                 selectionPanels.removeAll()
                 guard let target else { return }
                 let request = CaptureRequestFromWindows.make(target: target,
                     bars: [panel, statusPanel].compactMap { $0 }, overlays: overlays)
-                capture(request: request)
+                capture(request: request, keepingAlive: overlays)
             }
             selectionPanels.append(overlay)
         }
         selectionPanels.first { $0.frame.contains(NSEvent.mouseLocation) }?.makeKey()
     }
 
-    private func capture(request: CaptureRequest?) {
+    /// `overlays` stay alive until the capture finishes, so nothing depends on when AppKit frees them.
+    private func capture(request: CaptureRequest?, keepingAlive overlays: [NSWindow] = []) {
         Task { [weak self] in
             guard let self else { return }
+            defer { withExtendedLifetime(overlays) {} }
             do {
                 let result = try await session.captureResult(request: request)
                 NSPasteboard.general.clearContents()

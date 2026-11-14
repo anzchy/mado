@@ -15,8 +15,34 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
         let scale: Double
     }
     var testDisplay: TestDisplay?
+    typealias DisplayFilterFactory = @Sendable (SCDisplay, [SCWindow]) -> SCContentFilter
+    let makeDisplayFilter: DisplayFilterFactory
 
-    init(testDisplay: TestDisplay? = nil) { self.testDisplay = testDisplay }
+    init(testDisplay: TestDisplay? = nil,
+         makeDisplayFilter: @escaping DisplayFilterFactory = { SCContentFilter(display: $0, excludingWindows: $1) }) {
+        self.testDisplay = testDisplay
+        self.makeDisplayFilter = makeDisplayFilter
+    }
+
+    /// The production display filter: the display and exactly the resolved excluded windows.
+    static func displayFilter<Display, Window, Filter>(display: Display, request: CaptureRequest, windows: [Window],
+                                                        id: (Window) -> UInt32,
+                                                        make: (Display, [Window]) -> Filter) throws -> Filter {
+        displayFilter(display: display, resolved: try CaptureFilterPlan.resolveWindows(request, windows: windows, id: id),
+                      make: make)
+    }
+
+    /// `capturePNG` resolves once and calls this with the result.
+    static func displayFilter<Display, Window, Filter>(display: Display,
+                                                        resolved: CaptureFilterPlan.ResolvedWindows<Window>,
+                                                        make: (Display, [Window]) -> Filter) -> Filter {
+        make(display, resolved.excludedWindows)
+    }
+
+    /// Full screen excludes every helper window; shown ones are required, never-shown ones optional.
+    @MainActor static func fullScreenRequest(displayID: UInt32, windows: [NSWindow]) -> CaptureRequest {
+        CaptureRequestFromWindows.make(target: .fullScreen(displayID: displayID), bars: windows, overlays: [])
+    }
 
     private func pixelDimensions(width: Int, height: Int, scale: Double) -> (Int, Int) {
         (Int((Double(width) * scale).rounded()), Int((Double(height) * scale).rounded()))
@@ -48,21 +74,18 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
             return (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
         }
         guard let displayID else { throw Failure.displayUnavailable }
-        let ownIDs = await MainActor.run { Set(NSApp.windows.compactMap { UInt32(exactly: $0.windowNumber) }) }
-        return try await capturePNG(request: CaptureRequest(target: .fullScreen(displayID: displayID),
-                                                             barWindowIDs: ownIDs, overlayWindowIDs: []))
+        let request = await MainActor.run { Self.fullScreenRequest(displayID: displayID, windows: NSApp.windows) }
+        return try await capturePNG(request: request)
     }
 
     func capturePNG(request: CaptureRequest) async throws -> Data {
         try checkPermission()
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        let plan = try CaptureFilterPlan.resolve(request,
-            availableWindowIDs: Set(content.windows.map(\.windowID)))
         let resolved = try CaptureFilterPlan.resolveWindows(request, windows: content.windows, id: { $0.windowID })
         let configuration = SCStreamConfiguration()
         let filter: SCContentFilter
         var legacyCrop = false
-        switch plan.target {
+        switch resolved.plan.target {
         case let .window(windowID):
             guard let window = resolved.targetWindow, window.windowID == windowID,
                   window.isOnScreen && window.windowLayer == 0
@@ -80,7 +103,7 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
                 throw Failure.displayUnavailable
             }
-            filter = SCContentFilter(display: display, excludingWindows: resolved.excludedWindows)
+            filter = Self.displayFilter(display: display, resolved: resolved, make: makeDisplayFilter)
             let scale: CGFloat
             if case let .region(_, _, _, requestedScale) = request.target {
                 scale = requestedScale
