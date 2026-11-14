@@ -348,6 +348,12 @@ class LockAlert:
 
 
 def reraise(signum):
+    # SIGKILL and SIGSTOP have no settable disposition: signal.signal raises
+    # OSError(EINVAL), which turned a job killed by SIGKILL (jetsam, kill -9) into
+    # a traceback and exit 1, an ordinary test failure to every lane (#705 T2).
+    # Report the shell's 128+signal status instead of re-raising.
+    if signum in (signal.SIGKILL, signal.SIGSTOP):
+        return 128 + signum
     signal.signal(signum, signal.SIG_DFL)
     os.kill(os.getpid(), signum)
     return 128 + signum
