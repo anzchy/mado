@@ -96,6 +96,14 @@ extension CanvasWindowController {
             self?.session.replaceAnnotationMark(at: index, with: mark)
             self?.syncAnnotateUI()
         }
+        // #692 fix r1: VoiceOver's 删除 on a mark, as select + ⌫ (undoable). Ignored while typing or dragging, when the
+        // indices are about to change.
+        overlay.onDelete = { [weak self, weak overlay] index in
+            guard let self, let overlay, !overlay.isEditingText, !overlay.isDragging else { return }
+            self.session.selectAnnotationMark(index)
+            self.session.deleteSelectedAnnotation()
+            self.syncAnnotateUI()
+        }
         overlay.onCommitText = { [weak self] index, text, origin, style in
             guard let self else { return }
             self.session.commitAnnotationText(text, at: origin, editing: index, style: style)
