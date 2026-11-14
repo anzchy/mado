@@ -652,6 +652,13 @@ public enum AnnotatePaint {
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard selector == #selector(NSResponder.insertNewline(_:)) || selector == #selector(NSResponder.cancelOperation(_:))
         else { return false }
+        // #692 fix r1: an Esc no input method took while composing drops the composition, as Pinyin's Esc does, and
+        // typing goes on; it never commits the half-typed text.
+        if selector == #selector(NSResponder.cancelOperation(_:)), textView.hasMarkedText() {
+            textView.insertText("", replacementRange: textView.markedRange())
+            textView.unmarkText()
+            return true
+        }
         commitText()
         return true
     }

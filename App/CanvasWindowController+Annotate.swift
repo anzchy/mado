@@ -143,6 +143,9 @@ extension CanvasWindowController {
         return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// #692 fix r1: the field editor holds an input method's marked text.
+    private var annotateComposing: Bool { (window?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true }
+
     /// #692 fix r1: a move or resize is held on the overlay.
     var annotateDragging: Bool { annotateViews.overlay?.isDragging == true }
 
@@ -185,7 +188,8 @@ extension CanvasWindowController {
         let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
         if let overlay = annotateViews.overlay, overlay.isEditingText {
             guard plain else { return nil }
-            guard event.keyCode == 53 else { return false }
+            // #692 fix r1: while an input method composes, Esc is the input method's (it cancels the composition).
+            guard event.keyCode == 53, !annotateComposing else { return false }
             commitAnnotateText()
             syncAnnotateUI()
             return true
@@ -247,6 +251,8 @@ extension CanvasWindowController {
             sheet.cancelButton.performClick(nil)
             return true
         }
+        // #692 fix r1: a composing field keeps the Esc; it is used up here so browsing never sees it.
+        if annotateViews.overlay?.isEditingText == true, annotateComposing { return true }
         // #692: Esc first ends the typing, then a drag; only then does it leave.
         if annotateViews.overlay?.isEditingText == true || annotateViews.overlay?.isDragging == true {
             commitAnnotateText()
