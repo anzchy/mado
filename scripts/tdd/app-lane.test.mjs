@@ -765,6 +765,31 @@ test(`discovery startup ${fault} returns 70 before native launch`,()=>{
  assert.equal(existsSync(marker),false,'failed startup metadata must prevent native launch');
 });
 
+// #705 T4: the startup snapshot runs once, before the native command, while
+// node, python3 and the lock are still starting; a busy machine can take
+// longer than the 250 ms polling limit to answer one ps. A slow first snapshot
+// must not fail discovery. The real /bin/ps answers after a 0.4 s delay.
+test('discovery startup tolerates one slow process snapshot',()=>{
+ const runOnce=delayFirst=>{
+  const h=harness(quarantine),log=path.join(h.dir,'slow-ps');
+  const code=h.calls.find(c=>c.cmd.endsWith('heavy-lock.sh')&&c.args[0]===process.execPath).args[2];
+  const setup=delayFirst?`{const cp=require('node:child_process'),real=cp.spawnSync;let first=true;
+cp.spawnSync=(cmd,args,opts)=>{if(first&&cmd==='/bin/ps'){first=false;require('node:fs').appendFileSync(${JSON.stringify(log)},'delayed\\n');
+return real('/bin/sh',['-c','sleep 0.4; exec /bin/ps "$@"','ps',...args],opts);}return real(cmd,args,opts);};}
+`:'';
+  const native=`process.stdout.write('inventory-ok\\n');`;
+  const run=spawnSync(process.execPath,['-e',setup+code,'5000',process.execPath,'-e',native],{encoding:'utf8',timeout:20000,detached:true});
+  return {run,delayed:existsSync(log)?readFileSync(log,'utf8'):''};
+ };
+ const plain=runOnce(false),slow=runOnce(true);
+ assert.equal(plain.run.status,0,plain.run.stderr);
+ assert.equal(slow.delayed,'delayed\n','the startup snapshot was the delayed one');
+ assert.equal(slow.run.status,0,slow.run.stderr);assert.equal(slow.run.signal,null);
+ assert.doesNotMatch(slow.run.stderr,/startup failed/);
+ assert.equal(slow.run.stdout,plain.run.stdout);
+ assert.match(slow.run.stdout,/inventory-ok/);
+});
+
 // #195: filter at the public lane boundary, with real parser and fake native processes.
 const filteredRoot = `Test Suite 'Selected tests' started at now.
 Test Suite 'Selected tests' passed at now.
