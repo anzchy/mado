@@ -59,14 +59,16 @@ def safe_job_name(command):
     return f'argc={len(command)}'
 
 
-def process_rows():
-    """Return live PID/PGID rows, or None when the query cannot prove absence."""
+def process_rows(command=None):
+    """Return live PID/PGID rows, or None when the query cannot prove absence.
+
+    `command` replaces /bin/ps only for the exit-query test plan (exit_query)."""
     if os.environ.get('PICSEE_HEAVY_FAULT_QUERY') == '1':
         return None
     try:
         # Absolute path (#705 T3): the job's PATH must not choose the program
         # that decides whether owned members still exist.
-        query = subprocess.Popen(['/bin/ps', '-axo', 'pid=,pgid=,stat='],
+        query = subprocess.Popen(command or ['/bin/ps', '-axo', 'pid=,pgid=,stat='],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             output, _ = query.communicate(timeout=1)
@@ -86,6 +88,92 @@ def process_rows():
         return rows
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
+
+
+class QueryRetry:
+    """Bounded retry of the process query after the job's leader exits (#705 T5).
+
+    One failed `ps` (a timeout under load, a malformed line) used to end the run
+    as unknown cleanup although the next query would have answered. A failure
+    starts a streak: the next query waits `interval` after the last failure, and
+    the streak is exhausted after `attempts` failures or `budget` seconds from
+    its first failure, whichever comes first. Exhausted stays exhausted until a
+    query succeeds. Any successful snapshot, empty or not, ends the streak; the
+    caller decides what the rows mean (release only on an empty one)."""
+
+    def __init__(self, attempts=4, interval=0.2, budget=5.0, clock=time.monotonic):
+        self.attempts, self.interval, self.budget, self.clock = attempts, interval, budget, clock
+        self.failures = []
+        self.exhausted = False
+
+    @staticmethod
+    def _since(now, then):
+        # Elapsed time at 1 us: on a float clock 0.6 - 0.4 is just under 0.2.
+        return round(now - then, 6)
+
+    def _expired(self, now):
+        return bool(self.failures) and (len(self.failures) >= self.attempts
+                                        or self._since(now, self.failures[0]) >= self.budget)
+
+    def next_action(self):
+        """'query' when a query may run now, 'wait' between attempts, or 'exhausted'."""
+        now = self.clock()
+        if self.exhausted or self._expired(now):
+            self.exhausted = True
+            return 'exhausted'
+        if self.failures and self._since(now, self.failures[-1]) < self.interval:
+            return 'wait'
+        return 'query'
+
+    def observe(self, rows):
+        """Record a query result (None is a failure): 'ok', 'wait' or 'exhausted'."""
+        now = self.clock()
+        if rows is not None:
+            self.failures = []
+            self.exhausted = False
+            return 'ok'
+        if self.exhausted:
+            return 'exhausted'
+        self.failures.append(now)
+        if self._expired(now):
+            self.exhausted = True
+            return 'exhausted'
+        return 'wait'
+
+
+# Test seam for the post-exit query only (#705 T5). The plan file lists tokens
+# (comma or whitespace separated); each post-exit query consumes one, appends
+# "<token> <monotonic>" to <plan>.log and runs a real substitute. An unknown
+# token is a failing query; an exhausted plan runs the real query. The variable
+# is removed from the guardian's and the job's environment.
+EXIT_QUERY_SUBSTITUTES = {'error': ['/usr/bin/false'], 'timeout': ['/bin/sleep', '5'],
+                          'malformed': ['/bin/echo', 'garbage']}
+exit_query_plan = {'tokens': None, 'next': 0}
+
+
+def exit_query():
+    """The process query used after the leader exits."""
+    plan = os.environ.get('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN')
+    if not plan:
+        return process_rows()
+    if exit_query_plan['tokens'] is None:
+        try:
+            exit_query_plan['tokens'] = Path(plan).read_text().replace(',', ' ').split()
+        except OSError:
+            exit_query_plan['tokens'] = []
+    tokens = exit_query_plan['tokens']
+    if exit_query_plan['next'] >= len(tokens):
+        return process_rows()
+    token = tokens[exit_query_plan['next']]
+    exit_query_plan['next'] += 1
+    try:
+        with open(f'{plan}.log', 'a') as log:
+            log.write(f'{token} {time.monotonic()}\n')
+    except OSError:
+        pass
+    if token == 'real':
+        return process_rows()
+    return process_rows(EXIT_QUERY_SUBSTITUTES.get(token, ['/usr/bin/false']))
 
 
 def send_control(fd, message):
@@ -446,8 +534,8 @@ def release_shared(lock):
             pass
 
 
-def owned_state(root, groups, hosts, excluded=0):
-    rows = process_rows()
+def owned_state(root, groups, hosts, excluded=0, query=process_rows):
+    rows = query()
     if rows is None:
         return None
     live = [(pid, pgid) for pid, pgid in rows
@@ -668,6 +756,7 @@ def supervised_main():
             ready_read, ready_write = os.pipe()
             guardian_env = {**os.environ}
             guardian_env.pop('PICSEE_HEAVY_FAULT_QUERY', None)
+            guardian_env.pop('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
             guardian_owner = lock.parent / f'heavy.lock.guardian-{invocation}.owner'
             guardian_log = lock.parent / f'heavy.lock.guardian-{invocation}.log'
             guardian_env['PICSEE_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
@@ -706,6 +795,7 @@ def supervised_main():
         child_env.pop('PICSEE_HEAVY_STATUS_DIR', None)
         child_env.pop('PICSEE_HEAVY_ATTEST_FD', None)
         child_env.pop('PICSEE_HEAVY_FAULT_STATUS_WRITE', None)
+        child_env.pop('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
         if acquired:
             child_env['MDPRO_HEAVY_LOCK_HELD'] = '1'
         if fd is not None:
@@ -749,6 +839,8 @@ def supervised_main():
         excluded = os.getpid() if nested else 0
         draining = None
         heartbeat = None
+        exit_retry = QueryRetry()
+        query_state = None
         while True:
             result = child.poll()
             receive_control(parent_control, groups, hosts, session, guardian_write, flock_required,
@@ -761,7 +853,19 @@ def supervised_main():
                                                    parent_control, session, excluded, guardian_write,
                                                    flock_required, ancestor_control_fd, unknown) else 'incomplete'
                 break
-            rows = owned_state(root, groups, hosts, excluded)
+            if result is None:
+                rows = owned_state(root, groups, hosts, excluded)
+            elif received:
+                rows = None  # the stop below runs its own queries
+            else:
+                # After the leader exits, a failed query is retried within
+                # QueryRetry's bounds; cancellation, registration and the
+                # execution deadline are still handled on every pass.
+                query_state = exit_retry.next_action()
+                rows = None
+                if query_state == 'query':
+                    rows = owned_state(root, groups, hosts, excluded, query=exit_query)
+                    query_state = exit_retry.observe(rows)
             if received:
                 cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
                                                    parent_control, session, excluded, guardian_write,
@@ -795,7 +899,7 @@ def supervised_main():
                     alert.publish(first=False)
                 break
             if rows is None:
-                if result is not None:
+                if result is not None and query_state == 'exhausted':
                     cleanup = 'incomplete'
                     print('[heavy-lock] unknown cleanup: process query failed', file=sys.stderr, flush=True)
                     break
@@ -811,13 +915,15 @@ def supervised_main():
                     print(f'[heavy-lock] job exited ({result}); waiting for group survivors: {rows}',
                           file=sys.stderr, flush=True)
                     heartbeat = now + 60
-                if now - draining >= drain_seconds:
-                    print('[heavy-lock] drain timed out; terminating survivors', file=sys.stderr, flush=True)
-                    drain_expired = True
-                    cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
-                                                       parent_control, session, excluded, guardian_write,
-                                                       flock_required, ancestor_control_fd, unknown) else 'incomplete'
-                    break
+            # The drain runs from the first snapshot with survivors; a failed
+            # query in between neither resets nor pauses it.
+            if draining is not None and time.monotonic() - draining >= drain_seconds:
+                print('[heavy-lock] drain timed out; terminating survivors', file=sys.stderr, flush=True)
+                drain_expired = True
+                cleanup = 'complete' if stop_owned(child, root, groups, hosts, grace,
+                                                   parent_control, session, excluded, guardian_write,
+                                                   flock_required, ancestor_control_fd, unknown) else 'incomplete'
+                break
             time.sleep(0.02)
         known_cleanup = cleanup
         if unknown[0]:
