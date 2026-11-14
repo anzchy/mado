@@ -60,3 +60,20 @@ actor LoadPipeline: ImagePipeline {
     #expect(session.imageLoader.presented?.key.itemID == pipeline.item)
     #expect(session.imageLoader.presented?.name == "A.png")
 }
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue687RecognitionUsesHeldSourceAtRequestedFullResolution() async throws {
+    let session = ViewerSession(), host = LoadHost(), pipeline = LoadPipeline(), access = LoadLeases()
+    session.imageLoader.host = host
+    #expect(try await session.imageLoader.recognitionImage(maximumPixelSize: 4000) == nil)
+    let url = URL(fileURLWithPath: "/recognise.png")
+    session.openImage(url, maximumPixelSize: 512) {
+        try await AccessImageSource.open(.fileGrant(url), access: access, pipeline: pipeline)
+    }
+    await session.imageLoader.loadTask?.value
+    #expect(host.images.last?.image.width == 512)
+    let full = try await session.imageLoader.recognitionImage(maximumPixelSize: 4000)
+    #expect(full?.width == 4000)
+    #expect(await pipeline.edges.last == 4000)
+    session.closeImage()
+    #expect(try await session.imageLoader.recognitionImage(maximumPixelSize: 4000) == nil)
+}

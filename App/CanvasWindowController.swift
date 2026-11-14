@@ -202,6 +202,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     lazy var annotateUI: any AnnotateNativeUI = InWindowAnnotateUI(controller: self)
     /// Page 39's views while Annotate Mode is on (#690 WI-6).
     var annotateViews = AnnotateWindowViews()
+    lazy var recogniseTextAdapter = ViewerRecogniseTextAdapter(controller: self)
     /// #690 fix r1: flattening for ⌘S and ⌘C; tests replace it to prove it runs off the main actor.
     var annotateFlatten: @Sendable (CGImage, Int, [AnnotationMark], CGRect?) throws -> CGImage = AnnotationFlattener.flatten
     /// #693 fix r1: reads the original for the overlay's redaction patches; tests replace it to hold or fail the read.

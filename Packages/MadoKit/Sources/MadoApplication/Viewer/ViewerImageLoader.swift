@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Observation
 import MadoCore
 
@@ -140,6 +141,13 @@ public struct PresentedImage: Sendable {
         guard progress.previewCompleted, deliveredDetailMaximum == 0 || desiredMaximum > max(progress.completedMaximum, deliveredDetailMaximum) else { return }
         phase = .refining
         if !loading { schedule() }
+    }
+    /// Decode from the same scoped source that supplied the shown image. The caller
+    /// still checks its presentation generation before admitting an OCR result.
+    public func recognitionImage(maximumPixelSize: Int) async throws -> CGImage? {
+        guard let source else { return nil }
+        let (_, decoded) = try await source.image(maximumPixelSize: maximumPixelSize)
+        return decoded.image
     }
     private func retire() {
         loadTask?.cancel()

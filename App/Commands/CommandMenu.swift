@@ -232,6 +232,11 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         annotate.target = self
         annotate.identifier = NSUserInterfaceItemIdentifier("annotate.enter.menu")
         annotate.setAccessibilityIdentifier("annotate.enter.menu")
+        let recognise = view.addItem(withTitle: String(localized: "Recognise Text"),
+            action: #selector(recogniseText(_:)), keyEquivalent: "")
+        recognise.target = self
+        recognise.identifier = NSUserInterfaceItemIdentifier("viewer.recognise-text.menu")
+        recognise.setAccessibilityIdentifier("viewer.recognise-text.menu")
         view.addItem(.separator())
         let fullScreen = view.addItem(withTitle: String(localized: "Enter Full Screen"),
             action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
@@ -343,6 +348,7 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
 
     @objc private func showSettings(_ item: NSMenuItem) { openSettings() }
     @objc private func enterAnnotate(_ item: NSMenuItem) { windowController()?.enterAnnotateMode() }
+    @objc private func recogniseText(_ item: NSMenuItem) { windowController()?.recogniseText() }
     @objc private func saveAnnotatedCopy(_ item: NSMenuItem) { windowController()?.saveAnnotatedCopy() }
     @objc private func showDiagnostics(_ item: NSMenuItem) { openDiagnostics() }
     @objc private func showShortcuts(_ item: NSMenuItem) { openShortcuts() }
@@ -391,6 +397,7 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
         if item.action == #selector(showSettings(_:)) || item.action == #selector(showDiagnostics(_:))
             || item.action == #selector(showShortcuts(_:)) || item.action == #selector(reportIssue(_:)) { return true }
         if item.action == #selector(enterAnnotate(_:)) { return windowController()?.canEnterAnnotateFromMenu == true }
+        if item.action == #selector(recogniseText(_:)) { return windowController()?.canRecogniseTextFromMenu == true }
         if item.action == #selector(saveAnnotatedCopy(_:)) { return windowController()?.canSaveAnnotatedCopyFromMenu == true }
         if let raw = item.representedObject as? String, let entry = EntryPoint(rawValue: raw), entry.state == .comingSoon {
             item.isEnabled = false
