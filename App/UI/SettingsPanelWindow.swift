@@ -106,6 +106,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var updateCheck: NSButton!
     private var updateLastChecked: NSTextField!
     private var captureEnabled: NSSwitch!
+    private var captureScroll: NSScrollView?
     private var captureDetails: [NSView] = []
     private let captureControl: CaptureBarControl
     private let capturePreferences: any CaptureBarPreferencePort
@@ -154,7 +155,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refreshCache()
-        if selectedSection == .capture { refreshCapture() }
+        if selectedSection == .capture {
+            scrollCaptureToTop()
+            refreshCapture()
+        }
     }
 
     func select(_ section: SettingsSection) {
@@ -174,7 +178,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         }
         if section == .cache { refreshCache() }
         if section == .update { refreshUpdates() }
-        if section == .capture { refreshCapture() }
+        if section == .capture {
+            scrollCaptureToTop()
+            refreshCapture()
+        }
+    }
+
+    private func scrollCaptureToTop() {
+        guard let scroll = captureScroll, let document = scroll.documentView else { return }
+        let top = max(0, document.frame.height - scroll.contentView.bounds.height)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: top))
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     func preferencesDidChange(_ preferences: DisplayPreferences) {
@@ -255,6 +269,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         scroll.setAccessibilityIdentifier("settings.capture.scroll")
+        captureScroll = scroll
         let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: 1124))
         let captureLabels = ["Capture Bar", "Start at Login", "Screen Recording", "Capture Folder",
                              "Save to Folder", "Copy to Clipboard", "Capture and Recognize Text",
