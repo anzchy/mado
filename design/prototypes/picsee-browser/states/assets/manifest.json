@@ -59,7 +59,9 @@
         "compact-grid",
         "grid-context-menu",
         "grid-multiselect",
-        "viewer-filmstrip"
+        "viewer-filmstrip",
+        "capture-bar",
+        "capture-thumbnail"
       ]
     },
     {
@@ -164,7 +166,8 @@
         "compact-grid",
         "grid-context-menu",
         "grid-multiselect",
-        "viewer-filmstrip"
+        "viewer-filmstrip",
+        "capture-thumbnail"
       ]
     },
     {
@@ -194,7 +197,8 @@
         "original-size",
         "keyboard-focus",
         "viewer-filmstrip",
-        "viewer-inspector-light"
+        "viewer-inspector-light",
+        "annotate"
       ]
     }
   ],

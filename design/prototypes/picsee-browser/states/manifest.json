@@ -264,6 +264,42 @@
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
       "sha256": "85a9d803283c104d9d4bcccc688dee16b0d5c8baa82ed09092fcb023050c7f96"
+    },
+    {
+      "name": "capture-bar",
+      "title": "37 截图工具条 · A",
+      "file": "capture-bar.html",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "kind": "static-mockup",
+      "origin": "local-C-adaptation",
+      "sha256": "cd06fb9c9ca42539366e386e17a9890c0db837c4c5b7d88db3b402372dbc24bc"
+    },
+    {
+      "name": "capture-thumbnail",
+      "title": "38 截图缩略图 · A",
+      "file": "capture-thumbnail.html",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "kind": "static-mockup",
+      "origin": "local-C-adaptation",
+      "sha256": "a8c8c761c2097e4546a075adae42b9252ce0e1f4d10019cab3c21dc86d229267"
+    },
+    {
+      "name": "annotate",
+      "title": "39 标注模式 · D",
+      "file": "annotate.html",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "kind": "static-mockup",
+      "origin": "local-C-adaptation",
+      "sha256": "a69f3614fdfc22176d9cfa0563d60a137efdfb90db495697d23e1465a6005ddc"
     }
   ]
 }

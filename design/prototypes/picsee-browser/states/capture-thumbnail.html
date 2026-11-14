@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN" class="theme-light"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1280, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>picsee · 38 截图缩略图 · A</title>
+  <!--
+  38 截图缩略图 (#680; #684 Capture Thumbnail, #687 recognise-text notice, ledger CAP-01, EXT-04). Static design state, not
+  the native app. Promoted from Capture Thumbnail variant A of the throwaway prototype
+  design/prototypes/capture-proto/thumbnail.html on branch prototype/680-capture-ui (96b47f79); owner 2026-11-13:
+  「A A A .the fourth: 标注模式工具栏放在右边竖排，重新更新这个Prototype」.
+  The page is a whole screen (1280×800 = one display) right after a Capture: the desktop backdrop of 37 and, in the
+  bottom-right corner, the Capture Thumbnail. It stays about 5 s and while the pointer is over it (spec #680 stories
+  28–34, grilling 3.2); dragging it out drags the image. Actions (story 29, 31) appear on hover. 存储 appears only when
+  saving after a Capture is off (decision 3.5). The bar itself is not drawn here: it can be expanded or collapsed (37).
+  Buttons do nothing. Radii, shadows and colours use the design tokens; the thumbnail's hover scrim is a fixed dark
+  overlay over the image (no token), its frame is --color-panel.
+  The bare URL is the pinned main case: saving on, the thumbnail at rest, light. Sub-cases, by query:
+    ?hover=1             the pointer over the thumbnail: dark overlay with 拷贝, 标注, 在 Mado 中打开, 识别文字, 移到废纸篓
+    ?save=off            saving off, pointer over the thumbnail: 存储 first, then 拷贝, 标注, 在 Mado 中打开, 识别文字;
+                         the status line says the image is only on the clipboard (Delete when unsaved is not decided)
+    ?kind=text           after 截图并识别文字: the notice 「已拷贝 N 个字符」 with the engine tag, no thumbnail
+    ?kind=text&panel=1   the notice clicked: the editable recognised-text panel with 拷贝
+    ?kind=notext         no text found: 「没有找到文字 · 剪贴板没有改变」
+    ?theme=dark          dark tokens (combines with the others)
+-->
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/globals.css">:root{--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-focus-ring: var(--color-accent);--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--font-sans: "SF Pro Text", "Avenir Next", "Helvetica Neue", sans-serif;--font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;--title-bar-height: 38px;--traffic-lights-end: 0px;--traffic-lights-clearance: 0px;--traffic-lights-clearance-main: 0px;--sidebar-width: 220px;--sidebar-width-min: 180px;--main-min-width: 320px;--bottom-tabs-height: 36px;--editor-content-width: 780px;--content-padding: 40px;--editor-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--editor-font-size: 16px;--editor-line-height: 1.6;--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: #6b7280;--color-bg-secondary: #f6f7fb;--color-bg-tertiary: #eeeff3;--color-on-accent: #fff;--color-scrim: rgba(15, 23, 42, 0.35);--font-size-ui-sm: 12px;--font-size-ui: 13px;--font-size-ui-lg: 14px;--font-size-title: 16px;--radius-inner: 4px;--radius-control: 6px;--radius-popover: 10px;--motion-duration-fast: 150ms;} @media (prefers-reduced-motion: reduce){:root{--motion-duration-fast: 0ms;}} *{box-sizing: border-box;} html, body, #root{height: 100%;} body{margin: 0;font-family: var(--font-sans);background: var(--color-bg);color: var(--color-text);} body.tauri-macos{--traffic-lights-end: 78px;--traffic-lights-clearance: calc(var(--traffic-lights-end) - 16px);--traffic-lights-clearance-main: calc(var(--traffic-lights-end) + 2px);} a{color: inherit;text-decoration: none;}</style>
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/light.css">.theme-light{color-scheme: light;--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: var(--color-muted);--color-bg-secondary: var(--color-surface);--color-bg-tertiary: #eeeff3;}</style>
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/dark.css">.theme-dark{color-scheme: dark;--color-bg: #0f1115;--color-surface: #161a22;--color-panel: #141821;--color-text: #e5e7eb;--color-muted: #9aa4b2;--color-border: color-mix(in srgb, var(--color-text) 12%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 7%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 8%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 16%, transparent), 0 8px 24px color-mix(in srgb, black 45%, transparent);--color-accent: #60a5fa;--color-accent-soft: color-mix(in srgb, var(--color-accent) 22%, transparent);--color-accent-text: var(--color-accent);--color-accent-fill: #1d4ed8;--color-accent-fill-hover: color-mix(in srgb, var(--color-accent-fill) 88%, #000);--color-tab-active-fill: color-mix(in srgb, var(--color-text) 30%, var(--color-surface));--color-tab-active-accent: #93c5fd;--tab-active-close-opacity: 0.6;--color-danger: #f87171;--color-danger-soft: color-mix(in srgb, var(--color-danger) 18%, transparent);--color-error-text: #f87171;--color-highlight: rgba(255, 85, 130, 0.40);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #0f1115;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: rgba(15, 18, 28, 0.6);--color-input-bg: rgba(15, 18, 28, 0.9);--color-text-secondary: var(--color-muted);--color-bg-secondary: var(--color-surface);--color-bg-tertiary: #1e2330;}</style>
+<style data-viewer-grid-tokens>/* #347: owner A A C, 2026-11-03. Inline this source into pinned state HTML. */
+:root {
+  --tool-background-opacity: 50%;
+  --tool-background-blur: 20px;
+  --tool-background-saturation: 1.6;
+  --tool-content-backing-opacity: 50%;
+  --tool-content-inset: 2px;
+  --tool-content-radius: 4px;
+  --tool-glyph-ink: 0 0 0 var(--color-text);
+  --tool-foreground-halo: 0 0 1px var(--color-panel);
+  --thumbnail-size-min: 140px;
+  --thumbnail-size-default: 220px;
+  --thumbnail-size-max: 280px;
+  --thumbnail-scale-min: calc(140 / 220);
+  --thumbnail-scale-max: calc(280 / 220);
+  --thumbnail-height-base: clamp(135px,14.7vw,225px);
+  --thumbnail-height: var(--thumbnail-height-base);
+  --thumb-min: var(--thumbnail-size-default);
+  --thumbnail-height-wide: 200px;
+  --thumbnail-height-medium: 165px;
+  --thumbnail-height-compact: 150px;
+  --thumbnail-track-compact: 145px;
+}
+</style>
+  <style>
+  * { box-sizing: border-box; }
+  html, body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
+  body { position: relative; font-family: var(--font-sans); font-size: var(--font-size-ui); color: var(--color-text); -webkit-font-smoothing: antialiased;
+         background: var(--color-surface) url(assets/images/b2b2e3fddb8288fe4613.jpg) center / cover no-repeat; }
+  button { font: inherit; color: inherit; }
+  svg { flex: none; }
+  /* The system menu bar and another app's window: backdrop only. */
+  .menubar { position: absolute; inset: 0 0 auto 0; height: 24px; z-index: 20; display: flex; align-items: center; gap: 18px; padding: 0 14px;
+             background: color-mix(in srgb, var(--color-panel) 72%, transparent); backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation)); }
+  .menubar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .menubar-item { position: relative; height: 22px; min-width: 26px; padding: 0 5px; display: grid; place-items: center; border: 0; border-radius: var(--radius-inner); background: none; }
+  .menubar-item[aria-expanded="true"] { background: var(--color-hover); }
+  .appwin { position: absolute; left: 96px; top: 112px; width: 760px; height: 540px; border-radius: var(--radius-popover); overflow: hidden; background: var(--color-panel); box-shadow: var(--shadow-soft); }
+  .appwin .bar { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+                 font-size: var(--font-size-ui-sm); color: var(--color-muted); }
+  .appwin .bar i { width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--color-text) 22%, transparent); }
+  .appwin .bar span { margin-left: 8px; }
+  .appwin .lines { padding: 18px 20px; display: grid; gap: 10px; }
+  .appwin .lines i { display: block; height: 8px; border-radius: var(--radius-inner); background: color-mix(in srgb, var(--color-text) 10%, transparent); }
+  .appwin .lines i:nth-child(4n) { width: 62%; }
+  /* Capture Thumbnail · A: a framed image in the bottom-right corner; actions on hover. */
+  .corner { position: absolute; z-index: 25; right: 20px; bottom: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .thumb { position: relative; width: 240px; border: 3px solid var(--color-panel); border-radius: 8px; overflow: hidden; background: var(--color-panel); box-shadow: var(--shadow-soft); }
+  .thumb img { display: block; width: 100%; height: 150px; object-fit: cover; }
+  .thumb .overlay { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); align-content: center; gap: 4px 0; padding: 6px;
+                    background: color-mix(in srgb, black 55%, transparent); color: white; }
+  .thumb .overlay button { display: grid; justify-items: center; gap: 3px; padding: 4px 0; border: 0; border-radius: var(--radius-control); background: none; color: inherit;
+                           font-size: var(--font-size-ui-sm); white-space: nowrap; }
+  .thumb .overlay button.primary { background: var(--color-accent-fill); }
+  .thumb .close { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%;
+                  background: color-mix(in srgb, black 60%, transparent); color: white; }
+  .status, .notice, .panel { background: color-mix(in srgb, var(--color-panel) 86%, transparent);
+                             backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation)); box-shadow: var(--shadow-soft); }
+  .status { padding: 3px 8px; border-radius: var(--radius-inner); font-size: var(--font-size-ui-sm); }
+  .mono { font-family: var(--font-mono); font-size: var(--font-size-ui-sm); }
+  .engine { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--color-hover); font-size: var(--font-size-ui-sm); font-weight: 400; }
+  .notice { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; font-size: var(--font-size-ui-sm); }
+  .notice .ok { color: var(--color-running-text); }
+  .notice .warn { color: var(--color-muted); }
+  .panel { position: absolute; z-index: 26; right: 20px; bottom: 20px; width: 380px; display: grid; gap: 8px; padding: 12px; border-radius: var(--radius-popover); }
+  .panel .head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .panel .head .icon-only { margin-left: auto; }
+  .icon-only { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; color: inherit; }
+  .panel textarea { width: 100%; height: 150px; resize: none; padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control);
+                    background: var(--color-input-bg); color: var(--color-text); font: inherit; line-height: 1.5; }
+  .panel .foot { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-ui-sm); color: var(--color-muted); }
+  .btn { height: 26px; padding: 0 12px; border-radius: var(--radius-control); border: 1px solid var(--color-border); background: var(--color-bg); font-size: var(--font-size-ui-sm); white-space: nowrap; }
+  .btn.primary { margin-left: auto; border: 0; background: var(--color-accent-fill); color: var(--color-on-accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header class="menubar" aria-label="系统菜单栏（背景）">
+  <b>访达</b><span>文件</span><span>编辑</span><span>显示</span><span>前往</span><span>窗口</span><span>帮助</span>
+  <div class="right">
+    <span class="menubar-item" aria-label="Mado 截图"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="8" y="8" width="8" height="8" rx="1" stroke-dasharray="2 2"/></svg></span>
+    <span>周四 15:30</span>
+  </div>
+</header>
+<div class="appwin" aria-hidden="true"><div class="bar"><i></i><i></i><i></i><span>示例文稿</span></div>
+  <div class="lines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+
+<div class="corner" id="corner" data-kind="image">
+  <div class="thumb" draggable="true" title="拖到其他 App" aria-label="截图缩略图 mado-20261113153012.png">
+    <img src="assets/images/0507fad8b25695d8a7d9.jpg" alt="" draggable="false">
+    <div class="overlay" id="overlay" role="toolbar" aria-label="截图操作" hidden>
+      <button type="button" class="primary" data-save-off hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 19h14"/></svg>存储</button>
+      <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>拷贝</button>
+      <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/></svg>标注</button>
+      <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>在 Mado 中打开</button>
+      <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8.5 9h7M12 9v7"/></svg>识别文字</button>
+      <button type="button" data-save-on><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>移到废纸篓</button>
+    </div>
+    <button type="button" class="close" id="thumb-close" aria-label="关闭缩略图" title="关闭缩略图" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="status" id="status">已存到 <span class="mono">~/下载</span> · 已拷贝</div>
+</div>
+
+<button type="button" class="notice" id="notice-text" hidden><svg class="ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg><span>已拷贝 <span id="char-count">0</span> 个字符</span><span class="engine">本机识别</span></button>
+<div class="notice" id="notice-notext" role="status" hidden><svg class="warn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>没有找到文字 · 剪贴板没有改变</div>
+
+<div class="panel" id="panel" role="dialog" aria-label="识别出的文字" hidden>
+  <div class="head">识别出的文字 <span class="engine">本机识别</span><button type="button" class="icon-only" aria-label="关闭" title="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <textarea id="recognised" aria-label="可编辑的识别文字">会议纪要 2026-11-13
+Mado 截图工具条 Capture Bar
+联系电话 021-5555 0123
+https://example.com/agenda</textarea>
+  <div class="foot">可以修改后再拷贝<button type="button" class="btn primary">拷贝</button></div>
+</div>
+<script>
+// Static state page. ?hover=1, ?save=off, ?kind=text|notext, ?panel=1 and ?theme=dark select a sub-case (see the header comment).
+(() => {
+  const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
+  if (q.get('theme') === 'dark') document.documentElement.className = 'theme-dark';
+  const kind = q.get('kind'), saveOff = q.get('save') === 'off';
+  $('char-count').textContent = $('recognised').value.replace(/\s/g, '').length;
+  if (kind === 'text' || kind === 'notext') {
+    const corner = $('corner'), notice = $(kind === 'text' ? 'notice-text' : 'notice-notext');
+    corner.dataset.kind = kind; corner.replaceChildren(notice); notice.hidden = false;
+    if (kind === 'text' && q.get('panel') === '1') { corner.hidden = true; $('panel').hidden = false; }
+    return;
+  }
+  if (saveOff) {
+    $('status').textContent = '只在剪贴板里 · 没有存储';
+    for (const e of document.querySelectorAll('[data-save-on]')) e.remove();
+    for (const e of document.querySelectorAll('[data-save-off]')) e.hidden = false;
+  }
+  if (saveOff || q.get('hover') === '1') { $('overlay').hidden = false; $('thumb-close').hidden = false; }
+})();
+</script>
+</body></html>

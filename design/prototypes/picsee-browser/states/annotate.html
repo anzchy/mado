@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN" class="theme-light"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1280, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>picsee · 39 标注模式 · D</title>
+  <!--
+  39 标注模式 (#680; #690 Annotate Mode skeleton, #691–#694 tools and save, ledger EDIT-07, EDIT-08). Static design state,
+  not the native app. Promoted from Annotate variant D of the throwaway prototype
+  design/prototypes/capture-proto/annotate.html on branch prototype/680-capture-ui (96b47f79); owner 2026-11-13:
+  「A A A .the fourth: 标注模式工具栏放在右边竖排，重新更新这个Prototype」.
+  The page is the viewer window (1280×800, full-size content, traffic lights at 14,13) in Annotate Mode (⌘E) on
+  DSC_0342.jpg (1600×2400). The tool strip is docked on the right edge: 48 px wide, 12 px from the edge, vertically centred.
+  The image is fitted to the area left of it (right inset 64 px, 16 px margins), so the strip never covers the image.
+  Strip order (spec #680 stories 39–59, grilling 4.3/4.7): 选择 | 箭头 矩形 文字 荧光笔 画笔 遮挡 裁剪 序号 | 撤销 重做 |
+  拷贝 存储 | 完成. Hover tips (title) carry the single-letter shortcuts of decision 5.5: V A R T H P M C N; 拷贝 ⌘C,
+  存储 ⌘S, 完成 Esc. Marks use --color-danger. Buttons do nothing. Radii, shadows and colours use the design tokens.
+  ⌘S follows the #680 decision of 2026-11-13: stay in Annotate Mode on the original and confirm 「已存储为 <name>」 with
+  在访达中显示; the open Preview Set does not change.
+  The bare URL is the pinned main case: the rectangle tool active with four marks, light. Sub-cases, by query:
+    ?tool=redact         the redaction tool active: options popover left of the strip with 马赛克/实色块, 强度 and the
+                         permanent reversibility hint (5.4) with 改用实色块; a mosaic mark over the gate's plaque
+    ?tool=redact&style=solid   实色块 chosen: 「纯黑色块，不可还原。」, the plaque covered by a solid box
+    ?saved=1             after ⌘S: 「已存储为 DSC_0342-annotated.jpg」 with 在访达中显示, centred over the image area
+    ?sheet=unsaved       Esc with unsaved marks: the sheet 不存储 / 取消 / 存储
+    ?theme=dark          dark tokens (combines with the others)
+-->
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/globals.css">:root{--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-focus-ring: var(--color-accent);--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--font-sans: "SF Pro Text", "Avenir Next", "Helvetica Neue", sans-serif;--font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;--title-bar-height: 38px;--traffic-lights-end: 0px;--traffic-lights-clearance: 0px;--traffic-lights-clearance-main: 0px;--sidebar-width: 220px;--sidebar-width-min: 180px;--main-min-width: 320px;--bottom-tabs-height: 36px;--editor-content-width: 780px;--content-padding: 40px;--editor-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--editor-font-size: 16px;--editor-line-height: 1.6;--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: #6b7280;--color-bg-secondary: #f6f7fb;--color-bg-tertiary: #eeeff3;--color-on-accent: #fff;--color-scrim: rgba(15, 23, 42, 0.35);--font-size-ui-sm: 12px;--font-size-ui: 13px;--font-size-ui-lg: 14px;--font-size-title: 16px;--radius-inner: 4px;--radius-control: 6px;--radius-popover: 10px;--motion-duration-fast: 150ms;} @media (prefers-reduced-motion: reduce){:root{--motion-duration-fast: 0ms;}} *{box-sizing: border-box;} html, body, #root{height: 100%;} body{margin: 0;font-family: var(--font-sans);background: var(--color-bg);color: var(--color-text);} body.tauri-macos{--traffic-lights-end: 78px;--traffic-lights-clearance: calc(var(--traffic-lights-end) - 16px);--traffic-lights-clearance-main: calc(var(--traffic-lights-end) + 2px);} a{color: inherit;text-decoration: none;}</style>
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/light.css">.theme-light{color-scheme: light;--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: var(--color-muted);--color-bg-secondary: var(--color-surface);--color-bg-tertiary: #eeeff3;}</style>
+  <style data-stitch-inlined="_ds/picsee-ui-system/tokens/dark.css">.theme-dark{color-scheme: dark;--color-bg: #0f1115;--color-surface: #161a22;--color-panel: #141821;--color-text: #e5e7eb;--color-muted: #9aa4b2;--color-border: color-mix(in srgb, var(--color-text) 12%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 7%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 8%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 16%, transparent), 0 8px 24px color-mix(in srgb, black 45%, transparent);--color-accent: #60a5fa;--color-accent-soft: color-mix(in srgb, var(--color-accent) 22%, transparent);--color-accent-text: var(--color-accent);--color-accent-fill: #1d4ed8;--color-accent-fill-hover: color-mix(in srgb, var(--color-accent-fill) 88%, #000);--color-tab-active-fill: color-mix(in srgb, var(--color-text) 30%, var(--color-surface));--color-tab-active-accent: #93c5fd;--tab-active-close-opacity: 0.6;--color-danger: #f87171;--color-danger-soft: color-mix(in srgb, var(--color-danger) 18%, transparent);--color-error-text: #f87171;--color-highlight: rgba(255, 85, 130, 0.40);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #0f1115;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: rgba(15, 18, 28, 0.6);--color-input-bg: rgba(15, 18, 28, 0.9);--color-text-secondary: var(--color-muted);--color-bg-secondary: var(--color-surface);--color-bg-tertiary: #1e2330;}</style>
+<style data-viewer-grid-tokens>/* #347: owner A A C, 2026-11-03. Inline this source into pinned state HTML. */
+:root {
+  --tool-background-opacity: 50%;
+  --tool-background-blur: 20px;
+  --tool-background-saturation: 1.6;
+  --tool-content-backing-opacity: 50%;
+  --tool-content-inset: 2px;
+  --tool-content-radius: 4px;
+  --tool-glyph-ink: 0 0 0 var(--color-text);
+  --tool-foreground-halo: 0 0 1px var(--color-panel);
+  --thumbnail-size-min: 140px;
+  --thumbnail-size-default: 220px;
+  --thumbnail-size-max: 280px;
+  --thumbnail-scale-min: calc(140 / 220);
+  --thumbnail-scale-max: calc(280 / 220);
+  --thumbnail-height-base: clamp(135px,14.7vw,225px);
+  --thumbnail-height: var(--thumbnail-height-base);
+  --thumb-min: var(--thumbnail-size-default);
+  --thumbnail-height-wide: 200px;
+  --thumbnail-height-medium: 165px;
+  --thumbnail-height-compact: 150px;
+  --thumbnail-track-compact: 145px;
+}
+</style>
+  <style>
+  * { box-sizing: border-box; }
+  html, body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
+  body { position: relative; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-ui); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  svg { flex: none; }
+  .traffic { position: absolute; z-index: 6; left: 14px; top: 13px; display: flex; gap: 8px; }
+  .traffic i { width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--color-text) 25%, transparent); }
+  /* The image fitted to the area left of the strip: 1600×2400 at scale 0.32 → 512×768 at (352, 16). */
+  .annotate-image { position: absolute; left: 352px; top: 16px; width: 512px; height: 768px; display: block; }
+  .marks { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .marks text { font-family: var(--font-sans); font-weight: 600; }
+  .mosaic { position: absolute; z-index: 1; image-rendering: pixelated; }
+  .solid { position: absolute; z-index: 1; background: black; }
+  /* Annotate D: the vertical tool strip docked on the right edge. */
+  .annotate-strip { position: absolute; z-index: 5; right: 12px; top: 50%; transform: translateY(-50%); width: 48px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+                    padding: 4px; border-radius: var(--radius-popover); background: color-mix(in srgb, var(--color-panel) 72%, transparent);
+                    backdrop-filter: blur(var(--tool-background-blur)) saturate(var(--tool-background-saturation)); box-shadow: var(--shadow-soft); }
+  .annotate-strip .hsep { flex: none; width: 24px; height: 1px; margin: 4px 0; background: var(--color-border); }
+  .tool { flex: none; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; }
+  .tool[aria-pressed="true"] { background: var(--color-accent-fill); color: var(--color-on-accent); }
+  .tool:disabled { opacity: .35; }
+  .text-button { flex: none; width: 40px; height: 26px; padding: 0; border: 0; border-radius: var(--radius-control); background: none; font-size: var(--font-size-ui-sm); }
+  .text-button.primary { background: var(--color-accent-fill); color: var(--color-on-accent); }
+  /* The tool options popover, left of the strip, its nub at the active tool. */
+  .tool-options { position: absolute; z-index: 6; right: 72px; width: 236px; display: grid; gap: 8px; padding: 10px 12px; border-radius: var(--radius-popover);
+                  background: var(--color-panel); box-shadow: var(--shadow-soft); font-size: var(--font-size-ui-sm); }
+  .tool-options::after { content: ""; position: absolute; right: -6px; top: var(--nub, 50%); width: 12px; height: 12px; margin-top: -6px; background: var(--color-panel); transform: rotate(45deg); }
+  .tool-options b { font-size: var(--font-size-ui-sm); }
+  .segmented { justify-self: start; display: inline-flex; padding: 2px; border-radius: var(--radius-control); background: var(--color-hover); }
+  .segmented button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--radius-inner); background: none; color: var(--color-muted); font-size: var(--font-size-ui-sm); }
+  .segmented button[aria-pressed="true"] { background: var(--color-panel); color: var(--color-text); box-shadow: var(--shadow-soft); }
+  .tool-options label { display: flex; align-items: center; gap: 6px; }
+  .tool-options input[type=range] { flex: 1; margin: 0; accent-color: var(--color-accent); }
+  .reversible-hint { margin: 0; line-height: 1.4; color: color-mix(in srgb, var(--color-banner-unsaved) 75%, var(--color-text)); }
+  .link { padding: 0; border: 0; background: none; color: var(--color-accent-text); font-size: var(--font-size-ui-sm); }
+  .muted { margin: 0; line-height: 1.4; color: var(--color-muted); }
+  /* ⌘S confirmation, centred over the image area (the window minus the strip's 64 px). */
+  .save-confirmation { position: absolute; z-index: 8; left: calc((100% - 64px) / 2); top: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+                       padding: 6px 6px 6px 12px; border-radius: var(--radius-popover); background: var(--color-panel); box-shadow: var(--shadow-soft); font-size: var(--font-size-ui-sm); white-space: nowrap; }
+  .save-confirmation .ok { display: inline-flex; color: var(--color-running-text); }
+  .btn { height: 24px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-bg); font-size: var(--font-size-ui-sm); white-space: nowrap; }
+  .btn.primary { border: 0; background: var(--color-accent-fill); color: var(--color-on-accent); }
+  .icon-only { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; }
+  /* Esc with unsaved marks: a sheet from the top of the window. */
+  .scrim { position: absolute; inset: 0; z-index: 20; background: var(--color-scrim); }
+  .sheet { position: absolute; z-index: 21; left: 50%; top: 0; transform: translateX(-50%); width: 400px; display: grid; gap: 8px; padding: 18px 20px 16px;
+           border-radius: 0 0 12px 12px; background: var(--color-panel); box-shadow: var(--shadow-soft); }
+  .sheet h2 { margin: 0; font-size: var(--font-size-ui-lg); }
+  .sheet p { margin: 0; color: var(--color-muted); font-size: var(--font-size-ui-sm); line-height: 1.5; }
+  .sheet .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .sheet .actions .btn { height: 28px; }
+  .sheet .actions .btn:first-child { margin-right: auto; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+<img class="annotate-image" id="annotate-image" src="assets/images/b3525a0437e56edf3a3f.jpg" alt="DSC_0342.jpg">
+<canvas class="mosaic" id="mosaic" data-redact hidden></canvas>
+<div class="solid" id="solid" data-redact hidden></div>
+<svg class="marks" viewBox="0 0 1280 800" width="1280" height="800" aria-label="标记" role="img" style="color: var(--color-danger)">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect id="mark-plaque" x="560" y="312" width="96" height="70" rx="1"/>
+    <rect x="528" y="442" width="176" height="60" rx="1"/>
+    <path d="M446 640 L492 572"/><path d="M479 576 L492 572 L495 586"/>
+  </g>
+  <circle cx="752" cy="300" r="14" fill="currentColor"/>
+  <text x="752" y="305.5" text-anchor="middle" font-size="15" fill="var(--color-on-accent)">1</text>
+  <text x="376" y="670" font-size="18" fill="currentColor" stroke="var(--color-panel)" stroke-width="3" paint-order="stroke">从这里上岸</text>
+</svg>
+
+<div class="annotate-strip" id="annotate-strip" role="toolbar" aria-orientation="vertical" aria-label="标注工具">
+  <button type="button" class="tool" data-tool="select" aria-label="选择" title="选择 V" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l12 8-5.5 1.5L10 18z"/></svg></button>
+  <span class="hsep" aria-hidden="true"></span>
+  <button type="button" class="tool" data-tool="arrow" aria-label="箭头" title="箭头 A" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19 19 5M10 5h9v9"/></svg></button>
+  <button type="button" class="tool" data-tool="rect" aria-label="矩形" title="矩形 R" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg></button>
+  <button type="button" class="tool" data-tool="text" aria-label="文字" title="文字 T" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg></button>
+  <button type="button" class="tool" data-tool="highlight" aria-label="荧光笔" title="荧光笔 H" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 15-4 4h6l1-1M9 15l8-8 3 3-8 8z"/></svg></button>
+  <button type="button" class="tool" data-tool="pen" aria-label="画笔" title="画笔 P" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/></svg></button>
+  <button type="button" class="tool" data-tool="redact" aria-label="遮挡" title="遮挡 M" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M4 10h16M4 14h16M8 6v12M12 6v12M16 6v12"/></svg></button>
+  <button type="button" class="tool" data-tool="crop" aria-label="裁剪" title="裁剪 C" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v16h16M2 6h16v16"/></svg></button>
+  <button type="button" class="tool" data-tool="step" aria-label="序号" title="序号 N" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M11 9l1.5-1v8"/></svg></button>
+  <span class="hsep" aria-hidden="true"></span>
+  <button type="button" class="tool" aria-label="撤销" title="撤销 ⌘Z"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+  <button type="button" class="tool" aria-label="重做" title="重做 ⇧⌘Z" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+  <span class="hsep" aria-hidden="true"></span>
+  <button type="button" class="text-button" title="拷贝 ⌘C">拷贝</button>
+  <button type="button" class="text-button primary" title="存储 ⌘S">存储</button>
+  <span class="hsep" aria-hidden="true"></span>
+  <button type="button" class="text-button" title="完成 Esc">完成</button>
+</div>
+
+<div class="tool-options" id="tool-options" role="dialog" aria-label="遮挡选项" hidden>
+  <b>遮挡</b>
+  <span class="segmented"><button type="button" data-style="mosaic" aria-pressed="true">马赛克</button><button type="button" data-style="solid" aria-pressed="false">实色块</button></span>
+  <label data-mosaic-only>强度 <input type="range" min="4" max="40" value="12" aria-label="马赛克强度"></label>
+  <p class="reversible-hint" data-mosaic-only>强度低的马赛克可能被还原出文字；真正保密的内容请用实色块。 <button type="button" class="link">改用实色块</button></p>
+  <p class="muted" data-solid-only hidden>纯黑色块，不可还原。</p>
+</div>
+
+<div class="save-confirmation" id="save-confirmation" role="status" hidden>
+  <span class="ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg></span>
+  <span>已存储为 DSC_0342-annotated.jpg</span>
+  <button type="button" class="btn">在访达中显示</button>
+  <button type="button" class="icon-only" aria-label="关闭" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+
+<div id="unsaved" hidden>
+  <div class="scrim"></div>
+  <div class="sheet" role="alertdialog" aria-labelledby="unsaved-title">
+    <h2 id="unsaved-title">要存储对“DSC_0342.jpg”的标注吗？</h2>
+    <p>存储会另存为 DSC_0342-annotated.jpg，原图不变。不存储则丢弃这些标记。</p>
+    <div class="actions"><button type="button" class="btn">不存储</button><button type="button" class="btn">取消</button><button type="button" class="btn primary">存储</button></div>
+  </div>
+</div>
+<script>
+// Static state page. ?tool=redact, ?style=solid, ?saved=1, ?sheet=unsaved and ?theme=dark select a sub-case (see the header comment).
+(() => {
+  const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
+  if (q.get('theme') === 'dark') document.documentElement.className = 'theme-dark';
+  if (q.get('saved') === '1') $('save-confirmation').hidden = false;
+  if (q.get('sheet') === 'unsaved') $('unsaved').hidden = false;
+  if (q.get('tool') !== 'redact') return;
+  // Redaction: the tool is pressed, the plaque mark becomes a redaction, the popover's nub points at the tool.
+  for (const b of document.querySelectorAll('[data-tool]')) b.setAttribute('aria-pressed', String(b.dataset.tool === 'redact'));
+  const solid = q.get('style') === 'solid', plaque = $('mark-plaque'), pop = $('tool-options');
+  const r = { x: +plaque.getAttribute('x'), y: +plaque.getAttribute('y'), w: +plaque.getAttribute('width'), h: +plaque.getAttribute('height') };
+  plaque.remove();
+  for (const b of pop.querySelectorAll('[data-style]')) b.setAttribute('aria-pressed', String((b.dataset.style === 'solid') === solid));
+  for (const e of pop.querySelectorAll('[data-mosaic-only]')) e.hidden = solid;
+  for (const e of pop.querySelectorAll('[data-solid-only]')) e.hidden = !solid;
+  const box = $(solid ? 'solid' : 'mosaic');
+  Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }); box.hidden = false;
+  if (!solid) {
+    // Mosaic at strength 12: one block per 12 image pixels (4 px on screen at scale 0.32 ≈ 12 × 0.32).
+    const img = $('annotate-image'), s = 0.32, block = 12;
+    const paint = () => {
+      const c = box, sw = Math.ceil(r.w / s / block), sh = Math.ceil(r.h / s / block);
+      c.width = sw; c.height = sh;
+      const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, (r.x - 352) / s, (r.y - 16) / s, r.w / s, r.h / s, 0, 0, sw, sh);
+    };
+    img.complete ? paint() : img.addEventListener('load', paint);
+  }
+  pop.hidden = false;
+  const btn = document.querySelector('[data-tool="redact"]').getBoundingClientRect(), cy = btn.top + btn.height / 2, ph = pop.offsetHeight;
+  const top = Math.max(12, Math.min(800 - ph - 12, Math.round(cy - ph / 2)));
+  pop.style.top = top + 'px'; pop.style.setProperty('--nub', (cy - top) + 'px');
+})();
+</script>
+</body></html>
