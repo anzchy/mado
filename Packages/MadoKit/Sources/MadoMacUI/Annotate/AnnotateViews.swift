@@ -441,7 +441,7 @@ public enum AnnotatePaint {
     public override func accessibilityChildren() -> [Any]? {
         let kept = markElements.prefix(marks.count)
         markElements = Array(kept) + (kept.count..<marks.count).map { AnnotationMarkElement(overlay: self, index: $0) }
-        return (super.accessibilityChildren() ?? []) + markElements
+        return Array([super.accessibilityChildren()].compactMap { $0 }.joined()) + markElements
     }
 
     public override func accessibilitySelectedChildren() -> [Any]? {
@@ -699,7 +699,8 @@ public enum AnnotatePaint {
         case .highlighter: return String(localized: "Highlighter")
         case .pen: return String(localized: "Pen")
         case .step:
-            let number = AnnotationGeometry.stepNumbers(overlay.marks)[index] ?? 0
+            // Steps number by creation order: this one is the count of steps up to it.
+            let number = overlay.marks[...index].filter { $0.kind == .step }.count
             return String(format: String(localized: "Step %lld"), number)
         }
     }
