@@ -11,8 +11,10 @@ struct SecurityScopedBookmarkCreation: Sendable {
         self.bookmarkData = bookmarkData
     }
 
-    func create(for url: URL, keys: Set<URLResourceKey>?) throws -> Data {
-        try bookmarkData(url, [.withSecurityScope, .securityScopeAllowOnlyReadAccess], keys)
+    /// Access Roots (and the probe that checks folders the same way) are writable under ADR-020; a File Grant stays
+    /// read-only (#610), since its Annotated Copy goes through the save panel.
+    func create(for url: URL, keys: Set<URLResourceKey>?, readOnly: Bool = false) throws -> Data {
+        try bookmarkData(url, readOnly ? [.withSecurityScope, .securityScopeAllowOnlyReadAccess] : [.withSecurityScope], keys)
     }
 }
 
@@ -25,9 +27,13 @@ public struct SystemSecurityScope: SecurityScope, BookmarkCoding {
     public func stop(_ url: URL) { url.stopAccessingSecurityScopedResource() }
     public func isReadable(_ url: URL) -> Bool { FileManager.default.isReadableFile(atPath: url.path) }
     public func create(for url: URL) throws -> Data {
-        try bookmarkCreation.create(for: url, keys: [.volumeUUIDStringKey, .volumeNameKey,
-                                                   .volumeURLKey, .fileResourceIdentifierKey])
+        try bookmarkCreation.create(for: url, keys: Self.identityKeys)
     }
+    public func createFileGrant(for url: URL) throws -> Data {
+        try bookmarkCreation.create(for: url, keys: Self.identityKeys, readOnly: true)
+    }
+    private static let identityKeys: Set<URLResourceKey> = [.volumeUUIDStringKey, .volumeNameKey,
+                                                            .volumeURLKey, .fileResourceIdentifierKey]
     public func resolve(_ data: Data) throws -> ResolvedBookmark {
         var stale = false
         let url = try URL(resolvingBookmarkData: data,

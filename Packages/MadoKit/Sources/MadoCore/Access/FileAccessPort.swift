@@ -58,7 +58,10 @@ public struct ResolvedBookmark: Sendable {
     public init(url: URL, stale: Bool) { self.url = url; self.stale = stale }
 }
 public protocol BookmarkCoding: Sendable {
+    /// An Access Root's bookmark: a folder the user granted, writable under ADR-020.
     func create(for url: URL) throws -> Data
+    /// A File Grant's in-memory bookmark: one file opened from Finder, read-only (#610); its copy goes through a panel.
+    func createFileGrant(for url: URL) throws -> Data
     func resolve(_ data: Data) throws -> ResolvedBookmark
     /// True when created bookmarks embed the volume UUID and root resource identity,
     /// so a root on a UUID-bearing volume is trusted only after matching them.
@@ -66,6 +69,7 @@ public protocol BookmarkCoding: Sendable {
 }
 public extension BookmarkCoding {
     var requiresEmbeddedIdentity: Bool { false }
+    func createFileGrant(for url: URL) throws -> Data { try create(for: url) }
 }
 
 public struct AccessRootRecord: Codable, Equatable, Sendable {
