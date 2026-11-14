@@ -19,7 +19,7 @@ let package = Package(
             .copy("B4Samples/temple.jpg"), .copy("B4Samples/hillside.jpg"),
             .copy("B4Samples/lakehouse.jpg"), .copy("B4Samples/gate.jpg")
         ]),
-        .testTarget(name: "MadoApplicationTests", dependencies: ["MadoCore", "MadoApplication"]),
+        .testTarget(name: "MadoApplicationTests", dependencies: ["MadoCore", "MadoApplication", "MadoInfrastructure"]),
         .testTarget(name: "MadoMacUITests", dependencies: ["MadoMacUI", "MadoInfrastructure"], exclude: ["B4PinnedDesign"]),
         .testTarget(name: "MadoCoreTests", dependencies: ["MadoCore"]),
         .testTarget(name: "MadoInfrastructureTests", dependencies: ["MadoCore", "MadoInfrastructure"]),

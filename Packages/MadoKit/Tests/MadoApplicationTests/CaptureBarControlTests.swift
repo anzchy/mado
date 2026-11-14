@@ -23,6 +23,34 @@ private actor CaptureBarMemoryProcess: CaptureBarProcessPort {
 
 private enum CaptureBarProcessFailure: Error { case failed }
 
+private actor DelayedRestoreProcess: CaptureBarProcessPort {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var running = false
+    func startCaptureBar() async {
+        await withCheckedContinuation { continuation = $0 }
+        running = true
+    }
+    func stopCaptureBar() { running = false }
+    func finishStart() { continuation?.resume(); continuation = nil }
+    func hasStarted() -> Bool { continuation != nil }
+    func isRunning() -> Bool { running }
+}
+
+@Test(.timeLimit(.minutes(2))) func captureBarToggleDuringRestoreEndsConsistent() async throws {
+    let preferences = CaptureBarMemoryPreferences()
+    await preferences.setCaptureBarEnabled(true)
+    let process = DelayedRestoreProcess()
+    let control = CaptureBarControl(preferences: preferences, process: process)
+    let restoring = Task { try await control.restoreOnMadoLaunch() }
+    while !(await process.hasStarted()) { await Task.yield() }
+    let toggling = Task { try await control.setEnabled(false) }
+    await process.finishStart()
+    try await restoring.value
+    try await toggling.value
+    #expect(await preferences.isCaptureBarEnabled() == false)
+    #expect(await process.isRunning() == false)
+}
+
 @Test(.timeLimit(.minutes(2))) func captureBarSwitchOffOnOffOnAndRestoreAfterRelaunch() async throws {
     let preferences = CaptureBarMemoryPreferences()
     let process = CaptureBarMemoryProcess()
