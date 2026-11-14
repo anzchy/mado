@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 import MadoCore
 @testable import MadoInfrastructure
@@ -20,11 +21,17 @@ import MadoCore
 /// Decision 5.3: the weakest mosaic makes a line of body text unreadable. Vision `.accurate` reads every sample
 /// before the mosaic and no character of it afterwards. Serialized: parallel cases starve the cooperative pool
 /// while Vision waits for its own capacity-limited queue, and the run deadlocks.
-@Test(.serialized, .timeLimit(.minutes(2)), arguments: RedactionTextSample.all)
+///
+/// Opt-in (`MADO_VISION_MEASURE=1`): its result depends on the host's Vision build and system font, so the default
+/// lane (and CI) does not run it; the pure tests above and `issue693MinimumMosaicStrengthIsTheMeasuredSafeValue`
+/// hold the minimum there. When enabled, a Vision that cannot read the unredacted control fails the test.
+/// Rerun: docs/validation/P7-693-mosaic-minimum.md.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["MADO_VISION_MEASURE"] == "1", "set MADO_VISION_MEASURE=1"),
+      .serialized, .timeLimit(.minutes(2)), arguments: RedactionTextSample.all)
 func issue693MinimumMosaicLeavesVisionNoCharacterOfTheLine(sample: RedactionTextSample) throws {
     let original = RedactionVision.characters(sample.text)
-    #expect(RedactionVision.matched(try RedactionVision.recognise(sample.image), original: sample.text) == original,
-            "control: Vision must read \(sample) before the mosaic")
+    try #require(RedactionVision.matched(try RedactionVision.recognise(sample.image), original: sample.text) == original,
+                 "control: Vision must read \(sample) before the mosaic; Vision is unavailable or reads differently here")
     let redacted = try RedactionRenderer.render(sample.image, rect: sample.lineRect, style: .mosaic(strength: 1))
     let read = try RedactionVision.recognise(redacted)
     #expect(RedactionVision.matched(read, original: sample.text).isEmpty, "\(sample) read as \(read)")
