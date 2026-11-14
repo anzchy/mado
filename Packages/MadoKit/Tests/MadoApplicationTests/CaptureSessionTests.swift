@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import MadoApplication
+import MadoInfrastructure
 
 private struct FixedScreen: CaptureScreenPort {
     let png: Data

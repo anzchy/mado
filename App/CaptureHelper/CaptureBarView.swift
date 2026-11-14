@@ -3,8 +3,10 @@ import MadoMacUI
 
 /// The expanded #680 page 37 toolbar. Later tickets enable the placeholder actions.
 @MainActor final class CaptureBarView: NSVisualEffectView {
-    init(captureAction: @escaping () -> Void) {
+    init(localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
+         captureAction: @escaping () -> Void) {
         self.captureAction = captureAction
+        self.localize = localize
         super.init(frame: NSRect(x: 0, y: 0, width: 562, height: 40))
         material = .popover
         blendingMode = .behindWindow
@@ -13,21 +15,40 @@ import MadoMacUI
         layer?.cornerRadius = DesignMetrics.radii["popover"]!
         layer?.masksToBounds = true
         setAccessibilityIdentifier("capture.bar")
-        addButton("", symbol: "circle.grid.2x3", id: "capture.grip", x: 4, width: 32, enabled: false)
-        addButton(String(localized: "Region Capture"), symbol: "camera.viewfinder", id: "capture.region", x: 38, width: 95, enabled: false)
-        addButton(String(localized: "Window Capture"), symbol: "macwindow", id: "capture.window", x: 135, width: 95, enabled: false)
-        addButton(String(localized: "Full Screen Capture"), symbol: "display", id: "capture.screen", x: 232, width: 95, enabled: true)
-        addButton(String(localized: "Recognize Text"), symbol: "text.viewfinder", id: "capture.text", x: 329, width: 95, enabled: false)
-        let divider = NSBox(frame: NSRect(x: 428, y: 10, width: 1, height: 20))
+        var x: CGFloat = 4
+        addButton("", symbol: "circle.grid.2x3", id: "capture.grip", x: x, width: 32, enabled: false)
+        x += 34
+        for (key, symbol, id, enabled) in [
+            ("Region Capture", "camera.viewfinder", "capture.region", false),
+            ("Window Capture", "macwindow", "capture.window", false),
+            ("Full Screen Capture", "display", "capture.screen", true),
+            ("Recognize Text", "text.viewfinder", "capture.text", false)
+        ] {
+            let title = localize(key)
+            let width = max(87, titleWidth(title) + 18 + 6 + 12)
+            addButton(title, symbol: symbol, id: id, x: x, width: width, enabled: enabled)
+            x += width + 2
+        }
+        let divider = NSBox(frame: NSRect(x: x + 2, y: 10, width: 1, height: 20))
         divider.boxType = .separator
         addSubview(divider)
-        addButton(String(localized: "Open Mado"), symbol: "photo", id: "capture.mado", x: 433, width: 91, enabled: false)
-        addButton("", symbol: "chevron.up", id: "capture.collapse", x: 526, width: 32, enabled: false)
+        x += 5
+        let mado = localize("Open Mado")
+        let madoWidth = max(83, titleWidth(mado) + 18 + 6 + 12)
+        addButton(mado, symbol: "photo", id: "capture.mado", x: x, width: madoWidth, enabled: false)
+        x += madoWidth + 2
+        addButton("", symbol: "chevron.up", id: "capture.collapse", x: x, width: 32, enabled: false)
+        frame.size.width = max(562, x + 36)
     }
 
     required init?(coder: NSCoder) { nil }
 
     private let captureAction: () -> Void
+    private let localize: (String) -> String
+
+    private func titleWidth(_ title: String) -> CGFloat {
+        (title as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
+    }
 
     private func addButton(_ title: String, symbol: String, id: String, x: CGFloat, width: CGFloat, enabled: Bool) {
         let button = NSButton(title: title, target: self, action: #selector(activate(_:)))
@@ -39,7 +60,8 @@ import MadoMacUI
             .withSymbolConfiguration(.init(pointSize: 18, weight: .regular))
         button.imagePosition = .imageLeading
         button.isEnabled = enabled
-        button.toolTip = title.isEmpty ? (id == "capture.grip" ? String(localized: "Drag Capture Bar") : String(localized: "Collapse to Menu Bar")) : title
+        button.toolTip = title.isEmpty ? (id == "capture.grip" ? localize("Drag Capture Bar") : localize("Collapse to Menu Bar")) : title
+        if title.isEmpty { button.setAccessibilityLabel(button.toolTip!) }
         button.setAccessibilityIdentifier(id)
         addSubview(button)
     }
