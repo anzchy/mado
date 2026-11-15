@@ -353,3 +353,87 @@ import MadoApplication
     #expect(try h.editMenuUndo(viaShortcut: true) === h.controller, "Annotate's undo: answers Command-Z")
     #expect(h.controller.session.annotateMode?.document.marks.isEmpty == true, "Annotate's Command-Z undoes the mark")
 }
+
+// MARK: - Matrix
+
+private enum Fix5Focus: String, CaseIterable { case canvas, notice, editor }
+private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageChange, commandE, viewAnnotate }
+
+/// Inspector {shown, hidden} × focus {canvas, notice, editor} × exit {timer, Esc, re-run, image change, ⌘E, View › 标注}
+/// × input {ABC, composing}, driven with `window.sendEvent`, menu validation and `NSApp.mainMenu.performKeyEquivalent`.
+/// Pruned: timer × editor (an open panel has no timer); composing × {canvas, notice} (only the editor composes);
+/// composing × {timer, re-run, image change} (no panel timer; the two menu items are not keys an input method holds);
+/// Esc × {canvas, notice} (with no panel, Esc is the viewer's own return to the grid, not an OCR exit).
+@MainActor @Test(.timeLimit(.minutes(6))) func issue687Fix5FocusExitInputMatrix() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    var rows = 0
+    for visible in [true, false] {
+        for focus in Fix5Focus.allCases {
+            for exit in Fix5Exit.allCases {
+                for composing in [false, true] {
+                    if exit == .timer && focus == .editor { continue }
+                    if exit == .escape && focus != .editor { continue }
+                    if composing && (focus != .editor || exit == .rerun || exit == .imageChange || exit == .timer) { continue }
+                    rows += 1
+                    let label = "inspector=\(visible) focus=\(focus.rawValue) exit=\(exit.rawValue) composing=\(composing)"
+                    try await h.reset(inspector: visible)
+                    h.text = "Row \(rows)"
+                    try await h.recognise()
+                    #expect(h.overlay?.noticeView != nil, "\(label): notice shown")
+                    var editor: RecogniseTextEditor?
+                    switch focus {
+                    case .canvas: break
+                    case .notice: _ = try h.focusNotice()
+                    case .editor: editor = try h.openEditor()
+                    }
+                    if composing, let editor { h.compose(editor) }
+
+                    let urlBefore = h.controller.session.imageLoader.fileURL
+                    switch exit {
+                    case .timer: h.fireDismissals()
+                    case .escape: try h.key("\u{1b}", code: 53)
+                    case .rerun:
+                        h.text = "Row \(rows) again"
+                        try await h.recognise()
+                    case .imageChange:
+                        // The pod's ‹/› buttons (a click needs no keyboard focus; the bare-arrow menu items follow
+                        // the Session's typing state).
+                        #expect(h.controller.route(urlBefore?.lastPathComponent == h.context.first.lastPathComponent ? .next : .previous, from: .button),
+                                "\(label): navigation available")
+                        try await waitUntil("\(label): image changed", timeout: .seconds(60)) {
+                            h.controller.session.imageLoader.fileURL != urlBefore && h.controller.session.imageStatus == .showing
+                                && h.overlay?.noticeView == nil && h.overlay?.panelView == nil
+                        }
+                    case .commandE: _ = try h.commandE()
+                    case .viewAnnotate:
+                        if try h.context.enabled("annotate.enter.menu") { try h.context.perform("annotate.enter.menu") }
+                    }
+
+                    let panel = h.overlay?.panelView != nil, notice = h.overlay?.noticeView != nil
+                    if composing, let editor {
+                        #expect(panel && h.window.firstResponder === editor, "\(label): the composing editor keeps the keys")
+                        #expect(!h.controller.session.isAnnotating, "\(label): no Annotate entry while composing")
+                        if exit == .escape { #expect(!editor.hasMarkedText(), "\(label): Esc dropped the composition") }
+                        continue
+                    }
+                    switch exit {
+                    case .timer:
+                        #expect(!notice && !panel, "\(label): notice timed out")
+                    case .escape:
+                        #expect(!panel, "\(label): no panel after Esc")
+                    case .rerun:
+                        #expect(notice && !panel, "\(label): the new run's notice")
+                    case .imageChange:
+                        #expect(!notice && !panel, "\(label): OCR cleared by the image change")
+                    case .commandE, .viewAnnotate:
+                        #expect(h.controller.session.isAnnotating, "\(label): Annotate Mode on")
+                        #expect(!notice && !panel, "\(label): OCR closed first")
+                    }
+                    try h.expectCanvasOwnsKeys(label)
+                }
+            }
+        }
+    }
+    #expect(rows == 36)
+}
