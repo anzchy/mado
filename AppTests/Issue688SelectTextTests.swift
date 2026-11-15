@@ -42,4 +42,3 @@ import MadoCore
         == CGRect(x: 30, y: 80, width: 80, height: 20))
 }
 }
-
