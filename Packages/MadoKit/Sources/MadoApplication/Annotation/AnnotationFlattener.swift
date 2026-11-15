@@ -31,7 +31,8 @@ public enum AnnotationFlattener {
 
     /// #693: what the copy shows where the redaction at `index` is, so the screen can show the same pixels: the
     /// flatten of the marks up to it, cut to its whole pixels. (Drawing only a part of the image was measured to
-    /// antialias a mark crossing that part's edge one level differently, so the whole image is drawn.) Nil when
+    /// antialias a mark crossing that part's edge one level differently, so the whole image is drawn.) The patch is
+    /// copied into its own bitmap, so keeping it does not keep the whole flatten alive (#693 fix r1). Nil when
     /// `index` is not a redaction on the image.
     public static func redactionPatch(_ image: CGImage, orientation: Int, marks: [AnnotationMark],
                                       index: Int) throws -> RedactionPatch? {
@@ -41,8 +42,12 @@ public enum AnnotationFlattener {
             return nil
         }
         let area = CGRect(x: pixels.minX, y: pixels.minY, width: pixels.maxX - pixels.minX, height: pixels.maxY - pixels.minY)
-        return RedactionPatch(image: try flatten(image, orientation: orientation, marks: Array(marks[...index]), crop: area),
-                              area: area)
+        let cut = try flatten(image, orientation: orientation, marks: Array(marks[...index]), crop: area)
+        guard let own = bitmap((cut.width, cut.height), format: BitmapFormat(cut)) else { throw Failure.contextUnavailable }
+        own.setBlendMode(.copy)
+        own.draw(cut, in: CGRect(x: 0, y: 0, width: cut.width, height: cut.height))
+        guard let copy = own.makeImage() else { throw Failure.contextUnavailable }
+        return RedactionPatch(image: copy, area: area)
     }
 
     /// Draws the upright image and `marks` in order.
