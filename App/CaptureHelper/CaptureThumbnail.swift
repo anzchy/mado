@@ -189,12 +189,15 @@ private final class ThumbnailButton: NSButton {
     private let status = NSVisualEffectView()
     private let statusText = NSTextField(labelWithString: "")
     private var buttons: [ThumbnailButton] = []
+    private var shownActions: [CaptureThumbnailAction]?
+    private var shownImage: CGImage?
     private var trackingArea: NSTrackingArea?
     private var mouseDownEvent: NSEvent?
     private let localize: (String) -> String
     private var hovered = false
 
     var dragOperationMask: NSDragOperation { .copy }
+    var actionButtons: [NSButton] { buttons }
 
     init(localize: @escaping (String) -> String) {
         self.localize = localize
@@ -274,7 +277,8 @@ private final class ThumbnailButton: NSButton {
     }
 
     /// Lays out the corner (thumbnail above the status line) inside `bounds`, inset for the shadow.
-    func render(png: Data, imageHeight: CGFloat, actions: [CaptureThumbnailAction], statusLine: String,
+    /// The image and the action buttons are replaced only when they change.
+    func render(image cgImage: CGImage?, imageHeight: CGFloat, actions: [CaptureThumbnailAction], statusLine: String,
                 accessibilityName: String) {
         let inset = CaptureThumbnailLayout.shadowInset
         let thumbHeight = imageHeight + 2 * CaptureThumbnailLayout.border
@@ -294,10 +298,16 @@ private final class ThumbnailButton: NSButton {
         thumb.toolTip = localize("Drag to another app")
         let border = CaptureThumbnailLayout.border
         image.frame = NSRect(x: border, y: border, width: CaptureThumbnailLayout.imageWidth, height: imageHeight)
-        image.layer?.contents = NSImage(data: png)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        if cgImage !== shownImage {
+            image.layer?.contents = cgImage
+            shownImage = cgImage
+        }
         overlay.frame = thumb.bounds
         closeButton.frame = NSRect(x: 4, y: thumbHeight - 24, width: 20, height: 20)
-        layoutButtons(actions, in: thumb.bounds)
+        if actions != shownActions {
+            layoutButtons(actions, in: thumb.bounds)
+            shownActions = actions
+        }
         installTrackingArea(thumbFrame.union(status.frame))
         applyColors()
         setHovered(hovered)
@@ -388,12 +398,15 @@ private final class ThumbnailButton: NSButton {
     private let now: () -> Date
     private let localize: (String) -> String
     private let startsTimer: Bool
+    /// Decoded once; a timer tick never decodes or re-renders (#684 fix r1).
+    private let image: CGImage?
     private var timer: Timer?
     private var trashFailed = false
 
     init(model: CaptureThumbnailModel, visibleFrame: NSRect, now: @escaping () -> Date = Date.init,
          localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
-         startsTimer: Bool = true) {
+         startsTimer: Bool = true, decodeImage: @escaping (Data) -> CGImage? = CaptureThumbnailController.decode) {
+        image = decodeImage(model.state.png)
         self.model = model
         self.visibleFrame = visibleFrame
         self.now = now
@@ -434,10 +447,10 @@ private final class ThumbnailButton: NSButton {
         }
     }
 
+    /// Only checks the lifetime; the thumbnail is re-rendered on show and after an action, never per tick.
     func tick() {
-        guard isOpen else { return }
-        render()
-        if lifetime.isExpired(at: now()) { close() }
+        guard isOpen, lifetime.isExpired(at: now()) else { return }
+        close()
     }
 
     func close() {
@@ -477,11 +490,14 @@ private final class ThumbnailButton: NSButton {
         }
     }
 
+    nonisolated static func decode(_ png: Data) -> CGImage? {
+        NSImage(data: png)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+    }
+
     private func render() {
         let state = model.state
-        let pixels = NSBitmapImageRep(data: state.png)
-        let imageHeight = CaptureThumbnailLayout.imageHeight(forPixelWidth: pixels?.pixelsWide ?? 0,
-                                                             pixelHeight: pixels?.pixelsHigh ?? 0)
+        let imageHeight = CaptureThumbnailLayout.imageHeight(forPixelWidth: image?.width ?? 0,
+                                                             pixelHeight: image?.height ?? 0)
         cornerFrame = CaptureThumbnailLayout.cornerFrame(visibleFrame: visibleFrame, imageHeight: imageHeight)
         let inset = CaptureThumbnailLayout.shadowInset
         panel.setFrame(cornerFrame.insetBy(dx: -inset, dy: -inset), display: false)
@@ -489,7 +505,7 @@ private final class ThumbnailButton: NSButton {
         let line = trashFailed ? localize("Couldn't move to the Trash")
             : CaptureThumbnailText.status(state.status, localize: localize)
         let name = String(format: localize("Capture Thumbnail %@"), state.savedURL?.lastPathComponent ?? "")
-        thumbnailView.render(png: state.png, imageHeight: imageHeight, actions: state.actions, statusLine: line,
+        thumbnailView.render(image: image, imageHeight: imageHeight, actions: state.actions, statusLine: line,
                              accessibilityName: name)
     }
 }

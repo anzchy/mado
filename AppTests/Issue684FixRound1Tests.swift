@@ -4,6 +4,7 @@ import MadoApplication
 
 // #684 P7-10 CAP-02 fix round 1.
 // F1 (gpt F1 + opus M2): the thumbnail goes on the display that was captured, fixed before the Capture.
+// F2 (gpt M1 = opus M1): a timer tick does not decode the PNG or rebuild the action buttons.
 
 @MainActor private final class Pointer {
     var location: NSPoint
@@ -44,6 +45,10 @@ private actor NoFiles: CaptureFilePort {
 
 private actor NoClipboard: CaptureClipboardPort {
     func writePNG(_ png: Data) -> Bool { true }
+}
+
+private actor NoTrash: CaptureTrashPort {
+    func moveToTrash(_ url: URL) throws {}
 }
 
 /// Main display 1 (menu bar 25 pt) and display 7 to its right, lower, with its own 25 pt menu bar.
@@ -114,4 +119,50 @@ private func targetDisplay(_ target: CaptureRequest.Target?) -> UInt32? {
     let window = CaptureRequest(target: .window(windowID: 99), barWindowIDs: [], overlayWindowIDs: [])
     #expect(try await runFlow(request: window, selectedDisplay: 7, startsAt: menuBar, movesTo: menuBar).frame
             == secondVisible)
+}
+
+private final class DecodeCount: @unchecked Sendable { var value = 0 }
+private final class TickClock: @unchecked Sendable { var now = Date(timeIntervalSinceReferenceDate: 10_000) }
+
+private func pinnedPNG() -> Data {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 234, pixelsHigh: 150, bitsPerSample: 8,
+                               samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                               bytesPerRow: 0, bitsPerPixel: 0)!
+    return rep.representation(using: .png, properties: [:])!
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue684FixTickKeepsButtonsAndDecodesOnce() async throws {
+    let decodes = DecodeCount()
+    let clock = TickClock()
+    let state = CaptureThumbnailState(png: pinnedPNG(), savedURL: nil, clipboard: .copied, folderDisplay: "~/Downloads")
+    let session = CaptureSession(screen: MovingScreen(pointer: Pointer(.zero), movesTo: .zero), files: NoFiles())
+    let model = CaptureThumbnailModel(state: state, session: session, clipboard: NoClipboard(), trash: NoTrash())
+    let controller = CaptureThumbnailController(
+        model: model, visibleFrame: mainVisible, now: { clock.now }, localize: { $0 }, startsTimer: false,
+        decodeImage: { decodes.value += 1; return CaptureThumbnailController.decode($0) })
+    defer { controller.close() }
+    controller.show()
+    let thumbnailView = try #require(controller.view as? CaptureThumbnailView)
+    #expect(decodes.value == 1)
+    controller.pointerEntered()
+    let before = thumbnailView.actionButtons.map(ObjectIdentifier.init)
+    #expect(before.count == 2)
+    for _ in 0..<12 {
+        clock.now += 0.25
+        controller.tick()
+    }
+    #expect(controller.isOpen)
+    #expect(decodes.value == 1, "ticks decoded the PNG \(decodes.value - 1) more times")
+    #expect(thumbnailView.actionButtons.map(ObjectIdentifier.init) == before)
+    // A state change (Save) rebuilds the buttons once, still without decoding again.
+    let save = try #require(thumbnailView.actionButtons.first { $0.identifier?.rawValue == "save" })
+    save.performClick(nil)
+    for _ in 0..<500 where model.state.savedURL == nil || thumbnailView.actionButtons.count != 2
+        || thumbnailView.actionButtons.first?.identifier?.rawValue != "copy" { await Task.yield() }
+    #expect(thumbnailView.actionButtons.compactMap { $0.identifier?.rawValue } == ["copy", "moveToTrash"])
+    let afterSave = thumbnailView.actionButtons.map(ObjectIdentifier.init)
+    clock.now += 0.25
+    controller.tick()
+    #expect(thumbnailView.actionButtons.map(ObjectIdentifier.init) == afterSave)
+    #expect(decodes.value == 1)
 }
