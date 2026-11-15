@@ -989,11 +989,11 @@ private final class Issue690FlattenGate: @unchecked Sendable {
     var entered: Int { lock.withLock { calls.count } }
     var onMain: [Bool] { lock.withLock { calls } }
     func open() { release.signal() }
-    var flatten: @Sendable (CGImage, Int, [AnnotationMark]) throws -> CGImage {
-        { [self] image, orientation, marks in
+    var flatten: @Sendable (CGImage, Int, [AnnotationMark], CGRect?) throws -> CGImage {
+        { [self] image, orientation, marks, crop in
             lock.withLock { calls.append(pthread_main_np() != 0) }
             _ = release.wait(timeout: .now() + 15)
-            return try AnnotationFlattener.flatten(image, orientation: orientation, marks: marks)
+            return try AnnotationFlattener.flatten(image, orientation: orientation, marks: marks, crop: crop)
         }
     }
 }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import MadoCore
 import MadoApplication
 import MadoInfrastructure
+import MadoMacUI
 
 /// The native surfaces Annotate Mode asks through; tests replace them.
 @MainActor protocol AnnotateNativeUI: AnyObject {
@@ -202,6 +203,7 @@ extension CanvasWindowController {
         case 51: .delete
         case 117: .forwardDelete
         case 53: .escape
+        case 36, 76: .returnKey
         case 123: .leftArrow
         case 124: .rightArrow
         case 125: .downArrow
@@ -231,15 +233,18 @@ extension CanvasWindowController {
         case .redo: session.redoAnnotation()
         case .selectTool: session.selectAnnotateTool(.select)
         case .chooseTool(let tool): session.selectAnnotateTool(tool)
-        case .applyCrop: return nil
-        // ⌫/⌦ stay consumed without a selection too.
-        case .deleteSelection: session.deleteSelectedAnnotation()
+        // #693: Return applies a pending crop; with none it is left to the window.
+        case .applyCrop: guard session.applyPendingCrop() else { return nil }
+        // ⌫/⌦ stay consumed without a selection too; with the crop tool they clear the crop (#693).
+        case .deleteSelection:
+            if session.annotateMode?.tool == .crop { session.clearCrop() } else { session.deleteSelectedAnnotation() }
         // ←/→/↑/↓ stay consumed even without a selection, so they never change images.
         case .nudge(let dx, let dy): nudgeAnnotation(dx: dx, dy: dy)
         case .requestLeave:
             // Esc first returns focus from a panel or tool to the canvas, as outside Annotate Mode.
             guard focus == .canvas else { return nil }
-            leaveAnnotateMode(.escape, proceed: {})
+            // #693: Esc first drops a pending crop.
+            if !session.cancelPendingCrop() { leaveAnnotateMode(.escape, proceed: {}) }
         }
         syncAnnotateUI()
         return true
@@ -262,6 +267,11 @@ extension CanvasWindowController {
             return true
         }
         guard session.inspectorFocus.focus == .canvas else { return false }
+        // #693: Esc first drops a pending crop.
+        if session.cancelPendingCrop() {
+            syncAnnotateUI()
+            return true
+        }
         leaveAnnotateMode(.escape, proceed: {})
         return true
     }
@@ -339,24 +349,43 @@ extension CanvasWindowController {
     }
 
     /// Reads the original under its lease; a missing file or a lost grant is a typed reason.
-    private func annotateFlattened(_ source: URL, marks: [AnnotationMark], services: AccessServices,
+    private func annotateFlattened(_ source: URL, marks: [AnnotationMark], crop: CGRect?, services: AccessServices,
                                    access: AccessRequest) async throws(AnnotatedCopyError) -> AnnotateSource {
-        let original: AnnotateSource
+        let original = try await annotateOriginal(source, services: services, access: access)
+        // Full-size flattening runs off the main actor (gpt M3); only the result comes back to the window.
+        let flatten = annotateFlatten
+        let task = Task.detached(priority: .userInitiated) {
+            AnnotateSource(image: try flatten(original.image, original.orientation, marks, crop), orientation: 1)
+        }
+        do { return try await task.value }
+        catch { throw .encodeFailed }
+    }
+
+    /// The original, decoded under its lease.
+    private func annotateOriginal(_ source: URL, services: AccessServices,
+                                  access: AccessRequest) async throws(AnnotatedCopyError) -> AnnotateSource {
         do {
             // A root lease names the root folder; a File Grant lease names the (possibly moved) file itself.
-            original = try await services.files.withLease(access) { lease in
+            return try await services.files.withLease(access) { lease in
                 try Self.decodeOriginal(lease.rootID == nil ? lease.url : source)
             }
         } catch let error as AnnotatedCopyError { throw error }
         catch FileAccessError.fileDeleted(_) { throw .sourceMissing }
         catch { throw FileManager.default.fileExists(atPath: source.path) ? .accessLost : .sourceMissing }
-        // Full-size flattening runs off the main actor (gpt M3); only the result comes back to the window.
-        let flatten = annotateFlatten
-        let task = Task.detached(priority: .userInitiated) {
-            AnnotateSource(image: try flatten(original.image, original.orientation, marks), orientation: 1)
+    }
+
+    /// #693: decodes the original once so the overlay shows each redaction with the copy's own pixels; until then (or
+    /// if it cannot be read) a redaction is drawn black.
+    func loadAnnotateRedactionSource() {
+        guard !annotateViews.redactionSourceRequested, let source = session.annotateMode?.fileURL else { return }
+        annotateViews.redactionSourceRequested = true
+        Task { [weak self] in
+            guard let self, let granted = try? await self.annotateAccess(source),
+                  let original = try? await self.annotateOriginal(source, services: granted.0, access: granted.1),
+                  self.session.annotateMode?.fileURL == source, let overlay = self.annotateViews.overlay else { return }
+            overlay.redactionSource = AnnotationOverlayView.RedactionSource(image: original.image,
+                                                                           orientation: original.orientation)
         }
-        do { return try await task.value }
-        catch { throw .encodeFailed }
     }
 
     /// The copy's name: a fresh listing of the folder (inside an Access Root) plus this window's own saves, which a
@@ -381,7 +410,8 @@ extension CanvasWindowController {
         annotateViews.shownName = nil
         do throws(AnnotatedCopyError) {
             let (services, access, root) = try await annotateAccess(source)
-            let flat = try await annotateFlattened(source, marks: request.marks, services: services, access: access)
+            let flat = try await annotateFlattened(source, marks: request.marks, crop: request.crop, services: services,
+                                                  access: access)
             let folder = source.deletingLastPathComponent()
             let planned = await annotatePlannedCopyName(for: source, services: services, root: root, preferring: shown)
             let writer = AnnotatedCopyWriter(leases: services.files)
@@ -451,14 +481,17 @@ extension CanvasWindowController {
 
     /// ⌘C: the flattened full image; nothing is written and the marks stay unsaved.
     private func copyAnnotatedImage() {
+        // #693: a pending crop is applied first, so the copy is the crop the window shows.
+        if session.applyPendingCrop() { syncAnnotateUI() }
         guard let state = session.annotateMode, let source = state.fileURL else { return }
-        let marks = state.document.marks
+        let marks = state.document.marks, crop = state.document.crop
         let pasteboard = annotatePasteboard
         Task { [weak self] in
             guard let self else { return }
             do throws(AnnotatedCopyError) {
                 let (services, access, _) = try await self.annotateAccess(source)
-                let flat = try await self.annotateFlattened(source, marks: marks, services: services, access: access)
+                let flat = try await self.annotateFlattened(source, marks: marks, crop: crop, services: services,
+                                                            access: access)
                 let image = NSImage(cgImage: flat.image, size: NSSize(width: flat.image.width, height: flat.image.height))
                 pasteboard.clearContents()
                 pasteboard.writeObjects([image])

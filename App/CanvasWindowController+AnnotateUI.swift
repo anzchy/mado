@@ -10,6 +10,10 @@ import MadoMacUI
 struct AnnotateWindowViews {
     var strip: AnnotateStripView?
     var overlay: AnnotationOverlayView?
+    /// #693: 遮挡's options beside the strip, shown while the redaction tool is chosen.
+    var redactionOptions: AnnotateRedactionOptionsView?
+    /// #693: the original is decoded once for the redaction patches, the first time a redaction is drawn.
+    var redactionSourceRequested = false
     var confirmation: AnnotateSaveConfirmationView?
     /// The marks the confirmation reported; any change to them dismisses it.
     var confirmedMarks: [AnnotationMark]?
@@ -75,6 +79,16 @@ extension CanvasWindowController {
         annotateViews.overlay?.marks = state.document.marks
         annotateViews.overlay?.selectedMark = state.selectedMark
         annotateViews.overlay?.tool = state.tool
+        annotateViews.overlay?.redactionStyle = state.redactionStyle
+        annotateViews.overlay?.crop = state.document.crop
+        annotateViews.overlay?.pendingCrop = state.pendingCrop
+        if let options = annotateViews.redactionOptions {
+            options.isHidden = state.tool != .redact
+            let selected = state.selectedMark.flatMap { state.document.marks.indices.contains($0) ? state.document.marks[$0] : nil }
+            let shown = selected?.redaction ?? state.redactionStyle
+            if options.style != shown { options.update(shown) }
+        }
+        if state.document.marks.contains(where: { $0.kind == .redaction }) { loadAnnotateRedactionSource() }
         annotateViews.strip?.update(AnnotateStripState(tool: state.tool, canUndo: state.document.canUndo,
             canRedo: state.document.canRedo, canSave: session.canSaveAnnotatedCopy || annotatePendingText, canCopy: state.fileURL != nil))
         if let confirmed = annotateViews.confirmedMarks, confirmed != state.document.marks { dismissAnnotateConfirmation() }
@@ -113,12 +127,26 @@ extension CanvasWindowController {
             self.applyFocus(.canvas)
             self.syncAnnotateUI()
         }
+        // #693: the crop tool proposes a crop; Return, 完成 or another tool applies it.
+        overlay.onCropChange = { [weak self] rect in
+            self?.session.setPendingCrop(rect)
+            self?.syncAnnotateUI()
+        }
         content.addSubview(overlay)
         let strip = AnnotateStripView(frame: .zero)
         strip.onAction = { [weak self] action in self?.performAnnotateStripAction(action) }
         content.addSubview(strip)
+        let options = AnnotateRedactionOptionsView()
+        options.strip = strip
+        options.isHidden = true
+        options.onChange = { [weak self] style in
+            self?.session.setRedactionStyle(style)
+            self?.syncAnnotateUI()
+        }
+        content.addSubview(options)
         annotateViews.overlay = overlay
         annotateViews.strip = strip
+        annotateViews.redactionOptions = options
         annotateViews.chromeWasHidden = chromeOverlay.isHidden
         chromeOverlay.isHidden = true
         canvas.trailingReserve = Self.annotateStripReserve
@@ -128,7 +156,8 @@ extension CanvasWindowController {
     private func tearDownAnnotateUI() {
         guard annotateViews.strip != nil || annotateViews.overlay != nil || annotateViews.sheet != nil
             || annotateViews.confirmation != nil else { return }
-        for view: NSView? in [annotateViews.overlay, annotateViews.strip, annotateViews.confirmation, annotateViews.sheet] {
+        for view: NSView? in [annotateViews.overlay, annotateViews.strip, annotateViews.redactionOptions,
+                              annotateViews.confirmation, annotateViews.sheet] {
             view?.removeFromSuperview()
         }
         let chromeWasHidden = annotateViews.chromeWasHidden
@@ -152,7 +181,8 @@ extension CanvasWindowController {
         case .redo: session.redoAnnotation()
         case .copy: copy(nil)
         case .save: saveAnnotatedCopy()
-        case .done: leaveAnnotateMode(.escape, proceed: {})
+        // #693: 完成 first applies a pending crop; with none it leaves.
+        case .done: if !session.applyPendingCrop() { leaveAnnotateMode(.escape, proceed: {}) }
         }
         syncAnnotateUI()
     }
