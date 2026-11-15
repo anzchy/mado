@@ -80,7 +80,7 @@ function local(value, opts) {
     if (unstaged.status !== 0 || staged.status !== 0) throw Object.assign(new Error('tracked worktree is dirty; use --allow-dirty'), { exitCode: 2 });
   }
   const workflow = workflowAt(repo, head, opts.job);
-  const host = process.env.PICSEE_LINUX_HOST || 'picsee-ci-linux';
+  const host = process.env.PICSEE_LINUX_HOST || 'mado-ci-linux';
   if (!/^[A-Za-z0-9._-]+$/.test(host) || host.startsWith('-')) throw Object.assign(new Error('invalid PICSEE_LINUX_HOST'), { exitCode: 2 });
   const temp = mkdtempSync(join(tmpdir(), 'ci-linux-preflight-'));
   const bundle = join(temp, 'head.bundle');
