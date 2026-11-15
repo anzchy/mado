@@ -170,6 +170,47 @@ struct FileManagerCaptureTrash: CaptureTrashPort {
     func moveToTrash(_ url: URL) async throws { try trash(url) }
 }
 
+/// Opens a Capture in the Mado that embeds this helper (#686). Mado is the app enclosing the helper's
+/// `Contents/Library/LoginItems` bundle, never looked up by bundle id (which could pick another installed copy).
+/// Opening the file through Launch Services gives Mado a File Grant for it; Mado needs no new entitlement.
+struct CaptureMadoLauncher: CaptureOpenPort {
+    enum Failure: Error, Equatable { case madoNotFound }
+    let mado: URL?
+    private let openFile: @Sendable (URL, URL) async throws -> Void
+    private let openApp: @Sendable (URL) async throws -> Void
+
+    init(helperBundle: URL = Bundle.main.bundleURL,
+         openFile: @escaping @Sendable (URL, URL) async throws -> Void = { file, app in
+             _ = try await NSWorkspace.shared.open([file], withApplicationAt: app,
+                                                   configuration: CaptureMadoLauncher.configuration())
+         },
+         openApp: @escaping @Sendable (URL) async throws -> Void = { app in
+             _ = try await NSWorkspace.shared.openApplication(at: app, configuration: CaptureMadoLauncher.configuration())
+         }) {
+        mado = CaptureMadoLocation.madoApp(containingHelper: helperBundle)
+        self.openFile = openFile
+        self.openApp = openApp
+    }
+
+    /// Mado comes to the front.
+    static func configuration() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        return configuration
+    }
+
+    func openInMado(_ url: URL) async throws {
+        guard let mado else { throw Failure.madoNotFound }
+        try await openFile(url, mado)
+    }
+
+    /// The bar's 打开 Mado: launches Mado, or brings the running one to the front as its own reopen does.
+    func bringMadoForward() async throws {
+        guard let mado else { throw Failure.madoNotFound }
+        try await openApp(mado)
+    }
+}
+
 /// Never key and never main: the frontmost app keeps its focus while the thumbnail is up.
 final class CaptureThumbnailPanel: NSPanel {
     override var canBecomeKey: Bool { false }
@@ -405,13 +446,17 @@ private final class ThumbnailButton: NSButton {
     private let startsTimer: Bool
     /// Decoded once; a timer tick never decodes or re-renders (#684 fix r1).
     private let image: CGImage?
+    private let opener: any CaptureOpenPort
     private var timer: Timer?
-    private var trashFailed = false
+    /// The status line after an action that failed without changing the Capture's own status.
+    private var failureLine: String?
 
     init(model: CaptureThumbnailModel, visibleFrame: NSRect, now: @escaping () -> Date = Date.init,
          localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
-         startsTimer: Bool = true, decodeImage: @escaping (Data) -> CGImage? = CaptureThumbnailController.decode) {
+         startsTimer: Bool = true, decodeImage: @escaping (Data) -> CGImage? = CaptureThumbnailController.decode,
+         opener: any CaptureOpenPort = CaptureMadoLauncher()) {
         image = decodeImage(model.state.png)
+        self.opener = opener
         self.model = model
         self.visibleFrame = visibleFrame
         self.now = now
@@ -480,18 +525,17 @@ private final class ThumbnailButton: NSButton {
 
     private func perform(_ action: CaptureThumbnailAction) {
         Task { @MainActor in
+            failureLine = nil
             switch action {
             case .copy: await model.copy()
             case .save: try? await model.save()
-            // Wired to Launch Services in the next #686 commit.
-            case .openInMado: break
+            case .openInMado:
+                do { try await model.openInMado(opener) }
+                // A failed save already shows in the status line (decision 3.5); only a failed open needs its own.
+                catch { if model.state.savedURL != nil { failureLine = localize("Couldn't open in Mado") } }
             case .moveToTrash:
-                do {
-                    try await model.moveToTrash()
-                    trashFailed = false
-                } catch {
-                    trashFailed = true
-                }
+                do { try await model.moveToTrash() }
+                catch { failureLine = localize("Couldn't move to the Trash") }
             }
             if model.isClosed { close() } else { render() }
         }
@@ -509,8 +553,7 @@ private final class ThumbnailButton: NSButton {
         let inset = CaptureThumbnailLayout.shadowInset
         panel.setFrame(cornerFrame.insetBy(dx: -inset, dy: -inset), display: false)
         thumbnailView.frame = NSRect(origin: .zero, size: panel.frame.size)
-        let line = trashFailed ? localize("Couldn't move to the Trash")
-            : CaptureThumbnailText.status(state.status, localize: localize)
+        let line = failureLine ?? CaptureThumbnailText.status(state.status, localize: localize)
         let name = String(format: localize("Capture Thumbnail %@"), state.savedURL?.lastPathComponent ?? "")
         thumbnailView.render(image: image, imageHeight: imageHeight, actions: state.actions, statusLine: line,
                              accessibilityName: name)

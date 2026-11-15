@@ -52,6 +52,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
     /// Held for the process lifetime; the kernel drops it when the helper exits.
     private let instanceLock = FlockCaptureHelperInstanceLock.appGroup()
+    /// The Mado that embeds this helper (#686).
+    private let mado = CaptureMadoLauncher()
 
     override init() {
         // The real home folder: in the sandbox NSHomeDirectory() is the container. ~/Downloads is open to the helper
@@ -85,7 +87,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         let bar = CaptureBarView(captureAction: { [weak self] in self?.capture() },
                                  regionAction: { [weak self] in self?.startSelection(.region) },
                                  windowAction: { [weak self] in self?.startSelection(.window) },
-                                 collapseAction: { [weak self] in self?.collapse?.collapse() })
+                                 collapseAction: { [weak self] in self?.collapse?.collapse() },
+                                 madoAction: { [weak self] in self?.openMado() })
         self.bar = bar
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: bar.frame.width, height: 40),
                             styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
@@ -326,9 +329,20 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 statusPanel?.orderOut(nil)
                 let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
                                                   trash: FileManagerCaptureTrash())
-                thumbnails.present(CaptureThumbnailController(model: model, visibleFrame: frame))
+                thumbnails.present(CaptureThumbnailController(model: model, visibleFrame: frame, opener: mado))
             } catch {
                 report(error)
+            }
+        }
+    }
+
+    /// The bar's 打开 Mado (#686): Mado comes to the front with a new or existing window, as its own reopen does.
+    private func openMado() {
+        Task { [weak self] in
+            guard let self else { return }
+            do { try await mado.bringMadoForward() } catch {
+                status?.stringValue = String(localized: "Couldn't open Mado")
+                statusPanel?.orderFrontRegardless()
             }
         }
     }
