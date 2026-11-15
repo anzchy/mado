@@ -7,6 +7,16 @@ final class CommandWindow: NSWindow {
     var consumeKey: ((NSEvent) -> Bool)?
     /// Sees every mouse-down before it is delivered; it cannot swallow the click.
     var observeMouseDown: ((NSEvent) -> Void)?
+    /// #692 fix r2: NSWindow answers undo:/redo: itself, from its own undo manager, so a nil-targeted
+    /// Edit › Undo/Redo never reaches the window controller. While this returns true, the window declines them and
+    /// the responder chain carries them on to the controller. Views ahead of the window (a text field) keep theirs.
+    var yieldsUndoRedo: (() -> Bool)?
+    override func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == Self.undoAction || aSelector == Self.redoAction, yieldsUndoRedo?() == true { return false }
+        return super.responds(to: aSelector)
+    }
+    private static let undoAction = NSSelectorFromString("undo:")
+    private static let redoAction = NSSelectorFromString("redo:")
     override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
         if preserveResponder?(responder) == true { return false }
         let accepted = super.makeFirstResponder(responder)
