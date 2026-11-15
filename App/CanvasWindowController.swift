@@ -115,6 +115,17 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var folderScanningOverride: (any FolderScanning)?
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
+    /// Tests answer the prompt with its wording and its decline path (#686), in place of the alert and open panel.
+    var folderGrantRequestOverride: ((FolderGrantPromptRequest) -> Void)?
+    /// #686: whether ←/→ on an image outside every Access Root is in the Capture Folder the helper publishes in the
+    /// App Group, and which Capture Folders were declined in this Mado session. Tests replace it.
+    lazy var captureFolderGate: CaptureFolderGrantGate = {
+        let preferences = UserDefaultsCaptureFolderPreferences.shared()
+        // The real home folder: in the sandbox NSHomeDirectory() is the container.
+        let home = getpwuid(getuid()).map { URL(fileURLWithPath: String(cString: $0.pointee.pw_dir), isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        return CaptureFolderGrantGate(record: { await preferences?.folderRecord() }, home: home)
+    }()
     private var sidebarKnownCounts: [URL: Int] = [:]
     // A failed main read retains its parent's tree throughout Retry, until a complete main snapshot wins.
     private var sidebarFailedReadFolder: URL?
@@ -1758,17 +1769,30 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     try operation.check()
                     try await folderScanner(services).begin(folder: file.deletingLastPathComponent(), rootID: root,
                         input: file, pending: direction, canPresent: { authority.isCurrent && context.permit.isCurrent }).value
-                } else { promptForFolder(file.deletingLastPathComponent(), currentImage: file, direction: direction) }
+                } else {
+                    await offerPagingGrant(file, direction: direction) { operation.isCurrent && self.generation == current }
+                }
             } catch {
                 if operation.isCurrent, generation == current {
-                    if error is FileAccessError { promptForFolder(file.deletingLastPathComponent(), currentImage: file, direction: direction) }
-                    else { showAccessError(error) }
+                    if error is FileAccessError {
+                        await offerPagingGrant(file, direction: direction) { operation.isCurrent && self.generation == current }
+                    } else { showAccessError(error) }
                 }
             }
         }
     }
 
-    private func promptForFolder(_ folder: URL, currentImage: URL?, direction: NavigationDirection, mismatch: Bool = false) {
+    /// ←/→ on an image whose folder is not an Access Root (#686, decision 3.4): the Capture Folder gets the capture
+    /// wording, and once declined it is not offered again in this session; ←/→ then stays on the one image.
+    private func offerPagingGrant(_ file: URL, direction: NavigationDirection, isCurrent: () -> Bool) async {
+        let folder = file.deletingLastPathComponent()
+        let paging = await captureFolderGate.paging(in: folder)
+        guard isCurrent(), case let .prompt(wording) = paging else { return }
+        promptForFolder(folder, currentImage: file, direction: direction, wording: wording)
+    }
+
+    private func promptForFolder(_ folder: URL, currentImage: URL?, direction: NavigationDirection, mismatch: Bool = false,
+                                 wording: FolderGrantWording = .generic) {
         guard let window, window.attachedSheet == nil else { return }
         let current = generation
         let operation = accessIntent.current
@@ -1798,14 +1822,22 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                             try await folderScanner(services).begin(folder: currentImage.deletingLastPathComponent(), rootID: id,
                                 input: currentImage, pending: direction, canPresent: { authority.isCurrent && context.permit.isCurrent }).value
                         } else {
-                            promptForFolder(folder, currentImage: currentImage, direction: direction, mismatch: true)
+                            promptForFolder(folder, currentImage: currentImage, direction: direction, mismatch: true,
+                                            wording: wording)
                         }
                     } else { inputIntent.invalidate(); openFolder(chosen, rootID: id) }
                 } catch { if operation.isCurrent { showAccessError(error) } }
             }
         }
-        if let folderGrantPromptOverride { folderGrantPromptOverride(folder, selected) }
-        else { FolderGrantPrompt.request(folder: folder, window: window, mismatch: mismatch, selected: selected) }
+        let declined: () -> Void = { [weak self] in self?.captureFolderGate.declined(folder, wording: wording) }
+        if let folderGrantRequestOverride {
+            folderGrantRequestOverride(FolderGrantPromptRequest(folder: folder, wording: wording, mismatch: mismatch,
+                                                                selected: selected, declined: declined))
+        } else if let folderGrantPromptOverride { folderGrantPromptOverride(folder, selected) }
+        else {
+            FolderGrantPrompt.request(folder: folder, window: window, mismatch: mismatch, wording: wording,
+                                      selected: selected, declined: declined)
+        }
     }
 
     private func showAccessError(_ error: Error) {
