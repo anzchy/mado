@@ -1,4 +1,5 @@
 import AppKit
+import os
 import MadoApplication
 import MadoMacUI
 
@@ -178,6 +179,7 @@ struct CaptureMadoLauncher: CaptureOpenPort {
     let mado: URL?
     private let openFile: @Sendable (URL, URL) async throws -> Void
     private let openApp: @Sendable (URL) async throws -> Void
+    private let log: @Sendable (String) -> Void
 
     init(helperBundle: URL = Bundle.main.bundleURL,
          openFile: @escaping @Sendable (URL, URL) async throws -> Void = { file, app in
@@ -186,10 +188,12 @@ struct CaptureMadoLauncher: CaptureOpenPort {
          },
          openApp: @escaping @Sendable (URL) async throws -> Void = { app in
              _ = try await NSWorkspace.shared.openApplication(at: app, configuration: CaptureMadoLauncher.configuration())
-         }) {
+         },
+         log: @escaping @Sendable (String) -> Void = CaptureMadoLauncher.systemLog) {
         mado = CaptureMadoLocation.madoApp(containingHelper: helperBundle)
         self.openFile = openFile
         self.openApp = openApp
+        self.log = log
     }
 
     /// Mado comes to the front.
@@ -200,15 +204,36 @@ struct CaptureMadoLauncher: CaptureOpenPort {
     }
 
     func openInMado(_ url: URL) async throws {
-        guard let mado else { throw Failure.madoNotFound }
-        try await openFile(url, mado)
+        try await logged("file") {
+            guard let mado else { throw Failure.madoNotFound }
+            try await openFile(url, mado)
+        }
     }
 
     /// The bar's 打开 Mado: launches Mado, or brings the running one to the front as its own reopen does.
     func bringMadoForward() async throws {
-        guard let mado else { throw Failure.madoNotFound }
-        try await openApp(mado)
+        try await logged("app") {
+            guard let mado else { throw Failure.madoNotFound }
+            try await openApp(mado)
+        }
     }
+
+    /// A failed open is logged with its kind only (#686 fix r1): `madoNotFound`, or the error's domain and code.
+    /// Never the file name or a user path, so the line can be public.
+    private func logged(_ action: String, _ body: () async throws -> Void) async throws {
+        do { try await body() } catch {
+            let kind: String
+            if case Failure.madoNotFound = error { kind = "madoNotFound" } else {
+                let error = error as NSError
+                kind = "\(error.domain)#\(error.code)"
+            }
+            log("Open in Mado outcome=failed action=\(action) error=\(kind)")
+            throw error
+        }
+    }
+
+    private static let logger = Logger(subsystem: "io.github.anzchy.mado", category: "capture")
+    static let systemLog: @Sendable (String) -> Void = { line in logger.error("\(line, privacy: .public)") }
 }
 
 /// Never key and never main: the frontmost app keeps its focus while the thumbnail is up.
