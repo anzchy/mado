@@ -408,30 +408,29 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
                                 action: #selector(openLoginItems(_:)))
         approval.font = DesignMetrics.font("uiSmall")
         let approvalWidth = approval.intrinsicContentSize.width + 12
-        let loginTitleWidth = (loginTitle as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width
-        approval.frame = NSRect(x: min(valueX + 40 + loginTitleWidth.rounded(.up) + 12, 554 - approvalWidth),
-                                y: 1124 - 125 - 21, width: approvalWidth, height: 24)
+        // Its own row under the hint: next to the switch caption there is no room in English.
+        approval.frame = NSRect(x: valueX, y: 1124 - 186 - 24, width: approvalWidth, height: 24)
         approval.isHidden = true
         approval.setAccessibilityIdentifier("settings.capture.login-open-settings")
         form.addSubview(approval)
         captureLoginApproval = approval
         captureLoginHint = field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
                                  top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
-        field(captureLocalize("Screen Recording"), top: 190, labelColumn: true)
-        capturePermissionStatus = field(captureLocalize("Unknown"), top: 190, id: "settings.capture.permission-status", muted: true)
+        field(captureLocalize("Screen Recording"), top: 220, labelColumn: true)
+        capturePermissionStatus = field(captureLocalize("Unknown"), top: 220, id: "settings.capture.permission-status", muted: true)
         if #available(macOS 15, *) {
             field(captureLocalize("On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."),
-                  top: 218, height: 46, id: "settings.capture.permission-note", muted: true)
+                  top: 248, height: 46, id: "settings.capture.permission-note", muted: true)
         }
-        heading(captureLocalize("After Capture"), top: 280, id: "settings.capture.heading-after", divider: true)
-        field(captureLocalize("Capture Folder"), top: 315, id: "settings.capture.folder-label", labelColumn: true)
-        let folder = field("~/Downloads", top: 315, id: "settings.capture.folder")
+        heading(captureLocalize("After Capture"), top: 310, id: "settings.capture.heading-after", divider: true)
+        field(captureLocalize("Capture Folder"), top: 345, id: "settings.capture.folder-label", labelColumn: true)
+        let folder = field("~/Downloads", top: 345, id: "settings.capture.folder")
         folder.font = DesignMetrics.font("uiSmall", monospaced: true)
         folder.frame.size.width = 94
         captureFolderPath = folder
         let change = NSButton(title: captureLocalize("Change…"), target: self, action: #selector(changeFolder(_:)))
         change.font = DesignMetrics.font("uiSmall")
-        change.frame = NSRect(x: valueX + 102, y: 1124 - 315 - 24, width: max(72, change.intrinsicContentSize.width + 12),
+        change.frame = NSRect(x: valueX + 102, y: 1124 - 345 - 24, width: max(72, change.intrinsicContentSize.width + 12),
                               height: 24)
         change.isEnabled = false
         change.alphaValue = 0.45
@@ -439,21 +438,21 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         form.addSubview(change)
         captureDetails.append(change)
         captureFolderChange = change
-        captureFilenameHint = field(captureLocalize(Self.filenameHint), top: 341, height: 30,
+        captureFilenameHint = field(captureLocalize(Self.filenameHint), top: 371, height: 30,
                                     id: "settings.capture.filename-hint", muted: true)
-        field(captureLocalize("Save to Folder"), top: 385, labelColumn: true)
-        captureAfterSave = outputSwitch(captureLocalize("Save captures to the Capture Folder"), top: 385,
+        field(captureLocalize("Save to Folder"), top: 415, labelColumn: true)
+        captureAfterSave = outputSwitch(captureLocalize("Save captures to the Capture Folder"), top: 415,
                                         id: "settings.capture.after-save", action: #selector(changeAfterSave(_:)))
-        field(captureLocalize("Copy to Clipboard"), top: 423, labelColumn: true)
-        captureAfterCopy = outputSwitch(captureLocalize("Copy captures to the Clipboard"), top: 423,
+        field(captureLocalize("Copy to Clipboard"), top: 453, labelColumn: true)
+        captureAfterCopy = outputSwitch(captureLocalize("Copy captures to the Clipboard"), top: 453,
                                         id: "settings.capture.after-copy", action: #selector(changeAfterCopy(_:)))
-        heading(captureLocalize("Global Shortcuts"), top: 475, id: "settings.capture.heading-shortcuts", divider: true)
+        heading(captureLocalize("Global Shortcuts"), top: 505, id: "settings.capture.heading-shortcuts", divider: true)
         let shortcutRows: [(CaptureShortcutAction, String)] = [
             (.region, "Region Capture"), (.window, "Window Capture"), (.fullScreen, "Full Screen Capture"),
             (.recognizeText, "Capture and Recognize Text"), (.toggleBar, "Show / Hide Capture Bar")
         ]
         for (index, (action, key)) in shortcutRows.enumerated() {
-            let top = CGFloat(510 + index * 38)
+            let top = CGFloat(540 + index * 38)
             let name = captureLocalize(key)
             captureShortcutNames[action] = name
             field(name, top: top, id: "settings.capture.shortcut-label-\(index)", labelColumn: true)
@@ -474,7 +473,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             captureShortcutMessages[action] = message
         }
         let systemHintText = captureLocalize("The system shortcuts ⌘⇧3 / ⌘⇧4 / ⌘⇧5 remain available.")
-        field(systemHintText, top: 704, height: 30, id: "settings.capture.system-shortcuts-hint", muted: true)
+        let systemHint = field(systemHintText, top: 734, height: 18, id: "settings.capture.system-shortcuts-hint", muted: true)
         // settings.html:166 恢复默认 is a link at the end of the hint; it moves under the hint when both do not fit.
         let restoreTitle = captureLocalize("Restore Defaults")
         let restore = NSButton(title: restoreTitle, target: self, action: #selector(restoreShortcuts(_:)))
@@ -486,15 +485,16 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let restoreWidth = restore.intrinsicContentSize.width
         let hintWidth = (systemHintText as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
         let inline = valueX + hintWidth + 6 + restoreWidth <= 554
-        restore.frame = NSRect(x: inline ? valueX + hintWidth + 6 : valueX, y: 1124 - (inline ? 704 : 722) - 16,
+        restore.frame = NSRect(x: inline ? valueX + hintWidth + 6 : valueX, y: 1124 - (inline ? 734 : 752) - 16,
                                width: restoreWidth, height: 16)
+        if inline { systemHint.frame.size.width = hintWidth + 2 }
         restore.isEnabled = false
         restore.alphaValue = 0.45
         restore.setAccessibilityIdentifier("settings.capture.shortcut-restore")
         form.addSubview(restore)
         captureDetails.append(restore)
         captureRestore = restore
-        let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 900, width: 528, height: 160))
+        let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 930, width: 528, height: 160))
         ocr.setAccessibilityIdentifier("settings.capture.ocr")
         form.addSubview(ocr)
         let ocrDivider = NSBox(frame: NSRect(x: 0, y: 159, width: 528, height: 1))
