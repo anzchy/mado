@@ -185,7 +185,7 @@ private let page39Arrow = AnnotationMark.arrow(tail: image(CGPoint(x: 446, y: 64
         #expect(px(rep, 615, 400)[3] < 60, "\(name) diameter 28")
         #expect(px(rep, 585, 400)[3] < 60, "\(name) diameter 28")
         var white = 0
-        for y in 392...408 { for x in 594...606 where isWhite(px(rep, x, y)) { white += 1 } }
+        for y in 392...408 { for x in 594...606 { guard isWhite(px(rep, x, y)) else { continue }; white += 1 } }
         #expect(white >= 6, "\(name) the number is white: \(white)")
         bytes.append(px(rep, 590, 400) + px(rep, 600, 400) + px(rep, 600, 396))
     }
@@ -285,7 +285,7 @@ private let keyPixels: [CGPoint] = [
 @Test(.timeLimit(.minutes(2))) @MainActor func issue692ScreenAndCopyLookTheSameAtOneToOne() throws {
     let (screen, copy) = try screenAndCopy(sixKinds(lineWidth: 3), zoom: 1)
     var close = 0
-    for y in 0..<300 { for x in 0..<400 where diff(screen(CGPoint(x: x, y: y)), copy(CGPoint(x: x, y: y))) <= 16 { close += 1 } }
+    for y in 0..<300 { for x in 0..<400 { guard diff(screen(CGPoint(x: x, y: y)), copy(CGPoint(x: x, y: y))) <= 16 else { continue }; close += 1 } }
     #expect(Double(close) / 120_000 >= 0.99, "\(close) of 120000 within 16")
     for point in keyPixels {
         #expect(diff(screen(point), copy(point)) <= 4, "\(point): screen \(screen(point)) copy \(copy(point))")
