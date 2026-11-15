@@ -203,6 +203,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Page 39's views while Annotate Mode is on (#690 WI-6).
     var annotateViews = AnnotateWindowViews()
     lazy var recogniseTextAdapter = ViewerRecogniseTextAdapter(controller: self)
+    lazy var selectTextAdapter = ViewerSelectTextAdapter(controller: self)
     /// #690 fix r1: flattening for ⌘S and ⌘C; tests replace it to prove it runs off the main actor.
     var annotateFlatten: @Sendable (CGImage, Int, [AnnotationMark], CGRect?) throws -> CGImage = AnnotationFlattener.flatten
     /// #693 fix r1: reads the original for the overlay's redaction patches; tests replace it to hold or fail the read.
@@ -292,6 +293,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         canvas.onBackdropChange = { [weak self] frame in
             self?.chromeOverlay?.setBackdropFrame(frame)
             self?.annotateBackdropChanged(frame)
+            self?.selectTextAdapter.backdropChanged(frame)
         }
         chromeOverlay.setBackdropFrame(canvas.backdropFrame)
         gridShell = GridShellView(frame: NSRect(x: 0, y: 0, width: content.bounds.width,
@@ -458,6 +460,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self?.session.tab(reverse: reverse)
         }
         canvas.onCommand = { [weak self] id in self?.route(id, from: .key) ?? false }
+        installSelectTextInput()
         canvas.onResolutionNeeded = { [weak self] maximum in
             guard let self else { return }
             let wasSettled = self.session.imageLoader.phase == .settled

@@ -111,7 +111,7 @@ import MadoInfrastructure
         newModel.start(Data(), identity: run)
     }
 
-    private nonisolated static func sourceData(image: CGImage) async throws -> Data {
+    nonisolated static func sourceData(image: CGImage) async throws -> Data {
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
             let buffer = NSMutableData()
