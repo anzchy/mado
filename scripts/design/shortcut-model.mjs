@@ -90,10 +90,11 @@ export const KEY_SITES = {
     36: { excluded: FOCUSED_CONTROL }, 49: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/DesignSystem/Components/DesignComponents.swift': { space: { excluded: FOCUSED_CONTROL } },
   'Packages/MadoKit/Sources/MadoMacUI/States/ReadFailedStateView.swift': { 36: { excluded: FOCUSED_CONTROL }, 76: { excluded: FOCUSED_CONTROL } },
-  // #692: ⌫ (51) and ⌦ (117) delete the selected mark.
+  // #692: ⌫ (51) and ⌦ (117) delete the selected mark. #693: Return (36) and keypad Enter (76) apply a pending crop.
   'App/CanvasWindowController+Annotate.swift': { 53: { excluded: ANNOTATE_ONLY }, 123: { excluded: ANNOTATE_ONLY },
     124: { excluded: ANNOTATE_ONLY }, 125: { excluded: ANNOTATE_ONLY }, 126: { excluded: ANNOTATE_ONLY },
-    51: { excluded: ANNOTATE_ONLY }, 117: { excluded: ANNOTATE_ONLY } },
+    51: { excluded: ANNOTATE_ONLY }, 117: { excluded: ANNOTATE_ONLY }, 36: { excluded: ANNOTATE_ONLY },
+    76: { excluded: ANNOTATE_ONLY } },
   'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
     76: { excluded: ANNOTATE_SHEET } },
   'App/CaptureHelper/CaptureSelectionPanel.swift': { 53: { excluded: 'Esc cancels a transient helper Capture selection, not a Mado command' } },
