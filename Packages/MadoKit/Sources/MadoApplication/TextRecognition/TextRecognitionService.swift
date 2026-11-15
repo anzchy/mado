@@ -33,10 +33,12 @@ public struct CloudRecognitionOptions: Sendable {
 public protocol CloudRecognitionSettings: Sendable {
     func options() async -> CloudRecognitionOptions
 }
-public struct CloudCredentials: Sendable, Equatable {
+public struct CloudCredentials: Sendable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     public let apiKey: String
     public let secretKey: String
     public init(apiKey: String, secretKey: String) { self.apiKey = apiKey; self.secretKey = secretKey }
+    public var description: String { "CloudCredentials(apiKey: <redacted>, secretKey: <redacted>)" }
+    public var debugDescription: String { description }
 }
 public protocol CloudCredentialStore: Sendable {
     func credentials() async -> CloudCredentials?
@@ -79,6 +81,7 @@ public struct TextRecognitionService: Sendable {
     }
 
     public func recognise(_ image: Data, intent: TextRecognitionIntent) async throws(TextRecognitionError) -> TextRecognitionResult {
+        if Task.isCancelled { throw TextRecognitionError.cancelled }
         if case .explicit = intent, let settings, let credentialStore, let cloud {
             let options = await settings.options()
             if options.enabled, case .granted = options.consent, options.online,
@@ -86,22 +89,25 @@ public struct TextRecognitionService: Sendable {
                !credentials.apiKey.isEmpty, !credentials.secretKey.isEmpty {
                 do {
                     let text = try await cloud.recognise(image, credentials: credentials)
+                    if Task.isCancelled { throw TextRecognitionError.cancelled }
                     return TextRecognitionResult(text: text, characterCount: text.count, engine: .cloud, isEmpty: text.isEmpty)
-                } catch .cancelled {
-                    throw .cancelled
-                } catch let error {
-                    let reason: CloudFallbackReason = switch error {
-                    case .cloudAuth: .auth
-                    case .cloudQuota: .quota
-                    case .cloudOffline: .offline
+                } catch {
+                    let cloudError = error as? TextRecognitionError
+                    if Task.isCancelled || cloudError == .cancelled { throw TextRecognitionError.cancelled }
+                    let reason: CloudFallbackReason = switch cloudError {
+                    case .cloudAuth?: .auth
+                    case .cloudQuota?: .quota
+                    case .cloudOffline?: .offline
                     default: .failure
                     }
                     let text = try await onDevice.recognise(image)
+                    if Task.isCancelled { throw TextRecognitionError.cancelled }
                     return TextRecognitionResult(text: text, characterCount: text.count, engine: .onDevice, isEmpty: text.isEmpty, fallbackReason: reason)
                 }
             }
         }
         let text = try await onDevice.recognise(image)
+        if Task.isCancelled { throw TextRecognitionError.cancelled }
         return TextRecognitionResult(
             text: text,
             characterCount: text.count,

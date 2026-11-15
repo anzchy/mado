@@ -136,7 +136,7 @@ func issue689BaiduConcurrentCallsShareTokenExchange() async throws {
     let first = Task { try await provider.recognise(image, credentials: baiduKeys) }
     for await _ in stream.stream { break }
     let second = Task { try await provider.recognise(image, credentials: baiduKeys) }
-    try await Task.sleep(for: .milliseconds(30))
+    await waitForTokenWaiter(provider)
     await http.release()
     #expect(try await first.value == "first\n第二行")
     #expect(try await second.value == "first\n第二行")
@@ -154,10 +154,10 @@ func issue689BaiduConcurrentDifferentKeysUseTheirOwnTokens() async throws {
     let first = Task { try await provider.recognise(image, credentials: baiduKeys) }
     for await _ in stream.stream { break }
     let second = Task { try await provider.recognise(image, credentials: otherKeys) }
-    try await Task.sleep(for: .milliseconds(30))
+    await waitForTokenWaiter(provider)
     await http.release()
     #expect(try await first.value == "first\n第二行")
-    try await Task.sleep(for: .milliseconds(30))
+    for await _ in stream.stream { break }
     await http.release()
     #expect(try await second.value == "first\n第二行")
     let requests = await http.requests
@@ -193,7 +193,7 @@ func issue689BaiduFailedConcurrentTokenExchangeRetriesOnlyForOtherKeys(sameKeys:
     let first = Task { try await provider.recognise(image, credentials: baiduKeys) }
     for await _ in stream.stream { break }
     let second = Task { try await provider.recognise(image, credentials: secondKeys) }
-    try await Task.sleep(for: .milliseconds(30))
+    await waitForTokenWaiter(provider)
     await http.release()
     do { _ = try await first.value; Issue.record("Expected first auth failure") }
     catch { #expect(error as? TextRecognitionError == .cloudAuth) }
@@ -205,4 +205,195 @@ func issue689BaiduFailedConcurrentTokenExchangeRetriesOnlyForOtherKeys(sameKeys:
         #expect(try await second.value == "first\n第二行")
         #expect(await http.tokenCount == 2)
     }
+}
+
+private actor CancellationHTTP: HTTPTransport {
+    enum Stage { case token, recognition }
+    let stage: Stage
+    let entered: AsyncStream<Void>.Continuation
+    var pending: CheckedContinuation<HTTPResponse, Error>?
+    var requests: [URLRequest] = []
+    init(stage: Stage, entered: AsyncStream<Void>.Continuation) { self.stage = stage; self.entered = entered }
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        requests.append(request)
+        let isToken = request.url?.path == "/oauth/2.0/token"
+        if (isToken && stage == .token) || (!isToken && stage == .recognition) {
+            return try await withCheckedThrowingContinuation { pending = $0; entered.yield(()) }
+        }
+        return try tokenJSON.get()
+    }
+    func cancelWithURLError() { pending?.resume(throwing: URLError(.cancelled)); pending = nil }
+}
+
+private actor CountingLocal: OnDeviceTextRecognitionProviding {
+    var calls = 0
+    func recognise(_ image: Data) async throws(TextRecognitionError) -> String { calls += 1; return "local" }
+}
+private struct FixedSettings: CloudRecognitionSettings {
+    func options() async -> CloudRecognitionOptions { .init(enabled: true, consent: .granted, online: true) }
+}
+private struct FixedKeys: CloudCredentialStore {
+    func credentials() async -> CloudCredentials? { baiduKeys }
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
+func issue689FixCancellationNeverFallsBack(atRecognition: Bool) async throws {
+    let stream = AsyncStream<Void>.makeStream()
+    let http = CancellationHTTP(stage: atRecognition ? .recognition : .token, entered: stream.continuation)
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    let local = CountingLocal()
+    let service = TextRecognitionService(onDevice: local, settings: FixedSettings(), credentialStore: FixedKeys(), cloud: provider)
+    let image = try testImage()
+    let task = Task { try await service.recognise(image, intent: .explicit) }
+    for await _ in stream.stream { break }
+    task.cancel()
+    await http.cancelWithURLError()
+    do { _ = try await task.value; Issue.record("Expected cancellation") }
+    catch { #expect(error as? TextRecognitionError == .cancelled) }
+    #expect(await local.calls == 0)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixRejectedCachedTokenRefreshes() async throws {
+    let http = StubHTTP([tokenJSON, wordsJSON, json(#"{"error_code":111}"#), tokenJSON, wordsJSON])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    let image = try testImage()
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    do { _ = try await provider.recognise(image, credentials: baiduKeys); Issue.record("Expected auth rejection") }
+    catch { #expect(error as? TextRecognitionError == .cloudAuth) }
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    #expect(await http.requests.filter { $0.url?.path == "/oauth/2.0/token" }.count == 2)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixCredentialsDescriptionRedacted() {
+    let credentials = CloudCredentials(apiKey: "private-api", secretKey: "private-secret")
+    #expect(!"\(credentials)".contains("private-api"))
+    #expect(!"\(credentials)".contains("private-secret"))
+    #expect(!String(reflecting: credentials).contains("private-api"))
+    #expect(!String(reflecting: credentials).contains("private-secret"))
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixExpiryMargin() async throws {
+    let http = StubHTTP([tokenJSON, wordsJSON, wordsJSON, tokenJSON, wordsJSON])
+    let clock = TestClock()
+    let provider = BaiduTextRecognitionProvider(transport: http, now: { clock.now() })
+    let image = try testImage()
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    clock.advance(89)
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    #expect(await http.count == 3)
+    clock.advance(2)
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    #expect(await http.count == 5)
+}
+
+private func tiffImage(width: Int, height: Int, transparent: Bool = false) throws -> Data {
+    let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let buffer = try #require(context.data)
+    let pixels = buffer.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * height)
+    var state: UInt32 = 0x12345678
+    for y in 0..<height {
+        for x in 0..<width {
+            let index = y * context.bytesPerRow + x * 4
+            for channel in 0..<3 { state = 1664525 &* state &+ 1013904223; pixels[index + channel] = UInt8(truncatingIfNeeded: state >> 16) }
+            pixels[index + 3] = transparent && x < width / 2 ? 0 : 255
+        }
+    }
+    let image = try #require(context.makeImage())
+    let data = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixEncodedImageLimitChecksUploadBytes() async throws {
+    let image = try tiffImage(width: 1700, height: 1100)
+    let encoded = image.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!
+    #expect(image.base64EncodedString().utf8.count < 10 * 1024 * 1024)
+    #expect(encoded.utf8.count > 10 * 1024 * 1024)
+    let http = StubHTTP([tokenJSON, wordsJSON])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    do {
+        _ = try await provider.recognise(image, credentials: baiduKeys)
+        let upload = try #require(await http.requests.last?.httpBody)
+        #expect(upload.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+    } catch {
+        #expect(error as? TextRecognitionError == .cloudImageTooLarge)
+        #expect(await http.count == 0)
+    }
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
+func issue689FixTiffIsReencodedBeforeUpload(transparent: Bool) async throws {
+    let image = try tiffImage(width: 20, height: 20, transparent: transparent)
+    let http = StubHTTP([tokenJSON, wordsJSON])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    let body = try #require(await http.requests.last?.httpBody)
+    let encoded = try #require(String(data: body, encoding: .utf8))
+    let base64 = try #require(String(encoded.dropFirst("image=".count)).removingPercentEncoding)
+    let uploaded = try #require(Data(base64Encoded: base64))
+    let source = try #require(CGImageSourceCreateWithData(uploaded as CFData, nil))
+    let type = try #require(CGImageSourceGetType(source) as String?)
+    #expect(type == (transparent ? UTType.png.identifier : UTType.jpeg.identifier))
+}
+
+private func waitForTokenWaiter(_ provider: BaiduTextRecognitionProvider) async {
+    for _ in 0..<10_000 {
+        if await provider.pendingTokenWaiters() > 0 { return }
+        await Task.yield()
+    }
+    Issue.record("Second caller did not enter the shared token exchange")
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixSupportedFormatByteOnlyReencode() async throws {
+    let tiff = try tiffImage(width: 1700, height: 1100)
+    let source = try #require(CGImageSourceCreateWithData(tiff as CFData, nil))
+    let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+    let bitmap = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(bitmap, UTType.bmp.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    let original = bitmap as Data
+    #expect(original.base64EncodedString().utf8.count < 10 * 1024 * 1024)
+    #expect(original.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!.utf8.count > 10 * 1024 * 1024)
+    let http = StubHTTP([tokenJSON, wordsJSON])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    _ = try await provider.recognise(original, credentials: baiduKeys)
+    let body = try #require(await http.requests.last?.httpBody)
+    #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+    #expect(body != Data("image=\(original.base64EncodedString())".utf8))
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixDownscaleRejectsTooNarrowImageBeforeNetwork() async throws {
+    let http = StubHTTP([])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    do { _ = try await provider.recognise(testImage(width: 9000, height: 15), credentials: baiduKeys); Issue.record("Expected narrow downscale rejection") }
+    catch { #expect(error as? TextRecognitionError == .cloudImageTooLarge) }
+    #expect(await http.count == 0)
+}
+
+private struct CancellationErrorHTTP: HTTPTransport {
+    let atRecognition: Bool
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        let isToken = request.url?.path == "/oauth/2.0/token"
+        if isToken != atRecognition { throw CancellationError() }
+        return try tokenJSON.get()
+    }
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
+func issue689FixTransportCancellationErrorNeverFallsBack(atRecognition: Bool) async throws {
+    let local = CountingLocal()
+    let provider = BaiduTextRecognitionProvider(transport: CancellationErrorHTTP(atRecognition: atRecognition))
+    let service = TextRecognitionService(onDevice: local, settings: FixedSettings(), credentialStore: FixedKeys(), cloud: provider)
+    do { _ = try await service.recognise(testImage(), intent: .explicit); Issue.record("Expected cancellation") }
+    catch { #expect(error as? TextRecognitionError == .cancelled) }
+    #expect(await local.calls == 0)
 }
