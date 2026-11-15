@@ -21,6 +21,7 @@ import MadoInfrastructure
     private var priorMinimum: NSSize?
     private var expandedFrom: NSSize?
     private var priorConsumeKey: ((NSEvent) -> Bool)?
+    var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
 
     init(controller: CanvasWindowController) {
         self.controller = controller

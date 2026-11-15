@@ -194,6 +194,29 @@ import MadoMacUI
     #expect(!warning.accessibilityPerformPress())
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687bVisibleNoticeIsInAccessibilityChildrenAndPressOpensPanel() throws {
+    _ = NSApplication.shared
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
+    let overlay = RecogniseTextOverlay(frame: root.bounds)
+    root.addSubview(overlay)
+    overlay.showNotice(message: "Copied", engine: "On-device Recognition", kind: .success,
+        onOpen: { overlay.showPanel(text: "editable", engine: "On-device Recognition",
+            onEdit: nil, onCopy: nil, onClose: nil) })
+    overlay.layoutSubtreeIfNeeded()
+    let children = (overlay.accessibilityChildren() ?? []).compactMap { $0 as? NSView }
+    let notice = try #require(children.first { $0.accessibilityIdentifier() == "recognise-text.notice" })
+    #expect(notice.accessibilityRole() == .button)
+    #expect(notice.accessibilityLabel()?.contains("Copied") == true)
+    #expect(notice.accessibilityPerformPress())
+    #expect(overlay.panelView?.textView.string == "editable")
+
+    overlay.showNotice(message: "No text", engine: nil, kind: .warning, onOpen: nil)
+    let warning = try #require((overlay.accessibilityChildren() ?? []).compactMap { $0 as? NSView }
+        .first { $0.accessibilityIdentifier() == "recognise-text.notice" })
+    #expect(warning.accessibilityRole() == .staticText)
+    #expect(!warning.accessibilityPerformPress())
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func PinnedDesignNarrowPanelKeepsHeaderAndFooterControlsApart() throws {
     _ = NSApplication.shared
     let overlay = RecogniseTextOverlay(frame: NSRect(x: 0, y: 0, width: 238, height: 340))

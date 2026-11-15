@@ -55,6 +55,8 @@ enum RecogniseTextNoticeKind { case success, warning }
     var compactWidth: CGFloat? { didSet { if oldValue != compactWidth { needsLayout = true } } }
     private var tracking: NSTrackingArea?
     override var acceptsFirstResponder: Bool { kind == .success }
+    override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
+    override func accessibilityChildren() -> [Any]? { [] }
 
     init(message: String, engine: String?, kind: RecogniseTextNoticeKind, onOpen: (() -> Void)?) {
         self.kind = kind
@@ -308,6 +310,11 @@ enum RecogniseTextNoticeKind { case success, warning }
         autoresizingMask = [.width, .height]
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func accessibilityChildren() -> [Any]? {
+        if let noticeView { return [noticeView] }
+        if let panelView { return [panelView] }
+        return []
+    }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let result = super.hitTest(point)
         return result === self ? nil : result
