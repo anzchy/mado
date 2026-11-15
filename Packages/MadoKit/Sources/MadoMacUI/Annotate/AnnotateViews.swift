@@ -507,7 +507,7 @@ public enum AnnotatePaint {
         context.clip(to: viewRect(CGRect(origin: .zero, size: imageSize), transform))
         context.translateBy(x: transform.origin.x, y: transform.origin.y)
         context.scaleBy(x: scale, y: scale)
-        var redactions = shown.indices.filter { shown[$0].kind == .redaction }[...]
+        var redactions = ArraySlice(shown.indices.filter { shown[$0].kind == .redaction })
         AnnotationRenderer.draw(shown, in: context, hiding: editing?.index) { [self] mark in
             guard let index = redactions.popFirst() else { return }
             drawRedaction(mark, at: index, of: shown, in: context)
@@ -1340,8 +1340,8 @@ public enum AnnotatePaint {
     }
 
     private final class SegmentButton: NSButton {
-        init(title: String) {
-            super.init(frame: .zero)
+        convenience init(title: String) {
+            self.init(frame: .zero)
             self.title = title
             isBordered = false
             bezelStyle = .regularSquare
@@ -1349,7 +1349,6 @@ public enum AnnotatePaint {
             refusesFirstResponder = true
             font = .systemFont(ofSize: 12)
         }
-        required init?(coder: NSCoder) { nil }
         var titleWidth: CGFloat { (title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width }
         override var state: NSControl.StateValue { didSet { needsDisplay = true } }
         override func draw(_ dirtyRect: NSRect) {
