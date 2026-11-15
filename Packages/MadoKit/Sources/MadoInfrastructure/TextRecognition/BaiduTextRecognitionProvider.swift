@@ -111,8 +111,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
 
     private static func mapTaskError(_ error: Error) -> TextRecognitionError {
         if Task.isCancelled { return .cancelled }
-        if let typed = error as? TextRecognitionError { return typed }
-        return mapTransportError(error)
+        return (error as? TextRecognitionError) ?? .cloudFailure
     }
 
     private static func mapTransportError(_ error: Error) -> TextRecognitionError {
@@ -149,11 +148,11 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
               min(width, height) >= 15 else { throw .invalidImage }
         let maxBytes = 10 * 1024 * 1024
         let sourceType = CGImageSourceGetType(source) as String?
-        let supported = sourceType.map { [UTType.jpeg.identifier, UTType.png.identifier, UTType.bmp.identifier].contains($0) } ?? false
+        let supported = sourceType == UTType.jpeg.identifier || sourceType == UTType.png.identifier || sourceType == UTType.bmp.identifier
         if supported, max(width, height) <= 8192, encodedImageSize(data) <= maxBytes { return data }
 
         var maxPixel = min(8192, max(width, height))
-        while maxPixel >= 15 {
+        while true {
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
@@ -169,9 +168,8 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
             let prepared = output as Data
             if encodedImageSize(prepared) <= maxBytes { return prepared }
-            maxPixel = Int(Double(maxPixel) * 0.75)
+            maxPixel = max(15, Int(Double(maxPixel) * 0.75))
         }
-        throw .cloudImageTooLarge
     }
 
     private static func encodedImageSize(_ data: Data) -> Int {
