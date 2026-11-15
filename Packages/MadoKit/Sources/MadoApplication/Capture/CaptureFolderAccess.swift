@@ -85,6 +85,13 @@ public actor CaptureFolderAccess {
                                                               fellBack: false))
     }
 
+    /// The folder a display path names: the inverse of `display(_:home:)`.
+    public static func url(forDisplay display: String, home: URL) -> URL {
+        if display == "~" { return home }
+        if display.hasPrefix("~/") { return home.appendingPathComponent(String(display.dropFirst(2)), isDirectory: true) }
+        return URL(fileURLWithPath: display, isDirectory: true)
+    }
+
     /// The path with the user's home folder as `~`.
     public static func display(_ url: URL, home: URL) -> String {
         let path = url.standardizedFileURL.path
