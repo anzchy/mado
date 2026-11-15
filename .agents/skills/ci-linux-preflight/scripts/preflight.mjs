@@ -150,7 +150,7 @@ function local(sha) {
   try {
     requireOK(exec('git', ['bundle', 'create', bundle, 'HEAD'], { cwd: repoRoot }), 'git bundle');
     requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `mkdir -p ${remoteDir}`]), 'remote mkdir');
-    requireOK(exec('rsync', [bundle, `${host}:${remoteDir}/head.bundle`]), 'bundle transfer');
+    requireOK(exec('rsync', ['-e', 'ssh -o BatchMode=yes', bundle, `${host}:${remoteDir}/head.bundle`]), 'bundle transfer');
     requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `git clone -q ${remoteDir}/head.bundle ${remoteDir}/pr-head`]), 'remote clone');
     const remoteCommand = `cd ${remoteDir}/pr-head && if [ -d \"\$HOME/opt/node/bin\" ]; then export PATH=\"\$HOME/opt/node/bin:\$PATH\"; fi; node .agents/skills/ci-linux-preflight/scripts/preflight.mjs remote . ${sha7}`;
     const result = exec('ssh', ['-o', 'BatchMode=yes', host, remoteCommand]);
