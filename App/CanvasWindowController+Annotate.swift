@@ -231,6 +231,7 @@ extension CanvasWindowController {
         case .redo: session.redoAnnotation()
         case .selectTool: session.selectAnnotateTool(.select)
         case .chooseTool(let tool): session.selectAnnotateTool(tool)
+        case .applyCrop: return nil
         // ⌫/⌦ stay consumed without a selection too.
         case .deleteSelection: session.deleteSelectedAnnotation()
         // ←/→/↑/↓ stay consumed even without a selection, so they never change images.

@@ -9,6 +9,10 @@ public enum RedactionStyle: Hashable, Sendable {
     /// docs/validation/P7-693-mosaic-minimum.md measured 8 as the smallest cell size from which Apple Vision reads
     /// no character of any sample line (13/15/17 pt, @1x and @2x, Chinese and English); the minimum doubles it.
     public static let minimumMosaicStrength = 16
+    /// #693 brief defaults (page 39 shows no numbers): the strength slider runs from the minimum to 64 image pixels
+    /// and a new redaction starts at 24.
+    public static let maximumMosaicStrength = 64
+    public static let defaultMosaicStrength = 24
 
     /// The style as it is rendered: a mosaic weaker than the minimum is raised to the minimum.
     public var enforced: RedactionStyle {

@@ -26,9 +26,9 @@ public struct AnnotationStyle: Hashable, Sendable {
     public var unit: Double { lineWidth / Self.screenLineWidth }
 }
 
-/// The kinds of mark on page 39's strip (#690 rectangle; #692 the rest).
+/// The kinds of mark on page 39's strip (#690 rectangle; #692 the rest; #693 redaction).
 public enum AnnotationKind: Hashable, Sendable, CaseIterable {
-    case rectangle, arrow, text, highlighter, pen, step
+    case rectangle, arrow, text, highlighter, pen, step, redaction
 }
 
 /// #692: page 39's sizes in screen points; a mark's size in image pixels is the value times its style's `unit`.
@@ -62,14 +62,23 @@ public struct AnnotationMark: Hashable, Sendable {
     public var points: [CGPoint]
     public var text: String
     public var style: AnnotationStyle
+    /// #693: how a redaction hides its `rect`; nil for every other kind.
+    public var redaction: RedactionStyle?
 
     /// A rectangle.
     public init(rect: CGRect, style: AnnotationStyle = .default) {
         self.init(kind: .rectangle, rect: rect, points: [], text: "", style: style)
     }
 
-    public init(kind: AnnotationKind, rect: CGRect, points: [CGPoint], text: String, style: AnnotationStyle) {
+    public init(kind: AnnotationKind, rect: CGRect, points: [CGPoint], text: String, style: AnnotationStyle,
+                redaction: RedactionStyle? = nil) {
         self.kind = kind; self.rect = rect; self.points = points; self.text = text; self.style = style
+        self.redaction = redaction
+    }
+
+    /// #693: a redaction of `rect` (image pixels).
+    public static func redaction(rect: CGRect, style: RedactionStyle) -> AnnotationMark {
+        AnnotationMark(kind: .redaction, rect: rect, points: [], text: "", style: .default, redaction: style)
     }
 
     /// The first point (an arrow's tail, a text mark's origin, a step's centre), or the rect's origin for a mark
