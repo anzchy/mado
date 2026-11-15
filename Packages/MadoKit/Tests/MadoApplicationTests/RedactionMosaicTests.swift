@@ -1,7 +1,7 @@
 import CoreGraphics
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// Mean of the source pixels in [x0, x1) × [y0, y1), rounded to nearest, per premultiplied channel.
 private func mean(_ source: RedactionPixels, _ xs: Range<Int>, _ ys: Range<Int>) -> [UInt8] {

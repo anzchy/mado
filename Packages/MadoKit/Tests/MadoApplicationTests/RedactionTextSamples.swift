@@ -2,7 +2,7 @@ import CoreGraphics
 import CoreText
 import Foundation
 import Vision
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// One line of body text rendered with the system UI font, black on white, as the #693 minimum-strength sample.
 /// Samples are rendered at test time (see TestAssets/README.md, "Redaction text samples"): the committed fixtures

@@ -17,7 +17,7 @@
 
 ## 方法
 
-- **样本**：测试运行时用 CoreText 渲染（`Packages/MadoKit/Tests/MadoInfrastructureTests/RedactionTextSamples.swift`）。系统 UI 字体（`CTFontCreateUIFontForLanguage(.system)`），黑字白底，四周留 12 pt 白边，开启抗锯齿与字体平滑。13/15/17 pt × @1x/@2x（@2x 为同一 pt 字号在 2 倍像素上下文中绘制）× 中英文，共 12 个。
+- **样本**：测试运行时用 CoreText 渲染（`Packages/MadoKit/Tests/MadoApplicationTests/RedactionTextSamples.swift`）。系统 UI 字体（`CTFontCreateUIFontForLanguage(.system)`），黑字白底，四周留 12 pt 白边，开启抗锯齿与字体平滑。13/15/17 pt × @1x/@2x（@2x 为同一 pt 字号在 2 倍像素上下文中绘制）× 中英文，共 12 个。
   - 英文：`Transfer 4,280.50 to account 6217 0033 1985 by Friday`（24 个不同字母/数字，不区分大小写）
   - 中文：`请在周五之前把报销单交给财务部的王老师`（19 个不同汉字）
   - 为什么不入库：`TestAssets/` 的已入库素材全部由无字体的 Python 生成器产生，`check.py` 拒绝其他文件；系统文字只能在宿主上渲染。见 `TestAssets/README.md`「Redaction text samples」。

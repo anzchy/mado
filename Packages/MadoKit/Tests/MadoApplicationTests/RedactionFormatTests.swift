@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// A stored pixel layout, spelled out here independently of the renderer. `channels` names the stored components in
 /// memory order: r, g, b, a (alpha) or x (padding). Integer components are 8 or 16 bits; 32 bits means float.
