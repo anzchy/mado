@@ -216,3 +216,36 @@ private let unitStyle = AnnotationStyle(red: 220.0 / 255, green: 38.0 / 255, blu
     let out = Pixels(try AnnotationFlattener.flatten(source, orientation: 1, marks: marks))
     for y in 0..<32 { for x in 0..<32 { #expect(out[x, y] == [0, 0, 0, 255], "\(x),\(y)") } }
 }
+
+// Coverage (tests-20261114-i693b.md, coverage phase): the edge cases the matrix rows imply.
+
+@Test(.timeLimit(.minutes(2))) func issue693FlattenRejectsACropOutsideTheImage() throws {
+    let source = noise(width: 32, height: 24)
+    #expect(throws: (any Error).self) {
+        try AnnotationFlattener.flatten(source, orientation: 1, marks: [], crop: CGRect(x: 40, y: 30, width: 8, height: 8))
+    }
+    // Partly outside: cut to the image.
+    let partial = try AnnotationFlattener.flatten(source, orientation: 1, marks: [], crop: CGRect(x: 24, y: 16, width: 20, height: 20))
+    #expect(partial.width == 8 && partial.height == 8)
+}
+
+@Test(.timeLimit(.minutes(2))) func issue693RedactionPatchIsNilOffTheImageOrForOtherMarks() throws {
+    let source = noise(width: 32, height: 24)
+    let outside = AnnotationMark.redaction(rect: CGRect(x: 40, y: 30, width: 8, height: 8), style: .solid)
+    #expect(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: [outside], index: 0) == nil)
+    let rectangle = AnnotationMark(rect: CGRect(x: 2, y: 2, width: 8, height: 8))
+    #expect(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: [rectangle], index: 0) == nil)
+    #expect(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: [rectangle], index: 3) == nil)
+}
+
+@Test(.timeLimit(.minutes(2))) func issue693RendererNeverDrawsARedactionItself() throws {
+    let width = 24, height = 16
+    var data = [UInt8](repeating: 200, count: width * height * 4)
+    let unchanged = data
+    data.withUnsafeMutableBytes { buffer in
+        let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                bytesPerRow: width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        AnnotationRenderer.draw([.redaction(rect: CGRect(x: 2, y: 2, width: 12, height: 8), style: .solid)], in: context)
+    }
+    #expect(data == unchanged, "without a redact closure a redaction leaves the context as it was")
+}

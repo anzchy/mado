@@ -395,3 +395,120 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     view.crop = nil
     #expect(near(px(try render(container), 600, 400), px(plain, 600, 400), 0))
 }
+
+// MARK: - Coverage (coverage phase): strings, archiving, re-docking, drawing, a new crop beside one, the cached patch
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693RedactionOptionsUseTheCatalogKeysAndAreNotArchivable() {
+    let strings = AnnotateRedactionOptionsView.Strings.localized
+    #expect([strings.dialog, strings.title, strings.mosaic, strings.solid, strings.strength, strings.strengthLabel,
+             strings.hint, strings.link, strings.solidLine] == ["Redaction Options", "Redact", "Mosaic", "Solid", "Strength",
+        "Mosaic Strength", "A weak mosaic can be reversed to reveal text; use a solid box for anything truly secret.",
+        "Use Solid Box", "Solid black box; cannot be reversed."])
+    #expect(AnnotateRedactionOptionsView(coder: NSKeyedArchiver(requiringSecureCoding: false)) == nil)
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693RedactionOptionsRedockWhenTheWindowResizes() throws {
+    let (popover, strip, window) = popoverHost(.mosaic(strength: 24))
+    defer { window.close() }
+    let container = try #require(popover.superview)
+    for size in [CGSize(width: 1000, height: 600), CGSize(width: 1400, height: 900)] {
+        container.setFrameSize(size)
+        let stripFrame = AnnotateStripView.frame(in: size)
+        let expected = AnnotateRedactionOptionsView.placement(height: popover.frame.height, stripFrame: stripFrame,
+            toolCentreY: stripFrame.minY + strip.centreY(of: .redact), containerHeight: size.height)
+        #expect(near(popover.frame, expected.frame), "\(size): \(popover.frame) vs \(expected.frame)")
+        #expect(popover.nubY == expected.nubY)
+    }
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: [NSAppearance.Name.aqua, .darkAqua])
+@MainActor func issue693RedactionOptionsDrawThePanelAndThePressedSegment(_ appearance: NSAppearance.Name) throws {
+    let (popover, _, window) = popoverHost(.mosaic(strength: 24), appearance)
+    defer { window.close() }
+    let rep = try render(popover)
+    let panel = px(rep, Int(popover.bounds.midX), 4)
+    let theme: DesignTheme = appearance == .darkAqua ? .dark : .light
+    let expected = DesignColor.popoverBackground.components(theme).prefix(3).map { Int(($0 * 255).rounded()) } + [255]
+    #expect(near(panel, expected, 3), "panel \(panel) vs \(expected)")
+    // The pressed segment (马赛克) is panel-filled; the other shows the track.
+    let pressed = popover.mosaicButton.convert(popover.mosaicButton.bounds, to: popover)
+    let other = popover.solidButton.convert(popover.solidButton.bounds, to: popover)
+    let on = px(rep, Int(pressed.minX) + 3, Int(pressed.midY)), off = px(rep, Int(other.maxX) - 3, Int(other.midY))
+    #expect(near(on, panel, 3), "pressed \(on) vs panel \(panel)")
+    #expect(!near(off, panel, 1), "the track \(off) differs from the panel \(panel)")
+    // Switching to 实色块 moves the fill.
+    popover.update(.solid)
+    let solid = try render(popover)
+    #expect(near(px(solid, Int(other.maxX) - 3, Int(other.midY)), panel, 3))
+    #expect(!near(px(solid, Int(pressed.minX) + 3, Int(pressed.midY)), panel, 1))
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayDragOutsideAShownCropStartsANewOne() throws {
+    let size = CGSize(width: 1600, height: 2400)
+    let (view, _, window) = overlay()
+    defer { window.close() }
+    var crops: [CGRect] = []
+    view.onCropChange = { crops.append($0) }
+    view.tool = .crop
+    view.pendingCrop = CGRect(x: 100, y: 100, width: 200, height: 200)
+    try drag(view, [CGPoint(x: 600, y: 400), CGPoint(x: 650, y: 450), CGPoint(x: 700, y: 500)])
+    let expected = try #require(AnnotationGeometry.cropRect(from: CGPoint(x: 600, y: 400), to: CGPoint(x: 700, y: 500),
+                                                            transform: page39, imageSize: size))
+    #expect(crops == [expected])
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayKeepsTheLastPatchWhileAMarkBeforeItIsDragged() throws {
+    let source = noise(width: 96, height: 64)
+    let (view, container, window) = overlay(actual, imageSize: CGSize(width: 96, height: 64),
+                                            size: CGSize(width: 96, height: 64), fill: .white)
+    defer { window.close() }
+    let red = AnnotationMark(rect: CGRect(x: 4, y: 4, width: 30, height: 20),
+                             style: AnnotationStyle(red: 1, green: 0, blue: 0, lineWidth: 4))
+    let mosaic = AnnotationMark.redaction(rect: CGRect(x: 8, y: 8, width: 48, height: 32), style: .mosaic(strength: 16))
+    view.marks = [red, mosaic]
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
+    let shown = try render(container)
+    let patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: view.marks, index: 1))
+    #expect(near(px(shown, 12, 12), bytes(patch.image, 4, 4)))
+    // Drag the rectangle (held): the mosaic keeps its last patch instead of recomputing on every move.
+    view.tool = .select
+    view.selectedMark = 0
+    view.mouseDown(with: try event(view, .leftMouseDown, CGPoint(x: 5, y: 5)))
+    view.mouseDragged(with: try event(view, .leftMouseDragged, CGPoint(x: 45, y: 35)))
+    #expect(view.isDragging)
+    let held = try render(container)
+    #expect(near(px(held, 12, 12), bytes(patch.image, 4, 4), 0), "the cached patch: \(px(held, 12, 12))")
+    #expect(near(px(held, 16, 36), bytes(patch.image, 8, 28), 0))
+    view.mouseUp(with: try event(view, .leftMouseUp, CGPoint(x: 45, y: 35)))
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayShowsTheAppliedCropWithTheCropToolAndNothingPending() throws {
+    let (view, container, window) = overlay(fill: NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+    defer { window.close() }
+    view.tool = .crop
+    view.crop = CGRect(x: 100, y: 100, width: 500, height: 500)
+    let rep = try render(container)
+    #expect(near(px(rep, 600, 400), [96, 96, 96, 255], 3), "outside the applied crop is dimmed")
+    #expect(near(px(rep, 460, 120), [128, 128, 128, 255], 3), "inside it is not")
+    // A pending crop replaces it on screen while the crop tool is chosen.
+    view.pendingCrop = CGRect(x: 1000, y: 1000, width: 400, height: 400)
+    #expect(near(px(try render(container), 460, 120), [96, 96, 96, 255], 3))
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693RedactionOptionsFollowAutoresizingWithoutNotifications() throws {
+    let (popover, strip, window) = popoverHost(.mosaic(strength: 24))
+    defer { window.close() }
+    let container = try #require(popover.superview)
+    container.postsFrameChangedNotifications = false
+    container.autoresizesSubviews = false
+    let old = container.frame.size
+    let before = popover.frame
+    let size = CGSize(width: 1440, height: 900)
+    container.setFrameSize(size)
+    #expect(popover.frame == before, "nothing moved yet")
+    popover.resize(withOldSuperviewSize: old)
+    let stripFrame = AnnotateStripView.frame(in: size)
+    let expected = AnnotateRedactionOptionsView.placement(height: popover.frame.height, stripFrame: stripFrame,
+        toolCentreY: stripFrame.minY + strip.centreY(of: .redact), containerHeight: size.height)
+    #expect(near(popover.frame, expected.frame), "\(popover.frame) vs \(expected.frame)")
+}
