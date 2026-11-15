@@ -191,8 +191,8 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         let pixels = bytes.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * image.height)
         for y in 0..<image.height {
-            for x in 0..<image.width where pixels[y * context.bytesPerRow + x * 4 + 3] < 255 {
-                return true
+            for x in 0..<image.width {
+                if pixels[y * context.bytesPerRow + x * 4 + 3] < 255 { return true }
             }
         }
         return false
