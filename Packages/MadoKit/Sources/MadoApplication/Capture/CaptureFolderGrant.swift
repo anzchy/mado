@@ -40,5 +40,6 @@ public enum FolderGrantPaging: Equatable, Sendable {
         if wording == .capture { declinedPaths.insert(Self.path(folder)) }
     }
 
-    private static func path(_ url: URL) -> String { url.standardizedFileURL.path }
+    /// Symlinks resolved on both sides, so a folder reached through a link, or /tmp against /private/tmp, still matches.
+    private static func path(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
 }
