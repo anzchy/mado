@@ -10,7 +10,8 @@ public enum AnnotationRenderer {
     /// `hiding` leaves out one mark (a text mark being edited) without changing the step numbers.
     public static func draw(_ marks: [AnnotationMark], in context: CGContext, hiding: Int? = nil) {
         let numbers = AnnotationGeometry.stepNumbers(marks)
-        for (index, mark) in marks.enumerated() where index != hiding {
+        for (index, mark) in marks.enumerated() {
+            guard index != hiding else { continue }
             context.saveGState()
             draw(mark, number: numbers[index] ?? 0, in: context)
             context.restoreGState()

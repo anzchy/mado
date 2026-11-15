@@ -58,7 +58,8 @@ private func sevenMarks() -> [AnnotationMark] {
     #expect(children.map { $0.accessibilityLabel() ?? "" }
             == ["Rectangle", "Arrow", "Text", "Highlighter", "Pen", "Step 1", "Step 2"])
     #expect(try at(children, 2).accessibilityValue() as? String == "从这里上岸", "a text mark reads its words")
-    for (index, child) in children.enumerated() where index != 2 {
+    for (index, child) in children.enumerated() {
+        guard index != 2 else { continue }
         #expect(child.accessibilityValue() == nil, "\(index) has no value")
     }
     for child in children {

@@ -86,7 +86,8 @@ private func edgeMarks() -> [AnnotationMark] {
     let marked = try screen(marks)
     var changed: [(Int, Int)] = []
     for y in 0..<400 {
-        for x in 0..<500 where !imageRect.contains(CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5)) {
+        for x in 0..<500 {
+            guard !imageRect.contains(CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5)) else { continue }
             if diff(bare(x, y), marked(x, y)) > 0 { changed.append((x, y)) }
         }
     }
@@ -100,7 +101,8 @@ private func edgeMarks() -> [AnnotationMark] {
     var close = 0, total = 0
     // The edge bands, where the marks are cut: the right 100 columns and the bottom 40 rows.
     for y in 0..<300 {
-        for x in 0..<400 where x >= 300 || y >= 260 {
+        for x in 0..<400 {
+            guard x >= 300 || y >= 260 else { continue }
             total += 1
             if diff(marked(x + 50, y + 40), flat(x, y)) <= 16 { close += 1 }
         }
