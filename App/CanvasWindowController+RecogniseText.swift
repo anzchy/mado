@@ -180,6 +180,18 @@ import MadoInfrastructure
             _ = controller.window?.makeFirstResponder(controller.canvas)
         }
     }
+    /// A mode switch ends the explicit OCR run and releases its editor and key wrapper.
+    func leaveForAnnotate() {
+        activeRun = UUID()
+        restorePanelKeyRouting()
+        model?.close()
+        overlay?.clear()
+        restoreWindowMinimumIfNeeded()
+        if let controller {
+            controller.session.updateFocus(.canvas)
+            _ = controller.window?.makeFirstResponder(controller.canvas)
+        }
+    }
     private func windowClosed() {
         restorePanelKeyRouting()
         closed = true

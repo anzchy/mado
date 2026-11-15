@@ -308,7 +308,7 @@ v0.0.1 起就是门槛，范围是 J1/J2 的页面（见计划 P3「MVP 还需�
 
 | ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |
 |---|---|---|---|---|---|---|
-| EXT-01 | 识别并复制图中文字 | Absent | 无 | P7-01 | `Packages/MadoKit/Sources/MadoApplication/TextRecognition/`、`Packages/MadoKit/Sources/MadoInfrastructure/TextRecognition/`、`App/CanvasWindowController+RecogniseText.swift` | 打开含文字的截图，选中文字复制，粘贴结果正确；缩放、旋转或翻图后选区不错位。 限制：按 [ADR-019](adr/0019-cloud-text-recognition-with-user-key-and-consent.md)，选字默认且始终使用 On-device Recognition；用户提供密钥并同意上传后，显式“识别文字”可用 Cloud Recognition。 当前仅有查看器的显式“识别文字”入口；同图细化期间保留识别结果；全尺寸解码受限时使用已显示图像识别；成功通知在辅助功能树可见，可通过 Tab、空格或回车及 VoiceOver 打开编辑面板，面板打开时编辑器取得键盘焦点；剪贴板写入失败时保留原内容。直接选字、Capture Bar 入口与云识别尚未实现。 |
+| EXT-01 | 识别并复制图中文字 | Absent | 无 | P7-01 | `Packages/MadoKit/Sources/MadoApplication/TextRecognition/`、`Packages/MadoKit/Sources/MadoInfrastructure/TextRecognition/`、`App/CanvasWindowController+RecogniseText.swift` | 打开含文字的截图，选中文字复制，粘贴结果正确；缩放、旋转或翻图后选区不错位。 限制：按 [ADR-019](adr/0019-cloud-text-recognition-with-user-key-and-consent.md)，选字默认且始终使用 On-device Recognition；用户提供密钥并同意上传后，显式“识别文字”可用 Cloud Recognition。 当前仅有查看器的显式“识别文字”入口；同图细化期间保留识别结果；全尺寸解码受限时使用已显示图像识别；成功通知在辅助功能树可见，可通过 Tab、空格或回车及 VoiceOver 打开编辑面板，面板打开时编辑器取得键盘焦点；剪贴板写入失败时保留原内容；进入标注模式时关闭识别结果面板和通知。直接选字、Capture Bar 入口与云识别尚未实现。 |
 | EXT-02 | 提取主体 | Absent | 无 | P7-02 | — | 对人像提取主体，复制后粘贴为带透明背景的图；换一张图后不会沿用上一张的结果 |
 | EXT-03 | 跟随 Finder 排序 | Absent | 无 | P7-05 | — | 在 Finder 里手动排好顺序后用 Mado 打开该目录，翻图顺序与 Finder 一致；读不到时回到默认排序并提示 |
 | EXT-04 | Cloud Recognition（云识别） | Absent | 无 | P7-12 | — | 在 macOS 26 输入自己的百度密钥并启用 Cloud Recognition，首次显式识别文字前告知图片离开 Mac 上传百度、链接百度条款并征求同意；结果标明引擎。关闭全局开关、无密钥、离线或额度耗尽时回退并标明 On-device Recognition。直接选字只用本机；删除密钥后不再调用百度。 |

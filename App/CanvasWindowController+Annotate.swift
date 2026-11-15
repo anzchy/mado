@@ -158,6 +158,7 @@ extension CanvasWindowController {
     /// ⌘E.
     func enterAnnotateMode() {
         guard canEnterAnnotateFromMenu else { return }
+        recogniseTextAdapter.leaveForAnnotate()
         session.enterAnnotateMode()
         syncAnnotateUI()
     }
