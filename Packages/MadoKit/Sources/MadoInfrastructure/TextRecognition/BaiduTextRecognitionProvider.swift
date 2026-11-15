@@ -62,7 +62,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             } catch {
                 if tokenTask?.id == pending.id { tokenTask = nil }
                 if pending.credentials != credentials { return try await accessToken(for: credentials) }
-                throw Self.mapTaskError(error)
+                throw Self.mapTransportError(error)
             }
             if tokenTask?.id == pending.id {
                 token = (result.0, result.1, pending.credentials)
@@ -100,7 +100,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             return result.0
         } catch {
             if tokenTask?.id == taskID { tokenTask = nil }
-            throw Self.mapTaskError(error)
+            throw Self.mapTransportError(error)
         }
     }
 
@@ -109,13 +109,9 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         catch { throw Self.mapTransportError(error) }
     }
 
-    private static func mapTaskError(_ error: Error) -> TextRecognitionError {
-        if Task.isCancelled { return .cancelled }
-        return (error as? TextRecognitionError) ?? .cloudFailure
-    }
-
     private static func mapTransportError(_ error: Error) -> TextRecognitionError {
         if Task.isCancelled || error is CancellationError { return .cancelled }
+        if let typed = error as? TextRecognitionError { return typed }
         if let urlError = error as? URLError {
             return urlError.code == .cancelled ? .cancelled : .cloudOffline
         }
@@ -151,25 +147,27 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         let supported = sourceType == UTType.jpeg.identifier || sourceType == UTType.png.identifier || sourceType == UTType.bmp.identifier
         if supported, max(width, height) <= 8192, encodedImageSize(data) <= maxBytes { return data }
 
-        var maxPixel = min(8192, max(width, height))
-        while true {
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel
-            ]
-            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .invalidImage }
-            guard min(thumbnail.width, thumbnail.height) >= 15 else { throw .cloudImageTooLarge }
-            let alpha = hasAlphaChannel(thumbnail)
-            let output = NSMutableData()
-            let type = alpha ? UTType.png : UTType.jpeg
-            guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { throw .cloudImageTooLarge }
-            CGImageDestinationAddImage(destination, thumbnail, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-            guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
-            let prepared = output as Data
-            if encodedImageSize(prepared) <= maxBytes { return prepared }
-            maxPixel = max(15, Int(Double(maxPixel) * 0.75))
-        }
+        return try reencodedThumbnail(source, maxPixel: min(8192, max(width, height)), maxBytes: maxBytes)
+    }
+
+    private static func reencodedThumbnail(_ source: CGImageSource, maxPixel: Int, maxBytes: Int) throws(TextRecognitionError) -> Data {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .invalidImage }
+        guard min(thumbnail.width, thumbnail.height) >= 15 else { throw .cloudImageTooLarge }
+        let alpha = hasAlphaChannel(thumbnail)
+        let output = NSMutableData()
+        let type = alpha ? UTType.png : UTType.jpeg
+        guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { throw .cloudImageTooLarge }
+        CGImageDestinationAddImage(destination, thumbnail, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
+        let prepared = output as Data
+        if encodedImageSize(prepared) <= maxBytes { return prepared }
+        // At 15 pixels the encoder cannot produce a 10 MB image; the short-side guard handles narrow inputs.
+        return try reencodedThumbnail(source, maxPixel: max(15, Int(Double(maxPixel) * 0.75)), maxBytes: maxBytes)
     }
 
     private static func encodedImageSize(_ data: Data) -> Int {
