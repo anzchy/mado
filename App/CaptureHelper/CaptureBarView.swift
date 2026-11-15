@@ -7,11 +7,12 @@ import MadoMacUI
     init(localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          captureAction: @escaping () -> Void,
          regionAction: @escaping () -> Void = {}, windowAction: @escaping () -> Void = {},
-         collapseAction: (() -> Void)? = nil, shortcuts: [String: String] = [:]) {
+         collapseAction: (() -> Void)? = nil, madoAction: (() -> Void)? = nil, shortcuts: [String: String] = [:]) {
         self.captureAction = captureAction
         self.regionAction = regionAction
         self.windowAction = windowAction
         self.collapseAction = collapseAction
+        self.madoAction = madoAction
         self.localize = localize
         super.init(frame: NSRect(x: 0, y: 0, width: 0, height: 40))
         material = .popover
@@ -48,7 +49,7 @@ import MadoMacUI
         x += 7
         let mado = localize("Open Mado")
         let madoWidth = titleWidth(mado) + 10 + 6 + 18 + 10
-        addButton(mado, symbol: "photo", id: "capture.mado", x: x, width: madoWidth, enabled: false)
+        addButton(mado, symbol: "photo", id: "capture.mado", x: x, width: madoWidth, enabled: madoAction != nil)
         x += madoWidth + 2
         addButton("", symbol: "chevron.up", id: "capture.collapse", x: x, width: 32, enabled: collapseAction != nil)
         frame.size.width = x + 32 + 4
@@ -74,6 +75,7 @@ import MadoMacUI
     private let regionAction: () -> Void
     private let windowAction: () -> Void
     private let collapseAction: (() -> Void)?
+    private let madoAction: (() -> Void)?
     private let localize: (String) -> String
 
     private func titleWidth(_ title: String) -> CGFloat {
@@ -102,6 +104,7 @@ import MadoMacUI
         case "capture.window": windowAction()
         case "capture.screen": captureAction()
         case "capture.collapse": collapseAction?()
+        case "capture.mado": madoAction?()
         default: break
         }
     }
