@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// The menu bar icon shown while the Capture Bar is collapsed.
 @MainActor protocol CaptureStatusItemHandle: AnyObject {
@@ -23,12 +24,18 @@ import AppKit
 
     init(bar: NSWindow, localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          makeStatusItem: @escaping StatusItemFactory = SystemCaptureStatusItem.make,
-         changed: @escaping (Bool) -> Void = { _ in }, iconPoll: Duration = .milliseconds(16)) {
+         changed: @escaping (Bool) -> Void = { _ in }, iconPoll: Duration = .milliseconds(16),
+         iconSettle: Duration = .milliseconds(300),
+         sleep: @escaping @MainActor (Duration) async -> Void = { try? await Task.sleep(for: $0) },
+         iconNeverLeft: @escaping @MainActor () -> Void = CaptureBarCollapseController.logIconNeverLeft) {
         self.bar = bar
         self.localize = localize
         self.makeStatusItem = makeStatusItem
         self.changed = changed
         self.iconPoll = iconPoll
+        self.iconSettle = iconSettle
+        self.sleep = sleep
+        self.iconNeverLeft = iconNeverLeft
     }
 
     func collapse() {
@@ -56,23 +63,40 @@ import AppKit
     /// Captures in flight; the icon is hidden while at least one runs.
     private var captures = 0
     private let iconPoll: Duration
+    private let iconSettle: Duration
+    private let sleep: @MainActor (Duration) async -> Void
+    private let iconNeverLeft: @MainActor () -> Void
 
-    /// About one second at the default poll: an icon that never reports gone does not hold the Capture forever.
+    /// About one second at the default poll, plus the 300 ms settle: an icon that never reports gone does not hold the
+    /// Capture forever.
     static let iconWaitPolls = 60
+
+    /// One line, no paths: the icon's window was still listed when the wait ran out.
+    static func logIconNeverLeft() {
+        Logger(subsystem: "io.github.anzchy.mado.capture-helper", category: "capture")
+            .notice("The menu bar icon was still listed after the wait; capturing after the settle delay.")
+    }
 
     /// Runs one Capture with the collapsed bar's menu bar icon out of the image (#685 fix r2 F1). On macOS 26 the
     /// status item's window belongs to Control Center, so no filter on the helper's own windows can exclude it: the icon
-    /// is hidden, the helper waits until the window server no longer shows it, the Capture runs, and the icon comes back
-    /// on every exit path (saved, failed or cancelled). The collapsed state itself does not change.
+    /// is hidden, the helper waits until the window server no longer lists it and then a settle delay for the fade-out
+    /// (fix r4), the Capture runs, and the icon comes back on every exit path (saved, failed or cancelled). The collapsed
+    /// state itself does not change; a Capture with the bar shown waits for nothing.
     func whileCapturing<T>(_ body: @MainActor () async throws -> T) async rethrows -> T {
         captures += 1
         if captures == 1, let item {
             item.setHidden(true)
             var polls = 0
-            while polls < Self.iconWaitPolls, item.isOnScreen {
+            var listed = true
+            while polls < Self.iconWaitPolls {
+                listed = item.isOnScreen
+                guard listed else { break }
                 polls += 1
-                try? await Task.sleep(for: iconPoll)
+                await sleep(iconPoll)
             }
+            if listed { iconNeverLeft() }
+            // The compositor's fade-out can outlive the window list (fix r4, smoke685-20261115d 5.3).
+            await sleep(iconSettle)
         }
         defer {
             captures -= 1
