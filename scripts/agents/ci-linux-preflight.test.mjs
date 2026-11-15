@@ -57,7 +57,7 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
   const calls = join(base, 'calls.jsonl');
   const inputs = join(base, 'inputs.txt');
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: 'picsee-ci-linux' };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: '' };
   return { base, repo, hostHome, bin, calls, inputs, sha, env };
 }
 function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }
@@ -99,6 +99,7 @@ test('fake SSH executes remote script, copies bundle, records isolated step summ
   assert.equal(readlinkSync(join(resolve(summary, '..'), 'latest')), summary.split('/').at(-1));
   assert.equal(statSync(summary.replace('-summary.txt', '-raw.log')).mode & 0o777, 0o600);
   const calls = readFileSync(f.calls, 'utf8').trim().split('\n');
+  assert.ok(calls.every(call => call.includes('mado-ci-linux')));
   assert.ok(calls.every(call => ['-a', '-x', 'BatchMode=yes', 'ConnectTimeout=10', 'ServerAliveInterval=15', 'ServerAliveCountMax=4'].every(option => call.includes(option))));
   assert.ok(calls.every(call => !call.includes('StrictHostKeyChecking=no')));
   assert.doesNotMatch(readFileSync(f.inputs, 'utf8'), /sudo apt-get/);
