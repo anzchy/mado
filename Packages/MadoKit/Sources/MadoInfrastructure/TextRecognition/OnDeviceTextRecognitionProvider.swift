@@ -41,6 +41,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     /// Vision's `perform` is synchronous and can wait on Vision's own queues; it runs here,
     /// never on a Swift cooperative thread, so it cannot starve the pool (#706).
     private let performQueue = DispatchQueue(label: "app.mado.text-recognition.perform", qos: .userInitiated)
+    private let selectionQueue = DispatchQueue(label: "app.mado.text-recognition.selection", qos: .utility)
 
     public init() {
         self.init(performRequest: { handler, request in try handler.perform([request]) })
@@ -57,7 +58,15 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
     }
 
     public func recognise(_ image: Data) async throws(TextRecognitionError) -> String {
-        let worker = Task.detached(priority: .userInitiated) { () throws -> String in
+        try await recogniseLines(image, priority: .userInitiated).map(\.text).joined(separator: "\n")
+    }
+
+    public func recogniseLines(_ image: Data) async throws(TextRecognitionError) -> [TextRecognitionLine] {
+        try await recogniseLines(image, priority: .utility)
+    }
+
+    private func recogniseLines(_ image: Data, priority: TaskPriority) async throws(TextRecognitionError) -> [TextRecognitionLine] {
+        let worker = Task.detached(priority: priority) { () throws -> [TextRecognitionLine] in
             try Task.checkCancellation()
             let (cgImage, orientation) = try Self.preparedImage(image)
 
@@ -71,7 +80,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
                 await beforePerform()
                 try Task.checkCancellation()
                 try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
-                    performQueue.async {
+                    (priority == .utility ? selectionQueue : performQueue).async {
                         if cancellation.isCancelled { return done.resume(throwing: CancellationError()) }
                         do { try performRequest(handler, request); done.resume() }
                         catch { done.resume(throwing: error) }
@@ -86,14 +95,28 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
             try Task.checkCancellation()
 
             var boxes: [RecognizedTextBox] = []
+            var lines: [TextRecognitionLine] = []
             if let results = request.results {
                 for observation in results {
                     if let candidate = observation.topCandidates(1).first {
                         boxes.append(RecognizedTextBox(text: candidate.string, bounds: observation.boundingBox))
+                        var characterBoxes: [CGRect] = []
+                        var start = candidate.string.startIndex
+                        for _ in candidate.string {
+                            let end = candidate.string.index(after: start)
+                            if let rangeBox = try? candidate.boundingBox(for: start..<end) {
+                                characterBoxes.append(rangeBox.boundingBox)
+                            }
+                            start = end
+                        }
+                        if characterBoxes.count != candidate.string.count { characterBoxes = [] }
+                        lines.append(TextRecognitionLine(text: candidate.string, box: observation.boundingBox,
+                                                         characterBoxes: characterBoxes))
                     }
                 }
             }
-            return Self.readingOrder(boxes).map(\.text).joined(separator: "\n")
+            let ordered = Self.readingOrder(boxes)
+            return ordered.compactMap { box in lines.first { $0.text == box.text && $0.box == box.bounds } }
         }
 
         do {

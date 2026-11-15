@@ -34,6 +34,19 @@ private func recognitionFixture(_ name: String) throws -> Data {
 @Suite(.serialized)
 struct OnDeviceRealVisionTests {
     @Test(.timeLimit(.minutes(2)))
+    func issue688VisionProvidesNormalizedLineAndCharacterBoxes() async throws {
+        let lines = try await OnDeviceTextRecognitionProvider().recogniseLines(recognitionFixture("mixed.png"))
+        let chinese = try #require(lines.first { $0.text.contains("中文") })
+        let english = try #require(lines.first { $0.text.contains("Hello Mado") })
+        #expect(lines.firstIndex { $0.text == chinese.text }! < lines.firstIndex { $0.text == english.text }!)
+        for line in [chinese, english] {
+            #expect(line.box.minX >= 0 && line.box.minY >= 0)
+            #expect(line.box.maxX <= 1 && line.box.maxY <= 1)
+            #expect(line.characterBoxes.isEmpty || line.characterBoxes.count == line.text.count)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(2)))
     func issue687VisionRecognisesChineseAndEnglishInReadingOrder() async throws {
         let provider = OnDeviceTextRecognitionProvider()
         let text = try await provider.recognise(recognitionFixture("mixed.png"))
