@@ -1,7 +1,7 @@
 import CoreGraphics
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// `left + cell` overflowed for `.mosaic(strength: .max)` with a rect not at the origin, and the process trapped.
 @Test(.timeLimit(.minutes(2))) func issue693HugeMosaicStrengthDoesNotTrap() async {

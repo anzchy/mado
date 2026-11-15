@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// #693a fix r2: grey layouts and RGB or grey layouts with a decode array are edited in place too, so every pixel
 /// outside the rectangle keeps its stored bytes and the image keeps its format, decode array included.

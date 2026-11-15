@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 @Test func issue693RenderClampsMosaicStrengthToTheMinimum() throws {
     let source = RedactionPixels.distinct(width: 48, height: 40)

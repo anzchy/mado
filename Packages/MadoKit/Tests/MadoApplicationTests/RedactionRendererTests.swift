@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 import MadoCore
-@testable import MadoInfrastructure
+@testable import MadoApplication
 
 /// RGBA8 premultiplied-last pixels, row 0 at the top. Shared by the #693 redaction tests.
 struct RedactionPixels: Equatable {

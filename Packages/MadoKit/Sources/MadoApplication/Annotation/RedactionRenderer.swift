@@ -38,7 +38,7 @@ public enum RedactionRenderer {
         return pixels.image
     }
 
-    /// #690's `AnnotationFlattener.BitmapFormat` rule, kept local until the full #693 merges the two.
+    /// #690's `AnnotationFlattener.BitmapFormat` rule, except that floats are drawn in host (little-endian) order.
     static func redrawn(_ image: CGImage) throws -> CGImage {
         var space = CGColorSpace(name: CGColorSpace.sRGB)!, bits = 8
         var info = CGImageAlphaInfo.premultipliedLast.rawValue
