@@ -487,3 +487,68 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
 }
 
+// Fix r2 F3 (device smoke685 step A): a field kept recording after the user clicked elsewhere or switched apps, so the
+// global shortcuts stayed suspended until the 30 s safety resume. Recording ends, and the helper is told, when the field
+// resigns first responder, when the Settings window resigns key, when Mado deactivates, and on a click outside it.
+@MainActor private func recordingEnds(_ trigger: String, _ end: (Fixture, CaptureShortcutField) async -> Void) async throws {
+    let fixture = Fixture()
+    defer { fixture.panel.window.close() }
+    let region = try fixture.field(0)
+    await eventually { region.isEnabled }
+    region.performClick(nil)
+    #expect(region.isRecording, "\(trigger)")
+    await end(fixture, region)
+    await eventually { !region.isRecording }
+    #expect(!region.isRecording, "\(trigger)")
+    #expect(region.title != "Type Shortcut…", "\(trigger)")
+    await eventually { fixture.signals.names.count == 2 }
+    #expect(fixture.signals.names == [CaptureBarIdentity.recordingBeganNotification,
+                                      CaptureBarIdentity.recordingEndedNotification], "\(trigger)")
+    #expect(await fixture.shortcuts.stored == .defaults, "\(trigger)")
+    // Nothing more arrives later (no second resume from a stale observer).
+    NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
+    NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: fixture.panel.window)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(fixture.signals.names.count == 2, "\(trigger)")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685RecordingEndsWhenTheFieldResignsFirstResponder() async throws {
+    try await recordingEnds("first responder") { fixture, _ in _ = fixture.panel.window.makeFirstResponder(nil) }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685RecordingEndsWhenTheSettingsWindowResignsKey() async throws {
+    try await recordingEnds("resign key") { fixture, _ in
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: fixture.panel.window)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685RecordingEndsWhenMadoDeactivates() async throws {
+    try await recordingEnds("deactivate") { _, _ in
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685RecordingEndsOnAClickOutsideTheField() async throws {
+    // A click on a label does not take first responder; the field's mouse-down monitor ends recording itself.
+    try await recordingEnds("click outside") { fixture, region in
+        let outside = region.convert(NSPoint(x: region.bounds.maxX + 300, y: region.bounds.midY), to: nil)
+        region.mouseDownWhileRecording(in: fixture.panel.window, at: outside)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685ClickInsideTheRecordingFieldKeepsRecordingAndElsewhereEndsIt() async throws {
+    let fixture = Fixture()
+    defer { fixture.panel.window.close() }
+    let region = try fixture.field(0)
+    await eventually { region.isEnabled }
+    region.performClick(nil)
+    region.mouseDownWhileRecording(in: fixture.panel.window,
+                                   at: region.convert(NSPoint(x: region.bounds.midX, y: region.bounds.midY), to: nil))
+    #expect(region.isRecording)
+    #expect(fixture.signals.names == [CaptureBarIdentity.recordingBeganNotification])
+    // A click in another of Mado's windows ends it too.
+    region.mouseDownWhileRecording(in: nil, at: .zero)
+    await eventually { fixture.signals.names.count == 2 }
+    #expect(!region.isRecording)
+    #expect(fixture.signals.names.last == CaptureBarIdentity.recordingEndedNotification)
+}
