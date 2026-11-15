@@ -51,7 +51,10 @@ function countTAP(output) {
   for (const key of Object.keys(totals)) {
     for (const match of output.matchAll(new RegExp(`^# ${key} (\\d+)$`, 'gm'))) totals[key] += Number(match[1]);
   }
-  const failed = [...output.matchAll(/^not ok \d+ - (.+)$/gm)].map(match => match[1].trim());
+  const failed = [
+    ...output.matchAll(/^not ok \d+ - (.+)$/gm),
+    ...output.matchAll(/^(?:FAIL|ERROR): (.+)$/gm),
+  ].map(match => match[1].trim());
   return { totals, failed };
 }
 function remote(dir, sha7) {
