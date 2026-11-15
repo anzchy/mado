@@ -48,7 +48,7 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
     flock: `#!/bin/sh\nif [ "${'$'}FAKE_BUSY" = 1 ]; then exit 1; fi\nexit 0\n`,
     timeout: `#!/usr/bin/env node\nconst {spawnSync}=require('node:child_process');const a=process.argv.slice(2);a.shift();const seconds=Number(a.shift());const cmd=a.shift();const r=spawnSync(cmd,a,{stdio:'inherit',timeout:seconds*1000});process.exit(r.error?.code==='ETIMEDOUT'?124:r.status??75);\n`,
     rsync: `#!/bin/sh\nif [ "$FAKE_RSYNC_FAIL" = 1 ]; then echo 'transfer failed' >&2; exit 1; fi\ncp "$3" "\${4#*:}"\n`,
-    ssh: `#!/bin/bash\nset -o pipefail\nprintf '%s\\n' "$*" >> "$FAKE_CALLS"\ntmp=$(mktemp)\ncat > "$tmp"\ncat "$tmp" >> "$FAKE_INPUTS"\nif [ "$FAKE_SSH_FAIL" = 1 ]; then echo unreachable >&2; exit 1; fi\nfor item in "$@"; do last=$item; done\nsed "s#export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin#export PATH=$FAKE_BIN:/usr/local/bin:/usr/bin:/bin#g" "$tmp" | HOME="$FAKE_HOST_HOME" PATH="$FAKE_BIN:$PATH" /bin/bash -c "$last"\nstatus=$?\nrm -f "$tmp"\nexit $status\n`,
+    ssh: `#!/bin/bash\nset -o pipefail\nprintf '%s\\n' "$*" >> "$FAKE_CALLS"\ntmp=$(mktemp)\ncat > "$tmp"\ncat "$tmp" >> "$FAKE_INPUTS"\nif [ "$FAKE_SSH_FAIL" = 1 ]; then echo unreachable >&2; exit 1; fi\nif [ "$FAKE_NO_BIN_ZSH" = 1 ]; then sed 's#/bin/zsh#/missing-zsh#g' "$tmp" > "$tmp.nozsh"; mv "$tmp.nozsh" "$tmp"; fi\nfor item in "$@"; do last=$item; done\nsed "s#export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin#export PATH=$FAKE_BIN:/usr/local/bin:/usr/bin:/bin#g" "$tmp" | HOME="$FAKE_HOST_HOME" PATH="$FAKE_BIN:$PATH" /bin/bash -c "$last"\nstatus=$?\nrm -f "$tmp"\nexit $status\n`,
   })) writeFileSync(join(bin, name), body, { mode: 0o755 });
   for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'], ['add', '.github/workflows/pr-body.yml', '.agents/skills/ci-linux-preflight/scripts', 'sample_test.py'], ['commit', '-qm', 'fixture']]) {
     const result = exec(realGit, args, { cwd: repo });
@@ -266,11 +266,11 @@ test('step timeout is TIMEOUT; summary checker refuses truncation, duplicate DON
 
 test('environment mismatch and unsupported workflow fail closed', async () => {
   const f = fixture();
-  const mismatch = exec('/bin/zsh', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: { ...f.env, FAKE_GIT_VERSION: '2.34.1' } });
+  const mismatch = exec('/bin/bash', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: { ...f.env, FAKE_GIT_VERSION: '2.34.1' } });
   assert.notEqual(mismatch.status, 0);
   assert.match(mismatch.stdout, /git.*2\.34\.1.*FAIL/);
   writeFileSync(join(f.bin, 'sudo'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  const privileged = exec('/bin/zsh', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: f.env });
+  const privileged = exec('/bin/bash', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: f.env });
   assert.notEqual(privileged.status, 0);
   assert.match(privileged.stdout, /sudo passwordless FAIL/);
   const bad = fixture();
@@ -280,6 +280,21 @@ test('environment mismatch and unsupported workflow fail closed', async () => {
   exec(realGit, ['commit', '-qm', 'unsupported'], { cwd: bad.repo });
   const head = exec(realGit, ['rev-parse', 'HEAD'], { cwd: bad.repo }).stdout.trim();
   assert.equal(run(['run', head, '--repo', bad.repo], { env: bad.env }).status, 2);
+});
+
+test('environment check runs with bash and reports the actual mismatch', async () => {
+  const f = fixture();
+  const check = join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh');
+  const syntax = exec('/bin/bash', ['-n', check]);
+  assert.equal(syntax.status, 0, syntax.stderr);
+  assert.doesNotMatch(readFileSync(join(root, '.agents/skills/ci-linux-preflight/scripts/remote-run.sh'), 'utf8'), /\/bin\/zsh/);
+  const healthy = exec('/bin/bash', [check], { env: f.env });
+  assert.equal(healthy.status, 0, healthy.stderr + healthy.stdout);
+  const withoutBinZsh = await runFixtureAsync(f, [], { FAKE_NO_BIN_ZSH: '1' });
+  assert.equal(withoutBinZsh.status, 0, withoutBinZsh.stderr + withoutBinZsh.stdout);
+  const failed = await runFixtureAsync(f, [], { FAKE_GIT_VERSION: '2.34.1' });
+  assert.equal(failed.status, 75, failed.stderr + failed.stdout);
+  assert.match(readFileSync(summaryPath(failed), 'utf8'), /outcome=NOT VERIFIED\nreason=environment mismatch\n/);
 });
 
 test('supplementary PR line does not change Gates lint', () => {

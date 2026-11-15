@@ -36,7 +36,7 @@ fi
 
 export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin
 set +e
-run_bounded /bin/zsh "$run_dir/pr-head/.agents/skills/ci-linux-preflight/scripts/env-check.sh" >&2
+run_bounded /bin/bash "$run_dir/pr-head/.agents/skills/ci-linux-preflight/scripts/env-check.sh" >&2
 check_status=$?
 set -e
 if (( check_status == 124 )); then exit 124; fi

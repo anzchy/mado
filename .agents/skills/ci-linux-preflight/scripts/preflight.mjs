@@ -111,7 +111,10 @@ function local(value, opts) {
       } catch (error) { rawLog += `\ninvalid remote summary: ${error.message}\n${run.stdout ?? ''}`; }
     }
     if (run.status === 124) throw Object.assign(new Error('whole run deadline reached'), { exitCode: 124 });
-    throw Object.assign(new Error(run.status === 75 && /busy/.test(rawLog) ? 'busy' : `remote run: ${rawLog.trim() || run.error?.message || run.status}`), { exitCode: 75 });
+    const reason = run.status === 75 && /(?:^|\n)environment mismatch\s*$/m.test(rawLog) ? 'environment mismatch' :
+      run.status === 75 && /(?:^|\n)busy\s*$/m.test(rawLog) ? 'busy' :
+      `remote run: ${rawLog.trim() || run.error?.message || run.status}`;
+    throw Object.assign(new Error(reason), { exitCode: 75 });
   } catch (error) {
     const timedOut = error.exitCode === 124;
     const summary = blankSummary(head, workflow, timedOut ? 'TIMEOUT' : 'NOT VERIFIED', error.message);
