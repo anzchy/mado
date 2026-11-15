@@ -4,6 +4,8 @@ public enum CaptureBarIdentity {
     public static let enabledKey = "captureBar.enabled.v1"
     public static let permissionKey = "captureBar.permission.v1"
     public static let permissionRequestedKey = "captureBar.permissionRequested.v1"
+    public static let saveToFolderKey = "capture.afterCapture.saveToFolder.v1"
+    public static let copyToClipboardKey = "capture.afterCapture.copyToClipboard.v1"
     public static let switchChangedNotification = "io.github.anzchy.mado.capture.switchChanged"
 }
 
