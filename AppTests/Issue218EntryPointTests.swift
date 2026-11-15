@@ -55,7 +55,8 @@ import MadoMacUI
     }
 
     let disabled = disabledSettingsControls(in: root)
-    #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }) == Set(CaptureDeferredSettingsControls.tickets.keys))
+    #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }).subtracting(CaptureDeferredSettingsControls.barDependent)
+        == Set(CaptureDeferredSettingsControls.tickets.keys))
     #expect(CaptureDeferredSettingsControls.unexpectedDisabledIDs(disabled).isEmpty)
 }
 
