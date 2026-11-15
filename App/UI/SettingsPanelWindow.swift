@@ -152,6 +152,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var captureLoginHint: NSTextField?
     private var captureLoginApproval: NSButton?
     private var captureLoginRetry: NSButton?
+    /// Why the last 登录时启动 turn-on failed, until the next try (#685 fix r2 F2).
+    private var captureLoginRegisterError: String?
     private var captureFolderPath: NSTextField?
     private var captureFolderChange: NSButton?
     private var captureFilenameHint: NSTextField?
@@ -575,11 +577,14 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             captureLogin?.isEnabled = login.isEditable
             captureLoginApproval?.isHidden = !login.needsApproval
             captureLoginRetry?.isHidden = !login.removalFailed
+            let registerFailure = login.isOn ? nil : captureLoginRegisterError
             captureLoginHint?.stringValue = login.needsApproval
                 ? captureLocalize("Mado Capture needs your approval in System Settings › General › Login Items.")
-                : login.removalFailed
+                : registerFailure.map {
+                    String(format: captureLocalize("The capture helper could not be added as a login item: %@"), $0)
+                } ?? (login.removalFailed
                 ? captureLocalize("The login item could not be removed, so the capture helper may still start at login.")
-                : captureLocalize("When off, the Capture Bar will not appear after restarting your Mac.")
+                : captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."))
             captureFolderPath?.stringValue = folder.fellBack ? CaptureFolderRecord.downloads.display : folder.display
             captureFilenameHint?.stringValue = folder.fellBack
                 ? String(format: captureLocalize("The chosen folder %@ can't be opened, so captures go to ~/Downloads. Choose it again."),
@@ -618,8 +623,15 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let on = sender.state == .on
         sender.isEnabled = false
         Task {
-            // A refusal leaves the status as it was; the refresh shows what the system reports.
-            if on { try? await captureLoginItem.register() } else { try? await captureLoginItem.unregister() }
+            // A refusal leaves the status as it was; the refresh shows what the system reports. A refused register
+            // is named on the row until the next try (fix r2 F2).
+            captureLoginRegisterError = nil
+            if on {
+                do { try await captureLoginItem.register() }
+                catch { captureLoginRegisterError = error.localizedDescription }
+            } else {
+                try? await captureLoginItem.unregister()
+            }
             refreshCapture()
         }
     }

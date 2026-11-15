@@ -27,12 +27,14 @@ public struct CaptureLoginPresentation: Equatable, Sendable {
         self.removalFailed = removalFailed
     }
 
+    /// `.notFound` is what a helper that was never registered reads on a signed build, so it is shown like
+    /// `.notRegistered`: off, and editable while the bar is on; turning it on registers (#685 fix r2).
     /// `removalFailed`: the bar is off but the item is still registered (turning the bar off could not remove it),
     /// so the helper may still start at login. Settings says so and offers a retry (#685 fix r1).
     public static func make(status: CaptureLoginItemStatus, barEnabled: Bool) -> CaptureLoginPresentation {
         let registered = status == .enabled || status == .requiresApproval
         return CaptureLoginPresentation(isOn: registered,
-                                        isEditable: barEnabled && status != .notFound,
+                                        isEditable: barEnabled,
                                         needsApproval: barEnabled && status == .requiresApproval,
                                         removalFailed: !barEnabled && registered)
     }

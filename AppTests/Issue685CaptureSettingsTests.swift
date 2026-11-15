@@ -44,7 +44,16 @@ private actor LoginItem: CaptureLoginItemPort {
     var opened = 0
     init(_ status: CaptureLoginItemStatus) { current = status }
     func status() -> CaptureLoginItemStatus { current }
-    func register() { registers += 1; current = statusAfterRegister }
+    var registerError: NSError?
+    func register() throws {
+        registers += 1
+        if let registerError { throw registerError }
+        current = statusAfterRegister
+    }
+    func allowRegister() { registerError = nil }
+    func refuseRegister(_ message: String) {
+        registerError = NSError(domain: "issue685", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
     func unregister() { unregisters += 1; current = .notRegistered }
     func openLoginItemsSettings() { opened += 1 }
     func set(_ status: CaptureLoginItemStatus) { current = status }
@@ -444,3 +453,37 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     change.performClick(nil)
     #expect(fixture.signals.log == ["yield:\(CaptureBarIdentity.bundleID)", CaptureBarIdentity.chooseFolderNotification])
 }
+
+// Fix r2 F2 (device smoke685 step 8): the never-registered helper reads `.notFound` on the signed build. With the bar on
+// the switch is editable and off; turning it on registers. A refused register puts the switch back to off and the row
+// names the failure; the next attempt clears it.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685LoginSwitchTurnsOnFromNotFoundAndNamesARefusal() async throws {
+    let login = LoginItem(.notFound)
+    let fixture = Fixture(login: login)
+    defer { fixture.panel.window.close() }
+    let toggle = try #require(fixture.view("settings.capture.login") as? NSSwitch)
+    let hint = try #require(fixture.view("settings.capture.login-hint") as? NSTextField)
+    let shortcut = try fixture.field(0)
+    await eventually { shortcut.isEnabled }
+    #expect(toggle.isEnabled && toggle.state == .off)
+    await login.refuseRegister("Refused by the test")
+    toggle.performClick(nil)
+    await eventually { await login.registers == 1 }
+    await eventually { toggle.isEnabled }
+    #expect(await login.registers == 1)
+    #expect(toggle.state == .off)
+    #expect(toggle.isEnabled)
+    #expect(hint.stringValue == "The capture helper could not be added as a login item: Refused by the test")
+    #expect(try #require(fixture.view("settings.capture.login-open-settings")).isHidden)
+    #expect(try captureCatalog("zh-Hans")["The capture helper could not be added as a login item: %@"]
+            == "未能添加登录项：%@")
+    // A second try that works turns it on and clears the failure.
+    await login.set(.notFound)
+    await login.allowRegister()
+    toggle.performClick(nil)
+    await eventually { await login.registers == 2 }
+    await eventually { toggle.state == .on }
+    #expect(toggle.state == .on && toggle.isEnabled)
+    #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
+}
+

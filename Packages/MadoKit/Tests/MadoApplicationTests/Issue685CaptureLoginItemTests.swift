@@ -11,8 +11,6 @@ import MadoApplication
             == CaptureLoginPresentation(isOn: false, isEditable: true, needsApproval: false))
     #expect(CaptureLoginPresentation.make(status: .requiresApproval, barEnabled: true)
             == CaptureLoginPresentation(isOn: true, isEditable: true, needsApproval: true))
-    #expect(CaptureLoginPresentation.make(status: .notFound, barEnabled: true)
-            == CaptureLoginPresentation(isOn: false, isEditable: false, needsApproval: false))
     for status: CaptureLoginItemStatus in [.enabled, .notRegistered, .requiresApproval, .notFound] {
         #expect(!CaptureLoginPresentation.make(status: status, barEnabled: false).isEditable)
         #expect(!CaptureLoginPresentation.make(status: status, barEnabled: false).needsApproval)
@@ -100,4 +98,28 @@ private actor LoginItem: CaptureLoginItemPort {
     #expect(await login.unregisterCalls == 2)
     #expect(await login.current == .notRegistered)
     #expect(!CaptureLoginPresentation.make(status: await login.status(), barEnabled: false).removalFailed)
+}
+
+// Fix r2 F2 (device smoke685 step 8): a helper login item that was never registered reads `.notFound` on the signed
+// build, so the switch could never be turned on. `.notFound` is shown like `.notRegistered`: off and editable while the
+// bar is on; turning it on calls register(). The whole table, bar on and off.
+@Test(.timeLimit(.minutes(2))) func issue685LoginSwitchCanBeTurnedOnBeforeTheHelperWasEverRegistered() {
+    let barOn: [CaptureLoginItemStatus: CaptureLoginPresentation] = [
+        .notRegistered: CaptureLoginPresentation(isOn: false, isEditable: true, needsApproval: false),
+        .notFound: CaptureLoginPresentation(isOn: false, isEditable: true, needsApproval: false),
+        .enabled: CaptureLoginPresentation(isOn: true, isEditable: true, needsApproval: false),
+        .requiresApproval: CaptureLoginPresentation(isOn: true, isEditable: true, needsApproval: true),
+    ]
+    let barOff: [CaptureLoginItemStatus: CaptureLoginPresentation] = [
+        .notRegistered: CaptureLoginPresentation(isOn: false, isEditable: false, needsApproval: false),
+        .notFound: CaptureLoginPresentation(isOn: false, isEditable: false, needsApproval: false),
+        .enabled: CaptureLoginPresentation(isOn: true, isEditable: false, needsApproval: false, removalFailed: true),
+        .requiresApproval: CaptureLoginPresentation(isOn: true, isEditable: false, needsApproval: false, removalFailed: true),
+    ]
+    for (status, expected) in barOn {
+        #expect(CaptureLoginPresentation.make(status: status, barEnabled: true) == expected, "\(status) bar on")
+    }
+    for (status, expected) in barOff {
+        #expect(CaptureLoginPresentation.make(status: status, barEnabled: false) == expected, "\(status) bar off")
+    }
 }
