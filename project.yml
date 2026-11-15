@@ -105,6 +105,7 @@ targets:
       - path: App/CaptureHelper/CaptureThumbnail.swift
       - path: App/CaptureHelper/CaptureBarCollapse.swift
       - path: App/CaptureHelper/CarbonHotKeyRegistrar.swift
+      - path: App/CaptureHelper/CaptureHelperSingleInstance.swift
     dependencies:
       - package: MadoKit
         product: MadoCore
