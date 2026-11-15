@@ -11,6 +11,7 @@ import { checkSummary } from '../../.agents/skills/ci-linux-preflight/scripts/su
 const root = resolve(import.meta.dirname, '../..');
 const tool = join(root, '.agents/skills/ci-linux-preflight/scripts/preflight.mjs');
 const realGit = spawnSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).stdout.trim();
+const realPython = spawnSync('/usr/bin/which', ['python3'], { encoding: 'utf8' }).stdout.trim();
 const exec = (cmd, args, options = {}) => spawnSync(cmd, args, { encoding: 'utf8', ...options });
 const run = (args, options = {}) => exec(process.execPath, [tool, ...args], options);
 const runAsync = (args, options = {}) => new Promise(resolve => {
@@ -35,6 +36,9 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   mkdirSync(hostHome);
   mkdirSync(bin);
   cpSync(join(root, '.agents/skills/ci-linux-preflight/scripts'), join(repo, '.agents/skills/ci-linux-preflight/scripts'), { recursive: true });
+  // The integration fixture controls the preflight result; env-check itself is tested below.
+  writeFileSync(join(repo, '.agents/skills/ci-linux-preflight/scripts/env-check.sh'),
+    '#!/bin/bash\nif [ "${FAKE_ENV_CHECK_FAIL:-}" = 1 ]; then echo "fixture environment mismatch" >&2; exit 1; fi\nexit 0\n');
   const workflow = `jobs:\n  agent-tests:\n    name: Agent tooling\n    steps:\n      - name: Checkout PR head\n        uses: actions/checkout@abc\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - name: Set up Node\n        uses: actions/setup-node@abc\n        with:\n          node-version: 22\n      - name: Install portable device test tools\n        run: |\n          sudo apt-get update\n      - name: Python tests\n        working-directory: pr-head\n        run: ${first}\n      - name: Node totals\n        working-directory: pr-head\n        run: ${second}\n`;
   writeFileSync(join(repo, '.github/workflows/pr-body.yml'), workflow
     .replace('      - name: Set up Node', '          path: pr-head\n          fetch-depth: 0\n      - name: Set up Node')
@@ -43,8 +47,10 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   for (const [name, body] of Object.entries({
     node: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo v22.23.5; else exec "$REAL_NODE" "$@"; fi\n`,
     git: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "git version \${FAKE_GIT_VERSION:-2.56.1}"; exit; fi\nif [ "$FAKE_REMOTE_WRONG_HEAD" = 1 ]; then case "$*" in *'rev-parse HEAD'*) printf '%040d\\n' 0; exit;; esac; fi\nexec "$REAL_GIT" "$@"\n`,
+    python3: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'Python 3.11.0'; else exec "$REAL_PYTHON" "$@"; fi\n`,
     zsh: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'zsh 5.8'; else exec /bin/zsh "$@"; fi\n`,
     ps: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'ps from procps-ng 3.3.17'; else exec /bin/ps "$@"; fi\n`,
+    sudo: `#!/bin/sh\nexit 1\n`,
     flock: `#!/bin/sh\nif [ "${'$'}FAKE_BUSY" = 1 ]; then exit 1; fi\nexit 0\n`,
     timeout: `#!/usr/bin/env node\nconst {spawnSync}=require('node:child_process');const a=process.argv.slice(2);a.shift();const seconds=Number(a.shift());const cmd=a.shift();const r=spawnSync(cmd,a,{stdio:'inherit',timeout:seconds*1000});process.exit(r.error?.code==='ETIMEDOUT'?124:r.status??75);\n`,
     rsync: `#!/bin/sh\nif [ "$FAKE_RSYNC_FAIL" = 1 ]; then echo 'transfer failed' >&2; exit 1; fi\ncp "$3" "\${4#*:}"\n`,
@@ -57,7 +63,7 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
   const calls = join(base, 'calls.jsonl');
   const inputs = join(base, 'inputs.txt');
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: '' };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, REAL_PYTHON: realPython, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: '' };
   return { base, repo, hostHome, bin, calls, inputs, sha, env };
 }
 function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }
@@ -292,9 +298,17 @@ test('environment check runs with bash and reports the actual mismatch', async (
   assert.equal(healthy.status, 0, healthy.stderr + healthy.stdout);
   const withoutBinZsh = await runFixtureAsync(f, [], { FAKE_NO_BIN_ZSH: '1' });
   assert.equal(withoutBinZsh.status, 0, withoutBinZsh.stderr + withoutBinZsh.stdout);
-  const failed = await runFixtureAsync(f, [], { FAKE_GIT_VERSION: '2.34.1' });
+  const failed = await runFixtureAsync(f, [], { FAKE_ENV_CHECK_FAIL: '1' });
   assert.equal(failed.status, 75, failed.stderr + failed.stdout);
   assert.match(readFileSync(summaryPath(failed), 'utf8'), /outcome=NOT VERIFIED\nreason=environment mismatch\n/);
+});
+
+test('fake SSH outcome does not depend on passwordless sudo on the test host', async () => {
+  const f = fixture();
+  writeFileSync(join(f.bin, 'sudo'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const result = await runFixtureAsync(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=PASS/);
 });
 
 test('supplementary PR line does not change Gates lint', () => {
