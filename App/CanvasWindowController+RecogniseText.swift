@@ -28,6 +28,19 @@ import MadoInfrastructure
     var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
     /// #687 fix r5 (F5): the OCR editor holds an input method's marked text.
     var isComposing: Bool { panelEditor?.hasMarkedText() == true }
+    /// #687 fix r5 (F6): the open panel's key views, in Tab order.
+    var panelKeyViews: [NSView] {
+        guard let panel = overlay?.panelView else { return [] }
+        return [panel.textView, panel.copyButton, panel.closeButton]
+    }
+    /// The viewer's trailing key views: the panel's while it is open, otherwise a success notice.
+    var trailingKeyViews: [NSView] {
+        let panel = panelKeyViews
+        return panel.isEmpty ? (focusableNotice.map { [$0] } ?? []) : panel
+    }
+    /// #687 fix r5 (F6): set while the panel's own Tab hands focus to the Inspector, which preserveResponder would
+    /// otherwise refuse as the opening's focus replay.
+    private(set) var allowsInspectorFocus = false
     var focusableNotice: RecogniseTextNoticeView? {
         guard let notice = overlay?.noticeView, notice.kind == .success else { return nil }
         return notice
@@ -235,8 +248,42 @@ import MadoInfrastructure
                 self.closePanel()
                 return true
             }
+            if event.keyCode == 48, plain, self.routePanelTab(reverse: event.modifierFlags.contains(.shift)) { return true }
             return previous?(event) ?? false
         }
+    }
+
+    /// #687 fix r5 (F6): editor → 拷贝 → 关闭 → Inspector (when shown) or canvas; Shift-Tab walks back. Shift-Tab
+    /// from the editor leaves for the previous key view (the last viewer control). Tab in the editor moves focus
+    /// rather than typing a tab: the recognised text is plain and single-purpose.
+    private func routePanelTab(reverse: Bool) -> Bool {
+        guard let controller, let window = controller.window, let panel = overlay?.panelView else { return false }
+        let ring = panelKeyViews
+        let responder = window.firstResponder as? NSView
+        if let responder, let index = ring.firstIndex(where: { $0 === responder }) {
+            if reverse {
+                if index > 0 { _ = window.makeFirstResponder(ring[index - 1]) } else { window.selectKeyView(preceding: panel.textView) }
+            } else if index < ring.count - 1 {
+                _ = window.makeFirstResponder(ring[index + 1])
+            } else if !focusInspector() {
+                controller.session.updateFocus(.canvas)
+                _ = window.makeFirstResponder(controller.canvas)
+            }
+            return true
+        }
+        guard controller.recogniseTextInspectorFocused else { return false }
+        if reverse {
+            _ = window.makeFirstResponder(panel.closeButton)
+        } else {
+            controller.session.updateFocus(.canvas)
+            _ = window.makeFirstResponder(controller.canvas)
+        }
+        return true
+    }
+    private func focusInspector() -> Bool {
+        allowsInspectorFocus = true
+        defer { allowsInspectorFocus = false }
+        return controller?.focusInspectorFromRecogniseText() == true
     }
 
     private func restorePanelKeyRouting() {
