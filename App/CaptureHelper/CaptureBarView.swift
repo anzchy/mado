@@ -57,7 +57,8 @@ import MadoMacUI
 
     /// Re-labels the tooltips after a rebind, without rebuilding the bar.
     func setShortcuts(_ shortcuts: [String: String]) {
-        for case let button as NSButton in subviews where !button.title.isEmpty {
+        for case let button as NSButton in subviews {
+            guard !button.title.isEmpty else { continue }
             let id = button.accessibilityIdentifier()
             // The short 识别文字 button is named in full in its tooltip (capture-bar.html:113).
             let name = id == "capture.text" ? localize("Capture and Recognize Text") : button.title
