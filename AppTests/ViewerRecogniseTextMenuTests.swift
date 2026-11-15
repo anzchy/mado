@@ -230,6 +230,137 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     #expect(!menu.validateMenuItem(item))
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix3PanelClosesBeforeAnnotateConsumesKeys() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    let priorConsume = (window as? CommandWindow)?.consumeKey
+    var downstreamEscapeCount = 0
+    (window as? CommandWindow)?.consumeKey = { event in
+        if event.keyCode == 53 { downstreamEscapeCount += 1 }
+        return priorConsume?(event) ?? false
+    }
+    let context = try #require(CGContext(data: nil, width: 3, height: 2, bitsPerComponent: 8,
+        bytesPerRow: 12, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let url = URL(fileURLWithPath: "/tmp/ocr-before-annotate.png")
+    let pipeline = RecogniseMenuPipeline(image: try #require(context.makeImage()))
+    let leases = RecogniseMenuLeases()
+    controller.session.openImage(url, maximumPixelSize: 3) {
+        try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
+    }
+    for _ in 0..<200 {
+        if controller.session.imageLoader.phase == .settled { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(controller.session.imageLoader.phase == .settled)
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        TextRecognitionResult(text: "text", characterCount: 4, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 {
+        if controller.recogniseTextAdapter.model?.isRunning == false { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let overlay = try #require(window.contentView?.subviews.compactMap { $0 as? RecogniseTextOverlay }.first)
+    let notice = try #require(overlay.noticeView)
+    let click = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+    notice.mouseDown(with: click)
+    #expect(controller.recogniseTextAdapter.panelEditor != nil)
+    _ = window.makeFirstResponder(controller.canvas)
+    controller.enterAnnotateMode()
+    #expect(controller.session.isAnnotating)
+    #expect(controller.recogniseTextAdapter.panelEditor == nil)
+    #expect(overlay.noticeView == nil)
+    #expect(overlay.panelView == nil)
+    #expect(controller.focusContext != .textInput)
+    let escape = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+        charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+    _ = (window as? CommandWindow)?.consumeKey?(escape)
+    #expect(downstreamEscapeCount == 1, "OCR's Escape wrapper must release the Annotate key path")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix3NoticeClosesOnAnnotateEntry() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    let context = try #require(CGContext(data: nil, width: 3, height: 2, bitsPerComponent: 8,
+        bytesPerRow: 12, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let url = URL(fileURLWithPath: "/tmp/ocr-notice-before-annotate.png")
+    let pipeline = RecogniseMenuPipeline(image: try #require(context.makeImage()))
+    let leases = RecogniseMenuLeases()
+    controller.session.openImage(url, maximumPixelSize: 3) {
+        try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
+    }
+    for _ in 0..<200 {
+        if controller.session.imageLoader.phase == .settled { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        TextRecognitionResult(text: "text", characterCount: 4, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 {
+        if controller.recogniseTextAdapter.model?.isRunning == false { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let overlay = try #require(window.contentView?.subviews.compactMap { $0 as? RecogniseTextOverlay }.first)
+    #expect(overlay.noticeView != nil)
+    controller.enterAnnotateMode()
+    #expect(controller.session.isAnnotating)
+    #expect(overlay.noticeView == nil)
+    #expect(controller.recogniseTextAdapter.model?.notice == nil)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix3AnnotateEscapeAndUndoAfterOCRPanel() async throws {
+    let context = try await Issue690Context(size: page39Size)
+    defer { context.close() }
+    let controller = try await context.open()
+    let window = try #require(controller.window)
+    controller.recogniseTextAdapter.pasteboard = context.pasteboard
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        TextRecognitionResult(text: "text", characterCount: 4, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 {
+        if controller.recogniseTextAdapter.model?.isRunning == false { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let overlay = try #require(window.contentView?.subviews.compactMap { $0 as? RecogniseTextOverlay }.first)
+    let notice = try #require(overlay.noticeView)
+    let click = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+    notice.mouseDown(with: click)
+    #expect(controller.recogniseTextAdapter.panelEditor != nil)
+    _ = window.makeFirstResponder(controller.canvas)
+    controller.enterAnnotateMode()
+    #expect(controller.recogniseTextAdapter.panelEditor == nil)
+    context.mark()
+    let first = try #require(context.marks().first)
+    try context.key("t", code: 17)
+    try context.click(CGPoint(x: 600, y: 400))
+    let annotateOverlay = try context.overlay()
+    #expect(annotateOverlay.isEditingText)
+    try context.type("abc")
+    try context.escape()
+    #expect(!annotateOverlay.isEditingText)
+    #expect(controller.session.isAnnotating)
+    #expect(context.marks().count == 2)
+    try context.key("z", code: 6, modifiers: [.command])
+    #expect(context.marks() == [first], "Undo affects only the latest annotation, never an OCR editor")
+}
+
 private actor RecogniseIntentProbe {
     private(set) var explicit = false
     private(set) var pixelSize = CGSize.zero
