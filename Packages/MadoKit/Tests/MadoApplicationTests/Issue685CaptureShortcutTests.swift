@@ -32,7 +32,7 @@ private let ctrlShiftCmd: CaptureKeyModifiers = [.control, .shift, .command]
     let bindings = CaptureShortcutBindings.defaults
     #expect(bindings.validate(combo(0, "A", []), for: .region) == .needsModifier)
     #expect(bindings.validate(combo(0, "A", [.shift]), for: .region) == .needsModifier)
-    for modifiers: CaptureKeyModifiers in [[.command], [.control], [.option], [.option, .shift]] {
+    for modifiers: CaptureKeyModifiers in [[.command], [.control], [.option, .command], [.option, .control]] {
         #expect(bindings.validate(combo(0, "A", modifiers), for: .region) == nil)
     }
 }
@@ -94,4 +94,20 @@ private let ctrlShiftCmd: CaptureKeyModifiers = [.control, .shift, .command]
     try bindings.bind(combo(29, "0", ctrlShiftCmd), to: .region)
     #expect(bindings[.region] == combo(29, "0", ctrlShiftCmd))
     #expect(bindings != .defaults)
+}
+
+// Fix r1 (opus M2): since macOS 15 RegisterEventHotKey refuses a hotkey whose only modifiers are ⌥ or ⌥⇧, so such a
+// binding is refused when it is recorded, not reported later as held by another app.
+@Test(.timeLimit(.minutes(2))) func issue685OptionOnlyBindingsAreRefused() {
+    let bindings = CaptureShortcutBindings.defaults
+    for modifiers: CaptureKeyModifiers in [[.option], [.option, .shift]] {
+        let refused = combo(3, "F", modifiers)
+        #expect(bindings.validate(refused, for: .region) == .optionOnly)
+        var copy = bindings
+        #expect(throws: CaptureShortcutRejection.optionOnly) { try copy.bind(refused, to: .region) }
+        #expect(copy == bindings)
+    }
+    for modifiers: CaptureKeyModifiers in [[.option, .command], [.option, .control], [.option, .shift, .control]] {
+        #expect(bindings.validate(combo(3, "F", modifiers), for: .region) == nil)
+    }
 }
