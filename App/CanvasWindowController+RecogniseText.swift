@@ -22,6 +22,10 @@ import MadoInfrastructure
     private var expandedFrom: NSSize?
     private var priorConsumeKey: ((NSEvent) -> Bool)?
     var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
+    var focusableNotice: RecogniseTextNoticeView? {
+        guard let notice = overlay?.noticeView, notice.kind == .success else { return nil }
+        return notice
+    }
 
     init(controller: CanvasWindowController) {
         self.controller = controller
@@ -100,6 +104,7 @@ import MadoInfrastructure
         guard overlay == nil, let content = controller?.window?.contentView else { return }
         let overlay = RecogniseTextOverlay(frame: content.bounds)
         overlay.onDismiss = { [weak self] in self?.model?.dismissNotice() }
+        overlay.onNoticeChange = { [weak self] in self?.controller?.relinkRecogniseTextNotice() }
         content.addSubview(overlay, positioned: .above, relativeTo: nil)
         self.overlay = overlay
     }

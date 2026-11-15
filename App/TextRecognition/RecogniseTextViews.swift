@@ -55,8 +55,16 @@ enum RecogniseTextNoticeKind { case success, warning }
     var compactWidth: CGFloat? { didSet { if oldValue != compactWidth { needsLayout = true } } }
     private var tracking: NSTrackingArea?
     override var acceptsFirstResponder: Bool { kind == .success }
+    override var canBecomeKeyView: Bool { acceptsFirstResponder }
     override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
     override func accessibilityChildren() -> [Any]? { [] }
+    override func setAccessibilityFocused(_ focused: Bool) {
+        if focused && kind == .success { _ = window?.makeFirstResponder(self) }
+    }
+    override func responds(to aSelector: Selector!) -> Bool {
+        if kind != .success && aSelector == NSSelectorFromString("accessibilityPerformPress") { return false }
+        return super.responds(to: aSelector)
+    }
 
     init(message: String, engine: String?, kind: RecogniseTextNoticeKind, onOpen: (() -> Void)?) {
         self.kind = kind
@@ -297,6 +305,7 @@ enum RecogniseTextNoticeKind { case success, warning }
     private(set) var noticeView: RecogniseTextNoticeView?
     private(set) var panelView: RecogniseTextPanelView?
     var onDismiss: (() -> Void)?
+    var onNoticeChange: (() -> Void)?
     private let scheduleDismiss: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private var dismissalGeneration = UUID()
     private var hovered = false
@@ -347,6 +356,7 @@ enum RecogniseTextNoticeKind { case success, warning }
         addSubview(view)
         noticeView = view
         needsLayout = true
+        onNoticeChange?()
         armDismissal()
     }
     func showPanel(text: String, engine: String, onEdit: ((String) -> Void)?, onCopy: (() -> Void)?, onClose: (() -> Void)?) {
@@ -361,6 +371,7 @@ enum RecogniseTextNoticeKind { case success, warning }
         hovered = false
         noticeView?.removeFromSuperview(); noticeView = nil
         panelView?.removeFromSuperview(); panelView = nil
+        onNoticeChange?()
     }
     private func armDismissal() {
         let token = dismissalGeneration

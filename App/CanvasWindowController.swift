@@ -383,6 +383,15 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         content.addSubview(chromeOverlay, positioned: .above, relativeTo: inspectorHost)
         presentation = GridViewerPresentation(canvas: canvas, chrome: chromeOverlay, state: stateHost,
             grid: gridView, inspector: inspectorHost, shell: gridShell)
+        let trailingKeyViews = chromeOverlay.trailingKeyViews
+        chromeOverlay.trailingKeyViews = { [weak self] in
+            trailingKeyViews() + (self?.recogniseTextAdapter.focusableNotice.map { [$0] } ?? [])
+        }
+        let sidebarKeyViewsChanged = gridShell.onViewerSidebarKeyViewsChange
+        gridShell.onViewerSidebarKeyViewsChange = { [weak self] in
+            sidebarKeyViewsChanged?()
+            self?.relinkRecogniseTextNotice()
+        }
         let previousMainFrameChange = gridShell.onMainFrameChange
         gridShell.onMainFrameChange = { [weak self] frame in
             previousMainFrameChange?(frame)
@@ -406,6 +415,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 return true
             }
             return responder === self.canvas && self.session.inspectorFocus.focus != .canvas
+                && self.window?.firstResponder !== self.recogniseTextAdapter.focusableNotice
         }
         window.didChangeResponder = { [weak self] in
             guard let self else { return }
@@ -1885,6 +1895,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     var inspectorVisible: Bool { session.inspectorFocus.isVisible }
     var hasImage: Bool { canvas.hasImage }
     var focusContext: FocusContext {
+        if window?.firstResponder === recogniseTextAdapter.focusableNotice { return .tools }
         let controls: [NSView] = stateHost.buttons + chromeOverlay.tools
         if let view = window?.firstResponder as? NSView,
            controls.contains(where: { view === $0 || view.isDescendant(of: $0) }) { return .tools }
@@ -1987,6 +1998,10 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         inspectorHost.isHidden = !visible
         layoutInspector()
         syncInspector()
+        relinkRecogniseTextNotice()
+    }
+    func relinkRecogniseTextNotice() {
+        stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
     }
     /// Public toggle for the grid footer's later info button.
     func toggleInspector() { _ = route(.inspector, from: .button) }
@@ -2437,7 +2452,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
             let opened = chromeGeneration != generation
             chromeGeneration = generation; chromeHasImage = canvas.hasImage
             chromeOverlay.refresh(session: session)
-            stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
+            relinkRecogniseTextNotice()
             if opened { session.activity() }
         }
     }
@@ -2457,7 +2472,7 @@ extension CanvasWindowController: ViewerChromeHost {
     func applyChrome(toolsVisible: Bool, trafficLightsVisible: Bool) {
         chromeOverlay.setToolBackgroundOpacity(session.displayPreferences.toolBackgroundOpacity)
         chromeOverlay.setToolsVisible(toolsVisible)
-        stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
+        relinkRecogniseTextNotice()
         if let window {
             ChromeTitlebarPolicy.apply(to: window,
                 visible: ChromeTitlebarPolicy.trafficLightsVisible(
@@ -2476,7 +2491,7 @@ extension CanvasWindowController: ViewerChromeHost {
         guard intent == .toggleSidebar else { return }
         layoutInspector()
         chromeOverlay.refresh(session: session)
-        stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
+        relinkRecogniseTextNotice()
     }
 }
 
