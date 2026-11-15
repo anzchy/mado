@@ -105,7 +105,8 @@ private func near(_ a: CGPoint?, _ b: CGPoint, _ tolerance: Double = 0.01) -> Bo
     for item: AnnotateStripItem in [.select, .arrow, .rectangle, .text, .highlighter, .pen, .step] {
         #expect(strip.button(item).isEnabled, "\(item)")
     }
-    for item: AnnotateStripItem in [.redact, .crop] { #expect(!strip.button(item).isEnabled, "\(item)") }
+    // #693 enabled 遮挡 and 裁剪 too.
+    for item: AnnotateStripItem in [.redact, .crop] { #expect(strip.button(item).isEnabled, "\(item)") }
     #expect(AnnotateStripItem.allCases == [.select, .arrow, .rectangle, .text, .highlighter, .pen, .redact, .crop,
                                            .step, .undo, .redo, .copy, .save, .done], "page 39's order is kept")
 }
@@ -115,7 +116,7 @@ private func near(_ a: CGPoint?, _ b: CGPoint, _ tolerance: Double = 0.01) -> Bo
     defer { window.close() }
     let expected: [(AnnotateStripItem, String)] = [(.select, "Select V"), (.arrow, "Arrow A"), (.rectangle, "Rectangle R"),
         (.text, "Text T"), (.highlighter, "Highlighter H"), (.pen, "Pen P"), (.step, "Step N"),
-        (.redact, "Redact"), (.crop, "Crop")]
+        (.redact, "Redact M"), (.crop, "Crop C")]
     for (item, tip) in expected { #expect(strip.button(item).toolTip == tip, "\(item)") }
 }
 
@@ -129,7 +130,7 @@ private func near(_ a: CGPoint?, _ b: CGPoint, _ tolerance: Double = 0.01) -> Bo
     for (item, _) in tools { strip.button(item).performClick(nil) }
     strip.button(.redact).performClick(nil)
     strip.button(.crop).performClick(nil)
-    #expect(log == tools.map { .tool($0.1) }, "遮挡 and 裁剪 stay inert")
+    #expect(log == tools.map { .tool($0.1) } + [.tool(.redact), .tool(.crop)], "#693: 遮挡 and 裁剪 choose their tools")
     for (item, tool) in tools {
         strip.update(AnnotateStripState(tool: tool, canUndo: false, canRedo: false, canSave: false, canCopy: false))
         #expect(strip.button(item).state == .on, "\(item)")

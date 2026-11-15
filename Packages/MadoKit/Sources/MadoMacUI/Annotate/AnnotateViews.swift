@@ -24,6 +24,17 @@ public enum AnnotatePaint {
     /// `--color-running-text` #16a34a, the same in both appearances; the ✓ of the save confirmation. Not a
     /// DesignColor token: the registry has no running-text entry yet (#690 Still open).
     public static var confirmationTick: NSColor { NSColor(srgbRed: 22.0 / 255, green: 163.0 / 255, blue: 74.0 / 255, alpha: 1) }
+
+    /// #693 annotate.html:95 `.reversible-hint`: color-mix(in srgb, --color-banner-unsaved 75%, --color-text). The banner
+    /// colour #f59e0b is the registry's `waitingIndicator`; the mix follows the appearance's text colour.
+    public static var redactionHint: NSColor {
+        NSColor(name: nil) { appearance in
+            let theme: DesignTheme = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+            let banner = DesignColor.waitingIndicator.components(theme), text = DesignColor.textPrimary.components(theme)
+            func mix(_ i: Int) -> CGFloat { banner[i] * 0.75 + text[i] * 0.25 }
+            return NSColor(srgbRed: mix(0), green: mix(1), blue: mix(2), alpha: 1)
+        }
+    }
 }
 
 // MARK: - Shared drawing
@@ -133,7 +144,6 @@ public enum AnnotatePaint {
     static let contentHeight: CGFloat = 508
     private static let tools: [AnnotateStripItem] = [.select, .arrow, .rectangle, .text, .highlighter, .pen, .redact,
                                                      .crop, .step, .undo, .redo]
-    private static let unimplemented: Set<AnnotateStripItem> = [.redact, .crop]
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -183,10 +193,15 @@ public enum AnnotatePaint {
 
     public func button(_ item: AnnotateStripItem) -> NSButton { buttons[item]! }
 
+    /// #693: the vertical centre of `item` in the strip's own top-left points, after scrolling.
+    public func centreY(of item: AnnotateStripItem) -> CGFloat {
+        buttons[item]!.frame.midY - scrollView.contentView.bounds.minY
+    }
+
     private func configure(_ button: AnnotateButton, _ item: AnnotateStripItem) {
         let name = Self.name(item)
         button.setAccessibilityLabel(name)
-        button.toolTip = Self.shortcut(item).map { "\(name) \($0)" } ?? name
+        button.toolTip = "\(name) \(Self.shortcut(item))"
         button.target = self
         button.action = #selector(clicked(_:))
         if button.style == .tool {
@@ -217,8 +232,8 @@ public enum AnnotatePaint {
         }
     }
 
-    /// Only keys Mado handles get a letter; the tools of #693 show their bare name.
-    private static func shortcut(_ item: AnnotateStripItem) -> String? {
+    /// Every item's key (#693 added M and C).
+    private static func shortcut(_ item: AnnotateStripItem) -> String {
         switch item {
         case .select: "V"
         case .arrow: "A"
@@ -226,13 +241,14 @@ public enum AnnotatePaint {
         case .text: "T"
         case .highlighter: "H"
         case .pen: "P"
+        case .redact: "M"
+        case .crop: "C"
         case .step: "N"
         case .undo: "⌘Z"
         case .redo: "⇧⌘Z"
         case .copy: "⌘C"
         case .save: "⌘S"
         case .done: "Esc"
-        default: nil
         }
     }
 
@@ -252,7 +268,7 @@ public enum AnnotatePaint {
         }
     }
 
-    /// Unimplemented tools stay disabled and are not labelled 「即将推出」 (#690 addendum).
+    /// Every tool is enabled since #693.
     public func update(_ state: AnnotateStripState) {
         self.state = state
         for (item, button) in buttons {
@@ -266,8 +282,7 @@ public enum AnnotatePaint {
             case .redo: button.isEnabled = state.canRedo
             case .copy: button.isEnabled = state.canCopy
             case .save: button.isEnabled = state.canSave
-            case .done: button.isEnabled = true
-            default: button.isEnabled = false; setPressed(button, false)
+            default: button.isEnabled = true // 完成
             }
         }
     }
@@ -280,6 +295,8 @@ public enum AnnotatePaint {
         case .text: .text
         case .highlighter: .highlighter
         case .pen: .pen
+        case .redact: .redact
+        case .crop: .crop
         case .step: .step
         default: nil
         }
@@ -292,8 +309,7 @@ public enum AnnotatePaint {
     }
 
     @objc private func clicked(_ sender: NSButton) {
-        guard sender.isEnabled, let item = buttons.first(where: { $0.value === sender })?.key,
-              !Self.unimplemented.contains(item) else { return }
+        guard sender.isEnabled, let item = buttons.first(where: { $0.value === sender })?.key else { return }
         update(state)
         let action: AnnotateStripAction = if let tool = Self.tool(item) { .tool(tool) } else {
             switch item {
@@ -383,6 +399,22 @@ public enum AnnotatePaint {
     public var editingMark: Int? { editing?.index }
     public var isDragging: Bool { drag != nil }
 
+    /// #693: the upright original the copy is flattened from; redactions show the copy's pixels once it is set.
+    public struct RedactionSource: @unchecked Sendable {
+        public let image: CGImage
+        public let orientation: Int
+        public init(image: CGImage, orientation: Int) { self.image = image; self.orientation = orientation }
+    }
+    public var redactionSource: RedactionSource? { didSet { patches = [:]; needsDisplay = true } }
+    /// #693: the style a new redaction is drawn with.
+    public var redactionStyle: RedactionStyle = .mosaic(strength: RedactionStyle.defaultMosaicStrength)
+    /// #693: the applied crop and the one being adjusted with the crop tool (image pixels). Outside the shown crop the
+    /// image is dimmed 25% black inside a 1 pt white border (#683's look; no page pins the crop).
+    public var crop: CGRect? { didSet { if crop != oldValue { needsDisplay = true } } }
+    public var pendingCrop: CGRect? { didSet { if pendingCrop != oldValue { needsDisplay = true } } }
+    /// #693: the crop tool's drag, handle or move released, once on mouse-up.
+    public var onCropChange: ((CGRect) -> Void)?
+
     private enum Drag {
         /// A rectangle, arrow, highlighter or pen: every sample, in view points.
         case create(AnnotateTool, [CGPoint])
@@ -390,7 +422,19 @@ public enum AnnotatePaint {
         case resize(Int, AnnotationHandle, original: AnnotationMark)
         /// Select on empty canvas, a step marker or a text click: acts on mouse-up.
         case click
+        /// #693 the crop tool.
+        case crop(CropDrag)
     }
+    /// A new crop from a point, a handle of the shown crop, or a move of it (view points).
+    private enum CropDrag {
+        case create(CGPoint)
+        case resize(AnnotationHandle, original: CGRect)
+        case move(from: CGPoint, original: CGRect)
+    }
+    /// The crop a crop-tool drag would report now.
+    private var cropPreview: CGRect?
+    /// #693: each redaction's copy pixels, kept while the marks up to it and the source stay the same.
+    private var patches: [Int: (marks: [AnnotationMark], patch: AnnotationFlattener.RedactionPatch)] = [:]
     private var drag: Drag?
     /// What the drag would commit now: a replacement for `index`, or a new mark.
     private var preview: (index: Int?, mark: AnnotationMark)?
@@ -463,8 +507,13 @@ public enum AnnotatePaint {
         context.clip(to: viewRect(CGRect(origin: .zero, size: imageSize), transform))
         context.translateBy(x: transform.origin.x, y: transform.origin.y)
         context.scaleBy(x: scale, y: scale)
-        AnnotationRenderer.draw(shown, in: context, hiding: editing?.index)
+        var redactions = shown.indices.filter { shown[$0].kind == .redaction }[...]
+        AnnotationRenderer.draw(shown, in: context, hiding: editing?.index) { [self] mark in
+            guard let index = redactions.popFirst() else { return }
+            drawRedaction(mark, at: index, of: shown, in: context)
+        }
         context.restoreGState()
+        drawCrop(transform)
 
         guard let selectedMark, shown.indices.contains(selectedMark), selectedMark != editing?.index else { return }
         let mark = shown[selectedMark]
@@ -477,6 +526,68 @@ public enum AnnotatePaint {
             outline.stroke()
             for handle in AnnotationGeometry.handles(for: mark.kind) {
                 let centre = transform.imageToView(AnnotationGeometry.handlePoint(handle, of: mark))
+                let size = Self.handleSize
+                let square = NSBezierPath(rect: CGRect(x: centre.x - size / 2, y: centre.y - size / 2, width: size, height: size))
+                NSColor.white.setFill()
+                square.fill()
+                square.lineWidth = 1
+                DesignColor.accent.nsColor.setStroke()
+                square.stroke()
+            }
+        }
+    }
+
+    /// The copy's pixels for a redaction once the source is decoded, else opaque black: the screen never shows what a
+    /// redaction hides. While a drag changes marks before it, the last patch stays (its area does not move); while the
+    /// redaction itself is dragged it is black.
+    private func drawRedaction(_ mark: AnnotationMark, at index: Int, of shown: [AnnotationMark], in context: CGContext) {
+        let prefix = Array(shown[...index])
+        var patch = patches[index].flatMap { $0.marks == prefix ? $0.patch : nil }
+        if patch == nil, let source = redactionSource {
+            if preview == nil {
+                patch = try? AnnotationFlattener.redactionPatch(source.image, orientation: source.orientation, marks: prefix,
+                                                               index: index)
+                if let patch { patches[index] = (prefix, patch) }
+            } else if let cached = patches[index], cached.marks.last == mark {
+                patch = cached.patch
+            }
+        }
+        context.saveGState()
+        if let patch {
+            context.interpolationQuality = .none
+            context.translateBy(x: patch.area.minX, y: patch.area.maxY)
+            context.scaleBy(x: 1, y: -1)
+            context.draw(patch.image, in: CGRect(origin: .zero, size: patch.area.size))
+        } else {
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fill(mark.rect.integral.intersection(CGRect(origin: .zero, size: imageSize)))
+        }
+        context.restoreGState()
+    }
+
+    /// The crop the overlay shows: the crop tool's drag, else with the crop tool the pending crop, else the applied one.
+    private var shownCrop: CGRect? { cropPreview ?? (tool == .crop ? pendingCrop ?? crop : crop) }
+
+    private func drawCrop(_ transform: CanvasTransform) {
+        guard let crop = shownCrop else { return }
+        let image = viewRect(CGRect(origin: .zero, size: imageSize), transform), box = viewRect(crop, transform)
+        let dim = NSBezierPath(rect: image)
+        dim.append(NSBezierPath(rect: box))
+        dim.windingRule = .evenOdd
+        NSColor.black.withAlphaComponent(0.25).setFill()
+        dim.fill()
+        // A 1 pt white border just outside the crop, on whole points.
+        let snapped = CGRect(x: box.minX.rounded(.down), y: box.minY.rounded(.down),
+                             width: box.maxX.rounded(.down) - box.minX.rounded(.down),
+                             height: box.maxY.rounded(.down) - box.minY.rounded(.down))
+        let border = NSBezierPath(rect: snapped.insetBy(dx: -0.5, dy: -0.5))
+        border.lineWidth = 1
+        NSColor.white.setStroke()
+        border.stroke()
+        guard tool == .crop else { return }
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            for handle in AnnotationGeometry.handles(for: .rectangle) {
+                let centre = transform.imageToView(AnnotationGeometry.handlePoint(handle, of: AnnotationMark(rect: crop)))
                 let size = Self.handleSize
                 let square = NSBezierPath(rect: CGRect(x: centre.x - size / 2, y: centre.y - size / 2, width: size, height: size))
                 NSColor.white.setFill()
@@ -505,9 +616,22 @@ public enum AnnotatePaint {
             } else {
                 drag = .click
             }
-        case .rectangle, .arrow, .highlighter, .pen:
+        case .rectangle, .arrow, .highlighter, .pen, .redact:
             drag = .create(tool, [point])
-        case .text, .step, .redact, .crop:
+        case .crop:
+            if let shown = pendingCrop ?? crop {
+                let box = AnnotationMark(rect: shown)
+                if let handle = handle(at: point, of: box, transform) {
+                    drag = .crop(.resize(handle, original: shown))
+                } else if viewRect(shown, transform).contains(point) {
+                    drag = .crop(.move(from: point, original: shown))
+                } else {
+                    drag = .crop(.create(point))
+                }
+            } else {
+                drag = .crop(.create(point))
+            }
+        case .text, .step:
             drag = .click
         }
     }
@@ -527,6 +651,8 @@ public enum AnnotatePaint {
                                                         imageSize: imageSize))
         case .click:
             return
+        case .crop(let crop):
+            cropPreview = cropped(crop, to: point, transform)
         }
         needsDisplay = true
     }
@@ -536,8 +662,11 @@ public enum AnnotatePaint {
         let end = convert(event.locationInWindow, from: nil)
         self.drag = nil
         preview = nil
+        cropPreview = nil
         needsDisplay = true
         switch drag {
+        case .crop(let drag):
+            if let rect = cropped(drag, to: end, transform), rect != pendingCrop ?? crop { onCropChange?(rect) }
         case .create(let tool, var points):
             if points.last != end { points.append(end) }
             if let mark = candidate(tool, points, transform) { onAddMark?(mark) }
@@ -569,6 +698,7 @@ public enum AnnotatePaint {
         guard drag != nil else { return false }
         drag = nil
         preview = nil
+        cropPreview = nil
         needsDisplay = true
         return true
     }
@@ -581,10 +711,30 @@ public enum AnnotatePaint {
                 .map { AnnotationMark(rect: $0, style: screenStyle) }
         case .arrow:
             return AnnotationGeometry.arrow(from: first, to: last, transform: transform, imageSize: imageSize, style: screenStyle)
+        case .redact:
+            return AnnotationGeometry.rect(from: first, to: last, transform: transform, imageSize: imageSize)
+                .map { .redaction(rect: $0, style: redactionStyle) }
         default:
             // Only rectangle, arrow, highlighter and pen start a `.create` drag (mouseDown), so this is a stroke.
             return AnnotationGeometry.stroke(tool == .pen ? .pen : .highlighter, through: points, transform: transform,
                                              imageSize: imageSize, style: screenStyle)
+        }
+    }
+
+    /// The crop a crop-tool drag gives at `point`: whole image pixels, inside the image, at least 1×1.
+    private func cropped(_ drag: CropDrag, to point: CGPoint, _ transform: CanvasTransform) -> CGRect? {
+        switch drag {
+        case .create(let start):
+            return AnnotationGeometry.cropRect(from: start, to: point, transform: transform, imageSize: imageSize)
+        case .resize(let handle, let original):
+            let p = transform.viewToImage(point)
+            let rect = AnnotationGeometry.resize(AnnotationMark(rect: original), handle: handle,
+                                                 to: CGPoint(x: p.x.rounded(), y: p.y.rounded()), imageSize: imageSize).rect
+            return rect.width >= 1 && rect.height >= 1 ? rect : original
+        case .move(let start, let original):
+            let scale = pointsPerImagePixel
+            let delta = CGVector(dx: ((point.x - start.x) / scale).rounded(), dy: ((point.y - start.y) / scale).rounded())
+            return AnnotationGeometry.translate(AnnotationMark(rect: original), by: delta, imageSize: imageSize).rect
         }
     }
 
@@ -936,5 +1086,289 @@ public enum AnnotatePaint {
         override func mouseDown(with event: NSEvent) {}
         override func rightMouseDown(with event: NSEvent) {}
         override func scrollWheel(with event: NSEvent) {}
+    }
+}
+
+// MARK: - Redaction options
+
+/// #693 page 39 `#tool-options` (annotate.html:86–97, :155–160): 遮挡's options, 236 wide, 12 left of the strip, its
+/// nub at the 遮挡 tool's centre and its top clamped 12 inside the window (:207–209). Rows: the title, 马赛克/实色块,
+/// then for a mosaic 强度 with an unnumbered slider (decision 5.3) and the reversible hint with 改用实色块 (5.4), or for a
+/// solid box 「纯黑色块，不可还原。」. Choosing reports the style; `update(_:)` shows one without reporting it.
+@MainActor public final class AnnotateRedactionOptionsView: NSView, NSTextViewDelegate {
+    public struct Strings: Sendable {
+        public var dialog, title, mosaic, solid, strength, strengthLabel, hint, link, solidLine: String
+        public init(dialog: String, title: String, mosaic: String, solid: String, strength: String, strengthLabel: String,
+                    hint: String, link: String, solidLine: String) {
+            self.dialog = dialog; self.title = title; self.mosaic = mosaic; self.solid = solid; self.strength = strength
+            self.strengthLabel = strengthLabel; self.hint = hint; self.link = link; self.solidLine = solidLine
+        }
+        public static var localized: Strings {
+            Strings(dialog: String(localized: "Redaction Options"), title: String(localized: "Redact"),
+                    mosaic: String(localized: "Mosaic"), solid: String(localized: "Solid"),
+                    strength: String(localized: "Strength"), strengthLabel: String(localized: "Mosaic Strength"),
+                    hint: String(localized: "A weak mosaic can be reversed to reveal text; use a solid box for anything truly secret."),
+                    link: String(localized: "Use Solid Box"),
+                    solidLine: String(localized: "Solid black box; cannot be reversed."))
+        }
+    }
+
+    public var onChange: ((RedactionStyle) -> Void)?
+    /// The strip the popover docks beside; set before adding it to the strip's superview.
+    public weak var strip: AnnotateStripView? { didSet { dock() } }
+    public let mosaicButton: NSButton
+    public let solidButton: NSButton
+    public let slider = NSSlider(value: Double(RedactionStyle.defaultMosaicStrength),
+                                 minValue: Double(RedactionStyle.minimumMosaicStrength),
+                                 maxValue: Double(RedactionStyle.maximumMosaicStrength), target: nil, action: nil)
+    public let hintView = NSTextView(frame: .zero)
+    public let solidLine = NSTextField(labelWithString: "")
+    /// The nub's centre, in the popover's own top-left points.
+    public private(set) var nubY: CGFloat = 0
+    public private(set) var style: RedactionStyle = .mosaic(strength: RedactionStyle.defaultMosaicStrength)
+
+    public static let width: CGFloat = 236
+    // annotate.html:86 `gap: 8px; padding: 10px 12px`; rows measured on the page (12 px type, line-height 1.4).
+    private static let padding = (x: CGFloat(12), y: CGFloat(10))
+    private static let gap: CGFloat = 8
+    private static let titleHeight: CGFloat = 17
+    private static let segmentedHeight: CGFloat = 28
+    private static let sliderRowHeight: CGFloat = 17
+    private static let lineHeight: CGFloat = 16.8
+    private static let link = URL(string: "mado-annotate:solid")!
+
+    private let strings: Strings
+    private let title = NSTextField(labelWithString: "")
+    private let segmented = SegmentedView()
+    private let strengthLabel = NSTextField(labelWithString: "")
+    private let nub = CALayer()
+
+    public init(strings: Strings = .localized) {
+        self.strings = strings
+        mosaicButton = SegmentButton(title: strings.mosaic)
+        solidButton = SegmentButton(title: strings.solid)
+        super.init(frame: CGRect(x: 0, y: 0, width: Self.width, height: 100))
+        panelBackground(self)
+        layer?.masksToBounds = false
+        nub.bounds = CGRect(x: 0, y: 0, width: 12, height: 12)
+        nub.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
+        layer?.addSublayer(nub)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.popover)
+        setAccessibilityLabel(strings.dialog)
+        setAccessibilityIdentifier("annotate.redaction-options")
+
+        title.stringValue = strings.title
+        title.font = .systemFont(ofSize: 12, weight: .semibold)
+        title.textColor = DesignColor.textPrimary.nsColor
+        segmented.addSubview(mosaicButton)
+        segmented.addSubview(solidButton)
+        for button in [mosaicButton, solidButton] {
+            button.target = self
+            button.action = #selector(chooseSegment(_:))
+        }
+        strengthLabel.stringValue = strings.strength
+        strengthLabel.font = .systemFont(ofSize: 12)
+        strengthLabel.textColor = DesignColor.textPrimary.nsColor
+        slider.isContinuous = false
+        slider.numberOfTickMarks = 0
+        slider.controlSize = .small
+        slider.target = self
+        slider.action = #selector(slid(_:))
+        slider.setAccessibilityLabel(strings.strengthLabel)
+
+        hintView.isEditable = false
+        hintView.isSelectable = true
+        hintView.drawsBackground = false
+        hintView.textContainerInset = .zero
+        hintView.textContainer?.lineFragmentPadding = 0
+        hintView.isVerticallyResizable = false
+        hintView.delegate = self
+        hintView.linkTextAttributes = [.foregroundColor: DesignColor.selectionText.nsColor, .cursor: NSCursor.pointingHand]
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = Self.lineHeight
+        paragraph.maximumLineHeight = Self.lineHeight
+        let font = NSFont.systemFont(ofSize: 12)
+        let hint = NSMutableAttributedString(string: strings.hint + " ", attributes: [.font: font, .paragraphStyle: paragraph,
+            .foregroundColor: AnnotatePaint.redactionHint])
+        hint.append(NSAttributedString(string: strings.link, attributes: [.font: font, .paragraphStyle: paragraph,
+            .link: Self.link]))
+        hintView.textStorage?.setAttributedString(hint)
+
+        solidLine.stringValue = strings.solidLine
+        solidLine.font = font
+        solidLine.textColor = DesignColor.textSecondary.nsColor
+        for view in [title, segmented, strengthLabel, slider, hintView, solidLine] { addSubview(view) }
+        update(style)
+    }
+    required init?(coder: NSCoder) { nil }
+
+    public override var isFlipped: Bool { true }
+
+    /// Shows `style` (a selected redaction's, or the tool's) without reporting it.
+    public func update(_ style: RedactionStyle) {
+        self.style = style
+        let mosaic: Bool
+        switch style {
+        case .mosaic(let strength):
+            mosaic = true
+            slider.integerValue = strength
+        case .solid:
+            mosaic = false
+        }
+        mosaicButton.state = mosaic ? .on : .off
+        solidButton.state = mosaic ? .off : .on
+        for view in [strengthLabel, slider, hintView] as [NSView] { view.isHidden = !mosaic }
+        solidLine.isHidden = mosaic
+        layoutRows()
+        dock()
+    }
+
+    private func layoutRows() {
+        let x = Self.padding.x, inner = Self.width - 2 * x
+        var y = Self.padding.y
+        title.frame = CGRect(x: x, y: y, width: inner, height: Self.titleHeight)
+        y += Self.titleHeight + Self.gap
+        segmented.frame = CGRect(x: x, y: y, width: segmented.layoutButtons(), height: Self.segmentedHeight)
+        y += Self.segmentedHeight + Self.gap
+        if solidLine.isHidden {
+            let label = ceil(strengthLabel.intrinsicContentSize.width)
+            strengthLabel.frame = CGRect(x: x, y: y, width: label, height: Self.sliderRowHeight)
+            slider.frame = CGRect(x: x + label + 6, y: y, width: inner - label - 6, height: Self.sliderRowHeight)
+            y += Self.sliderRowHeight + Self.gap
+            let height = Self.lineHeight * CGFloat(hintLines(width: inner))
+            hintView.frame = CGRect(x: x, y: y, width: inner, height: height)
+            y += height
+        } else {
+            solidLine.frame = CGRect(x: x, y: y, width: inner, height: Self.lineHeight)
+            y += Self.lineHeight
+        }
+        let height = y + Self.padding.y
+        if frame.size != CGSize(width: Self.width, height: height) { setFrameSize(CGSize(width: Self.width, height: height)) }
+    }
+
+    private func hintLines(width: CGFloat) -> Int {
+        guard let container = hintView.textContainer, let manager = hintView.layoutManager else { return 1 }
+        container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        manager.ensureLayout(for: container)
+        return max(1, Int((manager.usedRect(for: container).height / Self.lineHeight).rounded()))
+    }
+
+    // MARK: Placement
+
+    /// The popover's top-left frame beside a strip at `stripFrame` whose 遮挡 tool is centred at `toolCentreY` (the
+    /// container's top-left points), and the nub's y in the popover.
+    public static func placement(height: CGFloat, stripFrame: CGRect, toolCentreY: CGFloat,
+                                 containerHeight: CGFloat) -> (frame: CGRect, nubY: CGFloat) {
+        let top = max(12, min(containerHeight - height - 12, (toolCentreY - height / 2).rounded()))
+        return (CGRect(x: stripFrame.minX - 12 - width, y: top, width: width, height: height), toolCentreY - top)
+    }
+
+    public override func viewWillMove(toSuperview newSuperview: NSView?) {
+        stopFollowing(self)
+        super.viewWillMove(toSuperview: newSuperview)
+    }
+    public override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        follow(self, #selector(superviewFrameChanged))
+        dock()
+    }
+    @objc private func superviewFrameChanged() { dock() }
+    public override func resize(withOldSuperviewSize oldSize: NSSize) { dock() }
+
+    private func dock() {
+        guard let superview, let strip else { return }
+        let size = superview.bounds.size
+        let stripFrame = AnnotateStripView.frame(in: size)
+        let placed = Self.placement(height: frame.height, stripFrame: stripFrame,
+                                    toolCentreY: stripFrame.minY + strip.centreY(of: .redact), containerHeight: size.height)
+        nubY = placed.nubY
+        place(self, topLeft: placed.frame)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        nub.position = CGPoint(x: Self.width, y: layer?.isGeometryFlipped == true ? nubY : frame.height - nubY)
+        CATransaction.commit()
+        needsDisplay = true
+    }
+
+    // MARK: Drawing and input
+
+    public override func draw(_ dirtyRect: NSRect) {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let panel = DesignColor.popoverBackground.nsColor
+            panel.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
+            nub.backgroundColor = panel.cgColor
+        }
+    }
+
+    @objc private func chooseSegment(_ sender: NSButton) {
+        choose(sender === solidButton ? .solid : .mosaic(strength: slider.integerValue))
+    }
+
+    @objc private func slid(_ sender: NSSlider) { choose(.mosaic(strength: sender.integerValue)) }
+
+    private func choose(_ style: RedactionStyle) {
+        update(style)
+        onChange?(style)
+    }
+
+    /// 改用实色块.
+    public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        choose(.solid)
+        return true
+    }
+
+    /// annotate.html:89–91 `.segmented`: a 2 pt inset track in `--color-hover`; the pressed segment is panel-filled.
+    private final class SegmentedView: NSView {
+        override var isFlipped: Bool { true }
+        func layoutButtons() -> CGFloat {
+            var x: CGFloat = 2
+            for case let button as SegmentButton in subviews {
+                let width = ceil(button.titleWidth) + 20
+                button.frame = CGRect(x: x, y: 2, width: width, height: 24)
+                x += width
+            }
+            return x + 2
+        }
+        override func draw(_ dirtyRect: NSRect) {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                DesignColor.hoverBackground.nsColor.setFill()
+                NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+            }
+        }
+    }
+
+    private final class SegmentButton: NSButton {
+        init(title: String) {
+            super.init(frame: .zero)
+            self.title = title
+            isBordered = false
+            bezelStyle = .regularSquare
+            setButtonType(.onOff)
+            refusesFirstResponder = true
+            font = .systemFont(ofSize: 12)
+        }
+        required init?(coder: NSCoder) { nil }
+        var titleWidth: CGFloat { (title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width }
+        override var state: NSControl.StateValue { didSet { needsDisplay = true } }
+        override func draw(_ dirtyRect: NSRect) {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                let on = state == .on
+                if on {
+                    DesignColor.popoverBackground.nsColor.setFill()
+                    NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
+                    DesignColor.divider.nsColor.setStroke()
+                    let edge = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), xRadius: 4, yRadius: 4)
+                    edge.lineWidth = 0.5
+                    edge.stroke()
+                }
+                let colour = on ? DesignColor.textPrimary.nsColor : DesignColor.textSecondary.nsColor
+                let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12),
+                                                                           .foregroundColor: colour])
+                let size = text.size()
+                text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+            }
+        }
     }
 }
