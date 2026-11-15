@@ -1,185 +1,232 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, renameSync, symlinkSync, existsSync } from 'node:fs';
+import { tmpdir, homedir, release } from 'node:os';
+import { join, resolve, dirname, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { workflowAt, WorkflowError } from './workflow.mjs';
+import { blankSummary, serializeSummary, checkSummary } from './summary.mjs';
 
-const scriptDir = import.meta.dirname;
-const repoRoot = resolve(scriptDir, '../../../..');
-const workflowPath = '.github/workflows/pr-body.yml';
-
-function extract(file) {
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/);
-  const start = lines.findIndex(line => /^  agent-tests:\s*$/.test(line));
-  if (start < 0) throw Error('Agent tooling job missing');
-  const result = [];
-  let step;
-  let block = false;
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^  [\w-]+:\s*$/.test(line)) break;
-    if (/^      - name:\s*/.test(line)) {
-      if (step?.run && step.cwd === 'pr-head') result.push(step);
-      step = { name: line.replace(/^      - name:\s*/, '').trim() };
-      block = false;
-    } else if (step && /^        working-directory:\s*/.test(line)) {
-      step.cwd = line.replace(/^        working-directory:\s*/, '').trim();
-    } else if (step && /^        run:\s*/.test(line)) {
-      const value = line.replace(/^        run:\s*/, '');
-      block = value === '|';
-      step.run = block ? '' : value;
-    } else if (block && /^          /.test(line)) {
-      step.run += `${line.slice(10)}\n`;
-    } else if (block && line.trim() && !/^          /.test(line)) {
-      block = false;
-    }
-  }
-  if (step?.run && step.cwd === 'pr-head') result.push(step);
-  if (!result.length || result.some(s => !s.name || !s.run)) throw Error('no complete Agent tooling run steps');
-  return result;
-}
+const root = resolve(import.meta.dirname, '../../../..');
+const sshOptions = ['-a', '-x', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4'];
+const stepPath = '/opt/node/bin:/usr/local/bin:/usr/bin:/bin';
+const runScript = join(import.meta.dirname, 'remote-run.sh');
 
 function exec(cmd, args, options = {}) {
   return spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options });
 }
-function requireOK(result, label) {
-  if (result.error || result.status !== 0) throw Error(`${label}: ${result.error?.message ?? result.stderr ?? result.status}`);
+function must(result, label, code = 75) {
+  if (result.error || result.status !== 0) {
+    const error = new Error(`${label}: ${result.error?.message ?? result.stderr?.trim() ?? result.status}`);
+    error.exitCode = code;
+    throw error;
+  }
   return result.stdout;
 }
-function countTAP(output) {
-  const totals = { tests: 0, pass: 0, fail: 0, skip: 0 };
-  for (const key of Object.keys(totals)) {
-    for (const match of output.matchAll(new RegExp(`^# ${key} (\\d+)$`, 'gm'))) totals[key] += Number(match[1]);
-  }
-  const failed = [
-    ...output.matchAll(/^not ok \d+ - (.+)$/gm),
-    ...output.matchAll(/^(?:FAIL|ERROR): (.+)$/gm),
-  ].map(match => match[1].trim());
-  return { totals, failed };
+function quote(value) { return `'${String(value).replaceAll("'", "'\\''")}'`; }
+function ssh(host, command, input = '') { return exec('ssh', [...sshOptions, host, command], { input }); }
+function positive(value, label) {
+  if (!/^\d+$/.test(String(value)) || Number(value) < 1 || Number(value) > 86400) throw Object.assign(new Error(`invalid ${label}`), { exitCode: 2 });
+  return Number(value);
 }
-function remote(dir, sha7) {
-  const steps = extract(join(dir, workflowPath));
-  const start = Date.now();
-  let peak = null;
-  let output = '';
-  const lines = [`head=${sha7}`];
-  const nodeBin = join(homedir(), 'opt/node/bin');
-  const env = { ...process.env, PATH: existsSync(nodeBin) ? `${nodeBin}:${process.env.PATH}` : process.env.PATH };
-  delete env.NODE_TEST_CONTEXT;
-  const check = join(dir, '.agents/skills/ci-linux-preflight/scripts/env-check.sh');
-  try {
-    readFileSync(check);
-    const checkResult = exec('/bin/zsh', [check], { cwd: dir, env });
-    if (checkResult.status !== 0) {
-      lines.push(`step:Environment check=${checkResult.status ?? 70}`);
-      process.stderr.write(checkResult.stdout + checkResult.stderr);
-      return finish(1);
-    }
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+function parseFlags(args) {
+  const opts = { job: 'agent-tests', stepTimeout: 600, deadline: 1200, allowDirty: false };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--allow-dirty') opts.allowDirty = true;
+    else if (['--job', '--step-timeout', '--deadline', '--repo', '--expect-head', '--time-bin'].includes(arg)) {
+      if (!args[i + 1]) throw Object.assign(new Error(`missing ${arg}`), { exitCode: 2 });
+      const value = args[++i];
+      if (arg === '--job') opts.job = value;
+      else if (arg === '--step-timeout') opts.stepTimeout = positive(value, arg);
+      else if (arg === '--deadline') opts.deadline = positive(value, arg);
+      else if (arg === '--repo') opts.repo = value;
+      else if (arg === '--expect-head') opts.expectHead = value;
+      else opts.timeBin = value;
+    } else throw Object.assign(new Error(`unknown option ${arg}`), { exitCode: 2 });
   }
-  for (const step of steps) {
-    const cwd = step.cwd === 'pr-head' ? dir : step.cwd ? join(dir, step.cwd) : dir;
-    const command = '/bin/bash';
-    const args = ['-eo', 'pipefail', '-c', step.run];
-    const timed = process.platform === 'linux' && exec('/usr/bin/time', ['--version']).status === 0;
-    const result = timed ? exec('/usr/bin/time', ['-v', command, ...args], { cwd, env }) : exec(command, args, { cwd, env });
-    lines.push(`step:${step.name}=${result.status ?? 70}`);
-    output += `${result.stdout ?? ''}\n${result.stderr ?? ''}\n`;
-    const rss = result.stderr?.match(/Maximum resident set size \(kbytes\):\s*(\d+)/);
-    if (rss) peak = Math.max(peak ?? 0, Number(rss[1]));
-    if (result.status !== 0) {
-      process.stderr.write(`FAILED ${step.name}\n${(result.stdout ?? '') + (result.stderr ?? '')}\n`);
-      return finish(1);
-    }
-  }
-  return finish(0);
-
-  function finish(status) {
-    const { totals, failed } = countTAP(output);
-    if (totals.tests === 0 || totals.fail > 0) status = 1;
-    lines.push(`secs=${((Date.now() - start) / 1000).toFixed(1)}`);
-    lines.push(`peak_rss_kb=${peak ?? 'unknown'}`);
-    for (const key of Object.keys(totals)) lines.push(`${key}=${totals[key]}`);
-    for (const name of failed) lines.push(`failed:${name}`);
-    lines.push('DONE');
-    process.stdout.write(`${lines.join('\n')}\n`);
-    return status;
-  }
+  return opts;
 }
 
-function summaryCheck(file) {
-  const raw = readFileSync(file, 'utf8');
-  const lines = raw.trimEnd().split('\n');
-  if (lines.at(-1) !== 'DONE') throw Error('summary missing DONE');
-  const entries = new Map();
-  const steps = [];
-  for (const line of lines.slice(0, -1)) {
-    if (line.startsWith('step:')) {
-      const split = line.lastIndexOf('=');
-      if (split < 6) throw Error('invalid step');
-      steps.push({ name: line.slice(5, split), exit: Number(line.slice(split + 1)) });
-    } else if (!line.startsWith('failed:')) {
-      const split = line.indexOf('=');
-      if (split < 1) throw Error('invalid summary field');
-      entries.set(line.slice(0, split), line.slice(split + 1));
-    }
-  }
-  const head = entries.get('head');
-  if (!/^[a-f0-9]{7,40}$/.test(head ?? '') || !steps.length || steps.some(s => !Number.isInteger(s.exit))) throw Error('invalid head or steps');
-  for (const key of ['tests', 'pass', 'fail', 'skip']) if (!/^\d+$/.test(entries.get(key) ?? '')) throw Error(`invalid ${key}`);
-  if (!/^\d+(?:\.\d+)?$/.test(entries.get('secs') ?? '') || !/^(?:\d+|unknown)$/.test(entries.get('peak_rss_kb') ?? '')) throw Error('invalid measurements');
-  const tests = Number(entries.get('tests'));
-  const pass = Number(entries.get('pass'));
-  const fail = Number(entries.get('fail'));
-  const skip = Number(entries.get('skip'));
-  if (pass + fail + skip > tests) throw Error('invalid TAP totals');
-  const status = steps.every(s => s.exit === 0) && fail === 0 && tests > 0 ? 'PASS' : 'FAIL';
-  return `Linux-Preflight: ${head.slice(0, 7)} agent-tooling ${status} ${pass}/${tests} (${skip} skip)`;
+function resolveHead(repo, value) {
+  const head = must(exec('git', ['rev-parse', '--verify', `${value}^{commit}`], { cwd: repo }), 'resolve commit', 2).trim();
+  if (!/^[a-f0-9]{40}$/.test(head)) throw Object.assign(new Error('expected 40-hex commit'), { exitCode: 2 });
+  return head;
 }
 
-function local(sha) {
-  const head = requireOK(exec('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: repoRoot }), 'resolve commit').trim();
-  const current = requireOK(exec('git', ['rev-parse', 'HEAD'], { cwd: repoRoot }), 'current head').trim();
-  if (head !== current) throw Error('preflight commit must be the current HEAD');
-  const sha7 = head.slice(0, 7);
-  const host = process.env.PICSEE_LINUX_HOST || 'tencent-ci';
-  if (!/^[a-zA-Z0-9_.@-]+$/.test(host) || host.startsWith('-')) throw Error('invalid PICSEE_LINUX_HOST');
+function writeAttempt(head, summary, rawLog) {
+  const dir = join(homedir(), '.picsee/ci-linux', head);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const stamp = new Date().toISOString().replaceAll(':', '').replaceAll('-', '').replaceAll('.', '') + '-' + randomBytes(3).toString('hex');
+  const name = `${stamp}-summary.txt`;
+  const target = join(dir, name);
+  const temp = join(dir, `.${name}.tmp`);
+  writeFileSync(temp, summary, { mode: 0o600, flag: 'wx' });
+  renameSync(temp, target);
+  const logName = `${stamp}-raw.log`;
+  writeFileSync(join(dir, logName), rawLog, { mode: 0o600, flag: 'wx' });
+  const linkTemp = join(dir, `.latest-${stamp}`);
+  symlinkSync(name, linkTemp);
+  renameSync(linkTemp, join(dir, 'latest'));
+  return target;
+}
+
+function local(value, opts) {
+  const repo = resolve(opts.repo ?? root);
+  const head = resolveHead(repo, value);
+  if (!opts.allowDirty) {
+    const unstaged = exec('git', ['diff', '--quiet'], { cwd: repo });
+    const staged = exec('git', ['diff', '--cached', '--quiet'], { cwd: repo });
+    if (unstaged.status !== 0 || staged.status !== 0) throw Object.assign(new Error('tracked worktree is dirty; use --allow-dirty'), { exitCode: 2 });
+  }
+  const workflow = workflowAt(repo, head, opts.job);
+  const host = process.env.PICSEE_LINUX_HOST || 'picsee-ci-linux';
+  if (!/^[A-Za-z0-9._-]+$/.test(host) || host.startsWith('-')) throw Object.assign(new Error('invalid PICSEE_LINUX_HOST'), { exitCode: 2 });
   const temp = mkdtempSync(join(tmpdir(), 'ci-linux-preflight-'));
   const bundle = join(temp, 'head.bundle');
-  const remoteDir = `~/ci/${sha7}`;
-  const destination = join(homedir(), '.picsee/ci-linux', `${head}-summary.txt`);
-  mkdirSync(join(homedir(), '.picsee/ci-linux'), { recursive: true });
+  const ref = `refs/preflight/${head}`;
+  let remoteDir;
+  let rawLog = '';
   try {
-    requireOK(exec('git', ['bundle', 'create', bundle, 'HEAD'], { cwd: repoRoot }), 'git bundle');
-    requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `mkdir -p ${remoteDir}`]), 'remote mkdir');
-    requireOK(exec('rsync', ['-e', 'ssh -o BatchMode=yes', bundle, `${host}:${remoteDir}/head.bundle`]), 'bundle transfer');
-    requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `git clone -q ${remoteDir}/head.bundle ${remoteDir}/pr-head`]), 'remote clone');
-    const remoteCommand = `cd ${remoteDir}/pr-head && if [ -d \"\$HOME/opt/node/bin\" ]; then export PATH=\"\$HOME/opt/node/bin:\$PATH\"; fi; node .agents/skills/ci-linux-preflight/scripts/preflight.mjs remote . ${head}`;
-    const result = exec('ssh', ['-o', 'BatchMode=yes', host, remoteCommand]);
-    if (!result.stdout?.endsWith('DONE\n')) throw Error(`remote summary incomplete: ${result.stderr ?? result.status}`);
-    if (!result.stdout.startsWith(`head=${head}\n`)) throw Error('remote summary head mismatch');
-    writeFileSync(destination, result.stdout, { mode: 0o600 });
-    const line = summaryCheck(destination);
-    process.stdout.write(`${line}\nSummary: ${destination}\n`);
-    if (result.stderr) process.stderr.write(result.stderr);
-    return result.status === 0 && line.includes(' agent-tooling PASS ') ? 0 : 1;
+    must(exec('git', ['update-ref', ref, head], { cwd: repo }), 'temporary ref', 2);
+    must(exec('git', ['bundle', 'create', bundle, ref], { cwd: repo }), 'git bundle', 2);
+    must(exec('git', ['update-ref', '-d', ref], { cwd: repo }), 'remove temporary ref', 2);
+    const init = `set -e\nmkdir -p "$HOME/ci"\nfind "$HOME/ci" -maxdepth 1 -type d -name 'run.*' -mmin +1440 -exec rm -rf -- {} +\nmktemp -d "$HOME/ci/run.XXXXXX"\n`;
+    remoteDir = must(ssh(host, '/bin/bash -s', init), 'remote setup').trim();
+    if (!/^\/[A-Za-z0-9._/-]+\/ci\/run\.[A-Za-z0-9]+$/.test(remoteDir)) throw Object.assign(new Error('invalid remote run directory'), { exitCode: 75 });
+    const rsyncShell = `ssh ${sshOptions.map(quote).join(' ')}`;
+    must(exec('rsync', ['-e', rsyncShell, bundle, `${host}:${remoteDir}/head.bundle`]), 'bundle transfer');
+    const args = [remoteDir, head, opts.job, workflow.workflowSha256, opts.stepTimeout, opts.deadline];
+    const command = `/bin/bash -s -- ${args.map(quote).join(' ')}`;
+    const run = ssh(host, command, readFileSync(runScript, 'utf8'));
+    rawLog = run.stderr ?? '';
+    if (run.stdout?.endsWith('DONE\n')) {
+      try {
+        const line = checkSummary(run.stdout, head, workflow);
+        const expectedStatus = line.includes(' agent-tooling PASS ') ? 0 : line.includes(' agent-tooling NOT VERIFIED ') ? 75 : 1;
+        if (run.status !== expectedStatus) throw Error(`remote exit ${run.status} disagrees with summary`);
+        const target = writeAttempt(head, run.stdout, rawLog);
+        process.stdout.write(`${line}\nSummary: ${target}\n`);
+        return expectedStatus;
+      } catch (error) { rawLog += `\ninvalid remote summary: ${error.message}\n${run.stdout ?? ''}`; }
+    }
+    if (run.status === 124) throw Object.assign(new Error('whole run deadline reached'), { exitCode: 124 });
+    throw Object.assign(new Error(run.status === 75 && /busy/.test(rawLog) ? 'busy' : `remote run: ${rawLog.trim() || run.error?.message || run.status}`), { exitCode: 75 });
+  } catch (error) {
+    const timedOut = error.exitCode === 124;
+    const summary = blankSummary(head, workflow, timedOut ? 'TIMEOUT' : 'NOT VERIFIED', error.message);
+    const body = serializeSummary(summary);
+    const target = writeAttempt(head, body, rawLog || error.message);
+    process.stdout.write(`${checkSummary(body, head, workflow)}\nSummary: ${target}\n`);
+    return timedOut ? 1 : 75;
   } finally {
-    exec('ssh', ['-o', 'BatchMode=yes', host, `rm -rf ${remoteDir}`]);
+    if (remoteDir) ssh(host, `/bin/bash -s -- ${quote(remoteDir)}`, 'rm -rf -- "$1"\n');
+    exec('git', ['update-ref', '-d', ref], { cwd: repo });
     rmSync(temp, { recursive: true, force: true });
   }
+}
+
+function facts() {
+  const result = {};
+  try { const osRelease = readFileSync('/etc/os-release', 'utf8'); result.distro = osRelease.match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1] ?? 'unknown'; } catch { result.distro = 'unknown'; }
+  result.kernel = release();
+  const sh = exec('readlink', ['-f', '/bin/sh']); result.sh_target = sh.status === 0 ? sh.stdout.trim() : '/bin/sh';
+  for (const [key, cmd, args] of [['node', 'node', ['--version']], ['git', 'git', ['--version']], ['python3', 'python3', ['--version']], ['zsh', 'zsh', ['--version']], ['procps', 'ps', ['--version']]]) {
+    const output = exec(cmd, args); result[key] = (output.stdout || output.stderr || 'unknown').trim().split('\n')[0];
+  }
+  return result;
+}
+function parseOutput(output, step) {
+  for (const key of ['tests', 'pass', 'fail', 'skip']) {
+    for (const match of output.matchAll(new RegExp(`^# ${key} (\\d+)$`, 'gm'))) step[key] += Number(match[1]);
+  }
+  const py = [...output.matchAll(/^Ran (\d+) tests? in /gm)];
+  step.python_tests = py.reduce((sum, match) => sum + Number(match[1]), 0);
+  step.python_result = /^(?:FAILED \(|FAILED$)/m.test(output) ? 'FAILED' : /^OK(?:\s|$)/m.test(output) ? 'OK' : 'unknown';
+  return [
+    ...[...output.matchAll(/^not ok \d+ - (.+)$/gm)].map(match => match[1].trim()),
+    ...[...output.matchAll(/^(?:FAIL|ERROR): (.+)$/gm)].map(match => match[1].trim()),
+  ];
+}
+
+function remote(repo, head, job, expectedHash, stepTimeout, deadline, timeBin) {
+  const workflow = workflowAt(repo, head, job);
+  const summary = blankSummary(head, workflow);
+  summary.facts = facts();
+  const started = Date.now();
+  if (workflow.workflowSha256 !== expectedHash) {
+    summary.reason = 'workflow hash mismatch';
+    process.stdout.write(serializeSummary(summary));
+    return 75;
+  }
+  summary.outcome = 'PASS';
+  const runDir = dirname(repo);
+  const selectedTime = timeBin ?? '/usr/bin/time';
+  const timeAvailable = existsSync(selectedTime) && exec(selectedTime, ['--version']).status === 0;
+  for (let i = 0; i < workflow.steps.length; i++) {
+    const step = workflow.steps[i];
+    if (step.kind !== 'run') continue;
+    const remaining = Math.ceil(deadline - (Date.now() - started) / 1000);
+    if (remaining <= 0) {
+      summary.steps[i].kind = 'run'; summary.steps[i].exit = '124';
+      summary.steps_run++;
+      summary.outcome = 'TIMEOUT';
+      break;
+    }
+    const script = join(runDir, `step-${i}.sh`);
+    writeFileSync(script, step.run, { mode: 0o600 });
+    const home = mkdtempSync(join(runDir, `home-${i}-`));
+    const environment = ['-i', `HOME=${home}`, `PATH=${stepPath}`, 'CI=true', 'GITHUB_ACTIONS=true', 'LANG=C.UTF-8', 'GIT_CONFIG_NOSYSTEM=1', `TMPDIR=${runDir}`];
+    const command = timeAvailable ? [selectedTime, '-v', '/bin/bash', '-e', script] : ['/bin/bash', '-e', script];
+    const limit = Math.min(stepTimeout, remaining);
+    const begin = Date.now();
+    const result = exec('timeout', ['--kill-after=10', String(limit), '/usr/bin/env', ...environment, ...command], { cwd: repo });
+    const record = summary.steps[i];
+    record.kind = 'run';
+    record.exit = String(result.status ?? 75);
+    record.secs = ((Date.now() - begin) / 1000).toFixed(1);
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    const rss = output.match(/Maximum resident set size \(kbytes\):\s*(\d+)/);
+    record.peak_rss_kb = rss ? rss[1] : 'unknown';
+    summary.failed.push(...parseOutput(output, record));
+    summary.steps_run++;
+    process.stderr.write(`step ${step.name}:\n${output}\n`);
+    if (result.error) { summary.outcome = 'NOT VERIFIED'; summary.reason = result.error.message; break; }
+    if ([124, 137].includes(result.status)) { summary.outcome = 'TIMEOUT'; break; }
+    if (result.status !== 0) { summary.outcome = 'FAIL'; break; }
+  }
+  summary.secs = ((Date.now() - started) / 1000).toFixed(1);
+  const rssValues = summary.steps.map(step => Number(step.peak_rss_kb)).filter(Number.isFinite);
+  summary.peak_rss_kb = rssValues.length ? String(Math.max(...rssValues)) : 'unknown';
+  process.stdout.write(serializeSummary(summary));
+  return summary.outcome === 'PASS' ? 0 : summary.outcome === 'NOT VERIFIED' ? 75 : 1;
 }
 
 try {
   const [mode, ...args] = process.argv.slice(2);
   let status;
-  if (mode === 'extract' && args.length === 1) { process.stdout.write(`${JSON.stringify(extract(args[0]))}\n`); status = 0; }
-  else if (mode === 'remote' && args.length === 2 && /^[a-f0-9]{7,40}$/.test(args[1])) status = remote(resolve(args[0]), args[1]);
-  else if (mode === 'summary-check' && args.length === 1) { process.stdout.write(`${summaryCheck(args[0])}\n`); status = 0; }
-  else if (mode === 'run' && args.length === 1 && /^[a-f0-9]{7,40}$/.test(args[0])) status = local(args[0]);
-  else throw Error('usage: preflight.mjs extract <workflow> | remote <repo> <sha> | summary-check <file> | run <sha>');
+  if (mode === 'run') {
+    const [head, ...rest] = args;
+    if (!head) throw Object.assign(new Error('usage: run <sha> [options]'), { exitCode: 2 });
+    status = local(head, parseFlags(rest));
+  } else if (mode === 'remote') {
+    const [repo, head, job, hash, stepTimeout, deadline, ...rest] = args;
+    status = remote(resolve(repo), head, job, hash, positive(stepTimeout, 'step timeout'), positive(deadline, 'deadline'), parseFlags(rest).timeBin);
+  } else if (mode === 'summary-check') {
+    const [file, ...rest] = args;
+    const opts = parseFlags(rest);
+    if (!file || !opts.expectHead) throw Object.assign(new Error('summary-check needs file and --expect-head'), { exitCode: 2 });
+    const repo = resolve(opts.repo ?? root);
+    process.stdout.write(`${checkSummary(readFileSync(file, 'utf8'), opts.expectHead, workflowAt(repo, opts.expectHead, opts.job))}\n`);
+    status = 0;
+  } else if (mode === 'extract') {
+    const [head, ...rest] = args;
+    const opts = parseFlags(rest);
+    process.stdout.write(`${JSON.stringify(workflowAt(resolve(opts.repo ?? root), head, opts.job))}\n`);
+    status = 0;
+  } else throw Object.assign(new Error('usage: preflight.mjs run|remote|extract|summary-check'), { exitCode: 2 });
   process.exitCode = status;
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
-  process.exitCode = 70;
+  process.exitCode = error.exitCode ?? (error instanceof WorkflowError ? 2 : 75);
 }
