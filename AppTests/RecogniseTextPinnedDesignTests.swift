@@ -173,6 +173,27 @@ import MadoMacUI
     }
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func recogniseNoticeAccessibilityAndKeyboardActivateEditablePanel() throws {
+    _ = NSApplication.shared
+    var opens = 0
+    let notice = RecogniseTextNoticeView(message: "Copied", engine: "On-device Recognition",
+        kind: .success, onOpen: { opens += 1 })
+    #expect(notice.acceptsFirstResponder)
+    #expect(notice.accessibilityPerformPress())
+    #expect(opens == 1)
+    for (character, code) in [(" ", UInt16(49)), ("\r", UInt16(36))] {
+        let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: character, charactersIgnoringModifiers: character,
+            isARepeat: false, keyCode: code))
+        notice.keyDown(with: event)
+    }
+    #expect(opens == 3)
+    let warning = RecogniseTextNoticeView(message: "No text", engine: nil, kind: .warning, onOpen: nil)
+    #expect(!warning.acceptsFirstResponder)
+    #expect(!warning.accessibilityPerformPress())
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func PinnedDesignNarrowPanelKeepsHeaderAndFooterControlsApart() throws {
     _ = NSApplication.shared
     let overlay = RecogniseTextOverlay(frame: NSRect(x: 0, y: 0, width: 238, height: 340))
