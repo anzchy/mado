@@ -286,3 +286,35 @@ test('i693 Return and keypad Enter are declared Annotate-only key sites (they ap
   fails(withChange(ANNOTATE_KEYS, replaceOnce('case 36, 76: .returnKey', 'case 36, 76, 52: .returnKey')),
     /CanvasWindowController\+Annotate\.swift handles key code 52/);
 });
+
+const RECORDER = 'App/UI/CaptureShortcutField.swift';
+
+test('i685 a stored key code outside the Capture binding files still fails', () => {
+  fails(withChange('App/UI/SettingsPanelWindow.swift', s => `${s}\nlet storedKeyCode = event.keyCode\n`),
+    /SettingsPanelWindow\.swift reads a key code in a shape this check does not read/);
+});
+
+test('i685 the Capture binding files keep key codes as data without page rows', () => {
+  assert.deepEqual(check().filter(p => /Capture(Shortcut|HotKey|ShortcutPreferences)|CarbonHotKey/.test(p)), []);
+});
+
+test('i685 a new key comparison in the shortcut recorder fails until it is declared', () => {
+  fails(withChange(RECORDER, replaceOnce('if plain, event.keyCode == 53 { end(.cancelled); return }',
+    'if plain, event.keyCode == 53 { end(.cancelled); return }\n        if event.keyCode == 49 { return }')),
+  /CaptureShortcutField\.swift handles key code 49, which KEY_SITES does not declare/);
+});
+
+test('i685 the recorder Esc and Delete exclusions fail once the recorder stops handling them', () => {
+  fails(withChange(RECORDER, replaceOnce('if plain, [51, 117].contains(event.keyCode) { end(.cleared); return }', '')),
+    /KEY_SITES declares key code 51 in App\/UI\/CaptureShortcutField\.swift, which no longer handles it/);
+});
+
+test('i685 a second typed-character read in the shortcut recorder fails', () => {
+  fails(withChange(RECORDER, s => `${s}\nfunc extra(_ event: NSEvent) -> Bool { event.charactersIgnoringModifiers == "x" }\n`),
+    /CaptureShortcutField\.swift reads typed characters outside its declared site/);
+});
+
+test('i685 a SwiftUI key press in a binding file still fails', () => {
+  fails(withChange('App/CaptureHelper/CarbonHotKeyRegistrar.swift', s => `${s}\n// .onKeyPress(keys: [.escape])\n`),
+    /CarbonHotKeyRegistrar\.swift reads a key code in a shape this check does not read: \.onKeyPress/);
+});

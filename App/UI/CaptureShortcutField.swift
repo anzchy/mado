@@ -59,11 +59,9 @@ import MadoMacUI
 
     private func record(_ event: NSEvent) {
         let plain = Self.modifiers(event.modifierFlags).isEmpty
-        switch event.keyCode {
-        case 53 where plain: end(.cancelled)
-        case 51 where plain, 117 where plain: end(.cleared)
-        default: end(.recorded(Self.combo(from: event)))
-        }
+        if plain, event.keyCode == 53 { end(.cancelled); return }
+        if plain, [51, 117].contains(event.keyCode) { end(.cleared); return }
+        end(.recorded(Self.combo(from: event)))
     }
 
     private func end(_ outcome: Outcome) {
