@@ -2,9 +2,16 @@ import Foundation
 import MadoApplication
 
 /// Shortcut bindings and registration failures in the App Group defaults (#685). Nothing stored means the defaults.
+///
+/// #717 changed the defaults from ⌃⇧⌘ to ⌃⌥. #685 wrote all five bindings on the first change and kept no record of
+/// which ones the user set, so a stored set without `defaultsVersionKey` is moved once with
+/// `replacingLegacyDefaults()` and written back with the version.
 public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPreferencePort, @unchecked Sendable {
     public static let bindingsKey = "capture.shortcuts.v1"
     public static let failuresKey = "capture.shortcutFailures.v1"
+    public static let defaultsVersionKey = "capture.shortcuts.defaultsVersion"
+    /// 2: the stored bindings are on the ⌃⌥ defaults of #717 (none or 1: #685's ⌃⇧⌘).
+    static let defaultsVersion = 2
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults) {
@@ -19,12 +26,17 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
     public func bindings() async -> CaptureShortcutBindings {
         defaults.synchronize()
         guard let stored = defaults.dictionary(forKey: Self.bindingsKey) else { return .defaults }
-        return CaptureShortcutBindings(Self.decode(stored))
+        let bindings = CaptureShortcutBindings(Self.decode(stored))
+        guard defaults.integer(forKey: Self.defaultsVersionKey) < Self.defaultsVersion else { return bindings }
+        let moved = bindings.replacingLegacyDefaults()
+        await setBindings(moved)
+        return moved
     }
 
     public func setBindings(_ bindings: CaptureShortcutBindings) async {
         var combos: [CaptureShortcutAction: CaptureKeyCombo] = [:]
         for action in CaptureShortcutAction.allCases { combos[action] = bindings[action] }
+        defaults.set(Self.defaultsVersion, forKey: Self.defaultsVersionKey)
         write(combos, forKey: Self.bindingsKey)
     }
 
