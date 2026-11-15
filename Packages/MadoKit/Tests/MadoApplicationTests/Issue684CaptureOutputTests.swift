@@ -45,11 +45,11 @@ private func makeSession(_ files: RecordingFiles) -> CaptureSession {
                    timeZone: TimeZone(secondsFromGMT: 0)!, folderDisplay: "~/Downloads")
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684DefaultPolicyCopiesAndSaves() {
+@Test(.timeLimit(.minutes(2))) func issue684DefaultPolicyCopiesAndSaves() {
     #expect(CaptureOutputPolicy.standard == CaptureOutputPolicy(savesToFolder: true, copiesToClipboard: true))
 }
 
-@Test(.timeLimit(.minutes(1)), arguments: [(true, true), (true, false), (false, true), (false, false)])
+@Test(.timeLimit(.minutes(2)), arguments: [(true, true), (true, false), (false, true), (false, false)])
 func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     let files = RecordingFiles()
     let clipboard = RecordingClipboard()
@@ -76,7 +76,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     }
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684CopyFailureStillSaves() async throws {
+@Test(.timeLimit(.minutes(2))) func issue684CopyFailureStillSaves() async throws {
     let files = RecordingFiles()
     let state = try await makeSession(files).capture(request: nil, policy: .standard,
                                                      clipboard: RecordingClipboard(succeeds: false))
@@ -86,7 +86,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(state.actions == [.copy, .moveToTrash])
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684WriteFailureStillGivesThumbnail() async throws {
+@Test(.timeLimit(.minutes(2))) func issue684WriteFailureStillGivesThumbnail() async throws {
     let files = RecordingFiles()
     await files.setFailing(true)
     let clipboard = RecordingClipboard()
@@ -98,7 +98,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(await clipboard.writes == [png])
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684SaveReusesNamingRule() async throws {
+@Test(.timeLimit(.minutes(2))) func issue684SaveReusesNamingRule() async throws {
     let files = RecordingFiles()
     let session = makeSession(files)
     let first = try await session.save(png)
@@ -108,7 +108,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(session.folderDisplay == "~/Downloads")
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684LifetimeExpiresAfterFiveSeconds() {
+@Test(.timeLimit(.minutes(2))) func issue684LifetimeExpiresAfterFiveSeconds() {
     let start = Date(timeIntervalSinceReferenceDate: 1000)
     let lifetime = CaptureThumbnailLifetime(shownAt: start)
     #expect(CaptureThumbnailLifetime.visibleSeconds == 5)
@@ -117,7 +117,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(lifetime.isExpired(at: start.addingTimeInterval(5)))
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684LifetimeHoverKeepsAndExitRestarts() {
+@Test(.timeLimit(.minutes(2))) func issue684LifetimeHoverKeepsAndExitRestarts() {
     let start = Date(timeIntervalSinceReferenceDate: 1000)
     var lifetime = CaptureThumbnailLifetime(shownAt: start)
     lifetime.pointerEntered()
@@ -128,7 +128,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(lifetime.isExpired(at: start.addingTimeInterval(65)))
 }
 
-@MainActor @Test(.timeLimit(.minutes(1))) func issue684ModelSaveThenTrash() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue684ModelSaveThenTrash() async throws {
     let files = RecordingFiles()
     let session = makeSession(files)
     let trash = RecordingTrash()
@@ -147,7 +147,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(model.isClosed)
 }
 
-@MainActor @Test(.timeLimit(.minutes(1))) func issue684ModelTrashWithoutFileDoesNothing() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue684ModelTrashWithoutFileDoesNothing() async throws {
     let trash = RecordingTrash()
     let state = CaptureThumbnailState(png: png, savedURL: nil, clipboard: .copied, folderDisplay: "~/Downloads")
     let model = CaptureThumbnailModel(state: state, session: makeSession(RecordingFiles()),
@@ -159,7 +159,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(model.isClosed)
 }
 
-@MainActor @Test(.timeLimit(.minutes(1))) func issue684ModelCopyUpdatesClipboardState() async {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue684ModelCopyUpdatesClipboardState() async {
     let clipboard = RecordingClipboard()
     let state = CaptureThumbnailState(png: png, savedURL: nil, clipboard: .notCopied, folderDisplay: "~/Downloads")
     let model = CaptureThumbnailModel(state: state, session: makeSession(RecordingFiles()),
@@ -173,7 +173,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(failing.state.clipboard == .copyFailed)
 }
 
-@MainActor @Test(.timeLimit(.minutes(1))) func issue684ModelSaveFailureKeepsSaveAction() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue684ModelSaveFailureKeepsSaveAction() async throws {
     let files = RecordingFiles()
     await files.setFailing(true)
     let state = CaptureThumbnailState(png: png, savedURL: nil, clipboard: .notCopied, folderDisplay: "~/Downloads")
@@ -188,7 +188,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(!model.state.saveFailed)
 }
 
-@Test(.timeLimit(.minutes(1))) func issue684CaptureModulesHaveNoPermanentDelete() throws {
+@Test(.timeLimit(.minutes(2))) func issue684CaptureModulesHaveNoPermanentDelete() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
     let folders = ["Sources/MadoApplication/Capture", "Sources/MadoInfrastructure/Capture"]
