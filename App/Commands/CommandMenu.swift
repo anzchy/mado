@@ -440,6 +440,8 @@ final class CommandMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
                 ? String(localized: visible ? "Hide image information" : "Show image information")
                 : String(localized: visible ? "Hide Inspector" : "Show Inspector")
         }
+        // #687 fix r5 (F5): View › 聚焦画布's Esc goes to the input method while the OCR editor composes.
+        if id == .escape, target?.recogniseTextAdapter.isComposing == true { return false }
         return target?.session.isEnabled(id,
             commandModified: item.keyEquivalentModifierMask.contains(.command)) ?? (id == .open)
     }

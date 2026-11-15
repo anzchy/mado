@@ -42,7 +42,20 @@ enum RecogniseTextNoticeKind { case success, warning }
 
 @MainActor final class RecogniseTextEditor: NSTextView {
     var onEscape: (() -> Void)?
-    override func cancelOperation(_ sender: Any?) { onEscape?() }
+    override func cancelOperation(_ sender: Any?) {
+        // #687 fix r5 (F5): an Esc no input method took while composing drops the composition, as Pinyin's Esc does;
+        // it never closes the panel or commits the half-typed text.
+        if hasMarkedText() {
+            insertText("", replacementRange: markedRange())
+            unmarkText()
+            return
+        }
+        onEscape?()
+    }
+    // #687 fix r5 (F5/F6): the panel's key routing moves focus on Tab; a Tab that reaches the editor (while composing)
+    // is not typed into the recognised text.
+    override func insertTab(_ sender: Any?) {}
+    override func insertBacktab(_ sender: Any?) {}
 }
 
 @MainActor final class RecogniseTextNoticeView: NSView {

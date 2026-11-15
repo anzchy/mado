@@ -218,3 +218,45 @@ import MadoApplication
     #expect(h.window.firstResponder === h.editor)
     #expect(notice.superview == nil)
 }
+
+// MARK: - F5
+
+/// While the OCR editor composes (an input method's marked text), Esc, Tab, Shift-Tab, Space, Return and Command-E
+/// reach the editor first: the panel stays, focus stays, and Esc drops only the composition.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5ComposingEditorKeepsKeysAndPanel() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    for visible in [true, false] {
+        try await h.reset(inspector: visible)
+        try await h.recognise()
+        let editor = try h.openEditor()
+        let overlay = try #require(h.overlay)
+        let label = "Inspector visible=\(visible)"
+        h.compose(editor)
+        #expect(editor.hasMarkedText())
+        #expect(!h.controller.canEnterAnnotateFromMenu, "\(label): Command-E waits for the composition")
+        #expect(!(try h.context.enabled("annotate.enter.menu")))
+        #expect(!(try h.context.enabled("command.escape.menu")), "\(label): View › 聚焦画布 leaves the Esc to the input method")
+        _ = try h.commandE()
+        #expect(!h.controller.session.isAnnotating && overlay.panelView != nil, "\(label): Command-E")
+        try h.key("\u{1b}", code: 53)
+        #expect(overlay.panelView != nil, "\(label): Esc keeps the panel")
+        #expect(h.window.firstResponder === editor)
+        #expect(!editor.hasMarkedText(), "\(label): Esc dropped the composition")
+        #expect(editor.string == "Hello", "\(label): nothing was committed")
+        for (characters, code, flags) in [("\t", UInt16(48), NSEvent.ModifierFlags()), ("\u{19}", UInt16(48), .shift),
+                                          (" ", UInt16(49), []), ("\r", UInt16(36), [])] {
+            h.compose(editor)
+            let focus = h.controller.session.inspectorFocus.focus
+            try h.key(characters, code: code, modifiers: flags)
+            let key = "\(label), key \(code)\(flags.contains(.shift) ? " shift" : "")"
+            #expect(overlay.panelView != nil, "\(key): panel stays")
+            #expect(h.window.firstResponder === editor, "\(key): focus stays in the editor")
+            #expect(h.controller.session.inspectorFocus.focus == focus, "\(key): no Session traversal")
+            if editor.hasMarkedText() { editor.unmarkText() }
+        }
+        try h.key("\u{1b}", code: 53)
+        #expect(overlay.panelView == nil, "\(label): without a composition Esc closes the panel")
+        try h.expectCanvasOwnsKeys("\(label), panel closed by Esc")
+    }
+}
