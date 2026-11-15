@@ -197,6 +197,13 @@ test('i690 the Annotate Mode character exclusion covers only its own file', () =
   /ViewerChromeOverlay\.swift reads typed characters/);
 });
 
+test('i687b only the focused recognition notice may read its Space or Return key', () => {
+  const notice = 'App/TextRecognition/RecogniseTextViews.swift';
+  assert.equal(check().filter(p => p.includes(notice)).length, 0);
+  fails(withChange(notice, source => `${source}\n// let extra = event.charactersIgnoringModifiers\n`),
+    /RecogniseTextViews\.swift reads typed characters outside its declared site/);
+});
+
 const ANNOTATE_POLICY = 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift';
 
 test('i690 the page lists V and R, the Annotate Mode tools', () => {

@@ -122,6 +122,9 @@ export const CHARACTER_EXCLUSIONS = {
   'App/UI/CaptureShortcutField.swift': {
     reason: 'labels the key of a recorded Capture shortcut (#685)',
     anchor: /let base = event\.characters\(byApplyingModifiers: \[\]\) \?\? event\.charactersIgnoringModifiers/g },
+  'App/TextRecognition/RecogniseTextViews.swift': {
+    reason: 'Space and Return open the focused recognition notice, not a global shortcut',
+    anchor: /let character = event\.charactersIgnoringModifiers/g },
 };
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)

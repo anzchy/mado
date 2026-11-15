@@ -156,9 +156,10 @@ enum RecogniseTextNoticeKind { case success, warning }
         return true
     }
     override func keyDown(with event: NSEvent) {
+        let character = event.charactersIgnoringModifiers
         if kind == .success,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-           (event.charactersIgnoringModifiers == " " || event.charactersIgnoringModifiers == "\r") {
+           (character == " " || character == "\r") {
             activate()
         } else {
             super.keyDown(with: event)
