@@ -241,8 +241,9 @@ import MadoInfrastructure
         priorConsumeKey = previous ?? { _ in false }
         window.consumeKey = { [weak self] event in
             guard let self, self.overlay?.panelView != nil else { return previous?(event) ?? false }
-            // #687 fix r5 (F5): while the editor composes, every key goes to the input method first.
-            if self.isComposing, self.controller?.window?.firstResponder === self.panelEditor { return false }
+            // #687 fix r5 (F5, review M4): while the focused text input composes (the OCR editor or any other field),
+            // every key goes to the input method first.
+            if (self.controller?.window?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true { return false }
             let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             if event.characters == "\u{1b}", plain {
                 self.closePanel()

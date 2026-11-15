@@ -437,3 +437,75 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
     }
     #expect(rows == 36)
 }
+
+// MARK: - Review
+
+/// Review M4: with the panel open, a composition in another text input (an Inspector field) owns Esc; the panel's
+/// Esc must not close OCR or take the input method's key.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5ComposingOtherTextInputKeepsEscWithPanelOpen() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    try await h.reset(inspector: true)
+    try await h.recognise()
+    _ = try h.openEditor()
+    let other = NSTextView(frame: NSRect(x: 0, y: 0, width: 120, height: 40))
+    h.window.contentView?.addSubview(other)
+    defer { other.removeFromSuperview() }
+    #expect(h.window.makeFirstResponder(other))
+    h.compose(other)
+    #expect(other.hasMarkedText())
+    try h.key("\u{1b}", code: 53)
+    #expect(h.overlay?.panelView != nil, "Esc during another input's composition leaves the OCR panel open")
+    #expect(h.window.firstResponder === other, "the composing input keeps focus")
+}
+
+/// Review M2/5: removals while the Inspector holds focus leave it there, and Tab from the Inspector close control
+/// with the panel open goes to the canvas.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5PanelRemovalLeavesInspectorFocusAlone() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    func toInspector() async throws {
+        try await h.reset(inspector: true)
+        try await h.recognise()
+        _ = try h.openEditor()
+        for _ in 0..<3 { try h.key("\t", code: 48) }
+        #expect((h.window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close")
+    }
+    try await toInspector()
+    try h.key("\t", code: 48)
+    try h.expectCanvasOwnsKeys("Tab from the Inspector close control with the panel open")
+    #expect(h.overlay?.panelView != nil)
+
+    try await toInspector()
+    h.text = "Again"
+    try await h.recognise()
+    #expect(h.overlay?.panelView == nil)
+    #expect((h.window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close",
+            "a new run does not take focus from the Inspector")
+
+    try await toInspector()
+    let before = h.controller.session.imageLoader.fileURL
+    #expect(h.controller.route(before?.lastPathComponent == h.context.first.lastPathComponent ? .next : .previous,
+                               from: .button))
+    try await waitUntil("the other image is shown", timeout: .seconds(60)) {
+        h.controller.session.imageLoader.fileURL != before && h.controller.session.imageStatus == .showing && h.editor == nil
+    }
+    #expect((h.window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close",
+            "an image change does not take focus from the Inspector")
+}
+
+/// Review L6/L7: Edit › 撤销 validates against the editor's own stack through the menu-item path, and that stack is
+/// not the window's.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5EditorUndoMenuFollowsTheEditorStack() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    try await h.reset(inspector: false)
+    try await h.recognise()
+    let editor = try h.openEditor()
+    let item = NSMenuItem(title: "Undo", action: NSSelectorFromString("undo:"), keyEquivalent: "z")
+    #expect(!editor.validateMenuItem(item), "nothing typed: Undo is disabled")
+    editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+    try h.key("x", code: 7)
+    #expect(editor.validateMenuItem(item), "after typing: Undo is enabled")
+    #expect(editor.undoManager !== h.window.undoManager, "the editor's stack is its own")
+}
