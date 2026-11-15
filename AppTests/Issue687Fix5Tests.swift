@@ -38,6 +38,25 @@ import MadoApplication
             windowNumber: window.windowNumber, context: nil, characters: characters,
             charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
     }
+    /// Edit › 撤销 (or the item Command-Z matches) dispatched the way AppKit sends a nil-targeted action to the key
+    /// window: the first responder in the chain that answers undo:, validated first. The test host never becomes the
+    /// active app, so `NSApp.sendAction(_:to: nil)` has no key window to start from.
+    func editMenuUndo(viaShortcut: Bool) throws -> AnyObject? {
+        let undo = NSSelectorFromString("undo:")
+        let items = (NSApp.mainMenu?.items ?? []).flatMap { $0.submenu?.items ?? [] }
+        let item = try #require(viaShortcut
+            ? items.first { $0.keyEquivalent == "z" && $0.keyEquivalentModifierMask == [.command] }
+            : items.first { $0.action == undo })
+        #expect(item.action == undo && item.target == nil)
+        var responder: NSResponder? = window.firstResponder
+        while let current = responder, !current.responds(to: undo) { responder = current.nextResponder }
+        let target: AnyObject? = responder ?? (window.delegate?.responds(to: undo) == true ? window.delegate : nil)
+        guard let target else { return nil }
+        #expect((target as? NSMenuItemValidation)?.validateMenuItem(item)
+                ?? (target as? NSUserInterfaceValidations)?.validateUserInterfaceItem(item) ?? true, "Undo is enabled")
+        _ = target.perform(undo, with: item)
+        return target
+    }
     func commandE() throws -> Bool {
         NSApp.mainMenu?.performKeyEquivalent(with: try event("e", code: 14, modifiers: [.command])) == true
     }
@@ -299,4 +318,38 @@ import MadoApplication
                 "\(label): Shift-Tab leaves the editor backwards, panel open")
         #expect(h.controller.focusContext == .tools, "\(label): back to the last viewer control")
     }
+}
+
+// MARK: - F7
+
+/// Typing in the OCR editor can be undone with Edit › 撤销 and Command-Z; the undo stack ends with the editor, and in
+/// Annotate Mode Command-Z acts on the marks only. The editor is plain text without smart substitutions.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5EditorTypingUndoIsScopedToTheEditor() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    try await h.reset(inspector: true)
+    try await h.recognise()
+    let editor = try h.openEditor()
+    #expect(editor.allowsUndo && !editor.isRichText)
+    #expect(!editor.isAutomaticQuoteSubstitutionEnabled && !editor.isAutomaticDashSubstitutionEnabled
+            && !editor.isAutomaticTextReplacementEnabled && !editor.isAutomaticSpellingCorrectionEnabled)
+    for viaShortcut in [false, true] {
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+        try h.key(" ", code: 49)
+        try h.key("x", code: 7)
+        #expect(editor.string == "Hello x", "typed before \(viaShortcut ? "Command-Z" : "Edit › 撤销")")
+        editor.breakUndoCoalescing()
+        #expect(try h.editMenuUndo(viaShortcut: viaShortcut) === editor, "the editor answers undo:")
+        #expect(editor.string == "Hello", "\(viaShortcut ? "Command-Z" : "Edit › 撤销") restores the text")
+    }
+    let manager = try #require(editor.undoManager)
+    try h.key("y", code: 16)
+    #expect(manager.canUndo)
+    try await h.reset(inspector: false)
+    #expect(!manager.canUndo, "the editor's undo stack ends with the panel")
+    #expect(h.window.undoManager?.canUndo != true, "nothing from the editor is left on the window's stack")
+    #expect(try h.commandE())
+    h.context.mark()
+    #expect(try h.editMenuUndo(viaShortcut: true) === h.controller, "Annotate's undo: answers Command-Z")
+    #expect(h.controller.session.annotateMode?.document.marks.isEmpty == true, "Annotate's Command-Z undoes the mark")
 }

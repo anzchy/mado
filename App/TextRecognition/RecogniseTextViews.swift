@@ -56,6 +56,14 @@ enum RecogniseTextNoticeKind { case success, warning }
     // is not typed into the recognised text.
     override func insertTab(_ sender: Any?) {}
     override func insertBacktab(_ sender: Any?) {}
+    // #687 fix r5 (F7): Edit › 撤销/重做 act on the editor's own stack, which ends with the panel.
+    @objc func undo(_ sender: Any?) { undoManager?.undo() }
+    @objc func redo(_ sender: Any?) { undoManager?.redo() }
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == NSSelectorFromString("undo:") { return undoManager?.canUndo == true }
+        if item.action == NSSelectorFromString("redo:") { return undoManager?.canRedo == true }
+        return super.validateUserInterfaceItem(item)
+    }
 }
 
 /// #687 fix r5 (F6): 拷贝 and 关闭 take keyboard focus like Mado's other controls.
@@ -242,6 +250,16 @@ enum RecogniseTextNoticeKind { case success, warning }
         scrollView.layer?.borderWidth = 1
         textView.isEditable = true
         textView.isSelectable = true
+        // #687 fix r5 (F7): plain recognised text with typing undo, and nothing rewritten behind the user's back.
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isAutomaticDataDetectionEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainerInset = NSSize(width: 8, height: 8)
@@ -314,6 +332,13 @@ enum RecogniseTextNoticeKind { case success, warning }
     @objc private func closePressed() { onClose?() }
     @objc private func copyPressed() { onCopy?() }
     func textDidChange(_ notification: Notification) { onEdit?(textView.string) }
+    /// #687 fix r5 (F7): the editor's typing undo lives and ends with this panel.
+    private let editorUndo = UndoManager()
+    func undoManager(for view: NSTextView) -> UndoManager? { editorUndo }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { editorUndo.removeAllActions() }
+    }
     func showCopiedConfirmation(_ copied: Bool) {
         footerLabel.stringValue = copied
             ? String(localized: "Copied") : String(localized: "You can edit before copying again")
