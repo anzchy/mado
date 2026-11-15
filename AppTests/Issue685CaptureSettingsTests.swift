@@ -53,6 +53,8 @@ private actor LoginItem: CaptureLoginItemPort {
 
 @MainActor private final class Signals {
     var names: [String] = []
+    /// Yields of activation and signals, in the order Settings made them.
+    var log: [String] = []
 }
 
 @MainActor private struct Fixture {
@@ -77,7 +79,8 @@ private actor LoginItem: CaptureLoginItemPort {
             defaults: UserDefaults(suiteName: "issue685-\(UUID().uuidString)")!,
             capturePreferences: Bar(bar), captureLocalize: localize,
             captureShortcuts: shortcuts, captureFolder: folder, captureLoginItem: login,
-            captureSignal: { signals.names.append($0) })
+            captureSignal: { signals.names.append($0); signals.log.append($0) },
+            captureYieldActivation: { signals.log.append("yield:\($0)") })
         panel.select(.capture)
     }
 
@@ -429,4 +432,15 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     #expect(await fixture.shortcuts.stored == .defaults)
     #expect(!fixture.signals.names.contains(CaptureBarIdentity.shortcutsChangedNotification))
     #expect(try captureCatalog("zh-Hans")[reason] == "全局快捷键需要包含 ⌘ 或 ⌃，macOS 不允许只用 ⌥ 或 ⌥⇧。")
+}
+
+// Fix r1 (opus M3): from macOS 14 activation is cooperative, so Settings yields to the helper before asking it to show
+// the open panel; otherwise the panel can open behind Settings.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685ChangeFolderYieldsActivationToTheHelperFirst() async throws {
+    let fixture = Fixture()
+    defer { fixture.panel.window.close() }
+    let change = try #require(fixture.view("settings.capture.folder-change") as? NSButton)
+    await eventually { change.isEnabled }
+    change.performClick(nil)
+    #expect(fixture.signals.log == ["yield:\(CaptureBarIdentity.bundleID)", CaptureBarIdentity.chooseFolderNotification])
 }

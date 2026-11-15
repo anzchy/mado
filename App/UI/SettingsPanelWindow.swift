@@ -147,6 +147,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private let captureFolder: any CaptureFolderPreferencePort
     private let captureLoginItem: any CaptureLoginItemPort
     private let captureSignal: @MainActor (String) -> Void
+    private let captureYieldActivation: @MainActor (String) -> Void
     private var captureLogin: NSSwitch?
     private var captureLoginHint: NSTextField?
     private var captureLoginApproval: NSButton?
@@ -172,6 +173,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
          captureFolder: (any CaptureFolderPreferencePort)? = nil,
          captureLoginItem: (any CaptureLoginItemPort)? = nil,
          captureSignal: (@MainActor (String) -> Void)? = nil,
+         captureYieldActivation: (@MainActor (String) -> Void)? = nil,
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -194,6 +196,9 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         self.captureFolder = captureFolder ?? Self.sharedCaptureFolder
         self.captureLoginItem = captureLoginItem ?? Self.sharedCaptureLoginItem
         self.captureSignal = captureSignal ?? { Self.postCaptureSignal($0) }
+        self.captureYieldActivation = captureYieldActivation ?? {
+            NSApp.yieldActivation(toApplicationWithBundleIdentifier: $0)
+        }
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -633,8 +638,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         Task { await captureLoginItem.openLoginItemsSettings() }
     }
 
-    /// The helper shows the open panel and keeps the bookmark (ADR-0021).
+    /// The helper shows the open panel and keeps the bookmark (ADR-0021). Activation is cooperative from macOS 14:
+    /// Mado yields to the helper first, or the helper's panel can open behind Settings (#685 fix r1).
     @objc private func changeFolder(_ sender: NSButton) {
+        captureYieldActivation(CaptureBarIdentity.bundleID)
         captureSignal(CaptureBarIdentity.chooseFolderNotification)
     }
 
