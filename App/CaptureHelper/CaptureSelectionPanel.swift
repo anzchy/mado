@@ -148,6 +148,11 @@ import MadoApplication
             NSRect(x: 0, y: selected.maxY, width: bounds.width, height: bounds.maxY - selected.maxY).fill()
             NSRect(x: 0, y: selected.minY, width: selected.minX, height: selected.height).fill()
             NSRect(x: selected.maxX, y: selected.minY, width: bounds.maxX - selected.maxX, height: selected.height).fill()
+            // The panel is non-opaque, so the window server sends a click on a fully transparent pixel to the
+            // window below. A near-clear fill keeps the selection clickable; 0.01 survives 8-bit storage (0.001
+            // rounds to 0). The overlay never appears in a capture: it is excluded or ordered out first.
+            NSColor.black.withAlphaComponent(0.01).setFill()
+            selected.fill()
             NSColor.white.setStroke()
             let border = NSBezierPath(rect: selected)
             border.lineWidth = 1
