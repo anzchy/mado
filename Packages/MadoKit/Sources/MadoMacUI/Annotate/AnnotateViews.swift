@@ -405,7 +405,23 @@ public enum AnnotatePaint {
         public let orientation: Int
         public init(image: CGImage, orientation: Int) { self.image = image; self.orientation = orientation }
     }
-    public var redactionSource: RedactionSource? { didSet { patches = [:]; needsDisplay = true } }
+    public var redactionSource: RedactionSource? {
+        didSet {
+            patches = [:]
+            sourceRevision += 1
+            needsDisplay = true
+        }
+    }
+    /// #693 fix r1: makes one redaction's patch off the main actor (tests hold it to see the black placeholder).
+    typealias PatchMaker = @Sendable (RedactionSource, [AnnotationMark], Int) async -> AnnotationFlattener.RedactionPatch?
+    var makeRedactionPatch: PatchMaker = { source, marks, index in
+        await Task.detached(priority: .userInitiated) {
+            try? AnnotationFlattener.redactionPatch(source.image, orientation: source.orientation, marks: marks, index: index)
+        }.value
+    }
+    /// The patch being made; one at a time, so at most one full-size flatten is alive.
+    private(set) var patchGeneration: Task<Void, Never>?
+    private var sourceRevision = 0
     /// #693: the style a new redaction is drawn with.
     public var redactionStyle: RedactionStyle = .mosaic(strength: RedactionStyle.defaultMosaicStrength)
     /// #693: the applied crop and the one being adjusted with the crop tool (image pixels). Outside the shown crop the
@@ -433,8 +449,8 @@ public enum AnnotatePaint {
     }
     /// The crop a crop-tool drag would report now.
     private var cropPreview: CGRect?
-    /// #693: each redaction's copy pixels, kept while the marks up to it and the source stay the same.
-    private var patches: [Int: (marks: [AnnotationMark], patch: AnnotationFlattener.RedactionPatch)] = [:]
+    /// #693: each redaction's copy pixels (nil when it could not be made), for the marks up to it and the source.
+    private var patches: [Int: (marks: [AnnotationMark], patch: AnnotationFlattener.RedactionPatch?)] = [:]
     private var drag: Drag?
     /// What the drag would commit now: a replacement for `index`, or a new mark.
     private var preview: (index: Int?, mark: AnnotationMark)?
@@ -538,20 +554,14 @@ public enum AnnotatePaint {
     }
 
     /// The copy's pixels for a redaction once the source is decoded, else opaque black: the screen never shows what a
-    /// redaction hides. While a drag changes marks before it, the last patch stays (its area does not move); while the
-    /// redaction itself is dragged it is black.
+    /// redaction hides. Drawing never flattens (#693 fix r1): a missing patch is asked for off the main actor and the
+    /// redaction is black until it arrives. While marks before it change, or a drag changes them, its last patch stays
+    /// (its area does not move); while the redaction itself is new, moved, restyled or dragged it is black.
     private func drawRedaction(_ mark: AnnotationMark, at index: Int, of shown: [AnnotationMark], in context: CGContext) {
         let prefix = Array(shown[...index])
-        var patch = patches[index].flatMap { $0.marks == prefix ? $0.patch : nil }
-        if patch == nil, let source = redactionSource {
-            if preview == nil {
-                patch = try? AnnotationFlattener.redactionPatch(source.image, orientation: source.orientation, marks: prefix,
-                                                               index: index)
-                if let patch { patches[index] = (prefix, patch) }
-            } else if let cached = patches[index], cached.marks.last == mark {
-                patch = cached.patch
-            }
-        }
+        let cached = patches[index]
+        if cached?.marks != prefix, preview == nil, let source = redactionSource { requestPatch(index, prefix, source) }
+        let patch = cached?.marks.last == mark ? cached?.patch : nil
         context.saveGState()
         if let patch {
             context.interpolationQuality = .none
@@ -563,6 +573,22 @@ public enum AnnotatePaint {
             context.fill(mark.rect.integral.intersection(CGRect(origin: .zero, size: imageSize)))
         }
         context.restoreGState()
+    }
+
+    /// Makes one patch at a time; it is kept only if the source and the marks up to the redaction are still the
+    /// ones it was made from.
+    private func requestPatch(_ index: Int, _ prefix: [AnnotationMark], _ source: RedactionSource) {
+        guard patchGeneration == nil else { return }
+        let revision = sourceRevision, make = makeRedactionPatch
+        patchGeneration = Task { [weak self] in
+            let patch = await make(source, prefix, index)
+            guard let self else { return }
+            patchGeneration = nil
+            if revision == sourceRevision, marks.count > index, Array(marks[...index]) == prefix {
+                patches[index] = (prefix, patch)
+            }
+            needsDisplay = true
+        }
     }
 
     /// The crop the overlay shows: the crop tool's drag, else with the crop tool the pending crop, else the applied one.
@@ -1115,13 +1141,24 @@ public enum AnnotatePaint {
 
     public var onChange: ((RedactionStyle) -> Void)?
     /// The strip the popover docks beside; set before adding it to the strip's superview.
-    public weak var strip: AnnotateStripView? { didSet { dock() } }
+    public weak var strip: AnnotateStripView? {
+        didSet {
+            // gpt M3: a short window scrolls the strip, which moves 遮挡; the nub follows it.
+            NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: nil)
+            if let clip = strip?.scrollView.contentView {
+                clip.postsBoundsChangedNotifications = true
+                NotificationCenter.default.addObserver(self, selector: #selector(stripScrolled),
+                                                       name: NSView.boundsDidChangeNotification, object: clip)
+            }
+            dock()
+        }
+    }
     public let mosaicButton: NSButton
     public let solidButton: NSButton
     public let slider = NSSlider(value: Double(RedactionStyle.defaultMosaicStrength),
                                  minValue: Double(RedactionStyle.minimumMosaicStrength),
                                  maxValue: Double(RedactionStyle.maximumMosaicStrength), target: nil, action: nil)
-    public let hintView = NSTextView(frame: .zero)
+    public let hintView: NSTextView = HintTextView(frame: .zero)
     public let solidLine = NSTextField(labelWithString: "")
     /// The nub's centre, in the popover's own top-left points.
     public private(set) var nubY: CGFloat = 0
@@ -1178,7 +1215,9 @@ public enum AnnotatePaint {
         slider.setAccessibilityLabel(strings.strengthLabel)
 
         hintView.isEditable = false
-        hintView.isSelectable = true
+        // opus M1: the hint never takes the keys from the canvas; its link is handled by the click itself.
+        hintView.isSelectable = false
+        (hintView as? HintTextView)?.onLink = { [weak self] in self?.choose(.solid) }
         hintView.drawsBackground = false
         hintView.textContainerInset = .zero
         hintView.textContainer?.lineFragmentPadding = 0
@@ -1274,6 +1313,7 @@ public enum AnnotatePaint {
         dock()
     }
     @objc private func superviewFrameChanged() { dock() }
+    @objc private func stripScrolled() { dock() }
     public override func resize(withOldSuperviewSize oldSize: NSSize) { dock() }
 
     private func dock() {
@@ -1313,10 +1353,28 @@ public enum AnnotatePaint {
         onChange?(style)
     }
 
-    /// 改用实色块.
+    /// 改用实色块 (also what an accessibility press on the link reports).
     public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         choose(.solid)
         return true
+    }
+
+    /// The hint: read-only text that refuses first responder, so a click on it leaves the keys with the canvas; a
+    /// click on the link's own glyphs reports it (opus M1).
+    private final class HintTextView: NSTextView {
+        var onLink: (() -> Void)?
+        override var acceptsFirstResponder: Bool { false }
+        override func becomeFirstResponder() -> Bool { false }
+        override func mouseDown(with event: NSEvent) {
+            let point = convert(event.locationInWindow, from: nil)
+            let inContainer = CGPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+            guard let manager = layoutManager, let container = textContainer, let storage = textStorage else { return }
+            let index = manager.characterIndex(for: inContainer, in: container, fractionOfDistanceBetweenInsertionPoints: nil)
+            let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: index, length: 1), actualCharacterRange: nil)
+            guard index < storage.length, storage.attribute(.link, at: index, effectiveRange: nil) != nil,
+                  manager.boundingRect(forGlyphRange: glyphs, in: container).contains(inContainer) else { return }
+            onLink?()
+        }
     }
 
     /// annotate.html:89–91 `.segmented`: a 2 pt inset track in `--color-hover`; the pressed segment is panel-filled.

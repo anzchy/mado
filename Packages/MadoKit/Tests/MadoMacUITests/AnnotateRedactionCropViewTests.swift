@@ -279,8 +279,8 @@ private let actual = CanvasTransform(backingScale: 1, zoom: 1, origin: .zero)
 }
 
 /// Seeded noise, sRGB 8-bit.
-private func noise(width: Int, height: Int) -> CGImage {
-    var state: UInt64 = 11
+private func noise(width: Int, height: Int, seed: UInt64 = 11) -> CGImage {
+    var state: UInt64 = seed
     var bytes = [UInt8](repeating: 255, count: width * height * 4)
     for i in 0..<(width * height) {
         for c in 0..<3 {
@@ -309,7 +309,17 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     return (0..<4).map { Int(data[i + $0]) }
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayShowsTheRedactionPatchOrBlack() throws {
+/// #693 fix r1: renders, then lets every patch the draw asked for finish and renders again.
+@MainActor private func renderSettled(_ container: NSView, _ view: AnnotationOverlayView) async throws -> NSBitmapImageRep {
+    var rep = try render(container)
+    while let generation = view.patchGeneration {
+        await generation.value
+        rep = try render(container)
+    }
+    return rep
+}
+
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayShowsTheRedactionPatchOrBlack() async throws {
     let source = noise(width: 96, height: 64)
     let (view, container, window) = overlay(actual, imageSize: CGSize(width: 96, height: 64),
                                             size: CGSize(width: 96, height: 64), fill: .white)
@@ -324,7 +334,7 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     #expect(near(px(rep, 70, 50), [255, 255, 255, 255]), "outside is the container")
     // With it, the copy's pixels.
     view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
-    rep = try render(container)
+    rep = try await renderSettled(container, view)
     var patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: view.marks, index: 1))
     for (x, y) in [(8, 8), (30, 20), (55, 39), (24, 24)] {
         let expected = bytes(patch.image, x - Int(patch.area.minX), y - Int(patch.area.minY))
@@ -335,7 +345,7 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     let before = px(rep, 12, 12)
     view.marks = [AnnotationGeometry.translate(red, by: CGVector(dx: 40, dy: 30), imageSize: CGSize(width: 96, height: 64)),
                   mosaic]
-    rep = try render(container)
+    rep = try await renderSettled(container, view)
     patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: view.marks, index: 1))
     #expect(near(px(rep, 12, 12), bytes(patch.image, 4, 4)))
     #expect(!near(px(rep, 12, 12), before, 0), "the cell under the moved rectangle changed")
@@ -457,7 +467,7 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     #expect(crops == [expected])
 }
 
-@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayKeepsTheLastPatchWhileAMarkBeforeItIsDragged() throws {
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayKeepsTheLastPatchWhileAMarkBeforeItIsDragged() async throws {
     let source = noise(width: 96, height: 64)
     let (view, container, window) = overlay(actual, imageSize: CGSize(width: 96, height: 64),
                                             size: CGSize(width: 96, height: 64), fill: .white)
@@ -467,7 +477,7 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     let mosaic = AnnotationMark.redaction(rect: CGRect(x: 8, y: 8, width: 48, height: 32), style: .mosaic(strength: 16))
     view.marks = [red, mosaic]
     view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
-    let shown = try render(container)
+    let shown = try await renderSettled(container, view)
     let patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: view.marks, index: 1))
     #expect(near(px(shown, 12, 12), bytes(patch.image, 4, 4)))
     // Drag the rectangle (held): the mosaic keeps its last patch instead of recomputing on every move.
@@ -511,4 +521,165 @@ private func bytes(_ image: CGImage, _ x: Int, _ y: Int) -> [Int] {
     let expected = AnnotateRedactionOptionsView.placement(height: popover.frame.height, stripFrame: stripFrame,
         toolCentreY: stripFrame.minY + strip.centreY(of: .redact), containerHeight: size.height)
     #expect(near(popover.frame, expected.frame), "\(popover.frame) vs \(expected.frame)")
+}
+
+// MARK: - Fix round 1 (i693b-fix1-brief.md)
+
+/// opus M1: a click on the hint or on 改用实色块 never takes the keys from the canvas.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693HintRefusesFirstResponderAndTheLinkClickSwitchesToSolid() throws {
+    let (popover, _, window) = popoverHost(.mosaic(strength: 24))
+    defer { window.close() }
+    var log: [RedactionStyle] = []
+    popover.onChange = { log.append($0) }
+    let hint = popover.hintView
+    #expect(!hint.acceptsFirstResponder)
+    // What NSWindow does with a mouse-down on the hint; a view that refuses leaves the keys with the window.
+    _ = window.makeFirstResponder(hint)
+    #expect(window.firstResponder !== hint)
+    // A selectable text view runs its own mouse-tracking loop; the hint must not.
+    try #require(!hint.isSelectable)
+    let manager = try #require(hint.layoutManager), container = try #require(hint.textContainer)
+    func point(of text: String) throws -> CGPoint {
+        let range = (hint.string as NSString).range(of: text)
+        try #require(range.location != NSNotFound, "\(text) is in the hint")
+        let glyphs = manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        let rect = manager.boundingRect(forGlyphRange: glyphs, in: container)
+        return CGPoint(x: rect.midX + hint.textContainerOrigin.x, y: rect.midY + hint.textContainerOrigin.y)
+    }
+    hint.mouseDown(with: try event(hint, .leftMouseDown, try point(of: "强度低")))
+    #expect(log.isEmpty, "the hint's own words are not the link")
+    hint.mouseDown(with: try event(hint, .leftMouseDown, try point(of: "改用")))
+    #expect(log == [.solid])
+    #expect(window.firstResponder !== hint)
+}
+
+/// gpt M3: scrolling a short window's strip moves 遮挡, so the nub follows it.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693RedactionOptionsRedockWhenTheStripScrolls() throws {
+    let (popover, strip, window) = popoverHost(.mosaic(strength: 24))
+    defer { window.close() }
+    let container = try #require(popover.superview)
+    let size = CGSize(width: 1280, height: 400)
+    container.setFrameSize(size)
+    let stripFrame = AnnotateStripView.frame(in: size)
+    try #require(stripFrame.height < 508, "the strip scrolls in a 400 pt window")
+    let before = popover.frame
+    let clip = strip.scrollView.contentView
+    clip.scroll(to: NSPoint(x: 0, y: 60))
+    strip.scrollView.reflectScrolledClipView(clip)
+    let expected = AnnotateRedactionOptionsView.placement(height: popover.frame.height, stripFrame: stripFrame,
+        toolCentreY: stripFrame.minY + strip.centreY(of: .redact), containerHeight: size.height)
+    #expect(abs(expected.frame.minY - before.minY) > 10, "the scroll moved 遮挡 (\(before) → \(expected.frame))")
+    #expect(near(popover.frame, expected.frame), "\(popover.frame) vs \(expected.frame)")
+    #expect(abs(popover.nubY - expected.nubY) < 0.01, "\(popover.nubY) vs \(expected.nubY)")
+}
+
+/// gpt M1 / opus M2: a cached patch holds its own pixels, not a window into a full-size flatten.
+@Test(.timeLimit(.minutes(2))) func issue693RedactionPatchOwnsAPatchSizedBitmap() throws {
+    let source = noise(width: 400, height: 300)
+    let marks = [AnnotationMark(rect: CGRect(x: 0, y: 0, width: 60, height: 40),
+                                style: AnnotationStyle(red: 1, green: 0, blue: 0, lineWidth: 4)),
+                 AnnotationMark.redaction(rect: CGRect(x: 10.4, y: 20, width: 30, height: 16), style: .mosaic(strength: 16))]
+    let patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: marks, index: 1))
+    #expect(patch.area == CGRect(x: 10, y: 20, width: 31, height: 16))
+    #expect(patch.image.width == 31 && patch.image.height == 16)
+    #expect(patch.image.bytesPerRow < source.width * 4, "rows of \(patch.image.bytesPerRow) bytes belong to the whole image")
+    let data = try #require(patch.image.dataProvider?.data)
+    #expect(CFDataGetLength(data) <= patch.image.bytesPerRow * patch.image.height)
+    let full = try AnnotationFlattener.flatten(source, orientation: 1, marks: marks)
+    for (x, y) in [(0, 0), (15, 8), (30, 15), (3, 12)] {
+        #expect(bytes(patch.image, x, y) == bytes(full, 10 + x, 20 + y), "\(x),\(y)")
+    }
+}
+
+/// Holds every patch until `open()`, and records the marks each was asked for.
+private actor PatchGate {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+    private(set) var asked: [[AnnotationMark]] = []
+    func wait(_ marks: [AnnotationMark]) async {
+        asked.append(marks)
+        guard !isOpen else { return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+    func open() {
+        isOpen = true
+        for continuation in waiting { continuation.resume() }
+        waiting = []
+    }
+}
+
+@MainActor private func gated(_ view: AnnotationOverlayView) -> PatchGate {
+    let gate = PatchGate()
+    view.makeRedactionPatch = { source, marks, index in
+        await gate.wait(marks)
+        return try? AnnotationFlattener.redactionPatch(source.image, orientation: source.orientation, marks: marks,
+                                                       index: index)
+    }
+    return gate
+}
+
+/// gpt M1 / opus M2: drawing never flattens; the redaction is black until its patch arrives.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayDrawsBlackUntilThePatchIsReady() async throws {
+    let source = noise(width: 96, height: 64)
+    let (view, container, window) = overlay(actual, imageSize: CGSize(width: 96, height: 64),
+                                            size: CGSize(width: 96, height: 64), fill: .white)
+    defer { window.close() }
+    let gate = gated(view)
+    let mosaic = AnnotationMark.redaction(rect: CGRect(x: 8, y: 8, width: 48, height: 32), style: .mosaic(strength: 16))
+    view.marks = [mosaic]
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
+    var rep = try render(container)
+    for (x, y) in [(8, 8), (30, 20), (55, 39)] { #expect(near(px(rep, x, y), [0, 0, 0, 255]), "\(x),\(y)") }
+    let generation = try #require(view.patchGeneration, "the draw asked for the patch")
+    // Drawing again while it is made does not ask twice.
+    _ = try render(container)
+    await gate.open()
+    await generation.value
+    rep = try await renderSettled(container, view)
+    let patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: [mosaic], index: 0))
+    for (x, y) in [(8, 8), (30, 20), (55, 39)] {
+        #expect(near(px(rep, x, y), bytes(patch.image, x - 8, y - 8)), "\(x),\(y)")
+    }
+    #expect(await gate.asked == [[mosaic]])
+}
+
+/// gpt M1 / opus M2: a patch made for marks or a source that changed meanwhile is dropped.
+@Test(.timeLimit(.minutes(2))) @MainActor func issue693OverlayDiscardsAStalePatch() async throws {
+    let size = CGSize(width: 96, height: 64)
+    let source = noise(width: 96, height: 64), other = noise(width: 96, height: 64, seed: 5)
+    let (view, container, window) = overlay(actual, imageSize: size, size: size, fill: .white)
+    defer { window.close() }
+    let gate = gated(view)
+    let red = AnnotationMark(rect: CGRect(x: 4, y: 4, width: 30, height: 20),
+                             style: AnnotationStyle(red: 1, green: 0, blue: 0, lineWidth: 4))
+    let mosaic = AnnotationMark.redaction(rect: CGRect(x: 8, y: 8, width: 48, height: 32), style: .mosaic(strength: 16))
+    view.marks = [red, mosaic]
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
+    _ = try render(container)
+    let first = try #require(view.patchGeneration)
+    // The rectangle under the mosaic moves before the patch is ready.
+    let moved = AnnotationGeometry.translate(red, by: CGVector(dx: 40, dy: 30), imageSize: size)
+    view.marks = [moved, mosaic]
+    await gate.open()
+    await first.value
+    var rep = try render(container)
+    for (x, y) in [(8, 8), (30, 20), (55, 39)] { #expect(near(px(rep, x, y), [0, 0, 0, 255]), "stale marks: \(x),\(y)") }
+    rep = try await renderSettled(container, view)
+    var patch = try #require(try AnnotationFlattener.redactionPatch(source, orientation: 1, marks: [moved, mosaic], index: 1))
+    #expect(near(px(rep, 12, 12), bytes(patch.image, 4, 4), 0))
+    // A new source while a patch is made: the old one's patch is dropped too.
+    let gate2 = gated(view)
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: other, orientation: 1)
+    _ = try render(container)
+    let second = try #require(view.patchGeneration)
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: source, orientation: 1)
+    view.redactionSource = AnnotationOverlayView.RedactionSource(image: other, orientation: 1)
+    await gate2.open()
+    await second.value
+    rep = try render(container)
+    for (x, y) in [(8, 8), (30, 20), (55, 39)] { #expect(near(px(rep, x, y), [0, 0, 0, 255]), "stale source: \(x),\(y)") }
+    rep = try await renderSettled(container, view)
+    patch = try #require(try AnnotationFlattener.redactionPatch(other, orientation: 1, marks: [moved, mosaic], index: 1))
+    #expect(near(px(rep, 12, 12), bytes(patch.image, 4, 4), 0))
+    #expect(await gate.asked == [[red, mosaic], [moved, mosaic]])
 }
