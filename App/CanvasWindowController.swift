@@ -395,6 +395,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self.session.updateFocus(self.focusContext)
         }
         window.consumeKey = { [weak self] event in self?.consumePanelKey(event) ?? false }
+        window.yieldsUndoRedo = { [weak self] in self?.session.isAnnotating == true }
         window.observeMouseDown = { [weak self, weak window] event in
             guard let self else { return }
             // AppKit asks to focus the hit view before delivering mouseDown. Release the
