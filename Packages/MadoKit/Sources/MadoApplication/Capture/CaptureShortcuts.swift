@@ -57,17 +57,33 @@ public struct CaptureShortcutBindings: Equatable, Sendable {
 
     public init(_ combos: [CaptureShortcutAction: CaptureKeyCombo]) { self.combos = combos }
 
-    /// ⌃⇧⌘1 region, 2 window, 3 full screen, 4 capture and recognise text, 0 show / collapse the bar.
-    public static let defaults: CaptureShortcutBindings = {
-        let modifiers: CaptureKeyModifiers = [.control, .shift, .command]
-        return CaptureShortcutBindings([
+    /// ⌃⌥1 region, 2 window, 3 full screen, 4 capture and recognise text, 0 show / collapse the bar (#717).
+    public static let defaults: CaptureShortcutBindings = series([.control, .option])
+
+    /// The ⌃⇧⌘ series #685 shipped as defaults before #717.
+    public static let legacyDefaults: CaptureShortcutBindings = series([.control, .shift, .command])
+
+    private static func series(_ modifiers: CaptureKeyModifiers) -> CaptureShortcutBindings {
+        CaptureShortcutBindings([
             .region: CaptureKeyCombo(keyCode: 18, key: "1", modifiers: modifiers),
             .window: CaptureKeyCombo(keyCode: 19, key: "2", modifiers: modifiers),
             .fullScreen: CaptureKeyCombo(keyCode: 20, key: "3", modifiers: modifiers),
             .recognizeText: CaptureKeyCombo(keyCode: 21, key: "4", modifiers: modifiers),
             .toggleBar: CaptureKeyCombo(keyCode: 29, key: "0", modifiers: modifiers)
         ])
-    }()
+    }
+
+    /// #717: an action still on its ⌃⇧⌘ default moves to the ⌃⌥ default; a combo the user set stays. An old default
+    /// also stays when its new default is already bound to another action, so the move never makes a duplicate.
+    public func replacingLegacyDefaults() -> CaptureShortcutBindings {
+        var moved = self
+        for action in CaptureShortcutAction.allCases {
+            guard let old = Self.legacyDefaults[action], let new = Self.defaults[action],
+                  sameKeys(combos[action], old), moved.validate(new, for: action) == nil else { continue }
+            moved.combos[action] = new
+        }
+        return moved
+    }
 
     /// Virtual key codes of ⌘ ⇧ ⇪ ⌥ ⌃ (left and right) and fn.
     private static let modifierKeyCodes: ClosedRange<UInt32> = 54...63

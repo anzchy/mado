@@ -136,7 +136,7 @@ private func id(_ action: CaptureShortcutAction) -> UInt32 { CaptureHotKeyCoordi
     let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
     let one = CaptureShortcutBindings.defaults[.region]!
     let zero = CaptureShortcutBindings.defaults[.toggleBar]!
-    // The user had moved ⌃⇧⌘1 to the toggle; 恢复默认 hands it back to region in one change.
+    // The user had moved ⌃⌥1 to the toggle; 恢复默认 hands it back to region in one change.
     try await preferences.edit { $0.clear(.region); $0.clear(.toggleBar); try $0.bind(one, to: .toggleBar) }
     await coordinator.apply()
     await preferences.edit { $0 = .defaults }
