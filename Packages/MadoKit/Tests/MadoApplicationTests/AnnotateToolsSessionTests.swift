@@ -241,8 +241,8 @@ private func step(_ x: CGFloat) -> AnnotationMark { .step(centre: CGPoint(x: x, 
             }
         }
     }
-    // Redaction (M) and crop (C) are #693's; their letters do nothing yet. Other letters too.
-    for letter in ["m", "c", "M", "C", "b", "x", "1", ""] {
+    // #693 took M (redaction) and C (crop); its own tests cover them (issue693KeyPolicyMapsMAndC). Other letters do nothing.
+    for letter in ["b", "x", "1", ""] {
         #expect(AnnotateKeyPolicy.action(key: .character(letter), modifiers: [], active: true, typing: false) == nil, "\(letter)")
     }
 }
