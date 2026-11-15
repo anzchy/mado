@@ -305,12 +305,15 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
             do {
                 let policy = await outputPreferences?.outputPolicy() ?? .standard
                 let clipboard = PasteboardCaptureClipboard()
-                let (state, frame) = try await CaptureThumbnailFlow.capture(
-                    request: request, selectedDisplay: selectedDisplay, session: session, policy: policy,
-                    clipboard: clipboard, pointer: { pointer }, screens: CaptureThumbnailPlacement.screens,
-                    // The menu bar icon's window (collapsed bar) is part of the menu bar, not a window to exclude.
-                    fullScreenRequest: { ScreenCaptureKitScreen.fullScreenRequest(
-                        displayID: $0, windows: NSApp.windows.filter { $0.level != .statusBar }) })
+                let read: @MainActor () async throws -> (CaptureThumbnailState, NSRect) = { [session] in
+                    try await CaptureThumbnailFlow.capture(
+                        request: request, selectedDisplay: selectedDisplay, session: session, policy: policy,
+                        clipboard: clipboard, pointer: { pointer }, screens: CaptureThumbnailPlacement.screens,
+                        // The menu bar icon's window is not one of ours to exclude; whileCapturing hides it (fix r2 F1).
+                        fullScreenRequest: { ScreenCaptureKitScreen.fullScreenRequest(
+                            displayID: $0, windows: NSApp.windows.filter { $0.level != .statusBar }) })
+                }
+                let (state, frame) = if let collapse { try await collapse.whileCapturing(read) } else { try await read() }
                 statusPanel?.orderOut(nil)
                 let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
                                                   trash: FileManagerCaptureTrash())

@@ -66,12 +66,23 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
     let label: String
     let action: () -> Void
     var removed = false
+    /// What happened to the icon, in order, shared with the Capture body (fix r2 F1).
+    var log: (String) -> Void = { _ in }
+    /// How many more reads report the icon still on screen after it was hidden.
+    var lingeringReads = 0
+    private var hidden = false
     init(_ toolTip: String, _ label: String, _ action: @escaping () -> Void) {
         self.toolTip = toolTip
         self.label = label
         self.action = action
     }
-    func remove() { removed = true }
+    func remove() { removed = true; log("remove") }
+    func setHidden(_ hidden: Bool) { self.hidden = hidden; log(hidden ? "hide" : "show") }
+    var isOnScreen: Bool {
+        guard hidden else { return true }
+        if lingeringReads > 0 { lingeringReads -= 1; log("still-on-screen"); return true }
+        return false
+    }
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue685CollapseShowsOneMenuBarIconAndRestoreBringsTheBarBack() throws {
@@ -105,4 +116,88 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
     controller.toggle()
     #expect(!controller.isCollapsed && bar.isVisible && items[1].removed)
     #expect(changes == [true, false, true, false])
+}
+
+// Fix r2 F1 (device smoke685 step 5): on macOS 26 the status item's window belongs to Control Center, so no filter on
+// the helper's windows keeps the collapsed bar's icon out of a Capture. The icon is hidden, the helper waits until it
+// is really gone, the Capture runs, and the icon comes back on every exit path. The collapsed state is unchanged.
+private enum CaptureFailed: Error { case failed }
+
+@MainActor private func collapsedController(_ log: @escaping (String) -> Void,
+                                            lingering: Int = 0) -> (CaptureBarCollapseController, () -> FakeStatusItem?) {
+    let bar = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 40), styleMask: [.borderless, .nonactivatingPanel],
+                      backing: .buffered, defer: false)
+    var made: FakeStatusItem?
+    let controller = CaptureBarCollapseController(bar: bar, localize: { $0 }, makeStatusItem: { tip, label, action in
+        let item = FakeStatusItem(tip, label, action)
+        item.log = log
+        item.lingeringReads = lingering
+        made = item
+        return item
+    }, iconPoll: .milliseconds(1))
+    return (controller, { made })
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685CollapsedIconIsHiddenUntilGoneDuringACaptureAndComesBack() async throws {
+    var log: [String] = []
+    let (controller, item) = collapsedController({ log.append($0) }, lingering: 2)
+    controller.collapse()
+    try #require(item() != nil)
+    let result = await controller.whileCapturing { log.append("capture"); return 7 }
+    #expect(result == 7)
+    #expect(log == ["hide", "still-on-screen", "still-on-screen", "capture", "show"])
+    #expect(controller.isCollapsed)
+    #expect(item()?.removed == false)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685CollapsedIconComesBackWhenTheCaptureFailsOrIsCancelled() async throws {
+    var log: [String] = []
+    let (controller, _) = collapsedController({ log.append($0) })
+    controller.collapse()
+    await #expect(throws: CaptureFailed.self) {
+        try await controller.whileCapturing { log.append("capture"); throw CaptureFailed.failed }
+    }
+    #expect(log == ["hide", "capture", "show"])
+    log.removeAll()
+    await #expect(throws: CancellationError.self) {
+        try await controller.whileCapturing { log.append("capture"); throw CancellationError() }
+    }
+    #expect(log == ["hide", "capture", "show"])
+    #expect(controller.isCollapsed)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685CaptureWithTheBarShownTouchesNoIcon() async throws {
+    var log: [String] = []
+    let (controller, item) = collapsedController({ log.append($0) })
+    await controller.whileCapturing { log.append("capture") }
+    #expect(log == ["capture"])
+    #expect(item() == nil)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685IconThatNeverLeavesDoesNotHoldTheCaptureForever() async throws {
+    var log: [String] = []
+    let (controller, _) = collapsedController({ log.append($0) }, lingering: 10_000)
+    controller.collapse()
+    await controller.whileCapturing { log.append("capture") }
+    #expect(log.first == "hide")
+    #expect(log.suffix(2) == ["capture", "show"])
+    #expect(log.filter { $0 == "still-on-screen" }.count <= CaptureBarCollapseController.iconWaitPolls)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685IconRestoredDuringACaptureStaysRemoved() async throws {
+    var log: [String] = []
+    let (controller, item) = collapsedController({ log.append($0) })
+    controller.collapse()
+    await controller.whileCapturing { log.append("capture"); controller.restore() }
+    #expect(log == ["hide", "capture", "remove"])
+    #expect(!controller.isCollapsed)
+    #expect(item()?.removed == true)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685IconMadeDuringACaptureStartsHidden() async throws {
+    var log: [String] = []
+    let (controller, item) = collapsedController({ log.append($0) })
+    await controller.whileCapturing { log.append("capture"); controller.collapse() }
+    #expect(log == ["capture", "hide", "show"])
+    #expect(controller.isCollapsed && item() != nil)
 }
