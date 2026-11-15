@@ -96,17 +96,20 @@ private final class FakeClock: @unchecked Sendable {
     #expect(abs(controller.cornerFrame.maxX - (secondary.maxX - 20)) < 0.5)
     #expect(abs(controller.cornerFrame.minY - (secondary.minY + 20)) < 0.5)
     #expect(controller.panel.frame.contains(controller.cornerFrame))
-    let screens = [(id: UInt32(1), visible: NSRect(x: 0, y: 0, width: 1440, height: 875)),
-                   (id: UInt32(7), visible: secondary)]
-    let region = CaptureRequest(target: .region(rect: .zero, displayID: 7, displayFrame: secondary, scale: 2),
-                                barWindowIDs: [], overlayWindowIDs: [])
-    let full = CaptureRequest(target: .fullScreen(displayID: 7), barWindowIDs: [], overlayWindowIDs: [])
-    let window = CaptureRequest(target: .window(windowID: 99), barWindowIDs: [], overlayWindowIDs: [])
-    let pointerOnFirst = NSPoint(x: 10, y: 10)
-    #expect(CaptureThumbnailPlacement.visibleFrame(for: region, screens: screens, pointer: pointerOnFirst) == secondary)
-    #expect(CaptureThumbnailPlacement.visibleFrame(for: full, screens: screens, pointer: pointerOnFirst) == secondary)
-    #expect(CaptureThumbnailPlacement.visibleFrame(for: window, screens: screens, pointer: NSPoint(x: 1500, y: 0)) == secondary)
-    #expect(CaptureThumbnailPlacement.visibleFrame(for: nil, screens: screens, pointer: pointerOnFirst) == screens[0].visible)
+    let main = NSRect(x: 0, y: 0, width: 1440, height: 875)
+    let screens: [CaptureThumbnailPlacement.Screen] = [
+        (id: 1, frame: NSRect(x: 0, y: 0, width: 1440, height: 900), visible: main),
+        (id: 7, frame: NSRect(x: 1440, y: -200, width: 1920, height: 1080), visible: secondary)]
+    let region = CaptureRequest.Target.region(rect: .zero, displayID: 7, displayFrame: secondary, scale: 2)
+    #expect(CaptureThumbnailPlacement.displayID(for: region, selectedDisplay: nil) == 7)
+    #expect(CaptureThumbnailPlacement.displayID(for: .fullScreen(displayID: 7), selectedDisplay: nil) == 7)
+    #expect(CaptureThumbnailPlacement.displayID(for: .window(windowID: 99), selectedDisplay: 7) == 7)
+    #expect(CaptureThumbnailPlacement.displayID(containing: NSPoint(x: 10, y: 10), screens: screens) == 1)
+    #expect(CaptureThumbnailPlacement.visibleFrame(displayID: 7, screens: screens) == secondary)
+    #expect(CaptureThumbnailPlacement.visibleFrame(displayID: 1, screens: screens) == main)
+    // Unknown display (unplugged since the Capture started): the main display.
+    #expect(CaptureThumbnailPlacement.visibleFrame(displayID: 42, screens: screens) == main)
+    #expect(CaptureThumbnailPlacement.visibleFrame(displayID: nil, screens: screens) == main)
 }
 
 @MainActor @Test(.timeLimit(.minutes(2))) func issue684ThumbnailHoverActions() async throws {
