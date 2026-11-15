@@ -46,7 +46,7 @@ private actor CaptureBarTestPreferences: CaptureBarPreferencePort {
     #expect(switchButton.state == .off)
     #expect(switchButton.isEnabled)
     let note = try #require(captureSettingsView("settings.capture.permission-note", in: panel) as? NSTextField)
-    #expect(note.stringValue == "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots.")
+    #expect(note.stringValue == "On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing.")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue682CaptureSettingsFirstShowStartsAtTop() throws {
@@ -77,7 +77,7 @@ private actor CaptureBarTestPreferences: CaptureBarPreferencePort {
     #expect(folderLabel.alignment == .right)
     #expect(folderLabel.frame.width >= 120)
     #expect(abs(folder.frame.minX - folderLabel.frame.maxX - 16) <= 1)
-    #expect(note.stringValue == "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots.")
+    #expect(note.stringValue == "On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing.")
     #expect(ocr.isEnabledForCaptureSettings)
     let cloud = try #require(captureSettingsView("settings.capture.ocr-cloud", in: panel) as? NSSwitch)
     let service = try #require(captureSettingsView("settings.capture.ocr-service", in: panel) as? NSPopUpButton)

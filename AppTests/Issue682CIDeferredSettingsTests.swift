@@ -3,13 +3,6 @@ import Testing
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue682CIDeferredCaptureControlsAreExactAndRejectUnknownDisabledControls() {
     let expected = [
-        "settings.capture.login": 685,
-        "settings.capture.folder-change": 684,
-        "settings.capture.shortcut-region": 685,
-        "settings.capture.shortcut-1": 685,
-        "settings.capture.shortcut-2": 685,
-        "settings.capture.shortcut-3": 685,
-        "settings.capture.shortcut-4": 685,
         "settings.capture.ocr-cloud": 689,
         "settings.capture.ocr-service": 689,
     ]

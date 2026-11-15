@@ -15,6 +15,10 @@ public enum CaptureBarIdentity {
     public static let chooseFolderNotification = "io.github.anzchy.mado.capture.chooseFolder"
     /// Helper → Settings: the Capture Folder record changed (#685).
     public static let folderChangedNotification = "io.github.anzchy.mado.capture.folderChanged"
+    /// Settings → helper: a shortcut field started recording; release the hotkeys (#685).
+    public static let recordingBeganNotification = "io.github.anzchy.mado.capture.recordingBegan"
+    /// Settings → helper: recording ended; register the hotkeys again (#685).
+    public static let recordingEndedNotification = "io.github.anzchy.mado.capture.recordingEnded"
 }
 
 public enum CapturePermissionState: String, Sendable {
