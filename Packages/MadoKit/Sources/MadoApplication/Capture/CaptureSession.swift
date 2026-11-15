@@ -8,6 +8,12 @@ public protocol CaptureScreenPort: Sendable {
 public protocol CaptureFilePort: Sendable {
     /// Creates a new file. An existing name must throw `CaptureFileError.alreadyExists`.
     func writeNewPNG(_ data: Data, named: String) async throws -> URL
+    /// The folder the next file goes to, as the thumbnail's status line shows it; nil keeps the session's own.
+    func folderDisplay() async -> String?
+}
+
+public extension CaptureFilePort {
+    func folderDisplay() async -> String? { nil }
 }
 
 public enum CaptureFileError: Error, Equatable, Sendable {
@@ -56,8 +62,8 @@ public actor CaptureSession {
                         clipboard: any CaptureClipboardPort) async throws -> CaptureThumbnailState {
         try await admitted {
             let png = try await self.grab(request)
-            var state = CaptureThumbnailState(png: png, savedURL: nil, clipboard: .notCopied,
-                                              folderDisplay: self.folderDisplay)
+            let folder = await self.files.folderDisplay() ?? self.folderDisplay
+            var state = CaptureThumbnailState(png: png, savedURL: nil, clipboard: .notCopied, folderDisplay: folder)
             if policy.savesToFolder {
                 do { state.savedURL = try await self.writeUniquePNG(png) }
                 catch { try Task.checkCancellation(); state.saveFailed = true }
