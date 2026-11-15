@@ -9,14 +9,16 @@ private func combo(_ keyCode: UInt32, _ key: String, _ modifiers: CaptureKeyModi
 }
 
 private let ctrlShiftCmd: CaptureKeyModifiers = [.control, .shift, .command]
+/// The default series since #717 (was ⌃⇧⌘ in #685).
+private let ctrlOpt: CaptureKeyModifiers = [.control, .option]
 
-@Test(.timeLimit(.minutes(2))) func issue685DefaultsAreTheControlShiftCommandSeries() {
+@Test(.timeLimit(.minutes(2))) func issue685DefaultsAreTheControlOptionSeries() {
     let defaults = CaptureShortcutBindings.defaults
-    #expect(defaults[.region] == combo(18, "1", ctrlShiftCmd))
-    #expect(defaults[.window] == combo(19, "2", ctrlShiftCmd))
-    #expect(defaults[.fullScreen] == combo(20, "3", ctrlShiftCmd))
-    #expect(defaults[.recognizeText] == combo(21, "4", ctrlShiftCmd))
-    #expect(defaults[.toggleBar] == combo(29, "0", ctrlShiftCmd))
+    #expect(defaults[.region] == combo(18, "1", ctrlOpt))
+    #expect(defaults[.window] == combo(19, "2", ctrlOpt))
+    #expect(defaults[.fullScreen] == combo(20, "3", ctrlOpt))
+    #expect(defaults[.recognizeText] == combo(21, "4", ctrlOpt))
+    #expect(defaults[.toggleBar] == combo(29, "0", ctrlOpt))
     #expect(CaptureShortcutAction.allCases.map(\.rawValue)
             == ["region", "window", "fullScreen", "recognizeText", "toggleBar"])
 }
@@ -62,10 +64,10 @@ private let ctrlShiftCmd: CaptureKeyModifiers = [.control, .shift, .command]
 
 @Test(.timeLimit(.minutes(2))) func issue685DuplicateBindingNamesTheOtherAction() {
     var bindings = CaptureShortcutBindings.defaults
-    let taken = combo(19, "2", ctrlShiftCmd)
+    let taken = combo(19, "2", ctrlOpt)
     #expect(bindings.validate(taken, for: .region) == .usedBy(.window))
     #expect(throws: CaptureShortcutRejection.usedBy(.window)) { try bindings.bind(taken, to: .region) }
-    #expect(bindings[.region] == combo(18, "1", ctrlShiftCmd))
+    #expect(bindings[.region] == combo(18, "1", ctrlOpt))
     #expect(throws: CaptureShortcutRejection.systemShortcut(combo(21, "4", [.command, .shift]))) {
         try bindings.bind(combo(21, "4", [.command, .shift]), to: .toggleBar)
     }
@@ -75,7 +77,7 @@ private let ctrlShiftCmd: CaptureKeyModifiers = [.control, .shift, .command]
 
 @Test(.timeLimit(.minutes(2))) func issue685RebindingAnActionToItsOwnComboIsAllowed() throws {
     var bindings = CaptureShortcutBindings.defaults
-    let own = combo(18, "1", ctrlShiftCmd)
+    let own = combo(18, "1", ctrlOpt)
     #expect(bindings.validate(own, for: .region) == nil)
     try bindings.bind(own, to: .region)
     let fresh = combo(3, "F", [.control, .option])
