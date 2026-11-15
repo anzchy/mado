@@ -32,8 +32,9 @@ import MadoApplication
 private let tools: [AnnotateStripItem] = [.select, .arrow, .rectangle, .text, .highlighter, .pen, .redact, .crop, .step,
                                           .undo, .redo]
 private let textItems: [AnnotateStripItem] = [.copy, .save, .done]
-/// #692 implemented 箭头 文字 荧光笔 画笔 序号; 遮挡 and 裁剪 wait for #693.
-private let unimplemented: [AnnotateStripItem] = [.redact, .crop]
+/// #692 implemented 箭头 文字 荧光笔 画笔 序号 and #693 遮挡 and 裁剪 (issue693StripEnablesRedactAndCrop): no tool
+/// is left disabled.
+private let unimplemented: [AnnotateStripItem] = []
 
 @Test(.timeLimit(.minutes(2))) @MainActor func issue690StripFrameMatchesPage39() {
     let (strip, _, window) = stripHost()
