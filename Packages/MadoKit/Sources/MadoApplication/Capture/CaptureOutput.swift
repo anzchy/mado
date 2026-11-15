@@ -125,7 +125,8 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
 @MainActor public final class CaptureThumbnailModel {
     public private(set) var state: CaptureThumbnailState
     public private(set) var isClosed = false
-    private var isSaving = false
+    private var saving: Task<URL, any Error>?
+    private var isOpening = false
     private let session: CaptureSession
     private let clipboard: any CaptureClipboardPort
     private let trash: any CaptureTrashPort
@@ -145,16 +146,30 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
     /// Saves an unsaved Capture to the Capture Folder; a saved one is left alone. A Save while another is
     /// still writing does nothing, so a double click writes one file (#684 fix r1).
     public func save() async throws {
-        guard state.savedURL == nil, !isSaving else { return }
-        isSaving = true
-        defer { isSaving = false }
-        do {
-            state.savedURL = try await session.save(state.png)
-            state.saveFailed = false
-        } catch {
-            state.saveFailed = true
-            throw error
+        guard state.savedURL == nil, saving == nil else { return }
+        _ = try await savedFile()
+    }
+
+    /// The Capture's file: the saved one, the write in flight (joined, #686 fix r1), or a new write.
+    /// The write's task updates the state before any caller resumes.
+    private func savedFile() async throws -> URL {
+        if let url = state.savedURL { return url }
+        if let saving { return try await saving.value }
+        let png = state.png
+        let task = Task { @MainActor [session] in
+            defer { self.saving = nil }
+            do {
+                let url = try await session.save(png)
+                self.state.savedURL = url
+                self.state.saveFailed = false
+                return url
+            } catch {
+                self.state.saveFailed = true
+                throw error
+            }
         }
+        saving = task
+        return try await task.value
     }
 
     /// Moves the saved file to the Trash and closes the thumbnail. Without a file there is nothing to move.
@@ -166,10 +181,13 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
 
     /// Opens the Capture's file in Mado and closes the thumbnail (#686). An unsaved Capture is first saved to the
     /// Capture Folder by the 存储 path (decision 3.5); if that write fails, nothing is opened.
-    /// If Mado cannot be opened, the thumbnail stays.
+    /// If Mado cannot be opened, the thumbnail stays. Clicked while a 存储 write is in flight, it waits for that write
+    /// and opens its file; a second click while an open is pending does nothing, so a double click opens once.
     public func openInMado(_ opener: any CaptureOpenPort) async throws {
-        try await save()
-        guard let url = state.savedURL else { return }
+        guard !isOpening else { return }
+        isOpening = true
+        defer { isOpening = false }
+        let url = try await savedFile()
         try await opener.openInMado(url)
         isClosed = true
     }
