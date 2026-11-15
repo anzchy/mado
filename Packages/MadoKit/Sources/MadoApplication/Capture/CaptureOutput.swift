@@ -107,6 +107,7 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
 @MainActor public final class CaptureThumbnailModel {
     public private(set) var state: CaptureThumbnailState
     public private(set) var isClosed = false
+    private var isSaving = false
     private let session: CaptureSession
     private let clipboard: any CaptureClipboardPort
     private let trash: any CaptureTrashPort
@@ -123,9 +124,12 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
         state.clipboard = await clipboard.writePNG(state.png) ? .copied : .copyFailed
     }
 
-    /// Saves an unsaved Capture to the Capture Folder; a saved one is left alone.
+    /// Saves an unsaved Capture to the Capture Folder; a saved one is left alone. A Save while another is
+    /// still writing does nothing, so a double click writes one file (#684 fix r1).
     public func save() async throws {
-        guard state.savedURL == nil else { return }
+        guard state.savedURL == nil, !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
         do {
             state.savedURL = try await session.save(state.png)
             state.saveFailed = false
