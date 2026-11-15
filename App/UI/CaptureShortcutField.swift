@@ -29,12 +29,56 @@ import MadoMacUI
 
     override var acceptsFirstResponder: Bool { isEnabled }
 
+    /// While recording: the mouse-down monitor and the window / app observers that end it (#685 fix r2 F3).
+    private var recordingObservers: [NSObjectProtocol] = []
+    private var mouseMonitor: Any?
+
     @objc private func startRecording() {
         guard !isRecording else { return }
         isRecording = true
         window?.makeFirstResponder(self)
         refreshTitle()
+        watchForRecordingEnd()
         began?()
+    }
+
+    /// A click on a label never takes first responder, so the field watches for it itself; leaving the Settings
+    /// window or Mado ends recording too. Otherwise the global shortcuts stay suspended until the helper's 30 s resume.
+    private func watchForRecordingEnd() {
+        let center = NotificationCenter.default
+        let cancel: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.cancelRecording() }
+        }
+        recordingObservers = [
+            center.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main, using: cancel),
+            center.addObserver(forName: NSApplication.didResignActiveNotification, object: NSApp, queue: .main,
+                               using: cancel),
+        ]
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) {
+            [weak self] event in
+            let window = event.window, point = event.locationInWindow
+            MainActor.assumeIsolated { self?.mouseDownWhileRecording(in: window, at: point) }
+            return event
+        }
+    }
+
+    private func stopWatchingForRecordingEnd() {
+        recordingObservers.forEach(NotificationCenter.default.removeObserver)
+        recordingObservers = []
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        mouseMonitor = nil
+    }
+
+    private func cancelRecording() {
+        if isRecording { end(.cancelled) }
+    }
+
+    /// The mouse-down monitor's decision while recording (fix r2 F3). `point` is in `window`'s coordinates. A click
+    /// inside the field keeps recording; anywhere else, in this window or another, ends it.
+    func mouseDownWhileRecording(in window: NSWindow?, at point: NSPoint) {
+        guard isRecording else { return }
+        if let window, window === self.window, bounds.contains(convert(point, from: nil)) { return }
+        end(.cancelled)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -66,6 +110,7 @@ import MadoMacUI
 
     private func end(_ outcome: Outcome) {
         isRecording = false
+        stopWatchingForRecordingEnd()
         refreshTitle()
         finished?(outcome)
     }
