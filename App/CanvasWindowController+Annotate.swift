@@ -135,6 +135,8 @@ extension CanvasWindowController {
         let isOtherTextInput = responder is NSTextInputClient && !fromOCREditor
         guard !session.isAnnotating, !isOtherTextInput, window?.attachedSheet == nil else { return false }
         guard fromOCREditor else { return session.canEnterAnnotateMode }
+        // #687 fix r5 (F5): a composition belongs to the input method; entry would drop it.
+        if recogniseTextAdapter.isComposing { return false }
         // #687 fix r5: the Session records the OCR editor as typing (with the Inspector shown). Entry closes OCR and
         // moves focus to the canvas before the Session checks again, so admission is judged from the canvas.
         return AnnotateModeState.canEnter(mode: session.mode, hasImage: hasImage, status: session.imageStatus, focus: .canvas)

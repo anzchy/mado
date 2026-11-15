@@ -26,6 +26,8 @@ import MadoInfrastructure
     /// The panel's Esc wrapper is installed.
     var hasPanelKeyRouting: Bool { priorConsumeKey != nil }
     var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
+    /// #687 fix r5 (F5): the OCR editor holds an input method's marked text.
+    var isComposing: Bool { panelEditor?.hasMarkedText() == true }
     var focusableNotice: RecogniseTextNoticeView? {
         guard let notice = overlay?.noticeView, notice.kind == .success else { return nil }
         return notice
@@ -225,10 +227,12 @@ import MadoInfrastructure
         let previous = window.consumeKey
         priorConsumeKey = previous ?? { _ in false }
         window.consumeKey = { [weak self] event in
-            if event.characters == "\u{1b}",
-               event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-               self?.overlay?.panelView != nil {
-                self?.closePanel()
+            guard let self, self.overlay?.panelView != nil else { return previous?(event) ?? false }
+            // #687 fix r5 (F5): while the editor composes, every key goes to the input method first.
+            if self.isComposing, self.controller?.window?.firstResponder === self.panelEditor { return false }
+            let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+            if event.characters == "\u{1b}", plain {
+                self.closePanel()
                 return true
             }
             return previous?(event) ?? false
