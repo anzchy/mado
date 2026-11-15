@@ -1,6 +1,6 @@
 const PREFIX = 'Linux-Preflight (supplementary; GitHub required checks remain binding):';
 const FACTS = ['distro', 'kernel', 'sh_target', 'node', 'git', 'python3', 'zsh', 'procps'];
-const COUNTS = ['tests', 'pass', 'fail', 'skip'];
+const COUNTS = ['tests', 'pass', 'fail', 'skip', 'todo', 'cancelled'];
 
 export function blankSummary(head, workflow, outcome = 'NOT VERIFIED', reason = '') {
   return {
@@ -10,7 +10,8 @@ export function blankSummary(head, workflow, outcome = 'NOT VERIFIED', reason = 
     steps: workflow.steps.map(step => ({ name: step.name,
       kind: step.kind === 'checkout' ? 'bundle-checked' : step.kind === 'setup-node' || step.kind === 'provision' ? 'provision-checked' : 'not-run',
       exit: step.kind === 'run' ? 'not-run' : '0', secs: '0.0', peak_rss_kb: 'unknown',
-      tests: 0, pass: 0, fail: 0, skip: 0, python_tests: 0, python_result: 'unknown' })),
+      tests: 0, pass: 0, fail: 0, skip: 0, todo: 0, cancelled: 0,
+      tap_footer: 'not-applicable', python_tests: 0, python_result: 'unknown' })),
     failed: [],
   };
 }
@@ -27,7 +28,7 @@ export function serializeSummary(summary) {
   for (const step of summary.steps) {
     const prefix = `step:${step.name}`;
     lines.push(`${prefix}=${step.kind}`);
-    for (const key of ['exit', 'secs', 'peak_rss_kb', ...COUNTS, 'python_tests', 'python_result']) lines.push(`${prefix}:${key}=${step[key]}`);
+    for (const key of ['exit', 'secs', 'peak_rss_kb', ...COUNTS, 'tap_footer', 'python_tests', 'python_result']) lines.push(`${prefix}:${key}=${step[key]}`);
   }
   for (const name of summary.failed) lines.push(`failed:${clean(name)}`);
   lines.push('DONE');
@@ -63,7 +64,8 @@ export function checkSummary(raw, expectedHead, workflow) {
   for (const key of ['secs', 'peak_rss_kb']) validateMetric(requireField(key), key);
   for (const key of FACTS) requireField(key);
   let runCount = 0;
-  let total = 0; let pass = 0; let fail = 0; let skip = 0;
+  let total = 0; let pass = 0; let fail = 0; let skip = 0; let todo = 0; let cancelled = 0;
+  let accountingIssue = null;
   let badStep = null; let timeoutStep = null;
   for (const step of workflow.steps) {
     const prefix = `step:${step.name}`;
@@ -85,27 +87,34 @@ export function checkSummary(raw, expectedHead, workflow) {
       const value = requireField(`${prefix}:${key}`);
       if (!/^\d+$/.test(value)) throw Error(`invalid ${prefix}:${key}`);
     }
+    const tapFooter = requireField(`${prefix}:tap_footer`);
+    if (!['complete', 'missing', 'not-applicable'].includes(tapFooter)) throw Error(`invalid TAP footer ${step.name}`);
     const pyTests = requireField(`${prefix}:python_tests`);
     if (!/^\d+$/.test(pyTests)) throw Error(`invalid python tests ${step.name}`);
     const pyResult = requireField(`${prefix}:python_result`);
     if (!['OK', 'FAILED', 'unknown'].includes(pyResult)) throw Error(`invalid python result ${step.name}`);
     if (kind === 'run' && ![124, 137].includes(Number(exit))) {
       if (step.run.includes('python3 -m unittest') && (Number(pyTests) === 0 || pyResult === 'unknown')) throw Error(`missing Python unittest totals ${step.name}`);
-      if (step.run.includes('node --test') && pyResult !== 'FAILED' && Number(fields.get(`${prefix}:tests`)) === 0) throw Error(`missing Node TAP totals ${step.name}`);
+      if (Number(fields.get(`${prefix}:tests`)) === 0 || tapFooter !== 'complete') accountingIssue ??= `missing Node TAP totals ${step.name}`;
     }
+    if (kind === 'run' && Number(fields.get(`${prefix}:tests`)) > 0 && tapFooter !== 'complete') accountingIssue ??= `incomplete TAP footer ${step.name}`;
+    if (kind === 'run' && Number(fields.get(`${prefix}:pass`)) + Number(fields.get(`${prefix}:fail`)) + Number(fields.get(`${prefix}:skip`)) + Number(fields.get(`${prefix}:todo`)) + Number(fields.get(`${prefix}:cancelled`)) !== Number(fields.get(`${prefix}:tests`))) accountingIssue ??= `TAP totals mismatch ${step.name}`;
     total += Number(fields.get(`${prefix}:tests`));
     pass += Number(fields.get(`${prefix}:pass`));
     fail += Number(fields.get(`${prefix}:fail`));
     skip += Number(fields.get(`${prefix}:skip`));
+    todo += Number(fields.get(`${prefix}:todo`));
+    cancelled += Number(fields.get(`${prefix}:cancelled`));
   }
   if (Number(requireField('steps_run')) !== runCount) throw Error('steps_run mismatch');
-  if (pass + fail + skip > total) throw Error('TAP totals mismatch');
-  if (outcome === 'PASS' && (runCount !== workflow.steps.filter(step => step.kind === 'run').length || badStep || fail || !total)) throw Error('inconsistent PASS');
-  if (outcome === 'FAIL' && !badStep && !fail) throw Error('inconsistent FAIL');
+  if (accountingIssue && outcome !== 'NOT VERIFIED' && outcome !== 'TIMEOUT') throw Error(accountingIssue);
+  if (outcome === 'PASS' && (runCount !== workflow.steps.filter(step => step.kind === 'run').length || badStep || fail || cancelled || !total)) throw Error('inconsistent PASS');
+  if (outcome === 'FAIL' && !badStep && !fail && !cancelled) throw Error('inconsistent FAIL');
   if (outcome === 'TIMEOUT' && !timeoutStep && requireField('reason') !== 'whole run deadline reached') throw Error('inconsistent TIMEOUT');
-  const detail = outcome === 'PASS' ? `${pass}/${total} (${skip} skip)` :
+  const counts = `${pass}/${total} (${skip} skip${todo ? `, ${todo} todo` : ''})`;
+  const detail = outcome === 'PASS' ? counts :
     outcome === 'NOT VERIFIED' ? clean(requireField('reason')) :
-    `${outcome === 'TIMEOUT' ? timeoutStep ?? requireField('reason') : badStep ?? failed[0] ?? 'test failure'}; ${pass}/${total} (${skip} skip)`;
+    `${outcome === 'TIMEOUT' ? timeoutStep ?? requireField('reason') : badStep ?? failed[0] ?? 'test failure'}; ${counts}`;
   return `${PREFIX} ${expectedHead.slice(0, 7)} agent-tooling ${outcome} ${detail}`;
 }
 
