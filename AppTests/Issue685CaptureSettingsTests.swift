@@ -125,7 +125,8 @@ private func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.Modifier
                      characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
 }
 
-private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
+/// The default series since #717 (was ⌃⇧⌘ in #685).
+private let ctrlOpt: NSEvent.ModifierFlags = [.control, .option]
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue685ShortcutFieldsShowBindingsAndMatchTheDesign() async throws {
     var bindings = CaptureShortcutBindings.defaults
@@ -135,10 +136,10 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     let region = try fixture.field(0)
     await eventually { region.isEnabled }
     #expect(region.isEnabled)
-    #expect(try fixture.field(0).title == "⌃⇧⌘1")
-    #expect(try fixture.field(1).title == "⌃⇧⌘2")
-    #expect(try fixture.field(2).title == "⌃⇧⌘3")
-    #expect(try fixture.field(3).title == "⌃⇧⌘4")
+    #expect(try fixture.field(0).title == "⌃⌥1")
+    #expect(try fixture.field(1).title == "⌃⌥2")
+    #expect(try fixture.field(2).title == "⌃⌥3")
+    #expect(try fixture.field(3).title == "⌃⌥4")
     // settings.html:99-100 .shortcut-field: min-width 96px, height 24px, font-family var(--font-mono), font-size ui-sm.
     #expect(region.frame.width >= 96)
     #expect(region.frame.height == 24)
@@ -202,9 +203,9 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     #expect(try fixture.message(0).textColor == DesignColor.errorText.nsColor)
     #expect(await fixture.shortcuts.stored == .defaults)
     region.performClick(nil)
-    region.keyDown(with: key(19, "2", ctrlShiftCmd))
-    await eventually { (try? fixture.message(0).stringValue) == "⌃⇧⌘2 is already used by Window Capture." }
-    #expect(try fixture.message(0).stringValue == "⌃⇧⌘2 is already used by Window Capture.")
+    region.keyDown(with: key(19, "2", ctrlOpt))
+    await eventually { (try? fixture.message(0).stringValue) == "⌃⌥2 is already used by Window Capture." }
+    #expect(try fixture.message(0).stringValue == "⌃⌥2 is already used by Window Capture.")
     region.performClick(nil)
     region.keyDown(with: key(0, "A", [.shift]))
     await eventually { (try? fixture.message(0).stringValue) == "A shortcut needs ⌘, ⌃ or ⌥." }
@@ -216,8 +217,8 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     region.performClick(nil)
     region.keyDown(with: key(53, "\u{1b}", []))
     #expect(!region.isRecording)
-    await eventually { region.title == "⌃⇧⌘1" }
-    #expect(region.title == "⌃⇧⌘1")
+    await eventually { region.title == "⌃⌥1" }
+    #expect(region.title == "⌃⌥1")
     #expect(await fixture.shortcuts.stored == .defaults)
     // A good combo clears the message.
     region.performClick(nil)
@@ -240,7 +241,7 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     let fixture = Fixture(shortcuts: shortcuts)
     defer { fixture.panel.window.close() }
     await eventually { (try? fixture.message(2).stringValue.isEmpty) == false }
-    #expect(try fixture.message(2).stringValue == "⌃⇧⌘3 is used by another app. Choose another shortcut.")
+    #expect(try fixture.message(2).stringValue == "⌃⌥3 is used by another app. Choose another shortcut.")
     #expect(try fixture.message(0).stringValue == "")
     // The helper's shortcutStatus notification refreshes the tab.
     await shortcuts.setFailures([:])
@@ -262,8 +263,8 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     await eventually { await fixture.shortcuts.stored == .defaults }
     #expect(await fixture.shortcuts.stored == .defaults)
     #expect(fixture.signals.names == [CaptureBarIdentity.shortcutsChangedNotification])
-    await eventually { (try? fixture.field(0).title) == "⌃⇧⌘1" }
-    #expect(try fixture.field(0).title == "⌃⇧⌘1")
+    await eventually { (try? fixture.field(0).title) == "⌃⌥1" }
+    #expect(try fixture.field(0).title == "⌃⌥1")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue685FolderRowShowsTheChosenFolderAndAsksTheHelperToChange() async throws {
