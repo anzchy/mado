@@ -107,6 +107,7 @@ public struct OnDeviceTextRecognitionProvider: OnDeviceTextRecognitionProviding 
         } catch is CancellationError {
             throw .cancelled
         } catch let error as TextRecognitionError {
+            if Task.isCancelled { throw .cancelled }
             throw error
         } catch {
             if Task.isCancelled { throw .cancelled }
