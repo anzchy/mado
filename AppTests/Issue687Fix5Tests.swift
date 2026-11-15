@@ -95,6 +95,39 @@ import MadoApplication
     }
 }
 
+// MARK: - F1
+
+/// 5a: the device had the Inspector shown, so the Session recorded the OCR editor as `.textInput` and refused entry.
+/// The fix-round-4 test ran with the Inspector hidden, where `InspectorFocus` never records `.textInput`.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5EditorAllowsAnnotateMenuAndShortcutWithInspectorShownOrHidden() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    for visible in [true, false] {
+        try await h.reset(inspector: visible)
+        let other = NSTextField(frame: NSRect(x: 0, y: 0, width: 100, height: 25))
+        h.window.contentView?.addSubview(other)
+        _ = h.window.makeFirstResponder(other)
+        #expect(!h.controller.canEnterAnnotateFromMenu, "Inspector visible=\(visible): another text field still refuses")
+        #expect(!(try h.context.enabled("annotate.enter.menu")))
+        other.removeFromSuperview()
+        for viaShortcut in [false, true] {
+            try await h.reset(inspector: visible)
+            try await h.recognise()
+            let editor = try h.openEditor()
+            let label = "Inspector visible=\(visible), \(viaShortcut ? "Command-E" : "View › 标注")"
+            #expect(h.window.firstResponder === editor)
+            // InspectorFocus records `.textInput` only while the Inspector is shown: the device precondition.
+            #expect((h.controller.session.inspectorFocus.focus == .textInput) == visible,
+                    "\(label): the Session's view of the editor")
+            #expect(try h.context.enabled("annotate.enter.menu"), "\(label): enabled from the OCR editor")
+            if viaShortcut { #expect(try h.commandE()) } else { try h.context.perform("annotate.enter.menu") }
+            #expect(h.controller.session.isAnnotating, "\(label): Annotate Mode on")
+            #expect(h.editor == nil && h.overlay?.noticeView == nil && h.overlay?.panelView == nil, "\(label): OCR closed")
+            #expect(h.window.firstResponder === h.controller.canvas)
+        }
+    }
+}
+
 // MARK: - F2
 
 /// 2h: a focused success notice that dismisses itself hands focus to the canvas, so Tab keeps moving.
