@@ -20,6 +20,9 @@ public actor CaptureHotKeyCoordinator {
     private let preferences: any CaptureShortcutPreferencePort
     private let registrar: any CaptureHotKeyRegistrarPort
     public private(set) var registered: [CaptureShortcutAction: CaptureKeyCombo] = [:]
+    public private(set) var isSuspended = false
+    /// What `suspend()` released; a combo refused on resume falls back to it, as a refused rebind does.
+    private var released: [CaptureShortcutAction: CaptureKeyCombo] = [:]
 
     public init(preferences: any CaptureShortcutPreferencePort, registrar: any CaptureHotKeyRegistrarPort) {
         self.preferences = preferences
@@ -40,6 +43,7 @@ public actor CaptureHotKeyCoordinator {
     /// Registers what changed since the last call. Every changed hotkey is released first, so combos can move
     /// between actions in one change (恢复默认).
     public func apply() async {
+        if isSuspended { return }
         var bindings = await preferences.bindings()
         let storedFailures = await preferences.failures()
         var failures = storedFailures
@@ -49,10 +53,14 @@ public actor CaptureHotKeyCoordinator {
         }
         var previous: [CaptureShortcutAction: CaptureKeyCombo] = [:]
         for action in changed {
-            guard let old = registered.removeValue(forKey: action) else { continue }
-            previous[action] = old
-            await registrar.unregister(id: Self.hotKeyID(for: action))
+            if let old = registered.removeValue(forKey: action) {
+                previous[action] = old
+                await registrar.unregister(id: Self.hotKeyID(for: action))
+            } else if let old = released[action] {
+                previous[action] = old
+            }
         }
+        released = [:]
         var reverted = false
         for action in changed {
             let id = Self.hotKeyID(for: action)
@@ -71,5 +79,22 @@ public actor CaptureHotKeyCoordinator {
         }
         if reverted { await preferences.setBindings(bindings) }
         if failures != storedFailures { await preferences.setFailures(failures) }
+    }
+
+    /// Releases every hotkey while Settings records a shortcut, so the pressed combo reaches the recorder.
+    /// `apply()` does nothing until `resume()`.
+    public func suspend() async {
+        if isSuspended { return }
+        isSuspended = true
+        for (action, combo) in registered {
+            released[action] = combo
+            await registrar.unregister(id: Self.hotKeyID(for: action))
+        }
+        registered = [:]
+    }
+
+    public func resume() async {
+        isSuspended = false
+        await apply()
     }
 }
