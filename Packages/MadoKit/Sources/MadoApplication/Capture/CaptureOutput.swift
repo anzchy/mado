@@ -33,9 +33,26 @@ public enum CaptureClipboardState: Equatable, Sendable {
     case copied, notCopied, copyFailed
 }
 
-/// Thumbnail actions owned by #684. Annotate, Open in Mado and Recognise Text belong to later tickets.
+/// Opens a saved Capture in Mado through Launch Services, which gives Mado a File Grant for it (#686).
+public protocol CaptureOpenPort: Sendable {
+    func openInMado(_ url: URL) async throws
+}
+
+/// Thumbnail actions owned by #684 and #686 (在 Mado 中打开). Annotate (#694) and Recognise Text (#687) come later.
 public enum CaptureThumbnailAction: String, Equatable, Sendable {
-    case save, copy, moveToTrash
+    case save, copy, openInMado, moveToTrash
+}
+
+/// Where Mado is, seen from the helper (#686): the helper is embedded at `<Mado>.app/Contents/Library/LoginItems`.
+public enum CaptureMadoLocation {
+    public static func madoApp(containingHelper helper: URL) -> URL? {
+        let parts = helper.standardizedFileURL.pathComponents
+        guard parts.count >= 5, parts[parts.count - 1].hasSuffix(".app"),
+              Array(parts[(parts.count - 4)...(parts.count - 2)]) == ["Contents", "Library", "LoginItems"],
+              parts[parts.count - 5].hasSuffix(".app") else { return nil }
+        return helper.standardizedFileURL.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+    }
 }
 
 public enum CaptureThumbnailStatus: Equatable, Sendable {
@@ -66,9 +83,10 @@ public struct CaptureThumbnailState: Equatable, Sendable {
         self.saveFailed = saveFailed
     }
 
-    /// 存储 only while there is no file, then 拷贝, then 移到废纸篓 only when a file exists.
+    /// capture-thumbnail.html:19-20: 存储 only while there is no file, then 拷贝, 在 Mado 中打开, then 移到废纸篓 only
+    /// when a file exists.
     public var actions: [CaptureThumbnailAction] {
-        savedURL == nil ? [.save, .copy] : [.copy, .moveToTrash]
+        savedURL == nil ? [.save, .copy, .openInMado] : [.copy, .openInMado, .moveToTrash]
     }
 
     public var status: CaptureThumbnailStatus {
@@ -143,6 +161,16 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
     public func moveToTrash() async throws {
         guard let url = state.savedURL else { return }
         try await trash.moveToTrash(url)
+        isClosed = true
+    }
+
+    /// Opens the Capture's file in Mado and closes the thumbnail (#686). An unsaved Capture is first saved to the
+    /// Capture Folder by the 存储 path (decision 3.5); if that write fails, nothing is opened.
+    /// If Mado cannot be opened, the thumbnail stays.
+    public func openInMado(_ opener: any CaptureOpenPort) async throws {
+        try await save()
+        guard let url = state.savedURL else { return }
+        try await opener.openInMado(url)
         isClosed = true
     }
 

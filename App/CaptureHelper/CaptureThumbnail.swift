@@ -116,6 +116,7 @@ enum CaptureThumbnailText {
         switch action {
         case .save: "Save"
         case .copy: "Copy"
+        case .openInMado: "Open in Mado"
         case .moveToTrash: "Move to Trash"
         }
     }
@@ -124,6 +125,8 @@ enum CaptureThumbnailText {
         switch action {
         case .save: "square.and.arrow.down"
         case .copy: "doc.on.doc"
+        // capture-thumbnail.html:126: the box with an arrow out of its corner.
+        case .openInMado: "arrow.up.forward.app"
         case .moveToTrash: "trash"
         }
     }
@@ -480,6 +483,8 @@ private final class ThumbnailButton: NSButton {
             switch action {
             case .copy: await model.copy()
             case .save: try? await model.save()
+            // Wired to Launch Services in the next #686 commit.
+            case .openInMado: break
             case .moveToTrash:
                 do {
                     try await model.moveToTrash()
