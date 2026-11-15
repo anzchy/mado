@@ -93,12 +93,12 @@ export function checkSummary(raw, expectedHead, workflow) {
     if (!/^\d+$/.test(pyTests)) throw Error(`invalid python tests ${step.name}`);
     const pyResult = requireField(`${prefix}:python_result`);
     if (!['OK', 'FAILED', 'unknown'].includes(pyResult)) throw Error(`invalid python result ${step.name}`);
-    if (kind === 'run' && ![124, 137].includes(Number(exit))) {
+    if (kind === 'run' && exit === '0') {
       if (step.run.includes('python3 -m unittest') && (Number(pyTests) === 0 || pyResult === 'unknown')) throw Error(`missing Python unittest totals ${step.name}`);
       if (Number(fields.get(`${prefix}:tests`)) === 0 || tapFooter !== 'complete') accountingIssue ??= `missing Node TAP totals ${step.name}`;
+      if (Number(fields.get(`${prefix}:tests`)) > 0 && tapFooter !== 'complete') accountingIssue ??= `incomplete TAP footer ${step.name}`;
+      if (Number(fields.get(`${prefix}:pass`)) + Number(fields.get(`${prefix}:fail`)) + Number(fields.get(`${prefix}:skip`)) + Number(fields.get(`${prefix}:todo`)) + Number(fields.get(`${prefix}:cancelled`)) !== Number(fields.get(`${prefix}:tests`))) accountingIssue ??= `TAP totals mismatch ${step.name}`;
     }
-    if (kind === 'run' && Number(fields.get(`${prefix}:tests`)) > 0 && tapFooter !== 'complete') accountingIssue ??= `incomplete TAP footer ${step.name}`;
-    if (kind === 'run' && Number(fields.get(`${prefix}:pass`)) + Number(fields.get(`${prefix}:fail`)) + Number(fields.get(`${prefix}:skip`)) + Number(fields.get(`${prefix}:todo`)) + Number(fields.get(`${prefix}:cancelled`)) !== Number(fields.get(`${prefix}:tests`))) accountingIssue ??= `TAP totals mismatch ${step.name}`;
     total += Number(fields.get(`${prefix}:tests`));
     pass += Number(fields.get(`${prefix}:pass`));
     fail += Number(fields.get(`${prefix}:fail`));
