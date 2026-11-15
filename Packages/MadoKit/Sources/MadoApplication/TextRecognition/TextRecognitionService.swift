@@ -2,6 +2,7 @@ import Foundation
 
 public enum TextRecognitionIntent: Sendable {
     case selection
+    case selectOnImage
     case explicit
 }
 
@@ -51,18 +52,40 @@ public struct TextRecognitionResult: Sendable {
     public let engine: TextRecognitionEngine
     public let isEmpty: Bool
     public let fallbackReason: CloudFallbackReason?
+    public let lines: [TextRecognitionLine]
 
-    public init(text: String, characterCount: Int, engine: TextRecognitionEngine, isEmpty: Bool, fallbackReason: CloudFallbackReason? = nil) {
+    public init(text: String, characterCount: Int, engine: TextRecognitionEngine, isEmpty: Bool, fallbackReason: CloudFallbackReason? = nil, lines: [TextRecognitionLine] = []) {
         self.text = text
         self.characterCount = characterCount
         self.engine = engine
         self.isEmpty = isEmpty
         self.fallbackReason = fallbackReason
+        self.lines = lines
+    }
+}
+
+/// Vision coordinates: origin at the bottom left of the displayed image, in 0...1.
+public struct TextRecognitionLine: Sendable {
+    public let text: String
+    public let box: CGRect
+    /// One box per Swift Character when Vision can provide it; empty means uniform fallback.
+    public let characterBoxes: [CGRect]
+
+    public init(text: String, box: CGRect, characterBoxes: [CGRect] = []) {
+        self.text = text; self.box = box; self.characterBoxes = characterBoxes
     }
 }
 
 public protocol OnDeviceTextRecognitionProviding: Sendable {
     func recognise(_ image: Data) async throws(TextRecognitionError) -> String
+    func recogniseLines(_ image: Data) async throws(TextRecognitionError) -> [TextRecognitionLine]
+}
+
+public extension OnDeviceTextRecognitionProviding {
+    func recogniseLines(_ image: Data) async throws(TextRecognitionError) -> [TextRecognitionLine] {
+        _ = try await recognise(image)
+        return []
+    }
 }
 
 public protocol CloudTextRecognitionProviding: Sendable {
@@ -82,6 +105,13 @@ public struct TextRecognitionService: Sendable {
 
     public func recognise(_ image: Data, intent: TextRecognitionIntent) async throws(TextRecognitionError) -> TextRecognitionResult {
         if Task.isCancelled { throw TextRecognitionError.cancelled }
+        if case .selectOnImage = intent {
+            let lines = try await onDevice.recogniseLines(image)
+            if Task.isCancelled { throw TextRecognitionError.cancelled }
+            let text = lines.map(\.text).joined(separator: "\n")
+            return TextRecognitionResult(text: text, characterCount: text.count, engine: .onDevice,
+                                         isEmpty: text.isEmpty, lines: lines)
+        }
         if case .explicit = intent, let settings, let credentialStore, let cloud {
             let options = await settings.options()
             if options.enabled, case .granted = options.consent, options.online,
