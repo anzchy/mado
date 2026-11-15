@@ -19,6 +19,9 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     private let now: @Sendable () -> Date
     private var token: (value: String, expires: Date, credentials: CloudCredentials)?
     private var tokenTask: (id: UUID, credentials: CloudCredentials, task: Task<(String, Date), Error>)?
+    private var tokenWaiterCount = 0
+
+    func pendingTokenWaiters() -> Int { tokenWaiterCount }
 
     public init(transport: any HTTPTransport, now: @escaping @Sendable () -> Date = Date.init) {
         self.transport = transport
@@ -28,6 +31,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     public func recognise(_ image: Data, credentials: CloudCredentials) async throws(TextRecognitionError) -> String {
         let upload = try Self.preparedImage(image)
         let accessToken = try await accessToken(for: credentials)
+        if Task.isCancelled { throw TextRecognitionError.cancelled }
         var parts = URLComponents(string: "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic")!
         parts.queryItems = [URLQueryItem(name: "access_token", value: accessToken)]
         var request = URLRequest(url: parts.url!)
@@ -35,28 +39,36 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data("image=\(Self.form(upload.base64EncodedString()))".utf8)
         let response = try await send(request)
+        if Task.isCancelled { throw TextRecognitionError.cancelled }
         let payload = try Self.object(response.body)
-        if let code = payload["error_code"] as? Int { throw Self.map(code) }
+        if let code = payload["error_code"] as? Int {
+            if [100, 110, 111].contains(code), token?.credentials == credentials { token = nil }
+            throw Self.map(code)
+        }
         guard response.statusCode == 200, let lines = payload["words_result"] as? [[String: Any]],
               lines.allSatisfy({ $0["words"] is String }) else { throw .cloudFailure }
         return lines.compactMap { $0["words"] as? String }.joined(separator: "\n")
     }
 
     private func accessToken(for credentials: CloudCredentials) async throws(TextRecognitionError) -> String {
+        if Task.isCancelled { throw TextRecognitionError.cancelled }
         if let token, token.credentials == credentials, token.expires.timeIntervalSince(now()) > 30 { return token.value }
         if let pending = tokenTask {
+            tokenWaiterCount += 1
+            defer { tokenWaiterCount -= 1 }
             let result: (String, Date)
             do {
                 result = try await pending.task.value
             } catch {
                 if tokenTask?.id == pending.id { tokenTask = nil }
                 if pending.credentials != credentials { return try await accessToken(for: credentials) }
-                throw error as! TextRecognitionError
+                throw Self.mapTaskError(error)
             }
             if tokenTask?.id == pending.id {
                 token = (result.0, result.1, pending.credentials)
                 tokenTask = nil
             }
+            if Task.isCancelled { throw TextRecognitionError.cancelled }
             if pending.credentials == credentials { return result.0 }
             return try await accessToken(for: credentials)
         }
@@ -69,8 +81,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             request.httpBody = Data("grant_type=client_credentials&client_id=\(Self.form(credentials.apiKey))&client_secret=\(Self.form(credentials.secretKey))".utf8)
             let response: HTTPResponse
             do { response = try await transport.send(request) }
-            catch is URLError { throw TextRecognitionError.cloudOffline }
-            catch { throw TextRecognitionError.cloudFailure }
+            catch { throw Self.mapTransportError(error) }
             let payload = try Self.object(response.body)
             if payload["error"] != nil || payload["error_code"] != nil { throw TextRecognitionError.cloudAuth }
             guard response.statusCode == 200, let value = payload["access_token"] as? String,
@@ -81,6 +92,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         tokenTask = (taskID, credentials, task)
         do {
             let result = try await task.value
+            if Task.isCancelled { throw TextRecognitionError.cancelled }
             if tokenTask?.id == taskID {
                 token = (result.0, result.1, credentials)
                 tokenTask = nil
@@ -88,14 +100,27 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             return result.0
         } catch {
             if tokenTask?.id == taskID { tokenTask = nil }
-            throw error as! TextRecognitionError
+            throw Self.mapTaskError(error)
         }
     }
 
     private func send(_ request: URLRequest) async throws(TextRecognitionError) -> HTTPResponse {
         do { return try await transport.send(request) }
-        catch is URLError { throw .cloudOffline }
-        catch { throw .cloudFailure }
+        catch { throw Self.mapTransportError(error) }
+    }
+
+    private static func mapTaskError(_ error: Error) -> TextRecognitionError {
+        if Task.isCancelled { return .cancelled }
+        if let typed = error as? TextRecognitionError { return typed }
+        return mapTransportError(error)
+    }
+
+    private static func mapTransportError(_ error: Error) -> TextRecognitionError {
+        if Task.isCancelled || error is CancellationError { return .cancelled }
+        if let urlError = error as? URLError {
+            return urlError.code == .cancelled ? .cancelled : .cloudOffline
+        }
+        return .cloudFailure
     }
 
     private static func object(_ data: Data) throws(TextRecognitionError) -> [String: Any] {
@@ -105,14 +130,15 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
 
     private static func map(_ code: Int) -> TextRecognitionError {
         switch code {
-        case 110, 111: .cloudAuth
+        case 100, 110, 111: .cloudAuth
         case 17, 18, 19: .cloudQuota
         default: .cloudFailure
         }
     }
 
     private static func form(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        let ascii = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+        return value.addingPercentEncoding(withAllowedCharacters: ascii)!
     }
 
     private static func preparedImage(_ data: Data) throws(TextRecognitionError) -> Data {
@@ -122,21 +148,53 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               min(width, height) >= 15 else { throw .invalidImage }
         let maxBytes = 10 * 1024 * 1024
-        if max(width, height) <= 8192, ((data.count + 2) / 3) * 4 <= maxBytes { return data }
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw .invalidImage }
-        let ratio = min(1.0, 8192.0 / Double(max(width, height)))
-        let newWidth = Int(Double(width) * ratio)
-        let newHeight = Int(Double(height) * ratio)
-        guard min(newWidth, newHeight) >= 15,
-              let context = CGContext(data: nil, width: newWidth, height: newHeight, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw .cloudImageTooLarge }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
-        guard let scaled = context.makeImage() else { throw .cloudImageTooLarge }
-        let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { throw .cloudImageTooLarge }
-        CGImageDestinationAddImage(destination, scaled, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
-        let prepared = output as Data
-        guard ((prepared.count + 2) / 3) * 4 <= maxBytes else { throw .cloudImageTooLarge }
-        return prepared
+        let sourceType = CGImageSourceGetType(source) as String?
+        let supported = sourceType.map { [UTType.jpeg.identifier, UTType.png.identifier, UTType.bmp.identifier].contains($0) } ?? false
+        if supported, max(width, height) <= 8192, encodedImageSize(data) <= maxBytes { return data }
+
+        var maxPixel = min(8192, max(width, height))
+        while maxPixel >= 15 {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixel
+            ]
+            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .invalidImage }
+            guard min(thumbnail.width, thumbnail.height) >= 15 else { throw .cloudImageTooLarge }
+            let alpha = try containsTransparency(thumbnail)
+            let output = NSMutableData()
+            let type = alpha ? UTType.png : UTType.jpeg
+            guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { throw .cloudImageTooLarge }
+            CGImageDestinationAddImage(destination, thumbnail, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+            guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
+            let prepared = output as Data
+            if encodedImageSize(prepared) <= maxBytes { return prepared }
+            maxPixel = Int(Double(maxPixel) * 0.75)
+        }
+        throw .cloudImageTooLarge
+    }
+
+    private static func encodedImageSize(_ data: Data) -> Int {
+        form(data.base64EncodedString()).utf8.count
+    }
+
+    private static func containsTransparency(_ image: CGImage) throws(TextRecognitionError) -> Bool {
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: break
+        }
+        guard let context = CGContext(data: nil, width: image.width, height: image.height,
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
+              let bytes = context.data else { throw .cloudImageTooLarge }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let pixels = bytes.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * image.height)
+        for y in 0..<image.height {
+            for x in 0..<image.width where pixels[y * context.bytesPerRow + x * 4 + 3] < 255 {
+                return true
+            }
+        }
+        return false
     }
 }
