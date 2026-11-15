@@ -161,7 +161,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             ]
             guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .invalidImage }
             guard min(thumbnail.width, thumbnail.height) >= 15 else { throw .cloudImageTooLarge }
-            let alpha = try containsTransparency(thumbnail)
+            let alpha = hasAlphaChannel(thumbnail)
             let output = NSMutableData()
             let type = alpha ? UTType.png : UTType.jpeg
             guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { throw .cloudImageTooLarge }
@@ -178,23 +178,10 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         form(data.base64EncodedString()).utf8.count
     }
 
-    private static func containsTransparency(_ image: CGImage) throws(TextRecognitionError) -> Bool {
+    private static func hasAlphaChannel(_ image: CGImage) -> Bool {
         switch image.alphaInfo {
-        case .none, .noneSkipFirst, .noneSkipLast: return false
-        default: break
+        case .none, .noneSkipFirst, .noneSkipLast: false
+        default: true
         }
-        guard let context = CGContext(data: nil, width: image.width, height: image.height,
-                                      bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
-              let bytes = context.data else { throw .cloudImageTooLarge }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        let pixels = bytes.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * image.height)
-        for y in 0..<image.height {
-            for x in 0..<image.width {
-                if pixels[y * context.bytesPerRow + x * 4 + 3] < 255 { return true }
-            }
-        }
-        return false
     }
 }

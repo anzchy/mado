@@ -339,7 +339,7 @@ func issue689FixTiffIsReencodedBeforeUpload(transparent: Bool) async throws {
     let uploaded = try #require(Data(base64Encoded: base64))
     let source = try #require(CGImageSourceCreateWithData(uploaded as CFData, nil))
     let type = try #require(CGImageSourceGetType(source) as String?)
-    #expect(type == (transparent ? UTType.png.identifier : UTType.jpeg.identifier))
+    #expect(type == UTType.png.identifier)
 }
 
 private func waitForTokenWaiter(_ provider: BaiduTextRecognitionProvider) async {
