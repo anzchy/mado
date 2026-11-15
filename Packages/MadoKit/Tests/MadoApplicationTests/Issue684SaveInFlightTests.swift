@@ -9,15 +9,20 @@ private struct FixedScreen: CaptureScreenPort {
     func capturePNG(request: CaptureRequest) async throws -> Data { Data([1]) }
 }
 
-/// Holds every write until `open()`, so two Saves overlap; writes after `open()` go straight through.
+/// Holds every write until `open()`, so two Saves overlap; writes after `open()` go straight through. Each write
+/// that reaches the port is announced on `events`, so the test waits without polling.
 private actor GatedFiles: CaptureFilePort {
     private(set) var files: [String: Data] = [:]
     private(set) var calls = 0
     private var isOpen = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
+    private let announce: @Sendable (String) -> Void
+
+    init(announce: @escaping @Sendable (String) -> Void) { self.announce = announce }
 
     func writeNewPNG(_ data: Data, named: String) async throws -> URL {
         calls += 1
+        announce("write")
         if !isOpen { await withCheckedContinuation { waiters.append($0) } }
         guard files[named] == nil else { throw CaptureFileError.alreadyExists }
         files[named] = data
@@ -41,7 +46,9 @@ private actor TrashLog: CaptureTrashPort {
 }
 
 @MainActor @Test(.timeLimit(.minutes(2))) func issue684ConcurrentSavesWriteOneFile() async throws {
-    let files = GatedFiles()
+    let (events, sink) = AsyncStream.makeStream(of: String.self)
+    var next = events.makeAsyncIterator()
+    let files = GatedFiles(announce: { sink.yield($0) })
     let trash = TrashLog()
     let session = CaptureSession(screen: FixedScreen(), files: files,
                                  now: { ISO8601DateFormatter().date(from: "2026-11-14T07:30:12Z")! },
@@ -49,13 +56,17 @@ private actor TrashLog: CaptureTrashPort {
     let state = CaptureThumbnailState(png: Data([1]), savedURL: nil, clipboard: .copied, folderDisplay: "~/Downloads")
     let model = CaptureThumbnailModel(state: state, session: session, clipboard: NoClipboard(), trash: trash)
     let first = Task { @MainActor in try await model.save() }
-    for _ in 0..<10_000 where await files.calls == 0 { await Task.yield() }
-    #expect(await files.calls == 1)
-    let second = Task { @MainActor in try await model.save() }
-    for _ in 0..<200 { await Task.yield() }
+    #expect(await next.next() == "write")  // the first Save is now held inside the file port
+    let second = Task { @MainActor in
+        try await model.save()
+        sink.yield("second save returned")
+    }
+    // With the in-flight guard the second Save returns at once; without it, it reaches the port too.
+    #expect(await next.next() == "second save returned")
     await files.open()
     try await first.value
     try await second.value
+    sink.finish()
     let written = await files.files
     #expect(written.count == 1, "two Saves wrote \(written.keys.sorted())")
     #expect(await files.calls == 1)
