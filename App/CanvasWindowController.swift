@@ -385,7 +385,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             grid: gridView, inspector: inspectorHost, shell: gridShell)
         let trailingKeyViews = chromeOverlay.trailingKeyViews
         chromeOverlay.trailingKeyViews = { [weak self] in
-            trailingKeyViews() + (self?.recogniseTextAdapter.focusableNotice.map { [$0] } ?? [])
+            trailingKeyViews() + (self?.recogniseTextAdapter.trailingKeyViews ?? [])
         }
         let sidebarKeyViewsChanged = gridShell.onViewerSidebarKeyViewsChange
         gridShell.onViewerSidebarKeyViewsChange = { [weak self] in
@@ -409,7 +409,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         window.makeFirstResponder(canvas)
         window.preserveResponder = { [weak self] responder in
             guard let self else { return false }
-            if self.recogniseTextAdapter.panelEditor != nil,
+            // While the panel opens, the Inspector's focus replay must not take the editor's keys (#687b r2). An
+            // intentional move is let through: the panel's own Tab (#687 fix r5) or a click in the Inspector.
+            if self.recogniseTextAdapter.panelEditor != nil, !self.recogniseTextAdapter.allowsInspectorFocus,
+               self.window?.currentEvent?.type != .leftMouseDown,
                let view = responder as? NSView,
                view === self.inspectorHost || view.isDescendant(of: self.inspectorHost) {
                 return true
@@ -1896,6 +1899,9 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
     var hasImage: Bool { canvas.hasImage }
     var focusContext: FocusContext {
         if window?.firstResponder === recogniseTextAdapter.focusableNotice { return .tools }
+        // #687 fix r5 (F6): 拷贝 and 关闭 are panel controls like the notice; the editor stays text input.
+        if let view = window?.firstResponder as? NSView, view !== recogniseTextAdapter.panelEditor,
+           recogniseTextAdapter.panelKeyViews.contains(where: { $0 === view }) { return .tools }
         let controls: [NSView] = stateHost.buttons + chromeOverlay.tools
         if let view = window?.firstResponder as? NSView,
            controls.contains(where: { view === $0 || view.isDescendant(of: $0) }) { return .tools }
@@ -2905,5 +2911,15 @@ extension CanvasWindowController: FolderScanHost {
 @MainActor final class PopUpChromeMenuPresenter: ChromeMenuPresenting {
     func present(_ menu: NSMenu, from view: NSView) {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.bounds.maxY + menu.size.height + 6), in: view)
+    }
+}
+
+// #687 fix r5 (F6): the OCR panel's Tab reaches the Inspector the way the viewer's own ring does.
+extension CanvasWindowController {
+    var recogniseTextInspectorFocused: Bool { isInspectorFocused }
+    func focusInspectorFromRecogniseText() -> Bool {
+        guard gridView.isHidden, inspectorVisible else { return false }
+        focusInspectorCloseButton()
+        return true
     }
 }

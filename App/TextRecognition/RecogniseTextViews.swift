@@ -58,6 +58,12 @@ enum RecogniseTextNoticeKind { case success, warning }
     override func insertBacktab(_ sender: Any?) {}
 }
 
+/// #687 fix r5 (F6): 拷贝 and 关闭 take keyboard focus like Mado's other controls.
+@MainActor final class RecogniseTextKeyButton: NSButton {
+    override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+    override var canBecomeKeyView: Bool { acceptsFirstResponder }
+}
+
 @MainActor final class RecogniseTextNoticeView: NSView {
     let iconView = NSImageView(frame: .zero)
     let messageLabel = NSTextField(labelWithString: "")
@@ -195,11 +201,11 @@ enum RecogniseTextNoticeKind { case success, warning }
 @MainActor final class RecogniseTextPanelView: NSView, NSTextViewDelegate {
     let titleLabel = NSTextField(labelWithString: String(localized: "Recognised Text"))
     let engineTag = NSTextField(labelWithString: "")
-    let closeButton = NSButton(frame: .zero)
+    let closeButton = RecogniseTextKeyButton(frame: .zero)
     let scrollView = NSScrollView(frame: .zero)
     let textView = RecogniseTextEditor(frame: .zero)
     let footerLabel = NSTextField(labelWithString: String(localized: "You can edit before copying again"))
-    let copyButton = NSButton(frame: .zero)
+    let copyButton = RecogniseTextKeyButton(frame: .zero)
     var onEdit: ((String) -> Void)?
     var onCopy: (() -> Void)?
     var onClose: (() -> Void)?
@@ -383,6 +389,7 @@ enum RecogniseTextNoticeKind { case success, warning }
         addSubview(view)
         panelView = view
         needsLayout = true
+        onNoticeChange?()
     }
     func clear() { clear(handingOffFocus: true) }
     private func clear(handingOffFocus: Bool) {

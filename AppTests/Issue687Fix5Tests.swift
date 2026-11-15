@@ -260,3 +260,43 @@ import MadoApplication
         try h.expectCanvasOwnsKeys("\(label), panel closed by Esc")
     }
 }
+
+// MARK: - F6
+
+/// Tab moves focus out of the OCR editor (the text is single-purpose, so a Tab is not typed): editor → 拷贝 → 关闭 →
+/// (Inspector close when shown) → canvas; Shift-Tab walks back in the same loop. An intentional move to the
+/// Inspector is not refused while the panel is open.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5PanelControlsJoinTheKeyLoop() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    for visible in [false, true] {
+        try await h.reset(inspector: visible)
+        try await h.recognise()
+        let editor = try h.openEditor()
+        let panel = try #require(h.overlay?.panelView)
+        let label = "Inspector visible=\(visible)"
+        try h.key("\t", code: 48)
+        #expect(h.window.firstResponder === panel.copyButton, "\(label): Tab editor → 拷贝")
+        #expect(editor.string == "Hello", "\(label): no tab typed")
+        try h.key("\t", code: 48)
+        #expect(h.window.firstResponder === panel.closeButton, "\(label): Tab 拷贝 → 关闭")
+        try h.key("\t", code: 48)
+        if visible {
+            #expect((h.window.firstResponder as? NSView)?.accessibilityIdentifier() == "inspector.close",
+                    "\(label): Tab 关闭 → Inspector")
+            #expect(h.overlay?.panelView != nil, "the panel stays while the Inspector has focus")
+        } else {
+            try h.expectCanvasOwnsKeys("\(label): Tab 关闭 → canvas")
+        }
+        try h.key("\u{19}", code: 48, modifiers: [.shift])
+        #expect(h.window.firstResponder === panel.closeButton, "\(label): Shift-Tab back to 关闭")
+        try h.key("\u{19}", code: 48, modifiers: [.shift])
+        #expect(h.window.firstResponder === panel.copyButton, "\(label): Shift-Tab 关闭 → 拷贝")
+        try h.key("\u{19}", code: 48, modifiers: [.shift])
+        #expect(h.window.firstResponder === editor, "\(label): Shift-Tab 拷贝 → editor")
+        try h.key("\u{19}", code: 48, modifiers: [.shift])
+        #expect(h.window.firstResponder !== editor && h.overlay?.panelView != nil,
+                "\(label): Shift-Tab leaves the editor backwards, panel open")
+        #expect(h.controller.focusContext == .tools, "\(label): back to the last viewer control")
+    }
+}
