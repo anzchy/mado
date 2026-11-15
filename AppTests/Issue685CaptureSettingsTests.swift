@@ -380,3 +380,25 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     #expect(CaptureShortcutField.combo(from: key(18, "!", [.control, .shift])).key == "1")
     #expect(CaptureShortcutField.combo(from: key(3, "ƒ", [.option])).key == "F")
 }
+
+// Fix r1 (opus M2): ⌥-only and ⌥⇧-only combos get the real reason, not 「已被其他 App 占用」.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685OptionOnlyShortcutIsRefusedWithTheReason() async throws {
+    let fixture = Fixture()
+    defer { fixture.panel.window.close() }
+    let region = try fixture.field(0)
+    await eventually { region.isEnabled }
+    let reason = "A global shortcut needs ⌘ or ⌃; macOS does not allow ⌥ or ⌥⇧ alone."
+    for flags: NSEvent.ModifierFlags in [[.option], [.option, .shift]] {
+        // Another refusal first, so each round shows its own message.
+        region.performClick(nil)
+        region.keyDown(with: key(0, "A", [.shift]))
+        await eventually { (try? fixture.message(0).stringValue) == "A shortcut needs ⌘, ⌃ or ⌥." }
+        region.performClick(nil)
+        region.keyDown(with: key(3, "f", flags))
+        await eventually { (try? fixture.message(0).stringValue) == reason }
+        #expect(try fixture.message(0).stringValue == reason)
+    }
+    #expect(await fixture.shortcuts.stored == .defaults)
+    #expect(!fixture.signals.names.contains(CaptureBarIdentity.shortcutsChangedNotification))
+    #expect(try captureCatalog("zh-Hans")[reason] == "全局快捷键需要包含 ⌘ 或 ⌃，macOS 不允许只用 ⌥ 或 ⌥⇧。")
+}

@@ -46,6 +46,8 @@ public enum CaptureShortcutRejection: Error, Equatable, Sendable {
     case systemShortcut(CaptureKeyCombo)
     /// Already bound to another capture action.
     case usedBy(CaptureShortcutAction)
+    /// Only ⌥ or ⌥⇧: macOS 15 and later refuse these as global hotkeys.
+    case optionOnly
     /// The system refused to register it: another app holds it.
     case unavailable(CaptureKeyCombo)
 }
@@ -77,6 +79,7 @@ public struct CaptureShortcutBindings: Equatable, Sendable {
     public func validate(_ combo: CaptureKeyCombo, for action: CaptureShortcutAction) -> CaptureShortcutRejection? {
         if Self.modifierKeyCodes.contains(combo.keyCode) { return .needsKey }
         if combo.modifiers.isDisjoint(with: [.command, .control, .option]) { return .needsModifier }
+        if combo.modifiers.isDisjoint(with: [.command, .control]) { return .optionOnly }
         if combo.modifiers.isSuperset(of: [.command, .shift]), Self.systemScreenshotKeyCodes.contains(combo.keyCode) {
             return .systemShortcut(combo)
         }

@@ -658,6 +658,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             String(format: captureLocalize("%@ is a macOS screenshot shortcut and stays with the system."), system.display)
         case .usedBy(let other):
             String(format: captureLocalize("%1$@ is already used by %2$@."), combo.display, captureShortcutNames[other] ?? "")
+        case .optionOnly: captureLocalize("A global shortcut needs ⌘ or ⌃; macOS does not allow ⌥ or ⌥⇧ alone.")
         case .unavailable(let taken):
             String(format: captureLocalize("%@ is used by another app. Choose another shortcut."), taken.display)
         }
