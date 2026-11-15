@@ -23,7 +23,7 @@ func captureCatalog(_ locale: String) throws -> [String: String] {
     ]
     for locale in ["en", "zh-Hans"] {
         let catalog = try captureCatalog(locale)
-        let permissionNote = "On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."
+        let permissionNote = "On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."
         let expectedNote = locale == "zh-Hans"
             ? "在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。"
             : permissionNote

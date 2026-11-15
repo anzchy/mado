@@ -72,12 +72,37 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
 @MainActor final class SettingsPanelWindow: NSObject, DisplayPreferencesObserver {
     private static let sectionKey = "settings.selectedSection.v1"
+    /// The helper's Darwin notifications (shortcut status, folder changed), re-posted on the main queue.
+    nonisolated static let captureSignalNotification = Notification.Name("io.github.anzchy.mado.settings.captureSignal")
 
     static let sharedCapturePreferences = AppGroupCaptureBarPreferences()
     static let sharedCaptureOutputPreferences: any CaptureOutputPreferencePort =
         UserDefaultsCaptureOutputPreferences.shared() ?? UserDefaultsCaptureOutputPreferences(defaults: .standard)
+    static let sharedCaptureShortcuts: any CaptureShortcutPreferencePort =
+        UserDefaultsCaptureShortcutPreferences.shared() ?? UserDefaultsCaptureShortcutPreferences(defaults: .standard)
+    static let sharedCaptureFolder: any CaptureFolderPreferencePort =
+        UserDefaultsCaptureFolderPreferences.shared() ?? UserDefaultsCaptureFolderPreferences(defaults: .standard)
+    static let sharedCaptureLoginItem: any CaptureLoginItemPort = SMAppServiceCaptureLoginItem()
     static let sharedCaptureControl = CaptureBarControl(preferences: sharedCapturePreferences,
-                                                        process: WorkspaceCaptureBarProcess())
+                                                        process: WorkspaceCaptureBarProcess(),
+                                                        loginItem: sharedCaptureLoginItem)
+    static func postCaptureSignal(_ name: String) {
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(name as CFString), nil, nil, true)
+    }
+    /// Installed once: Darwin observers have no context, so they re-post locally for every open Settings window.
+    private static let captureSignalBridge: Void = {
+        for name in [CaptureBarIdentity.shortcutStatusNotification, CaptureBarIdentity.folderChangedNotification] {
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, name, _, _ in
+                guard let name else { return }
+                let value = name.rawValue as String
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: SettingsPanelWindow.captureSignalNotification, object: nil,
+                                                    userInfo: ["name": value])
+                }
+            }, name as CFString, nil, .deliverImmediately)
+        }
+    }()
     static func restoreCaptureBarOnLaunch() async throws { try await sharedCaptureControl.restoreOnMadoLaunch() }
     let window: NSWindow
     private(set) var selectedSection: SettingsSection
@@ -118,6 +143,22 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var capturePermissionStatus: NSTextField?
     private let captureLocalize: (String) -> String
     private var captureRefreshID = 0
+    private let captureShortcuts: any CaptureShortcutPreferencePort
+    private let captureFolder: any CaptureFolderPreferencePort
+    private let captureLoginItem: any CaptureLoginItemPort
+    private let captureSignal: @MainActor (String) -> Void
+    private var captureLogin: NSSwitch?
+    private var captureLoginHint: NSTextField?
+    private var captureLoginApproval: NSButton?
+    private var captureFolderPath: NSTextField?
+    private var captureFolderChange: NSButton?
+    private var captureFilenameHint: NSTextField?
+    private var captureShortcutFields: [CaptureShortcutAction: CaptureShortcutField] = [:]
+    private var captureShortcutMessages: [CaptureShortcutAction: NSTextField] = [:]
+    private var captureShortcutNames: [CaptureShortcutAction: String] = [:]
+    /// The last refusal per action from this window, until a good combo or 恢复默认 replaces it.
+    private var captureRefusals: [CaptureShortcutAction: String] = [:]
+    private var captureRestore: NSButton?
 
     init(cache: ThumbnailDiskCache, appearanceAdapter: WindowAppearanceAdapter,
          preferencesStore: any DisplayPreferencesStore, defaults: UserDefaults,
@@ -126,6 +167,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
          capturePreferences: (any CaptureBarPreferencePort)? = nil,
          captureOutputPreferences: (any CaptureOutputPreferencePort)? = nil,
          captureLocalize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
+         captureShortcuts: (any CaptureShortcutPreferencePort)? = nil,
+         captureFolder: (any CaptureFolderPreferencePort)? = nil,
+         captureLoginItem: (any CaptureLoginItemPort)? = nil,
+         captureSignal: (@MainActor (String) -> Void)? = nil,
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -144,6 +189,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         self.capturePreferences = capturePreferences ?? Self.sharedCapturePreferences
         self.captureOutputPreferences = captureOutputPreferences ?? Self.sharedCaptureOutputPreferences
         self.captureLocalize = captureLocalize
+        self.captureShortcuts = captureShortcuts ?? Self.sharedCaptureShortcuts
+        self.captureFolder = captureFolder ?? Self.sharedCaptureFolder
+        self.captureLoginItem = captureLoginItem ?? Self.sharedCaptureLoginItem
+        self.captureSignal = captureSignal ?? { Self.postCaptureSignal($0) }
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -153,6 +202,12 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         buildViews()
         preferencesStore.observe(self)
         updates?.observe { [weak self] in self?.refreshUpdates() }
+        _ = Self.captureSignalBridge
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSignalReceived(_:)),
+                                               name: Self.captureSignalNotification, object: nil)
+        // The login item can change in System Settings; read it again when the window comes back.
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSignalReceived(_:)),
+                                               name: NSWindow.didBecomeKeyNotification, object: window)
         preferencesDidChange(preferencesStore.value)
         select(selectedSection)
     }
@@ -301,17 +356,6 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             if top >= 105 { captureDetails.append(result) }
             return result
         }
-        func disabledButton(_ title: String, top: CGFloat, id: String, x: CGFloat? = nil, width: CGFloat = 140) {
-            let button = NSButton(title: title, target: nil, action: nil)
-            button.font = DesignMetrics.font("uiSmall")
-            button.frame = NSRect(x: x ?? valueX, y: 1124 - top - 24,
-                                  width: max(width, button.intrinsicContentSize.width + 12), height: 24)
-            button.isEnabled = false
-            button.alphaValue = 0.45
-            button.setAccessibilityIdentifier(id)
-            form.addSubview(button)
-            captureDetails.append(button)
-        }
         func heading(_ text: String, top: CGFloat, id: String, divider: Bool) {
             if divider {
                 let line = NSBox(frame: NSRect(x: 26, y: 1124 - top + 14, width: 528, height: 1))
@@ -322,20 +366,6 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             title.frame.origin.x = 26
             title.frame.size.width = 528
             title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        }
-        func disabledSwitch(_ title: String, top: CGFloat, id: String, on: Bool = false) {
-            let toggle = NSSwitch(frame: NSRect(x: valueX, y: 1124 - top - 18, width: 32, height: 18))
-            toggle.controlSize = .mini
-            toggle.state = on ? .on : .off
-            toggle.isEnabled = false
-            toggle.alphaValue = 0.45
-            toggle.setAccessibilityIdentifier(id)
-            toggle.setAccessibilityLabel(title)
-            form.addSubview(toggle)
-            captureDetails.append(toggle)
-            let caption = field(title, top: top - 1, id: "\(id).title")
-            caption.frame.origin.x = valueX + 40
-            caption.frame.size.width = 514 - valueX
         }
         /// 「截图之后」 switches (#684): live, but greyed and not editable while the bar is off (grilling 5.2).
         func outputSwitch(_ title: String, top: CGFloat, id: String, action: Selector) -> NSSwitch {
@@ -369,13 +399,28 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         field(captureLocalize("When enabled, Mado starts a small capture helper. Screen Recording permission belongs only to the helper; turning the switch off stops it."),
               top: 76, height: 46, id: "settings.capture.privacy-hint", muted: true)
         field(captureLocalize("Start at Login"), top: 125, labelColumn: true)
-        disabledSwitch(captureLocalize("Start Capture Bar at Login"), top: 125, id: "settings.capture.login")
-        field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
-              top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
+        let loginTitle = captureLocalize("Start Capture Bar at Login")
+        let login = outputSwitch(loginTitle, top: 125, id: "settings.capture.login", action: #selector(changeLogin(_:)))
+        login.state = .off
+        captureLogin = login
+        // No design element: shown only while macOS waits for the user's approval (#685 AC-4).
+        let approval = NSButton(title: captureLocalize("Open Login Items Settings"), target: self,
+                                action: #selector(openLoginItems(_:)))
+        approval.font = DesignMetrics.font("uiSmall")
+        let approvalWidth = approval.intrinsicContentSize.width + 12
+        let loginTitleWidth = (loginTitle as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width
+        approval.frame = NSRect(x: min(valueX + 40 + loginTitleWidth.rounded(.up) + 12, 554 - approvalWidth),
+                                y: 1124 - 125 - 21, width: approvalWidth, height: 24)
+        approval.isHidden = true
+        approval.setAccessibilityIdentifier("settings.capture.login-open-settings")
+        form.addSubview(approval)
+        captureLoginApproval = approval
+        captureLoginHint = field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
+                                 top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
         field(captureLocalize("Screen Recording"), top: 190, labelColumn: true)
         capturePermissionStatus = field(captureLocalize("Unknown"), top: 190, id: "settings.capture.permission-status", muted: true)
         if #available(macOS 15, *) {
-            field(captureLocalize("On macOS 15 and later, the system may ask again from time to time whether Mado can capture the screen. This is required by macOS; choose Allow to continue taking screenshots."),
+            field(captureLocalize("On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."),
                   top: 218, height: 46, id: "settings.capture.permission-note", muted: true)
         }
         heading(captureLocalize("After Capture"), top: 280, id: "settings.capture.heading-after", divider: true)
@@ -383,9 +428,19 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let folder = field("~/Downloads", top: 315, id: "settings.capture.folder")
         folder.font = DesignMetrics.font("uiSmall", monospaced: true)
         folder.frame.size.width = 94
-        disabledButton(captureLocalize("Change…"), top: 315, id: "settings.capture.folder-change", x: valueX + 102, width: 72)
-        field(captureLocalize("File name mado-20261113153012.png; the second capture in the same second adds -2."),
-              top: 341, height: 30, id: "settings.capture.filename-hint", muted: true)
+        captureFolderPath = folder
+        let change = NSButton(title: captureLocalize("Change…"), target: self, action: #selector(changeFolder(_:)))
+        change.font = DesignMetrics.font("uiSmall")
+        change.frame = NSRect(x: valueX + 102, y: 1124 - 315 - 24, width: max(72, change.intrinsicContentSize.width + 12),
+                              height: 24)
+        change.isEnabled = false
+        change.alphaValue = 0.45
+        change.setAccessibilityIdentifier("settings.capture.folder-change")
+        form.addSubview(change)
+        captureDetails.append(change)
+        captureFolderChange = change
+        captureFilenameHint = field(captureLocalize(Self.filenameHint), top: 341, height: 30,
+                                    id: "settings.capture.filename-hint", muted: true)
         field(captureLocalize("Save to Folder"), top: 385, labelColumn: true)
         captureAfterSave = outputSwitch(captureLocalize("Save captures to the Capture Folder"), top: 385,
                                         id: "settings.capture.after-save", action: #selector(changeAfterSave(_:)))
@@ -393,13 +448,52 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         captureAfterCopy = outputSwitch(captureLocalize("Copy captures to the Clipboard"), top: 423,
                                         id: "settings.capture.after-copy", action: #selector(changeAfterCopy(_:)))
         heading(captureLocalize("Global Shortcuts"), top: 475, id: "settings.capture.heading-shortcuts", divider: true)
-        for (index, name) in [captureLocalize("Region Capture"), captureLocalize("Window Capture"), captureLocalize("Full Screen Capture"), captureLocalize("Capture and Recognize Text"), captureLocalize("Show / Hide Capture Bar")].enumerated() {
+        let shortcutRows: [(CaptureShortcutAction, String)] = [
+            (.region, "Region Capture"), (.window, "Window Capture"), (.fullScreen, "Full Screen Capture"),
+            (.recognizeText, "Capture and Recognize Text"), (.toggleBar, "Show / Hide Capture Bar")
+        ]
+        for (index, (action, key)) in shortcutRows.enumerated() {
             let top = CGFloat(510 + index * 38)
+            let name = captureLocalize(key)
+            captureShortcutNames[action] = name
             field(name, top: top, id: "settings.capture.shortcut-label-\(index)", labelColumn: true)
-            disabledButton(captureLocalize("Not Set"), top: top, id: index == 0 ? "settings.capture.shortcut-region" : "settings.capture.shortcut-\(index)", width: 96)
+            let shortcut = CaptureShortcutField(frame: NSRect(x: valueX, y: 1124 - top - 24, width: 96, height: 24),
+                                                name: name, localize: captureLocalize)
+            shortcut.setAccessibilityIdentifier(index == 0 ? "settings.capture.shortcut-region" : "settings.capture.shortcut-\(index)")
+            shortcut.isEnabled = false
+            shortcut.alphaValue = 0.45
+            shortcut.began = { [weak self] in self?.captureSignal(CaptureBarIdentity.recordingBeganNotification) }
+            shortcut.finished = { [weak self] outcome in self?.shortcutFinished(action, outcome) }
+            form.addSubview(shortcut)
+            captureDetails.append(shortcut)
+            captureShortcutFields[action] = shortcut
+            let message = field("", top: top - 4, height: 32, id: "settings.capture.shortcut-message-\(index)")
+            message.frame.origin.x = valueX + 104
+            message.frame.size.width = 554 - valueX - 104
+            message.textColor = DesignColor.errorText.nsColor
+            captureShortcutMessages[action] = message
         }
-        field(captureLocalize("The system shortcuts ⌘⇧3 / ⌘⇧4 / ⌘⇧5 remain available."),
-              top: 704, height: 30, id: "settings.capture.system-shortcuts-hint", muted: true)
+        let systemHintText = captureLocalize("The system shortcuts ⌘⇧3 / ⌘⇧4 / ⌘⇧5 remain available.")
+        field(systemHintText, top: 704, height: 30, id: "settings.capture.system-shortcuts-hint", muted: true)
+        // settings.html:166 恢复默认 is a link at the end of the hint; it moves under the hint when both do not fit.
+        let restoreTitle = captureLocalize("Restore Defaults")
+        let restore = NSButton(title: restoreTitle, target: self, action: #selector(restoreShortcuts(_:)))
+        restore.isBordered = false
+        restore.font = DesignMetrics.font("uiSmall")
+        restore.attributedTitle = NSAttributedString(string: restoreTitle, attributes: [
+            .font: DesignMetrics.font("uiSmall"), .foregroundColor: DesignColor.accent.nsColor
+        ])
+        let restoreWidth = restore.intrinsicContentSize.width
+        let hintWidth = (systemHintText as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
+        let inline = valueX + hintWidth + 6 + restoreWidth <= 554
+        restore.frame = NSRect(x: inline ? valueX + hintWidth + 6 : valueX, y: 1124 - (inline ? 704 : 722) - 16,
+                               width: restoreWidth, height: 16)
+        restore.isEnabled = false
+        restore.alphaValue = 0.45
+        restore.setAccessibilityIdentifier("settings.capture.shortcut-restore")
+        form.addSubview(restore)
+        captureDetails.append(restore)
+        captureRestore = restore
         let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 900, width: 528, height: 160))
         ocr.setAccessibilityIdentifier("settings.capture.ocr")
         form.addSubview(ocr)
@@ -443,6 +537,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             let enabled = await capturePreferences.isCaptureBarEnabled()
             let permission = await capturePreferences.capturePermissionState()
             let output = await captureOutputPreferences.outputPolicy()
+            let bindings = await captureShortcuts.bindings()
+            let failures = await captureShortcuts.failures()
+            let folder = await captureFolder.folderRecord()
+            let loginStatus = await captureLoginItem.status()
             guard refreshID == captureRefreshID else { return }
             captureEnabled.state = enabled ? .on : .off
             captureAfterSave?.state = output.savesToFolder ? .on : .off
@@ -455,7 +553,113 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             case .notAsked: capturePermissionStatus?.stringValue = captureLocalize("Not Asked")
             case nil: capturePermissionStatus?.stringValue = captureLocalize("Unknown")
             }
-            for detail in captureDetails { detail.alphaValue = enabled && !(detail is NSButton) ? 1 : 0.45 }
+            let login = CaptureLoginPresentation.make(status: loginStatus, barEnabled: enabled)
+            captureLogin?.state = login.isOn ? .on : .off
+            captureLogin?.isEnabled = login.isEditable
+            captureLoginApproval?.isHidden = !login.needsApproval
+            captureLoginHint?.stringValue = login.needsApproval
+                ? captureLocalize("Mado Capture needs your approval in System Settings › General › Login Items.")
+                : captureLocalize("When off, the Capture Bar will not appear after restarting your Mac.")
+            captureFolderPath?.stringValue = folder.fellBack ? CaptureFolderRecord.downloads.display : folder.display
+            captureFilenameHint?.stringValue = folder.fellBack
+                ? String(format: captureLocalize("The chosen folder %@ can't be opened, so captures go to ~/Downloads. Choose it again."),
+                         folder.display)
+                : captureLocalize(Self.filenameHint)
+            layoutCaptureFolder()
+            captureFolderChange?.isEnabled = enabled
+            for (action, field) in captureShortcutFields {
+                field.combo = bindings[action]
+                field.isEnabled = enabled
+                let refused = failures[action].map {
+                    String(format: captureLocalize("%@ is used by another app. Choose another shortcut."), $0.display)
+                }
+                captureShortcutMessages[action]?.stringValue = captureRefusals[action] ?? refused ?? ""
+            }
+            captureRestore?.isEnabled = enabled
+            for detail in captureDetails { detail.alphaValue = enabled ? 1 : 0.45 }
+        }
+    }
+
+    private static let filenameHint = "File name mado-20261113153012.png; the second capture in the same second adds -2."
+
+    /// The path is as wide as its text (at least the design's ~/Downloads width), then 更改….
+    private func layoutCaptureFolder() {
+        guard let path = captureFolderPath, let change = captureFolderChange, let font = path.font else { return }
+        let text = (path.stringValue as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 4
+        path.frame.size.width = min(max(94, text), 554 - path.frame.minX - change.frame.width - 8)
+        change.frame.origin.x = path.frame.maxX + 8
+    }
+
+    @objc private func captureSignalReceived(_ notification: Notification) {
+        if selectedSection == .capture { refreshCapture() }
+    }
+
+    @objc private func changeLogin(_ sender: NSSwitch) {
+        let on = sender.state == .on
+        sender.isEnabled = false
+        Task {
+            // A refusal leaves the status as it was; the refresh shows what the system reports.
+            if on { try? await captureLoginItem.register() } else { try? await captureLoginItem.unregister() }
+            refreshCapture()
+        }
+    }
+
+    @objc private func openLoginItems(_ sender: NSButton) {
+        Task { await captureLoginItem.openLoginItemsSettings() }
+    }
+
+    /// The helper shows the open panel and keeps the bookmark (ADR-0021).
+    @objc private func changeFolder(_ sender: NSButton) {
+        captureSignal(CaptureBarIdentity.chooseFolderNotification)
+    }
+
+    @objc private func restoreShortcuts(_ sender: NSButton) {
+        Task {
+            await captureShortcuts.setBindings(.defaults)
+            captureRefusals = [:]
+            captureSignal(CaptureBarIdentity.shortcutsChangedNotification)
+            refreshCapture()
+        }
+    }
+
+    private func shortcutFinished(_ action: CaptureShortcutAction, _ outcome: CaptureShortcutField.Outcome) {
+        Task {
+            var bindings = await captureShortcuts.bindings()
+            var changed = false
+            switch outcome {
+            case .cancelled: break
+            case .cleared:
+                bindings.clear(action)
+                captureRefusals[action] = nil
+                changed = true
+            case .recorded(let combo):
+                do throws(CaptureShortcutRejection) {
+                    try bindings.bind(combo, to: action)
+                    captureRefusals[action] = nil
+                    changed = true
+                } catch {
+                    captureRefusals[action] = refusalText(error, combo: combo)
+                }
+            }
+            if changed {
+                await captureShortcuts.setBindings(bindings)
+                captureSignal(CaptureBarIdentity.shortcutsChangedNotification)
+            }
+            captureSignal(CaptureBarIdentity.recordingEndedNotification)
+            refreshCapture()
+        }
+    }
+
+    private func refusalText(_ rejection: CaptureShortcutRejection, combo: CaptureKeyCombo) -> String {
+        switch rejection {
+        case .needsModifier: captureLocalize("A shortcut needs ⌘, ⌃ or ⌥.")
+        case .needsKey: captureLocalize("A shortcut needs a key besides the modifiers.")
+        case .systemShortcut(let system):
+            String(format: captureLocalize("%@ is a macOS screenshot shortcut and stays with the system."), system.display)
+        case .usedBy(let other):
+            String(format: captureLocalize("%1$@ is already used by %2$@."), combo.display, captureShortcutNames[other] ?? "")
+        case .unavailable(let taken):
+            String(format: captureLocalize("%@ is used by another app. Choose another shortcut."), taken.display)
         }
     }
 

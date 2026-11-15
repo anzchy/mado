@@ -45,6 +45,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var collapse: CaptureBarCollapseController?
     private var bar: CaptureBarView?
     private var folderPanel: NSOpenPanel?
+    private var recordingGeneration = 0
     private let thumbnails = CaptureThumbnailPresenter()
     /// Read at every Capture, so a Settings change applies without restarting the helper.
     private let outputPreferences = UserDefaultsCaptureOutputPreferences.shared()
@@ -115,7 +116,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                                                object: panel)
         Task { await restoreLayout(of: panel) }
         for name in [CaptureBarIdentity.switchChangedNotification, CaptureBarIdentity.shortcutsChangedNotification,
-                     CaptureBarIdentity.chooseFolderNotification] {
+                     CaptureBarIdentity.chooseFolderNotification, CaptureBarIdentity.recordingBeganNotification,
+                     CaptureBarIdentity.recordingEndedNotification] {
             CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
                 Unmanaged.passUnretained(self).toOpaque(), { _, observer, name, _, _ in
                     guard let observer, let name else { return }
@@ -136,6 +138,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         switch name {
         case CaptureBarIdentity.shortcutsChangedNotification: applyShortcuts()
         case CaptureBarIdentity.chooseFolderNotification: chooseFolder()
+        case CaptureBarIdentity.recordingBeganNotification: suspendShortcuts()
+        case CaptureBarIdentity.recordingEndedNotification: resumeShortcuts()
         default: stopIfSwitchOff()
         }
     }
@@ -172,6 +176,26 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
             bar?.setShortcuts(labels)
             CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                 CFNotificationName(CaptureBarIdentity.shortcutStatusNotification as CFString), nil, nil, true)
+        }
+    }
+
+    /// Settings is recording a shortcut. If it never says it finished (it quit, or the field lost its window
+    /// without telling us), the hotkeys come back after 30 seconds anyway.
+    private func suspendShortcuts() {
+        recordingGeneration += 1
+        let generation = recordingGeneration
+        Task {
+            await hotKeys.suspend()
+            try? await Task.sleep(for: .seconds(30))
+            if generation == recordingGeneration { resumeShortcuts() }
+        }
+    }
+
+    private func resumeShortcuts() {
+        recordingGeneration += 1
+        Task {
+            await hotKeys.resume()
+            applyShortcuts()
         }
     }
 
