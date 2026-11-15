@@ -289,7 +289,7 @@ func issue689FixExpiryMargin() async throws {
     #expect(await http.count == 5)
 }
 
-private func tiffImage(width: Int, height: Int, transparent: Bool = false) throws -> Data {
+private func tiffImage(width: Int, height: Int, transparent: Bool = false, alphaValue: UInt8? = nil) throws -> Data {
     let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
     let buffer = try #require(context.data)
     let pixels = buffer.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * height)
@@ -298,7 +298,7 @@ private func tiffImage(width: Int, height: Int, transparent: Bool = false) throw
         for x in 0..<width {
             let index = y * context.bytesPerRow + x * 4
             for channel in 0..<3 { state = 1664525 &* state &+ 1013904223; pixels[index + channel] = UInt8(truncatingIfNeeded: state >> 16) }
-            pixels[index + 3] = transparent && x < width / 2 ? 0 : 255
+            pixels[index + 3] = alphaValue ?? (transparent && x < width / 2 ? 0 : 255)
         }
     }
     let image = try #require(context.makeImage())
@@ -396,4 +396,39 @@ func issue689FixTransportCancellationErrorNeverFallsBack(atRecognition: Bool) as
     do { _ = try await service.recognise(testImage(), intent: .explicit); Issue.record("Expected cancellation") }
     catch { #expect(error as? TextRecognitionError == .cancelled) }
     #expect(await local.calls == 0)
+}
+
+private enum UnexpectedTransportError: Error { case failed }
+private struct UnexpectedErrorHTTP: HTTPTransport {
+    let atRecognition: Bool
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        let isToken = request.url?.path == "/oauth/2.0/token"
+        if isToken != atRecognition { throw UnexpectedTransportError.failed }
+        return try tokenJSON.get()
+    }
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: [false, true])
+func issue689FixUnexpectedTransportErrorIsCloudFailure(atRecognition: Bool) async throws {
+    let provider = BaiduTextRecognitionProvider(transport: UnexpectedErrorHTTP(atRecognition: atRecognition))
+    do { _ = try await provider.recognise(testImage(), credentials: baiduKeys); Issue.record("Expected cloud failure") }
+    catch { #expect(error as? TextRecognitionError == .cloudFailure) }
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689FixAlphaUploadRetriesAtSmallerThumbnail() async throws {
+    let image = try tiffImage(width: 1800, height: 1300, alphaValue: 254)
+    let http = StubHTTP([tokenJSON, wordsJSON])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    _ = try await provider.recognise(image, credentials: baiduKeys)
+    let body = try #require(await http.requests.last?.httpBody)
+    #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+    let text = try #require(String(data: body, encoding: .utf8))
+    let base64 = try #require(String(text.dropFirst("image=".count)).removingPercentEncoding)
+    let upload = try #require(Data(base64Encoded: base64))
+    let source = try #require(CGImageSourceCreateWithData(upload as CFData, nil))
+    let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+    let width = try #require(props[kCGImagePropertyPixelWidth] as? Int)
+    #expect(width < 1800)
+    #expect((CGImageSourceGetType(source) as String?) == UTType.png.identifier)
 }
