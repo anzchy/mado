@@ -279,3 +279,10 @@ test('i692 delete and forward delete are declared Annotate-only key sites', () =
   fails(withChange(ANNOTATE_KEYS, replaceOnce('case 117: .forwardDelete', 'case 117, 116: .forwardDelete')),
     /CanvasWindowController\+Annotate\.swift handles key code 116/);
 });
+
+test('i693 Return and keypad Enter are declared Annotate-only key sites (they apply a pending crop)', () => {
+  assert.equal(KEY_SITES[ANNOTATE_KEYS][36]?.excluded, 'only in Annotate Mode');
+  assert.equal(KEY_SITES[ANNOTATE_KEYS][76]?.excluded, 'only in Annotate Mode');
+  fails(withChange(ANNOTATE_KEYS, replaceOnce('case 36, 76: .returnKey', 'case 36, 76, 52: .returnKey')),
+    /CanvasWindowController\+Annotate\.swift handles key code 52/);
+});
