@@ -142,12 +142,16 @@ public struct PresentedImage: Sendable {
         phase = .refining
         if !loading { schedule() }
     }
-    /// Decode from the same scoped source that supplied the shown image. The caller
-    /// still checks its presentation generation before admitting an OCR result.
+    /// OCR uses an independent scoped source. A failed decode closes that source,
+    /// so the viewer's display lease remains available for later refines.
     public func recognitionImage(maximumPixelSize: Int) async throws -> CGImage? {
-        guard let source else { return nil }
-        let (_, decoded) = try await source.image(maximumPixelSize: maximumPixelSize)
-        return decoded.image
+        guard source != nil, phase != .detailLimited, let opener else { return nil }
+        guard let recognitionSource = try? await opener() else { return nil }
+        let decoded = try? await recognitionSource.image(maximumPixelSize: maximumPixelSize)
+        await recognitionSource.close()
+        guard let decoded, let key = presented?.key,
+              decoded.1.itemID == key.itemID, decoded.1.revision == key.revision else { return nil }
+        return decoded.1.image
     }
     private func retire() {
         loadTask?.cancel()
