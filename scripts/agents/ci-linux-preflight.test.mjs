@@ -112,9 +112,10 @@ test('fake SSH executes remote script, copies bundle, records isolated step summ
   const editedHead = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
   const editedHash = workflowAt(f.repo, editedHead).workflowSha256;
   const edited = await runAsync(['remote', f.repo, editedHead, 'agent-tests', editedHash, '3', '5'], { env: f.env });
-  assert.equal(edited.status, 75, edited.stderr + edited.stdout);
+  assert.equal(edited.status, 1, edited.stderr + edited.stdout);
   assert.match(edited.stdout, /step:Node totals:exit=7/);
-  assert.match(edited.stdout, /outcome=NOT VERIFIED/);
+  assert.match(edited.stdout, /outcome=FAIL/);
+  assert.match(checkSummary(edited.stdout, editedHead, workflowAt(f.repo, editedHead)), /agent-tooling FAIL Node totals/);
 });
 
 test('observed Node footer preserves skipped count and the exact PR total', async () => {
@@ -172,17 +173,46 @@ test('zero Node tests are NOT VERIFIED, cancelled tests fail, and todo appears o
   assert.match(todo.stdout, /agent-tooling PASS 3\/4 \(0 skip, 1 todo\)/);
 });
 
-test('Python failure before Node leaves the run NOT VERIFIED and cleans the remote directory', async () => {
+test('Python failure before Node yields FAIL, retains the failed name, and cleans the remote directory', async () => {
   const f = fixture(undefined, undefined, true);
   const result = await runFixtureAsync(f);
-  assert.equal(result.status, 75, result.stderr + result.stdout);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
   const body = readFileSync(summaryPath(result), 'utf8');
-  assert.match(body, /outcome=NOT VERIFIED/);
+  assert.match(body, /outcome=FAIL/);
   assert.match(body, /step:Python tests:exit=1/);
   assert.match(body, /step:Node totals=not-run/);
   assert.match(body, /failed:test_case/);
-  assert.match(result.stdout, /agent-tooling NOT VERIFIED missing Node TAP totals Python tests/);
+  assert.match(result.stdout, /agent-tooling FAIL Python tests/);
   assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
+});
+
+test('ordinary nonzero exits keep FAIL across missing, partial, and inconsistent TAP output', async () => {
+  const cases = [
+    [2, 'exit 2'],
+    [42, 'exit 42'],
+    [42, `printf '%s\\n' 'not ok 1 - marker_failure' '# tests 1' && exit 42`, 'marker_failure'],
+    [42, `${tapStep(footer(2, 1))}; exit 42`],
+    [42, `${tapStep(footer(1, 1))}; exit 42`],
+    [75, 'exit 75'],
+    [127, 'exit 127'],
+  ];
+  for (const [code, second, failedName] of cases) {
+    const f = fixture(undefined, second);
+    const hash = workflowAt(f.repo, f.sha).workflowSha256;
+    const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '3', '5'], { env: f.env });
+    assert.equal(result.status, 1, `${code}: ${result.stderr}${result.stdout}`);
+    assert.match(result.stdout, /outcome=FAIL/);
+    assert.match(result.stdout, new RegExp(`step:Node totals:exit=${code}\\n`));
+    if (failedName) assert.match(result.stdout, new RegExp(`failed:${failedName}\\n`));
+    assert.match(checkSummary(result.stdout, f.sha, workflowAt(f.repo, f.sha)), /agent-tooling FAIL Node totals/);
+  }
+});
+
+test('successful step with a complete but inconsistent footer remains NOT VERIFIED', async () => {
+  const f = fixture(undefined, tapStep(footer(2, 1)));
+  const result = await runFixtureAsync(f);
+  assert.equal(result.status, 75, result.stderr + result.stdout);
+  assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=NOT VERIFIED\nreason=TAP totals mismatch Node totals/);
 });
 
 test('remote checkout refuses a mismatched SHA before executing steps', () => {

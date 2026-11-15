@@ -198,6 +198,7 @@ function remote(repo, head, job, expectedHash, stepTimeout, deadline, timeBin) {
     process.stderr.write(`step ${step.name}:\n${output}\n`);
     if (result.error) { summary.outcome = 'NOT VERIFIED'; summary.reason = result.error.message; break; }
     if ([124, 137].includes(result.status)) { summary.outcome = 'TIMEOUT'; break; }
+    if (result.status !== 0) { summary.outcome = 'FAIL'; break; }
     if (record.tests === 0 || record.tap_footer !== 'complete') {
       summary.outcome = 'NOT VERIFIED'; summary.reason = `missing Node TAP totals ${step.name}`; break;
     }
@@ -205,7 +206,6 @@ function remote(repo, head, job, expectedHash, stepTimeout, deadline, timeBin) {
       summary.outcome = 'NOT VERIFIED'; summary.reason = `TAP totals mismatch ${step.name}`; break;
     }
     if (record.cancelled > 0) { summary.outcome = 'FAIL'; break; }
-    if (result.status !== 0) { summary.outcome = 'FAIL'; break; }
   }
   summary.secs = ((Date.now() - started) / 1000).toFixed(1);
   const rssValues = summary.steps.map(step => Number(step.peak_rss_kb)).filter(Number.isFinite);
