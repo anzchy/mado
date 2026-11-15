@@ -2,10 +2,8 @@ import AppKit
 import Testing
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue682CIDeferredCaptureControlsAreExactAndRejectUnknownDisabledControls() {
-    let expected = [
-        "settings.capture.ocr-cloud": 689,
-        "settings.capture.ocr-service": 689,
-    ]
+    // #689 slice B made the last deferred controls (云端识别, 服务) live.
+    let expected: [String: Int] = [:]
     #expect(CaptureDeferredSettingsControls.tickets == expected)
     func disabled(_ id: String) -> NSButton {
         let button = NSButton(title: id, target: nil, action: nil)

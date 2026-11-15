@@ -181,6 +181,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     /// The last refusal per action from this window, until a good combo or 恢复默认 replaces it.
     private var captureRefusals: [CaptureShortcutAction: String] = [:]
     private var captureRestore: NSButton?
+    private let cloudRecognition: CloudRecognitionSettingsEnvironment
+    private var cloudRecognitionGroup: CloudRecognitionSettingsGroup?
 
     init(cache: ThumbnailDiskCache, appearanceAdapter: WindowAppearanceAdapter,
          preferencesStore: any DisplayPreferencesStore, defaults: UserDefaults,
@@ -194,6 +196,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
          captureLoginItem: (any CaptureLoginItemPort)? = nil,
          captureSignal: (@MainActor (String) -> Void)? = nil,
          captureYieldActivation: (@MainActor (String) -> Void)? = nil,
+         cloudRecognition: CloudRecognitionSettingsEnvironment? = nil,
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -219,6 +222,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         self.captureYieldActivation = captureYieldActivation ?? {
             NSApp.yieldActivation(toApplicationWithBundleIdentifier: $0)
         }
+        self.cloudRecognition = cloudRecognition ?? .inMemory()
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -246,6 +250,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         if selectedSection == .capture {
             scrollCaptureToTop()
             refreshCapture()
+            cloudRecognitionGroup?.refresh()
         }
     }
 
@@ -269,6 +274,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         if section == .capture {
             scrollCaptureToTop()
             refreshCapture()
+            cloudRecognitionGroup?.refresh()
         }
     }
 
@@ -361,7 +367,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: 1124))
         let captureLabels = ["Capture Bar", "Start at Login", "Screen Recording", "Capture Folder",
                              "Save to Folder", "Copy to Clipboard", "Capture and Recognize Text",
-                             "Show / Hide Capture Bar", "Cloud Recognition"]
+                             "Show / Hide Capture Bar", "Cloud Recognition", "Service", "Keys"]
         let labelWidth = max(120, captureLabels.map {
             (captureLocalize($0) as NSString)
                 .size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
@@ -531,38 +537,19 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         form.addSubview(restore)
         captureDetails.append(restore)
         captureRestore = restore
-        let ocr = NSView(frame: NSRect(x: 26, y: 1124 - 930, width: 528, height: 160))
-        ocr.setAccessibilityIdentifier("settings.capture.ocr")
+        // 文字识别 (#689): live and editable with the bar off. The form grows when the group needs more room
+        // than the space under the shortcuts; everything above moves up with it, so the group stays last.
+        let ocr = CloudRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
+                                                environment: cloudRecognition, localize: captureLocalize,
+                                                openURL: openURL)
+        let growth = max(0, 770 + ocr.frame.height - form.frame.height)
+        if growth > 0 {
+            form.frame.size.height += growth
+            for view in form.subviews { view.frame.origin.y += growth }
+        }
+        ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - ocr.frame.height)
         form.addSubview(ocr)
-        let ocrDivider = NSBox(frame: NSRect(x: 0, y: 159, width: 528, height: 1))
-        ocrDivider.boxType = .separator
-        ocr.addSubview(ocrDivider)
-        let ocrTitle = label(captureLocalize("Text Recognition"), role: "uiSmall", muted: true)
-        ocrTitle.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        ocrTitle.frame = NSRect(x: 0, y: 130, width: 120, height: 20)
-        ocr.addSubview(ocrTitle)
-        let cloudLabel = label(captureLocalize("Cloud Recognition"), role: "uiSmall")
-        cloudLabel.alignment = .right
-        cloudLabel.frame = NSRect(x: 0, y: 96, width: 120, height: 24)
-        ocr.addSubview(cloudLabel)
-        let ocrInfo = label(captureLocalize("Cloud Recognition · No Key"), role: "uiSmall", muted: true)
-        ocrInfo.frame = NSRect(x: 176, y: 96, width: 352, height: 24)
-        ocr.addSubview(ocrInfo)
-        let ocrCloud = NSSwitch(frame: NSRect(x: 136, y: 98, width: 32, height: 18))
-        ocrCloud.controlSize = .mini
-        ocrCloud.setAccessibilityLabel(captureLocalize("Cloud Recognition"))
-        ocrCloud.isEnabled = false
-        ocrCloud.setAccessibilityIdentifier("settings.capture.ocr-cloud")
-        ocr.addSubview(ocrCloud)
-        let serviceLabel = label(captureLocalize("Service"), role: "uiSmall")
-        serviceLabel.alignment = .right
-        serviceLabel.frame = NSRect(x: 0, y: 58, width: 120, height: 24)
-        ocr.addSubview(serviceLabel)
-        let service = NSPopUpButton(frame: NSRect(x: 136, y: 58, width: 140, height: 24), pullsDown: false)
-        service.addItem(withTitle: captureLocalize("Baidu OCR"))
-        service.isEnabled = false
-        service.setAccessibilityIdentifier("settings.capture.ocr-service")
-        ocr.addSubview(service)
+        cloudRecognitionGroup = ocr
         refreshCapture()
     }
 

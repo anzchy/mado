@@ -193,14 +193,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var updates: (any AppUpdatePort)?
     private var updatesStarted = false
 
-    func makeSettingsWindow(defaults: UserDefaults = .standard) -> SettingsPanelWindow {
+    func makeSettingsWindow(defaults: UserDefaults = .standard,
+                            cloudRecognition: CloudRecognitionSettingsEnvironment? = nil) -> SettingsPanelWindow {
         SettingsPanelWindow(cache: thumbnailCache, appearanceAdapter: appearanceAdapter,
-                            preferencesStore: displayPreferences, defaults: defaults, updates: updates)
+                            preferencesStore: displayPreferences, defaults: defaults, updates: updates,
+                            cloudRecognition: cloudRecognition)
     }
 
     private func showSettings() {
         if settingsWindow == nil {
-            settingsWindow = makeSettingsWindow()
+            // Only the real Settings window reads and writes the keychain keys (#689).
+            settingsWindow = makeSettingsWindow(cloudRecognition: .live)
         }
         settingsWindow?.show()
     }

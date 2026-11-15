@@ -1,0 +1,353 @@
+import AppKit
+import MadoApplication
+import MadoMacUI
+
+/// What the 文字识别 group needs: the switch/consent/keys rules and how to show the consent dialog.
+struct CloudRecognitionSettingsEnvironment {
+    typealias ConsentPresenter = @MainActor (NSWindow?, NSAlert, @escaping @MainActor (Bool) -> Void) -> Void
+    let model: CloudRecognitionSettingsModel
+    let presentConsent: ConsentPresenter
+
+    /// The App's keychain, defaults and a sheet on the Settings window.
+    @MainActor static var live: CloudRecognitionSettingsEnvironment {
+        CloudRecognitionSettingsEnvironment(model: CloudRecognitionAppServices.settingsModel) { window, alert, answer in
+            if let window {
+                alert.beginSheetModal(for: window) { answer($0 == .alertFirstButtonReturn) }
+            } else {
+                answer(alert.runModal() == .alertFirstButtonReturn)
+            }
+        }
+    }
+
+    /// For a Settings window built without the App's services (tests, fixtures): keys and answers live only in
+    /// memory, the keychain is never read, and the consent dialog is answered 取消.
+    static func inMemory() -> CloudRecognitionSettingsEnvironment {
+        CloudRecognitionSettingsEnvironment(
+            model: CloudRecognitionSettingsModel(preferences: MemoryPreferences(),
+                                                 keys: BaiduCloudCredentialStore(secrets: MemorySecrets())),
+            presentConsent: { _, _, answer in answer(false) })
+    }
+
+    private actor MemorySecrets: CloudSecretStorePort {
+        var items: [String: String] = [:]
+        func secret(service: String, account: String) async throws(CloudSecretStoreError) -> String? { items[account] }
+        func setSecret(_ value: String, service: String, account: String) async throws(CloudSecretStoreError) {
+            items[account] = value
+        }
+        func removeSecret(service: String, account: String) async throws(CloudSecretStoreError) { items[account] = nil }
+    }
+
+    private actor MemoryPreferences: CloudRecognitionPreferencePort {
+        var enabled = false
+        var record: CloudRecognitionConsentRecord?
+        func isEnabled() async -> Bool { enabled }
+        func setEnabled(_ enabled: Bool) async { self.enabled = enabled }
+        func consentRecord() async -> CloudRecognitionConsentRecord? { record }
+        func setConsentRecord(_ record: CloudRecognitionConsentRecord) async { self.record = record }
+    }
+}
+
+/// Settings › 截图 › 文字识别 (settings.html lines 174–176, ADR-0019). It stays editable with the Capture Bar off
+/// (owner 2026-11-13: 「文字识别不变灰」). The switch turns on only after both keys are saved and consent is given
+/// (settings.html line 23); the first turn-on shows the consent dialog; 移除密钥 deletes both keys and turns it off.
+@MainActor final class CloudRecognitionSettingsGroup: NSView {
+    /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
+    static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
+
+    static let cloudHint = "Cloud Recognition uploads the image being recognized to Baidu. It uploads only when you click Recognize Text, have agreed once, and this switch is on; selecting text directly on an image always uses on-device recognition only. Baidu text recognition needs a Baidu account with real-name verification, and Baidu's documentation lists only mainland Chinese ID documents. How long Baidu keeps uploaded images, and whether the service works outside mainland China, are not confirmed."
+    static let fallbackHint = "Without a key, offline, or when the quota is used up, Mado uses on-device recognition, and the result names the engine it used."
+
+    /// No pinned design for the dialog itself: a standard informational NSAlert with the terms link as its
+    /// accessory. The first button agrees.
+    static func consentAlert(localize: (String) -> String, openURL: @escaping (URL) -> Void) -> NSAlert {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = localize("Use Baidu to recognize text?")
+        alert.informativeText = localize("Cloud Recognition uploads the one image being recognized to Baidu, only when you choose Recognize Text. Selecting text directly on an image always uses on-device recognition. Baidu's terms of service apply to the upload.")
+        alert.addButton(withTitle: localize("Agree and Turn On"))
+        alert.addButton(withTitle: localize("Cancel"))
+        let link = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { openURL(termsURL) })
+        link.frame.size = link.intrinsicContentSize
+        alert.accessoryView = link
+        return alert
+    }
+
+    private let environment: CloudRecognitionSettingsEnvironment
+    private let localize: (String) -> String
+    private let openURL: (URL) -> Void
+    private let cloudSwitch = NSSwitch()
+    private let pill: NSTextField
+    private let apiKey = NSTextField()
+    private let secretKey = NSSecureTextField()
+    private var save: NSButton!
+    private let savedKeys: NSTextField
+    private var remove: NSButton!
+    private let message: NSTextField
+    private var refreshID = 0
+    private var busy = false
+
+    /// `valueX` is the form's value column, relative to this group's left edge.
+    init(width: CGFloat, labelWidth: CGFloat, valueX: CGFloat, environment: CloudRecognitionSettingsEnvironment,
+         localize: @escaping (String) -> String, openURL: @escaping (URL) -> Void) {
+        self.environment = environment
+        self.localize = localize
+        self.openURL = openURL
+        pill = Self.text("", muted: true)
+        savedKeys = Self.text("")
+        message = Self.text("")
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 0))
+        setAccessibilityIdentifier("settings.capture.ocr")
+        build(width: width, labelWidth: labelWidth, valueX: valueX)
+        refresh()
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var isFlipped: Bool { true }
+
+    private static func text(_ value: String, muted: Bool = false) -> NSTextField {
+        let field = NSTextField(wrappingLabelWithString: value)
+        field.font = DesignMetrics.font("uiSmall")
+        field.textColor = muted ? DesignColor.textSecondary.nsColor : DesignColor.textPrimary.nsColor
+        field.isSelectable = false
+        return field
+    }
+
+    private func build(width: CGFloat, labelWidth: CGFloat, valueX: CGFloat) {
+        let valueWidth = width - valueX
+        let divider = NSBox(frame: NSRect(x: 0, y: 0, width: width, height: 1))
+        divider.boxType = .separator
+        addSubview(divider)
+        let title = Self.text(localize("Text Recognition"), muted: true)
+        title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        title.frame = NSRect(x: 0, y: 14, width: width, height: 20)
+        addSubview(title)
+
+        func rowLabel(_ text: String, top: CGFloat) {
+            let label = Self.text(localize(text))
+            label.alignment = .right
+            label.frame = NSRect(x: 0, y: top + 4, width: labelWidth, height: 18)
+            addSubview(label)
+        }
+        func measured(_ field: NSTextField, top: CGFloat, x: CGFloat = valueX, width fieldWidth: CGFloat = valueWidth) -> CGFloat {
+            let height = field.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: fieldWidth, height: .greatestFiniteMagnitude)).height.rounded(.up)
+            field.frame = NSRect(x: x, y: top, width: fieldWidth, height: height)
+            addSubview(field)
+            return top + height
+        }
+
+        // 云端识别: switch, its caption, the 未填写密钥 pill, the ADR-0019 disclosure and the terms link.
+        var top: CGFloat = 46
+        rowLabel("Cloud Recognition", top: top)
+        let switchTitle = localize("Allow Recognize Text to use a cloud service")
+        cloudSwitch.controlSize = .mini
+        cloudSwitch.frame = NSRect(x: valueX, y: top + 3, width: 32, height: 18)
+        cloudSwitch.target = self
+        cloudSwitch.action = #selector(changeSwitch(_:))
+        cloudSwitch.setAccessibilityIdentifier("settings.capture.ocr-cloud")
+        cloudSwitch.setAccessibilityLabel(switchTitle)
+        addSubview(cloudSwitch)
+        let caption = Self.text(switchTitle)
+        caption.maximumNumberOfLines = 1
+        caption.setAccessibilityIdentifier("settings.capture.ocr-cloud.title")
+        // Sized for the wider of both languages, so switching language never clips the caption or the pill.
+        func widest(_ texts: [String], font: NSFont?) -> CGFloat {
+            texts.map { ($0 as NSString).size(withAttributes: [.font: font ?? NSFont.systemFont(ofSize: 12)]).width }
+                .max()!.rounded(.up) + 4
+        }
+        let captionWidth = min(widest([switchTitle, "Allow Recognize Text to use a cloud service", "允许「识别文字」使用云端服务"],
+                                      font: caption.font), valueWidth - 40)
+        caption.frame = NSRect(x: valueX + 40, y: top + 4, width: captionWidth, height: 18)
+        addSubview(caption)
+        pill.stringValue = localize("No Key")
+        pill.maximumNumberOfLines = 1
+        pill.alignment = .center
+        pill.wantsLayer = true
+        pill.drawsBackground = false
+        pill.layer?.cornerRadius = 9
+        pill.layer?.backgroundColor = DesignColor.hoverBackground.nsColor.cgColor
+        pill.setAccessibilityIdentifier("settings.capture.ocr-pill")
+        let pillWidth = widest([pill.stringValue, "No Key", "未填写密钥"], font: pill.font) + 10
+        let pillInline = valueX + 40 + captionWidth + 8 + pillWidth <= width
+        pill.frame = NSRect(x: pillInline ? valueX + 40 + captionWidth + 8 : valueX + 40,
+                            y: pillInline ? top + 3 : top + 26, width: pillWidth, height: 18)
+        addSubview(pill)
+        top = pillInline ? top + 30 : top + 50
+        let hint = Self.text(localize(Self.cloudHint), muted: true)
+        hint.setAccessibilityIdentifier("settings.capture.ocr-hint")
+        top = measured(hint, top: top) + 2
+        let terms = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { [weak self] in
+            self?.openURL(Self.termsURL)
+        })
+        terms.setAccessibilityIdentifier("settings.capture.ocr-terms")
+        terms.frame = NSRect(x: valueX, y: top, width: terms.intrinsicContentSize.width.rounded(.up), height: 16)
+        addSubview(terms)
+        top += 30
+
+        // 服务: one choice, 百度 OCR.
+        rowLabel("Service", top: top)
+        let service = NSPopUpButton(frame: NSRect(x: valueX, y: top, width: 140, height: 24), pullsDown: false)
+        service.addItem(withTitle: localize("Baidu OCR"))
+        service.font = DesignMetrics.font("uiSmall")
+        service.setAccessibilityLabel(localize("Recognition Service"))
+        service.setAccessibilityIdentifier("settings.capture.ocr-service")
+        addSubview(service)
+        top += 38
+
+        // 密钥: two fields and 保存到钥匙串, or the masked keys and 移除密钥.
+        rowLabel("Keys", top: top)
+        for (field, placeholder, id) in [(apiKey as NSTextField, "API Key", "settings.capture.ocr-api-key"),
+                                         (secretKey, "Secret Key", "settings.capture.ocr-secret-key")] {
+            field.placeholderString = placeholder
+            field.setAccessibilityLabel(placeholder)
+            field.font = DesignMetrics.font("uiSmall")
+            field.usesSingleLineMode = true
+            field.cell?.isScrollable = true
+            field.setAccessibilityIdentifier(id)
+            addSubview(field)
+        }
+        remove = NSButton(title: localize("Remove Keys"), target: self, action: #selector(removeKeys(_:)))
+        remove.font = DesignMetrics.font("uiSmall")
+        remove.setAccessibilityIdentifier("settings.capture.ocr-remove")
+        let removeWidth = remove.intrinsicContentSize.width.rounded(.up) + 12
+        // 移除密钥 replaces the fields on the same row, so the fields stop short of it (no hidden overlap).
+        let fieldWidth = min(150, (valueWidth - removeWidth - 16) / 2)
+        apiKey.frame = NSRect(x: valueX, y: top, width: fieldWidth, height: 24)
+        secretKey.frame = NSRect(x: valueX + fieldWidth + 8, y: top, width: fieldWidth, height: 24)
+        save = NSButton(title: localize("Save to Keychain"), target: self, action: #selector(saveKeys(_:)))
+        save.font = DesignMetrics.font("uiSmall")
+        save.setAccessibilityIdentifier("settings.capture.ocr-save")
+        let saveWidth = save.intrinsicContentSize.width.rounded(.up) + 12
+        let saveInline = secretKey.frame.maxX + 8 + saveWidth <= width - removeWidth - 8
+        save.frame = NSRect(x: saveInline ? secretKey.frame.maxX + 8 : valueX, y: saveInline ? top : top + 30,
+                            width: saveWidth, height: 24)
+        addSubview(save)
+        remove.frame = NSRect(x: width - removeWidth, y: top, width: removeWidth, height: 24)
+        addSubview(remove)
+        savedKeys.maximumNumberOfLines = 1
+        savedKeys.lineBreakMode = .byTruncatingMiddle
+        savedKeys.setAccessibilityIdentifier("settings.capture.ocr-saved-keys")
+        savedKeys.frame = NSRect(x: valueX, y: top + 4, width: remove.frame.minX - 8 - valueX, height: 18)
+        addSubview(savedKeys)
+        top = save.frame.maxY + 6
+        let keysHint = Self.text(localize("Keys are stored in the keychain."), muted: true)
+        keysHint.setAccessibilityIdentifier("settings.capture.ocr-keys-hint")
+        top = measured(keysHint, top: top) + 4
+        message.textColor = DesignColor.errorText.nsColor
+        message.maximumNumberOfLines = 2
+        message.setAccessibilityIdentifier("settings.capture.ocr-message")
+        message.frame = NSRect(x: valueX, y: top, width: valueWidth, height: 32)
+        addSubview(message)
+        top += 40
+        let fallback = Self.text(localize(Self.fallbackHint), muted: true)
+        fallback.setAccessibilityIdentifier("settings.capture.ocr-fallback-hint")
+        top = measured(fallback, top: top)
+        frame.size.height = top + 16
+        show(CloudRecognitionSettingsState(isOn: false, hasKeys: false, consent: .notAsked, maskedAPIKey: nil))
+    }
+
+    func refresh() {
+        refreshID += 1
+        let id = refreshID
+        Task {
+            let state = await environment.model.state()
+            guard id == refreshID else { return }
+            show(state)
+        }
+    }
+
+    private func show(_ state: CloudRecognitionSettingsState) {
+        cloudSwitch.state = state.isOn ? .on : .off
+        pill.isHidden = state.hasKeys
+        for view in [apiKey, secretKey, save!] as [NSView] { view.isHidden = state.hasKeys }
+        savedKeys.isHidden = !state.hasKeys
+        remove.isHidden = !state.hasKeys
+        savedKeys.stringValue = state.maskedAPIKey.map {
+            String(format: localize("API Key %1$@ · Secret Key %2$@"), $0, CloudKeyMask.hidden)
+        } ?? ""
+    }
+
+    /// One change at a time: each finishes by reading the model back, so the switch never shows a state the
+    /// model does not hold.
+    private func perform(_ work: @escaping @MainActor () async -> Void) {
+        guard !busy else { refresh(); return }
+        busy = true
+        Task {
+            await work()
+            busy = false
+            refreshID += 1
+            show(await environment.model.state())
+        }
+    }
+
+    @objc private func changeSwitch(_ sender: NSSwitch) {
+        let wantsOn = sender.state == .on
+        sender.state = .off
+        message.stringValue = ""
+        perform { [self] in
+            guard wantsOn else { await environment.model.disable(); return }
+            switch await environment.model.requestEnable() {
+            case .enabled: break
+            case .needsKeys: message.stringValue = localize("Save the keys first.")
+            case .needsConsent:
+                let alert = Self.consentAlert(localize: localize, openURL: openURL)
+                let agreed = await withCheckedContinuation { continuation in
+                    environment.presentConsent(window, alert) { continuation.resume(returning: $0) }
+                }
+                if await environment.model.answerConsent(granted: agreed) == .needsKeys {
+                    message.stringValue = localize("Save the keys first.")
+                }
+            }
+        }
+    }
+
+    @objc private func saveKeys(_ sender: NSButton) {
+        let api = apiKey.stringValue
+        let secret = secretKey.stringValue
+        message.stringValue = ""
+        perform { [self] in
+            do throws(CloudKeyError) {
+                try await environment.model.saveKeys(apiKey: api, secretKey: secret)
+                apiKey.stringValue = ""
+                secretKey.stringValue = ""
+            } catch .emptyKey {
+                message.stringValue = localize("Enter both the API Key and the Secret Key.")
+            } catch {
+                message.stringValue = localize("The keys could not be saved to the keychain.")
+            }
+        }
+    }
+
+    @objc private func removeKeys(_ sender: NSButton) {
+        message.stringValue = ""
+        perform { [self] in
+            do throws(CloudKeyError) { try await environment.model.removeKeys() }
+            catch { message.stringValue = localize("The keys could not be removed from the keychain.") }
+        }
+    }
+}
+
+/// A text link in the accent colour (settings.html `.link`).
+private final class TermsLinkButton: NSButton {
+    private let open: () -> Void
+
+    init(title: String, open: @escaping () -> Void) {
+        self.open = open
+        super.init(frame: .zero)
+        self.title = title
+        isBordered = false
+        font = DesignMetrics.font("uiSmall")
+        attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: DesignMetrics.font("uiSmall"), .foregroundColor: DesignColor.accent.nsColor
+        ])
+        target = self
+        action = #selector(follow(_:))
+        setAccessibilityRole(.link)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
+    @objc private func follow(_ sender: Any?) { open() }
+}
