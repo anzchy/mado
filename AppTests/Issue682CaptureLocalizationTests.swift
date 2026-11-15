@@ -31,7 +31,8 @@ func captureCatalog(_ locale: String) throws -> [String: String] {
         for (key, value) in expected[locale]! { #expect(catalog[key] == value) }
         let bar = CaptureBarView(localize: { catalog[$0] ?? $0 }, captureAction: {})
         #expect(locale != "zh-Hans" || bar.frame.width == 562)
-        let grip = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.grip" } as? NSButton)
+        // #685: the grip is a drag handle, not a button (capture-bar.html:109).
+        let grip = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.grip" })
         let collapse = try #require(bar.subviews.first { $0.accessibilityIdentifier() == "capture.collapse" } as? NSButton)
         #expect(grip.accessibilityLabel() == catalog["Drag Capture Bar"])
         #expect(collapse.accessibilityLabel() == catalog["Collapse to Menu Bar"])

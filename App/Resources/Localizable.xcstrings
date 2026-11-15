@@ -1,6 +1,10 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Click to show the Capture Bar": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Click to show the Capture Bar"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "点按显示截图工具条"}}}},
+    "Mado Capture: click to show the Capture Bar": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Mado Capture: click to show the Capture Bar"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "Mado 截图：点按显示截图工具条"}}}},
+    "Choose": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Choose"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "选择"}}}},
+    "Choose the folder new captures are saved to.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Choose the folder new captures are saved to."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "选择新截图存放的文件夹。"}}}},
     "Saved to %@ · Copied": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Saved to %@ · Copied"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "已存到 %@ · 已拷贝"}}}},
     "Saved to %@": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Saved to %@"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "已存到 %@"}}}},
     "Saved to %@ · Couldn't copy": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Saved to %@ · Couldn't copy"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "已存到 %@ · 无法拷贝"}}}},
