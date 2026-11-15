@@ -44,6 +44,14 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
         CaptureRequestFromWindows.make(target: .fullScreen(displayID: displayID), bars: windows, overlays: [])
     }
 
+    /// The one configuration every capture mode (region, window, full screen) starts from.
+    /// No capture includes the pointer (owner 2026-11-14); ScreenCaptureKit shows it by default.
+    static func configuration(for request: CaptureRequest) -> SCStreamConfiguration {
+        let configuration = SCStreamConfiguration()
+        configuration.showsCursor = false
+        return configuration
+    }
+
     private func pixelDimensions(width: Int, height: Int, scale: Double) -> (Int, Int) {
         (Int((Double(width) * scale).rounded()), Int((Double(height) * scale).rounded()))
     }
@@ -82,7 +90,7 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
         try checkPermission()
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         let resolved = try CaptureFilterPlan.resolveWindows(request, windows: content.windows, id: { $0.windowID })
-        let configuration = SCStreamConfiguration()
+        let configuration = Self.configuration(for: request)
         let filter: SCContentFilter
         var legacyCrop = false
         switch resolved.plan.target {
