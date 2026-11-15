@@ -77,3 +77,63 @@ actor LoadPipeline: ImagePipeline {
     session.closeImage()
     #expect(try await session.imageLoader.recognitionImage(maximumPixelSize: 4000) == nil)
 }
+
+private actor RecognitionFailingPipeline: ImagePipeline {
+    let item = ItemID.ephemeral(UUID())
+    let revision = FileRevision(byteCount: 9, modificationDate: nil)
+    var failAtOrAbove = Int.max
+    var failuresLeft = 0
+    var edges: [Int] = []
+    func configure(failAtOrAbove: Int, failures: Int) {
+        self.failAtOrAbove = failAtOrAbove; failuresLeft = failures
+    }
+    func request(for fileURL: URL, maximumPixelSize: Int) -> ImageDecodeRequest {
+        ImageDecodeRequest(fileURL: fileURL, maximumPixelSize: maximumPixelSize,
+            renderKey: RenderKey(itemID: item, revision: revision, maximumPixelSize: maximumPixelSize))
+    }
+    func image(for request: ImageDecodeRequest) throws -> DecodedImage {
+        edges.append(request.maximumPixelSize)
+        if request.maximumPixelSize >= failAtOrAbove, failuresLeft > 0 {
+            failuresLeft -= 1
+            throw ImageLoadError(.resourceLimit)
+        }
+        return loadImage(request.renderKey!, edge: request.maximumPixelSize, source: 1000)
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue687DetailLimitedRecognitionFallsBackWithoutClosingDisplaySource() async throws {
+    let session = ViewerSession(), host = LoadHost(), pipeline = RecognitionFailingPipeline(), access = LoadLeases()
+    session.imageLoader.host = host
+    await pipeline.configure(failAtOrAbove: 1000, failures: 2)
+    let url = URL(fileURLWithPath: "/detail-limited.png")
+    session.openImage(url, maximumPixelSize: 512) {
+        try await AccessImageSource.open(.fileGrant(url), access: access, pipeline: pipeline)
+    }
+    await session.imageLoader.loadTask?.value
+    session.requireImageResolution(1000)
+    await session.imageLoader.loadTask?.value
+    #expect(session.imageLoader.phase == .detailLimited)
+    #expect(host.images.last?.image.width == 512)
+    #expect(try await session.imageLoader.recognitionImage(maximumPixelSize: 1000) == nil)
+    #expect(await pipeline.edges.filter { $0 == 1000 }.count == 1)
+    #expect(await access.acquired.count - access.released.count == 1)
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue687RecognitionDecodeFailureKeepsDisplayLeaseAndAllowsLaterRefine() async throws {
+    let session = ViewerSession(), host = LoadHost(), pipeline = RecognitionFailingPipeline(), access = LoadLeases()
+    session.imageLoader.host = host
+    let url = URL(fileURLWithPath: "/transient-ocr.png")
+    session.openImage(url, maximumPixelSize: 512) {
+        try await AccessImageSource.open(.fileGrant(url), access: access, pipeline: pipeline)
+    }
+    await session.imageLoader.loadTask?.value
+    await pipeline.configure(failAtOrAbove: 1000, failures: 1)
+    #expect(try await session.imageLoader.recognitionImage(maximumPixelSize: 1000) == nil)
+    #expect(await access.acquired.count - access.released.count == 1)
+    session.requireImageResolution(700)
+    await session.imageLoader.loadTask?.value
+    #expect(host.images.last?.image.width == 700)
+    let full = try await session.imageLoader.recognitionImage(maximumPixelSize: 1000)
+    #expect(full?.width == 1000)
+    #expect(await access.acquired.count - access.released.count == 1)
+}

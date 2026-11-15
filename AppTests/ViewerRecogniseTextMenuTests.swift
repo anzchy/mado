@@ -25,16 +25,69 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     let preview: CGImage?
     let item = ItemID.ephemeral(UUID())
     let revision = FileRevision(byteCount: 1, modificationDate: nil)
-    init(image: CGImage, preview: CGImage? = nil) { self.image = image; self.preview = preview }
+    let failFullDecode: Bool
+    private var fullFailuresLeft = 0
+    init(image: CGImage, preview: CGImage? = nil, failFullDecode: Bool = false) {
+        self.image = image; self.preview = preview; self.failFullDecode = failFullDecode
+    }
+    func failNextFullDecode() { fullFailuresLeft = 1 }
     func request(for fileURL: URL, maximumPixelSize: Int) -> ImageDecodeRequest {
         ImageDecodeRequest(fileURL: fileURL, maximumPixelSize: maximumPixelSize,
             renderKey: RenderKey(itemID: item, revision: revision, maximumPixelSize: maximumPixelSize))
     }
-    func image(for request: ImageDecodeRequest) -> DecodedImage {
+    func image(for request: ImageDecodeRequest) throws -> DecodedImage {
+        if request.maximumPixelSize >= image.width && (failFullDecode || fullFailuresLeft > 0) {
+            if fullFailuresLeft > 0 { fullFailuresLeft -= 1 }
+            throw ImageLoadError(.resourceLimit)
+        }
         let selected = request.maximumPixelSize >= image.width ? image : (preview ?? image)
         return DecodedImage(image: selected, sourcePixelSize: CGSize(width: image.width, height: image.height),
                      revision: revision, itemID: item)
     }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextDetailLimitedUsesDeliveredPixels() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    let context = try #require(CGContext(data: nil, width: 200, height: 2, bitsPerComponent: 8,
+        bytesPerRow: 800, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let previewContext = try #require(CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8,
+        bytesPerRow: 8, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let pipeline = RecogniseMenuPipeline(image: try #require(context.makeImage()),
+        preview: try #require(previewContext.makeImage()), failFullDecode: true)
+    let leases = RecogniseMenuLeases(), url = URL(fileURLWithPath: "/tmp/detail-limited.png")
+    controller.session.openImage(url, maximumPixelSize: 3) {
+        try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
+    }
+    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    controller.session.requireImageResolution(200)
+    for _ in 0..<200 where controller.session.imageLoader.phase != .detailLimited {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(controller.session.imageLoader.phase == .detailLimited)
+    let board = NSPasteboard(name: .init("mado.issue687.limited.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    controller.recogniseTextAdapter.pasteboard = board
+    let probe = RecogniseIntentProbe()
+    controller.recogniseTextAdapter.recognise = { data, intent in
+        await probe.record(data, intent: intent)
+        return TextRecognitionResult(text: "delivered", characterCount: 9, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await probe.pixelSize == CGSize(width: 2, height: 2))
+    #expect(board.string(forType: .string) == "delivered")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextReducedPreviewUsesHeldFullResolutionSource() async throws {
@@ -131,6 +184,57 @@ private actor RecogniseIntentProbe {
                                height: properties[kCGImagePropertyPixelHeight] as? Int ?? 0)
         }
     }
+}
+
+private actor RecogniseRunCounter {
+    private var count = 0
+    func next() -> Int { count += 1; return count }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextDecodeErrorFallsBackAndNextActionDecodesAgain() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    func pixels(_ width: Int) throws -> CGImage {
+        let context = try #require(CGContext(data: nil, width: width, height: 2,
+            bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        return try #require(context.makeImage())
+    }
+    let pipeline = RecogniseMenuPipeline(image: try pixels(200), preview: try pixels(2))
+    let leases = RecogniseMenuLeases(), url = URL(fileURLWithPath: "/tmp/transient-ocr.png")
+    controller.session.openImage(url, maximumPixelSize: 3) {
+        try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
+    }
+    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let key = try #require(controller.session.imageLoader.presented?.key)
+    controller.installImage(DecodedImage(image: try pixels(2), sourcePixelSize: CGSize(width: 200, height: 2),
+        revision: key.revision, itemID: key.itemID), fileURL: url)
+    await pipeline.failNextFullDecode()
+    let board = NSPasteboard(name: .init("mado.issue687.retry-ocr.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    controller.recogniseTextAdapter.pasteboard = board
+    let counter = RecogniseRunCounter()
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        let count = await counter.next()
+        return TextRecognitionResult(text: "run \(count)", characterCount: 5, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(board.string(forType: .string) == "run 1")
+    controller.recogniseText()
+    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(board.string(forType: .string) == "run 2")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextMenuRunsExplicitServiceOnDecodedPixels() async throws {
