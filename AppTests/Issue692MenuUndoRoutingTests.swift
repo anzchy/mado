@@ -82,3 +82,57 @@ private let redoAction = NSSelectorFromString("redo:")
         #expect(chainTarget(window, redoAction) === window, "the viewer keeps NSWindow's own Redo")
     }
 }
+
+// #692 fix r3 (device FAIL, smoke692-20261114b step 5): while a text mark is typed, ⌘Z and Edit › Undo did
+// nothing, because the window declined undo:/redo: in Annotate Mode and the field editor's typing undo is carried
+// out by NSWindow's undo:. These go through the real chain from the field editor and AppKit's own validation.
+
+/// Enabled as NSMenu validates it: validateMenuItem(_:) if the target has it, else validateUserInterfaceItem(_:).
+@MainActor private func menuValidates(_ window: NSWindow, _ action: Selector) -> Bool {
+    let item = NSMenuItem(title: "", action: action, keyEquivalent: "")
+    guard let target = chainTarget(window, action) else { return false }
+    if let validation = target as? NSMenuItemValidation { return validation.validateMenuItem(item) }
+    if let validation = target as? NSUserInterfaceValidations { return validation.validateUserInterfaceItem(item) }
+    return true
+}
+
+@MainActor @Suite(.serialized) struct Issue692TypingUndoTests {
+    @Test(.timeLimit(.minutes(3))) func issue692TypingUndoActsOnTheTextNotTheMarks() async throws {
+        let context = try await Issue690Context(size: page39Size)
+        defer { context.close() }
+        let controller = try await context.open()
+        let window = try #require(controller.window)
+        controller.enterAnnotateMode()
+        try context.drag(from: CGPoint(x: 400, y: 200), to: CGPoint(x: 500, y: 300))
+        let before = context.marks()
+        try #require(before.count == 1)
+
+        try context.key("t", code: 17)
+        try context.click(CGPoint(x: 600, y: 400))
+        try context.type("abc")
+        let overlay = try context.overlay()
+        let field = try #require(overlay.textEditor)
+        try #require(overlay.isEditingText && field.stringValue == "abc")
+        let editor = try #require(window.firstResponder as? NSTextView, "the field editor is typing")
+
+        #expect(menuValidates(window, undoAction), "Edit › Undo is enabled while the typing can be undone")
+        #expect(editor.tryToPerform(undoAction, with: nil), "Undo reaches something from the field editor")
+        #expect(field.stringValue == "", "Edit › Undo took the typed characters back")
+        #expect(overlay.isEditingText, "the typing goes on")
+        #expect(context.marks() == before, "a typing undo leaves the marks alone")
+        #expect(menuValidates(window, redoAction), "Edit › Redo is enabled after a typing undo")
+        #expect(editor.tryToPerform(redoAction, with: nil))
+        #expect(field.stringValue == "abc", "Edit › Redo brought the characters back")
+        #expect(context.marks() == before)
+
+        // Ending the text makes Undo act on the marks again: one step takes the whole text mark.
+        try context.escape()
+        #expect(!overlay.isEditingText)
+        #expect(context.marks().count == 2, "Esc committed the text mark")
+        window.makeFirstResponder(controller.canvas)
+        #expect(chainTarget(window, undoAction) === controller, "after the text ends, Undo is the marks' again")
+        #expect(menuValidates(window, undoAction))
+        #expect(controller.canvas.tryToPerform(undoAction, with: nil))
+        #expect(context.marks() == before, "one Undo took the whole text mark, and only it")
+    }
+}
