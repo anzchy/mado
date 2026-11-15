@@ -41,13 +41,18 @@ public actor CaptureFolderAccess {
     }
 
     /// The folder the next Capture is written to.
-    /// The chosen folder stays open (its security scope started) until another one is chosen.
+    /// The chosen folder stays open (its security scope started) until another one is chosen, or until it can no
+    /// longer be read (renamed, deleted or unmounted meanwhile); then its bookmark is resolved again.
     public func currentFolder() async -> URL {
-        if let active { return active }
+        if let active {
+            if scope.isReadable(active) { return active }
+            scope.stop(active)
+            self.active = nil
+        }
         let stored = await preferences.folderRecord()
         guard let bookmark = stored.bookmark else { return downloads }
         var record = stored
-        if let resolved = try? scope.resolve(bookmark), scope.start(resolved.url) {
+        if let resolved = try? scope.resolve(bookmark), open(resolved.url) {
             active = resolved.url
             if resolved.stale, let fresh = try? scope.create(for: resolved.url) { record.bookmark = fresh }
             record.fellBack = false
@@ -56,6 +61,14 @@ public actor CaptureFolderAccess {
         }
         if record != stored { await preferences.setFolderRecord(record) }
         return active ?? downloads
+    }
+
+    /// Starts the folder's scope and keeps it only if the folder can be read.
+    private func open(_ url: URL) -> Bool {
+        guard scope.start(url) else { return false }
+        if scope.isReadable(url) { return true }
+        scope.stop(url)
+        return false
     }
 
     /// The folder the next Capture is written to, as the thumbnail's status line shows it.

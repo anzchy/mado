@@ -21,7 +21,13 @@ private final class FakeScope: SecurityScope, BookmarkCoding, @unchecked Sendabl
     var stopped: [URL] { lock.withLock { _stopped } }
     func start(_ url: URL) -> Bool { lock.withLock { _started.append(url) }; return !refuseAccess }
     func stop(_ url: URL) { lock.withLock { _stopped.append(url) } }
-    func isReadable(_ url: URL) -> Bool { true }
+    private var _gone: Set<URL> = []
+    /// Folders renamed, deleted or unmounted since they were opened.
+    var gone: Set<URL> {
+        get { lock.withLock { _gone } }
+        set { lock.withLock { _gone = newValue } }
+    }
+    func isReadable(_ url: URL) -> Bool { !gone.contains(url) }
     var requiresEmbeddedIdentity: Bool { false }
     func create(for url: URL) throws -> Data {
         if createFails { throw BookmarkFailure.failed }
@@ -193,4 +199,38 @@ private struct NoClipboard: CaptureClipboardPort {
     let plain = CaptureSession(screen: OnePixel(), files: PlainFiles())
     #expect(try await plain.capture(request: nil, policy: .standard, clipboard: NoClipboard()).folderDisplay == "~/Downloads")
     #expect(await PlainFiles().folderDisplay() == nil)
+}
+
+// Fix r1 (opus M1): a Capture Folder that disappears while the helper runs falls back to ~/Downloads with the note,
+// instead of every capture failing to save until the helper restarts.
+@Test(.timeLimit(.minutes(2))) func issue685FolderLostWhileTheHelperRunsFallsBackToDownloads() async throws {
+    let scope = FakeScope()
+    let stored = StoredFolder()
+    let folder = access(scope, stored)
+    try await folder.choose(shots)
+    #expect(await folder.currentFolder() == shots)
+    // Renamed, deleted or unmounted in Finder, and its bookmark no longer resolves.
+    scope.gone = [shots]
+    scope.resolveFails = true
+    #expect(await folder.currentFolder() == downloads)
+    #expect(await folder.currentDisplay() == "~/Downloads")
+    #expect(await stored.record.fellBack)
+    #expect(await stored.record.display == "~/Pictures/Shots")
+    #expect(scope.stopped == [shots])  // the lost folder's scope is closed
+    // Each later capture tries the bookmark again; once the folder is back the note clears.
+    scope.gone = []
+    scope.resolveFails = false
+    #expect(await folder.currentFolder() == shots)
+    #expect(await stored.record.fellBack == false)
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685BookmarkThatResolvesToAnUnreadableFolderFallsBack() async throws {
+    let scope = FakeScope()
+    let stored = StoredFolder()
+    try await access(scope, stored).choose(shots)
+    scope.gone = [shots]
+    let relaunched = access(scope, stored)
+    #expect(await relaunched.currentFolder() == downloads)
+    #expect(await stored.record.fellBack)
+    #expect(scope.stopped == [shots])
 }
