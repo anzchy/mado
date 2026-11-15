@@ -66,11 +66,13 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     controller.session.openImage(url, maximumPixelSize: 3) {
         try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
     }
-    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+    for _ in 0..<200 {
+        guard controller.session.imageLoader.phase != .settled else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     controller.session.requireImageResolution(200)
-    for _ in 0..<200 where controller.session.imageLoader.phase != .detailLimited {
+    for _ in 0..<200 {
+        guard controller.session.imageLoader.phase != .detailLimited else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(controller.session.imageLoader.phase == .detailLimited)
@@ -83,7 +85,8 @@ private actor RecogniseMenuPipeline: ImagePipeline {
         return TextRecognitionResult(text: "delivered", characterCount: 9, engine: .onDevice, isEmpty: false)
     }
     controller.recogniseText()
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(await probe.pixelSize == CGSize(width: 2, height: 2))
@@ -151,7 +154,8 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     controller.session.openImage(url, maximumPixelSize: 3) {
         try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
     }
-    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+    for _ in 0..<200 {
+        guard controller.session.imageLoader.phase != .settled else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     let generation = controller.session.imageLoader.generation
@@ -178,7 +182,8 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     #expect(controller.session.imageLoader.generation == generation)
     #expect(controller.session.imageLoader.presented?.key.itemID == item)
     await gate.release()
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(board.string(forType: .string) == "same item")
@@ -262,7 +267,8 @@ private actor RecogniseRunCounter {
     controller.session.openImage(url, maximumPixelSize: 3) {
         try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
     }
-    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+    for _ in 0..<200 {
+        guard controller.session.imageLoader.phase != .settled else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     let key = try #require(controller.session.imageLoader.presented?.key)
@@ -278,12 +284,14 @@ private actor RecogniseRunCounter {
         return TextRecognitionResult(text: "run \(count)", characterCount: 5, engine: .onDevice, isEmpty: false)
     }
     controller.recogniseText()
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(board.string(forType: .string) == "run 1")
     controller.recogniseText()
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(board.string(forType: .string) == "run 2")
@@ -312,7 +320,8 @@ private actor RecogniseRunCounter {
         sourcePixelSize: CGSize(width: 17, height: 11)), fileURL: URL(fileURLWithPath: "/tmp/recognise-17.png"))
     controller.recogniseText()
     #expect(controller.recogniseTextAdapter.model?.isRunning == true)
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(await probe.explicit)
@@ -412,7 +421,8 @@ private actor ViewerRecognitionGate {
     controller.session.openImage(secondURL, maximumPixelSize: 4) {
         try await AccessImageSource.open(.fileGrant(secondURL), access: secondLeases, pipeline: secondPipeline)
     }
-    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+    for _ in 0..<200 {
+        guard controller.session.imageLoader.phase != .settled else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(controller.session.imageLoader.presented?.key.itemID == secondPipeline.item)
@@ -531,7 +541,8 @@ private actor ViewerRecognitionGate {
         TextRecognitionResult(text: "original", characterCount: 8, engine: .onDevice, isEmpty: false)
     }
     controller.recogniseText()
-    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+    for _ in 0..<200 {
+        guard controller.recogniseTextAdapter.model?.isRunning == true else { continue }
         try await Task.sleep(for: .milliseconds(10))
     }
     let overlay = try #require(window.contentView?.subviews.compactMap { $0 as? RecogniseTextOverlay }.first)
