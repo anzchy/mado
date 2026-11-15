@@ -5,8 +5,6 @@ import Testing
     let expected = [
         "settings.capture.login": 685,
         "settings.capture.folder-change": 684,
-        "settings.capture.after-save": 684,
-        "settings.capture.after-copy": 684,
         "settings.capture.shortcut-region": 685,
         "settings.capture.shortcut-1": 685,
         "settings.capture.shortcut-2": 685,

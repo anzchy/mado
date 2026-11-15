@@ -74,6 +74,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private static let sectionKey = "settings.selectedSection.v1"
 
     static let sharedCapturePreferences = AppGroupCaptureBarPreferences()
+    static let sharedCaptureOutputPreferences: any CaptureOutputPreferencePort =
+        UserDefaultsCaptureOutputPreferences.shared() ?? UserDefaultsCaptureOutputPreferences(defaults: .standard)
     static let sharedCaptureControl = CaptureBarControl(preferences: sharedCapturePreferences,
                                                         process: WorkspaceCaptureBarProcess())
     static func restoreCaptureBarOnLaunch() async throws { try await sharedCaptureControl.restoreOnMadoLaunch() }
@@ -110,6 +112,9 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var captureDetails: [NSView] = []
     private let captureControl: CaptureBarControl
     private let capturePreferences: any CaptureBarPreferencePort
+    private let captureOutputPreferences: any CaptureOutputPreferencePort
+    private var captureAfterSave: NSSwitch?
+    private var captureAfterCopy: NSSwitch?
     private var capturePermissionStatus: NSTextField?
     private let captureLocalize: (String) -> String
     private var captureRefreshID = 0
@@ -119,6 +124,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
          updates: (any AppUpdatePort)? = nil,
          captureControl: CaptureBarControl? = nil,
          capturePreferences: (any CaptureBarPreferencePort)? = nil,
+         captureOutputPreferences: (any CaptureOutputPreferencePort)? = nil,
          captureLocalize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
@@ -136,6 +142,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         self.updates = updates
         self.captureControl = captureControl ?? Self.sharedCaptureControl
         self.capturePreferences = capturePreferences ?? Self.sharedCapturePreferences
+        self.captureOutputPreferences = captureOutputPreferences ?? Self.sharedCaptureOutputPreferences
         self.captureLocalize = captureLocalize
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
@@ -330,6 +337,24 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             caption.frame.origin.x = valueX + 40
             caption.frame.size.width = 514 - valueX
         }
+        /// 「截图之后」 switches (#684): live, but greyed and not editable while the bar is off (grilling 5.2).
+        func outputSwitch(_ title: String, top: CGFloat, id: String, action: Selector) -> NSSwitch {
+            let toggle = NSSwitch(frame: NSRect(x: valueX, y: 1124 - top - 18, width: 32, height: 18))
+            toggle.controlSize = .mini
+            toggle.state = .on
+            toggle.isEnabled = false
+            toggle.alphaValue = 0.45
+            toggle.target = self
+            toggle.action = action
+            toggle.setAccessibilityIdentifier(id)
+            toggle.setAccessibilityLabel(title)
+            form.addSubview(toggle)
+            captureDetails.append(toggle)
+            let caption = field(title, top: top - 1, id: "\(id).title")
+            caption.frame.origin.x = valueX + 40
+            caption.frame.size.width = 514 - valueX
+            return toggle
+        }
         heading(captureLocalize("Capture Bar"), top: 10, id: "settings.capture.heading-bar", divider: false)
         field(captureLocalize("Capture Bar"), top: 50, labelColumn: true)
         captureEnabled = NSSwitch(frame: NSRect(x: valueX, y: 1124 - 50 - 18, width: 32, height: 18))
@@ -362,9 +387,11 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         field(captureLocalize("File name mado-20261113153012.png; the second capture in the same second adds -2."),
               top: 341, height: 30, id: "settings.capture.filename-hint", muted: true)
         field(captureLocalize("Save to Folder"), top: 385, labelColumn: true)
-        disabledSwitch(captureLocalize("Save captures to the Capture Folder"), top: 385, id: "settings.capture.after-save", on: true)
+        captureAfterSave = outputSwitch(captureLocalize("Save captures to the Capture Folder"), top: 385,
+                                        id: "settings.capture.after-save", action: #selector(changeAfterSave(_:)))
         field(captureLocalize("Copy to Clipboard"), top: 423, labelColumn: true)
-        disabledSwitch(captureLocalize("Copy captures to the Clipboard"), top: 423, id: "settings.capture.after-copy", on: true)
+        captureAfterCopy = outputSwitch(captureLocalize("Copy captures to the Clipboard"), top: 423,
+                                        id: "settings.capture.after-copy", action: #selector(changeAfterCopy(_:)))
         heading(captureLocalize("Global Shortcuts"), top: 475, id: "settings.capture.heading-shortcuts", divider: true)
         for (index, name) in [captureLocalize("Region Capture"), captureLocalize("Window Capture"), captureLocalize("Full Screen Capture"), captureLocalize("Capture and Recognize Text"), captureLocalize("Show / Hide Capture Bar")].enumerated() {
             let top = CGFloat(510 + index * 38)
@@ -415,8 +442,13 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         Task {
             let enabled = await capturePreferences.isCaptureBarEnabled()
             let permission = await capturePreferences.capturePermissionState()
+            let output = await captureOutputPreferences.outputPolicy()
             guard refreshID == captureRefreshID else { return }
             captureEnabled.state = enabled ? .on : .off
+            captureAfterSave?.state = output.savesToFolder ? .on : .off
+            captureAfterCopy?.state = output.copiesToClipboard ? .on : .off
+            captureAfterSave?.isEnabled = enabled
+            captureAfterCopy?.isEnabled = enabled
             switch permission {
             case .granted: capturePermissionStatus?.stringValue = captureLocalize("Granted")
             case .denied: capturePermissionStatus?.stringValue = captureLocalize("Denied")
@@ -425,6 +457,16 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             }
             for detail in captureDetails { detail.alphaValue = enabled && !(detail is NSButton) ? 1 : 0.45 }
         }
+    }
+
+    @objc private func changeAfterSave(_ sender: NSSwitch) {
+        let enabled = sender.state == .on
+        Task { await captureOutputPreferences.setSavesToFolder(enabled) }
+    }
+
+    @objc private func changeAfterCopy(_ sender: NSSwitch) {
+        let enabled = sender.state == .on
+        Task { await captureOutputPreferences.setCopiesToClipboard(enabled) }
     }
 
     @objc private func changeCapture(_ sender: NSSwitch) {
