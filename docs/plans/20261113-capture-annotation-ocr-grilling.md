@@ -28,7 +28,7 @@ Inputs: [technical research](../research/20261113-capture-ocr-tech.md) and [anno
 | 2.1 | Which buttons the toolbar has in v1 | Region, window and full-screen capture; capture and recognise text; open Mado. **No delayed capture.** |
 | 2.2 | How the toolbar exists when not in use | It can be dragged and remembers its position. It can collapse to a menu bar icon and be restored from that icon or with a shortcut. |
 | 2.3 | Where it is turned on, and whether it starts at login | Off by default. The user turns on the screenshot toolbar in Mado Settings and chooses separately whether it starts at login. Screen Recording permission is requested only at the first capture. |
-| 2.4 | Global shortcuts | Default ⌃⇧⌘ series (for example ⌃⇧⌘1 region, 2 window, 3 full screen, 4 capture and recognise text). They can be changed in Settings, and conflicts are flagged. They do not take over the system's ⌘⇧3/4/5. |
+| 2.4 | Global shortcuts | Default ⌃⇧⌘ series (for example ⌃⇧⌘1 region, 2 window, 3 full screen, 4 capture and recognise text). They can be changed in Settings, and conflicts are flagged. They do not take over the system's ⌘⇧3/4/5. **Changed by #717 (owner 2026-11-15): the defaults are now the ⌃⌥ series, ⌃⌥1/2/3/4 and ⌃⌥0 for the bar.** |
 
 ## Group 3: after a capture
 
