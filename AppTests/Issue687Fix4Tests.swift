@@ -101,6 +101,8 @@ import MadoApplication
     let overlay = try await fix4Start(controller, text: "Hello")
     let notice = try #require(overlay.noticeView)
     #expect(notice.accessibilityPerformPress())
+    // #687 fix r5: the press opens the panel on the next main-actor turn.
+    try await waitUntil("the panel opened") { controller.recogniseTextAdapter.panelEditor != nil }
     #expect(window.firstResponder === controller.recogniseTextAdapter.panelEditor)
     let item = try context.item("annotate.enter.menu")
     #expect(context.menu.validateMenuItem(item), "View › Annotate must be enabled from the OCR editor")
