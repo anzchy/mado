@@ -152,9 +152,10 @@ function local(sha) {
     requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `mkdir -p ${remoteDir}`]), 'remote mkdir');
     requireOK(exec('rsync', ['-e', 'ssh -o BatchMode=yes', bundle, `${host}:${remoteDir}/head.bundle`]), 'bundle transfer');
     requireOK(exec('ssh', ['-o', 'BatchMode=yes', host, `git clone -q ${remoteDir}/head.bundle ${remoteDir}/pr-head`]), 'remote clone');
-    const remoteCommand = `cd ${remoteDir}/pr-head && if [ -d \"\$HOME/opt/node/bin\" ]; then export PATH=\"\$HOME/opt/node/bin:\$PATH\"; fi; node .agents/skills/ci-linux-preflight/scripts/preflight.mjs remote . ${sha7}`;
+    const remoteCommand = `cd ${remoteDir}/pr-head && if [ -d \"\$HOME/opt/node/bin\" ]; then export PATH=\"\$HOME/opt/node/bin:\$PATH\"; fi; node .agents/skills/ci-linux-preflight/scripts/preflight.mjs remote . ${head}`;
     const result = exec('ssh', ['-o', 'BatchMode=yes', host, remoteCommand]);
     if (!result.stdout?.endsWith('DONE\n')) throw Error(`remote summary incomplete: ${result.stderr ?? result.status}`);
+    if (!result.stdout.startsWith(`head=${head}\n`)) throw Error('remote summary head mismatch');
     writeFileSync(destination, result.stdout, { mode: 0o600 });
     const line = summaryCheck(destination);
     process.stdout.write(`${line}\nSummary: ${destination}\n`);
