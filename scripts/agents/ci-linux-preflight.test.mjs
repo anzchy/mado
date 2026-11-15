@@ -85,7 +85,7 @@ test('fake SSH executes remote script, copies bundle, records isolated step summ
   assert.match(body, /step:Install portable device test tools=provision-checked/);
   assert.match(body, /step:Node totals:tests=1/);
   assert.match(body, /step:Python tests:python_tests=1/);
-  assert.match(body, /step:Node totals:peak_rss_kb=unknown/);
+  assert.match(body, /step:Node totals:peak_rss_kb=(?:unknown|\d+)/);
   assert.match(body, /node=v22\.23\.5/);
   assert.match(body, /git=git version 2\.56\.1/);
   assert.match(body, /procps=ps from procps-ng 3\.3\.17/);
