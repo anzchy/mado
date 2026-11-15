@@ -18,16 +18,22 @@ public struct CaptureLoginPresentation: Equatable, Sendable {
     public let isOn: Bool
     public let isEditable: Bool
     public let needsApproval: Bool
+    public let removalFailed: Bool
 
-    public init(isOn: Bool, isEditable: Bool, needsApproval: Bool) {
+    public init(isOn: Bool, isEditable: Bool, needsApproval: Bool, removalFailed: Bool = false) {
         self.isOn = isOn
         self.isEditable = isEditable
         self.needsApproval = needsApproval
+        self.removalFailed = removalFailed
     }
 
+    /// `removalFailed`: the bar is off but the item is still registered (turning the bar off could not remove it),
+    /// so the helper may still start at login. Settings says so and offers a retry (#685 fix r1).
     public static func make(status: CaptureLoginItemStatus, barEnabled: Bool) -> CaptureLoginPresentation {
-        CaptureLoginPresentation(isOn: status == .enabled || status == .requiresApproval,
-                                 isEditable: barEnabled && status != .notFound,
-                                 needsApproval: barEnabled && status == .requiresApproval)
+        let registered = status == .enabled || status == .requiresApproval
+        return CaptureLoginPresentation(isOn: registered,
+                                        isEditable: barEnabled && status != .notFound,
+                                        needsApproval: barEnabled && status == .requiresApproval,
+                                        removalFailed: !barEnabled && registered)
     }
 }

@@ -381,6 +381,34 @@ private let ctrlShiftCmd: NSEvent.ModifierFlags = [.control, .shift, .command]
     #expect(CaptureShortcutField.combo(from: key(3, "ƒ", [.option])).key == "F")
 }
 
+// Fix r1 (gpt M1): with the bar off, a login item that could not be removed is not shown as off; the row names the
+// failure and 重试 asks the system again.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685LoginItemLeftAfterBarOffIsNamedAndRetried() async throws {
+    let login = LoginItem(.enabled)
+    let fixture = Fixture(bar: false, login: login)
+    defer { fixture.panel.window.close() }
+    let toggle = try #require(fixture.view("settings.capture.login") as? NSSwitch)
+    let hint = try #require(fixture.view("settings.capture.login-hint") as? NSTextField)
+    let retry = try #require(fixture.view("settings.capture.login-retry") as? NSButton)
+    await eventually { !retry.isHidden }
+    #expect(!retry.isHidden && retry.isEnabled && retry.alphaValue == 1)
+    #expect(retry.title == "Retry")
+    #expect(toggle.state == .on)
+    #expect(!toggle.isEnabled)
+    #expect(hint.stringValue == "The login item could not be removed, so the capture helper may still start at login.")
+    #expect(try #require(fixture.view("settings.capture.login-open-settings")).isHidden)
+    retry.performClick(nil)
+    await eventually { await login.unregisters == 1 }
+    #expect(await login.unregisters == 1)
+    await eventually { retry.isHidden }
+    #expect(retry.isHidden)
+    #expect(toggle.state == .off)
+    #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
+    let key = "The login item could not be removed, so the capture helper may still start at login."
+    #expect(try captureCatalog("zh-Hans")[key] == "未能移除登录项，登录时仍可能启动截图助手。")
+    #expect(try captureCatalog("zh-Hans")["Retry"] == "重试")
+}
+
 // Fix r1 (opus M2): ⌥-only and ⌥⇧-only combos get the real reason, not 「已被其他 App 占用」.
 @MainActor @Test(.timeLimit(.minutes(3))) func issue685OptionOnlyShortcutIsRefusedWithTheReason() async throws {
     let fixture = Fixture()

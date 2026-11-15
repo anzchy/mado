@@ -150,6 +150,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var captureLogin: NSSwitch?
     private var captureLoginHint: NSTextField?
     private var captureLoginApproval: NSButton?
+    private var captureLoginRetry: NSButton?
     private var captureFolderPath: NSTextField?
     private var captureFolderChange: NSButton?
     private var captureFilenameHint: NSTextField?
@@ -414,6 +415,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         approval.setAccessibilityIdentifier("settings.capture.login-open-settings")
         form.addSubview(approval)
         captureLoginApproval = approval
+        // No design element: shown only while the bar is off and turning it off could not remove the login item.
+        // Same row as the approval button, after it: the two never show together, but controls may not overlap.
+        // It stays usable with the bar off.
+        let retry = NSButton(title: captureLocalize("Retry"), target: self, action: #selector(retryLoginRemoval(_:)))
+        retry.font = DesignMetrics.font("uiSmall")
+        retry.frame = NSRect(x: approval.frame.maxX + 8, y: 1124 - 186 - 24, width: retry.intrinsicContentSize.width + 12,
+                             height: 24)
+        retry.isHidden = true
+        retry.setAccessibilityIdentifier("settings.capture.login-retry")
+        form.addSubview(retry)
+        captureLoginRetry = retry
         captureLoginHint = field(captureLocalize("When off, the Capture Bar will not appear after restarting your Mac."),
                                  top: 151, height: 32, id: "settings.capture.login-hint", muted: true)
         field(captureLocalize("Screen Recording"), top: 220, labelColumn: true)
@@ -557,8 +569,11 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             captureLogin?.state = login.isOn ? .on : .off
             captureLogin?.isEnabled = login.isEditable
             captureLoginApproval?.isHidden = !login.needsApproval
+            captureLoginRetry?.isHidden = !login.removalFailed
             captureLoginHint?.stringValue = login.needsApproval
                 ? captureLocalize("Mado Capture needs your approval in System Settings › General › Login Items.")
+                : login.removalFailed
+                ? captureLocalize("The login item could not be removed, so the capture helper may still start at login.")
                 : captureLocalize("When off, the Capture Bar will not appear after restarting your Mac.")
             captureFolderPath?.stringValue = folder.fellBack ? CaptureFolderRecord.downloads.display : folder.display
             captureFilenameHint?.stringValue = folder.fellBack
@@ -600,6 +615,16 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         Task {
             // A refusal leaves the status as it was; the refresh shows what the system reports.
             if on { try? await captureLoginItem.register() } else { try? await captureLoginItem.unregister() }
+            refreshCapture()
+        }
+    }
+
+    @objc private func retryLoginRemoval(_ sender: NSButton) {
+        sender.isEnabled = false
+        Task {
+            // A second refusal keeps the row as it is; the refresh shows what the system reports.
+            try? await captureLoginItem.unregister()
+            sender.isEnabled = true
             refreshCapture()
         }
     }
