@@ -74,6 +74,7 @@ export const KEY_SITES = {
     116: 'key:grid-page-up', 121: 'key:grid-page-down', 115: 'key:grid-home', 119: 'key:grid-end',
     36: 'key:grid-context-menu' },
   'Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift': { 48: 'key:viewer-tab',
+    53: { excluded: 'Esc clears a local image-text selection before the viewer handles Escape' },
     36: { excluded: OPEN_KEY_RING }, 49: { excluded: OPEN_KEY_RING }, 76: { excluded: OPEN_KEY_RING } },
   'App/CanvasWindowController.swift': { 34: 'command:inspector', 53: 'command:escape', 49: 'command:preview', 36: 'command:enter', 76: 'command:enter',
     48: { excluded: 'Tab moves focus between the grid, its footer and the Inspector' } },

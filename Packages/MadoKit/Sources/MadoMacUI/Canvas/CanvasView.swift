@@ -163,6 +163,14 @@ open class CanvasView: NSView {
     public var pointerIsOverPanel: (() -> Bool)?
     public var onCanvasFocus: (() -> Void)?
     public var onTab: ((Bool) -> Void)?
+    /// Return true only when a press begins in selectable image text.
+    public var onTextPress: ((CGPoint) -> Bool)?
+    public var onTextDrag: ((CGPoint) -> Void)?
+    public var onTextRelease: (() -> Void)?
+    public var onTextPointer: ((CGPoint) -> Bool)?
+    public var onTextEscape: (() -> Bool)?
+    private var textDragActive = false
+    private var textTrackingArea: NSTrackingArea?
     public var hasImage: Bool { image != nil }
 
     public override func becomeFirstResponder() -> Bool {
@@ -196,6 +204,8 @@ open class CanvasView: NSView {
         onCanvasFocus?()
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
+        textDragActive = onTextPress?(point) == true
+        if textDragActive { dragPoint = nil; return }
         let end = transform.imageToView(CGPoint(x: sourceSize.width, y: sourceSize.height))
         let rectangle = CGRect(origin: transform.origin,
             size: CGSize(width: end.x - transform.origin.x, height: end.y - transform.origin.y))
@@ -203,6 +213,7 @@ open class CanvasView: NSView {
     }
 
     public override func mouseDragged(with event: NSEvent) {
+        if textDragActive { onTextDrag?(convert(event.locationInWindow, from: nil)); return }
         guard let previous = dragPoint else { return }
         let point = convert(event.locationInWindow, from: nil)
         transform.pan(by: CGPoint(x: point.x - previous.x, y: point.y - previous.y),
@@ -212,9 +223,29 @@ open class CanvasView: NSView {
         publishBackdrop()
     }
 
-    public override func mouseUp(with event: NSEvent) { dragPoint = nil }
+    public override func mouseUp(with event: NSEvent) {
+        if textDragActive { onTextRelease?() }
+        textDragActive = false
+        dragPoint = nil
+    }
+
+    public override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let textTrackingArea { removeTrackingArea(textTrackingArea) }
+        let area = NSTrackingArea(rect: bounds, options: [.activeInKeyWindow, .mouseMoved, .cursorUpdate], owner: self)
+        addTrackingArea(area)
+        textTrackingArea = area
+    }
+
+    public override func cursorUpdate(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        ((onTextPointer?(point) == true) ? NSCursor.iBeam : NSCursor.arrow).set()
+    }
+
+    public override func mouseMoved(with event: NSEvent) { cursorUpdate(with: event) }
 
     public override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53, onTextEscape?() == true { return }
         if event.keyCode == 48 { onTab?(event.modifierFlags.contains(.shift)); return }
         if event.modifierFlags.intersection([.control, .option]).isEmpty,
            let key = event.charactersIgnoringModifiers,
