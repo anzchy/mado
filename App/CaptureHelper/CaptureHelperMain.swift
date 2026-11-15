@@ -32,11 +32,40 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var status: NSTextField?
     private var selectionPanels: [CaptureSelectionPanel] = []
     private let selectionAdmission = CaptureSelectionAdmission()
-    private let session = CaptureSession(screen: ScreenCaptureKitScreen(), files: MadoInfrastructure.DownloadsCaptureFilePort())
+    private let session: CaptureSession
+    /// The Capture Folder: ~/Downloads, or the folder chosen in this helper's open panel (ADR-0021).
+    private let folder: CaptureFolderAccess
+    private let shortcuts: any CaptureShortcutPreferencePort =
+        UserDefaultsCaptureShortcutPreferences.shared() ?? UserDefaultsCaptureShortcutPreferences(defaults: .standard)
+    private let registrar = CarbonHotKeyRegistrar()
+    private let hotKeys: CaptureHotKeyCoordinator
+    private let layout: any CaptureBarLayoutPort =
+        UserDefaults(suiteName: CaptureBarIdentity.appGroupID).map(UserDefaultsCaptureBarLayout.init(defaults:))
+        ?? UserDefaultsCaptureBarLayout(defaults: .standard)
+    private var collapse: CaptureBarCollapseController?
+    private var bar: CaptureBarView?
+    private var folderPanel: NSOpenPanel?
     private let thumbnails = CaptureThumbnailPresenter()
     /// Read at every Capture, so a Settings change applies without restarting the helper.
     private let outputPreferences = UserDefaultsCaptureOutputPreferences.shared()
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
+
+    override init() {
+        // The real home folder: in the sandbox NSHomeDirectory() is the container. ~/Downloads is open to the helper
+        // through its Downloads entitlement.
+        let home = getpwuid(getuid()).map { URL(fileURLWithPath: String(cString: $0.pointee.pw_dir), isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let folder = CaptureFolderAccess(
+            scope: SystemSecurityScope(),
+            preferences: UserDefaultsCaptureFolderPreferences.shared() ?? UserDefaultsCaptureFolderPreferences(defaults: .standard),
+            downloads: home.appendingPathComponent("Downloads", isDirectory: true), home: home)
+        self.folder = folder
+        session = CaptureSession(screen: ScreenCaptureKitScreen(),
+                                 files: MadoInfrastructure.DownloadsCaptureFilePort(folder: { await folder.currentFolder() },
+                                                                                   display: { await folder.currentDisplay() }))
+        hotKeys = CaptureHotKeyCoordinator(preferences: shortcuts, registrar: registrar)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard UserDefaults(suiteName: CaptureBarIdentity.appGroupID)?
@@ -46,7 +75,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         }
         let bar = CaptureBarView(captureAction: { [weak self] in self?.capture() },
                                  regionAction: { [weak self] in self?.startSelection(.region) },
-                                 windowAction: { [weak self] in self?.startSelection(.window) })
+                                 windowAction: { [weak self] in self?.startSelection(.window) },
+                                 collapseAction: { [weak self] in self?.collapse?.collapse() })
+        self.bar = bar
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: bar.frame.width, height: 40),
                             styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
         panel.isFloatingPanel = true
@@ -57,10 +88,10 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         if #available(macOS 26, *) { panel.collectionBehavior.insert(.canJoinAllApplications) }
         panel.contentView = bar
+        panel.isMovableByWindowBackground = true
         let display = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         if let display {
-            panel.setFrameOrigin(NSPoint(x: display.frame.midX - bar.frame.width / 2,
-                                         y: display.visibleFrame.maxY - 32 - 40))
+            panel.setFrameOrigin(CaptureBarPlacement.defaultOrigin(barSize: bar.frame.size, visibleFrame: display.visibleFrame))
         }
         let statusPanel = NSPanel(contentRect: NSRect(x: panel.frame.minX, y: panel.frame.minY - 42,
                                                         width: bar.frame.width, height: 36),
@@ -76,14 +107,109 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         self.statusPanel = statusPanel
         self.status = status
         self.panel = panel
-        panel.orderFrontRegardless()
-        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
-            Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
-                guard let observer else { return }
-                let helper = Unmanaged<CaptureHelperDelegate>.fromOpaque(observer).takeUnretainedValue()
-                Task { @MainActor in helper.stopIfSwitchOff() }
-            }, CaptureBarIdentity.switchChangedNotification as CFString, nil, .deliverImmediately)
+        let layout = layout
+        collapse = CaptureBarCollapseController(bar: panel, changed: { collapsed in
+            Task { await layout.setCollapsed(collapsed) }
+        })
+        NotificationCenter.default.addObserver(self, selector: #selector(barMoved(_:)), name: NSWindow.didMoveNotification,
+                                               object: panel)
+        Task { await restoreLayout(of: panel) }
+        for name in [CaptureBarIdentity.switchChangedNotification, CaptureBarIdentity.shortcutsChangedNotification,
+                     CaptureBarIdentity.chooseFolderNotification] {
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
+                Unmanaged.passUnretained(self).toOpaque(), { _, observer, name, _, _ in
+                    guard let observer, let name else { return }
+                    let helper = Unmanaged<CaptureHelperDelegate>.fromOpaque(observer).takeUnretainedValue()
+                    let received = name.rawValue as String
+                    Task { @MainActor in helper.received(received) }
+                }, name as CFString, nil, .deliverImmediately)
+        }
+        registrar.install { [weak self] id in
+            guard let action = CaptureHotKeyCoordinator.action(forHotKeyID: id) else { return }
+            self?.shortcutPressed(action)
+        }
+        applyShortcuts()
         stopIfSwitchOff()
+    }
+
+    private func received(_ name: String) {
+        switch name {
+        case CaptureBarIdentity.shortcutsChangedNotification: applyShortcuts()
+        case CaptureBarIdentity.chooseFolderNotification: chooseFolder()
+        default: stopIfSwitchOff()
+        }
+    }
+
+    /// The saved origin for this display arrangement, clamped on screen; then the collapsed state.
+    private func restoreLayout(of panel: NSPanel) async {
+        let key = CaptureBarPlacement.arrangementKey(NSScreen.screens.map(\.frame))
+        if let saved = await layout.origin(forArrangement: key) {
+            let pointer = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+            panel.setFrameOrigin(CaptureBarPlacement.origin(saved: saved, barSize: panel.frame.size,
+                                                            visibleFrames: NSScreen.screens.map(\.visibleFrame),
+                                                            pointerVisibleFrame: pointer?.visibleFrame ?? panel.frame))
+        }
+        if await layout.isCollapsed() { collapse?.collapse() } else { panel.orderFrontRegardless() }
+    }
+
+    @objc private func barMoved(_ notification: Notification) {
+        guard let panel else { return }
+        let origin = panel.frame.origin
+        let key = CaptureBarPlacement.arrangementKey(NSScreen.screens.map(\.frame))
+        Task { await layout.setOrigin(origin, forArrangement: key) }
+        statusPanel?.setFrameOrigin(NSPoint(x: origin.x, y: origin.y - 42))
+    }
+
+    /// Registers the stored bindings again (no restart), then tells Settings to read the failures.
+    private func applyShortcuts() {
+        Task {
+            await hotKeys.apply()
+            let bindings = await shortcuts.bindings()
+            let ids: [(String, CaptureShortcutAction)] = [("capture.region", .region), ("capture.window", .window),
+                                                          ("capture.screen", .fullScreen), ("capture.text", .recognizeText)]
+            var labels: [String: String] = [:]
+            for (id, action) in ids { labels[id] = bindings[action]?.display }
+            bar?.setShortcuts(labels)
+            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName(CaptureBarIdentity.shortcutStatusNotification as CFString), nil, nil, true)
+        }
+    }
+
+    private func shortcutPressed(_ action: CaptureShortcutAction) {
+        switch action {
+        case .region: startSelection(.region)
+        case .window: startSelection(.window)
+        case .fullScreen: capture()
+        // Capture and recognise text belongs to #687; the shortcut is bound and rebindable but does nothing yet.
+        case .recognizeText: break
+        case .toggleBar: collapse?.toggle()
+        }
+    }
+
+    /// The Capture Folder open panel runs here, in the helper, so the security-scoped bookmark is the helper's own
+    /// (ADR-0021). Settings only asks for it.
+    private func chooseFolder() {
+        if let folderPanel { folderPanel.makeKeyAndOrderFront(nil); NSApp.activate(); return }
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.canCreateDirectories = true
+        openPanel.prompt = String(localized: "Choose")
+        openPanel.message = String(localized: "Choose the folder new captures are saved to.")
+        folderPanel = openPanel
+        NSApp.activate()
+        Task {
+            openPanel.directoryURL = await folder.currentFolder()
+            let response = await openPanel.begin()
+            folderPanel = nil
+            if response == .OK, let url = openPanel.url {
+                try? await folder.choose(url)
+                _ = await folder.currentFolder()
+            }
+            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName(CaptureBarIdentity.folderChangedNotification as CFString), nil, nil, true)
+        }
     }
 
     private func stopIfSwitchOff() {
@@ -156,7 +282,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 let (state, frame) = try await CaptureThumbnailFlow.capture(
                     request: request, selectedDisplay: selectedDisplay, session: session, policy: policy,
                     clipboard: clipboard, pointer: { pointer }, screens: CaptureThumbnailPlacement.screens,
-                    fullScreenRequest: { ScreenCaptureKitScreen.fullScreenRequest(displayID: $0, windows: NSApp.windows) })
+                    // The menu bar icon's window (collapsed bar) is part of the menu bar, not a window to exclude.
+                    fullScreenRequest: { ScreenCaptureKitScreen.fullScreenRequest(
+                        displayID: $0, windows: NSApp.windows.filter { $0.level != .statusBar }) })
                 statusPanel?.orderOut(nil)
                 let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
                                                   trash: FileManagerCaptureTrash())

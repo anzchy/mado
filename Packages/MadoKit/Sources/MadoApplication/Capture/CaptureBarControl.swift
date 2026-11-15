@@ -7,6 +7,14 @@ public enum CaptureBarIdentity {
     public static let saveToFolderKey = "capture.afterCapture.saveToFolder.v1"
     public static let copyToClipboardKey = "capture.afterCapture.copyToClipboard.v1"
     public static let switchChangedNotification = "io.github.anzchy.mado.capture.switchChanged"
+    /// Settings → helper: the shortcut bindings changed; register them again (#685).
+    public static let shortcutsChangedNotification = "io.github.anzchy.mado.capture.shortcutsChanged"
+    /// Helper → Settings: registration finished; read the failures again (#685).
+    public static let shortcutStatusNotification = "io.github.anzchy.mado.capture.shortcutStatus"
+    /// Settings → helper: show the Capture Folder open panel (#685, ADR-0021).
+    public static let chooseFolderNotification = "io.github.anzchy.mado.capture.chooseFolder"
+    /// Helper → Settings: the Capture Folder record changed (#685).
+    public static let folderChangedNotification = "io.github.anzchy.mado.capture.folderChanged"
 }
 
 public enum CapturePermissionState: String, Sendable {

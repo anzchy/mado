@@ -82,7 +82,9 @@ struct ScreenCaptureKitScreen: CaptureScreenPort {
             return (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
         }
         guard let displayID else { throw Failure.displayUnavailable }
-        let request = await MainActor.run { Self.fullScreenRequest(displayID: displayID, windows: NSApp.windows) }
+        let request = await MainActor.run {
+            Self.fullScreenRequest(displayID: displayID, windows: NSApp.windows.filter { $0.level != .statusBar })
+        }
         return try await capturePNG(request: request)
     }
 
