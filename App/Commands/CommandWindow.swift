@@ -9,7 +9,8 @@ final class CommandWindow: NSWindow {
     var observeMouseDown: ((NSEvent) -> Void)?
     /// #692 fix r2: NSWindow answers undo:/redo: itself, from its own undo manager, so a nil-targeted
     /// Edit › Undo/Redo never reaches the window controller. While this returns true, the window declines them and
-    /// the responder chain carries them on to the controller. Views ahead of the window (a text field) keep theirs.
+    /// the responder chain carries them on to the controller. While a text mark is typed it returns false, so the
+    /// window's undo:/redo: carry out the field editor's typing undo (#692 fix r3).
     var yieldsUndoRedo: (() -> Bool)?
     override func responds(to aSelector: Selector!) -> Bool {
         if aSelector == Self.undoAction || aSelector == Self.redoAction, yieldsUndoRedo?() == true { return false }

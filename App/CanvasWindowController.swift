@@ -395,7 +395,12 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             self.session.updateFocus(self.focusContext)
         }
         window.consumeKey = { [weak self] event in self?.consumePanelKey(event) ?? false }
-        window.yieldsUndoRedo = { [weak self] in self?.session.isAnnotating == true }
+        // #692 fix r3: while a text mark is typed the window keeps undo:/redo:, which carry out the field editor's
+        // typing undo; otherwise Annotate Mode's Undo/Redo go on to the controller and act on the marks.
+        window.yieldsUndoRedo = { [weak self] in
+            guard let self else { return false }
+            return self.session.isAnnotating && self.annotateViews.overlay?.isEditingText != true
+        }
         window.observeMouseDown = { [weak self, weak window] event in
             guard let self else { return }
             // AppKit asks to focus the hit view before delivering mouseDown. Release the
