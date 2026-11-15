@@ -77,10 +77,10 @@ test('local transfer uses fake ssh and rsync and writes a checked summary withou
   const bin = join(dir, 'bin');
   mkdirSync(bin);
   const log = join(dir, 'calls');
-  writeFileSync(join(bin, 'ssh'), `#!/bin/sh\nprintf 'ssh %s\\n' "$*" >> "$CALL_LOG"\ncase "$*" in\n  *'preflight.mjs remote'*) printf 'head=%s\\nstep:Test agent tooling=0\\nsecs=1.0\\npeak_rss_kb=42\\ntests=2\\npass=2\\nfail=0\\nskip=0\\nDONE\\n' "$FAKE_SHA7";;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'ssh'), `#!/bin/sh\nprintf 'ssh %s\\n' "$*" >> "$CALL_LOG"\ncase "$*" in\n  *'preflight.mjs remote'*) printf 'head=%s\\nstep:Test agent tooling=0\\nsecs=1.0\\npeak_rss_kb=42\\ntests=2\\npass=2\\nfail=0\\nskip=0\\nDONE\\n' "$FAKE_SHA";;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'rsync'), `#!/bin/sh\nprintf 'rsync %s\\n' "$*" >> "$CALL_LOG"\n`, { mode: 0o755 });
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
-  const result = run(['run', head], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: dir, CALL_LOG: log, FAKE_SHA7: head.slice(0, 7) } });
+  const result = run(['run', head], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: dir, CALL_LOG: log, FAKE_SHA: head } });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`Linux-Preflight: ${head.slice(0, 7)} agent-tooling PASS 2/2 \\(0 skip\\)`));
   const calls = readFileSync(log, 'utf8');
