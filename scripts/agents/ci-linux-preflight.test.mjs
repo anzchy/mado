@@ -61,6 +61,17 @@ test('editing a workflow run command changes the command executed', () => {
   assert.match(edited.stdout, /step:Run fixture=7/);
 });
 
+test('Python unittest failure names appear in the failed list', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'preflight-python-'));
+  mkdirSync(join(dir, '.github/workflows'), { recursive: true });
+  writeFileSync(join(dir, '.github/workflows/pr-body.yml'), `jobs:\n  agent-tests:\n    steps:\n      - name: Python tests\n        working-directory: pr-head\n        run: python3 -m unittest sample_test.py\n`);
+  writeFileSync(join(dir, 'sample_test.py'), `import unittest\nclass Sample(unittest.TestCase):\n def test_broken(self):\n  self.fail('broken')\n`);
+  const result = run(['remote', dir, 'abcdef1']);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /step:Python tests=1/);
+  assert.match(result.stdout, /failed:test_broken \(sample_test.Sample\)/);
+});
+
 test('env check rejects a mismatched git version', () => {
   const dir = mkdtempSync(join(tmpdir(), 'preflight-env-'));
   for (const [name, output] of [['node', 'v22.0.0'], ['git', 'git version 2.34.1'], ['python3', 'Python 3.12.0'], ['zsh', 'zsh 5.9']]) {
