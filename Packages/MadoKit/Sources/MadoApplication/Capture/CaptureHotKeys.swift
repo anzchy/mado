@@ -16,6 +16,9 @@ public protocol CaptureHotKeyRegistrarPort: Sendable {
 
 /// Keeps the registered hotkeys equal to the stored bindings. A rebind the system refuses keeps the previous
 /// registration, puts the previous binding back and records the refused combo, so Settings can name it.
+///
+/// The registrar's calls are awaits, so actor isolation alone would let `suspend`, `resume` and `apply` interleave
+/// (#685 fix r1). Each call records what it wants and waits while one loop at a time moves the registrations there.
 public actor CaptureHotKeyCoordinator {
     private let preferences: any CaptureShortcutPreferencePort
     private let registrar: any CaptureHotKeyRegistrarPort
@@ -23,6 +26,11 @@ public actor CaptureHotKeyCoordinator {
     public private(set) var isSuspended = false
     /// What `suspend()` released; a combo refused on resume falls back to it, as a refused rebind does.
     private var released: [CaptureShortcutAction: CaptureKeyCombo] = [:]
+    private var wantsSuspended = false
+    private var needsApply = false
+    private var driving = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var lastRecordingSequence: UInt64?
 
     public init(preferences: any CaptureShortcutPreferencePort, registrar: any CaptureHotKeyRegistrarPort) {
         self.preferences = preferences
@@ -41,9 +49,67 @@ public actor CaptureHotKeyCoordinator {
     }
 
     /// Registers what changed since the last call. Every changed hotkey is released first, so combos can move
-    /// between actions in one change (恢复默认).
+    /// between actions in one change (恢复默认). Does nothing while suspended; `resume()` applies.
     public func apply() async {
-        if isSuspended { return }
+        needsApply = true
+        await drive()
+    }
+
+    /// Releases every hotkey while Settings records a shortcut, so the pressed combo reaches the recorder.
+    public func suspend() async {
+        wantsSuspended = true
+        await drive()
+    }
+
+    public func resume() async {
+        wantsSuspended = false
+        needsApply = true
+        await drive()
+    }
+
+    /// Settings' recording began/ended notifications, numbered by the helper in the order it received them. One
+    /// older than the last seen lost a race between the helper's tasks and is ignored.
+    public func recordingChanged(_ recording: Bool, sequence: UInt64) async {
+        if let last = lastRecordingSequence, sequence <= last { return }
+        lastRecordingSequence = sequence
+        if recording { await suspend() } else { await resume() }
+    }
+
+    /// Runs until the registrations match what the last calls asked for. A call made while it runs only waits.
+    private func drive() async {
+        if driving {
+            await withCheckedContinuation { waiters.append($0) }
+            return
+        }
+        driving = true
+        while true {
+            if wantsSuspended {
+                if !isSuspended { await releaseAll(); continue }
+            } else if isSuspended || needsApply {
+                isSuspended = false
+                needsApply = false
+                await register()
+                continue
+            }
+            break
+        }
+        driving = false
+        let done = waiters
+        waiters = []
+        for waiter in done { waiter.resume() }
+    }
+
+    private func releaseAll() async {
+        isSuspended = true
+        let current = registered
+        registered = [:]
+        for (action, combo) in current {
+            released[action] = combo
+            await registrar.unregister(id: Self.hotKeyID(for: action))
+        }
+    }
+
+    private func register() async {
         var bindings = await preferences.bindings()
         let storedFailures = await preferences.failures()
         var failures = storedFailures
@@ -79,22 +145,5 @@ public actor CaptureHotKeyCoordinator {
         }
         if reverted { await preferences.setBindings(bindings) }
         if failures != storedFailures { await preferences.setFailures(failures) }
-    }
-
-    /// Releases every hotkey while Settings records a shortcut, so the pressed combo reaches the recorder.
-    /// `apply()` does nothing until `resume()`.
-    public func suspend() async {
-        if isSuspended { return }
-        isSuspended = true
-        for (action, combo) in registered {
-            released[action] = combo
-            await registrar.unregister(id: Self.hotKeyID(for: action))
-        }
-        registered = [:]
-    }
-
-    public func resume() async {
-        isSuspended = false
-        await apply()
     }
 }

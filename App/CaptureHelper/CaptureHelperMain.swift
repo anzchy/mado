@@ -181,11 +181,12 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
 
     /// Settings is recording a shortcut. If it never says it finished (it quit, or the field lost its window
     /// without telling us), the hotkeys come back after 30 seconds anyway.
+    /// The generation is the coordinator's sequence: these tasks may reach it out of order (#685 fix r1).
     private func suspendShortcuts() {
         recordingGeneration += 1
         let generation = recordingGeneration
         Task {
-            await hotKeys.suspend()
+            await hotKeys.recordingChanged(true, sequence: UInt64(generation))
             try? await Task.sleep(for: .seconds(30))
             if generation == recordingGeneration { resumeShortcuts() }
         }
@@ -193,8 +194,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
 
     private func resumeShortcuts() {
         recordingGeneration += 1
+        let generation = recordingGeneration
         Task {
-            await hotKeys.resume()
+            await hotKeys.recordingChanged(false, sequence: UInt64(generation))
             applyShortcuts()
         }
     }
