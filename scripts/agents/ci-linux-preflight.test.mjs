@@ -1,102 +1,204 @@
-import test from 'node:test';
+import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, readdirSync, readlinkSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { checkGates } from './ui-parity-pr-body-lint.mjs';
+import { parseWorkflow, workflowAt } from '../../.agents/skills/ci-linux-preflight/scripts/workflow.mjs';
+import { checkSummary } from '../../.agents/skills/ci-linux-preflight/scripts/summary.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const tool = join(root, '.agents/skills/ci-linux-preflight/scripts/preflight.mjs');
-const checker = join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh');
-const run = (args, options = {}) => spawnSync(process.execPath, [tool, ...args], { encoding: 'utf8', ...options });
-
-test('extracts named Agent tooling run steps, including a workflow edit', () => {
-  const workflow = readFileSync(join(root, '.github/workflows/pr-body.yml'), 'utf8');
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-extract-'));
-  const file = join(dir, 'workflow.yml');
-  writeFileSync(file, workflow);
-  const original = run(['extract', file]);
-  assert.equal(original.status, 0, original.stderr);
-  const steps = JSON.parse(original.stdout);
-  assert.deepEqual(steps.map(s => s.name), ['Test portable device tools', 'Test agent tooling']);
-  writeFileSync(file, workflow.replace('node --test scripts/agents/*.test.mjs', 'node --test scripts/agents/changed.test.mjs'));
-  const changed = JSON.parse(run(['extract', file]).stdout);
-  assert.match(changed.at(-1).run, /changed\.test\.mjs/);
-  assert.notDeepEqual(changed, steps);
+const realGit = spawnSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).stdout.trim();
+const exec = (cmd, args, options = {}) => spawnSync(cmd, args, { encoding: 'utf8', ...options });
+const run = (args, options = {}) => exec(process.execPath, [tool, ...args], options);
+const runAsync = (args, options = {}) => new Promise(resolve => {
+  const child = spawn(process.execPath, [tool, ...args], options);
+  let stdout = ''; let stderr = '';
+  child.stdout.on('data', data => { stdout += data; });
+  child.stderr.on('data', data => { stderr += data; });
+  child.on('close', status => resolve({ status, stdout, stderr }));
 });
+const tap = `test "$CI" = true && test "$GITHUB_ACTIONS" = true && test "$LANG" = C.UTF-8 && test "$PATH" = /opt/node/bin:/usr/local/bin:/usr/bin:/bin && test -z "\${FAKE_SECRET:-}" && printf '# tests 1\\n# pass 1\\n# fail 0\\n# skip 0\\n' && : 'node --test'`;
 
-test('remote run reports failed step, TAP totals and failing name; checker rejects incomplete summary', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-remote-'));
-  mkdirSync(join(dir, '.github/workflows'), { recursive: true });
-  writeFileSync(join(dir, '.github/workflows/pr-body.yml'), `jobs:\n  agent-tests:\n    name: Agent tooling\n    steps:\n      - name: Install tools\n        run: exit 99\n      - name: Test altered command\n        working-directory: pr-head\n        run: node --test --test-reporter=tap sample.test.cjs\n`);
-  writeFileSync(join(dir, 'sample.test.cjs'), `const test=require('node:test');test('broken example',()=>{throw Error('broken')});`);
-  const result = run(['remote', dir, 'abcdef1']);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  const summary = result.stdout;
-  assert.match(summary, /step:Test altered command=1/);
-  assert.doesNotMatch(summary, /step:Install tools/);
-  assert.match(summary, /tests=1\npass=0\nfail=1\nskip=0/);
-  assert.match(summary, /failed:broken example/);
-  assert.match(summary, /\nDONE\n$/);
-  const file = join(dir, 'summary.txt');
-  writeFileSync(file, summary.replace(/DONE\n$/, ''));
-  assert.notEqual(run(['summary-check', file]).status, 0);
-  writeFileSync(file, summary);
-  assert.match(run(['summary-check', file]).stdout, /Linux-Preflight: abcdef1 agent-tooling FAIL 0\/1 \(0 skip\)/);
-});
-
-test('editing a workflow run command changes the command executed', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-edited-run-'));
-  mkdirSync(join(dir, '.github/workflows'), { recursive: true });
-  const workflow = join(dir, '.github/workflows/pr-body.yml');
-  const prefix = `jobs:\n  agent-tests:\n    name: Agent tooling\n    steps:\n      - name: Run fixture\n        working-directory: pr-head\n        run: `;
-  writeFileSync(join(dir, 'sample.test.cjs'), `require('node:test')('works',()=>{});`);
-  writeFileSync(workflow, `${prefix}node --test --test-reporter=tap sample.test.cjs\n`);
-  const initial = run(['remote', dir, 'abcdef1']);
-  assert.equal(initial.status, 0, initial.stderr);
-  assert.match(initial.stdout, /step:Run fixture=0/);
-  writeFileSync(workflow, `${prefix}node --test --test-reporter=tap sample.test.cjs && exit 7\n`);
-  const edited = run(['remote', dir, 'abcdef1']);
-  assert.equal(edited.status, 1);
-  assert.match(edited.stdout, /step:Run fixture=7/);
-});
-
-test('Python unittest failure names appear in the failed list', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-python-'));
-  mkdirSync(join(dir, '.github/workflows'), { recursive: true });
-  writeFileSync(join(dir, '.github/workflows/pr-body.yml'), `jobs:\n  agent-tests:\n    steps:\n      - name: Python tests\n        working-directory: pr-head\n        run: python3 -m unittest sample_test.py\n`);
-  writeFileSync(join(dir, 'sample_test.py'), `import unittest\nclass Sample(unittest.TestCase):\n def test_broken(self):\n  self.fail('broken')\n`);
-  const result = run(['remote', dir, 'abcdef1']);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /step:Python tests=1/);
-  assert.match(result.stdout, /failed:test_broken \(sample_test.Sample\)/);
-});
-
-test('env check rejects a mismatched git version', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-env-'));
-  for (const [name, output] of [['node', 'v22.0.0'], ['git', 'git version 2.34.1'], ['python3', 'Python 3.12.0'], ['zsh', 'zsh 5.9']]) {
-    const path = join(dir, name);
-    writeFileSync(path, `#!/bin/sh\necho '${output}'\n`, { mode: 0o755 });
-  }
-  const result = spawnSync('/bin/zsh', [checker], { encoding: 'utf8', env: { ...process.env, PATH: dir } });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /git.*2\.34\.1.*FAIL/);
-});
-
-test('local transfer uses fake ssh and rsync and writes a checked summary without network', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'preflight-transfer-'));
-  const bin = join(dir, 'bin');
+function fixture(first = 'python3 -m unittest sample_test.py', second = tap, failingPython = false) {
+  const base = mkdtempSync(join(tmpdir(), 'ci-preflight-'));
+  const repo = join(base, 'repo');
+  const hostHome = join(base, 'host');
+  const bin = join(base, 'bin');
+  mkdirSync(join(repo, '.github/workflows'), { recursive: true });
+  mkdirSync(join(repo, '.agents/skills/ci-linux-preflight'), { recursive: true });
+  mkdirSync(hostHome);
   mkdirSync(bin);
-  const log = join(dir, 'calls');
-  writeFileSync(join(bin, 'ssh'), `#!/bin/sh\nprintf 'ssh %s\\n' "$*" >> "$CALL_LOG"\ncase "$*" in\n  *'preflight.mjs remote'*) printf 'head=%s\\nstep:Test agent tooling=0\\nsecs=1.0\\npeak_rss_kb=42\\ntests=2\\npass=2\\nfail=0\\nskip=0\\nDONE\\n' "$FAKE_SHA";;\nesac\n`, { mode: 0o755 });
-  writeFileSync(join(bin, 'rsync'), `#!/bin/sh\nprintf 'rsync %s\\n' "$*" >> "$CALL_LOG"\n`, { mode: 0o755 });
-  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
-  const result = run(['run', head], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: dir, CALL_LOG: log, FAKE_SHA: head } });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, new RegExp(`Linux-Preflight: ${head.slice(0, 7)} agent-tooling PASS 2/2 \\(0 skip\\)`));
-  const calls = readFileSync(log, 'utf8');
-  assert.match(calls, /ssh -o BatchMode=yes/);
-  assert.match(calls, /rsync -e ssh -o BatchMode=yes .*head\.bundle/);
-  assert.doesNotMatch(calls, /StrictHostKeyChecking=no/);
-  assert.match(readFileSync(join(dir, '.picsee/ci-linux', `${head}-summary.txt`), 'utf8'), /DONE\n$/);
+  cpSync(join(root, '.agents/skills/ci-linux-preflight/scripts'), join(repo, '.agents/skills/ci-linux-preflight/scripts'), { recursive: true });
+  const workflow = `jobs:\n  agent-tests:\n    name: Agent tooling\n    steps:\n      - name: Checkout PR head\n        uses: actions/checkout@abc\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - name: Set up Node\n        uses: actions/setup-node@abc\n        with:\n          node-version: 22\n      - name: Install portable device test tools\n        run: |\n          sudo apt-get update\n      - name: Python tests\n        working-directory: pr-head\n        run: ${first}\n      - name: Node totals\n        working-directory: pr-head\n        run: ${second}\n`;
+  writeFileSync(join(repo, '.github/workflows/pr-body.yml'), workflow
+    .replace('      - name: Set up Node', '          path: pr-head\n          fetch-depth: 0\n      - name: Set up Node')
+    .replace('sudo apt-get update', 'sudo apt-get update\n          sudo apt-get install --no-install-recommends -y python3 git zsh'));
+  writeFileSync(join(repo, 'sample_test.py'), `import unittest\nclass Sample(unittest.TestCase):\n def test_case(self):\n  ${failingPython ? "self.fail('broken')" : 'self.assertTrue(True)'}\n`);
+  for (const [name, body] of Object.entries({
+    node: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo v22.23.5; else exec "$REAL_NODE" "$@"; fi\n`,
+    git: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "git version \${FAKE_GIT_VERSION:-2.56.1}"; exit; fi\nif [ "$FAKE_REMOTE_WRONG_HEAD" = 1 ]; then case "$*" in *'rev-parse HEAD'*) printf '%040d\\n' 0; exit;; esac; fi\nexec "$REAL_GIT" "$@"\n`,
+    zsh: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'zsh 5.8'; else exec /bin/zsh "$@"; fi\n`,
+    ps: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'ps from procps-ng 3.3.17'; else exec /bin/ps "$@"; fi\n`,
+    flock: `#!/bin/sh\nif [ "${'$'}FAKE_BUSY" = 1 ]; then exit 1; fi\nexit 0\n`,
+    timeout: `#!/usr/bin/env node\nconst {spawnSync}=require('node:child_process');const a=process.argv.slice(2);a.shift();const seconds=Number(a.shift());const cmd=a.shift();const r=spawnSync(cmd,a,{stdio:'inherit',timeout:seconds*1000});process.exit(r.error?.code==='ETIMEDOUT'?124:r.status??75);\n`,
+    rsync: `#!/bin/sh\nif [ "$FAKE_RSYNC_FAIL" = 1 ]; then echo 'transfer failed' >&2; exit 1; fi\ncp "$3" "\${4#*:}"\n`,
+    ssh: `#!/bin/bash\nset -o pipefail\nprintf '%s\\n' "$*" >> "$FAKE_CALLS"\ntmp=$(mktemp)\ncat > "$tmp"\ncat "$tmp" >> "$FAKE_INPUTS"\nif [ "$FAKE_SSH_FAIL" = 1 ]; then echo unreachable >&2; exit 1; fi\nfor item in "$@"; do last=$item; done\nsed "s#export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin#export PATH=$FAKE_BIN:/usr/local/bin:/usr/bin:/bin#g" "$tmp" | HOME="$FAKE_HOST_HOME" PATH="$FAKE_BIN:$PATH" /bin/bash -c "$last"\nstatus=$?\nrm -f "$tmp"\nexit $status\n`,
+  })) writeFileSync(join(bin, name), body, { mode: 0o755 });
+  for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'], ['add', '.github/workflows/pr-body.yml', '.agents/skills/ci-linux-preflight/scripts', 'sample_test.py'], ['commit', '-qm', 'fixture']]) {
+    const result = exec(realGit, args, { cwd: repo });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
+  const calls = join(base, 'calls.jsonl');
+  const inputs = join(base, 'inputs.txt');
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: 'picsee-ci-linux' };
+  return { base, repo, hostHome, bin, calls, inputs, sha, env };
+}
+function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }
+function runFixture(f, args = [], env = {}) { return run(['run', f.sha, '--repo', f.repo, ...args], { env: { ...f.env, ...env } }); }
+function runFixtureAsync(f, args = [], env = {}) { return runAsync(['run', f.sha, '--repo', f.repo, ...args], { env: { ...f.env, ...env } }); }
+
+describe('ci-linux-preflight', { concurrency: true }, () => {
+test('real Agent tooling workflow has two runnable steps and rejects unsupported YAML', () => {
+  const head = exec(realGit, ['rev-parse', 'HEAD'], { cwd: root }).stdout.trim();
+  const real = workflowAt(root, head);
+  assert.equal(real.steps.length, 5);
+  assert.equal(real.steps.filter(step => step.kind === 'run').length, 2);
+  assert.equal(real.steps.find(step => step.name === 'Install portable device test tools').kind, 'provision');
+  for (const fragment of ['env:', 'shell: bash', 'run: >', 'if: true', 'continue-on-error: true', 'timeout-minutes: 1']) {
+    const source = `jobs:\n  agent-tests:\n    steps:\n      - name: Test\n        working-directory: pr-head\n        ${fragment}\n        run: echo ok\n`;
+    assert.throws(() => parseWorkflow(source), /unsupported|folded|duplicate/i, fragment);
+  }
+  assert.throws(() => parseWorkflow(`jobs:\n  agent-tests:\n    steps:\n      - name: Test\n        working-directory: pr-head\n        run: echo \${{ secrets.X }}\n`), /expression/);
+});
+
+test('fake SSH executes remote script, copies bundle, records isolated step summary and cleans run dir', async () => {
+  const f = fixture();
+  const result = await runFixtureAsync(f, [], { FAKE_SECRET: 'must-not-reach-step' });
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const body = readFileSync(summaryPath(result), 'utf8');
+  assert.match(body, new RegExp(`head=${f.sha}`));
+  assert.match(body, /steps_total=5\nsteps_run=2\noutcome=PASS/);
+  assert.match(body, /step:Install portable device test tools=provision-checked/);
+  assert.match(body, /step:Node totals:tests=1/);
+  assert.match(body, /step:Python tests:python_tests=1/);
+  assert.match(body, /step:Node totals:peak_rss_kb=unknown/);
+  assert.match(body, /node=v22\.23\.5/);
+  assert.match(body, /git=git version 2\.56\.1/);
+  assert.match(body, /procps=ps from procps-ng 3\.3\.17/);
+  const missingTap = body.replace('step:Node totals:tests=1', 'step:Node totals:tests=0').replace('step:Node totals:pass=1', 'step:Node totals:pass=0');
+  assert.throws(() => checkSummary(missingTap, f.sha, workflowAt(f.repo, f.sha)), /missing Node TAP totals/);
+  assert.match(result.stdout, /Linux-Preflight \(supplementary; GitHub required checks remain binding\):/);
+  const summary = summaryPath(result);
+  assert.equal(readlinkSync(join(resolve(summary, '..'), 'latest')), summary.split('/').at(-1));
+  assert.equal(statSync(summary.replace('-summary.txt', '-raw.log')).mode & 0o777, 0o600);
+  const calls = readFileSync(f.calls, 'utf8').trim().split('\n');
+  assert.ok(calls.every(call => ['-a', '-x', 'BatchMode=yes', 'ConnectTimeout=10', 'ServerAliveInterval=15', 'ServerAliveCountMax=4'].every(option => call.includes(option))));
+  assert.ok(calls.every(call => !call.includes('StrictHostKeyChecking=no')));
+  assert.doesNotMatch(readFileSync(f.inputs, 'utf8'), /sudo apt-get/);
+  assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
+  const workflowFile = join(f.repo, '.github/workflows/pr-body.yml');
+  writeFileSync(workflowFile, readFileSync(workflowFile, 'utf8').replace(`run: ${tap}`, 'run: exit 7'));
+  assert.notEqual(parseWorkflow(readFileSync(workflowFile, 'utf8')).workflowSha256, workflowAt(f.repo, f.sha).workflowSha256);
+  assert.equal(runFixture(f).status, 2, 'tracked dirt must be refused before transfer');
+  exec(realGit, ['add', '.github/workflows/pr-body.yml'], { cwd: f.repo });
+  exec(realGit, ['commit', '-qm', 'edit command'], { cwd: f.repo });
+  const editedHead = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
+  const editedHash = workflowAt(f.repo, editedHead).workflowSha256;
+  const edited = await runAsync(['remote', f.repo, editedHead, 'agent-tests', editedHash, '3', '5'], { env: f.env });
+  assert.equal(edited.status, 1, edited.stderr + edited.stdout);
+  assert.match(edited.stdout, /step:Node totals:exit=7/);
+});
+
+test('Python failure before Node yields FAIL, step name, and remote cleanup', async () => {
+  const f = fixture(undefined, undefined, true);
+  const result = await runFixtureAsync(f);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  const body = readFileSync(summaryPath(result), 'utf8');
+  assert.match(body, /outcome=FAIL/);
+  assert.match(body, /step:Python tests:exit=1/);
+  assert.match(body, /step:Node totals=not-run/);
+  assert.match(body, /failed:test_case/);
+  assert.match(result.stdout, /agent-tooling FAIL Python tests/);
+  assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
+});
+
+test('remote checkout refuses a mismatched SHA before executing steps', () => {
+  const f = fixture();
+  const runDir = join(f.hostHome, 'ci', 'run.WRONG');
+  mkdirSync(runDir, { recursive: true });
+  const ref = `refs/preflight/${f.sha}`;
+  exec(realGit, ['update-ref', ref, f.sha], { cwd: f.repo });
+  exec(realGit, ['bundle', 'create', join(runDir, 'head.bundle'), ref], { cwd: f.repo });
+  exec(realGit, ['update-ref', '-d', ref], { cwd: f.repo });
+  const script = readFileSync(join(root, '.agents/skills/ci-linux-preflight/scripts/remote-run.sh'), 'utf8')
+    .replace('export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin', `export PATH=${f.bin}:/usr/local/bin:/usr/bin:/bin`);
+  const result = exec('/bin/bash', ['-s', '--', runDir, f.sha, 'agent-tests', workflowAt(f.repo, f.sha).workflowSha256, '2', '30'],
+    { input: script, env: { ...f.env, HOME: f.hostHome, FAKE_REMOTE_WRONG_HEAD: '1' } });
+  assert.equal(result.status, 75, result.stderr + result.stdout);
+  assert.match(result.stderr, /checkout head mismatch/);
+  assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
+});
+
+test('transfer failure and busy lock are NOT VERIFIED with exit 75 and immutable attempts', async () => {
+  const f = fixture();
+  const transfer = await runFixtureAsync(f, [], { FAKE_RSYNC_FAIL: '1' });
+  assert.equal(transfer.status, 75);
+  assert.match(readFileSync(summaryPath(transfer), 'utf8'), /outcome=NOT VERIFIED\nreason=bundle transfer:/);
+  const busy = await runFixtureAsync(f, [], { FAKE_BUSY: '1' });
+  assert.equal(busy.status, 75, busy.stderr);
+  assert.match(readFileSync(summaryPath(busy), 'utf8'), /outcome=NOT VERIFIED\nreason=busy/);
+  assert.notEqual(summaryPath(transfer), summaryPath(busy));
+});
+
+test('step timeout is TIMEOUT; summary checker refuses truncation, duplicate DONE, wrong head and missing totals', async () => {
+  const f = fixture('sleep 1.2');
+  const hash = workflowAt(f.repo, f.sha).workflowSha256;
+  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '1', '3', '--time-bin', '/nonexistent-gnu-time'], { env: f.env });
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  const body = result.stdout;
+  assert.match(body, /outcome=TIMEOUT/);
+  assert.match(body, /step:Python tests:exit=124/);
+  assert.match(body, /step:Python tests:peak_rss_kb=unknown/);
+  const path = join(f.base, 'summary.txt');
+  writeFileSync(path, body);
+  assert.equal(run(['summary-check', path, '--expect-head', f.sha, '--repo', f.repo]).status, 0);
+  const workflow = workflowAt(f.repo, f.sha);
+  const reordered = body.split('\n');
+  const first = reordered.findIndex(line => line === 'step:Checkout PR head=bundle-checked');
+  const second = reordered.findIndex(line => line === 'step:Set up Node=provision-checked');
+  [reordered[first], reordered[second]] = [reordered[second], reordered[first]];
+  for (const invalid of [body.replace(/DONE\n$/, ''), `${body}DONE\n`, body.replace(`head=${f.sha}`, `head=${'a'.repeat(40)}`), body.replace(/^step:Python tests:tests=.*\n/m, ''), body.replace('steps_total=5\n', 'steps_total=5\nsteps_total=5\n'), reordered.join('\n')]) assert.throws(() => checkSummary(invalid, f.sha, workflow));
+});
+
+test('environment mismatch and unsupported workflow fail closed', async () => {
+  const f = fixture();
+  const mismatch = exec('/bin/zsh', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: { ...f.env, FAKE_GIT_VERSION: '2.34.1' } });
+  assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stdout, /git.*2\.34\.1.*FAIL/);
+  writeFileSync(join(f.bin, 'sudo'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const privileged = exec('/bin/zsh', [join(root, '.agents/skills/ci-linux-preflight/scripts/env-check.sh')], { env: f.env });
+  assert.notEqual(privileged.status, 0);
+  assert.match(privileged.stdout, /sudo passwordless FAIL/);
+  const bad = fixture();
+  const workflow = join(bad.repo, '.github/workflows/pr-body.yml');
+  writeFileSync(workflow, readFileSync(workflow, 'utf8').replace('working-directory: pr-head', 'working-directory: pr-head\n        shell: bash'));
+  exec(realGit, ['add', '.github/workflows/pr-body.yml'], { cwd: bad.repo });
+  exec(realGit, ['commit', '-qm', 'unsupported'], { cwd: bad.repo });
+  const head = exec(realGit, ['rev-parse', 'HEAD'], { cwd: bad.repo }).stdout.trim();
+  assert.equal(run(['run', head, '--repo', bad.repo], { env: bad.env }).status, 2);
+});
+
+test('supplementary PR line does not change Gates lint', () => {
+  const head = '3de39c6012345678901234567890123456789012';
+  const source = readFileSync(join(root, '.agents/skills/pr/SKILL.md'), 'utf8');
+  const gates = source.match(/## Gates\n([\s\S]*?)\nDevice-Smoke:/)?.[1];
+  assert.ok(gates);
+  const body = `## Gates\n${gates}`.replaceAll('<head-sha>', head)
+    + `\nLinux-Preflight (supplementary; GitHub required checks remain binding): ${head.slice(0, 7)} agent-tooling PASS 1/1 (0 skip)\n`;
+  assert.deepEqual(checkGates(body, head), { ok: true });
+});
 });
