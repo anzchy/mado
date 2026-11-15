@@ -167,6 +167,50 @@ private actor RecognitionCounter {
     #expect(board.string(forType: privateType) == nil)
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextNativeWriteFailurePreservesPreviousClipboard() throws {
+    let board = NSPasteboard(name: .init("mado.issue687.write-failure.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let sentinelType = NSPasteboard.PasteboardType("mado.issue687.sentinel")
+    board.declareTypes([.string, sentinelType], owner: nil)
+    #expect(board.setString("before", forType: .string))
+    #expect(board.setString("keep", forType: sentinelType))
+    let previousCount = board.changeCount
+    let previousTypes = board.types
+    var attempted = false
+    let port = NativeTextPasteboard(board, writeObjects: { _, objects in
+        attempted = true
+        #expect(objects.count == 1)
+        return false
+    })
+    #expect(!port.copy("after"))
+    #expect(attempted)
+    #expect(board.changeCount == previousCount)
+    #expect(board.types == previousTypes)
+    #expect(board.string(forType: .string) == "before")
+    #expect(board.string(forType: sentinelType) == "keep")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextDestinationWriteFailureRestoresPreviousItems() {
+    let board = NSPasteboard(name: .init("mado.issue687.destination-failure.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let sentinelType = NSPasteboard.PasteboardType("mado.issue687.sentinel")
+    board.declareTypes([.string, sentinelType], owner: nil)
+    board.setString("before", forType: .string)
+    board.setString("keep", forType: sentinelType)
+    var destinationAttempted = false
+    let port = NativeTextPasteboard(board, writeObjects: { target, objects in
+        if target === board {
+            destinationAttempted = true
+            return false
+        }
+        return target.writeObjects(objects)
+    })
+    #expect(!port.copy("after"))
+    #expect(destinationAttempted)
+    #expect(board.string(forType: .string) == "before")
+    #expect(board.string(forType: sentinelType) == "keep")
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextRealProviderUsesPrivateNamedPasteboard() async throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let fixtures = root.appendingPathComponent("TestAssets/TextRecognition")
