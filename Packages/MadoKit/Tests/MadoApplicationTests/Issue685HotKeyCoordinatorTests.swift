@@ -8,8 +8,9 @@ private actor StoredShortcuts: CaptureShortcutPreferencePort {
     var stored: CaptureShortcutBindings
     var refused: [CaptureShortcutAction: CaptureKeyCombo] = [:]
     var bindingWrites = 0
+    var bindingReads = 0
     init(_ stored: CaptureShortcutBindings = .defaults) { self.stored = stored }
-    func bindings() -> CaptureShortcutBindings { stored }
+    func bindings() -> CaptureShortcutBindings { bindingReads += 1; return stored }
     func setBindings(_ bindings: CaptureShortcutBindings) { stored = bindings; bindingWrites += 1 }
     func failures() -> [CaptureShortcutAction: CaptureKeyCombo] { refused }
     func setFailures(_ failures: [CaptureShortcutAction: CaptureKeyCombo]) { refused = failures }
@@ -208,4 +209,83 @@ private func id(_ action: CaptureShortcutAction) -> UInt32 { CaptureHotKeyCoordi
     let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
     await coordinator.resume()
     #expect(await coordinator.registered.count == 5)
+}
+
+// Fix r1 (gpt F1): a quick start→end of recording always leaves every hotkey registered, whatever order the
+// helper's tasks reach the coordinator in and wherever they interleave.
+
+/// Like `FakeRegistrar`, but `unregister` can be held at its await until the test opens the gate.
+private actor GatedRegistrar: CaptureHotKeyRegistrarPort {
+    var held: [UInt32: CaptureKeyCombo] = [:]
+    var waiting = false
+    private var closed = false
+    private var gate: CheckedContinuation<Void, Never>?
+    func register(_ combo: CaptureKeyCombo, id: UInt32) -> Bool {
+        guard !held.values.contains(combo) else { return false }
+        held[id] = combo
+        return true
+    }
+    func unregister(id: UInt32) async {
+        if closed {
+            closed = false
+            waiting = true
+            await withCheckedContinuation { gate = $0 }
+        }
+        held[id] = nil
+    }
+    func close() { closed = true }
+    func open() { waiting = false; gate?.resume(); gate = nil }
+}
+
+/// Polls until `condition` holds or `limit` passes.
+private func eventually(within limit: Duration = .seconds(2), _ condition: () async -> Bool) async {
+    let clock = ContinuousClock()
+    let end = clock.now + limit
+    while clock.now < end {
+        if await condition() { return }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685ResumeWhileSuspendIsReleasingStillRestoresEveryHotKey() async {
+    let preferences = StoredShortcuts()
+    let registrar = GatedRegistrar()
+    let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
+    await coordinator.apply()
+    let reads = await preferences.bindingReads
+    await registrar.close()
+    let suspending = Task { await coordinator.suspend() }
+    await eventually { await registrar.waiting }
+    #expect(await registrar.waiting)
+    // Recording ended at once: resume reaches the coordinator while suspend waits on the system.
+    let resuming = Task { await coordinator.resume() }
+    // Give a resume that does not wait for the suspend time to finish on its own.
+    await eventually(within: .milliseconds(300)) { await preferences.bindingReads > reads }
+    await registrar.open()
+    await suspending.value
+    await resuming.value
+    #expect(await !coordinator.isSuspended)
+    #expect(await coordinator.registered.count == 5)
+    for action in CaptureShortcutAction.allCases {
+        #expect(await registrar.held[id(action)] == CaptureShortcutBindings.defaults[action])
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685RecordingEndThatOvertakesItsStartLeavesTheHotKeysRegistered() async {
+    let preferences = StoredShortcuts()
+    let registrar = FakeRegistrar()
+    let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
+    await coordinator.apply()
+    // The helper numbers its notifications; the end (2) reached the coordinator before the start (1).
+    await coordinator.recordingChanged(false, sequence: 2)
+    await coordinator.recordingChanged(true, sequence: 1)
+    #expect(await !coordinator.isSuspended)
+    #expect(await registrar.held.count == 5)
+    // A later recording still releases them, and its end brings them back.
+    await coordinator.recordingChanged(true, sequence: 3)
+    #expect(await coordinator.isSuspended)
+    #expect(await registrar.held.isEmpty)
+    await coordinator.recordingChanged(false, sequence: 4)
+    #expect(await !coordinator.isSuspended)
+    #expect(await registrar.held.count == 5)
 }
