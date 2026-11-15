@@ -46,6 +46,7 @@ private actor LoginItem: CaptureLoginItemPort {
     }
     func openLoginItemsSettings() {}
     func failNextUnregister() { failUnregister = true }
+    func allowUnregister() { failUnregister = false }
 }
 
 @Test(.timeLimit(.minutes(2))) func issue685TurningTheBarOffRemovesTheLoginItem() async throws {
@@ -64,4 +65,39 @@ private actor LoginItem: CaptureLoginItemPort {
     try await other.setEnabled(false)
     #expect(await preferences.enabled == false)
     #expect(await login.unregisterCalls == 2)
+}
+
+// Fix r1 (gpt M1): turning the bar off when the login item can't be removed must not look like success. The
+// switch keeps showing the item (it is still registered), and the row says so and offers a retry.
+@Test(.timeLimit(.minutes(2))) func issue685LoginItemLeftRegisteredWithTheBarOffIsShownWithARetry() {
+    for status: CaptureLoginItemStatus in [.enabled, .requiresApproval] {
+        let left = CaptureLoginPresentation.make(status: status, barEnabled: false)
+        #expect(left.isOn)
+        #expect(left.removalFailed)
+        #expect(!left.isEditable)
+        #expect(!left.needsApproval)
+    }
+    for status: CaptureLoginItemStatus in [.notRegistered, .notFound] {
+        #expect(!CaptureLoginPresentation.make(status: status, barEnabled: false).removalFailed)
+    }
+    for status: CaptureLoginItemStatus in [.enabled, .notRegistered, .requiresApproval, .notFound] {
+        #expect(!CaptureLoginPresentation.make(status: status, barEnabled: true).removalFailed)
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685RefusedLoginItemRemovalIsRetriedOnTheNextBarOff() async throws {
+    let login = LoginItem()
+    await login.failNextUnregister()
+    let preferences = Switch()
+    let control = CaptureBarControl(preferences: preferences, process: Process(), loginItem: login)
+    try await control.setEnabled(false)
+    #expect(await login.current == .enabled)
+    #expect(CaptureLoginPresentation.make(status: await login.status(), barEnabled: await preferences.enabled)
+        .removalFailed)
+    // Turning the bar off again (or Settings' retry) asks the system once more.
+    await login.allowUnregister()
+    try await control.setEnabled(false)
+    #expect(await login.unregisterCalls == 2)
+    #expect(await login.current == .notRegistered)
+    #expect(!CaptureLoginPresentation.make(status: await login.status(), barEnabled: false).removalFailed)
 }
