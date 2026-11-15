@@ -16,7 +16,6 @@ import MadoInfrastructure
     private var overlay: RecogniseTextOverlay?
     nonisolated(unsafe) private var closeObserver: (any NSObjectProtocol)?
     private var activeGeneration: UUID?
-    private var activeImage: UnsafeMutableRawPointer?
     private var activeRun = UUID()
     private var closed = false
     private var priorMinimum: NSSize?
@@ -47,11 +46,10 @@ import MadoInfrastructure
     func start() {
         guard canStart, let controller, let image = controller.canvas.backdropFrame.image else { return }
         let generation = controller.session.imageLoader.generation
-        let imagePointer = Unmanaged.passUnretained(image).toOpaque()
+        let presentedKey = controller.session.imageLoader.presented?.key
         let sourceSize = controller.canvas.backdropFrame.sourceSize
         let imageLoader = controller.session.imageLoader
         activeGeneration = generation
-        activeImage = imagePointer
         activeRun = UUID()
         let run = activeRun
         let recognise = self.recognise
@@ -64,10 +62,13 @@ import MadoInfrastructure
             try Task.checkCancellation()
             return try await recognise(data, .explicit)
         }, pasteboard: NativeTextPasteboard(pasteboard), isCurrent: { [weak self] identity in
-            guard let self, let current = self.controller?.canvas.backdropFrame.image else { return false }
+            guard let self, let controller = self.controller,
+                  controller.canvas.backdropFrame.image != nil else { return false }
+            let currentKey = controller.session.imageLoader.presented?.key
             return !self.closed && identity == self.activeRun && identity == run
-                && self.controller?.session.imageLoader.generation == generation
-                && Unmanaged.passUnretained(current).toOpaque() == imagePointer
+                && controller.session.imageLoader.generation == generation
+                && currentKey?.itemID == presentedKey?.itemID
+                && currentKey?.revision == presentedKey?.revision
         }, onChange: { [weak self] in self?.render() })
         model?.close()
         model = newModel

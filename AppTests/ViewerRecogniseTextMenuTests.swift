@@ -132,6 +132,58 @@ private actor RecogniseMenuPipeline: ImagePipeline {
     #expect(board.string(forType: .string) == "full source")
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextRefineOfSamePresentedItemStillCopies() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    func pixels(_ width: Int) throws -> CGImage {
+        let context = try #require(CGContext(data: nil, width: width, height: 2,
+            bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        return try #require(context.makeImage())
+    }
+    let pipeline = RecogniseMenuPipeline(image: try pixels(200), preview: try pixels(2))
+    let leases = RecogniseMenuLeases(), url = URL(fileURLWithPath: "/tmp/refine.png")
+    controller.session.openImage(url, maximumPixelSize: 3) {
+        try await AccessImageSource.open(.fileGrant(url), access: leases, pipeline: pipeline)
+    }
+    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let generation = controller.session.imageLoader.generation
+    let item = controller.session.imageLoader.presented?.key.itemID
+    let original = try #require(controller.canvas.backdropFrame.image)
+    let board = NSPasteboard(name: .init("mado.issue687.refine.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    controller.recogniseTextAdapter.pasteboard = board
+    let gate = ViewerRecognitionGate()
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        await gate.wait()
+        return TextRecognitionResult(text: "same item", characterCount: 9, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 {
+        if await gate.entered { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let key = try #require(controller.session.imageLoader.presented?.key)
+    controller.installImage(DecodedImage(image: try pixels(200),
+        sourcePixelSize: CGSize(width: 200, height: 2), revision: key.revision, itemID: key.itemID),
+        fileURL: url)
+    #expect(controller.canvas.backdropFrame.image !== original)
+    #expect(controller.session.imageLoader.generation == generation)
+    #expect(controller.session.imageLoader.presented?.key.itemID == item)
+    await gate.release()
+    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(board.string(forType: .string) == "same item")
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func viewerRecogniseTextMenuHasNoShortcutAndRequiresShownPixels() async throws {
     _ = NSApplication.shared
     let previousMenu = NSApp.mainMenu
@@ -354,7 +406,16 @@ private actor ViewerRecognitionGate {
         if await firstGate.entered { break }
         try await Task.sleep(for: .milliseconds(10))
     }
-    controller.installImage(try image(4), fileURL: URL(fileURLWithPath: "/tmp/b.png"))
+    let secondURL = URL(fileURLWithPath: "/tmp/b.png")
+    let secondPipeline = RecogniseMenuPipeline(image: try image(4).image)
+    let secondLeases = RecogniseMenuLeases()
+    controller.session.openImage(secondURL, maximumPixelSize: 4) {
+        try await AccessImageSource.open(.fileGrant(secondURL), access: secondLeases, pipeline: secondPipeline)
+    }
+    for _ in 0..<200 where controller.session.imageLoader.phase != .settled {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(controller.session.imageLoader.presented?.key.itemID == secondPipeline.item)
     await firstGate.release()
     for _ in 0..<200 {
         if controller.recogniseTextAdapter.model?.isRunning == false { break }
