@@ -400,6 +400,11 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         window.makeFirstResponder(canvas)
         window.preserveResponder = { [weak self] responder in
             guard let self else { return false }
+            if self.recogniseTextAdapter.panelEditor != nil,
+               let view = responder as? NSView,
+               view === self.inspectorHost || view.isDescendant(of: self.inspectorHost) {
+                return true
+            }
             return responder === self.canvas && self.session.inspectorFocus.focus != .canvas
         }
         window.didChangeResponder = { [weak self] in
@@ -2133,6 +2138,10 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         } else { inspector.select(itemID: nil, url: nil, access: nil) }
     }
     func applyFocus(_ focus: FocusContext) {
+        if focus == .textInput, let editor = recogniseTextAdapter.panelEditor {
+            _ = window?.makeFirstResponder(editor)
+            return
+        }
         // #444 fix round 1: Tab past the last viewer control, or Shift-Tab from the canvas, gives the visible Inspector
         // focus; its close button is its only key view.
         if focus == .textInput, gridView.isHidden, inspectorVisible { focusInspectorCloseButton(); return }

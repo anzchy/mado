@@ -511,3 +511,50 @@ private actor ViewerRecognitionGate {
     #expect(controller.inspectorVisible)
     #expect(window.styleMask.contains(.fullScreen) == fullScreen)
 }
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687bInspectorNoticeKeepsEditorFirstResponderForTyping() async throws {
+    _ = NSApplication.shared
+    let unavailable = Task<AccessServices, Error> { throw CancellationError() }
+    let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
+        preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: unavailable,
+        motionPolicy: MotionPolicy(source: RecogniseMenuMotion()))
+    let window = try #require(controller.window)
+    defer { window.close() }
+    let context = try #require(CGContext(data: nil, width: 3, height: 2, bitsPerComponent: 8,
+        bytesPerRow: 12, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    controller.installImage(DecodedImage(image: try #require(context.makeImage()),
+        sourcePixelSize: CGSize(width: 3, height: 2)), fileURL: URL(fileURLWithPath: "/tmp/focus.png"))
+    controller.session.setInspectorVisible(true)
+    window.makeKeyAndOrderFront(nil)
+    controller.recogniseTextAdapter.recognise = { _, _ in
+        TextRecognitionResult(text: "original", characterCount: 8, engine: .onDevice, isEmpty: false)
+    }
+    controller.recogniseText()
+    for _ in 0..<200 where controller.recogniseTextAdapter.model?.isRunning == true {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let overlay = try #require(window.contentView?.subviews.compactMap { $0 as? RecogniseTextOverlay }.first)
+    let notice = try #require(overlay.noticeView)
+    let click = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+    notice.mouseDown(with: click)
+    let panel = try #require(overlay.panelView)
+    await Task.yield()
+    #expect(window.firstResponder === panel.textView)
+    // The controller's later focus replay must still target the open editor.
+    controller.applyFocus(.textInput)
+    #expect(window.firstResponder === panel.textView)
+    let zoomBefore = controller.session.zoomMode
+    let inspectorBefore = controller.inspectorVisible
+    panel.textView.setSelectedRange(NSRange(location: panel.textView.string.utf16.count, length: 0))
+    (window.firstResponder as? NSTextInputClient)?.insertText(" typed", replacementRange: NSRange(location: NSNotFound, length: 0))
+    #expect(panel.textView.string == "original typed")
+    let space = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
+        isARepeat: false, keyCode: 49))
+    window.sendEvent(space)
+    #expect(controller.inspectorVisible == inspectorBefore)
+    #expect(controller.session.zoomMode == zoomBefore)
+    #expect(window.firstResponder === panel.textView)
+}
