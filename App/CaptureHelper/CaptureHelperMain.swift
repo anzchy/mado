@@ -50,6 +50,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     /// Read at every Capture, so a Settings change applies without restarting the helper.
     private let outputPreferences = UserDefaultsCaptureOutputPreferences.shared()
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
+    /// Held for the process lifetime; the kernel drops it when the helper exits.
+    private let instanceLock = FlockCaptureHelperInstanceLock.appGroup()
 
     override init() {
         // The real home folder: in the sandbox NSHomeDirectory() is the container. ~/Downloads is open to the helper
@@ -69,6 +71,12 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // One helper at a time (#685 fix r3, device N1): a second copy, for example launchd's login item while the
+        // bar already runs, exits here with no bar, no hotkeys and no Screen Recording request.
+        CaptureHelperStartup.launch(lock: instanceLock, exit: { NSApp.terminate(nil) }, start: { start() })
+    }
+
+    private func start() {
         guard UserDefaults(suiteName: CaptureBarIdentity.appGroupID)?
             .bool(forKey: CaptureBarIdentity.enabledKey) == true else {
             NSApp.terminate(nil)

@@ -36,16 +36,34 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     }
 }
 
-@MainActor private final class WorkspaceCaptureBarProcess: CaptureBarProcessPort {
+@MainActor final class WorkspaceCaptureBarProcess: CaptureBarProcessPort {
     enum Failure: Error { case helperMissing, didNotExit }
 
+    private let helperURL: URL
+    private let isRunning: @MainActor () -> Bool
+    private let open: @MainActor (URL) async throws -> Void
+
+    init(helperURL: URL = Bundle.main.bundleURL.appendingPathComponent(
+            "Contents/Library/LoginItems/MadoCaptureHelper.app", isDirectory: true),
+         isRunning: @escaping @MainActor () -> Bool = {
+            !NSRunningApplication.runningApplications(withBundleIdentifier: CaptureBarIdentity.bundleID).isEmpty
+         },
+         open: @escaping @MainActor (URL) async throws -> Void = { url in
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+         }) {
+        self.helperURL = helperURL
+        self.isRunning = isRunning
+        self.open = open
+    }
+
     func startCaptureBar() async throws {
-        let url = Bundle.main.bundleURL.appendingPathComponent(
-            "Contents/Library/LoginItems/MadoCaptureHelper.app", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: url.path) else { throw Failure.helperMissing }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+        guard FileManager.default.fileExists(atPath: helperURL.path) else { throw Failure.helperMissing }
+        // launchd may already have started it as the login item (#685 fix r3, device N1); a second copy would show a
+        // second bar. The helper's own lock covers a launch that races this check.
+        guard !isRunning() else { return }
+        try await open(helperURL)
     }
 
     func stopCaptureBar() async throws {
