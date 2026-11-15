@@ -159,3 +159,53 @@ private func id(_ action: CaptureShortcutAction) -> UInt32 { CaptureHotKeyCoordi
     #expect(await preferences.stored[.window] == f)
     #expect(await preferences.refused == [.window: f])
 }
+
+// While Settings records a shortcut the helper releases every hotkey, so the pressed combo reaches the recorder
+// instead of starting a capture; changes made meanwhile wait for resume.
+@Test(.timeLimit(.minutes(2))) func issue685SuspendReleasesEveryHotKeyAndResumeRestoresThem() async {
+    let preferences = StoredShortcuts()
+    let registrar = FakeRegistrar()
+    let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
+    await coordinator.apply()
+    await coordinator.suspend()
+    #expect(await registrar.held.isEmpty)
+    #expect(await coordinator.registered.isEmpty)
+    #expect(await coordinator.isSuspended)
+    await coordinator.suspend()
+    #expect(await registrar.unregisterCalls == 5)
+    await preferences.edit { $0.clear(.toggleBar) }
+    await coordinator.apply()
+    #expect(await registrar.held.isEmpty)
+    await coordinator.resume()
+    #expect(await !coordinator.isSuspended)
+    #expect(await registrar.held[id(.region)] == CaptureShortcutBindings.defaults[.region])
+    #expect(await registrar.held[id(.toggleBar)] == nil)
+    #expect(await coordinator.registered.count == 4)
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685RefusedComboRecordedWhileSuspendedFallsBackToTheOldShortcut() async throws {
+    let preferences = StoredShortcuts()
+    let registrar = FakeRegistrar()
+    let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
+    await coordinator.apply()
+    await coordinator.suspend()
+    await registrar.take(f)
+    try await preferences.edit { try $0.bind(f, to: .region) }
+    await coordinator.resume()
+    let old = CaptureShortcutBindings.defaults[.region]
+    #expect(await registrar.held[id(.region)] == old)
+    #expect(await preferences.stored[.region] == old)
+    #expect(await preferences.refused == [.region: f])
+    // The released set is used once: a later refusal has only the live registration to fall back on.
+    await coordinator.suspend()
+    await coordinator.resume()
+    #expect(await coordinator.registered.count == 5)
+}
+
+@Test(.timeLimit(.minutes(2))) func issue685ResumeWithoutSuspendIsAnApply() async {
+    let preferences = StoredShortcuts()
+    let registrar = FakeRegistrar()
+    let coordinator = CaptureHotKeyCoordinator(preferences: preferences, registrar: registrar)
+    await coordinator.resume()
+    #expect(await coordinator.registered.count == 5)
+}
