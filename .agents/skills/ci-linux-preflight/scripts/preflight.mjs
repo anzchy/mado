@@ -137,9 +137,14 @@ function facts() {
   return result;
 }
 function parseOutput(output, step) {
-  for (const key of ['tests', 'pass', 'fail', 'skip']) {
-    for (const match of output.matchAll(new RegExp(`^# ${key} (\\d+)$`, 'gm'))) step[key] += Number(match[1]);
+  const spellings = { tests: 'tests', pass: 'pass', fail: 'fail', skip: 'skipped', todo: 'todo', cancelled: 'cancelled' };
+  const footerLines = [];
+  for (const [key, label] of Object.entries(spellings)) {
+    const matches = [...output.matchAll(new RegExp(`^# ${label} (\\d+)$`, 'gm'))];
+    footerLines.push(matches.length);
+    for (const match of matches) step[key] += Number(match[1]);
   }
+  step.tap_footer = footerLines[0] > 0 && footerLines.every(count => count === footerLines[0]) ? 'complete' : 'missing';
   const py = [...output.matchAll(/^Ran (\d+) tests? in /gm)];
   step.python_tests = py.reduce((sum, match) => sum + Number(match[1]), 0);
   step.python_result = /^(?:FAILED \(|FAILED$)/m.test(output) ? 'FAILED' : /^OK(?:\s|$)/m.test(output) ? 'OK' : 'unknown';
@@ -193,6 +198,13 @@ function remote(repo, head, job, expectedHash, stepTimeout, deadline, timeBin) {
     process.stderr.write(`step ${step.name}:\n${output}\n`);
     if (result.error) { summary.outcome = 'NOT VERIFIED'; summary.reason = result.error.message; break; }
     if ([124, 137].includes(result.status)) { summary.outcome = 'TIMEOUT'; break; }
+    if (record.tests === 0 || record.tap_footer !== 'complete') {
+      summary.outcome = 'NOT VERIFIED'; summary.reason = `missing Node TAP totals ${step.name}`; break;
+    }
+    if (record.tests > 0 && record.pass + record.fail + record.skip + record.todo + record.cancelled !== record.tests) {
+      summary.outcome = 'NOT VERIFIED'; summary.reason = `TAP totals mismatch ${step.name}`; break;
+    }
+    if (record.cancelled > 0) { summary.outcome = 'FAIL'; break; }
     if (result.status !== 0) { summary.outcome = 'FAIL'; break; }
   }
   summary.secs = ((Date.now() - started) / 1000).toFixed(1);

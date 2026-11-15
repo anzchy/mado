@@ -20,9 +20,12 @@ const runAsync = (args, options = {}) => new Promise(resolve => {
   child.stderr.on('data', data => { stderr += data; });
   child.on('close', status => resolve({ status, stdout, stderr }));
 });
-const tap = `test "$CI" = true && test "$GITHUB_ACTIONS" = true && test "$LANG" = C.UTF-8 && test "$PATH" = /opt/node/bin:/usr/local/bin:/usr/bin:/bin && test -z "\${FAKE_SECRET:-}" && printf '# tests 1\\n# pass 1\\n# fail 0\\n# skip 0\\n' && : 'node --test'`;
+const footer = (tests, pass, fail = 0, skipped = 0, todo = 0, cancelled = 0) =>
+  [`# tests ${tests}`, `# pass ${pass}`, `# fail ${fail}`, `# cancelled ${cancelled}`, `# skipped ${skipped}`, `# todo ${todo}`];
+const tapStep = lines => `printf '%s\\n' ${lines.map(line => `'${line}'`).join(' ')} && : 'node --test'`;
+const tap = `test "$CI" = true && test "$GITHUB_ACTIONS" = true && test "$LANG" = C.UTF-8 && test "$PATH" = /opt/node/bin:/usr/local/bin:/usr/bin:/bin && test -z "\${FAKE_SECRET:-}" && ${tapStep(footer(1, 1))}`;
 
-function fixture(first = 'python3 -m unittest sample_test.py', second = tap, failingPython = false) {
+function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer(1, 1))}`, second = tap, failingPython = false) {
   const base = mkdtempSync(join(tmpdir(), 'ci-preflight-'));
   const repo = join(base, 'repo');
   const hostHome = join(base, 'host');
@@ -109,20 +112,76 @@ test('fake SSH executes remote script, copies bundle, records isolated step summ
   const editedHead = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
   const editedHash = workflowAt(f.repo, editedHead).workflowSha256;
   const edited = await runAsync(['remote', f.repo, editedHead, 'agent-tests', editedHash, '3', '5'], { env: f.env });
-  assert.equal(edited.status, 1, edited.stderr + edited.stdout);
+  assert.equal(edited.status, 75, edited.stderr + edited.stdout);
   assert.match(edited.stdout, /step:Node totals:exit=7/);
+  assert.match(edited.stdout, /outcome=NOT VERIFIED/);
 });
 
-test('Python failure before Node yields FAIL, step name, and remote cleanup', async () => {
+test('observed Node footer preserves skipped count and the exact PR total', async () => {
+  const first = `python3 -m unittest sample_test.py && ${tapStep(footer(17, 17))}`;
+  const f = fixture(first, tapStep(footer(897, 871, 0, 26)));
+  const result = await runFixtureAsync(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const body = readFileSync(summaryPath(result), 'utf8');
+  for (const [key, value] of Object.entries({ tests: 897, pass: 871, fail: 0, skip: 26, todo: 0, cancelled: 0 })) {
+    assert.match(body, new RegExp(`step:Node totals:${key}=${value}\\n`));
+  }
+  assert.match(result.stdout, /agent-tooling PASS 888\/914 \(26 skip\)/);
+  const compensated = body.replace('step:Python tests:pass=17', 'step:Python tests:pass=16')
+    .replace('step:Node totals:pass=871', 'step:Node totals:pass=872');
+  assert.throws(() => checkSummary(compensated, f.sha, workflowAt(f.repo, f.sha)), /TAP totals mismatch/);
+  for (const key of ['skip', 'todo', 'cancelled']) {
+    const missingField = body.replace(new RegExp(`^step:Node totals:${key}=.*\\n`, 'm'), '');
+    assert.throws(() => checkSummary(missingField, f.sha, workflowAt(f.repo, f.sha)), new RegExp(`missing step:Node totals:${key}`));
+  }
+});
+
+test('missing or truncated Node footer is NOT VERIFIED', async () => {
+  const complete = footer(1, 1);
+  for (const missing of complete) {
+    const f = fixture(undefined, tapStep(complete.filter(line => line !== missing)));
+    const result = await runFixtureAsync(f);
+    assert.equal(result.status, 75, `${missing}\n${result.stderr}${result.stdout}`);
+    assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=NOT VERIFIED\nreason=/);
+  }
+  const f = fixture(undefined, tapStep(complete.slice(0, 3)));
+  const result = await runFixtureAsync(f);
+  assert.equal(result.status, 75, result.stderr + result.stdout);
+});
+
+test('a tested run without a literal node command still requires a complete TAP footer', async () => {
+  const second = `printf '%s\\n' '# tests 1' '# pass 1' && : 'alternate runner'`;
+  const f = fixture(undefined, second);
+  const hash = workflowAt(f.repo, f.sha).workflowSha256;
+  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '3', '5'], { env: f.env });
+  assert.equal(result.status, 75, result.stderr + result.stdout);
+  assert.match(result.stdout, /outcome=NOT VERIFIED\nreason=/);
+});
+
+test('zero Node tests are NOT VERIFIED, cancelled tests fail, and todo appears only when positive', async () => {
+  const zero = await runFixtureAsync(fixture(undefined, tapStep(footer(0, 0))));
+  assert.equal(zero.status, 75, zero.stderr + zero.stdout);
+  assert.match(readFileSync(summaryPath(zero), 'utf8'), /outcome=NOT VERIFIED/);
+  const cancelled = await runFixtureAsync(fixture(undefined, tapStep(footer(2, 1, 0, 0, 0, 1))));
+  assert.equal(cancelled.status, 1, cancelled.stderr + cancelled.stdout);
+  assert.match(readFileSync(summaryPath(cancelled), 'utf8'), /step:Node totals:cancelled=1/);
+  assert.match(cancelled.stdout, /agent-tooling FAIL/);
+  const todo = await runFixtureAsync(fixture(undefined, tapStep(footer(3, 2, 0, 0, 1))));
+  assert.equal(todo.status, 0, todo.stderr + todo.stdout);
+  assert.match(readFileSync(summaryPath(todo), 'utf8'), /step:Node totals:todo=1/);
+  assert.match(todo.stdout, /agent-tooling PASS 3\/4 \(0 skip, 1 todo\)/);
+});
+
+test('Python failure before Node leaves the run NOT VERIFIED and cleans the remote directory', async () => {
   const f = fixture(undefined, undefined, true);
   const result = await runFixtureAsync(f);
-  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.equal(result.status, 75, result.stderr + result.stdout);
   const body = readFileSync(summaryPath(result), 'utf8');
-  assert.match(body, /outcome=FAIL/);
+  assert.match(body, /outcome=NOT VERIFIED/);
   assert.match(body, /step:Python tests:exit=1/);
   assert.match(body, /step:Node totals=not-run/);
   assert.match(body, /failed:test_case/);
-  assert.match(result.stdout, /agent-tooling FAIL Python tests/);
+  assert.match(result.stdout, /agent-tooling NOT VERIFIED missing Node TAP totals Python tests/);
   assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
 });
 
