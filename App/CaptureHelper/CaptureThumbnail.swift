@@ -30,25 +30,60 @@ enum CaptureThumbnailLayout {
     }
 }
 
-/// The thumbnail sits on the display that was captured.
+/// The thumbnail sits on the display that was captured. The display is fixed before the Capture starts; the
+/// pointer is never read after it (#684 fix r1).
 enum CaptureThumbnailPlacement {
-    static func visibleFrame(for request: CaptureRequest?, screens: [(id: UInt32, visible: NSRect)],
-                             pointer: NSPoint) -> NSRect {
-        var displayID: UInt32?
-        switch request?.target {
-        case let .region(_, id, _, _)?: displayID = id
-        case let .fullScreen(id)?: displayID = id
-        case .window?, nil: displayID = nil
-        }
-        if let displayID, let screen = screens.first(where: { $0.id == displayID }) { return screen.visible }
-        return screens.first { $0.visible.contains(pointer) }?.visible ?? screens.first?.visible ?? .zero
+    typealias Screen = (id: UInt32, frame: NSRect, visible: NSRect)
+
+    /// The display a bar full-screen Capture takes: the one whose frame holds the pointer, menu bar and Dock strips
+    /// included (the rule `ScreenCaptureKitScreen.captureCurrentDisplayPNG` uses), else the main display.
+    static func displayID(containing pointer: NSPoint, screens: [Screen]) -> UInt32? {
+        (screens.first { $0.frame.contains(pointer) } ?? screens.first)?.id
     }
 
-    @MainActor static func screens() -> [(id: UInt32, visible: NSRect)] {
+    /// A region or full-screen Capture names its display; a window Capture uses the display whose selection
+    /// overlay was clicked.
+    static func displayID(for target: CaptureRequest.Target, selectedDisplay: UInt32?) -> UInt32? {
+        switch target {
+        case let .region(_, id, _, _): id
+        case let .fullScreen(id): id
+        case .window: selectedDisplay
+        }
+    }
+
+    static func visibleFrame(displayID: UInt32?, screens: [Screen]) -> NSRect {
+        (screens.first { $0.id == displayID } ?? screens.first)?.visible ?? .zero
+    }
+
+    @MainActor static func screens() -> [Screen] {
         NSScreen.screens.compactMap { screen in
             (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
-                .map { (id: $0.uint32Value, visible: screen.visibleFrame) }
+                .map { (id: $0.uint32Value, frame: screen.frame, visible: screen.visibleFrame) }
         }
+    }
+}
+
+/// One Capture from the helper and where its thumbnail goes. Without a request, the display under the pointer
+/// when the Capture starts becomes an explicit full-screen request, so the image and the thumbnail share it.
+enum CaptureThumbnailFlow {
+    @MainActor static func capture(request: CaptureRequest?, selectedDisplay: UInt32?, session: CaptureSession,
+                                   policy: CaptureOutputPolicy, clipboard: any CaptureClipboardPort,
+                                   pointer: () -> NSPoint, screens: () -> [CaptureThumbnailPlacement.Screen],
+                                   fullScreenRequest: (UInt32) -> CaptureRequest) async throws
+        -> (state: CaptureThumbnailState, visibleFrame: NSRect) {
+        let resolved: CaptureRequest
+        let displayID: UInt32?
+        if let request {
+            resolved = request
+            displayID = CaptureThumbnailPlacement.displayID(for: request.target, selectedDisplay: selectedDisplay)
+        } else {
+            guard let id = CaptureThumbnailPlacement.displayID(containing: pointer(), screens: screens())
+            else { throw ScreenCaptureKitScreen.Failure.displayUnavailable }
+            resolved = fullScreenRequest(id)
+            displayID = id
+        }
+        let state = try await session.capture(request: resolved, policy: policy, clipboard: clipboard)
+        return (state, CaptureThumbnailPlacement.visibleFrame(displayID: displayID, screens: screens()))
     }
 }
 

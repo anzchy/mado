@@ -92,7 +92,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
 
     @objc private func capture() {
         thumbnails.dismiss()
-        capture(request: nil)
+        capture(request: nil, selectedDisplay: nil)
     }
 
     private func startSelection(_ mode: CaptureSelectionPanel.Mode) {
@@ -135,7 +135,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 guard let target else { return }
                 let request = CaptureHelperWindows.request(target: target, bar: panel, status: statusPanel,
                                                            thumbnails: thumbnails, overlays: overlays)
-                capture(request: request, keepingAlive: overlays)
+                capture(request: request, selectedDisplay: id, keepingAlive: overlays)
             }
             selectionPanels.append(overlay)
         }
@@ -143,19 +143,23 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     /// `overlays` stay alive until the capture finishes, so nothing depends on when AppKit frees them.
-    private func capture(request: CaptureRequest?, keepingAlive overlays: [NSWindow] = []) {
+    /// `selectedDisplay` is the display whose selection overlay finished. The pointer is read once, now, so the
+    /// thumbnail lands on the display captured even when the pointer moves during the Capture.
+    private func capture(request: CaptureRequest?, selectedDisplay: UInt32?, keepingAlive overlays: [NSWindow] = []) {
+        let pointer = NSEvent.mouseLocation
         Task { [weak self] in
             guard let self else { return }
             defer { withExtendedLifetime(overlays) {} }
             do {
                 let policy = await outputPreferences?.outputPolicy() ?? .standard
                 let clipboard = PasteboardCaptureClipboard()
-                let state = try await session.capture(request: request, policy: policy, clipboard: clipboard)
+                let (state, frame) = try await CaptureThumbnailFlow.capture(
+                    request: request, selectedDisplay: selectedDisplay, session: session, policy: policy,
+                    clipboard: clipboard, pointer: { pointer }, screens: CaptureThumbnailPlacement.screens,
+                    fullScreenRequest: { ScreenCaptureKitScreen.fullScreenRequest(displayID: $0, windows: NSApp.windows) })
                 statusPanel?.orderOut(nil)
                 let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
                                                   trash: FileManagerCaptureTrash())
-                let frame = CaptureThumbnailPlacement.visibleFrame(for: request, screens: CaptureThumbnailPlacement.screens(),
-                                                                   pointer: NSEvent.mouseLocation)
                 thumbnails.present(CaptureThumbnailController(model: model, visibleFrame: frame))
             } catch {
                 report(error)
