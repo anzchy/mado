@@ -192,6 +192,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var annotateViews = AnnotateWindowViews()
     /// #690 fix r1: flattening for ⌘S and ⌘C; tests replace it to prove it runs off the main actor.
     var annotateFlatten: @Sendable (CGImage, Int, [AnnotationMark], CGRect?) throws -> CGImage = AnnotationFlattener.flatten
+    /// #693 fix r1: reads the original for the overlay's redaction patches; tests replace it to hold or fail the read.
+    var annotateRedactionSourceRead: (@MainActor (URL) async -> AnnotationOverlayView.RedactionSource?)?
     var annotateSaveTask: Task<Void, Never>?
     var annotatePendingLeave: AnnotatePendingLeave?
     var annotatePasteboard: NSPasteboard = .general

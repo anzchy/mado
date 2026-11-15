@@ -140,8 +140,11 @@ extension CanvasWindowController {
         options.strip = strip
         options.isHidden = true
         options.onChange = { [weak self] style in
-            self?.session.setRedactionStyle(style)
-            self?.syncAnnotateUI()
+            guard let self else { return }
+            self.session.setRedactionStyle(style)
+            // opus M1: the keys go back to the canvas after a style choice, so M, C, ⌫ and ⌘Z act on Annotate Mode.
+            self.applyFocus(.canvas)
+            self.syncAnnotateUI()
         }
         content.addSubview(options)
         annotateViews.overlay = overlay

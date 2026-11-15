@@ -223,7 +223,7 @@ extension CanvasWindowController {
         // marks under it; these keys are consumed and ignored until the mouse is released.
         if annotateDragging {
             switch action {
-            case .undo, .redo, .deleteSelection, .nudge: return true
+            case .undo, .redo, .deleteSelection, .nudge, .applyCrop: return true
             default: break
             }
         }
@@ -379,13 +379,25 @@ extension CanvasWindowController {
     func loadAnnotateRedactionSource() {
         guard !annotateViews.redactionSourceRequested, let source = session.annotateMode?.fileURL else { return }
         annotateViews.redactionSourceRequested = true
-        Task { [weak self] in
-            guard let self, let granted = try? await self.annotateAccess(source),
-                  let original = try? await self.annotateOriginal(source, services: granted.0, access: granted.1),
-                  self.session.annotateMode?.fileURL == source, let overlay = self.annotateViews.overlay else { return }
-            overlay.redactionSource = AnnotationOverlayView.RedactionSource(image: original.image,
-                                                                           orientation: original.orientation)
+        let read = annotateRedactionSourceRead ?? { [weak self] url in await self?.readAnnotateRedactionSource(url) }
+        // gpt M2: the read belongs to this session's overlay; leaving and re-entering makes a new one, which the old
+        // read never reaches. A failed read lets the next sync with a redaction (or the next session) try again.
+        let overlay = annotateViews.overlay
+        Task { [weak self, weak overlay] in
+            let original = await read(source)
+            guard let self, let overlay, self.annotateViews.overlay === overlay else { return }
+            guard let original else {
+                self.annotateViews.redactionSourceRequested = false
+                return
+            }
+            overlay.redactionSource = original
         }
+    }
+
+    private func readAnnotateRedactionSource(_ source: URL) async -> AnnotationOverlayView.RedactionSource? {
+        guard let granted = try? await annotateAccess(source),
+              let original = try? await annotateOriginal(source, services: granted.0, access: granted.1) else { return nil }
+        return AnnotationOverlayView.RedactionSource(image: original.image, orientation: original.orientation)
     }
 
     /// The copy's name: a fresh listing of the folder (inside an Access Root) plus this window's own saves, which a
