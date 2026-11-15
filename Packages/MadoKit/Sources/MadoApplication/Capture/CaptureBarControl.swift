@@ -49,6 +49,7 @@ public protocol CaptureBarProcessPort: Sendable {
 public actor CaptureBarControl {
     private let preferences: any CaptureBarPreferencePort
     private let process: any CaptureBarProcessPort
+    private let loginItem: (any CaptureLoginItemPort)?
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -65,9 +66,12 @@ public actor CaptureBarControl {
         else { waiters.removeFirst().resume() }
     }
 
-    public init(preferences: any CaptureBarPreferencePort, process: any CaptureBarProcessPort) {
+    /// `loginItem`: turning the bar off also removes the login item (design page 35: 「关闭即停止助手并移除登录项」).
+    public init(preferences: any CaptureBarPreferencePort, process: any CaptureBarProcessPort,
+                loginItem: (any CaptureLoginItemPort)? = nil) {
         self.preferences = preferences
         self.process = process
+        self.loginItem = loginItem
     }
 
     public func setEnabled(_ enabled: Bool) async throws {
@@ -88,6 +92,8 @@ public actor CaptureBarControl {
                 await preferences.setCaptureBarEnabled(true)
                 throw error
             }
+            // A failure here leaves a login item that starts the helper, which then exits because the switch is off.
+            try? await loginItem?.unregister()
         }
     }
 
