@@ -8,7 +8,7 @@ import MadoApplication
 
 /// Answers every request made through a session that lists it; no request reaches the network.
 private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
-    enum Outcome { case respond(Int, Data), fail(URLError), hang }
+    enum Outcome { case respond(Int, Data), bare(Data), fail(URLError), hang }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var outcomes: [Outcome] = []
     nonisolated(unsafe) private static var seen: [(request: URLRequest, body: Data)] = []
@@ -44,6 +44,13 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         case .respond(let status, let data):
             let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
                                            headerFields: ["Content-Type": "application/json"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        case .bare(let data):
+            // A custom protocol may answer without an HTTP status line; URLSession itself never does for https.
+            let response = URLResponse(url: request.url!, mimeType: "application/json", expectedContentLength: data.count,
+                                       textEncodingName: nil)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
@@ -106,6 +113,16 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         #expect(seen.request.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
         #expect(seen.request.value(forHTTPHeaderField: "Cookie") == nil)
         #expect(seen.body == Data("grant_type=client_credentials&client_id=a&client_secret=b".utf8))
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func issue689TransportMapsAResponseWithoutStatusToZero() async throws {
+        StubURLProtocol.reset([.bare(Data("odd".utf8))])
+        let request = URLRequest(url: URL(string: "https://aip.baidubce.com/oauth/2.0/token")!)
+        let response = try await stubbedTransport().send(request)
+        // Status 0 is outside 200..<300, so the provider takes its failure path instead of trapping.
+        #expect(response.statusCode == 0)
+        #expect(response.body == Data("odd".utf8))
     }
 
     @Test(.timeLimit(.minutes(2)))
