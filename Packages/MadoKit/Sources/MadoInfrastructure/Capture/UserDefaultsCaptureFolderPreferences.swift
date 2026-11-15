@@ -25,6 +25,14 @@ public final class UserDefaultsCaptureFolderPreferences: CaptureFolderPreference
                                    fellBack: defaults.bool(forKey: Self.fallbackKey))
     }
 
+    /// The Capture Folder the helper has published, for Mado's Capture detection (#686 fix r1): nil while the App Group
+    /// holds no display value, so no folder counts as the Capture Folder and the prompt keeps its generic wording.
+    public func publishedFolderRecord() async -> CaptureFolderRecord? {
+        defaults.synchronize()
+        guard defaults.string(forKey: Self.displayKey) != nil else { return nil }
+        return await folderRecord()
+    }
+
     public func setFolderRecord(_ record: CaptureFolderRecord) async {
         defaults.set(record.bookmark, forKey: Self.bookmarkKey)
         defaults.set(record.display, forKey: Self.displayKey)

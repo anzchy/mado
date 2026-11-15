@@ -118,13 +118,14 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Tests answer the prompt with its wording and its decline path (#686), in place of the alert and open panel.
     var folderGrantRequestOverride: ((FolderGrantPromptRequest) -> Void)?
     /// #686: whether ←/→ on an image outside every Access Root is in the Capture Folder the helper publishes in the
-    /// App Group, and which Capture Folders were declined in this Mado session. Tests replace it.
+    /// App Group (none while the App Group holds no value), and which Capture Folders were declined in this Mado
+    /// session. Tests replace it.
     lazy var captureFolderGate: CaptureFolderGrantGate = {
         let preferences = UserDefaultsCaptureFolderPreferences.shared()
         // The real home folder: in the sandbox NSHomeDirectory() is the container.
         let home = getpwuid(getuid()).map { URL(fileURLWithPath: String(cString: $0.pointee.pw_dir), isDirectory: true) }
             ?? FileManager.default.homeDirectoryForCurrentUser
-        return CaptureFolderGrantGate(record: { await preferences?.folderRecord() }, home: home)
+        return CaptureFolderGrantGate(record: { await preferences?.publishedFolderRecord() }, home: home)
     }()
     private var sidebarKnownCounts: [URL: Int] = [:]
     // A failed main read retains its parent's tree throughout Retry, until a complete main snapshot wins.

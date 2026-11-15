@@ -13,7 +13,7 @@ public enum FolderGrantPaging: Equatable, Sendable {
 
 /// Mado's side of the first-time Capture Folder grant (#686). A folder is the Capture Folder when it is the folder the
 /// helper publishes in the App Group (`CaptureFolderRecord.display`, or ~/Downloads while it fell back); with no App
-/// Group record the prompt keeps its generic wording. A declined Capture Folder is not offered again until Mado quits:
+/// Group value (`record` returns nil) no folder is the Capture Folder and the prompt keeps its generic wording. A declined Capture Folder is not offered again until Mado quits:
 /// the set lives in memory only, never in preferences.
 @MainActor public final class CaptureFolderGrantGate {
     private let record: @Sendable () async -> CaptureFolderRecord?

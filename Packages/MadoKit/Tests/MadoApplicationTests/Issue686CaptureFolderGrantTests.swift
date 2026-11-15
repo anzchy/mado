@@ -39,8 +39,9 @@ private final class Record686: @unchecked Sendable {
     #expect(await gate.paging(in: URL(fileURLWithPath: "/Users/someone/Downloads")) == .prompt(.generic))
 }
 
-/// Never chosen: Captures go to ~/Downloads (the record's default); a broken bookmark falls back there too.
-@MainActor @Test(.timeLimit(.minutes(2))) func issue686DownloadsIsTheCaptureFolderByDefaultAndOnFallback() async {
+/// A published ~/Downloads record, or a broken bookmark that fell back there, makes ~/Downloads the Capture Folder.
+/// No record (no App Group value, or no App Group) is no Capture Folder: see issue686MissingAppGroupValueMeansNoCaptureFolder.
+@MainActor @Test(.timeLimit(.minutes(2))) func issue686PublishedDownloadsOrFallbackIsTheCaptureFolder() async {
     let downloads = URL(fileURLWithPath: "/Users/someone/Downloads", isDirectory: true)
     let chosen = URL(fileURLWithPath: "/Users/someone/Pictures/Shots", isDirectory: true)
     let box = Record686(.downloads)
@@ -49,7 +50,7 @@ private final class Record686: @unchecked Sendable {
     box.record = CaptureFolderRecord(bookmark: Data([1]), display: "~/Pictures/Shots", fellBack: true)
     #expect(await gate.paging(in: downloads) == .prompt(.capture))
     #expect(await gate.paging(in: chosen) == .prompt(.generic))
-    box.record = nil  // App Group unavailable
+    box.record = nil  // no App Group value, or no App Group
     #expect(await gate.paging(in: downloads) == .prompt(.generic))
 }
 
