@@ -22,12 +22,17 @@ extension ViewerSession {
         if inspectorFocus.isVisible { setInspectorVisible(false) }
     }
 
-    /// V and R: only inside Annotate Mode.
-    public func selectAnnotateTool(_ tool: AnnotateTool) { annotateMode?.tool = tool }
+    /// V and R: only inside Annotate Mode. #693: leaving the crop tool applies a crop in progress.
+    public func selectAnnotateTool(_ tool: AnnotateTool) {
+        if tool != .crop { applyPendingCrop() }
+        annotateMode?.tool = tool
+    }
 
-    /// A new mark becomes the selection, so ←/→/↑/↓ move it at once.
+    /// A new mark becomes the selection, so ←/→/↑/↓ move it at once. #693: a redaction gets the tool's style.
     public func addAnnotationMark(_ mark: AnnotationMark) {
         guard var state = annotateMode else { return }
+        var mark = mark
+        if mark.kind == .redaction { mark.redaction = state.redactionStyle }
         state.document.add(mark)
         state.selectedMark = state.document.marks.count - 1
         annotateMode = state
@@ -94,9 +99,59 @@ extension ViewerSession {
         return replaceAnnotationMark(at: index, with: measured(old.anchor, old.style))
     }
 
-    @discardableResult public func undoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.undo() ?? false) }
+    /// #693: the redaction style; with a redaction selected it also restyles that mark (one undoable change).
+    /// A mosaic weaker than the minimum is raised to it. Returns whether a mark changed.
+    @discardableResult public func setRedactionStyle(_ style: RedactionStyle) -> Bool {
+        guard var state = annotateMode else { return false }
+        let style = style.enforced
+        state.redactionStyle = style
+        annotateMode = state
+        guard let index = state.selectedMark, state.document.marks.indices.contains(index) else { return false }
+        var mark = state.document.marks[index]
+        guard mark.kind == .redaction, mark.redaction != style else { return false }
+        mark.redaction = style
+        return replaceAnnotationMark(at: index, with: mark)
+    }
 
-    @discardableResult public func redoAnnotation() -> Bool { keepSelectionValid(annotateMode?.document.redo() ?? false) }
+    /// #693: the crop tool's drag or handle; nil drops it. Not undoable until applied; only with the crop tool.
+    public func setPendingCrop(_ rect: CGRect?) {
+        guard annotateMode?.tool == .crop else { return }
+        annotateMode?.pendingCrop = rect
+    }
+
+    /// #693 Return/完成: the pending crop becomes the document's crop (one undoable change). False when none is
+    /// pending or it is the crop already applied.
+    @discardableResult public func applyPendingCrop() -> Bool {
+        guard let pending = annotateMode?.pendingCrop else { return false }
+        annotateMode?.pendingCrop = nil
+        return annotateMode?.document.setCrop(pending) ?? false
+    }
+
+    /// #693 Esc: drops the pending crop; the applied crop stays. False when none is pending.
+    @discardableResult public func cancelPendingCrop() -> Bool {
+        guard annotateMode?.pendingCrop != nil else { return false }
+        annotateMode?.pendingCrop = nil
+        return true
+    }
+
+    /// #693 ⌫/⌦ with the crop tool: drops a pending crop and removes the applied one (undoable). False when no crop
+    /// was applied.
+    @discardableResult public func clearCrop() -> Bool {
+        guard annotateMode != nil else { return false }
+        annotateMode?.pendingCrop = nil
+        return annotateMode?.document.setCrop(nil) ?? false
+    }
+
+    /// #693: undo and redo drop a crop in progress first.
+    @discardableResult public func undoAnnotation() -> Bool {
+        annotateMode?.pendingCrop = nil
+        return keepSelectionValid(annotateMode?.document.undo() ?? false)
+    }
+
+    @discardableResult public func redoAnnotation() -> Bool {
+        annotateMode?.pendingCrop = nil
+        return keepSelectionValid(annotateMode?.document.redo() ?? false)
+    }
 
     /// Undo and redo can remove the selected mark; the selection then clears.
     private func keepSelectionValid(_ changed: Bool) -> Bool {
@@ -107,7 +162,9 @@ extension ViewerSession {
     }
 
     /// Esc, closing the window, quitting or changing the image. Without unsaved marks the mode ends at once.
+    /// #693: a crop in progress is applied first, so it counts.
     public func requestLeaveAnnotateMode(_ reason: AnnotateLeaveReason) -> AnnotateLeaveOutcome {
+        applyPendingCrop()
         guard let state = annotateMode, state.needsPrompt else { exitAnnotateMode(); return .proceed }
         annotateMode?.prompt = reason
         return .ask
@@ -124,12 +181,16 @@ extension ViewerSession {
         }
     }
 
-    /// ⌘S: needs at least one mark and no save already in flight.
-    public var canSaveAnnotatedCopy: Bool { annotateMode?.document.canSave == true && annotateMode?.isSaving == false }
+    /// ⌘S: needs at least one mark or a crop (applied or in progress) and no save already in flight.
+    public var canSaveAnnotatedCopy: Bool {
+        guard let state = annotateMode, !state.isSaving else { return false }
+        return state.document.canSave || state.pendingCrop != nil
+    }
 
-    /// ⌘S hands one save to the host and stays in Annotate Mode.
+    /// ⌘S hands one save to the host and stays in Annotate Mode; a crop in progress is applied first.
     @discardableResult public func saveAnnotatedCopy() -> Bool {
         guard canSaveAnnotatedCopy else { return false }
+        applyPendingCrop()
         startSave(leave: nil)
         return true
     }
@@ -155,16 +216,20 @@ extension ViewerSession {
         return .proceed
     }
 
-    /// ⌘C: the flattened full image; nothing is written and the unsaved state does not change.
+    /// ⌘C: the flattened image, cut to the crop; nothing is written. A crop in progress is applied first (one
+    /// undoable change); otherwise the unsaved state does not change.
     public func flattenAnnotations(onto image: CGImage, orientation: Int) throws -> CGImage {
-        try AnnotationFlattener.flatten(image, orientation: orientation, marks: annotateMode?.document.marks ?? [])
+        applyPendingCrop()
+        return try AnnotationFlattener.flatten(image, orientation: orientation, marks: annotateMode?.document.marks ?? [],
+                                               crop: annotateMode?.document.crop)
     }
 
     private func startSave(leave: AnnotateLeaveReason?) {
         guard let state = annotateMode else { return }
         annotateMode?.saving = (state.document.revision, leave)
         (host as? any AnnotateSaveHost)?.performAnnotatedCopySave(AnnotateSaveRequest(
-            fileURL: state.fileURL, marks: state.document.marks, directRefused: state.directRefused))
+            fileURL: state.fileURL, marks: state.document.marks, directRefused: state.directRefused,
+            crop: state.document.crop))
     }
 
     /// Ends the mode; a deletion held back while annotating now moves the Preview Set on.

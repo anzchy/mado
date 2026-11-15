@@ -31,6 +31,8 @@ public enum AnnotateTool: Sendable {
     case rectangle
     /// #692: A arrow, T text, H highlighter, P pen, N numbered step marker.
     case arrow, text, highlighter, pen, step
+    /// #693: M redaction, C crop.
+    case redact, crop
 }
 
 /// How a save that the host performed ended.
@@ -45,8 +47,10 @@ public struct AnnotateSaveRequest: Equatable, Sendable {
     public let fileURL: URL?
     public let marks: [AnnotationMark]
     public let directRefused: Bool
-    public init(fileURL: URL?, marks: [AnnotationMark], directRefused: Bool) {
-        self.fileURL = fileURL; self.marks = marks; self.directRefused = directRefused
+    /// #693: the crop the copy is cut to; nil for the whole image.
+    public let crop: CGRect?
+    public init(fileURL: URL?, marks: [AnnotationMark], directRefused: Bool, crop: CGRect? = nil) {
+        self.fileURL = fileURL; self.marks = marks; self.directRefused = directRefused; self.crop = crop
     }
     /// Direct into an Access Root unless a write there was refused; otherwise a prefilled save panel.
     public func destination(folder: URL, name: String, access: AnnotatedCopyAccess) -> AnnotatedCopyDestination {
@@ -76,11 +80,15 @@ public struct AnnotateModeState: Equatable, Sendable {
     public internal(set) var directRefused = false
     public internal(set) var lastSaveError: AnnotatedCopyError?
     public internal(set) var lastSavedURL: URL?
+    /// #693: the style a new redaction gets, and the one the options popover shows without a selected redaction.
+    public internal(set) var redactionStyle: RedactionStyle = .mosaic(strength: RedactionStyle.defaultMosaicStrength)
+    /// #693: the crop being dragged or adjusted with the crop tool, not yet applied (not undoable).
+    public internal(set) var pendingCrop: CGRect?
 
     init(itemID: ItemID?, fileURL: URL?) { self.itemID = itemID; self.fileURL = fileURL }
 
-    /// Leaving loses something only when there are marks that are not saved.
-    public var needsPrompt: Bool { document.hasUnsavedMarks && !document.marks.isEmpty }
+    /// Leaving loses something only when there are marks or a crop (#693) that are not saved.
+    public var needsPrompt: Bool { document.hasUnsavedMarks && document.canSave }
 
     /// ⌘E works only while viewing a shown image, and never while typing.
     public static func canEnter(mode: ViewerMode, hasImage: Bool, status: ViewerImageStatus, focus: FocusContext) -> Bool {
@@ -93,6 +101,7 @@ public struct AnnotateModeState: Equatable, Sendable {
             && lhs.selectedMark == rhs.selectedMark && lhs.prompt == rhs.prompt && lhs.saving?.revision == rhs.saving?.revision
             && lhs.saving?.leave == rhs.saving?.leave && lhs.directRefused == rhs.directRefused
             && lhs.lastSaveError == rhs.lastSaveError && lhs.lastSavedURL == rhs.lastSavedURL
+            && lhs.redactionStyle == rhs.redactionStyle && lhs.pendingCrop == rhs.pendingCrop
     }
 }
 
@@ -102,6 +111,8 @@ public enum AnnotateKey: Equatable, Sendable {
     case escape, leftArrow, rightArrow, upArrow, downArrow
     /// #692: ⌫ and ⌦ delete the selected mark.
     case delete, forwardDelete
+    /// #693: Return applies a pending crop.
+    case returnKey
 }
 
 public struct AnnotateKeyModifiers: OptionSet, Sendable {
@@ -121,6 +132,8 @@ public enum AnnotateKeyAction: Equatable, Sendable {
     case chooseTool(AnnotateTool)
     /// #692: ⌫/⌦ delete the selected mark; without a selection nothing changes.
     case deleteSelection
+    /// #693: Return applies the pending crop; the host lets Return through when none is pending.
+    case applyCrop
 }
 
 public enum AnnotateKeyPolicy {
@@ -131,6 +144,7 @@ public enum AnnotateKeyPolicy {
         switch key {
         case .escape: return modifiers.isEmpty ? .requestLeave : nil
         case .delete, .forwardDelete: return modifiers.isEmpty ? .deleteSelection : nil
+        case .returnKey: return modifiers.isEmpty ? .applyCrop : nil
         case .leftArrow, .rightArrow, .upArrow, .downArrow:
             guard modifiers.isDisjoint(with: [.command, .control, .option]) else { return nil }
             let step = modifiers.contains(.shift) ? 10 : 1
@@ -150,6 +164,8 @@ public enum AnnotateKeyPolicy {
             if letter == "h", plain { return .chooseTool(.highlighter) }
             if letter == "p", plain { return .chooseTool(.pen) }
             if letter == "n", plain { return .chooseTool(.step) }
+            if letter == "m", plain { return .chooseTool(.redact) }
+            if letter == "c", plain { return .chooseTool(.crop) }
             if letter == "z", command, modifiers.isDisjoint(with: [.control, .option]) {
                 return modifiers.contains(.shift) ? .redo : .undo
             }

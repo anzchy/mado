@@ -8,10 +8,17 @@ public enum AnnotationRenderer {
     /// Draws `marks` in order. The context's user space must be the image's upright pixels with the origin at the top
     /// left (y down); the flattener sets that up for the copy and the overlay concatenates the image-to-view transform.
     /// `hiding` leaves out one mark (a text mark being edited) without changing the step numbers.
-    public static func draw(_ marks: [AnnotationMark], in context: CGContext, hiding: Int? = nil) {
+    /// #693: a redaction is not drawn here; `redact` is called for it at its place in the order, with the context
+    /// as it is for any mark (the flattener hides the pixels drawn so far; the overlay shows its patch).
+    public static func draw(_ marks: [AnnotationMark], in context: CGContext, hiding: Int? = nil,
+                            redact: (AnnotationMark) -> Void = { _ in }) {
         let numbers = AnnotationGeometry.stepNumbers(marks)
         for (index, mark) in marks.enumerated() {
             guard index != hiding else { continue }
+            if mark.kind == .redaction {
+                redact(mark)
+                continue
+            }
             context.saveGState()
             draw(mark, number: numbers[index] ?? 0, in: context)
             context.restoreGState()
@@ -30,7 +37,7 @@ public enum AnnotationRenderer {
         context.setFillColor(paint(style))
         context.setLineWidth(style.lineWidth)
         switch mark.kind {
-        case .rectangle:
+        case .rectangle, .redaction: // `draw(_:in:hiding:redact:)` hands redactions to `redact`; they never get here.
             context.stroke(mark.rect)
         case .arrow:
             guard mark.points.count == 2 else { return }

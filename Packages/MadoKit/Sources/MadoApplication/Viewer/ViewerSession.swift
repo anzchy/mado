@@ -373,7 +373,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
                 syncFocusLock()
                 host?.applyFocus(.canvas)
             } else if annotateMode != nil {
-                _ = requestLeaveAnnotateMode(.escape)
+                // #693: Esc first cancels a crop in progress; the next Esc leaves as before.
+                if !cancelPendingCrop() { _ = requestLeaveAnnotateMode(.escape) }
             } else {
                 returnToSource()
             }

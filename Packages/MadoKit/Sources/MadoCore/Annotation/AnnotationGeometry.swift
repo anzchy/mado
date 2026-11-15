@@ -17,6 +17,22 @@ public enum AnnotationGeometry {
         return clamped
     }
 
+    /// #693: the crop a drag from `a` to `b` (view points) sets: its edges rounded to whole image pixels and clamped
+    /// to the image; nil when the drag is too small or leaves no pixel.
+    public static func cropRect(from a: CGPoint, to b: CGPoint, transform: CanvasTransform, imageSize: CGSize) -> CGRect? {
+        guard let drawn = rect(from: a, to: b, transform: transform, imageSize: imageSize) else { return nil }
+        func edges(_ low: CGFloat, _ high: CGFloat, _ size: CGFloat) -> (CGFloat, CGFloat) {
+            var low = low.rounded(), high = high.rounded()
+            if high - low < 1 {
+                high = min(low + 1, size)
+                low = high - 1
+            }
+            return (low, high)
+        }
+        let x = edges(drawn.minX, drawn.maxX, imageSize.width), y = edges(drawn.minY, drawn.maxY, imageSize.height)
+        return CGRect(x: x.0, y: y.0, width: x.1 - x.0, height: y.1 - y.0)
+    }
+
     /// The topmost mark under `point` (image pixels): a rectangle, text or step by its box grown by half the stroke;
     /// an arrow, pen or highlighter by its path, within half its drawn width plus one stroke (#692).
     public static func hitTest(_ point: CGPoint, marks: [AnnotationMark]) -> Int? {
@@ -25,7 +41,7 @@ public enum AnnotationGeometry {
 
     private static func hits(_ point: CGPoint, _ mark: AnnotationMark) -> Bool {
         switch mark.kind {
-        case .rectangle, .text, .step:
+        case .rectangle, .text, .step, .redaction:
             let half = mark.style.lineWidth / 2
             return mark.rect.insetBy(dx: -half, dy: -half).contains(point)
         case .arrow, .pen, .highlighter:
@@ -110,7 +126,7 @@ extension AnnotationGeometry {
 
     public static func handles(for kind: AnnotationKind) -> [AnnotationHandle] {
         switch kind {
-        case .rectangle, .highlighter, .pen: [.topLeft, .top, .topRight, .right, .bottomRight, .bottom, .bottomLeft, .left]
+        case .rectangle, .highlighter, .pen, .redaction: [.topLeft, .top, .topRight, .right, .bottomRight, .bottom, .bottomLeft, .left]
         case .arrow: [.tail, .tip]
         case .text, .step: []
         }
@@ -151,7 +167,7 @@ extension AnnotationGeometry {
         let new = CGRect(x: min(low.x, high.x), y: min(low.y, high.y), width: abs(high.x - low.x), height: abs(high.y - low.y))
         var resized = mark
         resized.rect = new
-        guard mark.kind != .rectangle else { return resized }
+        guard mark.kind != .rectangle, mark.kind != .redaction else { return resized }
         // Samples keep their place within the box; a box flipped by the drag mirrors them, and a zero extent keeps its axis.
         func map(_ value: CGFloat, _ oldLow: CGFloat, _ oldSize: CGFloat, _ newLow: CGFloat, _ newHigh: CGFloat) -> CGFloat {
             guard oldSize > 0 else { return value }

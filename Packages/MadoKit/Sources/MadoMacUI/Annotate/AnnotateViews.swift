@@ -507,7 +507,7 @@ public enum AnnotatePaint {
             }
         case .rectangle, .arrow, .highlighter, .pen:
             drag = .create(tool, [point])
-        case .text, .step:
+        case .text, .step, .redact, .crop:
             drag = .click
         }
     }
@@ -698,6 +698,7 @@ public enum AnnotatePaint {
         case .text: return String(localized: "Text")
         case .highlighter: return String(localized: "Highlighter")
         case .pen: return String(localized: "Pen")
+        case .redaction: return String(localized: "Redact")
         case .step:
             // Steps number by creation order: this one is the count of steps up to it.
             let number = overlay.marks[...index].filter { $0.kind == .step }.count
