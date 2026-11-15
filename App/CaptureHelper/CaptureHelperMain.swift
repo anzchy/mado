@@ -33,6 +33,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var selectionPanels: [CaptureSelectionPanel] = []
     private let selectionAdmission = CaptureSelectionAdmission()
     private let session = CaptureSession(screen: ScreenCaptureKitScreen(), files: MadoInfrastructure.DownloadsCaptureFilePort())
+    private let thumbnails = CaptureThumbnailPresenter()
+    /// Read at every Capture, so a Settings change applies without restarting the helper.
+    private let outputPreferences = UserDefaultsCaptureOutputPreferences.shared()
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -88,11 +91,13 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     @objc private func capture() {
+        thumbnails.dismiss()
         capture(request: nil)
     }
 
     private func startSelection(_ mode: CaptureSelectionPanel.Mode) {
         guard selectionPanels.isEmpty, selectionAdmission.begin() else { return }
+        thumbnails.dismiss()  // the new Capture replaces it; it must not be in the image
         let point = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main,
               let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
@@ -128,8 +133,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 selectionPanels.forEach { $0.orderOut(nil) }
                 selectionPanels.removeAll()
                 guard let target else { return }
-                let request = CaptureRequestFromWindows.make(target: target,
-                    bars: [panel, statusPanel].compactMap { $0 }, overlays: overlays)
+                let request = CaptureHelperWindows.request(target: target, bar: panel, status: statusPanel,
+                                                           thumbnails: thumbnails, overlays: overlays)
                 capture(request: request, keepingAlive: overlays)
             }
             selectionPanels.append(overlay)
@@ -143,15 +148,18 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
             guard let self else { return }
             defer { withExtendedLifetime(overlays) {} }
             do {
-                let result = try await session.captureResult(request: request)
-                NSPasteboard.general.clearContents()
-                let copied = NSPasteboard.general.setData(result.png, forType: .png)
-                let message = copied ? "Saved %@" : "Saved %@, but clipboard copy failed"
-                status?.stringValue = String(format: String(localized: String.LocalizationValue(message)), result.url.lastPathComponent)
+                let policy = await outputPreferences?.outputPolicy() ?? .standard
+                let clipboard = PasteboardCaptureClipboard()
+                let state = try await session.capture(request: request, policy: policy, clipboard: clipboard)
+                statusPanel?.orderOut(nil)
+                let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
+                                                  trash: FileManagerCaptureTrash())
+                let frame = CaptureThumbnailPlacement.visibleFrame(for: request, screens: CaptureThumbnailPlacement.screens(),
+                                                                   pointer: NSEvent.mouseLocation)
+                thumbnails.present(CaptureThumbnailController(model: model, visibleFrame: frame))
             } catch {
                 report(error)
             }
-            statusPanel?.orderFrontRegardless()
         }
     }
 
