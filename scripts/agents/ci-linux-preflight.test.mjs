@@ -85,7 +85,7 @@ test('local transfer uses fake ssh and rsync and writes a checked summary withou
   assert.match(result.stdout, new RegExp(`Linux-Preflight: ${head.slice(0, 7)} agent-tooling PASS 2/2 \\(0 skip\\)`));
   const calls = readFileSync(log, 'utf8');
   assert.match(calls, /ssh -o BatchMode=yes/);
-  assert.match(calls, /rsync .*head\.bundle/);
+  assert.match(calls, /rsync -e ssh -o BatchMode=yes .*head\.bundle/);
   assert.doesNotMatch(calls, /StrictHostKeyChecking=no/);
   assert.match(readFileSync(join(dir, '.picsee/ci-linux', `${head}-summary.txt`), 'utf8'), /DONE\n$/);
 });
