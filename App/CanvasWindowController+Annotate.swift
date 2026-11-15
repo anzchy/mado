@@ -130,7 +130,9 @@ struct AnnotatePendingLeave {
 /// unsaved-marks prompt, close and quit, and performs the save (decode, flatten, plan, write or save panel).
 extension CanvasWindowController {
     var canEnterAnnotateFromMenu: Bool {
-        !session.isAnnotating && !(window?.firstResponder is NSTextInputClient) && window?.attachedSheet == nil
+        let responder = window?.firstResponder
+        let isOtherTextInput = responder is NSTextInputClient && responder !== recogniseTextAdapter.panelEditor
+        return !session.isAnnotating && !isOtherTextInput && window?.attachedSheet == nil
             && session.canEnterAnnotateMode
     }
     var canSaveAnnotatedCopyFromMenu: Bool {
