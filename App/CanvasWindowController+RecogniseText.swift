@@ -21,6 +21,10 @@ import MadoInfrastructure
     private var priorMinimum: NSSize?
     private var expandedFrom: NSSize?
     private var priorConsumeKey: ((NSEvent) -> Bool)?
+    /// #687 fix r5: the notice's 5 s dismissal clock; tests replace it before the first recognition.
+    var scheduleNoticeDismiss: ((TimeInterval, @escaping @MainActor () -> Void) -> Void)?
+    /// The panel's Esc wrapper is installed.
+    var hasPanelKeyRouting: Bool { priorConsumeKey != nil }
     var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
     var focusableNotice: RecogniseTextNoticeView? {
         guard let notice = overlay?.noticeView, notice.kind == .success else { return nil }
@@ -102,7 +106,16 @@ import MadoInfrastructure
 
     private func ensureOverlay() {
         guard overlay == nil, let content = controller?.window?.contentView else { return }
-        let overlay = RecogniseTextOverlay(frame: content.bounds)
+        let overlay = scheduleNoticeDismiss.map { RecogniseTextOverlay(frame: content.bounds, scheduleDismiss: $0) }
+            ?? RecogniseTextOverlay(frame: content.bounds)
+        // #687 fix r5: removing a focused notice or panel (timer, a new run, an image change) leaves the window as
+        // first responder. The Session moves to the canvas first, or preserveResponder refuses the canvas.
+        overlay.handOffFocus = { [weak self] removal in
+            guard let self, !self.closed, let controller = self.controller else { removal(); return }
+            controller.session.updateFocus(.canvas)
+            removal()
+            _ = controller.window?.makeFirstResponder(controller.canvas)
+        }
         overlay.onDismiss = { [weak self] in self?.model?.dismissNotice() }
         overlay.onNoticeChange = { [weak self] in self?.controller?.relinkRecogniseTextNotice() }
         content.addSubview(overlay, positioned: .above, relativeTo: nil)
@@ -132,6 +145,7 @@ import MadoInfrastructure
             overlay.panelView?.showCopiedConfirmation(model.copiedConfirmation)
             return
         }
+        restorePanelKeyRouting()
         restoreWindowMinimumIfNeeded()
         guard let notice = model.notice else { overlay.clear(); return }
         switch notice {
@@ -237,8 +251,10 @@ import MadoInfrastructure
                 if let activeGeneration,
                    self.controller?.session.imageLoader.generation != activeGeneration {
                     self.activeRun = UUID()
+                    self.restorePanelKeyRouting()
                     self.model?.close()
                     self.overlay?.clear()
+                    self.restoreWindowMinimumIfNeeded()
                     self.activeGeneration = nil
                 }
                 self.observeImageGeneration()

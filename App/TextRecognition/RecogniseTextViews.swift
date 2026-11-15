@@ -306,6 +306,8 @@ enum RecogniseTextNoticeKind { case success, warning }
     private(set) var panelView: RecogniseTextPanelView?
     var onDismiss: (() -> Void)?
     var onNoticeChange: (() -> Void)?
+    /// #687 fix r5: runs a removal that takes the first responder with it, so the owner can hand focus on.
+    var handOffFocus: ((_ removal: () -> Void) -> Void)?
     private let scheduleDismiss: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private var dismissalGeneration = UUID()
     private var hovered = false
@@ -360,18 +362,28 @@ enum RecogniseTextNoticeKind { case success, warning }
         armDismissal()
     }
     func showPanel(text: String, engine: String, onEdit: ((String) -> Void)?, onCopy: (() -> Void)?, onClose: (() -> Void)?) {
-        clear()
+        // Notice → panel: the editor takes focus next, so there is no handoff to the canvas in between.
+        clear(handingOffFocus: false)
         let view = RecogniseTextPanelView(text: text, engine: engine, onEdit: onEdit, onCopy: onCopy, onClose: onClose)
         addSubview(view)
         panelView = view
         needsLayout = true
     }
-    func clear() {
+    func clear() { clear(handingOffFocus: true) }
+    private func clear(handingOffFocus: Bool) {
         dismissalGeneration = UUID()
         hovered = false
-        noticeView?.removeFromSuperview(); noticeView = nil
-        panelView?.removeFromSuperview(); panelView = nil
+        let removal = {
+            self.noticeView?.removeFromSuperview(); self.noticeView = nil
+            self.panelView?.removeFromSuperview(); self.panelView = nil
+        }
+        if handingOffFocus, holdsFirstResponder, let handOffFocus { handOffFocus(removal) } else { removal() }
         onNoticeChange?()
+    }
+    /// The first responder is the notice, the panel, or inside one of them (the editor).
+    private var holdsFirstResponder: Bool {
+        guard let responder = window?.firstResponder as? NSView else { return false }
+        return [noticeView as NSView?, panelView].contains { $0.map { responder === $0 || responder.isDescendant(of: $0) } ?? false }
     }
     private func armDismissal() {
         let token = dismissalGeneration
