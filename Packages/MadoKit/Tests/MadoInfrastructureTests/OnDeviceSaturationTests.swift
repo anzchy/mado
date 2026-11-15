@@ -91,10 +91,18 @@ private final class BlockingCanceller: @unchecked Sendable {
     let performEntered = DispatchSemaphore(value: 0)
     let cancelEntered = DispatchSemaphore(value: 0)
     let releaseCancel = DispatchSemaphore(value: 0)
+    let throwsTypedError: Bool
+    private let lock = NSLock()
+    private var timedOut = false
+
+    init(throwsTypedError: Bool = false) { self.throwsTypedError = throwsTypedError }
 
     func perform() throws {
         performEntered.signal()
-        _ = cancelEntered.wait(timeout: .now() + .seconds(5))
+        if cancelEntered.wait(timeout: .now() + .seconds(30)) == .timedOut {
+            lock.lock(); timedOut = true; lock.unlock()
+        }
+        if throwsTypedError { throw TextRecognitionError.recognitionFailed(domain: "BlockingCanceller", code: 1) }
         throw NSError(domain: "BlockingCanceller", code: 1)
     }
 
@@ -102,6 +110,8 @@ private final class BlockingCanceller: @unchecked Sendable {
         cancelEntered.signal()
         _ = releaseCancel.wait(timeout: .now() + .seconds(2))
     }
+
+    var didTimeOut: Bool { lock.lock(); defer { lock.unlock() }; return timedOut }
 }
 
 /// #706: cancelling a recognition never waits for Vision's cancel to return. On CI the
@@ -126,6 +136,35 @@ func issue706CancelDoesNotWaitForVisionCancel() async throws {
     let cancelTook = ContinuousClock.now - started
     fake.releaseCancel.signal()
 
+    let result = await task.value
     #expect(cancelTook < .milliseconds(500))
-    #expect(await task.value == .cancelled)
+    #expect(!fake.didTimeOut)
+    #expect(result == .cancelled)
+}
+
+/// #711: cancellation takes precedence even if the request completes with a typed error.
+@Test(.timeLimit(.minutes(2)))
+func issue711CancelledTaskOverridesTypedRequestError() async throws {
+    let fake = BlockingCanceller(throwsTypedError: true)
+    let provider = OnDeviceTextRecognitionProvider(
+        performRequest: { _, _ in try fake.perform() },
+        cancelRequest: { fake.cancel($0) }
+    )
+    let bytes = try saturationImage()
+    let task = Task { () -> TextRecognitionError? in
+        do throws(TextRecognitionError) { _ = try await provider.recognise(bytes); return nil }
+        catch { return error }
+    }
+    await withCheckedContinuation { done in
+        DispatchQueue.global().async { fake.performEntered.wait(); done.resume() }
+    }
+    let started = ContinuousClock.now
+    task.cancel()
+    let cancelTook = ContinuousClock.now - started
+    fake.releaseCancel.signal()
+
+    let result = await task.value
+    #expect(cancelTook < .milliseconds(500))
+    #expect(!fake.didTimeOut)
+    #expect(result == .cancelled)
 }
