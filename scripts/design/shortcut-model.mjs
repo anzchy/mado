@@ -66,6 +66,7 @@ const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissa
 // #690: Esc and the arrows (nudging the selected mark) act only inside Annotate Mode; the page lists ⌘E, which
 // enters it, and V and R, its tools (key:annotate-*).
 const ANNOTATE_ONLY = 'only in Annotate Mode';
+const RECORDER = 'Esc cancels and Delete clears the Capture shortcut recorder in Settings › 截图 (#685), not a Mado command';
 const ANNOTATE_SHEET = 'Esc and Return answer the unsaved-marks sheet (取消 / 存储), a sheet\'s own buttons, not a command';
 export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
@@ -98,6 +99,18 @@ export const KEY_SITES = {
   'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
     76: { excluded: ANNOTATE_SHEET } },
   'App/CaptureHelper/CaptureSelectionPanel.swift': { 53: { excluded: 'Esc cancels a transient helper Capture selection, not a Mado command' } },
+  'App/UI/CaptureShortcutField.swift': {
+    53: { excluded: RECORDER }, 51: { excluded: RECORDER }, 117: { excluded: RECORDER } },
+};
+// Files that keep a key code as data for the system-wide Capture shortcuts (#685): the binding model, its stored form,
+// the Carbon registration and the recorder that captures a new combo. They bind keys for the helper, not Mado
+// commands, so the page does not list them and a stored or passed keyCode there is not read as a handler. Key codes
+// they compare in the shapes above still need KEY_SITES, and their typed-character reads still need an exclusion.
+export const BINDING_FILES = {
+  'Packages/MadoKit/Sources/MadoApplication/Capture/CaptureShortcuts.swift': 'the Capture shortcut binding model and its defaults',
+  'Packages/MadoKit/Sources/MadoInfrastructure/Capture/UserDefaultsCaptureShortcutPreferences.swift': 'the stored Capture shortcut bindings',
+  'App/CaptureHelper/CarbonHotKeyRegistrar.swift': 'registers the Capture shortcuts with RegisterEventHotKey',
+  'App/UI/CaptureShortcutField.swift': 'records a new Capture shortcut in Settings › 截图',
 };
 // The one file that maps typed characters to commands; it does so through CommandID.matching, read above.
 const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift'];
@@ -106,6 +119,9 @@ const CHARACTER_FILES = ['Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.s
 export const CHARACTER_EXCLUSIONS = {
   'App/CanvasWindowController+Annotate.swift': {
     reason: ANNOTATE_ONLY, anchor: /default: \.character\(event\.charactersIgnoringModifiers \?\? ""\)/g },
+  'App/UI/CaptureShortcutField.swift': {
+    reason: 'labels the key of a recorded Capture shortcut (#685)',
+    anchor: /let base = event\.characters\(byApplyingModifiers: \[\]\) \?\? event\.charactersIgnoringModifiers/g },
 };
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
@@ -269,7 +285,7 @@ export function codeShortcuts(read) {
           if (anchors.length !== 1 || keySites(source.replace(exactCancel, '')).codes.has('53'))
             problems.push(`${rel} handles an undeclared second key code 53 site or changed its Capture cancel handler`);
         }
-        for (const line of sites.unread) problems.push(`${rel} reads a key code in a shape this check does not read: ${line}`);
+        for (const line of sites.unread) if (!BINDING_FILES[rel] || line.startsWith('.onKeyPress')) problems.push(`${rel} reads a key code in a shape this check does not read: ${line}`);
         for (const code of sites.codes) if (!(code in declared))
           problems.push(`${rel} handles key code ${code}, which KEY_SITES does not declare; give it a page row or an exclusion`);
         for (const code of Object.keys(declared)) if (!sites.codes.has(code))
@@ -285,6 +301,8 @@ export function codeShortcuts(read) {
     if (!handler.anchor.test(read(handler.file))) problems.push(`${handler.id}: ${handler.file} no longer matches ${handler.anchor}`);
     add(handler.id, handler.keys, handler.file);
   }
+  for (const file of Object.keys(BINDING_FILES))
+    if (!seenSites.has(file)) problems.push(`BINDING_FILES names ${file}, which is not a Swift file under ${SCAN.join(', ')}`);
   for (const [file, codes] of Object.entries(KEY_SITES)) {
     if (!seenSites.has(file)) problems.push(`KEY_SITES names ${file}, which is not a Swift file under ${SCAN.join(', ')}`);
     for (const [code, row] of Object.entries(codes))
