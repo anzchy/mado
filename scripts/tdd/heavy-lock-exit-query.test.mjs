@@ -9,15 +9,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fixtureEnv } from './fixture-env.mjs';
+import { guardianEnvironments } from './guardian-env-probe.mjs';
 
 const here = p => fileURLToPath(new URL(p, import.meta.url));
 const supervisor = here('./heavy-lock.py');
 const lock = here('../heavy-lock.sh');
+const probe = here('./guardian-env-probe.mjs');
 const scratch = mkdtempSync(path.join(tmpdir(), 'i705-exit-query-'));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
@@ -198,12 +200,40 @@ test('exitQueryTokensAreConsumedOnlyAfterTheLeaderExits', { timeout: 25000 }, as
   assert.ok(tokens.every(t => t.at >= readExit(marker).mono), JSON.stringify({ tokens, exit: readExit(marker) }));
 });
 
+// The guardian probe must see guardian environments on Linux too: procps has
+// no -E, so the Linux path lists PIDs with "ps -eo pid=,args=" and reads
+// /proc/<pid>/environ. A procps-style shim and a fake /proc root stand in here.
+test('guardianProbeReadsEnvironmentsUnderProcpsSemantics', { timeout: 10000 }, () => {
+  const root = mkdtempSync(path.join(scratch, 'procps-')), proc = path.join(root, 'proc'), shim = path.join(root, 'ps');
+  writeFileSync(shim, `#!/bin/sh
+if [ "$*" = "-eo pid=,args=" ]; then
+  echo "    1 /sbin/init"
+  echo " 4242 /usr/bin/python3 /w/scripts/tdd/heavy-lock.py --guardian 5 6"
+  echo " 4343 /usr/bin/python3 /w/scripts/tdd/heavy-lock.py --guardian 7 8"
+  echo " 4444 /usr/bin/python3 /w/scripts/tdd/heavy-lock.py --guardian 9 10"
+  echo " 4545 node -e x heavy-lock.py --guardian"
+  exit 0
+fi
+echo "error: unsupported SysV option" >&2
+exit 1
+`, { mode: 0o755 });
+  const environ = (pid, vars) => { mkdirSync(path.join(proc, pid), { recursive: true }); writeFileSync(path.join(proc, pid, 'environ'), vars.map(v => `${v}\0`).join('')); };
+  environ('4242', ['HOME=/h', 'PICSEE_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-a.owner', 'PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=/h/query-plan']);
+  environ('4343', ['HOME=/other', 'PICSEE_HEAVY_GUARDIAN_OWNER=/other/heavy.lock.guardian-b.owner']);
+  environ('4545', ['PICSEE_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-c.owner']);
+  // 4444 exited between the listing and the read: it has no environ file.
+  const all = guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc });
+  assert.deepEqual(all.map(g => g.pid), [4242, 4343]);
+  const ours = guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/h/' });
+  assert.deepEqual(ours.map(g => g.pid), [4242]);
+  assert.match(ours[0].env, /PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=\/h\/query-plan/);
+  assert.deepEqual(guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/other/' }).map(g => g.env.includes('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=')), [false]);
+});
+
 test('exitQueryPlanIsNotInheritedByJobOrGuardian', { timeout: 25000 }, async () => {
   const env = environment(), log = withPlan(env, ['real']);
-  const probe = `const {spawnSync}=require('node:child_process');
-const ps=spawnSync('/bin/ps',['-wwEax','-o','command='],{encoding:'utf8'}).stdout.split('\\n').filter(l=>/heavy-lock\\.py --guardian [0-9]+ [0-9]+/.test(l));
-console.log(JSON.stringify({job:'PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN' in process.env,guardians:ps.length,leak:ps.some(l=>l.includes('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN'))}));`;
-  const r = await start([process.execPath, '-e', probe], env).done;
+  // The probe waits (at most 5 s) for this run's guardian, found by its owner file under this HOME.
+  const r = await start([process.execPath, probe, `${env.HOME}/`], env).done;
   assert.equal(r.code, 0, r.output);
   const seen = JSON.parse(r.output.split('\n').find(line => line.startsWith('{')));
   assert.equal(seen.job, false, 'job env');
