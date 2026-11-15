@@ -16,7 +16,7 @@ The owner wants a FastStone-style floating capture toolbar, and has decided that
   - Only the helper asks for Screen Recording, and only at the first Capture.
   - The helper captures with ScreenCaptureKit. It does not run the `screencapture` CLI.
   - Mado itself gains no Screen Recording permission.
-- **Global shortcuts:** the helper uses Carbon hotkeys. The defaults are the ⌃⇧⌘ series and can be changed in Settings; Mado does not take over the system's ⌘⇧3/4/5.
+- **Global shortcuts:** the helper uses Carbon hotkeys. The defaults are the ⌃⌥ series (⌃⌥1/2/3/4/0; #717 changed them from ⌃⇧⌘, owner 2026-11-15) and can be changed in Settings; Mado does not take over the system's ⌘⇧3/4/5.
 - **File hand-off:**
   - The helper writes to the Capture Folder, which defaults to ~/Downloads. This needs `com.apple.security.files.downloads.read-write` in the helper only. A different folder is granted through an open panel and kept as a security-scoped bookmark.
   - The helper hands the file to Mado through Launch Services. Mado gets a File Grant for that one file.
