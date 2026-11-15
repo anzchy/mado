@@ -70,6 +70,8 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
     var log: (String) -> Void = { _ in }
     /// How many more reads report the icon still on screen after it was hidden.
     var lingeringReads = 0
+    /// Called on the first read that reports the hidden icon gone (fix r4: the settle starts there).
+    var gone: () -> Void = {}
     private var hidden = false
     init(_ toolTip: String, _ label: String, _ action: @escaping () -> Void) {
         self.toolTip = toolTip
@@ -81,6 +83,8 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
     var isOnScreen: Bool {
         guard hidden else { return true }
         if lingeringReads > 0 { lingeringReads -= 1; log("still-on-screen"); return true }
+        gone()
+        gone = {}
         return false
     }
 }
@@ -123,8 +127,22 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
 // is really gone, the Capture runs, and the icon comes back on every exit path. The collapsed state is unchanged.
 private enum CaptureFailed: Error { case failed }
 
-@MainActor private func collapsedController(_ log: @escaping (String) -> Void,
-                                            lingering: Int = 0) -> (CaptureBarCollapseController, () -> FakeStatusItem?) {
+/// A virtual clock for the icon wait (fix r4): `sleep` advances `now` at once, so no test sleeps for real.
+@MainActor private final class FakeCaptureClock {
+    var now: Duration = .zero
+    var sleeps: [Duration] = []
+    /// When the fake window list first reported the icon gone.
+    var goneAt: Duration?
+    var neverLeftLogs = 0
+    func sleep(_ duration: Duration) async {
+        sleeps.append(duration)
+        now += duration
+    }
+}
+
+@MainActor private func collapsedController(_ log: @escaping (String) -> Void, lingering: Int = 0,
+                                            clock: FakeCaptureClock = FakeCaptureClock())
+    -> (CaptureBarCollapseController, () -> FakeStatusItem?) {
     let bar = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 40), styleMask: [.borderless, .nonactivatingPanel],
                       backing: .buffered, defer: false)
     var made: FakeStatusItem?
@@ -132,9 +150,10 @@ private enum CaptureFailed: Error { case failed }
         let item = FakeStatusItem(tip, label, action)
         item.log = log
         item.lingeringReads = lingering
+        item.gone = { [weak clock] in clock?.goneAt = clock?.now }
         made = item
         return item
-    }, iconPoll: .milliseconds(1))
+    }, iconPoll: .milliseconds(16), sleep: { await clock.sleep($0) }, iconNeverLeft: { clock.neverLeftLogs += 1 })
     return (controller, { made })
 }
 
@@ -200,4 +219,66 @@ private enum CaptureFailed: Error { case failed }
     await controller.whileCapturing { log.append("capture"); controller.collapse() }
     #expect(log == ["capture", "hide", "show"])
     #expect(controller.isCollapsed && item() != nil)
+}
+
+// Fix r4 (device smoke685-20261115d 5.3, 1 of 6): the window server stopped listing the icon's window while the
+// compositor was still fading it out, so the first Capture after a collapse caught a faded icon. After the icon is no
+// longer listed the helper waits a 300 ms settle before the screen read; a Capture with the bar shown waits for nothing.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685ScreenReadWaitsTheSettleAfterTheIconLeavesTheList() async throws {
+    var log: [String] = []
+    let clock = FakeCaptureClock()
+    let (controller, _) = collapsedController({ log.append($0) }, lingering: 2, clock: clock)
+    controller.collapse()
+    var readAt: Duration?
+    await controller.whileCapturing { readAt = clock.now; log.append("capture") }
+    let goneAt = try #require(clock.goneAt)
+    let read = try #require(readAt)
+    #expect(goneAt == .milliseconds(32))
+    #expect(read >= goneAt + .milliseconds(300))
+    #expect(read <= goneAt + .milliseconds(300) + .milliseconds(16))
+    #expect(log == ["hide", "still-on-screen", "still-on-screen", "capture", "show"])
+    #expect(clock.neverLeftLogs == 0)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685IconAlreadyGoneStillWaitsTheSettle() async throws {
+    var log: [String] = []
+    let clock = FakeCaptureClock()
+    let (controller, _) = collapsedController({ log.append($0) }, clock: clock)
+    controller.collapse()
+    var readAt: Duration?
+    await controller.whileCapturing { readAt = clock.now; log.append("capture") }
+    #expect(clock.goneAt == .zero)
+    #expect(try #require(readAt) >= .milliseconds(300))
+    #expect(log == ["hide", "capture", "show"])
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685IconThatNeverLeavesStillWaitsTheSettleAndLogsOnce() async throws {
+    var log: [String] = []
+    let clock = FakeCaptureClock()
+    let (controller, _) = collapsedController({ log.append($0) }, lingering: 10_000, clock: clock)
+    controller.collapse()
+    var readAt: Duration?
+    await controller.whileCapturing { readAt = clock.now; log.append("capture") }
+    let bound: Duration = .milliseconds(16) * CaptureBarCollapseController.iconWaitPolls
+    let read = try #require(readAt)
+    #expect(clock.goneAt == nil)
+    #expect(read >= bound + .milliseconds(300))
+    #expect(read <= .milliseconds(1_300))
+    #expect(clock.neverLeftLogs == 1)
+    #expect(log.suffix(2) == ["capture", "show"])
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685CaptureWithTheBarShownGetsNoSettleDelay() async throws {
+    var log: [String] = []
+    let clock = FakeCaptureClock()
+    let (controller, _) = collapsedController({ log.append($0) }, clock: clock)
+    var readAt: Duration?
+    await controller.whileCapturing { readAt = clock.now; log.append("capture") }
+    #expect(readAt == .zero)
+    #expect(clock.sleeps.isEmpty)
+    #expect(log == ["capture"])
+    controller.collapse()
+    controller.restore()  // collapsed once, then shown again: still no delay
+    await controller.whileCapturing { readAt = clock.now }
+    #expect(readAt == .zero && clock.sleeps.isEmpty)
 }
