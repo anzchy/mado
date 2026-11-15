@@ -122,9 +122,11 @@ extension ViewerSession {
     /// #693 Return/完成: the pending crop becomes the document's crop (one undoable change). False when none is
     /// pending or it is the crop already applied.
     @discardableResult public func applyPendingCrop() -> Bool {
-        guard let pending = annotateMode?.pendingCrop else { return false }
-        annotateMode?.pendingCrop = nil
-        return annotateMode?.document.setCrop(pending) ?? false
+        guard var state = annotateMode, let pending = state.pendingCrop else { return false }
+        state.pendingCrop = nil
+        let changed = state.document.setCrop(pending)
+        annotateMode = state
+        return changed
     }
 
     /// #693 Esc: drops the pending crop; the applied crop stays. False when none is pending.
@@ -137,9 +139,11 @@ extension ViewerSession {
     /// #693 ⌫/⌦ with the crop tool: drops a pending crop and removes the applied one (undoable). False when no crop
     /// was applied.
     @discardableResult public func clearCrop() -> Bool {
-        guard annotateMode != nil else { return false }
-        annotateMode?.pendingCrop = nil
-        return annotateMode?.document.setCrop(nil) ?? false
+        guard var state = annotateMode else { return false }
+        state.pendingCrop = nil
+        let changed = state.document.setCrop(nil)
+        annotateMode = state
+        return changed
     }
 
     /// #693: undo and redo drop a crop in progress first.
