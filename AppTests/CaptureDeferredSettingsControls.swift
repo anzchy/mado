@@ -2,10 +2,8 @@ import AppKit
 
 /// The only disabled Settings controls owned by later Capture tickets.
 @MainActor enum CaptureDeferredSettingsControls {
-    static let tickets: [String: Int] = [
-        "settings.capture.ocr-cloud": 689,
-        "settings.capture.ocr-service": 689,
-    ]
+    /// Empty since #689 slice B made the 文字识别 controls live.
+    static let tickets: [String: Int] = [:]
 
     /// Live controls that are greyed and not editable while the Capture Bar is off (grilling 5.2, #684, #685).
     static let barDependent: Set<String> = [

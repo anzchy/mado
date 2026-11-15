@@ -81,8 +81,9 @@ private actor CaptureBarTestPreferences: CaptureBarPreferencePort {
     #expect(ocr.isEnabledForCaptureSettings)
     let cloud = try #require(captureSettingsView("settings.capture.ocr-cloud", in: panel) as? NSSwitch)
     let service = try #require(captureSettingsView("settings.capture.ocr-service", in: panel) as? NSPopUpButton)
-    #expect(!cloud.isEnabled)
-    #expect(!service.isEnabled)
+    // #689 slice B: live, and editable with the bar off (owner 2026-11-13: 「文字识别不变灰」).
+    #expect(cloud.isEnabled)
+    #expect(service.isEnabled)
     #expect(captureSettingsView("settings.capture.after-action", in: panel) == nil)
     let shortcut1 = try #require(captureSettingsView("settings.capture.shortcut-region", in: panel))
     let shortcut2 = try #require(captureSettingsView("settings.capture.shortcut-1", in: panel))
