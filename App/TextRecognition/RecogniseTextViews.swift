@@ -54,6 +54,7 @@ enum RecogniseTextNoticeKind { case success, warning }
     var onHoverChange: ((Bool) -> Void)?
     var compactWidth: CGFloat? { didSet { if oldValue != compactWidth { needsLayout = true } } }
     private var tracking: NSTrackingArea?
+    override var acceptsFirstResponder: Bool { kind == .success }
 
     init(message: String, engine: String?, kind: RecogniseTextNoticeKind, onOpen: (() -> Void)?) {
         self.kind = kind
@@ -147,7 +148,22 @@ enum RecogniseTextNoticeKind { case success, warning }
     }
     override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
     override func mouseExited(with event: NSEvent) { onHoverChange?(false) }
-    override func mouseDown(with event: NSEvent) { if kind == .success { onOpen?() } }
+    private func activate() { if kind == .success { onOpen?() } }
+    override func mouseDown(with event: NSEvent) { activate() }
+    override func accessibilityPerformPress() -> Bool {
+        guard kind == .success else { return false }
+        activate()
+        return true
+    }
+    override func keyDown(with event: NSEvent) {
+        if kind == .success,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           (event.charactersIgnoringModifiers == " " || event.charactersIgnoringModifiers == "\r") {
+            activate()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
 }
 
 @MainActor final class RecogniseTextPanelView: NSView, NSTextViewDelegate {
