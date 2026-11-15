@@ -1,11 +1,11 @@
 import Foundation
 
 /// What a global capture shortcut does (#685, grilling 2.4).
-public enum CaptureShortcutAction: String, CaseIterable, Codable, Sendable {
+public enum CaptureShortcutAction: String, CaseIterable, Sendable {
     case region, window, fullScreen, recognizeText, toggleBar
 }
 
-public struct CaptureKeyModifiers: OptionSet, Hashable, Codable, Sendable {
+public struct CaptureKeyModifiers: OptionSet, Hashable, Sendable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
     public static let command = CaptureKeyModifiers(rawValue: 1)
@@ -15,7 +15,7 @@ public struct CaptureKeyModifiers: OptionSet, Hashable, Codable, Sendable {
 }
 
 /// One key with its modifiers. `keyCode` is the macOS virtual key code; `key` is the label shown for it.
-public struct CaptureKeyCombo: Hashable, Codable, Sendable {
+public struct CaptureKeyCombo: Hashable, Sendable {
     public let keyCode: UInt32
     public let key: String
     public let modifiers: CaptureKeyModifiers
@@ -50,7 +50,7 @@ public enum CaptureShortcutRejection: Error, Equatable, Sendable {
     case unavailable(CaptureKeyCombo)
 }
 
-public struct CaptureShortcutBindings: Equatable, Codable, Sendable {
+public struct CaptureShortcutBindings: Equatable, Sendable {
     private var combos: [CaptureShortcutAction: CaptureKeyCombo]
 
     public init(_ combos: [CaptureShortcutAction: CaptureKeyCombo]) { self.combos = combos }
@@ -90,6 +90,9 @@ public struct CaptureShortcutBindings: Equatable, Codable, Sendable {
     }
 
     public mutating func clear(_ action: CaptureShortcutAction) { combos[action] = nil }
+
+    /// Puts back a binding that was registered before, without the checks (a refused rebind).
+    mutating func restore(_ combo: CaptureKeyCombo, for action: CaptureShortcutAction) { combos[action] = combo }
 
     /// The label is only for display; the key code and modifiers decide a clash.
     private func sameKeys(_ bound: CaptureKeyCombo?, _ combo: CaptureKeyCombo) -> Bool {
