@@ -198,3 +198,23 @@ import MadoApplication
         }
     }
 }
+
+// MARK: - F3
+
+/// AXPress: the press must return while the notice is still in the window; the panel opens on the next main-queue
+/// turn. The external AX error code is not observable in-process (the test host is not an AX-trusted client).
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5NoticePressReturnsBeforeTheNoticeIsReplaced() async throws {
+    let h = try await Fix5Harness()
+    defer { h.close() }
+    try await h.reset(inspector: false)
+    try await h.recognise()
+    let overlay = try #require(h.overlay)
+    let notice = try #require(overlay.noticeView)
+    #expect(notice.accessibilityPerformPress())
+    #expect(notice.superview === overlay && overlay.noticeView === notice,
+            "the pressed element is still in the window when the press returns")
+    #expect(overlay.panelView == nil)
+    try await waitUntil("the panel opened") { h.editor != nil }
+    #expect(h.window.firstResponder === h.editor)
+    #expect(notice.superview == nil)
+}

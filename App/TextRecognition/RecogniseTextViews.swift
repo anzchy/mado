@@ -162,7 +162,9 @@ enum RecogniseTextNoticeKind { case success, warning }
     override func mouseDown(with event: NSEvent) { activate() }
     override func accessibilityPerformPress() -> Bool {
         guard kind == .success else { return false }
-        activate()
+        // #687 fix r5: opening replaces this element with the panel. Removing the AX target inside its own action
+        // likely made AXPress report kAXErrorFailure, so the press answers first and opens on the next turn.
+        Task { @MainActor [weak self] in self?.activate() }
         return true
     }
     override func keyDown(with event: NSEvent) {

@@ -173,14 +173,16 @@ import MadoMacUI
     }
 }
 
-@MainActor @Test(.timeLimit(.minutes(3))) func recogniseNoticeAccessibilityAndKeyboardActivateEditablePanel() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func recogniseNoticeAccessibilityAndKeyboardActivateEditablePanel() async throws {
     _ = NSApplication.shared
     var opens = 0
     let notice = RecogniseTextNoticeView(message: "Copied", engine: "On-device Recognition",
         kind: .success, onOpen: { opens += 1 })
     #expect(notice.acceptsFirstResponder)
     #expect(notice.accessibilityPerformPress())
-    #expect(opens == 1)
+    // #687 fix r5: the press answers first and opens on the next main-actor turn.
+    #expect(opens == 0)
+    try await waitUntil("the press opened") { opens == 1 }
     for (character, code) in [(" ", UInt16(49)), ("\r", UInt16(36))] {
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
@@ -194,7 +196,7 @@ import MadoMacUI
     #expect(!warning.accessibilityPerformPress())
 }
 
-@MainActor @Test(.timeLimit(.minutes(3))) func issue687bVisibleNoticeIsInAccessibilityChildrenAndPressOpensPanel() throws {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687bVisibleNoticeIsInAccessibilityChildrenAndPressOpensPanel() async throws {
     _ = NSApplication.shared
     let root = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
     let overlay = RecogniseTextOverlay(frame: root.bounds)
@@ -208,6 +210,7 @@ import MadoMacUI
     #expect(notice.accessibilityRole() == .button)
     #expect(notice.accessibilityLabel()?.contains("Copied") == true)
     #expect(notice.accessibilityPerformPress())
+    try await waitUntil("the press opened the panel") { overlay.panelView != nil }
     #expect(overlay.panelView?.textView.string == "editable")
 
     overlay.showNotice(message: "No text", engine: nil, kind: .warning, onOpen: nil)
