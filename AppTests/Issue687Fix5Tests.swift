@@ -2,6 +2,7 @@ import AppKit
 import Testing
 import MadoCore
 import MadoApplication
+import MadoMacUI
 
 // #687 fix r5 (device run smoke687b-20261115c, amendments 1 and 2): Annotate entry from the OCR editor (F1), focus
 // handoff when a focused OCR surface goes away (F2), the AX press (F3), input-method composition (F5), the panel's
@@ -369,7 +370,7 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
 /// Pruned: timer × editor (an open panel has no timer); composing × {canvas, notice} (only the editor composes);
 /// composing × {timer, re-run, image change} (no panel timer; the two menu items are not keys an input method holds);
 /// Esc × {canvas, notice} (with no panel, Esc is the viewer's own return to the grid, not an OCR exit).
-/// Since fix r5b F9, timer × notice expects the focused notice to stay.
+/// Since fix r5b F9, timer × notice expects the focused notice to stay; 7 further rows cover F8–F14 (owner decisions).
 @MainActor @Test(.timeLimit(.minutes(6))) func issue687Fix5FocusExitInputMatrix() async throws {
     let h = try await Fix5Harness()
     defer { h.close() }
@@ -446,6 +447,73 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
         }
     }
     #expect(rows == 36)
+
+    // Fix round 5b (owner decisions), Inspector {shown, hidden} × {placement (F8, F10), VoiceOver hold (F9), resting
+    // pointer (F12), VoiceOver into the Inspector with the panel open (F14; shown only)}.
+    func find(_ view: NSView, _ id: String) -> NSView? {
+        view.accessibilityIdentifier() == id ? view : view.subviews.lazy.compactMap { find($0, id) }.first
+    }
+    var extra = 0
+    for visible in [true, false] {
+        let label = "r5b inspector=\(visible)"
+        // F8 + F10: notice and panel clear of every chrome pod and of the Inspector column.
+        extra += 1
+        try await h.reset(inspector: visible)
+        try await h.recognise()
+        let overlay = try #require(h.overlay)
+        overlay.layoutSubtreeIfNeeded()
+        let chrome = try #require(h.controller.chromeOverlay)
+        let pods = chrome.groups.map { $0.convert($0.bounds, to: nil) }
+        let column = h.controller.recogniseTextInspectorColumn.map { h.window.contentView!.convert($0, to: nil) }
+        #expect((column != nil) == visible, "\(label): Inspector column present exactly when shown")
+        var surfaces = [try #require(overlay.noticeView)] as [NSView]
+        _ = try h.openEditor()
+        overlay.layoutSubtreeIfNeeded()
+        surfaces.append(try #require(overlay.panelView))
+        for view in surfaces {
+            let frame = view.convert(view.bounds, to: nil)
+            #expect(pods.allSatisfy { !frame.intersects($0) }, "\(label): \(frame) clear of the chrome pods")
+            if let column { #expect(!frame.intersects(column), "\(label): \(frame) clear of the Inspector") }
+        }
+        // F14: VoiceOver focus reaches the Inspector while the panel is open; the panel stays.
+        if visible {
+            extra += 1
+            let close = try #require(h.window.contentView.flatMap { find($0, "inspector.close") })
+            close.setAccessibilityFocused(true)
+            #expect(h.window.firstResponder === close, "\(label): VoiceOver moved focus to the Inspector")
+            #expect(overlay.panelView != nil, "\(label): the panel stays open")
+        }
+        // F9: VoiceOver focus holds the notice past the 5 s count; losing it restarts the count. The no-text warning,
+        // which VoiceOver reaches without keyboard focus (a success notice takes keyboard focus too, round 4).
+        extra += 1
+        try await h.reset(inspector: visible)
+        h.text = ""
+        try await h.recognise()
+        h.text = "Hello"
+        let held = try #require(h.overlay?.noticeView)
+        held.setAccessibilityFocused(true)
+        h.fireDismissals()
+        #expect(h.overlay?.noticeView === held, "\(label): VoiceOver focus holds the notice")
+        held.setAccessibilityFocused(false)
+        h.fireDismissals()
+        #expect(h.overlay?.noticeView == nil, "\(label): the notice goes once VoiceOver focus leaves")
+        try h.expectCanvasOwnsKeys("\(label) VoiceOver hold")
+        // F12: a notice that appears under a resting pointer counts as hovered.
+        extra += 1
+        try await h.reset(inspector: visible)
+        h.controller.recogniseTextAdapter.pointerLocation = { [weak h] in
+            guard let notice = h?.overlay?.noticeView else { return nil }
+            return notice.convert(NSPoint(x: notice.bounds.midX, y: notice.bounds.midY), to: nil)
+        }
+        defer { h.controller.recogniseTextAdapter.pointerLocation = nil }
+        try await h.recognise()
+        h.overlay?.layoutSubtreeIfNeeded()
+        let hovered = try #require(h.overlay?.noticeView)
+        h.fireDismissals()
+        #expect(h.overlay?.noticeView === hovered, "\(label): a notice under the resting pointer stays")
+        try h.expectCanvasOwnsKeys("\(label) resting pointer")
+    }
+    #expect(extra == 7)
 }
 
 // MARK: - Review
