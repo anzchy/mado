@@ -294,8 +294,7 @@ import MadoInfrastructure
             if (self.controller?.window?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true { return false }
             let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             if event.characters == "\u{1b}", plain {
-                _ = self.controller?.selectTextAdapter.escape()
-                self.closePanel()
+                _ = self.controller?.routeTextEscape()
                 return true
             }
             if event.keyCode == 48, plain, self.routePanelTab(reverse: event.modifierFlags.contains(.shift)) { return true }
