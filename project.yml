@@ -106,6 +106,7 @@ targets:
       - path: App/CaptureHelper/CaptureBarCollapse.swift
       - path: App/CaptureHelper/CarbonHotKeyRegistrar.swift
       - path: App/CaptureHelper/CaptureHelperSingleInstance.swift
+      - path: App/CaptureHelper/CaptureRecogniseText.swift
     dependencies:
       - package: MadoKit
         product: MadoCore
@@ -130,6 +131,10 @@ targets:
           - Info.plist
           - CaptureHelper.entitlements
       - path: App/Resources/Localizable.xcstrings
+      # #687c: the notice and panel views only; App/TextRecognition also holds viewer-bound files.
+      - path: App/TextRecognition/RecogniseTextModel.swift
+      - path: App/TextRecognition/NativeTextPasteboard.swift
+      - path: App/TextRecognition/RecogniseTextViews.swift
     dependencies:
       - package: MadoKit
         product: MadoApplication
