@@ -144,17 +144,30 @@ import MadoInfrastructure
         }
         // #687 fix r5b (F8): keep clear of the viewer's chrome pods. Their frames hold while the chrome auto-hides,
         // so the notice does not jump under a resting pointer when the pods come back.
+        // #687 fix r5b (F10): with the Inspector shown, keep left of its column, unless that leaves less than the
+        // panel's full 260 pt (a narrow window keeps the window edge).
         overlay.placement = { [weak self, weak overlay] in
-            guard let overlay, let chrome = self?.controller?.chromeOverlay, chrome.window === overlay.window else {
+            guard let overlay, let controller = self?.controller, let chrome = controller.chromeOverlay,
+                  chrome.window === overlay.window else {
                 return RecogniseTextPlacement(trailingEdge: nil, obstacles: [])
             }
-            return RecogniseTextPlacement(trailingEdge: nil,
+            let column = controller.recogniseTextInspectorColumn.flatMap { frame in
+                overlay.superview.map { overlay.convert(frame, from: $0) }
+            }
+            let trailing = column.map(\.minX).flatMap { $0 - overlay.bounds.minX - 40 >= 260 ? $0 : nil }
+            return RecogniseTextPlacement(trailingEdge: trailing,
                 obstacles: chrome.groups.map { overlay.convert($0.frame, from: chrome) })
         }
         overlay.onDismiss = { [weak self] in self?.model?.dismissNotice() }
         overlay.onNoticeChange = { [weak self] in self?.controller?.relinkRecogniseTextNotice() }
         content.addSubview(overlay, positioned: .above, relativeTo: nil)
         self.overlay = overlay
+    }
+
+    /// #687 fix r5b (F10): the Inspector was shown or hidden; the notice and the panel follow its edge.
+    func relayout() {
+        overlay?.needsLayout = true
+        overlay?.layoutSubtreeIfNeeded()
     }
 
     private func render() {
