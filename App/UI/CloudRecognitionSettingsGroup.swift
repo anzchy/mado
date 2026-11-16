@@ -63,7 +63,7 @@ struct CloudRecognitionSettingsEnvironment {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = localize("Use Baidu to recognize text?")
-        alert.informativeText = localize("Cloud Recognition uploads the one image being recognized to Baidu, only when you choose Recognize Text. Selecting text directly on an image always uses on-device recognition. Baidu's terms of service apply to the upload.")
+        alert.informativeText = localize("Cloud Recognition uploads the one image being recognized to Baidu, only when you choose Recognize Text. Selecting text directly on an image always uses on-device recognition. Baidu's terms of service apply to the upload. Baidu text recognition needs a Baidu account with real-name verification, and Baidu's documentation lists only mainland Chinese ID documents. How long Baidu keeps uploaded images, and whether the service works outside mainland China, are not confirmed.")
         alert.addButton(withTitle: localize("Agree and Turn On"))
         alert.addButton(withTitle: localize("Cancel"))
         let link = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { openURL(termsURL) })
