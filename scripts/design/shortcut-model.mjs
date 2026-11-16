@@ -129,6 +129,9 @@ export const CHARACTER_EXCLUSIONS = {
   'App/TextRecognition/RecogniseTextViews.swift': {
     reason: 'Space and Return open the focused recognition notice, not a global shortcut',
     anchor: /let character = event\.charactersIgnoringModifiers/g },
+  'App/CaptureHelper/CaptureRecogniseText.swift': {
+    reason: 'the standard Edit keys (⌘A/C/X/V/Z, ⇧⌘Z) in the Capture helper\'s text panel, which has no Edit menu (#687c)',
+    anchor: /switch \(event\.charactersIgnoringModifiers\?\.lowercased\(\), modifiers\)/g },
 };
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)

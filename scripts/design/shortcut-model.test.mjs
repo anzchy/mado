@@ -204,6 +204,13 @@ test('i687b only the focused recognition notice may read its Space or Return key
     /RecogniseTextViews\.swift reads typed characters outside its declared site/);
 });
 
+test('i687c only the helper text panel\'s Edit key equivalents may read typed characters there', () => {
+  const panel = 'App/CaptureHelper/CaptureRecogniseText.swift';
+  assert.equal(check().filter(p => p.includes(panel)).length, 0);
+  fails(withChange(panel, source => `${source}\n// let extra = event.charactersIgnoringModifiers\n`),
+    /CaptureRecogniseText\.swift reads typed characters outside its declared site/);
+});
+
 const ANNOTATE_POLICY = 'Packages/MadoKit/Sources/MadoApplication/Annotation/AnnotateMode.swift';
 
 test('i690 the page lists V and R, the Annotate Mode tools', () => {
