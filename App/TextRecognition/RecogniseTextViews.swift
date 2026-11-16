@@ -83,6 +83,9 @@ enum RecogniseTextNoticeKind { case success, warning }
     var onFocusChange: ((_ keyboard: Bool, _ focused: Bool) -> Void)?
     var compactWidth: CGFloat? { didSet { if oldValue != compactWidth { needsLayout = true } } }
     private var tracking: NSTrackingArea?
+    /// #687 fix r5b (F12): the notice appeared under the pointer, so its tracking area starts inside and the
+    /// pointer leaving sends an exit.
+    var startsUnderPointer = false { didSet { if oldValue != startsUnderPointer { updateTrackingAreas() } } }
     override var acceptsFirstResponder: Bool { kind == .success }
     override var canBecomeKeyView: Bool { acceptsFirstResponder }
     override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
@@ -188,7 +191,9 @@ enum RecogniseTextNoticeKind { case success, warning }
     }
     override func updateTrackingAreas() {
         if let tracking { removeTrackingArea(tracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        var options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
+        if startsUnderPointer { options.insert(.assumeInside) }
+        let area = NSTrackingArea(rect: .zero, options: options, owner: self)
         addTrackingArea(area); tracking = area
         super.updateTrackingAreas()
     }
@@ -382,6 +387,9 @@ struct RecogniseTextPlacement {
     private var holds: Set<Hold> = []
     /// #687 fix r5b (F8): the viewer's controls to keep clear of; nil keeps the plain 20 pt corner.
     var placement: (() -> RecogniseTextPlacement)?
+    /// #687 fix r5b (F12): where the pointer rests, in window coordinates; nil asks the window.
+    var pointerLocation: (() -> NSPoint?)?
+    private var pointerChecked = false
     /// The gap above an obstacle: the design system's 8 pt spacing step.
     static let obstacleGap = CGFloat(DesignMetrics.spacing[1])
 
@@ -412,6 +420,7 @@ struct RecogniseTextPlacement {
             let available = max(0, trailing - bounds.minX - 40)
             if noticeView.intrinsicContentSize.width > available { noticeView.compactWidth = available }
             noticeView.frame = surfaceFrame(size: noticeView.intrinsicContentSize, trailing: trailing, place: place)
+            checkRestingPointer(noticeView)
         }
         if let panelView { panelView.frame = plannedPanelFrame(place: place) }
     }
@@ -438,6 +447,7 @@ struct RecogniseTextPlacement {
         view.onFocusChange = { [weak self] keyboard, focused in self?.setHold(keyboard ? .keyboard : .accessibility, focused) }
         addSubview(view)
         noticeView = view
+        pointerChecked = false
         needsLayout = true
         onNoticeChange?()
         armDismissal()
@@ -468,6 +478,16 @@ struct RecogniseTextPlacement {
     private var holdsFirstResponder: Bool {
         guard let responder = window?.firstResponder as? NSView else { return false }
         return [noticeView as NSView?, panelView].contains { $0.map { responder === $0 || responder.isDescendant(of: $0) } ?? false }
+    }
+    /// Tracking areas report only crossings, so a notice that appears under a still pointer never hears it enter.
+    /// The first layout asks where the pointer is.
+    private func checkRestingPointer(_ notice: RecogniseTextNoticeView) {
+        guard !pointerChecked, window != nil else { return }
+        pointerChecked = true
+        guard let point = pointerLocation?() ?? window?.mouseLocationOutsideOfEventStream,
+              notice.convert(notice.bounds, to: nil).contains(point) else { return }
+        notice.startsUnderPointer = true
+        setHold(.hover, true)
     }
     private func setHold(_ hold: Hold, _ on: Bool) {
         guard noticeView != nil, holds.contains(hold) != on else { return }
