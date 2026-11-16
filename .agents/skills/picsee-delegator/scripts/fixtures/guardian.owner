@@ -1,0 +1,5 @@
+pid=86293
+cmd=/Applications/Xcode.app/Contents/Developer/usr/bin/python3 /worktree/scripts/tdd/heavy-lock.py --guardian 4 7
+started=2026-11-12T03:55:46-0800
+supervisor=86282
+job=argc=4

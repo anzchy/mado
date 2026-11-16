@@ -16,6 +16,7 @@ function fixture(t, mode = 'pass', covered = 2, npmInstalled = true, options = {
   }
   if (process.env.OWNER_GATES_SCRIPT_OVERRIDE)
     fs.copyFileSync(process.env.OWNER_GATES_SCRIPT_OVERRIDE, path.join(dir, '.agents/skills/picsee-delegator/scripts/owner-gates.sh'));
+  fs.writeFileSync(path.join(dir, '.agents/skills/picsee-delegator/scripts/fixture.test.mjs'), '');
   for (const group of ['agents', 'tdd', 'ledger', 'name-checks']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
   fs.mkdirSync(path.join(dir, 'scripts', 'ci'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'name-checks-ci.test.mjs'), '');
@@ -33,7 +34,7 @@ else{console.log('Swift started');if(process.env.MODE==='hang'){setTimeout(()=>p
 `);
   exe('node', `#!${process.execPath}
 const path=require('node:path');
-if(process.argv[2].endsWith('owner-gates-tools.mjs')){import(path.resolve(process.argv[2])).then(()=>{});const r=require('node:child_process').spawnSync(process.execPath,process.argv.slice(2),{stdio:'inherit'});process.exit(r.status);}
+if(process.argv[2].endsWith('owner-gates-tools.mjs')){if(process.argv[3]==='select'&&process.env.SELECT_OUTPUT){console.log(process.env.SELECT_OUTPUT);process.exit(0);}import(path.resolve(process.argv[2])).then(()=>{});const r=require('node:child_process').spawnSync(process.execPath,process.argv.slice(2),{stdio:'inherit'});process.exit(r.status);}
 else if(process.argv[2]==='scripts/tdd/unit-lane.mjs'){
  if(process.env.MODE==='coverage-fail'){console.log('✔ Test run with 7 tests in 1 suite passed after 0.001 seconds.');process.exitCode=65;}
  else import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1,verifyCoverage:false});});
@@ -61,9 +62,10 @@ xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/picsee-delegator/scripts/owner-gates.sh'),
-    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), PICSEE_GATES_OUT: out,
+    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), PICSEE_GATES_OUT: out,
     PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
+  if (options.staleOwner) fs.writeFileSync(`${env.PICSEE_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
   const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);
@@ -78,6 +80,23 @@ test('owner node lane runs the name-check tests required by CI', t => {
   const args = fs.readFileSync(f.nodeMarker, 'utf8').split('\n');
   assert.ok(args.includes('scripts/name-checks/fixture.test.mjs'), args.join('\n'));
   assert.ok(args.includes('scripts/ci/name-checks-ci.test.mjs'), args.join('\n'));
+  assert.ok(args.includes('.agents/skills/picsee-delegator/scripts/fixture.test.mjs'), args.join('\n'));
+});
+
+test('invalid select output refuses before every lane', t => {
+  for (const selectOutput of ['native=0\nagents=0', 'native=maybe\nagents=0\ntdd=0', 'native=0\nnative=1\nagents=0\ntdd=0']) {
+    const f = fixture(t, 'pass', 2, true, {selectOutput});
+    assert.equal(f.result.status, 2, f.result.stderr);
+    assert.match(f.summary, /^owner-gates: refused: invalid suite selection/m);
+    assert.doesNotMatch(f.summary, /^DONE$/m);
+  }
+});
+
+test('free lock with a captured stale owner record reports a fact and continues', t => {
+  const f = fixture(t, 'pass', 2, true, {staleOwner:true});
+  assert.equal(f.result.status, 0, f.result.stderr);
+  assert.match(f.summary, /^preflight: stale-owner-records=1$/m);
+  assert.match(f.summary, /^DONE$/m);
 });
 
 test('owner reports failure and timeout, rejects old coverage and completes later lanes', t => {
@@ -124,13 +143,16 @@ test('owner identifies post-test coverage failure and preserves its invalid-evid
   assert.doesNotMatch(fs.readFileSync(path.join(f.out, 'run-lcov.log'), 'utf8'), /coverage skipped/i);
 });
 
-test('tooling-only diff skips native and scoped Node suites', t => {
+test('tooling-only diff skips native and runs both Node suites', t => {
   const f = fixture(t, 'pass', 2, true, {diff:'docs/guide.md'});
   assert.equal(f.result.status, 0, f.result.stderr);
   assert.match(f.summary, /^swift=skipped \(no native inputs\)$/m);
   assert.match(f.summary, /^lcov=skipped \(no native inputs\)$/m);
-  assert.match(f.summary, /^node-agents=skipped /m);
-  assert.match(f.summary, /^node-tdd=skipped /m);
+  assert.doesNotMatch(f.summary, /^node-agents=skipped /m);
+  assert.doesNotMatch(f.summary, /^node-tdd=skipped /m);
+  const args = fs.readFileSync(f.nodeMarker, 'utf8');
+  assert.match(args, /scripts\/agents\/fixture\.test\.mjs/);
+  assert.match(args, /scripts\/tdd\/fixture\.test\.mjs/);
   assert.match(f.summary, /^DONE$/m);
 });
 

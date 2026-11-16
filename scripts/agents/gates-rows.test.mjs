@@ -904,6 +904,23 @@ test('new retained PASS says hosted CI binding, while supplied CI remains the on
   assert.deepEqual(ci.stdout.trim().split('\n').filter(line => line.startsWith('| app-tests |')),
     [`| app-tests | PASS | ${head} | ${validRun().url} |`]);
 });
+
+test('opted-in hosted failure makes local App row FAIL', async t => {
+  const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+  const summary = complete.replace('xcodebuild=0\n', 'xcodebuild=0\napptests-retained=0 2/0\napptests-hosted=70\napptests-hosted: hung\napptests=70\n');
+  const result = runRows(t, summary, ['--head', head]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`^\\| app-tests \\| FAIL \\| ${head} \\| owner-gates apptests-retained=0 2/0; hosted=70 \\|$`, 'm'));
+  const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling |\n| device-smoke | N/A | — | tooling |\n`;
+  assert.deepEqual(checkGates(body, head), {ok:false, reason:'app-tests is a FAIL row'});
+});
+
+test('node-tooling Source names any skipped suites', t => {
+  const summary = complete.replace('node=0\n', 'node-agents=skipped (reviewed native-only diff)\nnode-tdd=skipped (reviewed native-only diff)\nnode=0\n');
+  const result = runRows(t, summary, ['--head', head]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`^\\| node-tooling \\| PASS \\| ${head} \\| owner-gates node=0; node-agents=skipped \\(reviewed native-only diff\\); node-tdd=skipped \\(reviewed native-only diff\\) \\|$`, 'm'));
+});
 for (const [value, row] of [
   ['0', `| app-tests | PASS | ${head} | owner-gates apptests=0 |`],
   ['65', `| app-tests | FAIL | ${head} | owner-gates apptests=65 |`],

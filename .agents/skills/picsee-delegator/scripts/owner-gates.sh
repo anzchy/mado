@@ -35,6 +35,10 @@ mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-ba
 diff_file=$o/$p-diff.txt
 git diff --name-only --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
 selection=$(node "$here/owner-gates-tools.mjs" select "$diff_file") || refuse "cannot classify gated diff"
+selection_lines=("${(@f)selection}")
+(( ${#selection_lines} == 3 )) && [[ $selection_lines[1] == native=[01] ]] &&
+  [[ $selection_lines[2] == agents=[01] ]] && [[ $selection_lines[3] == tdd=[01] ]] ||
+  refuse "invalid suite selection; expected native/agents/tdd each exactly 0 or 1"
 native=${${(M)${(f)selection}:#native=*}#native=}
 agents=${${(M)${(f)selection}:#agents=*}#agents=}
 tdd=${${(M)${(f)selection}:#tdd=*}#tdd=}
@@ -54,6 +58,7 @@ lane_result() {
   fi
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
+print -r -- "$preflight" | grep -E '^preflight: stale-owner-records=[0-9]+$' >> "$s" || true
 if (( native )); then
 node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
   swift_code=$?
@@ -132,16 +137,16 @@ else
   echo 'apptests-hosted=skipped (no App-facing change)' >> "$s"
   echo 'apptests=skip (no App-facing change)' >> "$s"
 fi
-node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs)
+node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs .agents/skills/picsee-delegator/scripts/*.test.mjs)
 if (( agents )); then
   node_suites+=(scripts/agents/*.test.mjs)
 else
-  echo 'node-agents=skipped (no scripts/agents or delegator subject in diff)' >> "$s"
+  echo 'node-agents=skipped (reviewed native-only diff)' >> "$s"
 fi
 if (( tdd )); then
   node_suites+=(scripts/tdd/*.test.mjs)
 else
-  echo 'node-tdd=skipped (no scripts/tdd or CI subject in diff)' >> "$s"
+  echo 'node-tdd=skipped (reviewed native-only diff)' >> "$s"
 fi
 node --test --test-reporter=spec "${(@)node_suites}" > "$o/$p-node.log" 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?

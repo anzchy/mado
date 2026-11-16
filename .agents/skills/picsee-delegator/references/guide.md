@@ -399,16 +399,13 @@ signed-device comparison and independent review **before merging the UI PR**. Un
 7. **Gates** (copy verbatim):
    ```sh
    export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-   .agents/skills/picsee-delegator/scripts/owner-gates.sh <worktree> <head-sha> <prefix>
+   scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage
+   sh scripts/tdd/swift-lcov.sh      # writes coverage/lcov.info; sum LF/LH, FNF/FNH → must be 100% lines and functions
+   xcodegen generate
+   scripts/heavy-lock.sh xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci
+   node --test --test-reporter=spec scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs
+   node scripts/ledger/build.mjs --check
    ```
-   Use the summary at `<PICSEE_GATES_OUT>/<prefix>-summary.txt`. Its `swift` and `lcov` lines say
-   `skipped (no native inputs)` on CI documentation-only paths. `node-agents` and `node-tdd` say
-   `skipped` when their subjects are absent; ledger and name-check suites always run.
-   `apptests-retained=<exit> <run>/<fail>` reports local retained tests; `apptests-hosted=skipped`
-   is the default, or set `OWNER_GATES_HOSTED=1` for local hosted diagnostics. The `apptests=`
-   compatibility line has the retained exit when hosted is skipped. Hosted CI is the binding
-   app-tests result. Preflight refusal exits 2 with no `DONE`; failure facts follow nonzero lanes.
-   `PICSEE_HEAVY_LOCK_WAIT_SECS` defaults to 3600 seconds for all lock-taking lanes.
 8. **Ledger rules:**
    - Only the text after 「限制：」 may change in a behaviour commit.
    - Never raise a row above Partial without a device record.
@@ -597,6 +594,8 @@ PR body sections:
 - **Review**, both auditors' rounds plus a Still open list;
 - **Gates**, with numbers;
   source the local retained count from `apptests-retained`, and mark hosted CI as binding for `app-tests`.
+  An opted-in hosted failure makes the local App row FAIL. The node-tooling Source names skipped
+  suites; both optional suites skip only when every changed path is in the reviewed native-only set.
   A `swift` or `lcov` skip becomes N/A with the reason in Source on a documentation-only diff.
 - the `无用户可见变化` lines;
 - the `Ledger-Gardener: DAILY …` line (§5.7);
