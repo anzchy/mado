@@ -870,6 +870,40 @@ for (const event of ['workflow_dispatch\n', 'pull_request\r\n']) {
 
 // Owner 2026-11-14: owner-gates gained a local apptests lane; its row comes from apptests=, never from xcodebuild=.
 const withApp = value => complete.replace('xcodebuild=0\n', `xcodebuild=0\napptests=${value}\napptests: Tests run: 412, Failures: 0, Errors: 0, Skipped: 0\n`);
+test('new owner summary maps skipped native lanes to lint-valid N/A rows', async t => {
+  const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+  const summary = complete.replace('swift=0\nlcov=0\n', 'swift=skipped (no native inputs)\nlcov=skipped (no native inputs)\n')
+    .replace('xcodebuild=0\n', 'xcodebuild=0\napptests-retained=skipped (no App-facing change)\napptests-hosted=skipped (no App-facing change)\napptests=skip (no App-facing change)\n')
+    .replace('node=0\n', 'node-agents=skipped (no subject in diff)\nnode-tdd=skipped (no subject in diff)\nnode=0\n');
+  const result = runRows(t, summary, ['--head', head]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^\| package-tests \| N\/A \| — \| owner-gates swift=skipped \(no native inputs\) \|$/m);
+  assert.match(result.stdout, /^\| package-coverage \| N\/A \| — \| owner-gates lcov=skipped \(no native inputs\) \|$/m);
+  const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling |\n| device-smoke | N/A | — | tooling |\n`;
+  assert.deepEqual(checkGates(body, head), { ok: true });
+});
+
+test('new owner summary sources local App row from retained and ignores fact lines', async t => {
+  const { checkGates } = await import('./ui-parity-pr-body-lint.mjs');
+  const summary = complete.replace('xcodebuild=0\n', 'xcodebuild=0\napptests-retained=1 2/1\napptests-retained: tests=2 failed=1\napptests-hosted=skipped (OWNER_GATES_HOSTED=0; hosted CI binding)\napptests=0\n');
+  const result = runRows(t, summary, ['--head', head]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`^\\| app-tests \\| FAIL \\| ${head} \\| owner-gates apptests-retained=1 2/1; hosted CI binding \\|$`, 'm'));
+  assert.doesNotMatch(result.stdout, /summary malformed/);
+  const body = `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${result.stdout}| audit | N/A | — | tooling |\n| device-smoke | N/A | — | tooling |\n`;
+  assert.deepEqual(checkGates(body, head), { ok: false, reason: 'app-tests is a FAIL row' });
+});
+
+test('new retained PASS says hosted CI binding, while supplied CI remains the only App row', t => {
+  const summary = complete.replace('xcodebuild=0\n', 'xcodebuild=0\napptests-retained=0 2/0\napptests-hosted=skipped (OWNER_GATES_HOSTED=0; hosted CI binding)\napptests=0\n');
+  const local = runRows(t, summary, ['--head', head]);
+  assert.equal(local.status, 0, local.stderr);
+  assert.match(local.stdout, new RegExp(`^\\| app-tests \\| PASS \\| ${head} \\| owner-gates apptests-retained=0 2/0; hosted CI binding \\|$`, 'm'));
+  const ci = runCI(t, validRun(), { summary });
+  assert.equal(ci.status, 0, ci.stderr);
+  assert.deepEqual(ci.stdout.trim().split('\n').filter(line => line.startsWith('| app-tests |')),
+    [`| app-tests | PASS | ${head} | ${validRun().url} |`]);
+});
 for (const [value, row] of [
   ['0', `| app-tests | PASS | ${head} | owner-gates apptests=0 |`],
   ['65', `| app-tests | FAIL | ${head} | owner-gates apptests=65 |`],
