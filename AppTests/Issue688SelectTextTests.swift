@@ -45,7 +45,7 @@ import MadoInfrastructure
 }
 
 @Suite(.serialized, .timeLimit(.minutes(3))) struct Issue688DeviceSelectionGapTests {
-    @MainActor @Test func issue688DeviceGapClampsToDepartedLineInBothDirections() async throws {
+    @MainActor @Test func issue688DeviceGapDirectionGuard() async throws {
         let (selection, chinese, side) = try await fixtureSelection()
         let first = selection.geometry.viewRect(chinese.box)
         let second = selection.geometry.viewRect(side.box)
@@ -61,7 +61,7 @@ import MadoInfrastructure
         #expect(selection.selectedText == side.text, "dragging SIDE into the gap must not prepend a newline")
     }
 
-    @MainActor @Test func issue688DeviceOuterOvershootsClampToOwnLine() async throws {
+    @MainActor @Test func issue688DeviceOuterOvershootGuard() async throws {
         let (selection, chinese, side) = try await fixtureSelection()
         let first = selection.geometry.viewRect(chinese.box)
         let second = selection.geometry.viewRect(side.box)
@@ -86,17 +86,84 @@ import MadoInfrastructure
         #expect(first.maxY < second.minY)
     }
 
-    @MainActor private func fixtureSelection() async throws -> (ImageTextSelection, TextRecognitionLine, TextRecognitionLine) {
+    @MainActor @Test func issue688DeviceHelloMadoOvershootStaysOnLowerRow() async throws {
+        let (selection, _, _) = try await fixtureSelection()
+        let hello = try #require(selection.lines.first { $0.text == "Hello Mado" })
+        let rect = selection.geometry.viewRect(hello.box)
+        #expect(selection.begin(at: CGPoint(x: rect.minX + 1, y: rect.midY)))
+        selection.drag(to: CGPoint(x: rect.maxX + 150, y: rect.midY))
+        #expect(selection.selectedText == hello.text)
+    }
+
+    @MainActor @Test func issue688DeviceAndOrientedImageGapKeepDraggedLine() async throws {
+        for asset in ["mixed.png", "mixed-orientation-6.jpg"] {
+            let (selection, chinese, side) = try await fixtureSelection(asset: asset)
+            let pair = [chinese, side].sorted { selection.geometry.viewRect($0.box).minX < selection.geometry.viewRect($1.box).minX }
+            let first = selection.geometry.viewRect(pair[0].box)
+            let second = selection.geometry.viewRect(pair[1].box)
+            let gap = second.minX - first.maxX
+            #expect(gap > 24)
+            #expect(selection.begin(at: CGPoint(x: first.minX + 1, y: first.midY)))
+            selection.drag(to: CGPoint(x: first.maxX + 12, y: second.midY))
+            #expect(selection.selectedText == pair[0].text)
+            #expect(selection.begin(at: CGPoint(x: second.maxX - 1, y: second.midY)))
+            selection.drag(to: CGPoint(x: second.minX - 12, y: first.midY))
+            #expect(selection.selectedText == pair[1].text)
+        }
+    }
+
+    @MainActor private func fixtureSelection(asset: String = "mixed.png") async throws -> (ImageTextSelection, TextRecognitionLine, TextRecognitionLine) {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("TestAssets/TextRecognition/mixed.png"))
+        let data = try Data(contentsOf: root.appendingPathComponent("TestAssets/TextRecognition/\(asset)"))
         let lines = try await OnDeviceTextRecognitionProvider().recogniseLines(data)
         let chinese = try #require(lines.first { $0.text == "中文测试" })
         let side = try #require(lines.first { $0.text == "SIDE" })
         let selection = ImageTextSelection()
         selection.geometry = ImageTextGeometry(transform: CanvasTransform(backingScale: 1),
-                                               imageSize: CGSize(width: 1200, height: 800))
+                                               imageSize: CGSize(width: 1000, height: 340))
         selection.lines = lines
         return (selection, chinese, side)
+    }
+}
+
+@Suite(.timeLimit(.minutes(2))) struct Issue688RowSelectionTests {
+    @MainActor private func makeSelection(_ entries: [(String, CGRect)]) -> ImageTextSelection {
+        let selection = ImageTextSelection()
+        selection.geometry = ImageTextGeometry(transform: CanvasTransform(backingScale: 1),
+                                               imageSize: CGSize(width: 600, height: 100))
+        selection.lines = entries.map { text, rect in
+            TextRecognitionLine(text: text,
+                                box: CGRect(x: rect.minX / 600, y: 1 - rect.maxY / 100,
+                                            width: rect.width / 600, height: rect.height / 100))
+        }
+        return selection
+    }
+
+    @MainActor @Test func issue688ShortLineOvershootStaysOnItsVerticalRow() {
+        let selection = makeSelection([("Hi there", CGRect(x: 0, y: 0, width: 80, height: 16)),
+                                       ("Hello world long", CGRect(x: 0, y: 20, width: 300, height: 16))])
+        #expect(selection.begin(at: CGPoint(x: 1, y: 8)))
+        selection.drag(to: CGPoint(x: 95, y: 8))
+        #expect(selection.selectedText == "Hi there")
+    }
+
+    @MainActor @Test func issue688NextRowMarginsSelectThatRow() {
+        let selection = makeSelection([("A", CGRect(x: 0, y: 0, width: 100, height: 20)),
+                                       ("B", CGRect(x: 130, y: 30, width: 100, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 1, y: 10)))
+        selection.drag(to: CGPoint(x: 105, y: 40))
+        #expect(selection.selectedText == "A\n")
+        selection.drag(to: CGPoint(x: 245, y: 40))
+        #expect(selection.selectedText == "A\nB")
+    }
+
+    @MainActor @Test func issue688ThreeLinesOnOneRowClampToLineBeforeGap() {
+        let selection = makeSelection([("A", CGRect(x: 0, y: 0, width: 100, height: 20)),
+                                       ("B", CGRect(x: 200, y: 0, width: 100, height: 20)),
+                                       ("C", CGRect(x: 400, y: 0, width: 100, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 1, y: 10)))
+        selection.drag(to: CGPoint(x: 380, y: 10))
+        #expect(selection.selectedText == "A\nB")
     }
 }
 
