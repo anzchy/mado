@@ -88,6 +88,10 @@ enum RecogniseTextNoticeKind { case success, warning }
     var startsUnderPointer = false { didSet { if oldValue != startsUnderPointer { updateTrackingAreas() } } }
     override var acceptsFirstResponder: Bool { kind == .success }
     override var canBecomeKeyView: Bool { acceptsFirstResponder }
+    /// #687c: the Capture helper's notice sits in a panel that is never key, so its first click must open the panel.
+    /// The viewer keeps AppKit's default.
+    var acceptsFirstClick = false
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { acceptsFirstClick }
     override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
     override func accessibilityChildren() -> [Any]? { [] }
     override func setAccessibilityFocused(_ focused: Bool) {
