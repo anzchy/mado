@@ -66,7 +66,9 @@ enum CaptureThumbnailPlacement {
 /// One Capture from the helper and where its thumbnail goes. Without a request, the display under the pointer
 /// when the Capture starts becomes an explicit full-screen request, so the image and the thumbnail share it.
 enum CaptureThumbnailFlow {
-    @MainActor static func capture(request: CaptureRequest?, selectedDisplay: UInt32?, session: CaptureSession,
+    /// `request` is a region or window Capture's request, built when the read runs (nil: full screen).
+    @MainActor static func capture(request: (@MainActor () -> CaptureRequest)?, selectedDisplay: UInt32?,
+                                   session: CaptureSession,
                                    policy: CaptureOutputPolicy, clipboard: any CaptureClipboardPort,
                                    pointer: () -> NSPoint, screens: () -> [CaptureThumbnailPlacement.Screen],
                                    fullScreenRequest: (UInt32) -> CaptureRequest) async throws
@@ -74,8 +76,8 @@ enum CaptureThumbnailFlow {
         let resolved: CaptureRequest
         let displayID: UInt32?
         if let request {
-            resolved = request
-            displayID = CaptureThumbnailPlacement.displayID(for: request.target, selectedDisplay: selectedDisplay)
+            resolved = request()
+            displayID = CaptureThumbnailPlacement.displayID(for: resolved.target, selectedDisplay: selectedDisplay)
         } else {
             guard let id = CaptureThumbnailPlacement.displayID(containing: pointer(), screens: screens())
             else { throw ScreenCaptureKitScreen.Failure.displayUnavailable }
@@ -534,5 +536,13 @@ enum CaptureHelperWindows {
                                    thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow]) -> CaptureRequest {
         CaptureRequestFromWindows.make(target: target, bars: [bar, status].compactMap { $0 } + thumbnails.windows,
                                        overlays: overlays)
+    }
+
+    /// The request for a selection that finished now, built when its read runs (#685 fix r6): a Capture queued behind
+    /// another must also leave out the thumbnail the earlier one presented while it waited, as a full-screen read does.
+    @MainActor static func resolver(target: CaptureRequest.Target, bar: NSWindow?, status: NSWindow?,
+                                    thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow])
+        -> @MainActor () -> CaptureRequest {
+        { request(target: target, bar: bar, status: status, thumbnails: thumbnails, overlays: overlays) }
     }
 }

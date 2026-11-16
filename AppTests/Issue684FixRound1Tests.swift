@@ -72,8 +72,10 @@ private func targetDisplay(_ target: CaptureRequest.Target?) -> UInt32? {
     let pointer = Pointer(startsAt)
     let screen = MovingScreen(pointer: pointer, movesTo: movesTo)
     let session = CaptureSession(screen: screen, files: NoFiles())
+    var resolve: (@MainActor () -> CaptureRequest)?
+    if let request { resolve = { request } }
     let result = try await CaptureThumbnailFlow.capture(
-        request: request, selectedDisplay: selectedDisplay, session: session,
+        request: resolve, selectedDisplay: selectedDisplay, session: session,
         policy: CaptureOutputPolicy(savesToFolder: false, copiesToClipboard: false), clipboard: NoClipboard(),
         pointer: { pointer.location }, screens: { screens },
         fullScreenRequest: { CaptureRequest(target: .fullScreen(displayID: $0), barWindowIDs: [], overlayWindowIDs: []) })
