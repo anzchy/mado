@@ -1,5 +1,28 @@
 {
   "enabledPlugins": {
-    "tdd-guardian@xiaolai": true
+    "tdd-guardian@xiaolai": true,
+    "nlpm@xiaolai": false,
+    "ui-tokenize@xiaolai": false,
+    "ralph-loop@claude-plugins-official": false,
+    "cc-suite@xiaolai": false,
+    "docs-guardian@xiaolai": false
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/hooks/heavy-lock-guard.mjs\"", "timeout": 10 },
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/hooks/git-add-guard.mjs\"", "timeout": 10 },
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/hooks/ledger-pair-guard.mjs\"", "timeout": 150 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/hooks/ui-design-pointer.mjs\"", "timeout": 10 }
+        ]
+      }
+    ]
   }
 }
