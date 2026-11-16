@@ -11,6 +11,7 @@ import MadoMacUI
 @MainActor final class ViewerSelectTextAdapter {
     weak var controller: CanvasWindowController?
     var pasteboard: NSPasteboard = .general
+    var makeTextPasteboard: (NSPasteboard) -> any TextPasteboardWriting = { NativeTextPasteboard($0) }
     var recognise: @Sendable (Data, TextRecognitionIntent) async throws -> TextRecognitionResult = { data, intent in
         try await TextRecognitionService(onDevice: OnDeviceTextRecognitionProvider()).recognise(data, intent: intent)
     }
@@ -41,8 +42,7 @@ import MadoMacUI
     var hasSelection: Bool { selection.selectedText != nil && !closed && controller?.session.isAnnotating != true }
     func copy() -> Bool {
         guard hasSelection, let text = selection.selectedText else { return false }
-        pasteboard.clearContents()
-        return pasteboard.setString(text, forType: .string)
+        return makeTextPasteboard(pasteboard).copyText(text) == .copied
     }
     func press(_ point: CGPoint) -> Bool {
         guard isEligible else { clearSelection(); return false }
