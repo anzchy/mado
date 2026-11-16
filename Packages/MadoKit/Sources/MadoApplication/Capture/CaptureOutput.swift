@@ -182,12 +182,14 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
     /// Opens the Capture's file in Mado and closes the thumbnail (#686). An unsaved Capture is first saved to the
     /// Capture Folder by the 存储 path (decision 3.5); if that write fails, nothing is opened.
     /// If Mado cannot be opened, the thumbnail stays. Clicked while a 存储 write is in flight, it waits for that write
-    /// and opens its file; a second click while an open is pending does nothing, so a double click opens once.
+    /// and opens its file; a second click while an open is pending, or after one succeeded and closed the thumbnail,
+    /// does nothing, so a double click opens once (#686 fix r2).
     public func openInMado(_ opener: any CaptureOpenPort) async throws {
-        guard !isOpening else { return }
+        guard !isOpening, !isClosed else { return }
         isOpening = true
         defer { isOpening = false }
         let url = try await savedFile()
+        guard !isClosed else { return }
         try await opener.openInMado(url)
         isClosed = true
     }
