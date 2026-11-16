@@ -392,6 +392,8 @@ struct RecogniseTextPlacement {
     private var pointerChecked = false
     /// The gap above an obstacle: the design system's 8 pt spacing step.
     static let obstacleGap = CGFloat(DesignMetrics.spacing[1])
+    /// #687 fix r6: the narrowest panel (and compact notice) placed left of the Inspector column.
+    static let columnFloor: CGFloat = 200
 
     init(frame: NSRect = .zero,
          scheduleDismiss: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = { interval, action in
