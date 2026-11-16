@@ -130,7 +130,7 @@ test('Ubuntu tooling explicitly installs device dependencies and preserves exist
   assert.match(install, /sudo apt-get install[^\n]*\bpython3\b[^\n]*\bgit\b[^\n]*\bzsh\b/);
   assert.match(portableStep(), /^        working-directory: pr-head$/m);
   assert.equal(runBlock(step(body, 'Test agent tooling')),
-    'node --test scripts/agents/*.test.mjs scripts/perf/*.test.mjs scripts/ledger/*.test.mjs scripts/tdd/*.test.mjs');
+    'node --test scripts/agents/*.test.mjs scripts/perf/*.test.mjs scripts/ledger/*.test.mjs scripts/tdd/*.test.mjs scripts/hooks/*.test.mjs');
 });
 
 // Execute the REAL workflow block in a fixture checkout, with real runners.
