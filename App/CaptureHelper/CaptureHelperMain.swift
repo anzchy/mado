@@ -293,8 +293,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 selectionPanels.forEach { $0.orderOut(nil) }
                 selectionPanels.removeAll()
                 guard let target else { return }
-                let request = CaptureHelperWindows.request(target: target, bar: panel, status: statusPanel,
-                                                           thumbnails: thumbnails, overlays: overlays)
+                let request = CaptureHelperWindows.resolver(target: target, bar: panel, status: statusPanel,
+                                                            thumbnails: thumbnails, overlays: overlays)
                 capture(request: request, selectedDisplay: id, keepingAlive: overlays)
             }
             selectionPanels.append(overlay)
@@ -305,7 +305,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     /// `overlays` stay alive until the capture finishes, so nothing depends on when AppKit frees them.
     /// `selectedDisplay` is the display whose selection overlay finished. The pointer is read once, now, so the
     /// thumbnail lands on the display captured even when the pointer moves during the Capture.
-    private func capture(request: CaptureRequest?, selectedDisplay: UInt32?, keepingAlive overlays: [NSWindow] = []) {
+    private func capture(request: (@MainActor () -> CaptureRequest)?, selectedDisplay: UInt32?,
+                         keepingAlive overlays: [NSWindow] = []) {
         let pointer = NSEvent.mouseLocation
         Task { [weak self] in
             guard let self else { return }
