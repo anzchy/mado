@@ -13,8 +13,8 @@ struct CaptureFilterPlan {
         let excludedWindows: [Window]
     }
 
-    /// A visible bar window must still exist, or the capture could show it. An overlay or a never-shown
-    /// helper window that SCK no longer lists cannot appear in the image, so it needs no exclusion.
+    /// A visible bar window must still exist, or the capture could show it. A thumbnail may close after
+    /// the request is made; like an overlay or a never-shown helper window, it only needs exclusion while listed.
     static func resolve(_ request: CaptureRequest, availableWindowIDs: Set<UInt32>) throws -> Self {
         guard request.barWindowIDs.isSubset(of: availableWindowIDs) else { throw Failure.missingExcludedWindow }
         let excluded = request.excludedWindowIDs.intersection(availableWindowIDs)
@@ -44,10 +44,11 @@ struct CaptureFilterPlan {
 
 enum CaptureRequestFromWindows {
     /// Only bar windows on screen are required; a bar window never ordered in (the status panel before its
-    /// first message) is excluded if SCK lists it and otherwise skipped, like an overlay.
-    @MainActor static func make(target: CaptureRequest.Target, bars: [NSWindow], overlays: [NSWindow]) -> CaptureRequest {
+    /// first message) and a thumbnail are excluded if SCK lists them and otherwise skipped, like an overlay.
+    @MainActor static func make(target: CaptureRequest.Target, bars: [NSWindow], thumbnails: [NSWindow] = [],
+                                overlays: [NSWindow]) -> CaptureRequest {
         let shown = bars.filter(\.isVisible)
-        let optional = overlays + bars.filter { !$0.isVisible }
+        let optional = overlays + thumbnails + bars.filter { !$0.isVisible }
         return CaptureRequest(target: target,
                               barWindowIDs: Set(shown.compactMap { UInt32(exactly: $0.windowNumber) }),
                               overlayWindowIDs: Set(optional.compactMap { UInt32(exactly: $0.windowNumber) }))

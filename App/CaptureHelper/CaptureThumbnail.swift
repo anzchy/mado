@@ -607,8 +607,8 @@ private final class ThumbnailButton: NSButton {
 enum CaptureHelperWindows {
     @MainActor static func request(target: CaptureRequest.Target, bar: NSWindow?, status: NSWindow?,
                                    thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow]) -> CaptureRequest {
-        CaptureRequestFromWindows.make(target: target, bars: [bar, status].compactMap { $0 } + thumbnails.windows,
-                                       overlays: overlays)
+        CaptureRequestFromWindows.make(target: target, bars: [bar, status].compactMap { $0 },
+                                       thumbnails: thumbnails.windows, overlays: overlays)
     }
 
     /// The request for a selection that finished now, built when its read runs (#685 fix r6): a Capture queued behind
