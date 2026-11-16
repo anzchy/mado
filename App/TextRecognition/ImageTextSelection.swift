@@ -98,13 +98,21 @@ struct ImageTextGeometry {
 
     private func position(at point: CGPoint, requireHit: Bool) -> Position? {
         guard !lines.isEmpty else { return nil }
+        let rects = lines.map { geometry.viewRect($0.box) }
         let index: Int
-        if let hit = lines.indices.first(where: { geometry.viewRect(lines[$0].box).contains(point) }) {
+        if let hit = lines.indices.first(where: { rects[$0].contains(point) }) {
             index = hit
         } else if requireHit { return nil }
         else {
-            index = lines.indices.min { abs(geometry.viewRect(lines[$0].box).midY - point.y) <
-                                        abs(geometry.viewRect(lines[$1].box).midY - point.y) } ?? 0
+            // A drag ending in the gap between two lines on the same row stays at
+            // the edge of the line it left. Otherwise, measure to the whole box:
+            // midpoints alone can jump to a distant line on the same row.
+            index = departedLine(inGapAt: point, rects: rects)
+                ?? lines.indices.min { lhs, rhs in
+                    let a = distanceToBox(point, rects[lhs])
+                    let b = distanceToBox(point, rects[rhs])
+                    return a < b || (a == b && lhs < rhs)
+                } ?? 0
         }
         let line = lines[index]
         let count = line.text.count
@@ -122,4 +130,37 @@ struct ImageTextGeometry {
         return Position(line: index, offset: offset)
     }
     private var quarterTurnsHorizontal: Bool { geometry.quarterTurns.isMultiple(of: 2) }
+
+    private func distanceToBox(_ point: CGPoint, _ box: CGRect) -> CGFloat {
+        let dx = max(box.minX - point.x, 0, point.x - box.maxX)
+        let dy = max(box.minY - point.y, 0, point.y - box.maxY)
+        return dx * dx + dy * dy
+    }
+
+    private func departedLine(inGapAt point: CGPoint, rects: [CGRect]) -> Int? {
+        guard let anchor else { return nil }
+        let horizontal = quarterTurnsHorizontal
+        let coordinate = horizontal ? point.x : point.y
+        let perpendicular = horizontal ? point.y : point.x
+        let own = rects[anchor.line]
+        let ownMin = horizontal ? own.minX : own.minY
+        let ownMax = horizontal ? own.maxX : own.maxY
+        let ownPerpMin = horizontal ? own.minY : own.minX
+        let ownPerpMax = horizontal ? own.maxY : own.maxX
+        for neighbor in [anchor.line - 1, anchor.line + 1] where rects.indices.contains(neighbor) {
+            let other = rects[neighbor]
+            let otherMin = horizontal ? other.minX : other.minY
+            let otherMax = horizontal ? other.maxX : other.maxY
+            let otherPerpMin = horizontal ? other.minY : other.minX
+            let otherPerpMax = horizontal ? other.maxY : other.maxX
+            let overlap = min(ownPerpMax, otherPerpMax) - max(ownPerpMin, otherPerpMin)
+            let shorter = min(ownPerpMax - ownPerpMin, otherPerpMax - otherPerpMin)
+            guard overlap > shorter * 0.5,
+                  perpendicular >= min(ownPerpMin, otherPerpMin),
+                  perpendicular <= max(ownPerpMax, otherPerpMax) else { continue }
+            if ownMax < otherMin, coordinate >= ownMax, coordinate <= otherMin { return anchor.line }
+            if otherMax < ownMin, coordinate >= otherMax, coordinate <= ownMin { return anchor.line }
+        }
+        return nil
+    }
 }
