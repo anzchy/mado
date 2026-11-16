@@ -36,19 +36,36 @@ public struct BaiduCloudCredentialStore: CloudCredentialStore {
 
     public func hasKeys() async -> Bool { await credentials() != nil }
 
-    /// Saves both keys, trimmed. If either write fails, both are removed so no half pair is left behind.
+    /// Saves both keys, trimmed. If a write fails while replacing a saved pair, the API Key already written is put
+    /// back, so the old pair still works; on a first save, both are removed so no half pair is left behind.
     public func save(_ credentials: CloudCredentials) async throws(CloudKeyError) {
         let apiKey = credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let secretKey = credentials.secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty, !secretKey.isEmpty else { throw .emptyKey }
+        let previous = await self.credentials()
         do {
             try await secrets.setSecret(apiKey, service: service, account: Self.apiKeyAccount)
-            try await secrets.setSecret(secretKey, service: service, account: Self.secretKeyAccount)
         } catch {
-            try? await secrets.removeSecret(service: service, account: Self.apiKeyAccount)
-            try? await secrets.removeSecret(service: service, account: Self.secretKeyAccount)
+            if previous == nil { await removeBoth() }
             throw .storeFailed
         }
+        do {
+            try await secrets.setSecret(secretKey, service: service, account: Self.secretKeyAccount)
+        } catch {
+            if let previous {
+                // The Secret Key was not touched; restoring the API Key gives back the whole old pair.
+                do { try await secrets.setSecret(previous.apiKey, service: service, account: Self.apiKeyAccount) }
+                catch { await removeBoth() }
+            } else {
+                await removeBoth()
+            }
+            throw .storeFailed
+        }
+    }
+
+    private func removeBoth() async {
+        try? await secrets.removeSecret(service: service, account: Self.apiKeyAccount)
+        try? await secrets.removeSecret(service: service, account: Self.secretKeyAccount)
     }
 
     /// Removes both keys; tries the second even when the first fails, and reports any failure.
