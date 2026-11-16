@@ -411,7 +411,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             guard let self else { return false }
             // While the panel opens, the Inspector's focus replay must not take the editor's keys (#687b r2). An
             // intentional move is let through: the panel's own Tab (#687 fix r5) or a click in the Inspector.
+            // #687 fix r5b (F14): so is an accessibility client's focus move (VoiceOver, AXFocused).
             if self.recogniseTextAdapter.panelEditor != nil, !self.recogniseTextAdapter.allowsInspectorFocus,
+               !InspectorAccessibilityFocus.isMoving,
                self.window?.currentEvent?.type != .leftMouseDown,
                let view = responder as? NSView,
                view === self.inspectorHost || view.isDescendant(of: self.inspectorHost) {
