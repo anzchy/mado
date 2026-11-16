@@ -353,14 +353,16 @@ Risk tier decides the audits:
 
 | Tier | Typical scope | Audit |
 |---|---|---|
-| Low | docs, ledger wording, mechanical renames, tiny scripts, Low audit follow-ups | opus-auditor alone, one blind round; apply the shared severity policy in §5.5 to every finding |
-| Medium | ordinary features, UI states, navigation, scanning | opus-auditor alone; one fix round for user-visible/AC Mediums, no confirm |
-| High | FileAccess/sandbox/bookmarks, entitlements, concurrency core, anything that can lose data or access | opus-auditor alone; every C/H gets a fresh-context confirm; at most 2 auditor rounds, then the user decides |
+| Low | docs, ledger wording, mechanical renames, tiny scripts, Low audit follow-ups | gpt-auditor and opus-auditor, blind and in parallel, one round; apply the shared severity policy in §5.5 to every finding |
+| Medium | ordinary features, UI states, navigation, scanning | gpt-auditor and opus-auditor, blind and in parallel; one fix round for user-visible/AC Mediums, no confirm |
+| High | FileAccess/sandbox/bookmarks, entitlements, concurrency core, anything that can lose data or access | gpt-auditor and opus-auditor, blind and in parallel; every C/H gets a fresh-context confirm; at most 2 auditor rounds, then the user decides |
 
 Raise the tier if a change touches FileAccess, AccessIntent, the loader, entitlements, Info.plist or signing.
-This Opus-only table is an active user override (2026-10-25: 「Opus单审，gpt暂停」). It replaced the 2026-10-24 GPT-only override
-(「目前opus auditor qouta 不够用了，暂时停用opus-auditor，只由gpt-auditor 来审」). The dual-audit baseline stays suspended
-and gpt-auditor stays paused until the user explicitly restores it; never infer restoration from quota availability.
+Every tier gets both auditors, at most 2 rounds per item. History: a 2026-10-24 GPT-only override
+(「目前opus auditor qouta 不够用了，暂时停用opus-auditor，只由gpt-auditor 来审」) was replaced on the morning of 2026-10-25 by an
+Opus-only override (「Opus单审，gpt暂停」). The user lifted that the same afternoon ("audit now has gpt-auditor +
+opus-auditor at the same time, audit cap is two"), restoring dual audit. Only the user changes the route; never infer a
+change from quota availability.
 
 ### 5.1 Issue
 
@@ -834,9 +836,10 @@ Codex delegator doesn't see it, which is one reason this guide and the handoff l
 - **Merge authority and policies:** the delegator merges when there is no blocking C/H and CI is green. The Medium policy and C/H confirm rounds are as in §5.5.
 - **Implementers:** Codex implementers run with `-s danger-full-access` and use `$tdd-guardian-workflow` (from P1
   wave 3). Kimi is admitted; it always runs K3.1 Pro at effort high (2026-10-24).
-- **Auditors:** active override: all tiers use only opus-auditor, `/clear`ed before every audit and C/H confirm.
-  User decision 2026-10-25: 「Opus单审，gpt暂停」 (replacing the 2026-10-24 GPT-only override). Do not restore gpt-auditor
-  automatically when Codex quota returns; wait for an explicit user restoration.
+- **Auditors:** every tier gets gpt-auditor and opus-auditor, blind and in parallel, at most 2 rounds per item;
+  `/clear` opus-auditor and `reset.sh` gpt-auditor before every audit and C/H confirm. History: the 2026-10-25 morning
+  decision 「Opus单审，gpt暂停」 (replacing the 2026-10-24 GPT-only override) was lifted the same afternoon ("audit now
+  has gpt-auditor + opus-auditor at the same time, audit cap is two").
 - **Ledger:** feature-ledger md and html are committed together.
 - **Git:** force-with-lease is allowed only on the delegator's own unmerged PR branches.
 - **Product decisions of 2026-10-24:**

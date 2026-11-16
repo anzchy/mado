@@ -41,7 +41,7 @@ researcher、planner、opus-implementor、codex-implementor、codex-auditor（do
 - 实现者两种：Opus 在原生 Claude Code 里工具调用最稳；codex-implementor 让 Codex 模型在 Claude Code 外壳里干活，
   Bash 不受 Codex 沙箱限制（mini 上 Codex CLI pane 不能跑 xcodebuild，这条可以）。
 - 审计跨厂商（见第 6 节），盲点不重叠。
-- 现有原生 Codex CLI pane（`gpt-imple-*`、`gpt-auditor`）和 `kimi-imple-1` 不受影响，继续可用。
+- 现有原生 Codex CLI pane（`gpt-imple-*`、`gpt-auditor`）不受影响，继续可用；`kimi-imple-1` 已于 2026-11-01 退役，不再派活。
 
 ## 3. 一次性准备
 
@@ -220,4 +220,4 @@ P1 失败的备用方案：不用 `herdr agent start`，直接
 ## 12. 回退
 
 停掉新 pane，删除 `~/.picsee/shims/<pane>/` 与对应 `~/.claude-codex-*` profile 即可；agent 文件入库后不被调用就没有影响。
-现有 roster（gpt-imple-*、gpt-auditor、opus-auditor、opus-imple-1、kimi-imple-1）全程不改。
+现有 roster（gpt-imple-*、gpt-auditor、opus-auditor、opus-imple-1、opus-imple-2）全程不改；`kimi-imple-1`（2026-11-01 退役）和 `gpt-imple-3` 已退役。
