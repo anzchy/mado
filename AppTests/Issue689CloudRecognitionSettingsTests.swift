@@ -244,11 +244,11 @@ func issue689ConsentDialogNamesBaiduTheOneImageAndTheTerms(_ locale: String) thr
     let alert = CloudRecognitionSettingsGroup.consentAlert(localize: { catalog[$0] ?? $0 }, openURL: { opened.append($0) })
     if locale == "zh-Hans" {
         #expect(alert.messageText == "要用百度识别文字吗？")
-        #expect(alert.informativeText == "云端识别会把正在识别的那一张图片上传到百度，只在你选择「识别文字」时上传。在图片上直接选字永远只用本机识别。上传适用百度服务条款。")
+        #expect(alert.informativeText == "云端识别会把正在识别的那一张图片上传到百度，只在你选择「识别文字」时上传。在图片上直接选字永远只用本机识别。上传适用百度服务条款。使用百度文字识别需要一个完成实名认证的百度账号，百度文档列出的证件只有中国大陆证件。百度会把上传的图片保存多久、在中国大陆以外能否使用这项服务，目前都未经确认。")
         #expect(alert.buttons.map(\.title) == ["同意并打开", "取消"])
     } else {
         #expect(alert.messageText == "Use Baidu to recognize text?")
-        #expect(alert.informativeText == "Cloud Recognition uploads the one image being recognized to Baidu, only when you choose Recognize Text. Selecting text directly on an image always uses on-device recognition. Baidu's terms of service apply to the upload.")
+        #expect(alert.informativeText == "Cloud Recognition uploads the one image being recognized to Baidu, only when you choose Recognize Text. Selecting text directly on an image always uses on-device recognition. Baidu's terms of service apply to the upload. Baidu text recognition needs a Baidu account with real-name verification, and Baidu's documentation lists only mainland Chinese ID documents. How long Baidu keeps uploaded images, and whether the service works outside mainland China, are not confirmed.")
         #expect(alert.buttons.map(\.title) == ["Agree and Turn On", "Cancel"])
     }
     #expect(alert.alertStyle == .informational)
