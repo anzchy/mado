@@ -185,7 +185,7 @@ private let savedKeys = CloudCredentials(apiKey: "test-api-key-1234", secretKey:
     #expect(outcome.onDevice == 1)
 }
 
-@MainActor @Test func issue689RecogniseTextDefaultUsesTheAppServices() throws {
+@MainActor @Test(.timeLimit(.minutes(1))) func issue689RecogniseTextDefaultUsesTheAppServices() throws {
     _ = NSApplication.shared
     let unavailable = Task<AccessServices, Error> { throw CancellationError() }
     let controller = CanvasWindowController(pipeline: ImageIOPipeline(),
