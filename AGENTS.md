@@ -61,7 +61,7 @@ open -n .build/dd-signed/Build/Products/Debug/Mado.app
 
 ## 必须遵守的规则
 
-- **测试先行（先红）。** 行为改动要有先失败、后通过的测试，RED receipt 记录在实现之前，record 与 verify 用同一个过滤器（[test-lanes](docs/agents/test-lanes.md)）。Claude Code 用 `/tdd-guardian:workflow`；从 P1 第三波起，Codex 用 tdd-guardian 的官方 Codex 移植 `$tdd-guardian-workflow`。workflow 不提交；实现者通过 green gates 后按 WI 提交。config 已关闭 mutation。
+- **测试先行（先红）。** 行为改动要有先失败、后通过的测试，RED receipt 记录在实现之前，record 与 verify 用同一个过滤器（[test-lanes](docs/agents/test-lanes.md)）。Claude Code 用 `/tdd-guardian:workflow`；从 P1 第三波起，Codex 用 tdd-guardian 的官方 Codex 移植 `$tdd-guardian-workflow`。workflow 不提交；实现者通过 green gates 后按 WI 提交。config 已关闭 mutation。测试框架还没有时，说明这一点，不要跳过。
 - **sandbox 不关。** 不添加 Full Disk Access 依赖，不用 entitlement 绕过授权。遇到冲突，记录复现步骤，写 ADR，问用户。
 - **研究资料不进 App。** App target 不打包 REA、npm、`evidence/`、HTML/CSS 或 Stitch 产物。
 - **不入库的内容**：`.gitignore` 里列出的大体积反汇编和字符串转储（其中含第三方 API key）、`.stitch/` 工作区、本地工具状态。不要用 `git add -A` 把它们带进来，只暂存你能逐个说出名字的路径。
