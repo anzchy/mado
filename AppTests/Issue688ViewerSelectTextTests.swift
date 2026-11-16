@@ -30,6 +30,26 @@ private actor EmptySelectionProbe {
 }
 
 @Suite(.serialized) struct Issue688ViewerSelectTextTests {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue688EscapeClearsSelectionWhileOCRPanelIsOpen() async throws {
+    let h = try await Fix5bHarness()
+    defer { h.close() }
+    try await h.recognise()
+    _ = try h.openPanel()
+    let selection = h.controller.selectTextAdapter.selection
+    selection.geometry = ImageTextGeometry(transform: h.controller.canvas.backdropFrame.transform,
+                                           imageSize: h.controller.canvas.backdropFrame.sourceSize)
+    selection.lines = [TextRecognitionLine(text: "Hello", box: CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))]
+    let box = selection.geometry.viewRect(CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))
+    #expect(selection.begin(at: CGPoint(x: box.minX + 1, y: box.midY)))
+    selection.drag(to: CGPoint(x: box.maxX - 1, y: box.midY))
+    #expect(selection.selectedText != nil)
+    h.controller.session.updateFocus(.canvas)
+    _ = h.window.makeFirstResponder(h.controller.canvas)
+    try h.key("\u{1b}", code: 53)
+    #expect(selection.selectedText == nil, "Esc must clear an active image selection")
+    #expect(h.controller.recogniseTextAdapter.panelEditor == nil, "the OCR panel also closes")
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688SelectionCopyFailurePreservesClipboard() async throws {
     let context = try await Issue690Context()
     defer { context.close() }

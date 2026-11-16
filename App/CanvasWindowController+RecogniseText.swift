@@ -294,6 +294,7 @@ import MadoInfrastructure
             if (self.controller?.window?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true { return false }
             let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             if event.characters == "\u{1b}", plain {
+                _ = self.controller?.selectTextAdapter.escape()
                 self.closePanel()
                 return true
             }
