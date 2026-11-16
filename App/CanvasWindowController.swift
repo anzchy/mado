@@ -1961,6 +1961,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         session.updateFocus(focusContext)
         session.setMenuTracking(menuTracking())
         if command == .escape, routeAnnotateEscape() { return true }
+        if command == .escape, selectTextAdapter.escape() { return true }
         // Bare ←/→ arrive as menu key equivalents as well as canvas keys.
         if command == .previous || command == .next, window?.currentEvent?.type == .keyDown {
             return canvas.preservingKeyboardFocusRing { router.route(command, from: entry, to: session) }

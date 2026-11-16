@@ -29,7 +29,43 @@ private actor EmptySelectionProbe {
     }
 }
 
+private actor FailedSelectionProbe {
+    private(set) var calls = 0
+    func result() throws -> TextRecognitionResult {
+        calls += 1
+        throw CocoaError(.fileReadCorruptFile)
+    }
+}
+
 @Suite(.serialized) struct Issue688ViewerSelectTextTests {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue688EscapeMenuKeyClearsSelectionBeforeReturningToFolder() async throws {
+    let context = try await Issue690Context()
+    defer { context.close() }
+    let controller = try await context.open()
+    let window = try #require(controller.window)
+    window.makeKeyAndOrderFront(nil)
+    _ = window.makeFirstResponder(controller.canvas)
+    controller.session.updateFocus(.canvas)
+    try await waitUntil("returnable viewer", timeout: .seconds(20)) { controller.session.canReturnToSource }
+    let selection = controller.selectTextAdapter.selection
+    selection.geometry = ImageTextGeometry(transform: controller.canvas.backdropFrame.transform,
+                                           imageSize: controller.canvas.backdropFrame.sourceSize)
+    selection.lines = [TextRecognitionLine(text: "Hello", box: CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))]
+    let box = selection.geometry.viewRect(CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))
+    #expect(selection.begin(at: CGPoint(x: box.minX + 1, y: box.midY)))
+    selection.drag(to: CGPoint(x: box.maxX - 1, y: box.midY))
+    let esc = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+        isARepeat: false, keyCode: 53))
+    let viewMenu = try #require(context.item("command.escape.menu").menu)
+    #expect(viewMenu.performKeyEquivalent(with: esc))
+    #expect(selection.selectedText == nil)
+    #expect(controller.session.mode == .viewing)
+    #expect(viewMenu.performKeyEquivalent(with: esc))
+    try await waitUntil("Esc returned to the source folder", timeout: .seconds(20)) {
+        controller.gridShellVisible || controller.session.mode == .browsing
+    }
+}
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688EscapeClearsSelectionWhileOCRPanelIsOpen() async throws {
     let h = try await Fix5bHarness()
     defer { h.close() }
