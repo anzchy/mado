@@ -94,6 +94,8 @@ private actor FailedSelectionProbe {
     defer { board.releaseGlobally() }
     board.clearContents()
     board.setString("sentinel", forType: .string)
+    let previousRTF = Data("{\\rtf1 sentinel}".utf8)
+    board.setData(previousRTF, forType: .rtf)
     controller.selectTextAdapter.pasteboard = board
     controller.selectTextAdapter.makeTextPasteboard = { board in
         NativeTextPasteboard(board, writeObjects: { target, objects in
@@ -109,8 +111,9 @@ private actor FailedSelectionProbe {
     let box = controller.selectTextAdapter.selection.geometry.viewRect(CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))
     #expect(controller.selectTextAdapter.selection.begin(at: CGPoint(x: box.minX + 1, y: box.midY)))
     controller.selectTextAdapter.selection.drag(to: CGPoint(x: box.maxX - 1, y: box.midY))
-    #expect(!controller.selectTextAdapter.copy())
+    #expect(NSApp.sendAction(#selector(NSText.copy(_:)), to: controller.canvas, from: nil))
     #expect(board.string(forType: .string) == "sentinel")
+    #expect(board.data(forType: .rtf) == previousRTF)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688LateRecognitionAfterItemSwitchIsDropped() async throws {
@@ -239,8 +242,16 @@ private actor FailedSelectionProbe {
     controller.selectTextAdapter.pasteboard = board
     controller.selectTextAdapter.cancel()
     board.clearContents(); board.setString("sentinel", forType: .string)
-    controller.canvas.copy(nil)
-    #expect(board.string(forType: .string) == "sentinel", "viewer Copy without text selection retains its old behavior")
+    context.pasteboard.clearContents(); context.pasteboard.setString("legacy sentinel", forType: .string)
+    func items(_ menu: NSMenu) -> [NSMenuItem] { menu.items.flatMap { [$0] + ($0.submenu.map(items) ?? []) } }
+    let mainMenu = try #require(NSApp.mainMenu)
+    let copyItem = try #require(items(mainMenu).first {
+        $0.action == #selector(CanvasInputBridge.copy(_:)) && $0.keyEquivalent == "c"
+    })
+    #expect(!controller.canvas.validateMenuItem(copyItem), "Copy is disabled without an image-text selection")
+    #expect(NSApp.sendAction(#selector(NSText.copy(_:)), to: controller.canvas, from: copyItem))
+    #expect(board.string(forType: .string) == "sentinel")
+    #expect(context.pasteboard.string(forType: .string) == "legacy sentinel")
     controller.selectTextAdapter.selection.geometry = ImageTextGeometry(
         transform: controller.canvas.backdropFrame.transform,
         imageSize: controller.canvas.backdropFrame.sourceSize)
@@ -253,18 +264,14 @@ private actor FailedSelectionProbe {
     let shortcut = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command],
         timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "c",
         charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8))
-    func items(_ menu: NSMenu) -> [NSMenuItem] { menu.items.flatMap { [$0] + ($0.submenu.map(items) ?? []) } }
-    let mainMenu = try #require(NSApp.mainMenu)
-    let copyItem = try #require(items(mainMenu).first {
-        $0.action == #selector(CanvasInputBridge.copy(_:)) && $0.keyEquivalent == "c"
-    })
     #expect(shortcut.modifierFlags.contains(.command))
     let copyAction = try #require(copyItem.action)
+    #expect(copyItem.keyEquivalentModifierMask == [.command])
+    board.clearContents(); board.setString("shortcut sentinel", forType: .string)
     #expect(NSApp.sendAction(copyAction, to: controller.canvas, from: copyItem))
-    try context.key("c", code: 8, modifiers: [.command])
     #expect(board.string(forType: .string) == "Hello", "⌘C copies selected image text")
     board.clearContents(); board.setString("sentinel", forType: .string)
-    controller.canvas.copy(nil)
+    #expect(NSApp.sendAction(#selector(NSText.copy(_:)), to: controller.canvas, from: copyItem))
     #expect(board.string(forType: .string) == "Hello", "Edit Copy uses the same canvas action")
     let before = controller.selectTextAdapter.selection.selectionRects
     controller.canvas.magnify(by: 0.4, at: CGPoint(x: 320, y: 240))
