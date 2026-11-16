@@ -18,6 +18,7 @@ import MadoMacUI
     let selection = ImageTextSelection()
     private var overlay: ImageTextSelectionOverlay?
     private var task: Task<Void, Never>?
+    private var recognitionStarted = false
     private var activeGeneration: UUID?
     private var activeItem: ItemID?
     private var completedGeneration: UUID?
@@ -78,7 +79,13 @@ import MadoMacUI
             activeGeneration = generation
             activeItem = item
         }
-        guard completedGeneration != generation, task == nil else { return }
+        guard completedGeneration != generation else { return }
+        if task != nil {
+            guard !recognitionStarted else { return }
+            run = UUID()
+            task?.cancel()
+            task = nil
+        }
         let thisRun = run
         task = Task(priority: .utility) { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
@@ -93,6 +100,7 @@ import MadoMacUI
                 if self?.run == thisRun { self?.task = nil }
                 return
             }
+            self.recognitionStarted = true
             do {
                 let data = try await ViewerRecogniseTextAdapter.sourceData(image: image)
                 try Task.checkCancellation()
@@ -108,14 +116,21 @@ import MadoMacUI
                 self.completedGeneration = generation
                 if !result.lines.isEmpty { self.ensureOverlay() }
                 self.overlay?.needsDisplay = true
-            } catch { /* Direct selection is silent; explicit recognition reports errors. */ }
-            if self.run == thisRun { self.task = nil }
+            } catch {
+                if !Task.isCancelled, self.run == thisRun,
+                   controller.session.imageLoader.generation == generation,
+                   controller.session.imageLoader.presented?.key.itemID == item {
+                    self.completedGeneration = generation
+                }
+            }
+            if self.run == thisRun { self.task = nil; self.recognitionStarted = false }
         }
     }
 
     func cancel() {
         run = UUID()
         task?.cancel(); task = nil
+        recognitionStarted = false
         activeGeneration = nil; activeItem = nil
         completedGeneration = nil
         selection.lines = []
