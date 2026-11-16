@@ -25,7 +25,11 @@ import MadoInfrastructure
     /// #687 fix r5: the notice's 5 s dismissal clock; tests replace it before the first recognition.
     var scheduleNoticeDismiss: ((TimeInterval, @escaping @MainActor () -> Void) -> Void)?
     /// #687 fix r5b (F9): posts a VoiceOver announcement; tests record it instead.
-    var announce: (String) -> Void = { _ in }
+    lazy var announce: (String) -> Void = { [weak self] message in
+        NSAccessibility.post(element: self?.controller?.window ?? NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+    private var announcedRun: UUID?
     /// #687 fix r5b (F11): builds the clipboard writer; tests replace it.
     var makeTextPasteboard: (NSPasteboard) -> any TextPasteboardWriting = { NativeTextPasteboard($0) }
     /// #687 fix r5b (F12): where the pointer rests, in window coordinates; tests replace it.
@@ -192,6 +196,11 @@ import MadoInfrastructure
                 engine: nil, kind: .warning, onOpen: nil)
         }
         overlay.layoutSubtreeIfNeeded()
+        // #687 fix r5b (F9): VoiceOver hears each recognition's result once, as Annotate's showSaved does.
+        if announcedRun != activeRun, let label = overlay.noticeView?.accessibilityLabel() {
+            announcedRun = activeRun
+            announce(label)
+        }
     }
 
     private static func label(for engine: TextRecognitionEngine) -> String {
