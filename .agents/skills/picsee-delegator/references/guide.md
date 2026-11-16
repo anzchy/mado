@@ -50,13 +50,16 @@ is green.
 | w1:p1 | picsee-delegator | Claude Code, Opus (or you) | main checkout | delegator |
 | w1:p2 | gpt-imple-1 | Target Codex `gpt-6-sol`, effort `medium`, after its current work/fix rounds end | `picsee-wt/gpt-imple-1` | Medium/High implementer |
 | w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` (transition applied) | `picsee-wt/gpt-imple-2` | Medium/High implementer |
-| w1:p4 | gpt-imple-3 | Codex `gpt-5.6-sol` | `picsee-wt/gpt-imple-3` | Low-only implementer |
-| w1:p5 | gpt-auditor | Codex `gpt-6-astra`, reasoning high — **paused since 2026-10-25** | `picsee-wt/gpt-auditor` (detached) | do not dispatch or auto-restore |
-| w1:p6 | opus-auditor | Claude Code, `--agent picsee-opus-auditor --model opus` | `picsee-wt/opus-auditor` (detached) | sole auditor |
-| w1:p7 | kimi-imple-1 | Kimi Code CLI, **K3.1 Pro, thinking effort high** (user rule) | `picsee-wt/kimi-imple-1` | Medium/High implementer |
+| w1:p4 | gpt-imple-3 | Codex `gpt-5.6-sol` | `picsee-wt/gpt-imple-3` | **retired** (do not dispatch); was Low-only implementer |
+| w1:p5 | gpt-auditor | Codex `gpt-6-astra`, reasoning high (paused the morning of 2026-10-25, restored the same afternoon) | `picsee-wt/gpt-auditor` (detached) | blind auditor (with opus-auditor) |
+| w1:p6 | opus-auditor | Claude Code, `--agent picsee-opus-auditor --model opus` | `picsee-wt/opus-auditor` (detached) | blind auditor (with gpt-auditor) |
+| w1:p7 | kimi-imple-1 | Kimi Code CLI, **K3.1 Pro, thinking effort high** (user rule) | `picsee-wt/kimi-imple-1` | **retired 2026-11-01** (do not dispatch); was Medium/High implementer |
+| w1:p9 | opus-imple-1 | Claude Code, Opus | `picsee-wt/opus-imple-1` | implementer |
+| w1:pB | opus-imple-2 | Claude Code, Opus | `picsee-wt/opus-imple-2` | implementer |
 
-**Slots:** at most two Medium/High implementation items in flight at once. gpt-imple-1/2 and kimi-imple-1 share
-them. A third slot is for gpt-imple-3's Low items only.
+**Slots:** at most two Medium/High implementation items in flight at once. When this rule was written, gpt-imple-1/2
+and kimi-imple-1 shared them and a third slot was for gpt-imple-3's Low items only; kimi-imple-1 and gpt-imple-3 are
+now retired, and the active implementers are gpt-imple-1, gpt-imple-2, opus-imple-1 and opus-imple-2.
 
 **Panes that are too small.** p3 and p5 are often 2–3 rows tall, which leaves `herdr pane read` empty and makes
 `reset.sh` report `FAIL … no context line after 30s` (or the configured timeout) even if the reset worked. Run `herdr pane zoom <pane>` to resize, then read again.
@@ -325,7 +328,7 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 | Codex (p2–p5) | `.agents/skills/picsee-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`PICSEE_RESET_CONTEXT_SECS`, interval `PICSEE_RESET_POLL_SECS`, default 0.25 s; both timers must be positive plain decimals ≤300 s) and requires a fresh `>_ OpenAI Codex (v…)` header over an empty transcript above the bottom-most footer showing `Context 0% used` in the same read. A changed `herdr pane get` session ID is also sufficient proof with that footer, but is optional: herdr normally updates the ID only after the first turn, so an unchanged ID does not block success. Reads use `--source recent-unwrapped --lines 2000` so a short visible pane does not cut off the title above the logo. Parse from the last unfenced title, ignoring older scrollback, `/new` echoes and chooser residue above it. A title after residue needs an immediate nonblank cwd line below it; a leading title (or one directly after a leading cwd line) also counts. Cwd metadata is an unspaced `~/…` or multi-component absolute path, never a slash command such as `/new`. Blank lines, braille/box-drawing logo and the known welcome tip may precede one exact empty input placeholder; only blanks and known footer hints (`? for shortcuts`, `? for help`, `? for commands`) may follow that placeholder before the footer. A repeated placeholder, tip or box art after it invalidates title proof. Any user prompt, tool/message/output line, model reply, quoted or fenced transcript, or unknown text between the title and bottom-most footer invalidates header proof; keep polling even if that old footer is nonzero. `/new` and startup text alone cannot prove a fresh session. Both standalone and Codex status-bar footers count. Only the footer below the last boundary counts; a footer under a still-visible chooser is ignored. A missing boundary fails even if a markerless footer says 0%. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
 | opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent picsee-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
-| kimi-imple-1 (p7) | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
+| kimi-imple-1 (p7), **retired 2026-11-01, do not dispatch** | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
 
 To create a **new implementer pane**:
 
@@ -728,7 +731,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 - Record decisions verbatim:
   - in the commit body for acceptance and plan changes;
   - in the roster plan for roster and model rules;
-  - in `~/.picsee/handoff/20261022-migrate-to-mini.md` for the session log.
+  - in `~/.picsee/handoff/20261031-delegator.md` for the session log (rotated 2026-10-31 from `20261022-migrate-to-mini.md`).
 - Report budget. Codex weekly usage shows in Codex panes ("weekly limit: N% left"). Codex quota recovery does not
   reactivate gpt-auditor; only an explicit user restoration does.
 
@@ -811,8 +814,8 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | What | Where |
 |---|---|
 | Plan, architecture, ADRs, ledger, validation records | repo `docs/` |
-| Roster rules (source for `.claude/rules/70-herdr-roster.md`) | `docs/plans/20261021-herdr-roster-migration-plan.md` |
-| Session handoff log (append every milestone and decision) | `~/.picsee/handoff/20261022-migrate-to-mini.md` |
+| Roster rules (a `.claude/rules/70-herdr-roster.md` rules file was planned but has never been written) | `docs/plans/20261021-herdr-roster-migration-plan.md` |
+| Session handoff log (append every milestone and decision) | `~/.picsee/handoff/20261031-delegator.md` (rotated 2026-10-31 from `20261022-migrate-to-mini.md`) |
 | Timeline (WP status) | `~/.picsee/timeline.json` (back it up before editing) |
 | Briefs, requests, PR bodies | `~/.picsee/herdr/delegator/`, `~/.picsee/herdr/<agent>/` |
 | Audit reports | Active: `~/.picsee/herdr/opus-auditor/opus-<item>-audit-r<n>.md`, `-confirm-r<n>.md`; historical gpt-auditor reports remain evidence but receive no new dispatches |

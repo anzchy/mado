@@ -73,17 +73,20 @@ follow-up batch; those findings do not block landing.
 
 ## Independence
 
-Active routing override: since 2026-10-25 opus-auditor is the only auditor for every tier (「Opus单审，gpt暂停」), so its
-verdict is the merged verdict and there is no challenge step; see `docs/plans/20261021-herdr-roster-migration-plan.md`.
-The rules below describe the dual-audit baseline.
+Current route: two blind auditors, gpt-auditor and opus-auditor, audit every tier in parallel, at most 2 rounds per
+item. The rules below describe that route.
+
+History: on the morning of 2026-10-25 the user set a single-audit override (「Opus单审，gpt暂停」: opus-auditor alone,
+gpt-auditor paused). It was lifted the same afternoon ("audit now has gpt-auditor + opus-auditor at the same time, audit
+cap is two"); see `docs/plans/20261021-herdr-roster-migration-plan.md`.
 
 Round one is blind:
 - neither auditor reads the other's report folder, the delegator's notes, or PR comments;
 - both get the same range, tier and AC list at the same time;
 - the delegator merges the two verdicts.
 
-A Low item from `gpt-imple-3` has one blind auditor, `opus-auditor`, with no merge or
-challenge step; if that auditor raises the tier above Low, the item returns to two auditors.
+(Historical; gpt-imple-3 is retired.) A Low item from `gpt-imple-3` had one blind auditor, `opus-auditor`, with no merge or
+challenge step; if that auditor raised the tier above Low, the item returned to two auditors.
 
 When the auditors disagree on a finding, the delegator sends it as a `challenge` to the auditor that
 did not raise it. That auditor confirms the finding with its own trace or refutes it with a

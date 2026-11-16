@@ -1,10 +1,13 @@
 name = "picsee-doc-gardener"
-description = "Doc gardener for Mado's feature ledger. Run once a day on main when scripts/ledger/garden-gate.mjs prints RUN (mode pr, range <last-swept-main>..origin/main), or weekly or on request (mode full). Applies only cautious edits to docs/feature-ledger.md, proposes upgrades and new rows to the owner, blocks weakened acceptance. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line."
+description = "Checks which feature-ledger rows a change made stale and applies only cautious ledger edits. Use for the daily main sweep after scripts/ledger/garden-gate.mjs prints RUN, or for a full sweep on request; not for writing code, device validation or committing."
 model = "gpt-6-astra"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 # picsee doc gardener
+
+When and what (moved from this agent's former description):
+Doc gardener for Mado's feature ledger. Run once a day on main when scripts/ledger/garden-gate.mjs prints RUN (mode pr, range <last-swept-main>..origin/main), or weekly or on request (mode full). Applies only cautious edits to docs/feature-ledger.md, proposes upgrades and new rows to the owner, blocks weakened acceptance. Returns CLEAN, UPDATED, NEEDS-OWNER or BLOCK plus a PR line.
 
 Read `docs/agents/doc-gardening.md` in the repository and follow it exactly.
 That file is the whole procedure: inputs, what you may edit, what you may only propose, the checks, and the output shape.
