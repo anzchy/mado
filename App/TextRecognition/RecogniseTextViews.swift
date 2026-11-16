@@ -346,6 +346,13 @@ enum RecogniseTextNoticeKind { case success, warning }
     }
 }
 
+/// #687 fix r5b (F8): where the floating surface may sit, in the overlay's coordinates. `trailingEdge` is the
+/// right edge it keeps 20 pt from (nil: the overlay's own); `obstacles` are the viewer controls it must not cover.
+struct RecogniseTextPlacement {
+    var trailingEdge: CGFloat?
+    var obstacles: [NSRect]
+}
+
 /// Transparent across the content except for the active floating surface.
 @MainActor final class RecogniseTextOverlay: NSView {
     private(set) var noticeView: RecogniseTextNoticeView?
@@ -357,6 +364,10 @@ enum RecogniseTextNoticeKind { case success, warning }
     private let scheduleDismiss: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private var dismissalGeneration = UUID()
     private var hovered = false
+    /// #687 fix r5b (F8): the viewer's controls to keep clear of; nil keeps the plain 20 pt corner.
+    var placement: (() -> RecogniseTextPlacement)?
+    /// The gap above an obstacle: the design system's 8 pt spacing step.
+    static let obstacleGap = CGFloat(DesignMetrics.spacing[1])
 
     init(frame: NSRect = .zero,
          scheduleDismiss: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = { interval, action in
@@ -378,19 +389,31 @@ enum RecogniseTextNoticeKind { case success, warning }
     }
     override func layout() {
         super.layout()
+        let place = placement?()
+        let trailing = place?.trailingEdge ?? bounds.maxX
         if let noticeView {
             noticeView.compactWidth = nil
-            let available = max(0, bounds.width - 40)
+            let available = max(0, trailing - bounds.minX - 40)
             if noticeView.intrinsicContentSize.width > available { noticeView.compactWidth = available }
-            let size = noticeView.intrinsicContentSize
-            noticeView.frame = NSRect(x: bounds.maxX - 20 - size.width,
-                                      y: 20, width: size.width, height: size.height)
+            noticeView.frame = surfaceFrame(size: noticeView.intrinsicContentSize, trailing: trailing, place: place)
         }
-        if let panelView {
-            let width = max(0, min(380, bounds.width - 40))
-            panelView.frame = NSRect(x: bounds.maxX - 20 - width, y: 20,
-                                      width: width, height: width < 260 ? 300 : 242)
-        }
+        if let panelView { panelView.frame = plannedPanelFrame(place: place) }
+    }
+    /// The panel's frame in the current bounds: up to 380 wide, taller when narrow.
+    func plannedPanelFrame() -> NSRect { plannedPanelFrame(place: placement?()) }
+    private func plannedPanelFrame(place: RecogniseTextPlacement?) -> NSRect {
+        let trailing = place?.trailingEdge ?? bounds.maxX
+        let width = max(0, min(380, trailing - bounds.minX - 40))
+        return surfaceFrame(size: NSSize(width: width, height: width < 260 ? 300 : 242), trailing: trailing, place: place)
+    }
+    /// 20 pt from the trailing edge; the bottom edge 20 pt up, or `obstacleGap` above the highest control under it.
+    private func surfaceFrame(size: NSSize, trailing: CGFloat, place: RecogniseTextPlacement?) -> NSRect {
+        let minX = trailing - 20 - size.width
+        let clearTop = (place?.obstacles ?? [])
+            .filter { $0.maxX > minX && $0.minX < minX + size.width }
+            .map { $0.maxY + Self.obstacleGap }
+            .max() ?? 0
+        return NSRect(x: minX, y: max(20, clearTop), width: size.width, height: size.height)
     }
     func showNotice(message: String, engine: String?, kind: RecogniseTextNoticeKind, onOpen: (() -> Void)?) {
         clear()

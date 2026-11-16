@@ -4,12 +4,25 @@ import MadoApplication
 @MainActor
 protocol TextPasteboardWriting: AnyObject {
     @discardableResult func copy(_ text: String) -> Bool
+    /// #687 fix r5b (F11): the copy, and on failure whether the previous clipboard is known to be back.
+    func copyText(_ text: String) -> TextCopyResult
+}
+
+enum TextCopyResult: Equatable {
+    case copied
+    case failed(clipboardIntact: Bool)
+}
+
+extension TextPasteboardWriting {
+    func copyText(_ text: String) -> TextCopyResult { copy(text) ? .copied : .failed(clipboardIntact: true) }
 }
 
 enum RecogniseTextNotice: Equatable {
     case copied(count: Int, engine: TextRecognitionEngine)
     case noText
     case failed
+    /// #687 fix r5b (F11): the copy failed and the previous clipboard may not be back.
+    case clipboardMayHaveChanged
 }
 
 @MainActor
