@@ -46,16 +46,29 @@ if (!valid) {
         lanes.some(([, key]) => lines.filter(line => line.startsWith(`${key}=`)).length > 1);
       const malformed = lanes.some(([, key]) => {
         const value = lines.find(line => line.startsWith(`${key}=`))?.slice(key.length + 1);
-        return value !== undefined && !/^\d+$/.test(value);
+        const nativeSkip = (key === 'swift' || key === 'lcov') && /^skipped \([^|\r\n]+\)$/.test(value ?? '');
+        return value !== undefined && !/^\d+$/.test(value) && !nativeSkip;
       });
       const stale = expectedHead && expectedHead.toLowerCase() !== head.toLowerCase();
       // The local App lane (apptests=) is optional in older summaries. With --ci the CI App row is the only one.
       const appLines = lines.filter(line => line.startsWith('apptests='));
       const appValue = appLines[0]?.slice('apptests='.length);
-      const appRow = !ciFile && appLines.length > 0;
-      const appAmbiguous = appLines.length > 1;
-      const appMalformed = appValue !== undefined && !/^\d+$/.test(appValue) && appValue !== 'skip (no App-facing change)';
-      const summaryLanes = appRow ? [...lanes.slice(0, 3), ['app-tests', 'apptests'], ...lanes.slice(3)] : lanes;
+      const retainedLines = lines.filter(line => line.startsWith('apptests-retained='));
+      const retainedValue = retainedLines[0]?.slice('apptests-retained='.length);
+      const hostedLines = lines.filter(line => line.startsWith('apptests-hosted='));
+      const hostedValue = hostedLines[0]?.slice('apptests-hosted='.length);
+      const appRow = !ciFile && (appLines.length > 0 || retainedLines.length > 0);
+      const appAmbiguous = appLines.length > 1 || retainedLines.length > 1 || hostedLines.length > 1;
+      const retainedResult = retainedValue?.match(/^(\d+) (\d+)\/(\d+)$/);
+      const retainedSkipped = retainedValue === 'skipped (no App-facing change)';
+      const retainedMalformed = retainedValue !== undefined && !retainedSkipped &&
+        (!retainedResult || Number(retainedResult[3]) > Number(retainedResult[2]) ||
+          (retainedResult[1] === '0' && (Number(retainedResult[2]) === 0 || Number(retainedResult[3]) !== 0)));
+      const hostedMalformed = hostedValue !== undefined && !/^\d+$/.test(hostedValue) &&
+        !/^skipped \([^|\r\n]+\)$/.test(hostedValue);
+      const appMalformed = (appValue !== undefined && !/^\d+$/.test(appValue) && appValue !== 'skip (no App-facing change)') ||
+        retainedMalformed || hostedMalformed;
+      const summaryLanes = appRow ? [...lanes.slice(0, 3), ['app-tests', retainedValue === undefined ? 'apptests' : 'apptests-retained'], ...lanes.slice(3)] : lanes;
       if (ambiguous || appAmbiguous) {
         rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary ambiguous |`));
       } else if (malformed || appMalformed) {
@@ -66,11 +79,18 @@ if (!valid) {
         rows.push(...summaryLanes.map(([lane]) => `| ${lane} | NOT VERIFIED | ${head} | owner-gates stale head ${head.slice(0, 7)} |`));
       } else {
         rows.push(...summaryLanes.map(([lane, key]) => {
+          if (key === 'apptests-retained') {
+            if (retainedSkipped) return `| ${lane} | NOT RUN | — | owner-gates apptests-retained=${retainedValue} |`;
+            const source = `owner-gates apptests-retained=${retainedValue}${hostedValue?.startsWith('skipped') ? '; hosted CI binding' : ''}`;
+            return `| ${lane} | ${retainedResult[1] === '0' ? 'PASS' : 'FAIL'} | ${head} | ${source} |`;
+          }
           if (key === 'apptests' && appValue.startsWith('skip')) return `| ${lane} | NOT RUN | — | owner-gates apptests=${appValue} |`;
           const exit = lines.find(line => line.startsWith(`${key}=`))?.slice(key.length + 1);
           if (exit === undefined) return key === 'design'
             ? `| ${lane} | NOT VERIFIED | ${head} | owner-gates summary missing ${key} |`
             : `| ${lane} | NOT RUN | — | owner-gates summary missing ${key} |`;
+          if ((key === 'swift' || key === 'lcov') && exit.startsWith('skipped'))
+            return `| ${lane} | N/A | — | owner-gates ${key}=${exit} |`;
           const status = exit === '0' ? 'PASS' : 'FAIL';
           return `| ${lane} | ${status} | ${head} | owner-gates ${key}=${exit} |`;
         }));

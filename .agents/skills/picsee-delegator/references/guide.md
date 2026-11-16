@@ -597,8 +597,7 @@ PR body sections:
 - **Review**, both auditors' rounds plus a Still open list;
 - **Gates**, with numbers;
   source the local retained count from `apptests-retained`, and mark hosted CI as binding for `app-tests`.
-  A `swift` or `lcov` skip means NOT RUN on a documentation-only diff; the current gates-rows
-  parser rejects skip values, so write those local rows from the owner summary by hand.
+  A `swift` or `lcov` skip becomes N/A with the reason in Source on a documentation-only diff.
 - the `无用户可见变化` lines;
 - the `Ledger-Gardener: DAILY …` line (§5.7);
 - the `Device-Smoke:` line (below);
