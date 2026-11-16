@@ -75,6 +75,12 @@ public actor CaptureSession {
         }
     }
 
+    /// A Capture for 截图并识别文字 (#687): the image stays in memory. Same admission as any Capture, but
+    /// no file, no folder lookup and no clipboard; the 「截图之后」 switches do not apply.
+    public func captureForRecognition(request: CaptureRequest) async throws -> Data {
+        try await admitted { try await self.grab(request) }
+    }
+
     /// Saves an unsaved Capture with the same naming rule as a Capture.
     public func save(_ png: Data) async throws -> URL {
         try await writeUniquePNG(png)
