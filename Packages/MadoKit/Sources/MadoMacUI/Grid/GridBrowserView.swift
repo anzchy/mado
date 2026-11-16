@@ -238,8 +238,10 @@ struct GridGeometry: Equatable {
         columns = width <= 480 ? 1 : max(1, Int((available + columnGap) / (minColumnWidth + columnGap)))
         // Leave one representable step of slack so flow layout does not wrap an exact-fit row. Flow layout raises on a
         // zero-width item, and the hidden grid keeps resizing with the window: a legacy scroller can leave its clip view
-        // under the two insets (PR #730 CI), so the item keeps at least 1 pt.
-        let cellWidth = max(1, ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown)
+        // under the two insets (PR #730 CI). Only then, when no width fits, does the item fall back to 1 pt; any positive
+        // width that fits is kept as computed.
+        let fitted = ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown
+        let cellWidth = fitted > 0 ? fitted : 1
         if width <= 720 { tileHeight = 150 }
         else {
             let baseline: CGFloat
