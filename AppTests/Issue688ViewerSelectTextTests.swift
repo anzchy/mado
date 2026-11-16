@@ -197,6 +197,39 @@ private actor FailedSelectionProbe {
     #expect(await probe.calls == 1, "an empty result is retained only for the shown item")
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func issue688FailedRecognitionDoesNotRepeatOnPan() async throws {
+    let context = try await Issue690Context()
+    defer { context.close() }
+    let controller = try await context.open()
+    let probe = FailedSelectionProbe()
+    controller.selectTextAdapter.cancel()
+    controller.selectTextAdapter.recognise = { _, _ in try await probe.result() }
+    controller.selectTextAdapter.backdropChanged(controller.canvas.backdropFrame)
+    try await waitUntil("first recognition failure", timeout: .seconds(10)) { await probe.calls == 1 }
+    for _ in 0..<3 {
+        controller.canvas.magnify(by: 0.04, at: CGPoint(x: 320, y: 240))
+        try await Task.sleep(for: .milliseconds(600))
+    }
+    #expect(await probe.calls == 1)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue688RecognitionWaitsForLastBackdropPublish() async throws {
+    let context = try await Issue690Context()
+    defer { context.close() }
+    let controller = try await context.open()
+    let probe = EmptySelectionProbe()
+    controller.selectTextAdapter.cancel()
+    controller.selectTextAdapter.recognise = { _, _ in await probe.result() }
+    controller.selectTextAdapter.backdropChanged(controller.canvas.backdropFrame)
+    try await Task.sleep(for: .milliseconds(200))
+    controller.canvas.magnify(by: 0.04, at: CGPoint(x: 320, y: 240))
+    try await Task.sleep(for: .milliseconds(200))
+    controller.canvas.magnify(by: 0.04, at: CGPoint(x: 320, y: 240))
+    try await Task.sleep(for: .milliseconds(250))
+    #expect(await probe.calls == 0, "the earlier debounce deadline must not start recognition")
+    try await waitUntil("recognition after last publish", timeout: .seconds(10)) { await probe.calls == 1 }
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688CopySelectionAndLegacyNoSelection() async throws {
     let context = try await Issue690Context()
     defer { context.close() }
