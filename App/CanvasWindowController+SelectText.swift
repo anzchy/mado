@@ -192,6 +192,16 @@ import MadoMacUI
 }
 
 extension CanvasWindowController {
+    /// Keep the panel and direct image selection in one Esc step on both menu and key routes.
+    func routeTextEscape() -> Bool {
+        guard recogniseTextAdapter.panelEditor != nil else { return selectTextAdapter.escape() }
+        _ = selectTextAdapter.escape()
+        recogniseTextAdapter.closePanel()
+        return true
+    }
+}
+
+extension CanvasWindowController {
     func installSelectTextInput() {
         canvas.onTextPress = { [weak self] in self?.selectTextAdapter.press($0) ?? false }
         canvas.onTextDrag = { [weak self] in self?.selectTextAdapter.drag($0) }

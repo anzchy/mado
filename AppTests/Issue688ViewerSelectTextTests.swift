@@ -66,7 +66,8 @@ private actor FailedSelectionProbe {
         controller.gridShellVisible || controller.session.mode == .browsing
     }
 }
-@MainActor @Test(.timeLimit(.minutes(3))) func issue688EscapeClearsSelectionWhileOCRPanelIsOpen() async throws {
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [false, true])
+func issue688EscapeClosesOCRPanelAndClearsSelectionFromKeyAndMenu(viaMenu: Bool) async throws {
     let h = try await Fix5bHarness()
     defer { h.close() }
     try await h.recognise()
@@ -81,9 +82,19 @@ private actor FailedSelectionProbe {
     #expect(selection.selectedText != nil)
     h.controller.session.updateFocus(.canvas)
     _ = h.window.makeFirstResponder(h.controller.canvas)
-    try h.key("\u{1b}", code: 53)
+    if viaMenu {
+        let esc = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: h.window.windowNumber, context: nil, characters: "\u{1b}",
+            charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+        let viewMenu = try #require(h.context.item("command.escape.menu").menu)
+        #expect(viewMenu.performKeyEquivalent(with: esc))
+    } else {
+        try h.key("\u{1b}", code: 53)
+    }
     #expect(selection.selectedText == nil, "Esc must clear an active image selection")
     #expect(h.controller.recogniseTextAdapter.panelEditor == nil, "the OCR panel also closes")
+    #expect(h.controller.session.mode == .viewing, "the first Esc leaves the image visible")
+    #expect(h.window.firstResponder === h.controller.canvas, "the canvas keeps keyboard focus")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688SelectionCopyFailurePreservesClipboard() async throws {
