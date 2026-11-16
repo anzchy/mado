@@ -217,7 +217,7 @@ public struct GridDisplayOptions: Equatable, Sendable {
 
 /// Page 11/12 inlined CSS: `.grid-scroll`, `.photo-grid`, `.photo-cell`,
 /// `.thumbnail-wrap`, and `.layout-exploration .photo-name` (grid-light/dark.html).
-private struct GridGeometry: Equatable {
+struct GridGeometry: Equatable {
     let columns: Int
     let itemSize: NSSize
     let columnGap: CGFloat
@@ -236,8 +236,10 @@ private struct GridGeometry: Equatable {
         let minColumnWidth: CGFloat = width <= 720 ? 145 : CGFloat(options.thumbnailSize)
         let available = max(0, contentWidth - 2 * horizontalInset)
         columns = width <= 480 ? 1 : max(1, Int((available + columnGap) / (minColumnWidth + columnGap)))
-        // Leave one representable step of slack so flow layout does not wrap an exact-fit row.
-        let cellWidth = max(0, ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown)
+        // Leave one representable step of slack so flow layout does not wrap an exact-fit row. Flow layout raises on a
+        // zero-width item, and the hidden grid keeps resizing with the window: a legacy scroller can leave its clip view
+        // under the two insets (PR #730 CI), so the item keeps at least 1 pt.
+        let cellWidth = max(1, ((available - CGFloat(columns - 1) * columnGap) / CGFloat(columns)).nextDown)
         if width <= 720 { tileHeight = 150 }
         else {
             let baseline: CGFloat
