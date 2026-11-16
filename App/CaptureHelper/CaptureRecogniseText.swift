@@ -19,6 +19,37 @@ final class CaptureRecogniseTextPanel: NSPanel {
         if responder is RecogniseTextNoticeView { return false }
         return super.makeFirstResponder(responder)
     }
+
+    /// The Edit command a key equivalent stands for: the helper is an accessory app with no Edit menu, so the panel
+    /// maps them itself (#687c fix r1 M1).
+    static func editAction(for event: NSEvent) -> Selector? {
+        guard event.type == .keyDown else { return nil }
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let action: String? = switch (event.charactersIgnoringModifiers?.lowercased(), modifiers) {
+        case ("a", [.command]): "selectAll:"
+        case ("c", [.command]): "copy:"
+        case ("x", [.command]): "cut:"
+        case ("v", [.command]): "paste:"
+        case ("z", [.command]): "undo:"
+        case ("z", [.command, .shift]): "redo:"
+        default: nil
+        }
+        return action.map(NSSelectorFromString)
+    }
+
+    /// Sends the Edit action up the responder chain from the first responder, as an Edit menu item would: only to a
+    /// responder that implements it and validates it now, so ⌘Z with nothing to undo is not consumed.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard let action = Self.editAction(for: event) else { return super.performKeyEquivalent(with: event) }
+        var responder = firstResponder
+        while let current = responder, !current.responds(to: action) { responder = current.nextResponder }
+        guard let target = responder else { return super.performKeyEquivalent(with: event) }
+        let item = NSMenuItem(title: "", action: action, keyEquivalent: "")
+        if let validating = target as? any NSUserInterfaceValidations, !validating.validateUserInterfaceItem(item) {
+            return super.performKeyEquivalent(with: event)
+        }
+        return target.tryToPerform(action, with: item)
+    }
 }
 
 enum CaptureRecogniseTextLayout {
