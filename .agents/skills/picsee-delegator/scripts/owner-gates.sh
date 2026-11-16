@@ -1,17 +1,15 @@
 #!/bin/zsh
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
 # implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
-# ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate:
-#   head=<full sha> / swift= / lcov= (0 only at 100% eligible) / Package raw and eligible counts [uncovered f:l…] / xcodegen= / xcodebuild=
-#   / apptests= (xcodebuild build-for-testing + scripts/tdd/app-lane.mjs, no filter, when the merge-base diff touches App/,
-#   AppTests/, project.yml or Packages/MadoKit/Sources/MadoMacUI/; else "apptests=skip (no App-facing change)") plus
-#   "apptests: Tests run: N, Failures: F, …" / node= / ledger= / diffcheck= / design= / the Swift "Test run with N tests" line / DONE
+# ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate. The summary includes
+# swift/lcov (or native-input skip), xcodegen, xcodebuild, apptests-retained=<exit> <run>/<fail>,
+# apptests-hosted (default skip; OWNER_GATES_HOSTED=1 runs it), apptests compatibility, scoped node
+# suite skips, node, ledger, diffcheck, design, failure facts, and DONE after every selected lane finishes.
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
-# The Swift, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh. Run it in the background.
-# design:check needs npm ci --ignore-scripts and Playwright Chromium in the gated worktree;
-# without either prerequisite it fails closed (design != 0).
+# The Swift, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
+# Preflight checks npm and Playwright prerequisites before any lane, and refuses with exit 2.
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -32,66 +30,120 @@ for op in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_H
 done
 [[ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] || refuse "tracked changes in $wt; commit or stash them and rerun in a clean worktree at the head"
 hl=$wt/scripts/heavy-lock.sh
+export PICSEE_HEAVY_LOCK_WAIT_SECS=${PICSEE_HEAVY_LOCK_WAIT_SECS:-3600}
+mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-base of $base and HEAD"
+diff_file=$o/$p-diff.txt
+git diff --name-only --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
+selection=$(node "$here/owner-gates-tools.mjs" select "$diff_file") || refuse "cannot classify gated diff"
+native=${${(M)${(f)selection}:#native=*}#native=}
+agents=${${(M)${(f)selection}:#agents=*}#agents=}
+tdd=${${(M)${(f)selection}:#tdd=*}#tdd=}
+preflight=$(node "$here/owner-gates-tools.mjs" preflight "$wt" "$0")
+if (( $? != 0 )); then
+  echo "refused: $preflight" > "$s" || summary_error
+  exit 2
+fi
 failed=0
 lane_result() {
-  local lane=$1 code=$2
-  echo "$lane=$code" >> $s || summary_error
-  (( code == 0 )) || failed=1
+  local lane=$1 code=$2 detail=${3:-}
+  echo "$lane=$code${detail:+ $detail}" >> $s || summary_error
+  if (( code != 0 )); then
+    failed=1
+    local log=$o/$p-$lane.log
+    [[ -f "$log" ]] && node "$here/owner-gates-tools.mjs" fact "$lane" "$code" "$log" "$diff_file" >> "$s" || true
+  fi
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
+if (( native )); then
 node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
-swift_code=$?
-if (( swift_code == 65 )); then
-  lane_result swift 0
+  swift_code=$?
+  if (( swift_code == 65 )); then
+    lane_result swift 0
+  else
+    lane_result swift $swift_code
+  fi
+  # Re-evaluate the fresh local unit artifact with the same strict evaluator as CI.
+  # lcov= is that check's exit code; the next line holds raw and eligible totals.
+  if (( swift_code == 65 )); then
+    echo 'coverage failed after Swift tests passed; reevaluating retained evidence' > $o/$p-lcov.log
+    node scripts/ci/package-coverage-local.mjs --reuse >> $o/$p-lcov.log 2>&1
+    lane_result lcov 1
+  elif (( swift_code == 0 )); then
+    node scripts/ci/package-coverage-local.mjs --reuse > $o/$p-lcov.log 2>&1
+    lane_result lcov $?
+  else
+    echo "coverage skipped: Swift run failed (exit $swift_code); prior coverage is not current evidence" > $o/$p-lcov.log
+    lane_result lcov 1
+  fi
 else
-  lane_result swift $swift_code
+  echo "swift=skipped (no native inputs)" >> "$s"
+  echo "lcov=skipped (no native inputs)" >> "$s"
 fi
-# Re-evaluate the fresh local unit artifact with the same strict evaluator as CI.
-# lcov= is that check's exit code; the next line holds raw and eligible totals.
-if (( swift_code == 65 )); then
-  echo 'coverage failed after Swift tests passed; reevaluating retained evidence' > $o/$p-lcov.log
-  node scripts/ci/package-coverage-local.mjs --reuse >> $o/$p-lcov.log 2>&1
-  lane_result lcov 1
-elif (( swift_code == 0 )); then
-  node scripts/ci/package-coverage-local.mjs --reuse > $o/$p-lcov.log 2>&1
-  lane_result lcov $?
-else
-  echo "coverage skipped: Swift run failed (exit $swift_code); prior coverage is not current evidence" > $o/$p-lcov.log
-  lane_result lcov 1
-fi
+if (( native )); then
 grep -E '^(coverage failed after|Package:|Coverage gate:|Invalid coverage evidence:|- shard=|Uncovered locations:)' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 awk '/^Uncovered locations:/{section=1;next} /^Large LLVM counters/{section=0} section && /^- /{print}' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
-xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
-$hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
-  > $o/$p-xcodebuild.log 2>&1; lane_result xcodebuild $?
-# App tests: the full App lane as CI runs it, when the diff from the merge-base is App-facing (#702, #701).
-# Plain `xcodebuild test` hangs on the mini (bundle instance / runner connection, exit 65), so: build-for-testing,
-# then scripts/tdd/app-lane.mjs with no filter (retained MadoAppTests group + MadoHostedFocusTests group; exit 0/1/70).
-app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
-if ! mb=$(git merge-base "$base" HEAD 2>/dev/null) || [[ -z "$mb" ]]; then
-  echo "apptests: cannot compute merge-base of $base and HEAD" > $o/$p-apptests.log
-  lane_result apptests 1
-elif ! git diff --name-only "$mb" HEAD | grep -Eq "$app_facing"; then
-  echo "apptests=skip (no App-facing change)" >> $s || summary_error
-else
-  $hl xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
-    -derivedDataPath .build/dd-ci > $o/$p-apptests.log 2>&1
-  app_code=$?
-  if (( app_code != 0 )); then
-    echo "apptests: build-for-testing failed (exit $app_code); App lane not run" >> $o/$p-apptests.log
-  else
-    env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs >> $o/$p-apptests.log 2>&1
-    app_code=$?
-    if (( app_code == 0 )) && ! grep -Eq '^Tests run: [1-9][0-9]*, Failures: 0' $o/$p-apptests.log; then
-      echo "apptests: exit 0 but no 'Tests run: N' line with N > 0 and no failures; treated as failure" >> $o/$p-apptests.log
-      app_code=1
-    fi
-  fi
-  lane_result apptests $app_code
-  grep -E '^Tests run: [0-9]+' $o/$p-apptests.log | tail -1 | sed 's/^/apptests: /' >> $s || summary_error
 fi
-node --test --test-reporter=spec scripts/agents/*.test.mjs scripts/tdd/*.test.mjs scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs > $o/$p-node.log 2>&1; lane_result node $?
+xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
+app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
+if grep -Eq "$app_facing" "$diff_file"; then
+  $hl xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
+    -derivedDataPath .build/dd-ci > "$o/$p-xcodebuild.log" 2>&1
+  build_code=$?
+  lane_result xcodebuild $build_code
+  echo "xcodebuild: build-for-testing exit=$build_code" >> "$s"
+  if (( build_code == 0 )); then
+    env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoAppTests\.' > "$o/$p-apptests-retained.log" 2>&1
+    retained_code=$?
+  else
+    echo "retained: build-for-testing failed (exit $build_code)" > "$o/$p-apptests-retained.log"
+    retained_code=$build_code
+  fi
+  if (( retained_code == 0 )) && ! grep -Eq '^Tests run: [1-9][0-9]*, Failures: 0' "$o/$p-apptests-retained.log"; then
+    echo 'apptests-retained: missing positive passing count' >> "$o/$p-apptests-retained.log"
+    retained_code=1
+  fi
+  retained_counts=$(sed -nE 's/^Tests run: ([0-9]+), Failures: ([0-9]+).*/\1\/\2/p' "$o/$p-apptests-retained.log" | tail -1)
+  lane_result apptests-retained $retained_code "${retained_counts:-0/0}"
+  if [[ ${OWNER_GATES_HOSTED:-0} == 1 ]]; then
+    if (( build_code == 0 )); then
+      env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoHostedFocusTests\.' > "$o/$p-apptests-hosted.log" 2>&1
+      hosted_code=$?
+      if (( hosted_code == 0 )) && ! grep -Eq '^Tests run: [1-9][0-9]*, Failures: 0' "$o/$p-apptests-hosted.log"; then
+        echo 'apptests-hosted: missing positive passing count' >> "$o/$p-apptests-hosted.log"
+        hosted_code=1
+      fi
+    else
+      echo "hosted: build-for-testing failed (exit $build_code)" > "$o/$p-apptests-hosted.log"
+      hosted_code=$build_code
+    fi
+    lane_result apptests-hosted $hosted_code
+    grep -E '^Tests run: [0-9]+' "$o/$p-apptests-hosted.log" | tail -1 | sed 's/^/apptests-hosted: /' >> "$s" || true
+    if (( retained_code != 0 )); then lane_result apptests $retained_code; else lane_result apptests $hosted_code; fi
+  else
+    echo 'apptests-hosted=skipped (OWNER_GATES_HOSTED=0; hosted CI binding)' >> "$s"
+    lane_result apptests $retained_code
+  fi
+else
+  $hl xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci \
+    > "$o/$p-xcodebuild.log" 2>&1
+  lane_result xcodebuild $?
+  echo 'apptests-retained=skipped (no App-facing change)' >> "$s"
+  echo 'apptests-hosted=skipped (no App-facing change)' >> "$s"
+  echo 'apptests=skip (no App-facing change)' >> "$s"
+fi
+node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs)
+if (( agents )); then
+  node_suites+=(scripts/agents/*.test.mjs)
+else
+  echo 'node-agents=skipped (no scripts/agents or delegator subject in diff)' >> "$s"
+fi
+if (( tdd )); then
+  node_suites+=(scripts/tdd/*.test.mjs)
+else
+  echo 'node-tdd=skipped (no scripts/tdd or CI subject in diff)' >> "$s"
+fi
+node --test --test-reporter=spec "${(@)node_suites}" > "$o/$p-node.log" 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
 if [[ ! -d node_modules ]]; then
@@ -100,7 +152,7 @@ if [[ ! -d node_modules ]]; then
 else
   $hl npm run design:check > $o/$p-design.log 2>&1; lane_result design $?
 fi
-grep -E 'Test run with .* tests' $o/$p-swift.log | tail -1 >> $s || summary_error
+if (( native )); then grep -E 'Test run with .* tests' $o/$p-swift.log | tail -1 >> $s || true; fi
 echo DONE >> $s || summary_error
 cat "$s" || summary_error
 exit $failed
