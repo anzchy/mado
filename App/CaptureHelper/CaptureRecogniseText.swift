@@ -207,3 +207,34 @@ enum CaptureRecogniseTextFlow {
         return (png, CaptureThumbnailPlacement.visibleFrame(displayID: displayID, screens: screens()))
     }
 }
+
+/// What a selection overlay is for: a Capture, or 截图并识别文字.
+enum CaptureSelectionPurpose: Equatable { case capture, recogniseText }
+
+/// What the helper does for each global shortcut.
+enum CaptureHelperCommand: Equatable {
+    case selectRegion(CaptureSelectionPurpose), selectWindow, captureFullScreen, toggleBar
+
+    static func command(for action: CaptureShortcutAction) -> CaptureHelperCommand {
+        switch action {
+        case .region: .selectRegion(.capture)
+        case .window: .selectWindow
+        case .fullScreen: .captureFullScreen
+        case .recognizeText: .selectRegion(.recogniseText)
+        case .toggleBar: .toggleBar
+        }
+    }
+}
+
+/// A finished selection: captured or recognised by its purpose; cancelled (no target) does nothing.
+enum CaptureSelectionOutcome: Equatable {
+    case capture, recognise, none
+
+    static func route(purpose: CaptureSelectionPurpose, target: CaptureRequest.Target?) -> CaptureSelectionOutcome {
+        guard target != nil else { return .none }
+        switch purpose {
+        case .capture: return .capture
+        case .recogniseText: return .recognise
+        }
+    }
+}
