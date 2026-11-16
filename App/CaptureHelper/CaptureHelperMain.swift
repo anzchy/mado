@@ -47,6 +47,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private var folderPanel: NSOpenPanel?
     private var recordingGeneration = 0
     private let thumbnails = CaptureThumbnailPresenter()
+    /// 截图并识别文字's notice and panel (#687); its window exists from launch, so every Capture can leave it out.
+    private let textPresenter = CaptureRecogniseTextPresenter()
     /// Read at every Capture, so a Settings change applies without restarting the helper.
     private let outputPreferences = UserDefaultsCaptureOutputPreferences.shared()
     private let lifecycle = CaptureHelperLifecycle(preferences: HelperSwitchPreferences(), exit: HelperExit())
@@ -87,6 +89,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         let bar = CaptureBarView(captureAction: { [weak self] in self?.capture() },
                                  regionAction: { [weak self] in self?.startSelection(.region) },
                                  windowAction: { [weak self] in self?.startSelection(.window) },
+                                 recognizeAction: { [weak self] in self?.startSelection(.region, purpose: .recogniseText) },
                                  collapseAction: { [weak self] in self?.collapse?.collapse() },
                                  madoAction: { [weak self] in self?.openMado() })
         self.bar = bar
@@ -213,12 +216,10 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     private func shortcutPressed(_ action: CaptureShortcutAction) {
-        switch action {
-        case .region: startSelection(.region)
-        case .window: startSelection(.window)
-        case .fullScreen: capture()
-        // Capture and recognise text belongs to #687; the shortcut is bound and rebindable but does nothing yet.
-        case .recognizeText: break
+        switch CaptureHelperCommand.command(for: action) {
+        case .selectRegion(let purpose): startSelection(.region, purpose: purpose)
+        case .selectWindow: startSelection(.window)
+        case .captureFullScreen: capture()
         case .toggleBar: collapse?.toggle()
         }
     }
@@ -255,25 +256,27 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
 
     @objc private func capture() {
         thumbnails.dismiss()
+        textPresenter.dismiss()
         capture(request: nil, selectedDisplay: nil)
     }
 
-    private func startSelection(_ mode: CaptureSelectionPanel.Mode) {
+    private func startSelection(_ mode: CaptureSelectionPanel.Mode, purpose: CaptureSelectionPurpose = .capture) {
         guard selectionPanels.isEmpty, selectionAdmission.begin() else { return }
         thumbnails.dismiss()  // the new Capture replaces it; it must not be in the image
+        textPresenter.dismiss()  // so does a recognised-text notice or panel (#687)
         let point = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main,
               let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
         else { selectionAdmission.end(); return }
         if mode == .region {
-            showSelection(on: screen, displayID: displayID, mode: mode, windows: [])
+            showSelection(on: screen, displayID: displayID, mode: mode, purpose: purpose, windows: [])
         } else {
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let excluded = Set(NSApp.windows.compactMap { UInt32(exactly: $0.windowNumber) })
                     let windows = try await ScreenCaptureKitScreen().selectableWindows(excluding: excluded)
-                    showSelection(on: screen, displayID: displayID, mode: mode, windows: windows)
+                    showSelection(on: screen, displayID: displayID, mode: mode, purpose: purpose, windows: windows)
                 } catch {
                     selectionAdmission.end()
                     report(error)
@@ -283,7 +286,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     }
 
     private func showSelection(on screen: NSScreen, displayID: UInt32, mode: CaptureSelectionPanel.Mode,
-                               windows: [ScreenCaptureKitScreen.WindowCandidate]) {
+                               purpose: CaptureSelectionPurpose, windows: [ScreenCaptureKitScreen.WindowCandidate]) {
         selectionAdmission.end()
         let screens = mode == .window ? NSScreen.screens : [screen]
         for item in screens {
@@ -295,10 +298,15 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 guard !overlays.isEmpty else { return }  // another display's panel already finished
                 selectionPanels.forEach { $0.orderOut(nil) }
                 selectionPanels.removeAll()
-                guard let target else { return }
+                guard let target else { return }  // Esc: nothing captured, nothing recognised
                 let request = CaptureHelperWindows.resolver(target: target, bar: panel, status: statusPanel,
-                                                            thumbnails: thumbnails, overlays: overlays)
-                capture(request: request, selectedDisplay: id, keepingAlive: overlays)
+                                                            thumbnails: thumbnails, overlays: overlays,
+                                                            others: { [textPresenter] in textPresenter.windows })
+                switch CaptureSelectionOutcome.route(purpose: purpose, target: target) {
+                case .capture: capture(request: request, selectedDisplay: id, keepingAlive: overlays)
+                case .recognise: recogniseText(request: request, selectedDisplay: id, keepingAlive: overlays)
+                case .none: break
+                }
             }
             selectionPanels.append(overlay)
         }
@@ -330,6 +338,27 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 let model = CaptureThumbnailModel(state: state, session: session, clipboard: clipboard,
                                                   trash: FileManagerCaptureTrash())
                 thumbnails.present(CaptureThumbnailController(model: model, visibleFrame: frame, opener: mado))
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// 截图并识别文字 (#687): the region is read into memory under the same admission as a Capture, never saved and
+    /// never thumbnailed; the 「截图之后」 switches do not apply. Busy and Screen Recording failures report as a Capture's.
+    private func recogniseText(request: @escaping @MainActor () -> CaptureRequest, selectedDisplay: UInt32?,
+                               keepingAlive overlays: [NSWindow]) {
+        Task { [weak self] in
+            guard let self else { return }
+            defer { withExtendedLifetime(overlays) {} }
+            do {
+                let read: @MainActor () async throws -> (png: Data, visibleFrame: NSRect) = { [session] in
+                    try await CaptureRecogniseTextFlow.capture(request: request, selectedDisplay: selectedDisplay,
+                                                              session: session, screens: CaptureThumbnailPlacement.screens)
+                }
+                let (png, frame) = if let collapse { try await collapse.whileCapturing(read) } else { try await read() }
+                statusPanel?.orderOut(nil)
+                textPresenter.present(png: png, visibleFrame: frame)
             } catch {
                 report(error)
             }

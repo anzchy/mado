@@ -7,10 +7,12 @@ import MadoMacUI
     init(localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          captureAction: @escaping () -> Void,
          regionAction: @escaping () -> Void = {}, windowAction: @escaping () -> Void = {},
+         recognizeAction: (() -> Void)? = nil,
          collapseAction: (() -> Void)? = nil, madoAction: (() -> Void)? = nil, shortcuts: [String: String] = [:]) {
         self.captureAction = captureAction
         self.regionAction = regionAction
         self.windowAction = windowAction
+        self.recognizeAction = recognizeAction
         self.collapseAction = collapseAction
         self.madoAction = madoAction
         self.localize = localize
@@ -36,7 +38,7 @@ import MadoMacUI
             ("Region Capture", "camera.viewfinder", "capture.region", true),
             ("Window Capture", "macwindow", "capture.window", true),
             ("Full Screen Capture", "display", "capture.screen", true),
-            ("Recognize Text", "text.viewfinder", "capture.text", false)
+            ("Recognize Text", "text.viewfinder", "capture.text", recognizeAction != nil)
         ] {
             let title = localize(key)
             let width = titleWidth(title) + 10 + 6 + 18 + 10
@@ -63,7 +65,7 @@ import MadoMacUI
             let id = button.accessibilityIdentifier()
             // The short 识别文字 button is named in full in its tooltip (capture-bar.html:113).
             let name = id == "capture.text" ? localize("Capture and Recognize Text") : button.title
-            button.toolTip = shortcuts[id].map { "\(name) \($0)" } ?? button.title
+            button.toolTip = shortcuts[id].map { "\(name) \($0)" } ?? name
         }
     }
 
@@ -74,6 +76,8 @@ import MadoMacUI
     private let captureAction: () -> Void
     private let regionAction: () -> Void
     private let windowAction: () -> Void
+    /// 截图并识别文字 (#687); without it the button stays disabled.
+    private let recognizeAction: (() -> Void)?
     private let collapseAction: (() -> Void)?
     private let madoAction: (() -> Void)?
     private let localize: (String) -> String
@@ -103,6 +107,7 @@ import MadoMacUI
         case "capture.region": regionAction()
         case "capture.window": windowAction()
         case "capture.screen": captureAction()
+        case "capture.text": recognizeAction?()
         case "capture.collapse": collapseAction?()
         case "capture.mado": madoAction?()
         default: break

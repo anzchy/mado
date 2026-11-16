@@ -603,19 +603,22 @@ private final class ThumbnailButton: NSButton {
     func dismiss() { current?.close() }
 }
 
-/// Every helper window a Capture must keep out of its image: the bar, its status panel and the thumbnail.
+/// Every helper window a Capture must keep out of its image: the bar, its status panel, the thumbnail and `others`
+/// (the recognised-text panel, #687), which like the thumbnail are left out whenever ScreenCaptureKit lists them.
 enum CaptureHelperWindows {
     @MainActor static func request(target: CaptureRequest.Target, bar: NSWindow?, status: NSWindow?,
-                                   thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow]) -> CaptureRequest {
+                                   thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow],
+                                   others: [NSWindow] = []) -> CaptureRequest {
         CaptureRequestFromWindows.make(target: target, bars: [bar, status].compactMap { $0 },
-                                       thumbnails: thumbnails.windows, overlays: overlays)
+                                       thumbnails: thumbnails.windows + others, overlays: overlays)
     }
 
     /// The request for a selection that finished now, built when its read runs (#685 fix r6): a Capture queued behind
     /// another must also leave out the thumbnail the earlier one presented while it waited, as a full-screen read does.
     @MainActor static func resolver(target: CaptureRequest.Target, bar: NSWindow?, status: NSWindow?,
-                                    thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow])
+                                    thumbnails: CaptureThumbnailPresenter, overlays: [NSWindow],
+                                    others: @escaping @MainActor () -> [NSWindow] = { [] })
         -> @MainActor () -> CaptureRequest {
-        { request(target: target, bar: bar, status: status, thumbnails: thumbnails, overlays: overlays) }
+        { request(target: target, bar: bar, status: status, thumbnails: thumbnails, overlays: overlays, others: others()) }
     }
 }
