@@ -171,9 +171,24 @@ public struct InspectorPanel: View {
     }
 }
 
+/// #687 fix r5b (F14): true while an Inspector control takes keyboard focus because an accessibility client
+/// (VoiceOver, AXFocused) asked for it, so a window that blocks automatic focus replays can let this move through.
+@MainActor public enum InspectorAccessibilityFocus {
+    public private(set) static var isMoving = false
+    static func moving(_ body: () -> Void) {
+        isMoving = true
+        defer { isMoving = false }
+        body()
+    }
+}
+
 private final class InspectorFocusButton: NSButton {
     var onFocus: (() -> Void)?
     override var acceptsFirstResponder: Bool { true }
+    override func setAccessibilityFocused(_ focused: Bool) {
+        guard focused else { return super.setAccessibilityFocused(focused) }
+        InspectorAccessibilityFocus.moving { _ = window?.makeFirstResponder(self) }
+    }
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
         if accepted { onFocus?() }
