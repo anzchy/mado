@@ -149,18 +149,23 @@ import MadoApplication
 
 // MARK: - F2
 
-/// 2h: a focused success notice that dismisses itself hands focus to the canvas, so Tab keeps moving.
+/// 2h: a focused success notice that goes away (since r5b F9: replaced by a new run; the clock holds it) hands focus
+/// to the canvas, so Tab keeps moving.
 @MainActor @Test(.timeLimit(.minutes(3))) func issue687Fix5FocusedNoticeDismissalReturnsFocusToCanvas() async throws {
     let h = try await Fix5Harness()
     defer { h.close() }
     for visible in [false, true] {
         try await h.reset(inspector: visible)
         try await h.recognise()
-        _ = try h.focusNotice()
+        let notice = try h.focusNotice()
         #expect(h.pendingDismissals.count == 1, "the dismissal runs on the injected clock")
+        // #687 fix r5b F9 (owner: 「有焦点时不消失」): the clock no longer removes a focused notice; a new run does.
         h.fireDismissals()
-        #expect(h.overlay?.noticeView == nil)
-        try h.expectCanvasOwnsKeys("Inspector visible=\(visible), focused notice timed out")
+        #expect(h.overlay?.noticeView === notice && h.window.firstResponder === notice, "a focused notice stays")
+        h.text = "Again \(visible)"
+        try await h.recognise()
+        #expect(h.overlay?.noticeView !== notice)
+        try h.expectCanvasOwnsKeys("Inspector visible=\(visible), focused notice replaced by a new run")
         try h.key("\t", code: 48)
         #expect(h.window.firstResponder is NSView && h.window.firstResponder !== h.controller.canvas,
                 "Inspector visible=\(visible): Tab moves on from the canvas")
@@ -364,6 +369,7 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
 /// Pruned: timer × editor (an open panel has no timer); composing × {canvas, notice} (only the editor composes);
 /// composing × {timer, re-run, image change} (no panel timer; the two menu items are not keys an input method holds);
 /// Esc × {canvas, notice} (with no panel, Esc is the viewer's own return to the grid, not an OCR exit).
+/// Since fix r5b F9, timer × notice expects the focused notice to stay.
 @MainActor @Test(.timeLimit(.minutes(6))) func issue687Fix5FocusExitInputMatrix() async throws {
     let h = try await Fix5Harness()
     defer { h.close() }
@@ -418,6 +424,10 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
                         continue
                     }
                     switch exit {
+                    case .timer where focus == .notice:
+                        // #687 fix r5b F9: keyboard focus holds the notice past the 5 s count.
+                        #expect(notice && h.window.firstResponder === h.overlay?.noticeView, "\(label): focused notice stays")
+                        continue
                     case .timer:
                         #expect(!notice && !panel, "\(label): notice timed out")
                     case .escape:

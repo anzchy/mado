@@ -79,6 +79,8 @@ enum RecogniseTextNoticeKind { case success, warning }
     let kind: RecogniseTextNoticeKind
     var onOpen: (() -> Void)?
     var onHoverChange: ((Bool) -> Void)?
+    /// #687 fix r5b (F9): keyboard focus (`false` argument: accessibility) arrived or left.
+    var onFocusChange: ((_ keyboard: Bool, _ focused: Bool) -> Void)?
     var compactWidth: CGFloat? { didSet { if oldValue != compactWidth { needsLayout = true } } }
     private var tracking: NSTrackingArea?
     override var acceptsFirstResponder: Bool { kind == .success }
@@ -86,7 +88,18 @@ enum RecogniseTextNoticeKind { case success, warning }
     override func isAccessibilityElement() -> Bool { !isHiddenOrHasHiddenAncestor }
     override func accessibilityChildren() -> [Any]? { [] }
     override func setAccessibilityFocused(_ focused: Bool) {
+        onFocusChange?(false, focused)
         if focused && kind == .success { _ = window?.makeFirstResponder(self) }
+    }
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { onFocusChange?(true, true) }
+        return accepted
+    }
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { onFocusChange?(true, false) }
+        return resigned
     }
     override func responds(to aSelector: Selector!) -> Bool {
         if kind != .success && aSelector == NSSelectorFromString("accessibilityPerformPress") { return false }
@@ -363,7 +376,10 @@ struct RecogniseTextPlacement {
     var handOffFocus: ((_ removal: () -> Void) -> Void)?
     private let scheduleDismiss: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private var dismissalGeneration = UUID()
-    private var hovered = false
+    /// #687 fix r5b (F9): what holds the notice: the pointer over it, keyboard focus, VoiceOver focus. While any
+    /// holds, no dismissal runs; when the last lets go, the 5 s count starts again.
+    private enum Hold { case hover, keyboard, accessibility }
+    private var holds: Set<Hold> = []
     /// #687 fix r5b (F8): the viewer's controls to keep clear of; nil keeps the plain 20 pt corner.
     var placement: (() -> RecogniseTextPlacement)?
     /// The gap above an obstacle: the design system's 8 pt spacing step.
@@ -418,12 +434,8 @@ struct RecogniseTextPlacement {
     func showNotice(message: String, engine: String?, kind: RecogniseTextNoticeKind, onOpen: (() -> Void)?) {
         clear()
         let view = RecogniseTextNoticeView(message: message, engine: engine, kind: kind, onOpen: onOpen)
-        view.onHoverChange = { [weak self] inside in
-            guard let self else { return }
-            self.hovered = inside
-            self.dismissalGeneration = UUID()
-            if !inside { self.armDismissal() }
-        }
+        view.onHoverChange = { [weak self] inside in self?.setHold(.hover, inside) }
+        view.onFocusChange = { [weak self] keyboard, focused in self?.setHold(keyboard ? .keyboard : .accessibility, focused) }
         addSubview(view)
         noticeView = view
         needsLayout = true
@@ -442,7 +454,9 @@ struct RecogniseTextPlacement {
     func clear() { clear(handingOffFocus: true) }
     private func clear(handingOffFocus: Bool) {
         dismissalGeneration = UUID()
-        hovered = false
+        holds = []
+        noticeView?.onHoverChange = nil
+        noticeView?.onFocusChange = nil
         let removal = {
             self.noticeView?.removeFromSuperview(); self.noticeView = nil
             self.panelView?.removeFromSuperview(); self.panelView = nil
@@ -455,10 +469,16 @@ struct RecogniseTextPlacement {
         guard let responder = window?.firstResponder as? NSView else { return false }
         return [noticeView as NSView?, panelView].contains { $0.map { responder === $0 || responder.isDescendant(of: $0) } ?? false }
     }
+    private func setHold(_ hold: Hold, _ on: Bool) {
+        guard noticeView != nil, holds.contains(hold) != on else { return }
+        if on { holds.insert(hold) } else { holds.remove(hold) }
+        dismissalGeneration = UUID()
+        if holds.isEmpty { armDismissal() }
+    }
     private func armDismissal() {
         let token = dismissalGeneration
         scheduleDismiss(5) { [weak self] in
-            guard let self, self.dismissalGeneration == token, !self.hovered, self.noticeView != nil else { return }
+            guard let self, self.dismissalGeneration == token, self.holds.isEmpty, self.noticeView != nil else { return }
             self.clear()
             self.onDismiss?()
         }
