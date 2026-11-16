@@ -199,7 +199,8 @@ import MadoInfrastructure
         guard let notice = model.notice else { overlay.clear(); return }
         switch notice {
         case .copied(let count, let engine):
-            let message = String(format: String(localized: "Copied %lld characters"), Int64(count))
+            // #687 fix r5b (F13): the interpolated form resolves the catalogue's English plural (1 character).
+            let message = String(localized: "Copied \(Int64(count)) characters")
             overlay.showNotice(message: message, engine: Self.label(for: engine), kind: .success,
                 onOpen: { [weak self] in self?.model?.openPanel() })
         case .noText:
