@@ -80,6 +80,11 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
         CaptureHelperStartup.launch(lock: instanceLock, exit: { NSApp.terminate(nil) }, start: { start() })
     }
 
+    /// A recognise read still pending when the helper quits shows and copies nothing (#687c fix r1 F1).
+    func applicationWillTerminate(_ notification: Notification) {
+        textPresenter.dismiss()
+    }
+
     private func start() {
         guard UserDefaults(suiteName: CaptureBarIdentity.appGroupID)?
             .bool(forKey: CaptureBarIdentity.enabledKey) == true else {
@@ -356,9 +361,10 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                     try await CaptureRecogniseTextFlow.capture(request: request, selectedDisplay: selectedDisplay,
                                                               session: session, screens: CaptureThumbnailPlacement.screens)
                 }
-                let (png, frame) = if let collapse { try await collapse.whileCapturing(read) } else { try await read() }
-                statusPanel?.orderOut(nil)
-                textPresenter.present(png: png, visibleFrame: frame)
+                // A Capture or selection started meanwhile dismissed the presenter: this read is then dropped (fix r1 F1).
+                _ = try await textPresenter.recognise(
+                    read: { [collapse] in if let collapse { try await collapse.whileCapturing(read) } else { try await read() } },
+                    willPresent: { [statusPanel] in statusPanel?.orderOut(nil) })
             } catch {
                 report(error)
             }
