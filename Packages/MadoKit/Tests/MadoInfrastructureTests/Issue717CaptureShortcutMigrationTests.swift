@@ -80,3 +80,42 @@ private let f = CaptureKeyCombo(keyCode: 3, key: "F", modifiers: [.control, .opt
     #expect(await preferences.bindings() == .legacyDefaults)
     #expect(UserDefaultsCaptureShortcutPreferences.defaultsVersionKey == "capture.shortcuts.defaultsVersion")
 }
+
+/// Keeps the first key written and drops writes to any other key, as if the process exited after that write.
+private final class StopsAfterFirstWrite: UserDefaults, @unchecked Sendable {
+    private var firstKey: String?
+
+    override func set(_ value: Any?, forKey key: String) {
+        guard admit(key) else { return }
+        super.set(value, forKey: key)
+    }
+
+    override func set(_ value: Int, forKey key: String) {
+        guard admit(key) else { return }
+        super.set(value, forKey: key)
+    }
+
+    private func admit(_ key: String) -> Bool {
+        if firstKey == nil { firstKey = key }
+        return firstKey == key
+    }
+}
+
+@Test(.timeLimit(.minutes(2))) func issue717MigrationInterruptedAfterOneWriteFinishesOnTheNextLaunch() async throws {
+    let (defaults, name) = try suite()
+    defer { defaults.removePersistentDomain(forName: name) }
+    var old = CaptureShortcutBindings.legacyDefaults
+    try old.bind(f, to: .region)
+    store685(old, in: defaults)
+    let interrupted = try #require(StopsAfterFirstWrite(suiteName: name))
+    _ = await UserDefaultsCaptureShortcutPreferences(defaults: interrupted).bindings()
+    // Next launch: the migration runs again over whatever the first write left and ends on the same result.
+    let next = UserDefaultsCaptureShortcutPreferences(defaults: try #require(UserDefaults(suiteName: name)))
+    let read = await next.bindings()
+    #expect(read == old.replacingLegacyDefaults())
+    #expect(read[.region] == f)
+    #expect(read[.window] == CaptureShortcutBindings.defaults[.window])
+    #expect(defaults.integer(forKey: UserDefaultsCaptureShortcutPreferences.defaultsVersionKey) == 2)
+    let after = UserDefaultsCaptureShortcutPreferences(defaults: try #require(UserDefaults(suiteName: name)))
+    #expect(await after.bindings() == read)
+}

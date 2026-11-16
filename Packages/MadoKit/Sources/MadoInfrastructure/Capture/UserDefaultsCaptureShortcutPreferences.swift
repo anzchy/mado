@@ -36,8 +36,11 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
     public func setBindings(_ bindings: CaptureShortcutBindings) async {
         var combos: [CaptureShortcutAction: CaptureKeyCombo] = [:]
         for action in CaptureShortcutAction.allCases { combos[action] = bindings[action] }
-        defaults.set(Self.defaultsVersion, forKey: Self.defaultsVersionKey)
+        // Bindings first, version last: an exit between the two leaves the version unset, and the next read moves
+        // the stored set again. `replacingLegacyDefaults()` leaves a moved set unchanged, so the rerun ends the same.
         write(combos, forKey: Self.bindingsKey)
+        defaults.set(Self.defaultsVersion, forKey: Self.defaultsVersionKey)
+        defaults.synchronize()
     }
 
     public func failures() async -> [CaptureShortcutAction: CaptureKeyCombo] {
