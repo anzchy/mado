@@ -158,6 +158,7 @@ import MadoInfrastructure
             return RecogniseTextPlacement(trailingEdge: trailing,
                 obstacles: chrome.groups.map { overlay.convert($0.frame, from: chrome) })
         }
+        overlay.pointerLocation = { [weak self] in self?.pointerLocation?() }
         overlay.onDismiss = { [weak self] in self?.model?.dismissNotice() }
         overlay.onNoticeChange = { [weak self] in self?.controller?.relinkRecogniseTextNotice() }
         content.addSubview(overlay, positioned: .above, relativeTo: nil)
