@@ -197,15 +197,17 @@ private actor RecognitionCounter {
     board.declareTypes([.string, sentinelType], owner: nil)
     board.setString("before", forType: .string)
     board.setString("keep", forType: sentinelType)
+    // #687 fix r6: since F11 the restore also goes through the writer seam, so only the destination write (the
+    // first write to `board`) fails; the restore is a real write. A failed restore is F11's own test.
     var destinationAttempted = false
     let port = NativeTextPasteboard(board, writeObjects: { target, objects in
-        if target === board {
+        if target === board && !destinationAttempted {
             destinationAttempted = true
             return false
         }
         return target.writeObjects(objects)
     })
-    #expect(!port.copy("after"))
+    #expect(port.copyText("after") == .failed(clipboardIntact: true))
     #expect(destinationAttempted)
     #expect(board.string(forType: .string) == "before")
     #expect(board.string(forType: sentinelType) == "keep")
