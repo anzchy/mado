@@ -85,12 +85,13 @@ final class RecogniseTextModel {
                 if result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     self.notice = .noText
                 } else {
-                    if self.pasteboard.copy(result.text) {
+                    switch self.pasteboard.copyText(result.text) {
+                    case .copied:
                         self.recognisedText = result.text
                         self.engine = result.engine
                         self.notice = .copied(count: result.text.count, engine: result.engine)
-                    } else {
-                        self.notice = .failed
+                    case .failed(let clipboardIntact):
+                        self.notice = clipboardIntact ? .failed : .clipboardMayHaveChanged
                     }
                 }
             } catch {
@@ -144,7 +145,7 @@ final class RecogniseTextModel {
     }
     func copyEditedText() {
         guard let panelText else { return }
-        guard pasteboard.copy(panelText) else { return }
+        guard pasteboard.copyText(panelText) == .copied else { return }
         copiedConfirmation = true
         confirmationGeneration = UUID()
         let generation = confirmationGeneration
