@@ -238,6 +238,9 @@ open class CanvasView: NSView {
     }
 
     public override func cursorUpdate(with event: NSEvent) {
+        if let content = window?.contentView {
+            if content.hitTest(event.locationInWindow) !== self { return }
+        }
         let point = convert(event.locationInWindow, from: nil)
         ((onTextPointer?(point) == true) ? NSCursor.iBeam : NSCursor.arrow).set()
     }
