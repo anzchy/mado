@@ -82,27 +82,54 @@ import os
     /// is hidden, the helper waits until the window server no longer lists it and then a settle delay for the fade-out
     /// (fix r4), the Capture runs, and the icon comes back on every exit path (saved, failed or cancelled). The collapsed
     /// state itself does not change; a Capture with the bar shown waits for nothing.
+    ///
+    /// Overlapping Captures (fix r5 F1): every caller awaits the same hide-and-settle, and the bodies run one at a
+    /// time in arrival order, so a second Capture neither reads the fading icon nor overtakes the first and leaves it
+    /// to fail as busy. The icon comes back once, after the last one ends.
     func whileCapturing<T>(_ body: @MainActor () async throws -> T) async rethrows -> T {
         captures += 1
-        if captures == 1, let item {
-            item.setHidden(true)
-            var polls = 0
-            var listed = true
-            while polls < Self.iconWaitPolls {
-                listed = item.isOnScreen
-                guard listed else { break }
-                polls += 1
-                await sleep(iconPoll)
-            }
-            if listed { iconNeverLeft() }
-            // The compositor's fade-out can outlive the window list (fix r4, smoke685-20261115d 5.3).
-            await sleep(iconSettle)
-        }
+        if captures == 1, let item { iconGone = Task { await hideAndSettle(item) } }
         defer {
             captures -= 1
-            if captures == 0 { item?.setHidden(false) }
+            if captures == 0 {
+                iconGone = nil
+                item?.setHidden(false)
+            }
         }
+        await takeTurn()
+        defer { endTurn() }
+        await iconGone?.value
         return try await body()
+    }
+
+    /// The hide-and-settle in flight, shared by every Capture until the last one ends.
+    private var iconGone: Task<Void, Never>?
+    /// Whether a Capture body holds the turn, and the callers waiting for it in arrival order.
+    private var turnTaken = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    private func takeTurn() async {
+        guard turnTaken else { turnTaken = true; return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    private func endTurn() {
+        if waiting.isEmpty { turnTaken = false } else { waiting.removeFirst().resume() }
+    }
+
+    private func hideAndSettle(_ item: CaptureStatusItemHandle) async {
+        item.setHidden(true)
+        var polls = 0
+        var listed = true
+        while polls < Self.iconWaitPolls {
+            listed = item.isOnScreen
+            guard listed else { break }
+            polls += 1
+            await sleep(iconPoll)
+        }
+        if listed { iconNeverLeft() }
+        // The compositor's fade-out can outlive the window list (fix r4, smoke685-20261115d 5.3).
+        await sleep(iconSettle)
     }
 }
 
