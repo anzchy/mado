@@ -29,7 +29,7 @@ uses `scripts/codex-rules/push-guard.py`. Verify both a rejected direct push dry
 a successful guarded dry-run before a remote write (see `scripts/codex-rules/README.md`).
 
 
-1. Read the latest entries of `~/.picsee/handoff/20261022-migrate-to-mini.md`, then `gh pr list`, `gh issue list`,
+1. Read the latest entries of `~/.picsee/handoff/20261031-delegator.md`, then `gh pr list`, `gh issue list`,
    `herdr pane list`, and each busy pane's screen (`herdr pane read <pane> | tail -30`; `herdr pane zoom` if empty).
 2. Install the auditors' rules file if missing: `cp $SK/references/templates/audit-brief.md ~/.picsee/herdr/delegator/`.
 3. Check Codex budget (panes show "weekly limit: N% left").
@@ -40,11 +40,9 @@ a successful guarded dry-run before a remote write (see `scripts/codex-rules/REA
 |---|---|---|---|
 | w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
 | w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
-| w1:p4 | gpt-imple-3 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh` |
 | w1:p5 | gpt-auditor | Codex `gpt-6-sol`, effort `medium`; for a device run only, restart it with `-s danger-full-access` (its sandbox cannot run `pgrep`) and restart without it afterwards | `$SK/scripts/reset.sh` |
 | w1:p6 | opus-auditor | Claude `--agent picsee-opus-auditor --model opus` | send `/clear` + Enter, confirm `Context 0%` |
 | w1:p9 | opus-imple-1 | Claude Opus implementer (added 2026-10-25) | `/clear` + Enter |
-| w1:p7 | kimi-imple-1 | Kimi `-m kimi-code/k3.1-pro`, effort **high** (user rule) | `/new` + Enter |
 
 Any implementer pane may take Medium/High work (user 2026-10-25: "now codex usage is sufficient, fire up all gpt-imple-*
 if needed."); keep each pane on one item at a time. Never touch mdpro or its tmux `dtrack`.
