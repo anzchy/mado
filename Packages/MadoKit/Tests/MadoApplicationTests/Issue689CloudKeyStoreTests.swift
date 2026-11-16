@@ -9,11 +9,13 @@ actor FakeSecretStore: CloudSecretStorePort {
     var failSetAccount: String?
     var failRemoveAccount: String?
     var failRead = false
+    var setsBeforeOutage: Int?
     private(set) var operations: [String] = []
 
     func failSet(on account: String?) { failSetAccount = account }
     func failRemove(on account: String?) { failRemoveAccount = account }
     func failReads(_ value: Bool) { failRead = value }
+    func failEverySet(after count: Int) { setsBeforeOutage = count }
     func put(_ value: String, service: String, account: String) { items[Key(service: service, account: account)] = value }
 
     func secret(service: String, account: String) async throws(CloudSecretStoreError) -> String? {
@@ -23,6 +25,7 @@ actor FakeSecretStore: CloudSecretStorePort {
     }
     func setSecret(_ value: String, service: String, account: String) async throws(CloudSecretStoreError) {
         operations.append("set \(account)")
+        if let left = setsBeforeOutage { if left == 0 { throw .failed(status: -25308) }; setsBeforeOutage = left - 1 }
         if failSetAccount == account { throw .failed(status: -25308) }
         items[Key(service: service, account: account)] = value
     }
@@ -105,6 +108,42 @@ func issue689KeyStoreSaveFailureLeavesNoHalfSavedKeys() async throws {
         try await store.save(CloudCredentials(apiKey: "AK", secretKey: "SK"))
     }
     #expect(await secrets.items.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(2)), arguments: ["api-key", "secret-key"])
+func issue689KeyStoreFailedReplacementKeepsTheOldPair(_ failing: String) async throws {
+    let secrets = FakeSecretStore()
+    let store = BaiduCloudCredentialStore(secrets: secrets)
+    await secrets.put("AK-old-key", service: baiduService, account: "api-key")
+    await secrets.put("SK-old", service: baiduService, account: "secret-key")
+    await secrets.failSet(on: failing)
+    await #expect(throws: CloudKeyError.storeFailed) {
+        try await store.save(CloudCredentials(apiKey: "AK-new-key", secretKey: "SK-new"))
+    }
+    #expect(await secrets.items == [
+        .init(service: baiduService, account: "api-key"): "AK-old-key",
+        .init(service: baiduService, account: "secret-key"): "SK-old",
+    ])
+    #expect(await store.credentials() == CloudCredentials(apiKey: "AK-old-key", secretKey: "SK-old"))
+    // Once the store works again, the replacement goes through.
+    await secrets.failSet(on: nil)
+    try await store.save(CloudCredentials(apiKey: "AK-new-key", secretKey: "SK-new"))
+    #expect(await store.credentials() == CloudCredentials(apiKey: "AK-new-key", secretKey: "SK-new"))
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue689KeyStoreReplacementThatCannotRestoreLeavesNoMixedPair() async throws {
+    let secrets = FakeSecretStore()
+    let store = BaiduCloudCredentialStore(secrets: secrets)
+    await secrets.put("AK-old-key", service: baiduService, account: "api-key")
+    await secrets.put("SK-old", service: baiduService, account: "secret-key")
+    // The new API Key is written, then the keychain stops taking writes, so the old API Key cannot be put back.
+    await secrets.failEverySet(after: 1)
+    await #expect(throws: CloudKeyError.storeFailed) {
+        try await store.save(CloudCredentials(apiKey: "AK-new-key", secretKey: "SK-new"))
+    }
+    #expect(await secrets.items.isEmpty)
+    #expect(await store.credentials() == nil)
 }
 
 @Test(.timeLimit(.minutes(2)))
