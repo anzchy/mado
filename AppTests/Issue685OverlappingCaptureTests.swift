@@ -145,3 +145,66 @@ import Testing
     await second.value
     #expect(log == ["hide", "capture-A", "capture-B", "show"])
 }
+
+// #685 fix r6 (gpt M1 / opus L6): the queue after it drains, and a cancelled waiter.
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685ACollapsedCaptureAfterTheQueueDrainsHidesAndSettlesAgain()
+    async throws {
+    var log: [String] = []
+    let clock = HeldClock()
+    let session = OneReadAtATime()
+    let bar = controller(clock: clock, log: { log.append($0) })
+    bar.collapse()
+    var readAt: [String: Duration] = [:]
+
+    let first = Task { @MainActor in
+        await bar.whileCapturing { readAt["A"] = clock.now; await session.read("A", log: { log.append($0) }) }
+    }
+    await drain(clock, until: { log.contains("show") })
+    await first.value
+    #expect(log == ["hide", "capture-A", "show"])
+    let drainedAt = clock.now
+
+    let second = Task { @MainActor in
+        await bar.whileCapturing { readAt["B"] = clock.now; await session.read("B", log: { log.append($0) }) }
+    }
+    await turns(until: { clock.isHolding || readAt["B"] != nil })
+    #expect(readAt["B"] == nil, "the later Capture waits for a fresh settle")
+    await drain(clock, until: { log.count == 6 })
+    await second.value
+
+    #expect(session.busy == 0)
+    #expect(try #require(readAt["B"]) >= drainedAt + .milliseconds(300))
+    #expect(log == ["hide", "capture-A", "show", "hide", "capture-B", "show"])
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue685ACancelledWaiterDoesNotBlockTheNextCapture() async throws {
+    var log: [String] = []
+    let clock = HeldClock()
+    let session = OneReadAtATime()
+    let bar = controller(clock: clock, log: { log.append($0) })
+    var release: CheckedContinuation<Void, Never>?
+
+    let first = Task { @MainActor in
+        await bar.whileCapturing {
+            await session.read("A", log: { log.append($0) }, hold: { await withCheckedContinuation { release = $0 } })
+        }
+    }
+    await turns(until: { release != nil })
+    let second = Task { @MainActor in
+        await bar.whileCapturing { await session.read("B", log: { log.append($0) }) }
+    }
+    let third = Task { @MainActor in
+        await bar.whileCapturing { await session.read("C", log: { log.append($0) }) }
+    }
+    await turns(until: { false })  // B and C reach the queue
+    second.cancel()
+    #expect(log == ["capture-A"], "B and C wait while A reads")
+    release?.resume()
+    await first.value
+    await second.value
+    await third.value
+
+    #expect(session.busy == 0)
+    #expect(log == ["capture-A", "capture-B", "capture-C"], "the cancelled waiter keeps its place and C still runs")
+}
