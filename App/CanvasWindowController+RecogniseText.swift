@@ -9,8 +9,11 @@ import MadoInfrastructure
 @MainActor final class ViewerRecogniseTextAdapter {
     weak var controller: CanvasWindowController?
     var pasteboard: NSPasteboard = .general
-    var recognise: @Sendable (Data, TextRecognitionIntent) async throws -> TextRecognitionResult = { data, intent in
-        try await TextRecognitionService(onDevice: OnDeviceTextRecognitionProvider()).recognise(data, intent: intent)
+    /// Tests' full override of recognition; nil uses `makeRecognitionService`.
+    var recognise: (@Sendable (Data, TextRecognitionIntent) async throws -> TextRecognitionResult)?
+    /// #689 WI-8: the engine choice (switch, consent, keys, online) behind 识别文字; tests inject in-memory ports.
+    var makeRecognitionService: @MainActor () -> TextRecognitionService = {
+        CloudRecognitionAppServices.recognitionService(onDevice: OnDeviceTextRecognitionProvider())
     }
     private(set) var model: RecogniseTextModel?
     private var overlay: RecogniseTextOverlay?
@@ -87,7 +90,8 @@ import MadoInfrastructure
         activeGeneration = generation
         activeRun = UUID()
         let run = activeRun
-        let recognise = self.recognise
+        let service = makeRecognitionService()
+        let recognise = self.recognise ?? { data, intent in try await service.recognise(data, intent: intent) }
         let newModel = RecogniseTextModel(recognise: { _ in
             let needsFullResolution = image.width != Int(sourceSize.width) || image.height != Int(sourceSize.height)
             let sourceImage = needsFullResolution
