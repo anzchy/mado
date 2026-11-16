@@ -2005,6 +2005,7 @@ extension CanvasWindowController: ViewerSessionNavigationHost {
         layoutInspector()
         syncInspector()
         relinkRecogniseTextNotice()
+        recogniseTextAdapter.relayout()
     }
     func relinkRecogniseTextNotice() {
         stateHost.linkKeyViews(to: canvas, chrome: chromeOverlay)
@@ -2917,6 +2918,12 @@ extension CanvasWindowController: FolderScanHost {
 // #687 fix r5 (F6): the OCR panel's Tab reaches the Inspector the way the viewer's own ring does.
 extension CanvasWindowController {
     var recogniseTextInspectorFocused: Bool { isInspectorFocused }
+    /// #687 fix r5b (F10): the shown Inspector column in content coordinates, which the OCR notice and panel keep
+    /// left of; nil when it is hidden or the grid is up.
+    var recogniseTextInspectorColumn: NSRect? {
+        guard gridView.isHidden, inspectorVisible, let inspectorHost, !inspectorHost.isHidden else { return nil }
+        return inspectorHost.frame
+    }
     func focusInspectorFromRecogniseText() -> Bool {
         guard gridView.isHidden, inspectorVisible else { return false }
         focusInspectorCloseButton()
