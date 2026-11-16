@@ -8,7 +8,7 @@ import MadoApplication
 
 /// Answers every request made through a session that lists it; no request reaches the network.
 private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
-    enum Outcome { case respond(Int, Data), bare(Data), fail(URLError), hang }
+    enum Outcome { case respond(Int, Data), bare(Data), redirect(Int, String), fail(URLError), hang }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var outcomes: [Outcome] = []
     nonisolated(unsafe) private static var seen: [(request: URLRequest, body: Data)] = []
@@ -53,6 +53,18 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
                                        textEncodingName: nil)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        case .redirect(let status, let location):
+            // A 30x that points somewhere else. Following it would start a new load, which this stub records.
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
+                                           headerFields: ["Location": location])!
+            var next = URLRequest(url: URL(string: location)!)
+            next.httpMethod = request.httpMethod
+            next.httpBody = body
+            next.allHTTPHeaderFields = request.allHTTPHeaderFields
+            client?.urlProtocol(self, wasRedirectedTo: next, redirectResponse: response)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data())
             client?.urlProtocolDidFinishLoading(self)
         case .fail(let error):
             client?.urlProtocol(self, didFailWithError: error)
@@ -248,6 +260,38 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
             try await stubbedTransport().send(URLRequest(url: URL(string: address)!))
         }
         #expect(StubURLProtocol.requests.isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(2)), arguments: [301, 302, 303, 307, 308])
+    func issue689TransportRefusesRedirectsAndResendsNothing(_ status: Int) async throws {
+        // The token request carries client_id/client_secret; a redirect must not carry them to another host.
+        StubURLProtocol.reset([.redirect(status, "https://collector.example.com/steal"), .respond(200, tokenBody)])
+        var request = URLRequest(url: URL(string: "https://aip.baidubce.com/oauth/2.0/token")!)
+        request.httpMethod = "POST"
+        request.httpBody = Data("grant_type=client_credentials&client_id=a&client_secret=b".utf8)
+        await #expect(throws: URLSessionHTTPTransport.Refusal.redirected) {
+            try await stubbedTransport().send(request)
+        }
+        #expect(StubURLProtocol.requests.count == 1)
+        #expect(StubURLProtocol.requests.allSatisfy { $0.request.url?.host == "aip.baidubce.com" })
+
+        // A same-host redirect is refused too; Baidu's documented endpoints never redirect.
+        StubURLProtocol.reset([.redirect(status, "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"),
+                               .respond(200, wordsBody)])
+        await #expect(throws: URLSessionHTTPTransport.Refusal.redirected) {
+            try await stubbedTransport().send(request)
+        }
+        #expect(StubURLProtocol.requests.count == 1)
+
+        // Through the provider: the image upload is redirected; the user gets the service error, and only Baidu saw it.
+        StubURLProtocol.reset([.respond(200, tokenBody), .redirect(status, "https://collector.example.com/image"),
+                               .respond(200, wordsBody)])
+        await #expect(throws: TextRecognitionError.cloudFailure) {
+            try await BaiduTextRecognitionProvider(transport: stubbedTransport())
+                .recognise(try pngImage(), credentials: CloudCredentials(apiKey: "api", secretKey: "secret"))
+        }
+        #expect(StubURLProtocol.requests.count == 2)
+        #expect(StubURLProtocol.requests.allSatisfy { $0.request.url?.host == "aip.baidubce.com" })
     }
 
     @Test(.timeLimit(.minutes(2)))
