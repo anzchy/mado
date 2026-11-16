@@ -20,9 +20,16 @@ import MadoInfrastructure
     private var closed = false
     private var priorMinimum: NSSize?
     private var expandedFrom: NSSize?
+    private var panelHeight: CGFloat = 340
     private var priorConsumeKey: ((NSEvent) -> Bool)?
     /// #687 fix r5: the notice's 5 s dismissal clock; tests replace it before the first recognition.
     var scheduleNoticeDismiss: ((TimeInterval, @escaping @MainActor () -> Void) -> Void)?
+    /// #687 fix r5b (F9): posts a VoiceOver announcement; tests record it instead.
+    var announce: (String) -> Void = { _ in }
+    /// #687 fix r5b (F11): builds the clipboard writer; tests replace it.
+    var makeTextPasteboard: (NSPasteboard) -> any TextPasteboardWriting = { NativeTextPasteboard($0) }
+    /// #687 fix r5b (F12): where the pointer rests, in window coordinates; tests replace it.
+    var pointerLocation: (() -> NSPoint?)?
     /// The panel's Esc wrapper is installed.
     var hasPanelKeyRouting: Bool { priorConsumeKey != nil }
     var panelEditor: RecogniseTextEditor? { overlay?.panelView?.textView }
@@ -131,6 +138,15 @@ import MadoInfrastructure
             removal()
             _ = controller.window?.makeFirstResponder(controller.canvas)
         }
+        // #687 fix r5b (F8): keep clear of the viewer's chrome pods. Their frames hold while the chrome auto-hides,
+        // so the notice does not jump under a resting pointer when the pods come back.
+        overlay.placement = { [weak self, weak overlay] in
+            guard let overlay, let chrome = self?.controller?.chromeOverlay, chrome.window === overlay.window else {
+                return RecogniseTextPlacement(trailingEdge: nil, obstacles: [])
+            }
+            return RecogniseTextPlacement(trailingEdge: nil,
+                obstacles: chrome.groups.map { overlay.convert($0.frame, from: chrome) })
+        }
         overlay.onDismiss = { [weak self] in self?.model?.dismissNotice() }
         overlay.onNoticeChange = { [weak self] in self?.controller?.relinkRecogniseTextNotice() }
         content.addSubview(overlay, positioned: .above, relativeTo: nil)
@@ -171,7 +187,7 @@ import MadoInfrastructure
         case .noText:
             overlay.showNotice(message: String(localized: "No text found · Clipboard unchanged"),
                 engine: nil, kind: .warning, onOpen: nil)
-        case .failed:
+        case .failed, .clipboardMayHaveChanged:
             overlay.showNotice(message: String(localized: "Unable to recognise text"),
                 engine: nil, kind: .warning, onOpen: nil)
         }
@@ -189,17 +205,20 @@ import MadoInfrastructure
         guard let window = controller?.window, priorMinimum == nil else { return }
         priorMinimum = window.contentMinSize
         let current = window.contentView?.bounds.size ?? .zero
-        window.contentMinSize = NSSize(width: window.contentMinSize.width, height: max(340, window.contentMinSize.height))
-        if current.height < 340 {
+        // #687 fix r5b (F8): the panel sits above the zoom group, so the window keeps 20 pt over its top edge.
+        let needed = max(340, ceil(overlay?.plannedPanelFrame().maxY ?? 0) + 20)
+        panelHeight = needed
+        window.contentMinSize = NSSize(width: window.contentMinSize.width, height: max(needed, window.contentMinSize.height))
+        if current.height < needed {
             expandedFrom = current
-            window.setContentSize(NSSize(width: current.width, height: 340))
+            window.setContentSize(NSSize(width: current.width, height: needed))
         }
     }
     private func restoreWindowMinimumIfNeeded() {
         guard let window = controller?.window, let priorMinimum else { return }
         window.contentMinSize = priorMinimum
         self.priorMinimum = nil
-        if let expandedFrom, abs((window.contentView?.bounds.height ?? 0) - 340) < 1 {
+        if let expandedFrom, abs((window.contentView?.bounds.height ?? 0) - panelHeight) < 1 {
             let currentWidth = window.contentView?.bounds.width ?? expandedFrom.width
             window.setContentSize(NSSize(width: currentWidth, height: expandedFrom.height))
         }
