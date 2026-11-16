@@ -1,0 +1,5 @@
+✔ lock wait timeout keeps exit 75 without entering the command (1342.843708ms)
+✖ failing tests:
+
+test at scripts/agents/pre-push.test.mjs:235:3
+✖ documented bootstrap propagates false-success (612.902791ms)
