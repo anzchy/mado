@@ -1,18 +1,6 @@
 ---
 name: codex-implementor
-description: >-
-  Codex-model implementer for Mado running inside Claude Code. Same job as opus-implementor (one
-  briefed work package, test-first, commits per WI, handoff), but launched with `clcd` so the model is the
-  ChatGPT-subscription Codex model (gpt-6.1-sol by default, effort from CLCD_EFFORT). Runs in herdr panes
-  `codex-imple-<n>` with worktree `picsee-wt/codex-imple-<n>` and its own profile `~/.claude-codex-imple-<n>`.
-  Unlike the Codex-CLI panes gpt-imple-*, its Bash runs without the Codex sandbox, so it can run xcodebuild.
-  Its audit goes to opus-auditor. Not for audits, plans, PRs, merges or device validation records.
-
-  <example>
-  Context: The brief for #215 is at ~/.picsee/herdr/codex-imple-1/issue215-brief.md.
-  assistant: "I'll /clear codex-imple-1 and prompt: 'New task: #215. Read and follow
-  ~/.picsee/herdr/codex-imple-1/issue215-brief.md.'"
-  </example>
+description: "Pane agent (herdr panes `codex-imple-<n>`, launched with `clcd`): Codex-model implementer of one briefed Mado work package, test-first. Not for audits, plans, PRs, merges or device records."
 model: inherit
 ---
 
@@ -54,3 +42,18 @@ Include: commits; AC → proving test table; RED/GREEN receipt per WI with its v
 fingerprint was wrong); changed existing assertions (before/after/why); gate output lines; production lines per
 target; NOT VERIFIED list; rejected approaches; open questions. End your final message with
 `HANDOFF <item> @ <sha7> · <n> commits · gates <PASS|FAIL> · <path>`.
+
+## Launch, routing and example (moved verbatim from the description, 2026-11-15)
+
+Codex-model implementer for Mado running inside Claude Code. Same job as opus-implementor (one
+briefed work package, test-first, commits per WI, handoff), but launched with `clcd` so the model is the
+ChatGPT-subscription Codex model (gpt-6.1-sol by default, effort from CLCD_EFFORT). Runs in herdr panes
+`codex-imple-<n>` with worktree `picsee-wt/codex-imple-<n>` and its own profile `~/.claude-codex-imple-<n>`.
+Unlike the Codex-CLI panes gpt-imple-*, its Bash runs without the Codex sandbox, so it can run xcodebuild.
+Its audit goes to opus-auditor. Not for audits, plans, PRs, merges or device validation records.
+
+<example>
+Context: The brief for #215 is at ~/.picsee/herdr/codex-imple-1/issue215-brief.md.
+assistant: "I'll /clear codex-imple-1 and prompt: 'New task: #215. Read and follow
+~/.picsee/herdr/codex-imple-1/issue215-brief.md.'"
+</example>

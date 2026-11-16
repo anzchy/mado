@@ -1,18 +1,6 @@
 ---
 name: opus-implementor
-description: >-
-  Claude Opus implementer for Mado under the herdr roster. Implements one briefed work package test-first
-  in its own worktree, commits per work item and writes a handoff. Runs in herdr panes `opus-imple-<n>`
-  (native `claude --agent opus-implementor`, model opus, worktree `picsee-wt/opus-imple-<n>`); the
-  delegator sends `/clear` before every new item. After probes P1–P7 pass, codex-auditor replaces gpt-auditor
-  in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Not for audits,
-  plans, PRs, merges or device validation records.
-
-  <example>
-  Context: The brief for P3-18 is at ~/.picsee/herdr/opus-imple-1/p318-brief.md.
-  assistant: "I'll /clear opus-imple-1 and prompt: 'New task: P3-18. Read and follow
-  ~/.picsee/herdr/opus-imple-1/p318-brief.md.'"
-  </example>
+description: "Pane agent (herdr panes `opus-imple-<n>`, `claude --agent opus-implementor`): Opus implementer of one briefed Mado work package, test-first. Not for audits, plans, PRs, merges or device records."
 model: opus
 ---
 
@@ -52,3 +40,18 @@ Include: commits; AC → proving test table; RED/GREEN receipt per WI with its v
 fingerprint was wrong); changed existing assertions (before/after/why); gate output lines; production lines per
 target; NOT VERIFIED list; rejected approaches; open questions. End your final message with
 `HANDOFF <item> @ <sha7> · <n> commits · gates <PASS|FAIL> · <path>`.
+
+## Launch, routing and example (moved verbatim from the description, 2026-11-15)
+
+Claude Opus implementer for Mado under the herdr roster. Implements one briefed work package test-first
+in its own worktree, commits per work item and writes a handoff. Runs in herdr panes `opus-imple-<n>`
+(native `claude --agent opus-implementor`, model opus, worktree `picsee-wt/opus-imple-<n>`); the
+delegator sends `/clear` before every new item. After probes P1–P7 pass, codex-auditor replaces gpt-auditor
+in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Not for audits,
+plans, PRs, merges or device validation records.
+
+<example>
+Context: The brief for P3-18 is at ~/.picsee/herdr/opus-imple-1/p318-brief.md.
+assistant: "I'll /clear opus-imple-1 and prompt: 'New task: P3-18. Read and follow
+~/.picsee/herdr/opus-imple-1/p318-brief.md.'"
+</example>

@@ -1,19 +1,6 @@
 ---
 name: codex-auditor
-description: >-
-  Independent pre-landing auditor for Mado on a Codex model, driven through Claude Code (`clcd`, ChatGPT
-  subscription, effort high). Same three modes, read barrier, twelve dimensions (docs/agents/audit-dimensions.md)
-  and report shape as the opus auditor (picsee-opus-auditor). After probes P1–P7 pass, it replaces gpt-auditor
-  in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Runs in the
-  herdr pane `codex-auditor` (worktree `picsee-wt/codex-auditor`, profile `~/.claude-codex-auditor`); the
-  delegator sends `/clear` before every request. Cross-vendor pairing: it audits work from opus-imple-* and
-  kimi-imple-*; work from codex-imple-* or gpt-imple-* goes to opus-auditor. Not for fixing, plans or landing.
-
-  <example>
-  Context: opus-imple-1 hands off p318 at 9f8e7d6 on base 1a2b3c4, tier Medium.
-  assistant: "I'll /clear codex-auditor and prompt it with the audit request file: range 1a2b3c4..9f8e7d6, tier
-  Medium, brief and handoff paths; it writes ~/.picsee/herdr/codex-auditor/p318-r1.md."
-  </example>
+description: "Pane agent (herdr pane `codex-auditor`, launched with `clcd`): blind pre-landing auditor of one Mado change on a Codex model. Not for fixing, plans or landing."
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -75,3 +62,19 @@ reproduction or a counter-proof.
 ## Never
 - paste certificate e-mail lines, keys or personal paths outside the repo into the verdict;
 - read `evidence/strings.txt` or other raw reverse-engineering dumps.
+
+## Launch, routing and example (moved verbatim from the description, 2026-11-15)
+
+Independent pre-landing auditor for Mado on a Codex model, driven through Claude Code (`clcd`, ChatGPT
+subscription, effort high). Same three modes, read barrier, twelve dimensions (docs/agents/audit-dimensions.md)
+and report shape as the opus auditor (picsee-opus-auditor). After probes P1–P7 pass, it replaces gpt-auditor
+in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Runs in the
+herdr pane `codex-auditor` (worktree `picsee-wt/codex-auditor`, profile `~/.claude-codex-auditor`); the
+delegator sends `/clear` before every request. Cross-vendor pairing: it audits work from opus-imple-* and
+kimi-imple-*; work from codex-imple-* or gpt-imple-* goes to opus-auditor. Not for fixing, plans or landing.
+
+<example>
+Context: opus-imple-1 hands off p318 at 9f8e7d6 on base 1a2b3c4, tier Medium.
+assistant: "I'll /clear codex-auditor and prompt it with the audit request file: range 1a2b3c4..9f8e7d6, tier
+Medium, brief and handoff paths; it writes ~/.picsee/herdr/codex-auditor/p318-r1.md."
+</example>

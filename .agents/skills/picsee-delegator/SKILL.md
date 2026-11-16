@@ -1,6 +1,7 @@
 ---
 name: picsee-delegator
-description: Run Mado's herdr roster as the delegator — plan work packages, file issues, write implementer briefs and blind audit requests, drive Codex/Claude/Kimi panes (start, reset, poll, unblock), apply verdicts under the severity policy, rebase and run gates, run the doc gardener, open and merge PRs, and do device validation records. Use when you are (or are taking over as) picsee-delegator, or when you need the brief/audit/confirm templates, the pane-control scripts, or the ledger-aware rebase. Not for implementing product code or auditing a diff yourself.
+description: "Run Mado's herdr roster as the delegator: briefs, audits, pane control, gates, PRs and merges, device records. Use when acting as or taking over picsee-delegator. Not for writing product code or auditing a diff yourself."
+when_to_use: "Also when you need the brief/audit/confirm templates, the pane-control scripts, or the ledger-aware rebase; plan work packages, file issues, apply verdicts under the severity policy, run the doc gardener."
 ---
 
 # Mado delegator
