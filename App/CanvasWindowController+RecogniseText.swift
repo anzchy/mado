@@ -96,7 +96,7 @@ import MadoInfrastructure
             let data = try await Self.sourceData(image: sourceImage ?? image)
             try Task.checkCancellation()
             return try await recognise(data, .explicit)
-        }, pasteboard: NativeTextPasteboard(pasteboard), isCurrent: { [weak self] identity in
+        }, pasteboard: makeTextPasteboard(pasteboard), isCurrent: { [weak self] identity in
             guard let self, let controller = self.controller,
                   controller.canvas.backdropFrame.image != nil else { return false }
             let currentKey = controller.session.imageLoader.presented?.key
@@ -204,7 +204,10 @@ import MadoInfrastructure
         case .noText:
             overlay.showNotice(message: String(localized: "No text found · Clipboard unchanged"),
                 engine: nil, kind: .warning, onOpen: nil)
-        case .failed, .clipboardMayHaveChanged:
+        case .clipboardMayHaveChanged:
+            overlay.showNotice(message: String(localized: "Couldn't copy the text · The clipboard may have changed"),
+                engine: nil, kind: .warning, onOpen: nil)
+        case .failed:
             overlay.showNotice(message: String(localized: "Unable to recognise text"),
                 engine: nil, kind: .warning, onOpen: nil)
         }
