@@ -104,15 +104,10 @@ struct ImageTextGeometry {
             index = hit
         } else if requireHit { return nil }
         else {
-            // A drag ending in the gap between two lines on the same row stays at
-            // the edge of the line it left. Otherwise, measure to the whole box:
-            // midpoints alone can jump to a distant line on the same row.
-            index = departedLine(inGapAt: point, rects: rects)
-                ?? lines.indices.min { lhs, rhs in
-                    let a = distanceToBox(point, rects[lhs])
-                    let b = distanceToBox(point, rects[rhs])
-                    return a < b || (a == b && lhs < rhs)
-                } ?? 0
+            // Text-editor drag behavior: choose the vertical row before choosing
+            // a line. Horizontal proximity must never pull an endpoint to another
+            // row. In a same-row gap, stop at the line on the anchor's side.
+            index = endpointOutsideBoxes(at: point, rects: rects)
         }
         let line = lines[index]
         let count = line.text.count
@@ -131,36 +126,54 @@ struct ImageTextGeometry {
     }
     private var quarterTurnsHorizontal: Bool { geometry.quarterTurns.isMultiple(of: 2) }
 
-    private func distanceToBox(_ point: CGPoint, _ box: CGRect) -> CGFloat {
-        let dx = max(box.minX - point.x, 0, point.x - box.maxX)
-        let dy = max(box.minY - point.y, 0, point.y - box.maxY)
-        return dx * dx + dy * dy
-    }
-
-    private func departedLine(inGapAt point: CGPoint, rects: [CGRect]) -> Int? {
-        guard let anchor else { return nil }
+    private func endpointOutsideBoxes(at point: CGPoint, rects: [CGRect]) -> Int {
         let horizontal = quarterTurnsHorizontal
         let coordinate = horizontal ? point.x : point.y
         let perpendicular = horizontal ? point.y : point.x
-        let own = rects[anchor.line]
-        let ownMin = horizontal ? own.minX : own.minY
-        let ownMax = horizontal ? own.maxX : own.maxY
-        let ownPerpMin = horizontal ? own.minY : own.minX
-        let ownPerpMax = horizontal ? own.maxY : own.maxX
-        for neighbor in [anchor.line - 1, anchor.line + 1] where rects.indices.contains(neighbor) {
-            let other = rects[neighbor]
-            let otherMin = horizontal ? other.minX : other.minY
-            let otherMax = horizontal ? other.maxX : other.maxY
-            let otherPerpMin = horizontal ? other.minY : other.minX
-            let otherPerpMax = horizontal ? other.maxY : other.maxX
-            let overlap = min(ownPerpMax, otherPerpMax) - max(ownPerpMin, otherPerpMin)
-            let shorter = min(ownPerpMax - ownPerpMin, otherPerpMax - otherPerpMin)
-            guard overlap > shorter * 0.5,
-                  perpendicular >= min(ownPerpMin, otherPerpMin),
-                  perpendicular <= max(ownPerpMax, otherPerpMax) else { continue }
-            if ownMax < otherMin, coordinate >= ownMax, coordinate <= otherMin { return anchor.line }
-            if otherMax < ownMin, coordinate >= otherMax, coordinate <= ownMin { return anchor.line }
+        func alongMin(_ i: Int) -> CGFloat { horizontal ? rects[i].minX : rects[i].minY }
+        func alongMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxX : rects[i].maxY }
+        func perpMin(_ i: Int) -> CGFloat { horizontal ? rects[i].minY : rects[i].minX }
+        func perpMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxY : rects[i].maxX }
+        var rows: [[Int]] = []
+        for index in rects.indices.sorted(by: { (perpMin($0) + perpMax($0)) < (perpMin($1) + perpMax($1)) }) {
+            if let row = rows.indices.first(where: { row in
+                rows[row].contains { member in
+                    let overlap = min(perpMax(index), perpMax(member)) - max(perpMin(index), perpMin(member))
+                    let shorter = min(perpMax(index) - perpMin(index), perpMax(member) - perpMin(member))
+                    return overlap >= shorter * 0.5
+                }
+            }) {
+                rows[row].append(index)
+            } else {
+                rows.append([index])
+            }
         }
-        return nil
+        // A band containing the endpoint wins; between bands, use the nearer one.
+        let row = rows.min { lhs, rhs in
+            @MainActor func score(_ members: [Int]) -> (CGFloat, CGFloat) {
+                let low = members.map { perpMin($0) }.min() ?? 0
+                let high = members.map { perpMax($0) }.max() ?? 0
+                return (max(max(low - perpendicular, 0), perpendicular - high), abs((low + high) / 2 - perpendicular))
+            }
+            let a = score(lhs), b = score(rhs)
+            return a.0 == b.0 ? a.1 < b.1 : a.0 < b.0
+        }!.sorted { alongMin($0) < alongMin($1) }
+        let onAnchorRow = anchor.map { row.contains($0.line) } ?? false
+        if coordinate <= alongMin(row[0]) { return row[0] }
+        if coordinate >= alongMax(row[row.count - 1]) { return row[row.count - 1] }
+        for (position, index) in row.enumerated() {
+            if coordinate >= alongMin(index), coordinate <= alongMax(index) { return index }
+            guard position + 1 < row.count else { continue }
+            let next = row[position + 1]
+            if coordinate > alongMax(index), coordinate < alongMin(next) {
+                if onAnchorRow {
+                    return row.firstIndex(of: anchor!.line)! <= position ? index : next
+                }
+                let anchorRect = rects[anchor!.line]
+                let anchorCoordinate = horizontal ? anchorRect.midX : anchorRect.midY
+                return coordinate >= anchorCoordinate ? index : next
+            }
+        }
+        return row.min { abs((alongMin($0) + alongMax($0)) / 2 - coordinate) < abs((alongMin($1) + alongMax($1)) / 2 - coordinate) }!
     }
 }
