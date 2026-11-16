@@ -30,6 +30,33 @@ private actor EmptySelectionProbe {
 }
 
 @Suite(.serialized) struct Issue688ViewerSelectTextTests {
+@MainActor @Test(.timeLimit(.minutes(3))) func issue688SelectionCopyFailurePreservesClipboard() async throws {
+    let context = try await Issue690Context()
+    defer { context.close() }
+    let controller = try await context.open()
+    let board = NSPasteboard(name: .init("mado.issue688.failed-copy.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+    board.setString("sentinel", forType: .string)
+    controller.selectTextAdapter.pasteboard = board
+    controller.selectTextAdapter.makeTextPasteboard = { board in
+        NativeTextPasteboard(board, writeObjects: { target, objects in
+            if target === board && (objects.first as? NSPasteboardItem)?.string(forType: .string) == "Hello" { return false }
+            return target.writeObjects(objects)
+        })
+    }
+    controller.selectTextAdapter.selection.lines = [TextRecognitionLine(
+        text: "Hello", box: CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))]
+    controller.selectTextAdapter.selection.geometry = ImageTextGeometry(
+        transform: controller.canvas.backdropFrame.transform,
+        imageSize: controller.canvas.backdropFrame.sourceSize)
+    let box = controller.selectTextAdapter.selection.geometry.viewRect(CGRect(x: 0.1, y: 0.7, width: 0.5, height: 0.1))
+    #expect(controller.selectTextAdapter.selection.begin(at: CGPoint(x: box.minX + 1, y: box.midY)))
+    controller.selectTextAdapter.selection.drag(to: CGPoint(x: box.maxX - 1, y: box.midY))
+    #expect(!controller.selectTextAdapter.copy())
+    #expect(board.string(forType: .string) == "sentinel")
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue688LateRecognitionAfterItemSwitchIsDropped() async throws {
     let context = try await Issue690Context()
     defer { context.close() }
