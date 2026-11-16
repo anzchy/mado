@@ -34,6 +34,26 @@ import MadoMacUI
     func key(_ characters: String, code: UInt16, modifiers: NSEvent.ModifierFlags = []) throws {
         window.sendEvent(try event(characters, code: code, modifiers: modifiers))
     }
+    private var eventNumber = 0
+    /// #687 fix r6 (opus M2): the navigation pod's ‹ or › button pressed with a leftMouseDown/Up at its centre,
+    /// delivered to the view the window's hit test picks there, as the F8 test does for 放大. `window.sendEvent` mouse
+    /// events never reach a chrome tool in this lane (the host window is not key; every image-change row timed out).
+    func clickNavigation(next: Bool, _ label: String) throws {
+        let id = "command.\((next ? CommandID.next : CommandID.previous).rawValue).button"
+        let tool = try #require(controller.chromeOverlay.tools.first { $0.accessibilityIdentifier() == id }, "\(label): \(id)")
+        if tool.isHiddenOrHasHiddenAncestor { controller.session.setChromeInteraction(.pointerHover, active: true) }
+        try #require(!tool.isHiddenOrHasHiddenAncestor, "\(label): the navigation pod is shown")
+        let point = tool.convert(NSPoint(x: tool.bounds.midX, y: tool.bounds.midY), to: nil)
+        let hit = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point)
+        try #require(hit === tool, "\(label): the window's hit test picks \(id), not \(String(describing: hit))")
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            eventNumber += 1
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                eventNumber: eventNumber, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+            if type == .leftMouseDown { tool.mouseDown(with: event) } else { tool.mouseUp(with: event) }
+        }
+    }
     func event(_ characters: String, code: UInt16, modifiers: NSEvent.ModifierFlags = []) throws -> NSEvent {
         try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
             windowNumber: window.windowNumber, context: nil, characters: characters,
@@ -405,9 +425,8 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
                         try await h.recognise()
                     case .imageChange:
                         // The pod's ‹/› buttons (a click needs no keyboard focus; the bare-arrow menu items follow
-                        // the Session's typing state).
-                        #expect(h.controller.route(urlBefore?.lastPathComponent == h.context.first.lastPathComponent ? .next : .previous, from: .button),
-                                "\(label): navigation available")
+                        // the Session's typing state). #687 fix r6 (opus M2): a real click through the window.
+                        try h.clickNavigation(next: urlBefore?.lastPathComponent == h.context.first.lastPathComponent, label)
                         try await waitUntil("\(label): image changed", timeout: .seconds(60)) {
                             h.controller.session.imageLoader.fileURL != urlBefore && h.controller.session.imageStatus == .showing
                                 && h.overlay?.noticeView == nil && h.overlay?.panelView == nil
@@ -552,8 +571,7 @@ private enum Fix5Exit: String, CaseIterable { case timer, escape, rerun, imageCh
 
     try await toInspector()
     let before = h.controller.session.imageLoader.fileURL
-    #expect(h.controller.route(before?.lastPathComponent == h.context.first.lastPathComponent ? .next : .previous,
-                               from: .button))
+    try h.clickNavigation(next: before?.lastPathComponent == h.context.first.lastPathComponent, "Inspector focused")
     try await waitUntil("the other image is shown", timeout: .seconds(60)) {
         h.controller.session.imageLoader.fileURL != before && h.controller.session.imageStatus == .showing && h.editor == nil
     }
