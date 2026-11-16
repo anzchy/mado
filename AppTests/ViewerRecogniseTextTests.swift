@@ -201,7 +201,8 @@ private actor RecognitionCounter {
     // first write to `board`) fails; the restore is a real write. A failed restore is F11's own test.
     var destinationAttempted = false
     let port = NativeTextPasteboard(board, writeObjects: { target, objects in
-        if target === board && !destinationAttempted {
+        // Reject the destination text, then let the restore write prove the prior items survive.
+        if target === board && (objects.first as? NSPasteboardItem)?.string(forType: .string) == "after" {
             destinationAttempted = true
             return false
         }
