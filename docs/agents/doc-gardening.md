@@ -64,6 +64,22 @@ The gate ignores branch names: it maps IDs only from commit messages, and paths 
 A PR body carries the `Ledger-Gardener: DAILY …` line above. The daily sweep's own fix-up PR carries the
 gardener's or gate's line for its range (see Output).
 
+### 每日扫描步骤（从 AGENTS.md 原样挪来，2026-11-15）
+
+用户 2026-11-04：「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」，选择「每天在 main 上统一扫一次」。规程见 [`docs/agents/doc-gardening.md`](docs/agents/doc-gardening.md)「When it runs」。
+
+1. **每天一次**：delegator 在 `origin/main` 的干净 detached worktree 里，对 `<上次扫到的 main>..origin/main` 先跑 `node scripts/ledger/garden-gate.mjs`；输出 `RUN` 时运行 **picsee-doc-gardener**（Claude Code：subagent；Codex：custom agent），模式 `pr`。
+2. 按结果处理：
+
+   | 结果 | 怎么做 |
+   |---|---|
+   | `SKIP` / `CLEAN` | 只记下这次扫到的 main head |
+   | `UPDATED` | 检查 `git diff -- docs/feature-ledger.md docs/feature-ledger.html`，提交为 `docs(ledger): garden <base7>..<head7>`，开一个小 PR |
+   | `NEEDS-OWNER` | 改账簿里被点名的行，或问用户；同一个小 PR |
+   | `BLOCK` | 已合入 main 的验收改动或无证据升级：告诉用户，开 issue，修正后再扫 |
+
+3. **PR 不再等 gardener**：打开或重新推送 PR 时不运行 gardener，PR 描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`。改变用户可见行为的提交仍要同时改它的账簿行（见上一节），这条不变。
+
 ## What you may change, and what you may only propose
 
 The asymmetry is the point. **You may make the ledger more cautious, never more optimistic.**
