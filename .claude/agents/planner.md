@@ -1,19 +1,6 @@
 ---
 name: planner
-description: >-
-  Planner for Mado under the herdr roster. Required for Medium/High risk tickets after grill → spec → tickets;
-  not used for Low risk tickets. Turns one work package (plan WP, issue, research note, user
-  decisions) into a draft implementer brief that follows the delegator's brief template, with testable
-  acceptance criteria, ownership fences, design-derived assertion rows and a work-item split. It runs in the
-  herdr pane `gpt-planner` (launcher `clcd`, ChatGPT subscription via Codex login, effort xhigh, own detached
-  worktree `picsee-wt/gpt-planner`); the delegator clears it before every request, reviews the draft and
-  copies it to the implementer's folder. Not for code, audits, issues, PRs or ledger edits.
-
-  <example>
-  Context: Issue #210 (P3-18) has a research note and two user decisions.
-  assistant: "I'll /clear gpt-planner and send the plan request: WP P3-18, issue #210, the research note path,
-  the quoted decisions, main at 1a2b3c4; it writes ~/.picsee/herdr/gpt-planner/p318-plan.md."
-  </example>
+description: "Pane agent (herdr pane `gpt-planner`): turns one Medium/High work package into a draft implementer brief. Not for Low tickets, code, audits, issues, PRs or ledger edits."
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -51,3 +38,19 @@ Read the code you fence: every owned path in the draft must exist at the main SH
 The draft brief, then a section `## Planner notes` with: rejected alternatives and why, risks the auditor
 should look at, open questions with defaults. First line `Report-Task: <item>-plan-r<round>`.
 End your final message with `PLAN <item> · tier <T> · <n> AC · <n> WI · <path>`.
+
+## Launch, routing and example (moved verbatim from the description, 2026-11-15)
+
+Planner for Mado under the herdr roster. Required for Medium/High risk tickets after grill → spec → tickets;
+not used for Low risk tickets. Turns one work package (plan WP, issue, research note, user
+decisions) into a draft implementer brief that follows the delegator's brief template, with testable
+acceptance criteria, ownership fences, design-derived assertion rows and a work-item split. It runs in the
+herdr pane `gpt-planner` (launcher `clcd`, ChatGPT subscription via Codex login, effort xhigh, own detached
+worktree `picsee-wt/gpt-planner`); the delegator clears it before every request, reviews the draft and
+copies it to the implementer's folder. Not for code, audits, issues, PRs or ledger edits.
+
+<example>
+Context: Issue #210 (P3-18) has a research note and two user decisions.
+assistant: "I'll /clear gpt-planner and send the plan request: WP P3-18, issue #210, the research note path,
+the quoted decisions, main at 1a2b3c4; it writes ~/.picsee/herdr/gpt-planner/p318-plan.md."
+</example>

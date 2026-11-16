@@ -1,6 +1,7 @@
 ---
 name: apple-developer-setup
-description: Set up and maintain Mado's Apple Developer distribution: program agreements, the Developer ID Application certificate, the notarisation Apple ID and app-specific password, the Sparkle update-signing key, and the GitHub Secrets the release workflow reads. Use when setting up release signing for the first time, renewing or replacing the certificate, rotating the notarisation password or Sparkle key, checking that signing and notarisation credentials are in place, or diagnosing Xcode or notarytool errors such as "PLA Update available", a missing Developer ID identity, or App Store Connect compliance screening. Not for building or publishing a release (the release workflow, #222) or for App sandbox and entitlement decisions (ADRs).
+description: "Set up and maintain Mado's Apple Developer distribution credentials: agreements, Developer ID certificate, notarisation password, Sparkle key and the GitHub Secrets the release workflow reads. Use for first-time release signing, renewals and rotations, credential checks, or signing and notarisation errors. Not for building or publishing a release (#222) or for sandbox and entitlement decisions (ADRs)."
+when_to_use: "Renewing or replacing the certificate, rotating the notarisation password or Sparkle key, or Xcode or notarytool errors such as \"PLA Update available\", a missing Developer ID identity, or App Store Connect compliance screening."
 ---
 
 # Apple Developer setup for Mado
