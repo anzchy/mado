@@ -31,14 +31,19 @@ func issue688CanvasMouseMotionLeavesOverlayCursorAlone() throws {
     let window = NSWindow(contentRect: canvas.frame, styleMask: .borderless, backing: .buffered, defer: false)
     window.contentView = canvas
     let overlay = CursorOverlayControl(frame: NSRect(x: 20, y: 40, width: 100, height: 50))
-    canvas.addSubview(overlay)
     var pointerCalls = 0
     canvas.onTextPointer = { _ in pointerCalls += 1; return true }
     let event = try #require(NSEvent.mouseEvent(with: .mouseMoved, location: CGPoint(x: 42, y: 60),
         modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
         eventNumber: 1, clickCount: 0, pressure: 0))
     NSCursor.arrow.set()
+    let imageEvent = try #require(NSEvent.mouseEvent(with: .mouseMoved, location: CGPoint(x: 200, y: 100),
+        modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
+        eventNumber: 2, clickCount: 0, pressure: 0))
+    canvas.mouseMoved(with: imageEvent)
+    #expect(NSCursor.current == .iBeam)
+    canvas.addSubview(overlay)
     canvas.mouseMoved(with: event)
-    #expect(pointerCalls == 0)
-    #expect(NSCursor.current == .arrow)
+    #expect(pointerCalls == 1, "the overlay move must not ask the canvas for text")
+    #expect(NSCursor.current == .arrow, "leaving selected text for a control restores the arrow")
 }

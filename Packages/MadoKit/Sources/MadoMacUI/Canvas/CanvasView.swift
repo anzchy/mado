@@ -18,6 +18,7 @@ open class CanvasView: NSView {
     private var dragPoint: CGPoint?
     private var previousViewport = CGSize.zero
     private var showsKeyboardFocusRing = false
+    private var canvasSetTextCursor = false
     private var preserveKeyboardFocusRingForOpening = false
     public var onResolutionNeeded: ((Int) -> Void)?
     /// #690: points kept free on the right for the Annotate strip; the fit uses the area to its left.
@@ -239,10 +240,14 @@ open class CanvasView: NSView {
 
     public override func cursorUpdate(with event: NSEvent) {
         if let content = window?.contentView {
-            if content.hitTest(event.locationInWindow) !== self { return }
+            if content.hitTest(event.locationInWindow) !== self {
+                if canvasSetTextCursor { NSCursor.arrow.set(); canvasSetTextCursor = false }
+                return
+            }
         }
         let point = convert(event.locationInWindow, from: nil)
-        ((onTextPointer?(point) == true) ? NSCursor.iBeam : NSCursor.arrow).set()
+        canvasSetTextCursor = onTextPointer?(point) == true
+        (canvasSetTextCursor ? NSCursor.iBeam : NSCursor.arrow).set()
     }
 
     public override func mouseMoved(with event: NSEvent) { cursorUpdate(with: event) }
