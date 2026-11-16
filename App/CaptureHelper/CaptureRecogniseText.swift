@@ -73,6 +73,8 @@ struct CaptureRecogniseTextStrings {
     private let announce: (String) -> Void
     private var model: RecogniseTextModel?
     private var run = UUID()
+    /// Bumped by `dismiss()`; a `recognise` read that began under an older value is stale.
+    private var generation: UInt64 = 0
     private var announcedRun: UUID?
     private var visibleFrame: NSRect = .zero
 
@@ -127,8 +129,28 @@ struct CaptureRecogniseTextStrings {
         return model.start(png, identity: thisRun)
     }
 
-    /// Ends the run (a late result never copies) and takes the notice or panel away.
+    /// 截图并识别文字's read, then `present`, unless a Capture, another selection or quitting called `dismiss()` while the
+    /// read ran: that result is dropped (nothing shown, nothing copied), and so is its failure (#687c fix r1 F1).
+    /// Returns the recognition task when it presented.
+    func recognise(read: @MainActor () async throws -> (png: Data, visibleFrame: NSRect),
+                   willPresent: @MainActor () -> Void = {}) async throws -> Task<Void, Never>? {
+        let generation = self.generation
+        let png: Data, frame: NSRect
+        do {
+            (png, frame) = try await read()
+        } catch {
+            guard generation == self.generation else { return nil }
+            throw error
+        }
+        guard generation == self.generation else { return nil }
+        willPresent()
+        return present(png: png, visibleFrame: frame)
+    }
+
+    /// Ends the run (a late result never copies), makes any pending `recognise` read stale, and takes the notice or
+    /// panel away.
     func dismiss() {
+        generation &+= 1
         run = UUID()
         model?.close()
         model = nil
