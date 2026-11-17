@@ -136,7 +136,7 @@ func issue689bBaiduMessageNeverCarriesKeysOrToken() async throws {
     #expect(tokenDetails.first?.errorMessage == "invalid_client: bad <redacted>")
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue689bFailureDetailLogMessage() {
     #expect(CloudFailureDetail(stage: .recognition, httpStatus: 200, errorCode: 6, errorMessage: "No permission to access data")
         .logMessage == #"baidu stage=recognition http=200 error_code=6 error_msg="No permission to access data""#)

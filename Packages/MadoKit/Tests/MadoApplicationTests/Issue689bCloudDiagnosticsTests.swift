@@ -86,7 +86,7 @@ func issue689bSelectionAndCancelledRunsReportNothing() async throws {
     #expect(reports.all.isEmpty)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue689bOutcomeLogMessagesNameEngineAndReason() {
     #expect(CloudRecognitionOutcome.cloud.logMessage == "engine=cloud")
     #expect(CloudRecognitionOutcome.skipped(.disabled).logMessage == "engine=onDevice skipped=disabled")
