@@ -71,9 +71,10 @@ enum CloudRecognitionAppServices {
     static let preferences: any CloudRecognitionPreferencePort = UserDefaultsCloudRecognitionPreferences(defaults: .standard)
     static let keys = BaiduCloudCredentialStore(secrets: KeychainSecretStore(), service: keychainService)
     static let reachability = NWPathReachability()
-    /// #689b dev1: one line per explicit Recognise Text (engine, skip or fallback reason) and one per failed Baidu
-    /// attempt (stage, HTTP status, error_code, error_msg). The strings never hold keys, the token or the image, so
-    /// they are public; watch with `log stream --predicate 'subsystem == "io.github.anzchy.mado" && category ==
+    /// #689b dev1/dev2: one line per delivered explicit Recognise Text (engine, skip or fallback reason) and one per
+    /// failed Baidu attempt (stage, HTTP status, error_code, a fixed reason id, or the transport error's code). The
+    /// strings are built only from enums and numbers, never from server text, keys, the token or the image, so they
+    /// are public; watch with `log stream --predicate 'subsystem == "io.github.anzchy.mado" && category ==
     /// "cloud-recognition"'`.
     static let logger = Logger(subsystem: "io.github.anzchy.mado", category: "cloud-recognition")
     static let cloud = BaiduTextRecognitionProvider(transport: URLSessionHTTPTransport(), onFailure: { detail in
