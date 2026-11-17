@@ -100,7 +100,8 @@ public struct TextRecognitionService: Sendable {
     private let report: (@Sendable (CloudRecognitionOutcome) -> Void)?
 
     /// `report` hears, once per explicit run with a cloud provider, whether Baidu answered, was skipped or failed
-    /// (#689b dev1); selection runs and cancelled runs report nothing.
+    /// (#689b dev1). It is called only once the engine it names has delivered and the run is still current (#689b
+    /// dev2): selection runs, cancelled runs and runs whose on-device engine fails report nothing.
     public init(onDevice: any OnDeviceTextRecognitionProviding, settings: (any CloudRecognitionSettings)? = nil,
                 credentialStore: (any CloudCredentialStore)? = nil, cloud: (any CloudTextRecognitionProviding)? = nil,
                 report: (@Sendable (CloudRecognitionOutcome) -> Void)? = nil) {
@@ -118,10 +119,11 @@ public struct TextRecognitionService: Sendable {
             return TextRecognitionResult(text: text, characterCount: text.count, engine: .onDevice,
                                          isEmpty: text.isEmpty, lines: lines)
         }
+        var outcome: CloudRecognitionOutcome?
         if case .explicit = intent, let settings, let credentialStore, let cloud {
             switch await cloudChoice(settings: settings, store: credentialStore) {
             case .skip(let reason):
-                report?(.skipped(reason))
+                outcome = .skipped(reason)
             case .cloud(let credentials):
                 do throws(TextRecognitionError) {
                     let text = try await cloud.recognise(image, credentials: credentials)
@@ -136,15 +138,16 @@ public struct TextRecognitionService: Sendable {
                     case .cloudOffline: .offline
                     default: .failure
                     }
-                    report?(.fallback(reason, error))
                     let text = try await onDevice.recognise(image)
                     if Task.isCancelled { throw TextRecognitionError.cancelled }
+                    report?(.fallback(reason, error))
                     return TextRecognitionResult(text: text, characterCount: text.count, engine: .onDevice, isEmpty: text.isEmpty, fallbackReason: reason)
                 }
             }
         }
         let text = try await onDevice.recognise(image)
         if Task.isCancelled { throw TextRecognitionError.cancelled }
+        if let outcome { report?(outcome) }
         return TextRecognitionResult(
             text: text,
             characterCount: text.count,
