@@ -66,12 +66,14 @@ private final class Fix1Recognitions: @unchecked Sendable {
     }
     func close() { presenter.dismiss(); presenter.panel.orderOut(nil); pasteboard.releaseGlobally() }
 
-    /// Starts 截图并识别文字 on `read`; the call's outcome lands in the returned record.
-    func start(_ read: Fix1Read) -> Fix1Call {
+    /// Starts 截图并识别文字 on `read` under `ticket` (by default one taken now, as a selection's completion does);
+    /// the call's outcome lands in the returned record.
+    func start(_ read: Fix1Read, ticket: CaptureRecogniseTextPresenter.Ticket? = nil) -> Fix1Call {
         let call = Fix1Call()
+        let ticket = ticket ?? presenter.ticket()
         Task { @MainActor in
             do {
-                call.presented = try await presenter.recognise(read: { try await read.read() },
+                call.presented = try await presenter.recognise(ticket: ticket, read: { try await read.read() },
                                                                willPresent: { call.willPresentCount += 1 })
             } catch { call.error = error }
             call.finished = true
@@ -179,6 +181,74 @@ private final class Fix1Recognitions: @unchecked Sendable {
     #expect(h.recognitions.count == 1)
     #expect(h.pasteboard.string(forType: .string) == "current text")
     #expect(h.presenter.overlay.noticeView != nil)
+}
+
+// MARK: - Fix round 2 F1b
+
+/// A selection's ticket is taken when it completes; a Capture or another selection that dismisses the presenter
+/// before A's Task reaches the presenter makes A stale: A's read never starts, nothing shows, nothing is copied.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687CaptureFix2DismissBeforeStartPresentsNothing() async throws {
+    let h = Fix1Harness()
+    defer { h.close() }
+    let changeCount = h.pasteboard.changeCount
+    let ticketA = h.presenter.ticket()  // A's selection completes and enqueues its Task
+    h.presenter.dismiss()  // B's Capture or selection starts before A's Task runs
+    let a = Fix1Read("text A")
+    a.released = true
+    let call = h.start(a, ticket: ticketA)
+    #expect(await h.eventually { call.finished }, "A's Task returns")
+    #expect(!a.started, "A's screen read never starts")
+    #expect(call.presented == nil, "A presents nothing")
+    #expect(call.willPresentCount == 0)
+    #expect(call.error == nil, "nothing to report")
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(h.recognitions.count == 0, "A's image is never recognised")
+    #expect(!h.presenter.panel.isVisible)
+    #expect(h.presenter.overlay.noticeView == nil && h.presenter.overlay.panelView == nil)
+    #expect(h.pasteboard.changeCount == changeCount, "the clipboard is untouched")
+}
+
+/// B, selected after A's dismissal, presents; A's Task running later does not replace or copy over B.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687CaptureFix2LateStartKeepsTheNewerResult() async throws {
+    let h = Fix1Harness()
+    defer { h.close() }
+    let ticketA = h.presenter.ticket()
+    h.presenter.dismiss()  // B's selection starts
+    let b = Fix1Read("text B")
+    b.released = true
+    let callB = h.start(b)
+    #expect(await h.eventually { callB.finished })
+    #expect(await h.finish(callB.presented), "B presents")
+    let afterB = h.pasteboard.changeCount
+    let a = Fix1Read("text A")
+    a.released = true
+    let callA = h.start(a, ticket: ticketA)
+    #expect(await h.eventually { callA.finished })
+    #expect(!a.started && callA.presented == nil)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(h.recognitions.count == 1, "only B's image is recognised")
+    #expect(h.pasteboard.changeCount == afterB && h.pasteboard.string(forType: .string) == "text B")
+    #expect(h.presenter.overlay.noticeView != nil, "B's notice stays")
+}
+
+/// Quitting (applicationWillTerminate dismisses) before A's Task runs: A's read never starts, so its failure is
+/// never reported either.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687CaptureFix2QuitBeforeStartReportsNothing() async throws {
+    let h = Fix1Harness()
+    defer { h.close() }
+    let changeCount = h.pasteboard.changeCount
+    let ticketA = h.presenter.ticket()
+    h.presenter.dismiss()  // the helper quits
+    let a = Fix1Read("text A")
+    a.failure = Fix1ReadFailed()
+    a.released = true
+    let call = h.start(a, ticket: ticketA)
+    #expect(await h.eventually { call.finished })
+    #expect(!a.started, "A's screen read never starts")
+    #expect(call.error == nil, "no failure is reported")
+    #expect(call.presented == nil && call.willPresentCount == 0)
+    #expect(h.recognitions.count == 0)
+    #expect(h.pasteboard.changeCount == changeCount)
 }
 
 // MARK: - M1

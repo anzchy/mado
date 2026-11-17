@@ -353,6 +353,8 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     /// never thumbnailed; the 「截图之后」 switches do not apply. Busy and Screen Recording failures report as a Capture's.
     private func recogniseText(request: @escaping @MainActor () -> CaptureRequest, selectedDisplay: UInt32?,
                                keepingAlive overlays: [NSWindow]) {
+        // Taken now, on the selection's completion: a Capture, selection or quit before the Task runs makes it stale.
+        let ticket = textPresenter.ticket()
         Task { [weak self] in
             guard let self else { return }
             defer { withExtendedLifetime(overlays) {} }
@@ -363,7 +365,7 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
                 }
                 // A Capture or selection started meanwhile dismissed the presenter: this read is then dropped (fix r1 F1).
                 _ = try await textPresenter.recognise(
-                    read: { [collapse] in if let collapse { try await collapse.whileCapturing(read) } else { try await read() } },
+                    ticket: ticket, read: { [collapse] in if let collapse { try await collapse.whileCapturing(read) } else { try await read() } },
                     willPresent: { [statusPanel] in statusPanel?.orderOut(nil) })
             } catch {
                 report(error)
