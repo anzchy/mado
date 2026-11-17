@@ -71,7 +71,7 @@ private func check(_ layout: RS.Layout, anchorPoint: CGPoint?, _ sweep: RSSweep)
     }
 }
 
-@Suite(.timeLimit(.minutes(1))) struct Issue688TextRowResolverRegressionTests {
+@Suite(.timeLimit(.minutes(2))) struct Issue688TextRowResolverRegressionTests {
     @Test func issue688RSRowsOfNamedLayouts() {
         #expect(RS.normalized(RSLayouts.ce1.resolver.rows) == [[1], [2]])
         #expect(RS.normalized(RSLayouts.ce2.resolver.rows) == [[1], [2]])

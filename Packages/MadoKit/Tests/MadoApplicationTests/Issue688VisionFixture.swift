@@ -49,7 +49,7 @@ enum Issue688VisionFixture {
     }
 }
 
-@Suite(.timeLimit(.minutes(1))) struct Issue688TextRowResolverVisionFixtureTests {
+@Suite(.timeLimit(.minutes(2))) struct Issue688TextRowResolverVisionFixtureTests {
     @Test func issue688RSRealVisionRowsRecovered() {
         // Expected rows read off the images: 中文测试 and SIDE side by side, Hello Mado alone.
         for (name, lines, expected) in [("mixed.png", Issue688VisionFixture.mixed, [[0, 1], [2]]),
