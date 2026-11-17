@@ -98,18 +98,10 @@ struct ImageTextGeometry {
 
     private func position(at point: CGPoint, requireHit: Bool) -> Position? {
         guard !lines.isEmpty else { return nil }
-        let rects = lines.map { geometry.viewRect($0.box) }
-        let index: Int
-        if let hit = lines.indices.first(where: { rects[$0].contains(point) }) {
-            index = hit
-        } else if requireHit { return nil }
-        else {
-            // Text-editor drag behavior: choose a line by the endpoint's own
-            // perpendicular position, then its directly overlapping row. A tall
-            // line must not chain two separate rows together. Horizontal gaps
-            // clamp by the anchor side or by the direction of a cross-row drag.
-            index = endpointOutsideBoxes(at: point, rects: rects)
-        }
+        let resolver = self.resolver
+        // Begin needs a hit; a drag endpoint off every box resolves by row (TextRowResolver).
+        guard let index = requireHit ? resolver.hitLine(at: point)
+                                     : resolver.lineIndex(at: point, anchorLine: anchor?.line) else { return nil }
         let line = lines[index]
         let count = line.text.count
         guard count > 0 else { return Position(line: index, offset: 0) }
@@ -127,50 +119,14 @@ struct ImageTextGeometry {
     }
     private var quarterTurnsHorizontal: Bool { geometry.quarterTurns.isMultiple(of: 2) }
 
-    private func endpointOutsideBoxes(at point: CGPoint, rects: [CGRect]) -> Int {
-        let horizontal = quarterTurnsHorizontal
-        let coordinate = horizontal ? point.x : point.y
-        let perpendicular = horizontal ? point.y : point.x
-        func alongMin(_ i: Int) -> CGFloat { horizontal ? rects[i].minX : rects[i].minY }
-        func alongMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxX : rects[i].maxY }
-        func perpMin(_ i: Int) -> CGFloat { horizontal ? rects[i].minY : rects[i].minX }
-        func perpMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxY : rects[i].maxX }
-        func perpendicularDistance(_ i: Int) -> CGFloat {
-            max(max(perpMin(i) - perpendicular, 0), perpendicular - perpMax(i))
-        }
-        // Prefer a box containing this perpendicular coordinate; otherwise use
-        // the nearest box edge. The center breaks ties between containing boxes.
-        let seed = rects.indices.min { lhs, rhs in
-            let left = perpendicularDistance(lhs), right = perpendicularDistance(rhs)
-            if left != right { return left < right }
-            let leftCenter = abs((perpMin(lhs) + perpMax(lhs)) / 2 - perpendicular)
-            let rightCenter = abs((perpMin(rhs) + perpMax(rhs)) / 2 - perpendicular)
-            if leftCenter != rightCenter { return leftCenter < rightCenter }
-            let leftHeight = perpMax(lhs) - perpMin(lhs)
-            let rightHeight = perpMax(rhs) - perpMin(rhs)
-            return leftHeight == rightHeight ? lhs < rhs : leftHeight < rightHeight
-        }!
-        let row = rects.indices.filter { index in
-            let overlap = min(perpMax(seed), perpMax(index)) - max(perpMin(seed), perpMin(index))
-            let shorter = min(perpMax(seed) - perpMin(seed), perpMax(index) - perpMin(index))
-            return overlap >= shorter * 0.5
-        }.sorted { alongMin($0) < alongMin($1) }
-        let onAnchorRow = anchor.map { row.contains($0.line) } ?? false
-        if coordinate <= alongMin(row[0]) { return row[0] }
-        if let rowEnd = row.max(by: { alongMax($0) < alongMax($1) }), coordinate >= alongMax(rowEnd) {
-            return rowEnd
-        }
-        for (position, index) in row.enumerated() {
-            if coordinate >= alongMin(index), coordinate <= alongMax(index) { return index }
-            guard position + 1 < row.count else { continue }
-            let next = row[position + 1]
-            if coordinate > alongMax(index), coordinate < alongMin(next) {
-                if onAnchorRow {
-                    return row.firstIndex(of: anchor!.line)! <= position ? index : next
-                }
-                return seed > anchor!.line ? index : next
-            }
-        }
-        return row.min { abs((alongMin($0) + alongMax($0)) / 2 - coordinate) < abs((alongMin($1) + alongMax($1)) / 2 - coordinate) }!
+    /// Rows are built once per set of view rects; a change of lines or geometry rebuilds them.
+    private var cachedResolver: TextRowResolver?
+    private var resolver: TextRowResolver {
+        let rects = lines.map { geometry.viewRect($0.box) }
+        let axis: TextRowResolver.Axis = quarterTurnsHorizontal ? .horizontal : .vertical
+        if let cachedResolver, cachedResolver.rects == rects, cachedResolver.axis == axis { return cachedResolver }
+        let resolver = TextRowResolver(rects: rects, axis: axis)
+        cachedResolver = resolver
+        return resolver
     }
 }
