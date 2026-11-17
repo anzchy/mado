@@ -15,7 +15,7 @@ test('isPrMerge matches a real gh pr merge and nothing that only mentions it', (
   for (const c of [
     MERGE,
     'gh pr merge 1',
-    'cd ~/Documents/mac-app/picsee && gh pr merge 736 --repo anzchy/mado --rebase 2>&1 | tail -1',
+    'cd ~/work/app && gh pr merge 736 --repo anzchy/mado --rebase 2>&1 | tail -1',
     'GH_TOKEN=x gh pr merge 5 --rebase',
     'for n in 736 737; do gh pr merge $n --repo anzchy/mado --rebase; done',
     "bash -c 'gh pr merge 9 --rebase'",
@@ -45,7 +45,7 @@ function fakeGit(script) {
   };
   return { git, calls };
 }
-const MAIN = '/repo/picsee';
+const MAIN = '/repo/main-checkout';
 const happy = {
   'worktree list --porcelain': { stdout: `worktree ${MAIN}\nHEAD abc\nbranch refs/heads/main\n\nworktree /repo/wt/other\nHEAD def\nbranch refs/heads/feat\n` },
   'symbolic-ref': { stdout: 'main\n' },
