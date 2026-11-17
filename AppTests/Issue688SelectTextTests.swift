@@ -245,3 +245,74 @@ extension Issue688DeviceSelectionGapTests {
         #expect(selection.selectedText == side.text)
     }
 }
+
+// #688 688-RS-WI-3: the TextRowResolver wire-up through the real ImageTextSelection, and the
+// resolver cache following `lines` and every part of `geometry` on one reused object.
+@Suite(.timeLimit(.minutes(2))) struct Issue688RSWireUpTests {
+    static let size = CGSize(width: 600, height: 160)
+    static let ce1: [(String, CGRect)] = [("16", CGRect(x: 0, y: 0, width: 120, height: 48)),
+                                          ("November", CGRect(x: 140, y: 4, width: 120, height: 16)),
+                                          ("Monday", CGRect(x: 150, y: 28, width: 150, height: 16))]
+    static let ce2: [(String, CGRect)] = [("big", CGRect(x: 0, y: 0, width: 200, height: 120)),
+                                          ("a", CGRect(x: 300, y: 0, width: 200, height: 20)),
+                                          ("b", CGRect(x: 300, y: 40, width: 200, height: 20))]
+    static let ce3: [(String, CGRect)] = [("wide", CGRect(x: 0, y: 0, width: 300, height: 20)),
+                                          ("short", CGRect(x: 200, y: 0, width: 50, height: 20)),
+                                          ("C", CGRect(x: 400, y: 0, width: 100, height: 20))]
+
+    static func lines(_ entries: [(String, CGRect)]) -> [TextRecognitionLine] {
+        entries.map { text, rect in
+            TextRecognitionLine(text: text, box: CGRect(x: rect.minX / size.width, y: 1 - rect.maxY / size.height,
+                                                        width: rect.width / size.width, height: rect.height / size.height))
+        }
+    }
+    /// The view point of a point given in the unrotated, unzoomed 600×160 frame.
+    static func view(_ point: CGPoint, _ geometry: ImageTextGeometry) -> CGPoint {
+        geometry.viewPoint(CGPoint(x: point.x / size.width, y: 1 - point.y / size.height))
+    }
+    @MainActor static func drag(_ selection: ImageTextSelection, _ from: CGPoint, _ to: CGPoint) -> String? {
+        guard selection.begin(at: view(from, selection.geometry)) else { return "begin failed" }
+        selection.drag(to: view(to, selection.geometry))
+        return selection.selectedText
+    }
+    @MainActor static func fresh(_ lines: [TextRecognitionLine], _ geometry: ImageTextGeometry,
+                                 _ from: CGPoint, _ to: CGPoint) -> String? {
+        let selection = ImageTextSelection()
+        selection.geometry = geometry
+        selection.lines = lines
+        return drag(selection, from, to)
+    }
+
+    @MainActor @Test func issue688RSWireUpCountersExamplesThroughSelection() {
+        for (entries, from, to, line, text) in [(Self.ce1, CGPoint(x: 141, y: 12), CGPoint(x: 330, y: 21), 1, "November"),
+                                                (Self.ce2, CGPoint(x: 301, y: 50), CGPoint(x: 600, y: 62), 2, "b"),
+                                                (Self.ce3, CGPoint(x: 1, y: 10), CGPoint(x: 350, y: 10), 0, "wide")] {
+            let selection = ImageTextSelection()
+            selection.geometry = ImageTextGeometry(transform: CanvasTransform(backingScale: 1), imageSize: Self.size)
+            selection.lines = Self.lines(entries)
+            #expect(Self.drag(selection, from, to) == text)
+            #expect(selection.extent?.line == line)
+        }
+    }
+
+    @MainActor @Test func issue688RSWireUpCacheFollowsLinesAndGeometry() {
+        let selection = ImageTextSelection()
+        selection.geometry = ImageTextGeometry(transform: CanvasTransform(backingScale: 1), imageSize: Self.size)
+        selection.lines = Self.lines(Self.ce1)
+        let from = CGPoint(x: 141, y: 12), to = CGPoint(x: 330, y: 21)
+        #expect(Self.drag(selection, from, to) == "November")
+        selection.geometry.transform = CanvasTransform(backingScale: 1, origin: CGPoint(x: 0, y: 100))
+        #expect(Self.drag(selection, from, to) == "November")
+        #expect(Self.drag(selection, from, to) == Self.fresh(selection.lines, selection.geometry, from, to))
+        selection.geometry.quarterTurns = 1
+        #expect(Self.drag(selection, from, to) == "November")
+        #expect(Self.drag(selection, from, to) == Self.fresh(selection.lines, selection.geometry, from, to))
+        selection.geometry.flipHorizontal = true
+        #expect(Self.drag(selection, from, to) == "November")
+        #expect(Self.drag(selection, from, to) == Self.fresh(selection.lines, selection.geometry, from, to))
+        selection.lines = Self.lines(Self.ce3)
+        let wideFrom = CGPoint(x: 1, y: 10), wideTo = CGPoint(x: 350, y: 10)
+        #expect(Self.drag(selection, wideFrom, wideTo) == "wide")
+        #expect(Self.drag(selection, wideFrom, wideTo) == Self.fresh(selection.lines, selection.geometry, wideFrom, wideTo))
+    }
+}
