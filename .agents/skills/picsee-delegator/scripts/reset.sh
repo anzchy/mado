@@ -36,6 +36,10 @@ ctx = fence = ""
 def is_cwd(line):
     return bool(re.fullmatch(r"(?:~/\S+|/(?:[^/\s]+/)+[^/\s]*)", line))
 
+# A pane launched with a permission mode (YOLO) shows "permissions: <mode>" directly under the cwd line.
+def is_permissions(line):
+    return bool(re.fullmatch(r"permissions: \S.*", line))
+
 title = r">_ OpenAI Codex \(v[0-9][^)]*\)"
 lines = list(sys.stdin)
 last_title = None
@@ -82,6 +86,8 @@ for index in reversed(logos):
         clean_header = bool(header and is_cwd(header[0][1]))
         if clean_header:
             header = header[1:]
+            if header and is_permissions(header[0][1]):
+                header = header[1:]
         if header:
             row, content = header[0]
             separated = clean_header and (row in logos or
@@ -97,7 +103,8 @@ for index in reversed(logos):
 if not logo_proof and last_title is not None:
     lines = lines[last_title:]
 placeholder = False
-footer_hints = {"? for shortcuts", "? for help", "? for commands"}
+after_cwd = False
+footer_hints = {"? for shortcuts", "? for help", "? for commands", "← for agents · ? for shortcuts"}
 welcome = footer_hints | {"Tip: Use /help to see available commands."}
 for raw in lines:
     line = raw.strip()
@@ -142,7 +149,12 @@ for raw in lines:
     # The worktree line immediately under the saved title is header metadata.
     if metadata and is_cwd(line):
         metadata = False
+        after_cwd = True
         continue
+    if after_cwd and is_permissions(line):
+        after_cwd = False
+        continue
+    after_cwd = False
     metadata = False
     # One input placeholder; only blanks and known footer hints may follow it.
     # Tips, logo-like output, and duplicate placeholders remain transcript evidence.
