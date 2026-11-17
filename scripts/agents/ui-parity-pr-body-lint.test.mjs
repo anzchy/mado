@@ -626,7 +626,7 @@ test('CLI explains changed ancestor inputs even when Source contains CODE same',
   assert.doesNotMatch(result.stderr, /without CODE same/);
 });
 
-const checkerAck = (sha, families = 'ledger,design', rationale = 'Update checker rules', audits = '~/.picsee/herdr/gpt-auditor/i471-audit.md,~/.picsee/herdr/opus-auditor/i471-confirm.md') =>
+const checkerAck = (sha, families = 'ledger,design', rationale = 'Update checker rules', audits = '~/.mado/herdr/gpt-auditor/i471-audit.md,~/.mado/herdr/opus-auditor/i471-confirm.md') =>
   `Checker-Change: ${sha} families=${families} — ${rationale} — audits: ${audits}`;
 
 function checkerGitFixture(t) {
@@ -687,7 +687,7 @@ for (const refs of [
   '#471,#449', 'TBD.md,none.md', 'http://x,http://y',
   'a.md#r1,a.md#r2', 'a.md,./a.md', 'a.md,b.md',
   'https://github.com/anzchy/picsee/pull/0#issuecomment-1,https://github.com/anzchy/picsee/pull/472#issuecomment-0',
-  '~/.picsee/herdr/x-auditor/i471-audit.md,~/.picsee/herdr/opus-auditor/i471-audit.md',
+  '~/.mado/herdr/x-auditor/i471-audit.md,~/.mado/herdr/opus-auditor/i471-audit.md',
   'https://example.com/review/1,https://example.com/review/2',
   'https://github.com/anzchy/other/pull/472#issuecomment-1,https://github.com/anzchy/picsee/pull/472#issuecomment-2',
   'https://github.com/anzchy/picsee/pull/472,https://github.com/anzchy/picsee/issues/471',
@@ -699,10 +699,10 @@ for (const refs of [
   ].map(bad => `${bad},https://github.com/anzchy/picsee/pull/472#issuecomment-2`),
   // After the rename both spellings name the same report.
   'https://github.com/anzchy/picsee/pull/472#issuecomment-1,https://github.com/anzchy/mado/pull/472#issuecomment-1',
-  '~/.picsee/herdr/gpt-auditor/i471-audit.md#r1,~/.picsee/herdr/gpt-auditor/i471-audit.md#r2',
-  '~/.picsee/herdr/gpt-auditor/i471-audit.md,~/.picsee/herdr/gpt-auditor/./i471-audit.md',
+  '~/.mado/herdr/gpt-auditor/i471-audit.md#r1,~/.mado/herdr/gpt-auditor/i471-audit.md#r2',
+  '~/.mado/herdr/gpt-auditor/i471-audit.md,~/.mado/herdr/gpt-auditor/./i471-audit.md',
   ...['TBD', 'none', 'n/a', 'n-a', 'todo', 'x'].map(token =>
-    `~/.picsee/herdr/gpt-auditor/${token}-audit.md,~/.picsee/herdr/opus-auditor/i471-audit.md`),
+    `~/.mado/herdr/gpt-auditor/${token}-audit.md,~/.mado/herdr/opus-auditor/i471-audit.md`),
 ]) {
   test(`checker-change CLI rejects non-report or duplicate audit references ${refs}`, t => {
     const f = checkerGitFixture(t);
@@ -717,9 +717,9 @@ test('checker-change CLI accepts normalized report paths and mixed report/review
   const f = checkerGitFixture(t);
   const sha = f.change('scripts/ledger/rules.mjs');
   assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
-    '~/.picsee/herdr/gpt-auditor/./i471-audit2.md#r1,~/.picsee/herdr/opus-auditor/i471-confirm-fix1.md')));
+    '~/.mado/herdr/gpt-auditor/./i471-audit2.md#r1,~/.mado/herdr/opus-auditor/i471-confirm-fix1.md')));
   assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
-    '~/.picsee/herdr/gpt-auditor/i471-audit.md,https://github.com/anzchy/picsee/pull/472#pullrequestreview-123')));
+    '~/.mado/herdr/gpt-auditor/i471-audit.md,https://github.com/anzchy/picsee/pull/472#pullrequestreview-123')));
 });
 
 test('checker-change CLI accepts anzchy/mado PR review and comment references (#554)', t => {
@@ -730,7 +730,7 @@ test('checker-change CLI accepts anzchy/mado PR review and comment references (#
   assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
     'https://github.com/anzchy/picsee/pull/472#pullrequestreview-123,https://github.com/anzchy/mado/pull/560#issuecomment-456')));
   assertCLIPass(f.run(checkerAck(sha, 'ledger', 'Update rules',
-    '~/.picsee/herdr/gpt-auditor/i554-audit.md,https://github.com/anzchy/mado/pull/560#pullrequestreview-7')));
+    '~/.mado/herdr/gpt-auditor/i554-audit.md,https://github.com/anzchy/mado/pull/560#pullrequestreview-7')));
 });
 
 test('checker-change CLI ignores fenced unclosed comments before a real acknowledgement', t => {

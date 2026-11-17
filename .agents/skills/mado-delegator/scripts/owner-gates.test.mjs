@@ -62,10 +62,10 @@ xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
-    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), PICSEE_GATES_OUT: out,
-    PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
-    PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
-  if (options.staleOwner) fs.writeFileSync(`${env.PICSEE_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
+    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
+    MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
+    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
+  if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
   const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);

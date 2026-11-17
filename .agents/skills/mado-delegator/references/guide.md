@@ -9,7 +9,7 @@ describes how the roster has actually been run on the Mac mini since 2026-10-22.
 they win and this guide needs fixing.
 
 Paths outside the repo are written with `~`. Machine-local state (briefs, reports, run evidence) lives under
-`~/.picsee/` and is **never committed**.
+`~/.mado/` and is **never committed**.
 
 ---
 
@@ -100,7 +100,7 @@ base64 screenshots of 230–630k characters each) stayed in context after they w
 
 | Instead of | Do |
 |---|---|
-| Driving a device run and reading screenshots yourself | Brief a fresh subagent (not a fork, which inherits your whole context): run ID, build SHA, recipe, GUI-lock and cleanup rules, verdict format. It returns the verdict table and evidence paths under `~/.picsee/device-runs/`. Open a PNG only to settle a disputed finding. |
+| Driving a device run and reading screenshots yourself | Brief a fresh subagent (not a fork, which inherits your whole context): run ID, build SHA, recipe, GUI-lock and cleanup rules, verdict format. It returns the verdict table and evidence paths under `~/.mado/device-runs/`. Open a PNG only to settle a disputed finding. |
 | `cat` of a report, handoff or log | `grep -n 'VERDICT\|COUNT\|^  [CHML][0-9]'` for reports, the result line for logs; read the full file only for a finding you act on |
 | Polling panes or `gh pr checks` in your turn | listener events; `gh pr checks --watch` and `scripts/owner-gates.sh` in the background with a summary file |
 | Re-reading the same brief or handoff after each event | note the facts you need in the handoff log once; read the diff of a file, not the file |
@@ -144,8 +144,8 @@ does not restore the paused `gpt-auditor`.
   herdr, including any symlink alias; registration and preflight compare that spelling exactly. The listener checks
   a fresh pane-list envelope before delivery: exactly one pane must match, report `agent: claude`, and have the same
   terminal ID, `cwd`, and `foreground_cwd`. It writes the full notice to
-  `~/.picsee/herdr/delegator/listeners/<event>/notification.txt`, then sends only
-  `: PICSEE_LISTENER_EVENT_<event>` through `herdr pane run` (text plus Enter). In a shell, `:` is a no-op and the
+  `~/.mado/herdr/delegator/listeners/<event>/notification.txt`, then sends only
+  `: MADO_LISTENER_EVENT_<event>` through `herdr pane run` (text plus Enter). In a shell, `:` is a no-op and the
   event ID contains no shell metacharacters. It checks pane identity again after an observed herdr success. This
   prevents a changed pane observed by either check from getting a success receipt; it does not bind the send to a
   terminal or session. Do not reuse an old target after a Claude restart.
@@ -179,7 +179,7 @@ does not restore the paused `gpt-auditor`.
   another glyph, a box that does not parse) is `unknown`, so it is saved. After `--attention-after-seconds`
   (default 600) of `dialog` or `unknown`,
   the worker appends one line to `attention.log` beside the listeners directory
-  (`~/.picsee/herdr/delegator/attention.log`: UTC time, event, input, held time, pane, event directory), once per
+  (`~/.mado/herdr/delegator/attention.log`: UTC time, event, input, held time, pane, event directory), once per
   run, and from then on writes `attention: true` into every `status.json` write of that run. Read the new lines of
   that log at each turn; answering the dialog lets the held send go through. Typing gets no line: a person is at
   the box. Limit: when the dialog is in the delegator's own pane (the #157 case), nobody reads the log until the
@@ -244,7 +244,7 @@ python3 .agents/skills/mado-delegator/scripts/listen-notify.py start \
   --route codex-thread \
   --thread '<exact-delegator-thread-uuid>' \
   --agent 'gpt-imple-3' \
-  --handoff "$HOME/.picsee/herdr/gpt-imple-3/issue90-handoff.md" \
+  --handoff "$HOME/.mado/herdr/gpt-imple-3/issue90-handoff.md" \
   --handoff-marker 'issue90-implementation-r1' \
   --poll report \
   --interval 30 \
@@ -276,7 +276,7 @@ acceptance. Every dispatch or rearm gets a new `--event` and matching `--task`; 
 other unique token. Reusing an event with a different agent, task, destination, poll argv or report path is rejected.
 
 The start command detaches a new process session, so it survives the parent shell and agent turn. Runtime state is
-under `~/.picsee/herdr/delegator/listeners/<event>/`: `config.json`, `pid`, `listener.log`, `status.json`,
+under `~/.mado/herdr/delegator/listeners/<event>/`: `config.json`, `pid`, `listener.log`, `status.json`,
 `poll-result.json`, and, only after accepted Codex queue or Claude pane delivery, `queue-receipt.json`. Claude events
 also retain `notification.txt`; the token points to that event directory. The receipt filename is retained for
 compatibility; new receipts identify the selected destination. The shipped pollers
@@ -314,7 +314,7 @@ deduplication, not exactly-once transport.
 This helper is available after its reviewed change lands; it does not migrate or stop listeners already running, and
 it does not provide unattended acceptance or merge safeguards. When a real operating failure is demonstrated, fix
 the narrow instruction or attachment and add a reproducing behavioral test in a reviewed PR instead of keeping the
-repair only under `~/.picsee/`.
+repair only under `~/.mado/`.
 
 ---
 
@@ -325,7 +325,7 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 
 | Agent | Reset | Notes |
 |---|---|---|
-| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`PICSEE_RESET_CONTEXT_SECS`, interval `PICSEE_RESET_POLL_SECS`, default 0.25 s; both timers must be positive plain decimals ≤300 s) and requires a fresh `>_ OpenAI Codex (v…)` header over an empty transcript above the bottom-most footer showing `Context 0% used` in the same read. A changed `herdr pane get` session ID is also sufficient proof with that footer, but is optional: herdr normally updates the ID only after the first turn, so an unchanged ID does not block success. Reads use `--source recent-unwrapped --lines 2000` so a short visible pane does not cut off the title above the logo. Parse from the last unfenced title, ignoring older scrollback, `/new` echoes and chooser residue above it. A title after residue needs an immediate nonblank cwd line below it; a leading title (or one directly after a leading cwd line) also counts. Cwd metadata is an unspaced `~/…` or multi-component absolute path, never a slash command such as `/new`. Blank lines, braille/box-drawing logo and the known welcome tip may precede one exact empty input placeholder; only blanks and known footer hints (`? for shortcuts`, `? for help`, `? for commands`) may follow that placeholder before the footer. A repeated placeholder, tip or box art after it invalidates title proof. Any user prompt, tool/message/output line, model reply, quoted or fenced transcript, or unknown text between the title and bottom-most footer invalidates header proof; keep polling even if that old footer is nonzero. `/new` and startup text alone cannot prove a fresh session. Both standalone and Codex status-bar footers count. Only the footer below the last boundary counts; a footer under a still-visible chooser is ignored. A missing boundary fails even if a markerless footer says 0%. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
+| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`MADO_RESET_CONTEXT_SECS`, interval `MADO_RESET_POLL_SECS`, default 0.25 s; both timers must be positive plain decimals ≤300 s) and requires a fresh `>_ OpenAI Codex (v…)` header over an empty transcript above the bottom-most footer showing `Context 0% used` in the same read. A changed `herdr pane get` session ID is also sufficient proof with that footer, but is optional: herdr normally updates the ID only after the first turn, so an unchanged ID does not block success. Reads use `--source recent-unwrapped --lines 2000` so a short visible pane does not cut off the title above the logo. Parse from the last unfenced title, ignoring older scrollback, `/new` echoes and chooser residue above it. A title after residue needs an immediate nonblank cwd line below it; a leading title (or one directly after a leading cwd line) also counts. Cwd metadata is an unspaced `~/…` or multi-component absolute path, never a slash command such as `/new`. Blank lines, braille/box-drawing logo and the known welcome tip may precede one exact empty input placeholder; only blanks and known footer hints (`? for shortcuts`, `? for help`, `? for commands`) may follow that placeholder before the footer. A repeated placeholder, tip or box art after it invalidates title proof. Any user prompt, tool/message/output line, model reply, quoted or fenced transcript, or unknown text between the title and bottom-most footer invalidates header proof; keep polling even if that old footer is nonzero. `/new` and startup text alone cannot prove a fresh session. Both standalone and Codex status-bar footers count. Only the footer below the last boundary counts; a footer under a still-visible chooser is ignored. A missing boundary fails even if a markerless footer says 0%. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
 | opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent mado-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
 | kimi-imple-1 (p7), **retired 2026-11-01, do not dispatch** | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
@@ -372,9 +372,9 @@ the user's words.
 
 ### 5.2 Brief (implementer task document)
 
-Put it at `~/.picsee/herdr/<implementer>/<item>-brief.md`. Templates that worked:
-`~/.picsee/herdr/delegator/p1-brief-P1-02.md`, `p2-brief-P2-01.md`, `p2-brief-P2-02.md` (long, for Codex) and
-`~/.picsee/herdr/kimi-imple-1/issue82-brief.md` (short, for Kimi). A brief contains:
+Put it at `~/.mado/herdr/<implementer>/<item>-brief.md`. Templates that worked:
+`~/.mado/herdr/delegator/p1-brief-P1-02.md`, `p2-brief-P2-01.md`, `p2-brief-P2-02.md` (long, for Codex) and
+`~/.mado/herdr/kimi-imple-1/issue82-brief.md` (short, for Kimi). A brief contains:
 
 For any UI change, complete the state mapping, pinned design source, native exceptions, and evidence plan in
 [`docs/agents/ui-parity-contract.md`](../../../../docs/agents/ui-parity-contract.md) before dispatch. Apply its
@@ -398,7 +398,7 @@ signed-device comparison and independent review **before merging the UI PR**. Un
      into the handoff, implement, rerun the same filter, paste GREEN".
 7. **Gates** (copy verbatim):
    ```sh
-   export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+   export PATH=$HOME/.mado/tools/xcodegen/bin:/opt/homebrew/bin:$PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
    scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage
    sh scripts/tdd/swift-lcov.sh      # writes coverage/lcov.info; sum LF/LH, FNF/FNH → must be 100% lines and functions
    xcodegen generate
@@ -416,20 +416,20 @@ signed-device comparison and independent review **before merging the UI PR**. Un
 10. **Device smoke** (implementer smoke is not validation): `pgrep -x Mado` first. Never kill a Mado it didn't
     start. The user's `~/Applications/Mado.app` is off limits. No pre-granting, no container edits, no system
     settings.
-11. **Handoff** at `~/.picsee/herdr/<implementer>/<item>-handoff.md`: design, AC table with the test that proves
+11. **Handoff** at `~/.mado/herdr/<implementer>/<item>-handoff.md`: design, AC table with the test that proves
     each AC, RED/GREEN or receipts, changed existing assertions (before, after, why), gates output, diff stat,
     production line count, open questions, NOT VERIFIED list.
 12. **Open questions with defaults,** plus a closing line: "follow each default; if WI-0 or the code contradicts one,
     stop and report".
 
 Dispatch with a one-line prompt that points at the file, for example `herdr agent prompt gpt-imple-2 'New task: … Read
-and follow ~/.picsee/herdr/gpt-imple-2/<brief>.md … Do not push.'`, then start a fresh listener event as described
+and follow ~/.mado/herdr/gpt-imple-2/<brief>.md … Do not push.'`, then start a fresh listener event as described
 in [Durable listener notification](#durable-listener-notification).
 
 ### 5.3 During implementation
 
 - **Scope stops.** The implementer stops at a fence and proposes a minimal change. If it is reasonable, approve it
-  in a file such as `~/.picsee/herdr/<impl>/<item>-scope-amendment-<n>.md` (append later amendments), prompt
+  in a file such as `~/.mado/herdr/<impl>/<item>-scope-amendment-<n>.md` (append later amendments), prompt
   "approved, see file", and list it in the audit request.
 - **tdd-guardian "FAILED-VERIFICATION, stop with evidence"** is usually a test-fixture mistake (wrong router
   constructor, `/private/var` vs `/var`). Approve the fixture-only fix if no assertion changes. Grant a standing
@@ -441,9 +441,9 @@ in [Durable listener notification](#durable-listener-notification).
 
 ### 5.4 Audit requests
 
-Put each request at `~/.picsee/herdr/delegator/opus-<item>-audit-r<round>.md` and its report at
-`~/.picsee/herdr/opus-auditor/opus-<item>-audit-r<round>.md` (exactly one `Report-Task:` line), ending with the VERDICT
-block; gpt-auditor's go to `~/.picsee/herdr/gpt-auditor/gpt-<item>-…` the same way. Since 2026-10-25 every tier gets
+Put each request at `~/.mado/herdr/delegator/opus-<item>-audit-r<round>.md` and its report at
+`~/.mado/herdr/opus-auditor/opus-<item>-audit-r<round>.md` (exactly one `Report-Task:` line), ending with the VERDICT
+block; gpt-auditor's go to `~/.mado/herdr/gpt-auditor/gpt-<item>-…` the same way. Since 2026-10-25 every tier gets
 both auditors, blind and in parallel (SKILL.md step 4): `/clear` opus-auditor and `reset.sh` gpt-auditor before every
 audit and confirm.
 
@@ -454,7 +454,7 @@ points both at the same summary.
 Every request carries:
 - item, exact range `base..head`, worktree, commit list, and the note "objects are shared; use git show/diff";
 - tier with the reason and the raise-the-tier triggers;
-- dimensions D1–D12 and the pointer to `~/.picsee/herdr/delegator/audit-brief.md` (blind, read-only, no gh, scratch
+- dimensions D1–D12 and the pointer to `~/.mado/herdr/delegator/audit-brief.md` (blind, read-only, no gh, scratch
   isolation);
 - inputs: brief, amendments, handoff ("a claim to test"), evidence dir, receipts command;
 - "Judge specifically", 5–10 bullets on the risky points;
@@ -558,7 +558,7 @@ choosing a daily sweep on main). Rules: `docs/agents/doc-gardening.md` §When it
 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`.
 
 Daily: in `picsee-wt/owner-gates`, `git switch --detach origin/main`, then
-`node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`). On `RUN`:
+`node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.mado/gardening/last-daily-sweep`). On `RUN`:
 - **Claude:** the `mado-doc-gardener` subagent. It runs on Haiku (`model: haiku` in its agent file; user decision
   2026-10-25: 「mado-doc-gardener will be powered by Haiku model, from now on」); do not override the model when
   dispatching it.
@@ -567,7 +567,7 @@ Daily: in `picsee-wt/owner-gates`, `git switch --detach origin/main`, then
 Pass it the mode `pr`, the worktree, `<last-swept-main>..origin/main` and a context paragraph. It edits only Part 3
 area-review rows and cautious fixes, and never commits. **Never give it a worktree an implementer is using**
 (2026-10-26: it left uncommitted ledger edits in two active implementer worktrees). After the run, write the swept
-main head to `~/.picsee/gardening/last-daily-sweep`.
+main head to `~/.mado/gardening/last-daily-sweep`.
 
 | Verdict | Action |
 |---|---|
@@ -656,7 +656,7 @@ know about the lock. Both projects use the shared lock (mdpro ADR-0134 decision 
   them before each mini GUI run. mdpro does the same.
 
 ```sh
-RUN_DIR="$HOME/.picsee/device-runs/$(date +%Y%m%d-%H%M%S)-<ledger-ids>"
+RUN_DIR="$HOME/.mado/device-runs/$(date +%Y%m%d-%H%M%S)-<ledger-ids>"
 scripts/device/build.sh "$RUN_DIR"          # signed Debug of HEAD; refuses dirty or untracked inputs
 scripts/device/launch.sh "$RUN_DIR"         # records PID, executable, birth time
 scripts/device/doctor.sh "$RUN_DIR" --expected-sha <sha7>   # 12 lines must PASS before driving
@@ -692,7 +692,7 @@ Rules and gotchas:
   (relative path → sha). Files you will move, delete or drag from Finder go **outside** `fixtures/` (for example
   `folders/`, `drag-src/`), because Finder writes `.DS_Store` and doctor's fixture check fails.
 - **Finder `.DS_Store` in the source tree** makes `build.sh` refuse. Move them out of the repo intact to
-  `~/.picsee/handoff/ds_store-backup-<ts>/`; never delete them.
+  `~/.mado/handoff/ds_store-backup-<ts>/`; never delete them.
 - **For drag tests,** use files the app has **never opened**. An earlier `open -a` of the same path gives the process
   access and hides access defects (this masked #73 once). Close stray Finder windows first, or the drop lands in them
   and Finder *moves* the file.
@@ -737,7 +737,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 - Record decisions verbatim:
   - in the commit body for acceptance and plan changes;
   - in the roster plan for roster and model rules;
-  - in `~/.picsee/handoff/20261031-delegator.md` for the session log (rotated 2026-10-31 from `20261022-migrate-to-mini.md`).
+  - in `~/.mado/handoff/20261031-delegator.md` for the session log (rotated 2026-10-31 from `20261022-migrate-to-mini.md`).
 - Report budget. Codex weekly usage shows in Codex panes ("weekly limit: N% left"). Codex quota recovery does not
   reactivate gpt-auditor; only an explicit user restoration does.
 
@@ -754,9 +754,9 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
   (user 2026-10-30); its branch stays. After every merge, archive from the merged item's implementer worktree,
   pane homes included: when `.claude/tdd-guardian/receipts.json` exists, run
   `node scripts/tdd/archive-receipts.mjs <worktree>` there, before any removal decision. This writes immutable
-  per-ID envelopes for structurally valid, terminal verified receipts to `~/.picsee/archive/tdd-guardian/receipts/`,
+  per-ID envelopes for structurally valid, terminal verified receipts to `~/.mado/archive/tdd-guardian/receipts/`,
   lists invalid/unverified entries as skipped, uses `<ID>.<worktree>.json` on another worktree's collision and reports
-  identical reruns as no-op. `PICSEE_RECEIPT_ARCHIVE_ROOT` is a test override: it must be absolute and resolve
+  identical reruns as no-op. `MADO_RECEIPT_ARCHIVE_ROOT` is a test override: it must be absolute and resolve
   outside every Git worktree, including through symlink ancestors. Stop post-merge cleanup on an archive error.
   Keep pane home and `prototype/*` worktrees; remove only eligible PR worktrees, preserving other untracked
   `.claude/tdd-guardian/` evidence in the existing worktree archive before removal.
@@ -821,14 +821,14 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 |---|---|
 | Plan, architecture, ADRs, ledger, validation records | repo `docs/` |
 | Roster rules (a `.claude/rules/70-herdr-roster.md` rules file was planned but has never been written) | `docs/plans/20261021-herdr-roster-migration-plan.md` |
-| Session handoff log (append every milestone and decision) | `~/.picsee/handoff/20261031-delegator.md` (rotated 2026-10-31 from `20261022-migrate-to-mini.md`) |
-| Timeline (WP status) | `~/.picsee/timeline.json` (back it up before editing) |
-| Briefs, requests, PR bodies | `~/.picsee/herdr/delegator/`, `~/.picsee/herdr/<agent>/` |
-| Audit reports | Active: `~/.picsee/herdr/opus-auditor/opus-<item>-audit-r<n>.md`, `-confirm-r<n>.md`; historical gpt-auditor reports remain evidence but receive no new dispatches |
-| Gardener reports | `~/.picsee/gardening/` |
-| Device runs (evidence, screenshots, logs) | `~/.picsee/device-runs/<run-id>/` |
-| Delegator scripts and templates | `.agents/skills/mado-delegator/scripts/`, `.agents/skills/mado-delegator/references/templates/` (`.claude/skills/mado-delegator` is a symlink to the same folder); the auditors' rules file is installed at `~/.picsee/herdr/delegator/audit-brief.md` (copy of `references/templates/audit-brief.md`) |
-| Heavy lock | `scripts/heavy-lock.sh`; flock `~/.picsee/locks/heavy.lock` (never delete) |
+| Session handoff log (append every milestone and decision) | `~/.mado/handoff/20261031-delegator.md` (rotated 2026-10-31 from `20261022-migrate-to-mini.md`) |
+| Timeline (WP status) | `~/.mado/timeline.json` (back it up before editing) |
+| Briefs, requests, PR bodies | `~/.mado/herdr/delegator/`, `~/.mado/herdr/<agent>/` |
+| Audit reports | Active: `~/.mado/herdr/opus-auditor/opus-<item>-audit-r<n>.md`, `-confirm-r<n>.md`; historical gpt-auditor reports remain evidence but receive no new dispatches |
+| Gardener reports | `~/.mado/gardening/` |
+| Device runs (evidence, screenshots, logs) | `~/.mado/device-runs/<run-id>/` |
+| Delegator scripts and templates | `.agents/skills/mado-delegator/scripts/`, `.agents/skills/mado-delegator/references/templates/` (`.claude/skills/mado-delegator` is a symlink to the same folder); the auditors' rules file is installed at `~/.mado/herdr/delegator/audit-brief.md` (copy of `references/templates/audit-brief.md`) |
+| Heavy lock | `scripts/heavy-lock.sh`; flock `~/.mado/locks/heavy.lock` (never delete) |
 
 A Claude delegator also keeps auto-memory under `~/.claude/projects/-Users-jack-Documents-mac-app-picsee/memory/`. A
 Codex delegator doesn't see it, which is one reason this guide and the handoff log exist.

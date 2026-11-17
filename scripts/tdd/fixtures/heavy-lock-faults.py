@@ -11,7 +11,7 @@ spec = importlib.util.spec_from_file_location('launcher', sys.argv[1])
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 mode = sys.argv[2]
-lock = Path(os.environ['PICSEE_MDPRO_LOCK'])
+lock = Path(os.environ['MADO_MDPRO_LOCK'])
 
 if mode == 'survivors':
     class Child:

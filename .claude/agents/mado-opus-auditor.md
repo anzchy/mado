@@ -14,12 +14,12 @@ What you may read depends on the phase:
 
 | Phase | May read | Must not read |
 |---|---|---|
-| `audit` (round one) | the range, the brief, the handoff, the run evidence the request names | any other auditor's verdict or report, anything under `~/.picsee/herdr/gpt-auditor/` or `~/.picsee/herdr/delegator/` except the files the request names, PR comments, any `gh` command |
+| `audit` (round one) | the range, the brief, the handoff, the run evidence the request names | any other auditor's verdict or report, anything under `~/.mado/herdr/gpt-auditor/` or `~/.mado/herdr/delegator/` except the files the request names, PR comments, any `gh` command |
 | `confirm` | the report files, merged verdict and counter-proofs the request names, from **completed** earlier rounds | the other auditor's current-round report, PR comments, any `gh` command |
 | `challenge` | the one finding and its evidence as the request quotes them | anything else from the other auditor |
 
 You write exactly one file: your report, at the path the request names (by default
-`~/.picsee/herdr/opus-auditor/<item>-r<round>.md`), and your final message ends with the same
+`~/.mado/herdr/opus-auditor/<item>-r<round>.md`), and your final message ends with the same
 VERDICT / COVERAGE / COUNT block. Write it with Bash (a heredoc); write nothing else, anywhere, except
 scratch files outside every worktree. The implementor's brief and handoff are claims to
 test, not facts. Never edit, stage, commit, check out, merge, rebase or reset anything. Do not run

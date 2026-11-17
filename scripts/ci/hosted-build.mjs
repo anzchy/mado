@@ -5,14 +5,14 @@ import {fileURLToPath} from 'node:url';
 export function runHostedBuild({env=process.env,cwd=process.cwd(),out=env.APP_COMPARE_BUILD_OUT??'.build/app-compare-build',
  spawn=spawnSync,now=Date.now,stdout=s=>process.stdout.write(s),stderr=s=>process.stderr.write(s)}={}) {
  const mode=env.APP_COMPARE_MODE;
- if(mode!=='hosted'||env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='workflow_dispatch'||env.PICSEE_HEAVY_LOCK_HELD!=='1'){
+ if(mode!=='hosted'||env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='workflow_dispatch'||env.MADO_HEAVY_LOCK_HELD!=='1'){
   stderr('comparison build requires explicit locked dispatch mode\n');return 64;
  }
- const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+ const control=Number(env.MADO_HEAVY_CONTROL_FD);
  if(!Number.isInteger(control)||control<3||control>64){stderr('comparison build needs parent control FD\n');return 70;}
  const fds=[control];
- if(env.PICSEE_HEAVY_FLOCK_FD){
-  const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+ if(env.MADO_HEAVY_FLOCK_FD){
+  const flock=Number(env.MADO_HEAVY_FLOCK_FD);
   if(!Number.isInteger(flock)||flock<3||flock>64){stderr('comparison build has invalid flock FD\n');return 70;}
   fds.push(flock);
  }

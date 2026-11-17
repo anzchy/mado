@@ -56,20 +56,20 @@ test('hostedRepeatCannotStartBeforePreviousWorkloadDrains real nested timeout',a
   const repeat=fileURLToPath(new URL('../app-repeat.mjs',import.meta.url));
   writeFileSync(worker,`import {spawnSync} from 'node:child_process';import {appendFileSync} from 'node:fs';\n`+
     `appendFileSync(${JSON.stringify(marker)},'started\\n');\n`+
-    `const fd=Number(process.env.PICSEE_HEAVY_CONTROL_FD);const stdio=['ignore','pipe','pipe'];`+
+    `const fd=Number(process.env.MADO_HEAVY_CONTROL_FD);const stdio=['ignore','pipe','pipe'];`+
     `while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;\n`+
     `const run=spawnSync(${JSON.stringify(lock)},[process.execPath,'-e','setInterval(()=>{},1000)'],`+
-    `{env:{...process.env,PICSEE_HEAVY_LOCK_EXEC_SECS:'0.3'},stdio,encoding:'utf8',timeout:5000});`+
+    `{env:{...process.env,MADO_HEAVY_LOCK_EXEC_SECS:'0.3'},stdio,encoding:'utf8',timeout:5000});`+
     `process.exitCode=run.status??70;\n`);
   writeFileSync(controller,`import {runAppRepeat} from ${JSON.stringify(new URL('../app-repeat.mjs',import.meta.url).href)};`+
     `process.exitCode=runAppRepeat({repeat:2,filter:'^MadoAppTests\\\\.retainedOnly\\\\(\\\\)$',`+
     `workerScript:${JSON.stringify(worker)},out:${JSON.stringify(path.join(dir,'out'))},`+
     `deadline:Date.now()+8000,summaryPath:null});\n`);
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'10',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'cleanup-status.json')};
+  const env={...process.env,MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'10',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'cleanup-status.json')};
   env.APP_COMPARE_MODE='none';delete env.APP_COMPARE_SCOPE;
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,controller],{env,encoding:'utf8',timeout:15000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.equal(readFileSync(marker,'utf8'),'started\n','the second native worker never starts');

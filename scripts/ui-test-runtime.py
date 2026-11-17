@@ -151,7 +151,7 @@ def main(argv=None) -> int:
     app_cleaning.add_argument("run_root", type=Path)
     args = parser.parse_args(argv)
     # Deliberately no environment override: CLI output is confined to this home-owned root.
-    runtime_root = Path.home() / ".picsee" / "ui-tests"
+    runtime_root = Path.home() / ".mado" / "ui-tests"
     try:
         if args.command == "stage":
             fixtures = stage(args.run_root, args.source_dir, runtime_root)

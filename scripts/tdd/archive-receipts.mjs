@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Archive cwd receipts by ID with immutable worktree provenance.
  * Usage: node scripts/tdd/archive-receipts.mjs <worktree-label>
- * PICSEE_RECEIPT_ARCHIVE_ROOT must be absolute and resolve outside all Git worktrees.
+ * MADO_RECEIPT_ARCHIVE_ROOT must be absolute and resolve outside all Git worktrees.
  * Existing differing evidence is a conflict; use a new receipt ID for a new cycle.
  */
 import { readFileSync, lstatSync, realpathSync, statSync, mkdirSync, openSync, closeSync, writeFileSync, linkSync, unlinkSync } from 'node:fs';
@@ -121,7 +121,7 @@ function main() {
   const args = process.argv.slice(2);
   if (args.length !== 1 || !safeComponent(args[0])) throw new Error('Usage: archive-receipts.mjs <safe-worktree-label>');
   const { receipts, skipped } = selectReceipts(readReceipts({ rawEntries: true }));
-  const root = archiveRoot(process.env.PICSEE_RECEIPT_ARCHIVE_ROOT ?? join(homedir(), '.picsee/archive/tdd-guardian/receipts'));
+  const root = archiveRoot(process.env.MADO_RECEIPT_ARCHIVE_ROOT ?? join(homedir(), '.mado/archive/tdd-guardian/receipts'));
   for (const line of skipped) process.stdout.write(line + '\n');
   if (!receipts.length) { process.stdout.write('No receipts to archive.\n'); return; }
   try {

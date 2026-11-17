@@ -38,7 +38,7 @@ function fixture(t) {
   const input = oid => `refs/heads/topic ${oid} refs/heads/topic ${base}\n`;
   const run = ({ suppliedBody = false, oid = head, stdin = input(oid) } = {}) => spawnSync('sh', [hook, 'origin', 'unused'], {
     cwd: repo, input: stdin, encoding: 'utf8', timeout: 15000,
-    env: { ...process.env, PATH: sentinels + ':' + process.env.PATH, PICSEE_PR_BODY: suppliedBody ? body : '' },
+    env: { ...process.env, PATH: sentinels + ':' + process.env.PATH, MADO_PR_BODY: suppliedBody ? body : '' },
   });
   return { repo, git, write, base, head, body, run };
 }
@@ -164,7 +164,7 @@ test('installed hook and runner survive topic replacement and still reject stale
     const refs = join(f.repo, 'push-input');
     writeFileSync(refs, `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`);
     return spawnSync('git', ['hook', 'run', '--to-stdin=' + refs, 'pre-push', '--', 'origin', 'unused'], {
-      cwd: f.repo, encoding: 'utf8', env: { ...process.env, PICSEE_PR_BODY: f.body }, timeout: 15000,
+      cwd: f.repo, encoding: 'utf8', env: { ...process.env, MADO_PR_BODY: f.body }, timeout: 15000,
     });
   };
   status(run(), 1, /stale head/);
@@ -178,7 +178,7 @@ test('installed hook and runner survive topic replacement and still reject stale
   f.git('add', 'docs/feature-ledger.html', 'scripts/ledger/build.mjs'); f.git('commit', '-qm', 'weaken ledger');
   const result = spawnSync(join(installed, 'pre-push'), ['origin', 'unused'], {
     cwd: f.repo, input: `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`,
-    encoding: 'utf8', env: { ...process.env, PICSEE_PR_BODY: '' }, timeout: 15000,
+    encoding: 'utf8', env: { ...process.env, MADO_PR_BODY: '' }, timeout: 15000,
   });
   status(result, 0, /ledger.*checker changed.*CI decides/i);
 });
@@ -204,7 +204,7 @@ function documentedBootstrap() {
 }
 function bootstrap(f) {
   return spawnSync('sh', ['-c', documentedBootstrap()], { cwd: f.repo, encoding: 'utf8', timeout: 15000,
-    env: { ...process.env, PICSEE_PR_BODY: '' } });
+    env: { ...process.env, MADO_PR_BODY: '' } });
 }
 function baseAtHead(f) {
   f.git('add', 'scripts'); f.git('commit', '-qm', 'test installation base');
@@ -288,7 +288,7 @@ for (const checker of ['ledger', 'shortcut']) {
     f.git('add', 'scripts', 'App', 'docs/feature-ledger.html'); f.git('commit', '-qm', 'teach checker');
     const run = (suppliedBody = false) => spawnSync(join(installed, 'pre-push'), ['origin', 'unused'], { cwd: f.repo,
       input: `refs/heads/topic ${f.git('rev-parse', 'HEAD')} refs/heads/topic ${f.base}\n`, encoding: 'utf8', timeout: 15000,
-      env: { ...process.env, PICSEE_PR_BODY: suppliedBody ? f.body : '' } });
+      env: { ...process.env, MADO_PR_BODY: suppliedBody ? f.body : '' } });
     const deferred = run();
     status(deferred, 0, new RegExp(`${checker}.*checker changed.*CI decides`, 'i'));
     assert.match(deferred.stdout, /CI decides.*local check deferred.*PR body must carry Checker-Change: acknowledgement for independent review/);

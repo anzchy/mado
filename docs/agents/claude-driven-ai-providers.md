@@ -1,7 +1,7 @@
 # Mado 多模型 roster 使用指南（草案）
 
 探针 P1–P7 尚未运行；只有全部通过后，codex-auditor 才按第 6 节的跨厂商配对取代 gpt-auditor。
-文中的 `scripts/install-shims.sh` 和 `scripts/start-roster.sh` 目前仅在本地 `~/.picsee/herdr/opus-auditor/roster-proposal/scripts/`，尚未入库。
+文中的 `scripts/install-shims.sh` 和 `scripts/start-roster.sh` 目前仅在本地 `~/.mado/herdr/opus-auditor/roster-proposal/scripts/`，尚未入库。
 
 日期：2026-10-28 · 作者：opus-auditor（应用户要求起草）· 状态：**提案，未实测**。
 本指南说明怎样用 [xiaolai/claude-driven-ai-providers](https://github.com/xiaolai/claude-driven-ai-providers)（下称 clai）
@@ -16,7 +16,7 @@ researcher、planner、opus-implementor、codex-implementor、codex-auditor（do
 
 - clai 的每个启动器（`clcd`、`clki`…）启动**一个独立的 Claude Code 进程**，并设置自己的 `CLAUDE_CONFIG_DIR`（profile）。
   进程里的所有 subagent 都用这个提供方；agent 文件里写 `model: opus` 只是映射到该提供方的某个模型。
-- 所以「不同角色用不同厂商」= **不同 herdr pane 跑不同启动器**，角色之间仍靠文件交接（`~/.picsee/herdr/<pane>/`）。
+- 所以「不同角色用不同厂商」= **不同 herdr pane 跑不同启动器**，角色之间仍靠文件交接（`~/.mado/herdr/<pane>/`）。
 - 新 agent 文件放在**项目级** `.claude/agents/`。各启动器的 profile 互相隔离，`~/.claude/agents/` 在 `clcd`/`clki` 进程里看不到；项目级目录都能读到。
 - 「ChatGPT 网页版订阅」实际走的是 Codex 订阅通道：`codex login` 用 ChatGPT 账号登录，`clcd` 借 Codex 的认证后端
   （`chatgpt.com/backend-api/codex/responses`）。额度与网页版同一个订阅；不经过网页界面。该后端不是公开 API，随时可能变化。
@@ -25,11 +25,11 @@ researcher、planner、opus-implementor、codex-implementor、codex-auditor（do
 
 | 角色 | agent 文件 | pane | 启动器 · 模型 · effort | 写什么 |
 |---|---|---|---|---|
-| researcher | `researcher.md` | `kimi-researcher` | `clki` · kimi-k3（注册表默认） | `~/.picsee/herdr/kimi-researcher/<item>-research.md` |
-| planner | `planner.md` | `gpt-planner` | `clcd` · gpt-6.1-sol（注册表默认）· xhigh | `~/.picsee/herdr/gpt-planner/<item>-plan.md`（草稿 brief） |
+| researcher | `researcher.md` | `kimi-researcher` | `clki` · kimi-k3（注册表默认） | `~/.mado/herdr/kimi-researcher/<item>-research.md` |
+| planner | `planner.md` | `gpt-planner` | `clcd` · gpt-6.1-sol（注册表默认）· xhigh | `~/.mado/herdr/gpt-planner/<item>-plan.md`（草稿 brief） |
 | opus-implementor | `opus-implementor.md` | `opus-imple-<n>` | 原生 `claude` · Opus | 代码 + `<item>-handoff.md` |
 | codex-implementor | `codex-implementor.md` | `codex-imple-<n>` | `clcd` · gpt-6.1-sol · medium | 代码 + `<item>-handoff.md` |
-| codex-auditor | `codex-auditor.md` | `codex-auditor` | `clcd` · gpt-6.1-sol · high | `~/.picsee/herdr/codex-auditor/<item>-r<round>.md` |
+| codex-auditor | `codex-auditor.md` | `codex-auditor` | `clcd` · gpt-6.1-sol · high | `~/.mado/herdr/codex-auditor/<item>-r<round>.md` |
 | opus-auditor | 现有 `mado-opus-auditor.md` | `opus-auditor`（w1:p6） | 原生 `claude` · Opus | 不变 |
 | doc gardener | 现有 `mado-doc-gardener.md` | 不占 pane | delegator 调用的 Haiku subagent | 不变 |
 
@@ -84,7 +84,7 @@ clai config set kimi  model <probe 里的 ID>
 
 ### 3.5 包装脚本（shim）
 `herdr agent start --kind claude` 只会运行 PATH 上的 `claude`，不能直接指定 `clcd`。`scripts/install-shims.sh`
-为每个非 Anthropic pane 写 `~/.picsee/shims/<pane>/claude`：
+为每个非 Anthropic pane 写 `~/.mado/shims/<pane>/claude`：
 ```sh
 #!/bin/sh
 exec env CLAI_CLAUDE_BIN=<真实 claude 绝对路径> CLCD_EFFORT=xhigh CLCD_PROFILE=$HOME/.claude-codex-planner <clcd 绝对路径> "$@"
@@ -110,7 +110,7 @@ sh scripts/start-roster.sh w1:p2      # 参数是用来 split 的已有 pane
 ```sh
 herdr pane split w1:p2 --direction down                       # 记下新 pane id
 herdr pane send-text <id> 'cd ~/Documents/mac-app/picsee-wt/gpt-planner'; herdr pane send-keys <id> enter
-herdr pane send-text <id> 'export PATH=$HOME/.picsee/shims/gpt-planner:$PATH; hash -r'; herdr pane send-keys <id> enter
+herdr pane send-text <id> 'export PATH=$HOME/.mado/shims/gpt-planner:$PATH; hash -r'; herdr pane send-keys <id> enter
 herdr agent start gpt-planner --kind claude --pane <id> -- --agent planner
 ```
 - 原生 Opus 实现者：`herdr agent start opus-imple-1 --kind claude --pane <id> -- --agent opus-implementor --model opus --dangerously-skip-permissions`
@@ -121,37 +121,37 @@ herdr agent start gpt-planner --kind claude --pane <id> -- --agent planner
 
 所有角色每个请求前都要 `/clear`：`herdr pane send-text <pane> '/clear'` + `send-keys enter`，状态行显示 `Context 0%` 才发请求。
 请求一律是一个指向请求文件的单行 prompt，例如
-`herdr agent prompt gpt-planner 'New request: read and follow ~/.picsee/herdr/delegator/p318-plan-request.md'`。
+`herdr agent prompt gpt-planner 'New request: read and follow ~/.mado/herdr/delegator/p318-plan-request.md'`。
 等结果用 `listen-notify.py --poll report`，`--task` 与报告首行 `Report-Task:` 相同。
 
 ### 5.1 researcher 请求文件
 ```text
 Item: p318. Question: <一两句>.
 May read beyond the repo: docs/PICVIEW_FEATURES.md, docs/PICVIEW_ANALYSIS.md, <URL>.
-Output: ~/.picsee/herdr/kimi-researcher/p318-research.md, Report-Task: p318-research-r1.
+Output: ~/.mado/herdr/kimi-researcher/p318-research.md, Report-Task: p318-research-r1.
 ```
 输出：答案、证据（每条 CONFIRMED / INFERRED / UNKNOWN + 来源）、约束、开放问题。不读 `evidence/` 原始转储。
 
 ### 5.2 planner 请求文件
 ```text
 Item: p318 · WP P3-18 · issue #210 · main 1a2b3c4 · main checkout ~/Documents/mac-app/picsee.
-Research: ~/.picsee/herdr/kimi-researcher/p318-research.md.
+Research: ~/.mado/herdr/kimi-researcher/p318-research.md.
 User decisions (verbatim): 「…」.
 Target implementer: opus | codex | kimi.
-Output: ~/.picsee/herdr/gpt-planner/p318-plan.md, Report-Task: p318-plan-r1.
+Output: ~/.mado/herdr/gpt-planner/p318-plan.md, Report-Task: p318-plan-r1.
 ```
 输出是按 `brief-template.md` 填满的草稿 brief + `Planner notes`（放弃的方案、审计要看的风险、开放问题）。
 **delegator 审读后**再复制到实现者目录作为正式 brief；fence、tier、用户原话由 delegator 负责最终核对。
 
 ### 5.3 实现者
-与现在一样：`herdr agent prompt opus-imple-1 'New task: P3-18. Read and follow ~/.picsee/herdr/opus-imple-1/p318-brief.md'`。
+与现在一样：`herdr agent prompt opus-imple-1 'New task: P3-18. Read and follow ~/.mado/herdr/opus-imple-1/p318-brief.md'`。
 两个实现者文件的规则段相同：只改 brief 的 You own、每个 WI 先 RED、`--files` 只填该 WI 的测试文件、
 改坏 fixture/素材得到的失败不算 RED、UI 断言看渲染几何、只把重任务放进 heavy lock、命名路径暂存、按 WI 提交、
 不 push / 不开 PR、账簿只改「限制：」，handoff 首行 `Report-Task:`。
 
 ### 5.4 codex-auditor
-请求文件与 opus-auditor 完全相同（`audit-request-template.md`），只换报告路径 `~/.picsee/herdr/codex-auditor/<item>-r<round>.md`。
-它读 `~/.picsee/herdr/delegator/audit-brief.md` 与 main 上的 `docs/agents/audit-dimensions.md`，读屏障、三种模式、报告格式不变。
+请求文件与 opus-auditor 完全相同（`audit-request-template.md`），只换报告路径 `~/.mado/herdr/codex-auditor/<item>-r<round>.md`。
+它读 `~/.mado/herdr/delegator/audit-brief.md` 与 main 上的 `docs/agents/audit-dimensions.md`，读屏障、三种模式、报告格式不变。
 
 ## 6. 审计配对（跨厂商）
 
@@ -192,14 +192,14 @@ Output: ~/.picsee/herdr/gpt-planner/p318-plan.md, Report-Task: p318-plan-r1.
 | P7 | `herdr pane split` 的输出 | `start-roster.sh` 取到的 pane id 正确；否则改脚本的 awk 一行 |
 
 P1 失败的备用方案：不用 `herdr agent start`，直接
-`herdr pane send-text <id> '~/.picsee/shims/gpt-planner/claude --agent planner'` + Enter；
+`herdr pane send-text <id> '~/.mado/shims/gpt-planner/claude --agent planner'` + Enter；
 之后对该 pane 用 `herdr pane send-text/read` 按 pane id 操作，listener 用 `--route claude-pane`。
 
 ## 10. 故障排查
 
 | 现象 | 原因 / 处理 |
 |---|---|
-| 状态行仍是 Claude 模型 | PATH 没带 shim（`which claude` 应指向 `~/.picsee/shims/...`）；或 shim 里的 `CLAI_CLAUDE_BIN` 指错 |
+| 状态行仍是 Claude 模型 | PATH 没带 shim（`which claude` 应指向 `~/.mado/shims/...`）；或 shim 里的 `CLAI_CLAUDE_BIN` 指错 |
 | shim 无限递归 / 进程暴涨 | `CLAI_CLAUDE_BIN` 指向了 shim 本身；在干净 shell 重跑 `install-shims.sh`（脚本会拒绝这种情况） |
 | `/agents` 看不到新 agent | 文件不在项目 `.claude/agents/`，或 pane 的 worktree 早于入库提交 |
 | `clcd` 报认证错误 | `codex login` 过期，重新登录；不要换成 `cloa` |
@@ -219,5 +219,5 @@ P1 失败的备用方案：不用 `herdr agent start`，直接
 
 ## 12. 回退
 
-停掉新 pane，删除 `~/.picsee/shims/<pane>/` 与对应 `~/.claude-codex-*` profile 即可；agent 文件入库后不被调用就没有影响。
+停掉新 pane，删除 `~/.mado/shims/<pane>/` 与对应 `~/.claude-codex-*` profile 即可；agent 文件入库后不被调用就没有影响。
 现有 roster（gpt-imple-*、gpt-auditor、opus-auditor、opus-imple-1、opus-imple-2）全程不改；`kimi-imple-1`（2026-11-01 退役）和 `gpt-imple-3` 已退役。

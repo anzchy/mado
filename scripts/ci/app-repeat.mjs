@@ -25,10 +25,10 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
     stdout('app-repeat: invalid comparison mode or scope\n');return 64;
   }
   if (validateOnly) return 0;
-  if (env.PICSEE_HEAVY_LOCK_HELD !== '1') {
-    stdout('app-repeat: repeat execution requires PICSEE_HEAVY_LOCK_HELD=1 (CI machine ownership)\n'); return 64;
+  if (env.MADO_HEAVY_LOCK_HELD !== '1') {
+    stdout('app-repeat: repeat execution requires MADO_HEAVY_LOCK_HELD=1 (CI machine ownership)\n'); return 64;
   }
-  const controlFd=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  const controlFd=Number(env.MADO_HEAVY_CONTROL_FD);
   if(!Number.isInteger(controlFd)||controlFd<3||controlFd>64){
     stdout('app-repeat: missing inherited supervision control FD\n');return 70;
   }
@@ -39,14 +39,14 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
   const temporary = mkdtempSync(path.join(tmpdir(), 'app-repeat-'));
   const quarantinePath = path.join(temporary, 'empty-quarantine.json');
   writeFileSync(quarantinePath, '[]\n');
-  const iterationEnv = { ...env, PICSEE_APP_LANE_NO_RETRY: '1' };
+  const iterationEnv = { ...env, MADO_APP_LANE_NO_RETRY: '1' };
   let filterCanLaunch=true;
   try{new RegExp(filter);}catch{filterCanLaunch=false;}
   const needsHost=mode==='hosted'||(mode==='normal'&&filterCanLaunch&&
     (!filter.trim()||hostedTestIDs.some(id=>new RegExp(filter).test(id))));
   // The lane deliberately rejects a blank filter. Omit it to select the full bundle.
-  if (filter.trim()) iterationEnv.PICSEE_APP_FILTER = filter;
-  else delete iterationEnv.PICSEE_APP_FILTER;
+  if (filter.trim()) iterationEnv.MADO_APP_FILTER = filter;
+  else delete iterationEnv.MADO_APP_FILTER;
   const summarize = line => {
     stdout(line + '\n');
     if (summaryPath) appendFileSync(summaryPath, line + '\n');
@@ -78,24 +78,24 @@ export function runAppRepeat({ repeat = process.env.APP_REPEAT ?? 1, filter = pr
           JSON.stringify({version:1,runId:workerEnv.MADO_APP_COMPARE_RESULT_ID,complete:false,status:null}));
         if(needsHost&&filterCanLaunch) {
           workerEnv.MADO_HOST_OWNERSHIP_REQUIRED='1';
-          workerEnv.MADO_HOST_EXECUTABLE=hostExecutable??path.resolve(env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci',
+          workerEnv.MADO_HOST_EXECUTABLE=hostExecutable??path.resolve(env.MADO_APP_DERIVED_DATA_PATH??'.build/dd-ci',
             'Build/Products/Debug/Mado.app/Contents/MacOS/Mado');
         } else {delete workerEnv.MADO_HOST_OWNERSHIP_REQUIRED;delete workerEnv.MADO_HOST_EXECUTABLE;}
         row.started=true;
-        const attestFd=Math.max(3,controlFd+1,Number(workerEnv.PICSEE_HEAVY_FLOCK_FD||0)+1);
+        const attestFd=Math.max(3,controlFd+1,Number(workerEnv.MADO_HEAVY_FLOCK_FD||0)+1);
         if(attestFd>64)throw new Error('no private repeat status FD available');
         const stdio=['ignore','pipe','pipe'];
         while(stdio.length<=attestFd)stdio.push('ignore');
         stdio[controlFd]=controlFd;
-        if(workerEnv.PICSEE_HEAVY_FLOCK_FD){
-          const flockFd=Number(workerEnv.PICSEE_HEAVY_FLOCK_FD);
+        if(workerEnv.MADO_HEAVY_FLOCK_FD){
+          const flockFd=Number(workerEnv.MADO_HEAVY_FLOCK_FD);
           if(!Number.isInteger(flockFd)||flockFd<3||flockFd>64)throw new Error('invalid inherited flock FD');
           stdio[flockFd]=flockFd;
         }
         stdio[attestFd]='pipe';
         const run = spawn(process.execPath, [supervisor, String(deadline), logPath,
           process.execPath, workerScript, quarantinePath, path.join(temporary, `attempt-${label}.log`),mode], {
-          env:{...workerEnv,PICSEE_REPEAT_ATTEST_FD:String(attestFd),PICSEE_REPEAT_STATUS_DIR:temporary},
+          env:{...workerEnv,MADO_REPEAT_ATTEST_FD:String(attestFd),MADO_REPEAT_STATUS_DIR:temporary},
           stdio,encoding:'utf8', maxBuffer:1024*1024 });
         log = readFileSync(logPath,'utf8');
         if (run.error || run.signal || run.status !== 0) {

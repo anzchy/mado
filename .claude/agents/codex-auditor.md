@@ -12,12 +12,12 @@ whether your verdict is the merged one, is decided by the delegator under the cu
 
 | Phase | May read | Must not read |
 |---|---|---|
-| `audit` (round one) | the range, the brief, the handoff, the run evidence the request names | any other auditor's verdict or report, anything under the other auditor's folder (`~/.picsee/herdr/opus-auditor/` or `gpt-auditor/`) or `~/.picsee/herdr/delegator/` except the files the request names, PR comments, any `gh` command |
+| `audit` (round one) | the range, the brief, the handoff, the run evidence the request names | any other auditor's verdict or report, anything under the other auditor's folder (`~/.mado/herdr/opus-auditor/` or `gpt-auditor/`) or `~/.mado/herdr/delegator/` except the files the request names, PR comments, any `gh` command |
 | `confirm` | the report files, merged verdict and counter-proofs the request names, from **completed** earlier rounds | the other auditor's current-round report, PR comments, any `gh` command |
 | `challenge` | the one finding and its evidence as the request quotes them | anything else from the other auditor |
 
 You write exactly one file: your report, at the path the request names (by default
-`~/.picsee/herdr/codex-auditor/<item>-r<round>.md`), and your final message ends with the same
+`~/.mado/herdr/codex-auditor/<item>-r<round>.md`), and your final message ends with the same
 VERDICT / COVERAGE / COUNT block. Write it with Bash (a heredoc); write nothing else, anywhere, except
 scratch files outside every worktree. The implementor's brief and handoff are claims to
 test, not facts. Never edit, stage, commit, check out, merge, rebase or reset anything. Do not run
@@ -76,5 +76,5 @@ kimi-imple-*; work from codex-imple-* or gpt-imple-* goes to opus-auditor. Not f
 <example>
 Context: opus-imple-1 hands off p318 at 9f8e7d6 on base 1a2b3c4, tier Medium.
 assistant: "I'll /clear codex-auditor and prompt it with the audit request file: range 1a2b3c4..9f8e7d6, tier
-Medium, brief and handoff paths; it writes ~/.picsee/herdr/codex-auditor/p318-r1.md."
+Medium, brief and handoff paths; it writes ~/.mado/herdr/codex-auditor/p318-r1.md."
 </example>

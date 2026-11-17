@@ -24,8 +24,8 @@ export function runUnit({ cwd = process.cwd(), env = process.env,
   // #672: read heavy-lock's private status so a forced drain (a descendant that
   // outlived the run) can never leave a green package gate.
   const stdio = ['inherit', 'inherit', 'inherit'];
-  if (env.PICSEE_HEAVY_LOCK_HELD === '1') {
-    for (const name of ['PICSEE_HEAVY_CONTROL_FD', 'PICSEE_HEAVY_FLOCK_FD']) {
+  if (env.MADO_HEAVY_LOCK_HELD === '1') {
+    for (const name of ['MADO_HEAVY_CONTROL_FD', 'MADO_HEAVY_FLOCK_FD']) {
       const fd = Number(env[name]);
       if (!env[name] || !Number.isInteger(fd) || fd < 3 || fd > 64) continue;
       while (stdio.length <= fd) stdio.push('ignore');
@@ -35,7 +35,7 @@ export function runUnit({ cwd = process.cwd(), env = process.env,
   const result = runAttestedSync(lock, [process.execPath, locked, '--out', out,
     '--timeout-seconds', String(timeoutSeconds), '--capture-seconds', String(captureSeconds),
     '--grace-seconds', String(graceSeconds), '--verify-coverage', String(verifyCoverage)], {
-    cwd, env: { ...env, PICSEE_HEAVY_LOCK_WAIT_SECS: String(UNIT_LIMITS.lockWaitSeconds) }, stdio,
+    cwd, env: { ...env, MADO_HEAVY_LOCK_WAIT_SECS: String(UNIT_LIMITS.lockWaitSeconds) }, stdio,
   }, { fault: statusFault });
   if (result.error) process.stderr.write(`unit-lane: ${result.error.message}\n`);
   if (result.drainExpired) {

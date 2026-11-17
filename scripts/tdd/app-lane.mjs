@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-/** Run the compiled App test bundle. Optional [filter] overrides PICSEE_APP_FILTER.
+/** Run the compiled App test bundle. Optional [filter] overrides MADO_APP_FILTER.
  * Keep the same filter for receipt record/verify; env is not stored in receipts.
- * Set PICSEE_APP_LANE_NO_RETRY=1 for RED receipts. */
+ * Set MADO_APP_LANE_NO_RETRY=1 for RED receipts. */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -16,12 +16,12 @@ const realSpawnSync=spawnSync;
 
 const lock = fileURLToPath(new URL("../heavy-lock.sh", import.meta.url));
 function inheritedControlStdio(env){
-  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return undefined;
-  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(env.MADO_HEAVY_LOCK_HELD!=='1')return undefined;
+  const control=Number(env.MADO_HEAVY_CONTROL_FD);
   if(!Number.isInteger(control)||control<3||control>64)throw new Error('missing inherited heavy-lock control FD');
   const fds=[control];
-  if(env.PICSEE_HEAVY_FLOCK_FD){
-    const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+  if(env.MADO_HEAVY_FLOCK_FD){
+    const flock=Number(env.MADO_HEAVY_FLOCK_FD);
     if(!Number.isInteger(flock)||flock<3||flock>64)throw new Error('invalid inherited heavy-lock flock FD');
     fds.push(flock);
   }
@@ -253,12 +253,12 @@ deadline = setTimeout(() => stop('execution timeout'), Math.max(1, Number(proces
 `;
   const checked = (args, locked = true) => {
     const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env };
-    const workerEnv = { ...env, PICSEE_HEAVY_LOCK_DRAIN_SECS: '0.25', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.25',
-      PICSEE_HEAVY_LOCK_EXEC_SECS: '300' };
+    const workerEnv = { ...env, MADO_HEAVY_LOCK_DRAIN_SECS: '0.25', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.25',
+      MADO_HEAVY_LOCK_EXEC_SECS: '300' };
     const launch=spawn===realSpawnSync?runAttestedSync:spawn;
     const run = locked
       ? launch(lock, [process.execPath, '-e', boundedCommand, '120000', ...args], { ...options, env: workerEnv,
-          ...(workerEnv.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(workerEnv)}:{}) })
+          ...(workerEnv.MADO_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(workerEnv)}:{}) })
       : spawn(args[0], args.slice(1), { ...options, timeout: 120000 });
     if (run.error || run.signal || run.status !== 0) throw new Error(`inventory command failed: ${run.error?.message ?? run.stderr ?? run.signal ?? run.status}`);
     return run.stdout ?? '';
@@ -372,7 +372,7 @@ function selectionComplete(clean, selection) {
 function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
   const options = { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 2100000,
     env: { ...env, SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH: "1" },
-    ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
+    ...(env.MADO_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
   const launch=spawnSync===realSpawnSync?runAttestedSync:spawnSync;
   if (inclusion !== null) return launch(lock, ["xcrun", "xctest", "-XCTest", inclusion.join(','), bundlePath], options);
   return launch(lock, ["xcrun", "xctest", bundlePath], options);
@@ -381,19 +381,19 @@ function nativeSpawn(env, spawnSync, inclusion = null, bundlePath = bundle) {
 /** One attempt, plus at most one strictly authorized retry. Inject only the process boundary. */
 function runAppLaneBody({ spawn = spawnSync, env = process.env, argv = [], recordAttempt = () => {},
   evidencePath = '.build/app-lane-attempt1.log', quarantinePath = quarantineFile,
-  derivedDataPath = env.PICSEE_APP_DERIVED_DATA_PATH ?? '.build/dd-ci',
+  derivedDataPath = env.MADO_APP_DERIVED_DATA_PATH ?? '.build/dd-ci',
   bundlePath = path.join(derivedDataPath, 'Build/Products/Debug/MadoAppTests.xctest'), stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s) } = {}) {
-  const filter = argv[0] ?? env.PICSEE_APP_FILTER;
+  const filter = argv[0] ?? env.MADO_APP_FILTER;
   let expression;
   try {
     if (argv.length > 1 || (filter !== undefined && !filter.trim())) throw new Error('expected one nonblank filter');
     if (filter !== undefined) expression = new RegExp(filter);
   } catch (error) {
-    stderr(`usage: node scripts/tdd/app-lane.mjs [filter]; or set PICSEE_APP_FILTER for record and verify: ${error.message}\n`);
+    stderr(`usage: node scripts/tdd/app-lane.mjs [filter]; or set MADO_APP_FILTER for record and verify: ${error.message}\n`);
     return 64;
   }
   if (argv[0] === undefined && filter !== undefined)
-    stderr(`app-lane: using PICSEE_APP_FILTER=${JSON.stringify(filter)}; unset PICSEE_APP_FILTER before a full run\n`);
+    stderr(`app-lane: using MADO_APP_FILTER=${JSON.stringify(filter)}; unset MADO_APP_FILTER before a full run\n`);
   let quarantine, selection = null;
   try {
     quarantine = loadQuarantine(quarantinePath);
@@ -442,7 +442,7 @@ function runAppLaneBody({ spawn = spawnSync, env = process.env, argv = [], recor
       stdout: (attempt.run.stdout ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'"),
       stderr: (attempt.run.stderr ?? '').replaceAll("Test Suite 'Selected tests'", "Test Suite 'All tests'") } : attempt.run;
     const gate = selection && (!attempt.parsed.reliable || attempt.parsed.xctFailed > 0) ? { decision: 'fail' } : classifyFlaky(forGate);
-    if (env.PICSEE_APP_LANE_NO_RETRY !== '1' && gate.decision === 'retry-eligible') {
+    if (env.MADO_APP_LANE_NO_RETRY !== '1' && gate.decision === 'retry-eligible') {
       stdout(`app-lane: known flaky ${gate.names.join(', ')} (${gate.issues.map(issue => `#${issue}`).join(', ')}); retrying once\n`);
       attempt = execute();
     }
@@ -459,11 +459,11 @@ function runAppLaneBody({ spawn = spawnSync, env = process.env, argv = [], recor
  * validation so an early return cannot reuse an earlier successful result. */
 export function runAppLane(options = {}) {
   const env = options.env ?? process.env;
-  const destination = env.PICSEE_APP_RESULT_PATH;
+  const destination = env.MADO_APP_RESULT_PATH;
   if (!destination) return runAppLaneBody(options);
-  const record = { version: 1, runId: env.PICSEE_APP_RESULT_ID ?? '', complete: false,
-    attempts: 0, status: null, filter: options.argv?.[0] ?? env.PICSEE_APP_FILTER ?? null,
-    retryEnabled: env.PICSEE_APP_LANE_NO_RETRY !== '1',
+  const record = { version: 1, runId: env.MADO_APP_RESULT_ID ?? '', complete: false,
+    attempts: 0, status: null, filter: options.argv?.[0] ?? env.MADO_APP_FILTER ?? null,
+    retryEnabled: env.MADO_APP_LANE_NO_RETRY !== '1',
     defaultQuarantine: path.resolve(options.quarantinePath ?? quarantineFile) === path.resolve(quarantineFile) };
   const save = () => {
     mkdirSync(path.dirname(destination), { recursive: true });
@@ -489,17 +489,17 @@ export function runCompleteAppLane(options = {}) {
   const stdout = options.stdout ?? (s => process.stdout.write(s));
   const stderr = options.stderr ?? (s => process.stderr.write(s));
   const spawn = options.spawn ?? spawnSync;
-  const filter = options.argv?.[0] ?? env.PICSEE_APP_FILTER;
-  const derivedDataPath = options.derivedDataPath ?? env.PICSEE_APP_DERIVED_DATA_PATH ?? '.build/dd-ci';
+  const filter = options.argv?.[0] ?? env.MADO_APP_FILTER;
+  const derivedDataPath = options.derivedDataPath ?? env.MADO_APP_DERIVED_DATA_PATH ?? '.build/dd-ci';
   const bundlePath = options.bundlePath ?? path.join(derivedDataPath, 'Build/Products/Debug/MadoAppTests.xctest');
-  const record = { version: 1, runId: env.PICSEE_APP_RESULT_ID ?? '', complete: false,
-    attempts: 0, status: null, filter: filter ?? null, retryEnabled: env.PICSEE_APP_LANE_NO_RETRY !== '1',
+  const record = { version: 1, runId: env.MADO_APP_RESULT_ID ?? '', complete: false,
+    attempts: 0, status: null, filter: filter ?? null, retryEnabled: env.MADO_APP_LANE_NO_RETRY !== '1',
     defaultQuarantine: path.resolve(options.quarantinePath ?? quarantineFile) === path.resolve(quarantineFile),
     groups: {} };
   const save = () => {
-    if (!env.PICSEE_APP_RESULT_PATH) return;
-    mkdirSync(path.dirname(env.PICSEE_APP_RESULT_PATH), {recursive:true});
-    writeFileSync(env.PICSEE_APP_RESULT_PATH, JSON.stringify(record) + '\n');
+    if (!env.MADO_APP_RESULT_PATH) return;
+    mkdirSync(path.dirname(env.MADO_APP_RESULT_PATH), {recursive:true});
+    writeFileSync(env.MADO_APP_RESULT_PATH, JSON.stringify(record) + '\n');
   };
   let status = 70, count = 0, failed = 0, skipped = 0;
   try {
@@ -523,7 +523,7 @@ export function runCompleteAppLane(options = {}) {
     if (!retained && quarantine.length) throw new Error('hosted-only selection does not support an unvalidated quarantine');
     status = 0;
     if (retained) {
-      const childEnv = {...env}; delete childEnv.PICSEE_APP_RESULT_PATH;
+      const childEnv = {...env}; delete childEnv.MADO_APP_RESULT_PATH;
       let output = '';
       const unhosted = runAppLane({...options, env:childEnv, bundlePath,
         recordAttempt:() => {record.attempts++;}, stdout:s => {output += s; stdout(s.replace(/^Tests run:.*\n/gm,''));}});

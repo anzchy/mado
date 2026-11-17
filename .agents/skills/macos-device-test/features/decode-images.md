@@ -47,7 +47,7 @@ Preconditions:
   with localized label `Image` / `图片`; loading/failure text is localized.
 - Tier ① paths: `TestAssets/synthetic/orientation-1.tiff` through `orientation-8.tiff`,
   `alpha-gradient.png`, `corrupt.png`, `truncated.png`, `oversize-header.png` in the same directory.
-- Real photo paths: `~/.picsee/testassets/photos/5B_JPEG_SDR.jpg` and `3B_HEIC_SDR.heic`.
+- Real photo paths: `~/.mado/testassets/photos/5B_JPEG_SDR.jpg` and `3B_HEIC_SDR.heic`.
   Both are 8256×5504 (45.4MP), substituting for 48MP; provenance/hashes are in `TestAssets/manifest.json`.
   The 50-photo S1 corpus is incomplete. The noise PNG is allocation stress, never a timing source.
 - P0-05 pipeline default: N=3 including the reserved current opportunity, visible≤2, heavy≤1 (>12MP),
@@ -55,7 +55,7 @@ Preconditions:
   Logs use subsystem `io.github.anzchy.mado`, category `decode`, private filenames and actual pixel bytes.
 
 For implementor smoke, set the brief's Xcode environment and use a new absolute run directory under
-`~/.picsee/device-runs/`. Build with `scripts/heavy-lock.sh scripts/device/build.sh "$RUN_DIR"`;
+`~/.mado/device-runs/`. Build with `scripts/heavy-lock.sh scripts/device/build.sh "$RUN_DIR"`;
 if codesigning fails, retain `build.log` and skip launch. If another Mado is running, its owner must exit it.
 Then run `scripts/device/launch.sh "$RUN_DIR"` and `scripts/device/doctor.sh "$RUN_DIR" --expected-sha <SHA>`.
 Open fixtures with `open -a "$(cat "$RUN_DIR/bundle.path")" <absolute-fixture-path>`.

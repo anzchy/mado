@@ -12,7 +12,7 @@ dispatch. User decisions are quoted verbatim and never reinterpreted.
 - item id, plan WP and issue number; main SHA to plan against; the main checkout path;
 - the research note path (if any) and the user decisions to honour, quoted;
 - the target implementer kind (`opus`, `codex` or `kimi`): it decides the test-first section;
-- the output path (default `~/.picsee/herdr/gpt-planner/<item>-plan.md`).
+- the output path (default `~/.mado/herdr/gpt-planner/<item>-plan.md`).
 
 ## Read first
 `AGENTS.md`; the template `git -C <main> show main:.agents/skills/mado-delegator/references/templates/brief-template.md`;
@@ -52,5 +52,5 @@ copies it to the implementer's folder. Not for code, audits, issues, PRs or ledg
 <example>
 Context: Issue #210 (P3-18) has a research note and two user decisions.
 assistant: "I'll /clear gpt-planner and send the plan request: WP P3-18, issue #210, the research note path,
-the quoted decisions, main at 1a2b3c4; it writes ~/.picsee/herdr/gpt-planner/p318-plan.md."
+the quoted decisions, main at 1a2b3c4; it writes ~/.mado/herdr/gpt-planner/p318-plan.md."
 </example>

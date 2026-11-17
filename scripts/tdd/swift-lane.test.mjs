@@ -13,7 +13,7 @@ after(() => rmSync(temp, { recursive: true, force: true }));
 // Only Swift itself is replaced: the real wrapper and heavy lock execute.
 writeFileSync(path.join(temp, 'swift'), `#!${process.execPath}
 const fs = require('node:fs');
-fs.writeFileSync(process.env.ARGV_FILE, JSON.stringify({argv:process.argv.slice(2), held:process.env.PICSEE_HEAVY_LOCK_HELD}));
+fs.writeFileSync(process.env.ARGV_FILE, JSON.stringify({argv:process.argv.slice(2), held:process.env.MADO_HEAVY_LOCK_HELD}));
 let text=fs.readFileSync(process.env.FIXTURE);
 if(process.env.TRUNCATE_ROOT) text=Buffer.from(text.toString().split("Test Suite 'All tests' failed")[0]);
 // Feed uneven byte chunks (including multibyte checkmarks), across both streams.
@@ -42,7 +42,7 @@ process.exitCode=Number(process.env.SWIFT_EXIT);
 `, { mode: 0o755 });
 const require = createRequire(import.meta.url);
 const cache = path.join(process.env.HOME, '.claude/plugins/cache/xiaolai/tdd-guardian');
-const plugin = process.env.PICSEE_TDD_PLUGIN_ROOT || path.join(cache, '0.10.2');
+const plugin = process.env.MADO_TDD_PLUGIN_ROOT || path.join(cache, '0.10.2');
 // Keep the real plugin optional, and load it only inside tests that use it.
 function pluginTest(name, fn) {
   test(name, t => {
@@ -60,9 +60,9 @@ function pluginTest(name, fn) {
 function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], stderr = false, split = false, crashStderr = false, truncateRoot = false, incompleteSwift = false, extraEnv = {}, timeoutMs = 10000 } = {}) {
   const attempt=mkdtempSync(path.join(temp,'attempt-'));
   const argvFile = path.join(attempt, 'argv.json');
-  const env = { ...fixtureEnv(), PATH: `${temp}:${process.env.PATH}`, PICSEE_SWIFT_FILTER: filter,
-    PICSEE_HEAVY_LOCK: path.join(attempt, 'heavy.lock'), PICSEE_HEAVY_LOCK_HELD: '',
-    PICSEE_MDPRO_LOCK: path.join(attempt, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
+  const env = { ...fixtureEnv(), PATH: `${temp}:${process.env.PATH}`, MADO_SWIFT_FILTER: filter,
+    MADO_HEAVY_LOCK: path.join(attempt, 'heavy.lock'), MADO_HEAVY_LOCK_HELD: '',
+    MADO_MDPRO_LOCK: path.join(attempt, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '',
     SWIFT_START_FIXTURE: path.join(root,'scripts/tdd/fixtures/swift-pass.txt'), TRUNCATE_ROOT: truncateRoot ? '1' : '', INCOMPLETE_SWIFT: incompleteSwift ? '1' : '', CRASH_STDERR_FIXTURE: path.join(root,'scripts/tdd/fixtures/xctest-partial-crash.txt'), ARGV_FILE: argvFile, FIXTURE: path.join(root, 'scripts/tdd/fixtures', fixture + '.txt'),
     SWIFT_EXIT: String(code), ON_STDERR: stderr ? '1' : '', SPLIT: split ? '1' : '', CRASH_STDERR: crashStderr ? '1' : '', ...extraEnv };
   const r = spawnSync(process.execPath, ['scripts/tdd/swift-lane.mjs', ...args], { env, encoding:'utf8', timeout:timeoutMs });
@@ -71,19 +71,19 @@ function run(fixture, code, { filter = 'FixtureTests/selectedOnly', args = [], s
 }
 test('unterminatedDescendantStderrCannotHideIncompleteCleanup',()=>{
   const r=run('swift-fail',1,{extraEnv:{SPAWN_DESCENDANT:'1',DESCENDANT_PID:path.join(temp,'descendant.pid'),
-    PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+    MADO_HEAVY_LOCK_DRAIN_SECS:'0.05',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',MADO_HEAVY_FAULT_STATUS_WRITE:'1'}});
   assert.equal(r.status,70,r.stderr);
   assert.doesNotMatch(r.stdout,/^Tests run:/m);
   assert.match(r.stderr,/incomplete cleanup/);
 });
 pluginTest('incompleteCleanupCannotProduceValidRedReceipt',({exec,classifyRedRun})=>{
-  const r=run('swift-fail',1,{extraEnv:{PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+  const r=run('swift-fail',1,{extraEnv:{MADO_HEAVY_FAULT_STATUS_WRITE:'1'}});
   assert.equal(r.status,70,r.stderr);
   assert.equal(exec.parseCounts(r.stdout,r.stderr),null);
   assert.equal(classifyRedRun({status:exec.classify(r.status,r.stdout,r.stderr),testCounts:null}).kind,'environment');
 });
 pluginTest('publishedUnknownCleanupRejectsCompletedSwiftAssertion',({exec,classifyRedRun})=>{
-  const r=run('swift-fail',1,{extraEnv:{PICSEE_HEAVY_FAULT_QUERY:'1'}});
+  const r=run('swift-fail',1,{extraEnv:{MADO_HEAVY_FAULT_QUERY:'1'}});
   assert.equal(r.status,70,r.stderr);
   assert.match(r.stderr,/unknown cleanup: process query failed/);
   assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
@@ -94,7 +94,7 @@ pluginTest('publishedUnknownCleanupRejectsCompletedSwiftAssertion',({exec,classi
 });
 pluginTest('swiftExecutionTimeoutHasNoValidRed',({exec,classifyRedRun})=>{
   const r=run('swift-fail',1,{extraEnv:{HANG_AFTER_ASSERTION:'1',RUNNER_STARTED:path.join(temp,'swift-timeout.pid'),
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'2',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
+    MADO_HEAVY_LOCK_EXEC_SECS:'2',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
   assert.equal(r.status,70,r.stderr);
   assert.match(r.stderr,/execution timeout/);
   assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
@@ -106,7 +106,7 @@ pluginTest('swiftExecutionTimeoutHasNoValidRed',({exec,classifyRedRun})=>{
 });
 pluginTest('swiftCancellationHasNoValidRed',({exec,classifyRedRun})=>{
   const r=run('swift-fail',1,{extraEnv:{CANCEL_SUPERVISOR:'1',RUNNER_STARTED:path.join(temp,'swift-cancel.pid'),
-    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
+    MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.05'},timeoutMs:20000});
   assert.equal(r.signal,'SIGTERM',r.stderr);
   assert.doesNotMatch(r.stdout,/^Tests run:/m);
   const counts=exec.parseCounts(r.stdout,r.stderr);
@@ -117,15 +117,15 @@ pluginTest('swiftCancellationHasNoValidRed',({exec,classifyRedRun})=>{
 test('heldAndUnheldLanesPreservePassAndAssertionFailure Swift',()=>{
   for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
     const r=run(fixture,code);assert.equal(r.status,code,r.stderr);assert.match(r.stdout,/^Tests run:/m);
-    const bad=run(fixture,code,{extraEnv:{PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'}});
+    const bad=run(fixture,code,{extraEnv:{MADO_HEAVY_FAULT_STATUS_WRITE:'1'}});
     assert.equal(bad.status,70,bad.stderr);assert.doesNotMatch(bad.stdout,/^Tests run:/m);
   }
 });
 test('native Swift nested HELD retains pass and assertion counts',()=>{
  const lock=path.join(root,'scripts/heavy-lock.sh');
  for(const [fixture,code] of [['swift-pass',0],['swift-fail',1]]){
-  const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
-   PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
+  const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,MADO_SWIFT_FILTER:'FixtureTests/selectedOnly',
+   MADO_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_HELD:'',
    ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures',fixture+'.txt'),SWIFT_EXIT:String(code)};
   const r=spawnSync(lock,[process.execPath,'scripts/tdd/swift-lane.mjs'],{env,encoding:'utf8',timeout:10000});
   assert.ifError(r.error);assert.equal(r.status,code,r.stderr);
@@ -136,9 +136,9 @@ test('native Swift nested HELD rejects unpublished cleanup without counts',()=>{
  const lock=path.join(root,'scripts/heavy-lock.sh');
  const lane=path.join(root,'scripts/tdd/swift-lane.mjs');
  const launcher=path.join(temp,'nested-status-lane.mjs');
- writeFileSync(launcher,`process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';process.argv[1]=${JSON.stringify(lane)};await import(${JSON.stringify(new URL('./swift-lane.mjs',import.meta.url).href)});`);
- const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,PICSEE_SWIFT_FILTER:'FixtureTests/selectedOnly',
-  PICSEE_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',
+ writeFileSync(launcher,`process.env.MADO_HEAVY_FAULT_STATUS_WRITE='1';process.argv[1]=${JSON.stringify(lane)};await import(${JSON.stringify(new URL('./swift-lane.mjs',import.meta.url).href)});`);
+ const env={...fixtureEnv(),PATH:`${temp}:${process.env.PATH}`,MADO_SWIFT_FILTER:'FixtureTests/selectedOnly',
+  MADO_HEAVY_LOCK:path.join(temp,'nested-heavy.lock'),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_HELD:'',
   ARGV_FILE:path.join(temp,'nested-argv.json'),FIXTURE:path.join(root,'scripts/tdd/fixtures/swift-pass.txt'),SWIFT_EXIT:'0'};
  const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/^Tests run:/m);

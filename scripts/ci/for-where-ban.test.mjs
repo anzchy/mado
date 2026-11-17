@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { findForWhere, scanTree, scanProductionTrees } from './for-where-ban.mjs';
 
 test('Swift source has no for-where loops (issue #358)', () => {
-  const root = process.env.PICSEE_FOR_WHERE_REPO_ROOT ?? new URL('../../', import.meta.url).pathname;
+  const root = process.env.MADO_FOR_WHERE_REPO_ROOT ?? new URL('../../', import.meta.url).pathname;
   const hits = scanProductionTrees(root);
   assert.deepEqual(hits, [], `issue #358: replace for … where with a leading guard: ${hits.join(', ')}`);
 });

@@ -23,10 +23,10 @@ export function runComparisonIteration({env=process.env,expectedMode,spawn=spawn
     save();
     if(mode!=='hosted'||mode!==expectedMode)throw new Error('missing, invalid or contradictory comparison mode forwarding');
     if(!['focus','full'].includes(scope))throw new Error('comparison scope must be focus or full');
-    if(env.PICSEE_APP_LANE_NO_RETRY!=='1')throw new Error('comparison requires retry disabled');
+    if(env.MADO_APP_LANE_NO_RETRY!=='1')throw new Error('comparison requires retry disabled');
     if(!quarantinePath||JSON.stringify(JSON.parse(readFileSync(quarantinePath,'utf8')))!=='[]')throw new Error('comparison requires empty explicit quarantine');
-    if(env.PICSEE_APP_FILTER!==undefined)throw new Error('comparison scope owns selection; inherited App filter is not allowed');
-    const nativeEnv={...env};delete nativeEnv.PICSEE_APP_RESULT_PATH;delete nativeEnv.PICSEE_APP_RESULT_ID;
+    if(env.MADO_APP_FILTER!==undefined)throw new Error('comparison scope owns selection; inherited App filter is not allowed');
+    const nativeEnv={...env};delete nativeEnv.MADO_APP_RESULT_PATH;delete nativeEnv.MADO_APP_RESULT_ID;
     if(scope==='focus') {
       const hosted=runHostedAppLane({env:nativeEnv,spawn,stdout,stderr,evidencePath});
       status=hosted.status;record.groups.hosted=status;
@@ -45,12 +45,12 @@ export function runAppCompare({env=process.env,stdout=s=>process.stdout.write(s)
   if(env.APP_COMPARE_MODE!=='hosted'||!['focus','full'].includes(env.APP_COMPARE_SCOPE)) {
     stdout('app-compare: explicit hosted mode and scope focus/full required\n');return 64;
   }
-  if(env.APP_FILTER?.trim()||env.PICSEE_APP_FILTER!==undefined) {
+  if(env.APP_FILTER?.trim()||env.MADO_APP_FILTER!==undefined) {
     stdout('app-compare: comparison scope owns selection; remove App filters\n');return 64;
   }
   const start=Number(env.APP_JOB_STARTED_MS||Date.now());
   if(!Number.isFinite(start)) {stdout('app-compare: invalid job start time\n');return 64;}
-  const compareEnv={...env,PICSEE_APP_LANE_NO_RETRY:'1'};
+  const compareEnv={...env,MADO_APP_LANE_NO_RETRY:'1'};
   const status=runAppRepeat({...options,env:compareEnv,repeat:env.APP_REPEAT??1,filter:'',stdout,requireComparisonEvidence:true,
     deadline:options.deadline??Number(env.APP_REPEAT_DEADLINE_MS||start+6900000)});
   try {

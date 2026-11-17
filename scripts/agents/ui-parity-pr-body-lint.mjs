@@ -107,12 +107,12 @@ function auditReferenceIdentity(ref) {
   // After the anzchy/picsee -> anzchy/mado rename (#554) both spellings name one report.
   const review = /^https:\/\/github\.com\/anzchy\/(?:picsee|mado)(\/pull\/[1-9]\d*#(?:pullrequestreview|issuecomment)-[1-9]\d*)$/.exec(ref);
   if (review) return `https://github.com/anzchy/mado${review[1]}`;
-  if (!ref.startsWith('~/.picsee/herdr/') || /\s/.test(ref)) return undefined;
+  if (!ref.startsWith('~/.mado/herdr/') || /\s/.test(ref)) return undefined;
   const [path, fragment, ...extra] = ref.split('#');
   if (extra.length || (fragment !== undefined && !/^[\w-]+$/.test(fragment))) return undefined;
   const normalized = posix.normalize(path);
   if (/(?:^|[./_-])(?:tbd|none|todo|x|n[/-]a)(?=$|[./_-])/i.test(normalized)) return undefined;
-  if (!/^~\/\.picsee\/herdr\/[a-z0-9]+(?:-[a-z0-9]+)*-auditor\/[A-Za-z0-9][A-Za-z0-9._-]*-(?:audit|confirm)[A-Za-z0-9._-]*\.md$/.test(normalized)) return undefined;
+  if (!/^~\/\.mado\/herdr\/[a-z0-9]+(?:-[a-z0-9]+)*-auditor\/[A-Za-z0-9][A-Za-z0-9._-]*-(?:audit|confirm)[A-Za-z0-9._-]*\.md$/.test(normalized)) return undefined;
   return normalized;
 }
 

@@ -305,12 +305,12 @@ test('actual App run and report shells preserve exit status, logs, quarantine an
   for (const [status, retried] of [[0, false], [0, true], [1, false], [70, false], [1, true]]) {
     const output = quarantine + (retried ? retry : '') + 'Tests run: 1, Failures: ' + (status ? '1' : '0') + ', Errors: 0, Skipped: 0\n';
     const env = { PATH: process.env.PATH, HOME: process.env.HOME, REPEAT_ENABLED: 'false', APP_JOB_STARTED_MS: '0',
-      FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status), FIXTURE_ATTEMPTS: retried?'2':'1', APP_RESULT_PATH:join(directory,'.build/app-result.json'), PICSEE_APP_RESULT_PATH:join(directory,'.build/app-result.json'), APP_RESULT_ID:'workflow-fixture', PICSEE_APP_RESULT_ID:'workflow-fixture',
+      FIXTURE_OUTPUT: output, FIXTURE_STATUS: String(status), FIXTURE_ATTEMPTS: retried?'2':'1', APP_RESULT_PATH:join(directory,'.build/app-result.json'), MADO_APP_RESULT_PATH:join(directory,'.build/app-result.json'), APP_RESULT_ID:'workflow-fixture', MADO_APP_RESULT_ID:'workflow-fixture',
       GITHUB_OUTPUT: join(directory, 'outputs'), GITHUB_STEP_SUMMARY: join(directory, 'summary'),
       EVENT_NAME: 'push', APP_TESTS: '', APP_TEST_STEP: status ? 'failure' : 'success' };
     writeFileSync(env.GITHUB_OUTPUT, ''); writeFileSync(env.GITHUB_STEP_SUMMARY, '');
     // A real Node process stands in for the native runner; all shell/filesystem transport is real.
-    const standIn = `scripts/heavy-lock.sh() { "$@"; }; node() { command node -e 'require("node:fs").writeFileSync(process.env.PICSEE_APP_RESULT_PATH,JSON.stringify({version:1,runId:process.env.PICSEE_APP_RESULT_ID,complete:true,attempts:Number(process.env.FIXTURE_ATTEMPTS),status:Number(process.env.FIXTURE_STATUS),filter:null,retryEnabled:true,defaultQuarantine:true})); process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
+    const standIn = `scripts/heavy-lock.sh() { "$@"; }; node() { command node -e 'require("node:fs").writeFileSync(process.env.MADO_APP_RESULT_PATH,JSON.stringify({version:1,runId:process.env.MADO_APP_RESULT_ID,complete:true,attempts:Number(process.env.FIXTURE_ATTEMPTS),status:Number(process.env.FIXTURE_STATUS),filter:null,retryEnabled:true,defaultQuarantine:true})); process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS))'; };\n`;
     const run = spawnSync('bash', ['-e', '-c', standIn + runScript], { cwd: directory, env, encoding: 'utf8' });
     assert.equal(run.status, status, run.stdout + run.stderr);
     assert.equal(run.stdout, output);
@@ -408,7 +408,7 @@ test('strict fallback facts and pass or fail messages describe the App test step
 
 test('workflow transports structured evidence paths policy and report verdict outputs', () => {
   const run=appStep('Run App tests'), report=appStep('Report App test evidence'), skeleton=jobBlock('walking-skeleton');
-  assert.match(run,/PICSEE_APP_RESULT_PATH: \.build\/app-result\.json/);
+  assert.match(run,/MADO_APP_RESULT_PATH: \.build\/app-result\.json/);
   assert.match(report,/run: \|\n +node scripts\/ci\/app-evidence\.mjs/);
   assert.doesNotMatch(report,/grep -q/);
   assert.match(report,/APP_FILTER:/);assert.match(report,/APP_REPEAT:/);assert.match(report,/APP_RESULT_ID:/);
@@ -420,9 +420,9 @@ test('CI Host ownership step retains inherited supervision and top-level admissi
   const host=jobBlock('app-host-comparison');
   const integration=host.split(/^      - name: /m).find(step=>step.startsWith('Host ownership integration\n'));
   assert.ok(integration);
-  assert.doesNotMatch(integration,/\benv -u\b|unset PICSEE_HEAVY/);
-  assert.match(integration,/PICSEE_HEAVY_CI_TOP_LEVEL: '1'/);
-  assert.match(integration,/PICSEE_HEAVY_CI_BOUNDARY_REQUIRED: '1'/);
+  assert.doesNotMatch(integration,/\benv -u\b|unset MADO_HEAVY/);
+  assert.match(integration,/MADO_HEAVY_CI_TOP_LEVEL: '1'/);
+  assert.match(integration,/MADO_HEAVY_CI_BOUNDARY_REQUIRED: '1'/);
   assert.match(integration,/run: scripts\/heavy-lock\.sh node scripts\/tdd\/node-lane\.mjs scripts\/ci\/integration\/\*\.test\.mjs/);
   const app=appStep('Run App tests');
   assert.match(app,/MADO_HOST_OWNERSHIP_REQUIRED: '1'/);

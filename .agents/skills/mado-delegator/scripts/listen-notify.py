@@ -578,7 +578,7 @@ def _deliver_claude(event_dir, config, destination, message, run, sleep, clock):
     # Keep the full message out of pane input: if the terminal became a shell,
     # ':' is a no-op and the event ID cannot contain shell metacharacters.
     _atomic_text(event_dir / "notification.txt", message + "\n")
-    token = ": PICSEE_LISTENER_EVENT_" + config["event"]
+    token = ": MADO_LISTENER_EVENT_" + config["event"]
     attempts = config.get("max_delivery_attempts", 5)
     initial_backoff = config.get("initial_backoff_seconds", 5)
     typing_retry = config.get("typing_retry_seconds", 5)
@@ -909,7 +909,7 @@ def _build_parser():
                        help="claude-pane: stop re-checking a deferred send (default max(14400, defer))")
     start.add_argument("--attention-after-seconds", type=float, default=ATTENTION_AFTER_SECONDS,
                        help="claude-pane: log a dialog or unreadable box held this long to attention.log")
-    default_root = Path.home() / ".picsee" / "herdr" / "delegator" / "listeners"
+    default_root = Path.home() / ".mado" / "herdr" / "delegator" / "listeners"
     start.add_argument("--state-root", type=Path, default=default_root)
     status = subparsers.add_parser("status", help="list undelivered events; exit 3 if any needs attention")
     status.add_argument("--state-root", type=Path, default=default_root)

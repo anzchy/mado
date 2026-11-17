@@ -49,7 +49,7 @@ Each of these needs the owner's Apple ID with two-factor authentication. The age
    ```sh
    gh secret list -R anzchy/picsee
    gh variable list -R anzchy/picsee
-   cat ~/.picsee/release/sparkle-public-ed-key.txt   # public key, 44 base64 characters
+   cat ~/.mado/release/sparkle-public-ed-key.txt   # public key, 44 base64 characters
    ```
    Expected secrets: `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY`. Expected variable: `DEVELOPMENT_TEAM=GRT84NAK4T`. No `ASC_*` secrets.
 5. **End-to-end proof** comes from CI, not from this machine. The first `v0.0.1-rc.N` tag run of the release workflow (#222) imports the .p12, signs, notarises and staples. Until then, record "credentials stored, end-to-end NOT VERIFIED". Don't sign a test file locally just to check: macOS asks the user to allow `codesign` to use the private key.

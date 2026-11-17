@@ -12,11 +12,11 @@
 # herdr may retain the old id until the first turn; an unchanged id is not a veto.
 set -eu
 name=$1 pane=$2
-context_secs=${PICSEE_RESET_CONTEXT_SECS-30}
-poll_secs=${PICSEE_RESET_POLL_SECS-0.25}
+context_secs=${MADO_RESET_CONTEXT_SECS-30}
+poll_secs=${MADO_RESET_POLL_SECS-0.25}
 # Validate literal decimal text before any pane input or shell arithmetic.
-for timer in PICSEE_RESET_CONTEXT_SECS PICSEE_RESET_POLL_SECS; do
-  if [[ $timer == PICSEE_RESET_CONTEXT_SECS ]]; then value=$context_secs; else value=$poll_secs; fi
+for timer in MADO_RESET_CONTEXT_SECS MADO_RESET_POLL_SECS; do
+  if [[ $timer == MADO_RESET_CONTEXT_SECS ]]; then value=$context_secs; else value=$poll_secs; fi
   if ! [[ $value =~ '^[0-9]+([.][0-9]+)?$' ]] ||
      ! LC_ALL=C awk -v n="$value" 'BEGIN { exit !(n + 0 > 0 && n + 0 <= 300) }'; then
     echo "FAIL reset $name: invalid $timer=$value"; exit 1
@@ -195,7 +195,7 @@ restore_names() {
 restore_names
 trap restore_names EXIT
 # On a failed reset the pane content is the only evidence of why; keep the last screen read (stdout stays one line).
-dump_dir=${PICSEE_RESET_DUMP_DIR-$HOME/.picsee/herdr/delegator}
+dump_dir=${MADO_RESET_DUMP_DIR-$HOME/.mado/herdr/delegator}
 screen=""
 dump_screen() {
   local file=$dump_dir/reset-fail-$name-$(date +%Y%m%d-%H%M%S).txt

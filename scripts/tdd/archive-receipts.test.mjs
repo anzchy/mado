@@ -15,7 +15,7 @@ function fixture(root) {
   mkdirSync(join(cwd, '.claude/tdd-guardian'), { recursive: true });
   const source = join(cwd, '.claude/tdd-guardian/receipts.json');
   root ??= join(cwd, 'archive');
-  const options = { cwd, encoding: 'utf8', env: { ...process.env, PICSEE_RECEIPT_ARCHIVE_ROOT: root } };
+  const options = { cwd, encoding: 'utf8', env: { ...process.env, MADO_RECEIPT_ARCHIVE_ROOT: root } };
   return { cwd, source, root, options,
     put: (receipts) => writeFileSync(source, JSON.stringify({ schemaVersion: 2, receipts })),
     run: (...args) => spawnSync(process.execPath, [script, ...args], options) };
@@ -118,10 +118,10 @@ test('dangling symlink is occupied evidence and refuses promptly', async () => {
 });
 test('default archive root is the current home receipts directory', () => {
   const f = fixture(); f.put([receipt()]);
-  const env = { ...process.env, HOME: f.cwd }; delete env.PICSEE_RECEIPT_ARCHIVE_ROOT;
+  const env = { ...process.env, HOME: f.cwd }; delete env.MADO_RECEIPT_ARCHIVE_ROOT;
   const r = spawnSync(process.execPath, [script, 'wt'], { ...f.options, env });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(join(f.cwd, '.picsee/archive/tdd-guardian/receipts/408-WI-1.json'))), envelope('wt', receipt()));
+  assert.deepEqual(JSON.parse(readFileSync(join(f.cwd, '.mado/archive/tdd-guardian/receipts/408-WI-1.json'))), envelope('wt', receipt()));
 });
 test('relative roots and roots in git worktrees, including symlinked ancestors, are refused', async () => {
   const { symlinkSync, existsSync } = await import('node:fs');
@@ -132,7 +132,7 @@ test('relative roots and roots in git worktrees, including symlinked ancestors, 
   const alias = join(f.cwd, 'alias'); symlinkSync(repository, alias);
   for (const root of ['relative', repository, join(repository, 'new/deep'), alias, join(alias, 'new/deep')]) {
     const r = spawnSync(process.execPath, [script, 'wt'], {
-      ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: root },
+      ...f.options, env: { ...f.options.env, MADO_RECEIPT_ARCHIVE_ROOT: root },
     });
     assert.notEqual(r.status, 0, `must reject root ${root}`);
     assert.match(r.stderr, /absolute|worktree/i); assert.equal(r.stdout, '');
@@ -144,7 +144,7 @@ test('relative roots and roots in git worktrees, including symlinked ancestors, 
   // A symlink into an external directory remains a usable override.
   mkdirSync(f.root); const external = join(f.cwd, 'external'); symlinkSync(f.root, external);
   const r = spawnSync(process.execPath, [script, 'wt'], {
-    ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: join(external, 'new') },
+    ...f.options, env: { ...f.options.env, MADO_RECEIPT_ARCHIVE_ROOT: join(external, 'new') },
   });
   assert.equal(r.status, 0, r.stderr); assert.equal(existsSync(join(f.root, 'new/408-WI-1.json')), true);
 });
@@ -199,7 +199,7 @@ test('worktree source cwd can archive externally and Git environment cannot conc
   assert.equal(spawnSync('git', ['init', '--quiet', f.cwd]).status, 0);
   const external = mkdtempSync(join(tmpdir(), 'receipt-external-'));
   const allowed = spawnSync(process.execPath, [script, 'wt'], {
-    ...f.options, env: { ...f.options.env, PICSEE_RECEIPT_ARCHIVE_ROOT: external },
+    ...f.options, env: { ...f.options.env, MADO_RECEIPT_ARCHIVE_ROOT: external },
   });
   assert.equal(allowed.status, 0, allowed.stderr);
   assert.deepEqual(JSON.parse(readFileSync(join(external, '408-WI-1.json'))), envelope('wt', receipt()));

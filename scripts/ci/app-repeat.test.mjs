@@ -11,14 +11,14 @@ test('cleanWorkflowDispatchRepeatSurvivesDrainedToMissingDefault', t => {
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const out=path.join(dir,'out');let calls=0;
   const status=runAppRepeat({repeat:2,out,summaryPath:null,deadline:Date.now()+10000,
-    env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_ACTIONS:'true'},stdout:()=>{},
+    env:{MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4',GITHUB_ACTIONS:'true'},stdout:()=>{},
     spawn:(_command,args,settings)=>{
       calls++;
       const logPath=args[2];writeFileSync(logPath,baseline);
       const id='b'.repeat(30)+String(calls).padStart(2,'0');
-      const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      const statusPath=path.join(settings.env.MADO_REPEAT_STATUS_DIR,`${id}.json`);
       writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:0})+'\n');
-      const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      const output=[];output[Number(settings.env.MADO_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
       return {status:0,stdout:JSON.stringify({status:0}),stderr:'',signal:null,
         output};
     }});
@@ -36,7 +36,7 @@ function harness(t, options = {}) {
   const out = path.join(dir, 'logs'), summaryPath = path.join(dir, 'summary.md');
   const calls = [], supervisors = []; let output = '';
   const status = runAppRepeat({ repeat: 3, filter: '', out, summaryPath, deadline: 10000, now: () => 0,
-    env: { PICSEE_APP_FILTER: 'inherited-filter', PICSEE_HEAVY_LOCK_HELD:'1', PICSEE_HEAVY_CONTROL_FD:'4' }, stdout: s => output += s,
+    env: { MADO_APP_FILTER: 'inherited-filter', MADO_HEAVY_LOCK_HELD:'1', MADO_HEAVY_CONTROL_FD:'4' }, stdout: s => output += s,
     spawn: (command, arguments_, options_) => {
       supervisors.push({command,arguments_,options_});
       const [, deadline, logPath, , , quarantinePath, evidencePath] = arguments_;
@@ -49,9 +49,9 @@ function harness(t, options = {}) {
       } catch (error) { log += error.message; status=70; }
       writeFileSync(logPath,log);
       const id='a'.repeat(30)+String(supervisors.length).padStart(2,'0');
-      const statusPath=path.join(options_.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      const statusPath=path.join(options_.env.MADO_REPEAT_STATUS_DIR,`${id}.json`);
       writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:status})+'\n');
-      const resultOutput=[];resultOutput[Number(options_.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      const resultOutput=[];resultOutput[Number(options_.env.MADO_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
       return {status:0,stdout:JSON.stringify({status,drained:true}),stderr:'',signal:null,output:resultOutput};
     },
     ...options });
@@ -69,8 +69,8 @@ test('repeat count conserves logs, summary rows and native runs; full clears inh
     assert.match(summary, new RegExp(`TOTAL ${repeat} PASS, 0 FAIL`));
     for (const { args, opts } of h.calls) {
       assert.deepEqual(args, ['xcrun', 'xctest', '.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);
-      assert.equal(opts.env.PICSEE_APP_LANE_NO_RETRY, '1');
-      assert.equal(opts.env.PICSEE_APP_FILTER, undefined);
+      assert.equal(opts.env.MADO_APP_LANE_NO_RETRY, '1');
+      assert.equal(opts.env.MADO_APP_FILTER, undefined);
       assert.ok(opts.timeout > 0);
     }
     assert.match(readFileSync(path.join(h.out, 'iter-01.log'), 'utf8'), /app-lane quarantine none/);
@@ -88,9 +88,9 @@ test('filter is a literal environment value and selects real lane inventory', t 
   const inventory = 'APP_LANE_INVENTORY_BEGIN\nProbe.swiftKeep()\nAPP_LANE_INVENTORY_END\n';
   const selected = "Test Suite 'Selected tests' started at now\nTest Suite 'Selected tests' passed at now\nExecuted 0 tests, with 0 failures (0 unexpected)\n◇ Test run started.\n◇ Test swiftKeep() started.\n✔ Test swiftKeep() passed after 0.001 seconds.\n✔ Test run with 1 test in 0 suites passed after 0.001 seconds.\n";
   const filter = '^Probe\\.swiftKeep\\(\\)$';
-  const h = harness(t, { repeat: 2, filter, env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'}, native: (_n, _cmd, args, opts) => {
-    assert.equal(opts.env.PICSEE_APP_FILTER, filter);
-    assert.equal(opts.env.PICSEE_HEAVY_LOCK_HELD, '1', 'discovery stays in the already authorized iteration group');
+  const h = harness(t, { repeat: 2, filter, env:{MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'}, native: (_n, _cmd, args, opts) => {
+    assert.equal(opts.env.MADO_APP_FILTER, filter);
+    assert.equal(opts.env.MADO_HEAVY_LOCK_HELD, '1', 'discovery stays in the already authorized iteration group');
     if (args.includes('xctest')) {
       assert.ok(args.includes('Probe.swiftKeep()'));
       return result(selected);
@@ -166,9 +166,9 @@ test('hostedRepeatCannotStartBeforePreviousWorkloadDrains after a complete timeo
     launched++;
     writeFileSync(args[2],'job time budget exhausted; owned host cleaned up\n');
     const id='f'.repeat(30)+String(launched).padStart(2,'0');
-    const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+    const statusPath=path.join(settings.env.MADO_REPEAT_STATUS_DIR,`${id}.json`);
     writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:70})+'\n');
-    const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+    const output=[];output[Number(settings.env.MADO_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
     return {status:0,stdout:JSON.stringify({status:70,drained:true,cleanupStatus:'complete'}),stderr:'',signal:null,output};
   }});
   assert.equal(h.status,70);
@@ -182,9 +182,9 @@ test('repeatStopsAfterAnyNonLaneStatusBeforeSecondIteration',t=>{
       launched++;
       writeFileSync(args[2],`native exited ${invalid}\n`);
       const id='c'.repeat(30)+String(launched).padStart(2,'0');
-      const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+      const statusPath=path.join(settings.env.MADO_REPEAT_STATUS_DIR,`${id}.json`);
       writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:invalid})+'\n');
-      const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+      const output=[];output[Number(settings.env.MADO_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
       return {status:0,stdout:JSON.stringify({status:invalid,drained:true}),stderr:'',signal:null,output};
     }});
     assert.equal(h.status,70,`invalid status ${invalid} must stop with untrusted counts`);
@@ -206,7 +206,7 @@ test('whitespace-only filter selects the full bundle and clears an inherited fil
   const h = harness(t, {repeat:1,filter:' \t\n '});
   assert.equal(h.status, 0, h.output);
   assert.equal(h.calls.length, 1);
-  assert.equal(h.calls[0].opts.env.PICSEE_APP_FILTER, undefined);
+  assert.equal(h.calls[0].opts.env.MADO_APP_FILTER, undefined);
 });
 test('validation-only CLI rejects invalid dispatch counts and never launches tests for valid counts', async () => {
   const {spawnSync} = await import('node:child_process');
@@ -224,8 +224,8 @@ test('real repeat CLI supervises worker failures and writes every log without na
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const run = spawnSync(new URL('../heavy-lock.sh',import.meta.url).pathname,
     [process.execPath,new URL('./app-repeat.mjs',import.meta.url).pathname], {
-    cwd:dir,env:{...process.env,APP_REPEAT:'2',APP_FILTER:'[',PICSEE_HEAVY_LOCK_HELD:'1',
-      PICSEE_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',PICSEE_MDPRO_LOCK:'off',
+    cwd:dir,env:{...process.env,APP_REPEAT:'2',APP_FILTER:'[',MADO_HEAVY_LOCK_HELD:'1',
+      MADO_HEAVY_CI_TOP_LEVEL:'1',GITHUB_ACTIONS:'true',MADO_MDPRO_LOCK:'off',
       APP_REPEAT_DEADLINE_MS:String(Date.now()+5000),GITHUB_STEP_SUMMARY:path.join(dir,'summary')},
     encoding:'utf8',timeout:10000});
   assert.equal(run.status,70,run.stdout+run.stderr);
@@ -245,5 +245,5 @@ test('repeat execution refuses an unowned machine before launching any worker', 
   assert.equal(h.status,64);
   assert.equal(h.calls.length,0);
   assert.equal(h.supervisors.length,0);
-  assert.match(h.output,/requires PICSEE_HEAVY_LOCK_HELD=1/);
+  assert.match(h.output,/requires MADO_HEAVY_LOCK_HELD=1/);
 });

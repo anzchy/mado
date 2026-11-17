@@ -26,7 +26,7 @@ class XcodeSelection(unittest.TestCase):
         return app
 
     def select(self, candidates, explicit=None):
-        environment = {} if explicit is None else {'PICSEE_XCODE': str(explicit)}
+        environment = {} if explicit is None else {'MADO_XCODE': str(explicit)}
         with patch.dict(os.environ, environment, clear=True):
             return d.select_xcode(candidates)
 

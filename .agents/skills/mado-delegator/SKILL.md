@@ -30,9 +30,9 @@ uses `scripts/codex-rules/push-guard.py`. Verify both a rejected direct push dry
 a successful guarded dry-run before a remote write (see `scripts/codex-rules/README.md`).
 
 
-1. Read the latest entries of `~/.picsee/handoff/20261031-delegator.md`, then `gh pr list`, `gh issue list`,
+1. Read the latest entries of `~/.mado/handoff/20261031-delegator.md`, then `gh pr list`, `gh issue list`,
    `herdr pane list`, and each busy pane's screen (`herdr pane read <pane> | tail -30`; `herdr pane zoom` if empty).
-2. Install the auditors' rules file if missing: `cp $SK/references/templates/audit-brief.md ~/.picsee/herdr/delegator/`.
+2. Install the auditors' rules file if missing: `cp $SK/references/templates/audit-brief.md ~/.mado/herdr/delegator/`.
 3. Check Codex budget (panes show "weekly limit: N% left").
 
 ## Roster (guide §2)
@@ -57,7 +57,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    stored list; then drop items already in flight or overlapping files, and pick by journey order (plan §1.6,
    ADR-013) within the in-flight cap and auditor capacity. Why: `docs/knowledge/owner-questions.md`.
 2. **Brief** — copy [templates/brief-template.md](references/templates/brief-template.md) to
-   `~/.picsee/herdr/<impl>/<item>-brief.md`. Every brief starts from the template and keeps its
+   `~/.mado/herdr/<impl>/<item>-brief.md`. Every brief starts from the template and keeps its
    `## Verify (mado-verify)` section; a hand-written brief copies that section verbatim (the briefs for #682, #683,
    #687, #690 and #692 omitted it and were never verified). There is no hook. For UI work, fill the per-state design and evidence fields in
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
@@ -117,7 +117,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
 7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」).
    PRs carry `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`; don't run the gate or the
    gardener on open or re-push. Once a day, in `picsee-wt/owner-gates` detached at `origin/main`, run
-   `node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`); on
+   `node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.mado/gardening/last-daily-sweep`); on
    `RUN`, `mado-doc-gardener` (Claude subagent on Haiku / Codex custom agent), mode `pr`, that range. UPDATED /
    NEEDS-OWNER → one small `docs(ledger): garden <b>..<h>` PR (限制/在哪 only; acceptance changes only in a separate
    commit quoting the user); BLOCK → tell the user, open an issue. Record the swept head. Keep the weekly `full` run
@@ -150,11 +150,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    CI green, and `Device-Smoke:` is PASS or n/a). Merge as soon as an item is ready; don't hold a green branch for
    another. **After every merge, archive the merged item's receipts from its implementer worktree, pane homes included**:
    when `.claude/tdd-guardian/receipts.json` exists, run `node scripts/tdd/archive-receipts.mjs <worktree>` there
-   (one immutable envelope per verified, structurally valid ID in `~/.picsee/archive/tdd-guardian/receipts/`;
+   (one immutable envelope per verified, structurally valid ID in `~/.mado/archive/tdd-guardian/receipts/`;
    invalid/unverified entries are listed as skipped; collisions use `<ID>.<worktree>.json`; identical reruns report no-op).
    Stop post-merge cleanup on an archive error. **Then remove eligible PR worktrees right after the merge**
    (user 2026-10-30: 「已经提交并成功merge pr的对应的worktree要及时清除，这个要作为一个rule」): before `git worktree remove`,
-   preserve the other untracked `.claude/tdd-guardian/` evidence in `~/.picsee/archive/tdd-guardian/<worktree>/`
+   preserve the other untracked `.claude/tdd-guardian/` evidence in `~/.mado/archive/tdd-guardian/<worktree>/`
    (`--force` only when the rest is `.tokenize/` or `.claude/mind.mv2*` caches; report any other dirt). Keep the
    branch, pane home worktrees and `prototype/*` worktrees. **After every merge**, `git fetch` and run `$SK/scripts/overlap-check.py trial`: `OVERLAP` or `CODE` →
    rebase that branch now while it is small, then the rebase-verify and combination-check path of step 6; `LEDGER` can
@@ -170,7 +170,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    signed App and pinned HTML states under [the parity contract](../../../docs/agents/ui-parity-contract.md).
    Record in `docs/validation/P<n>.md` with `Validated-by: mado-delegator run=<id>`;
    garden; PR. Defect found → issue + FAIL limit + fix brief + re-validate.
-10. **Log** — update `~/.picsee/timeline.json` and append the handoff log; record user decisions verbatim.
+10. **Log** — update `~/.mado/timeline.json` and append the handoff log; record user decisions verbatim.
 
 ## Keep your own context small (guide §3.1)
 

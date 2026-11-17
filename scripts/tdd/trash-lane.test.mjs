@@ -124,11 +124,11 @@ else if(mode==='orphan'){
 
 function environment() {
   const home = mkdtempSync(path.join(scratch, 'home-'));
-  const env = { ...fixtureEnv(), HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'),
-    PICSEE_MDPRO_LOCK: 'off', MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '',
-    PICSEE_HEAVY_LOCK_EXEC_SECS: '30' };
-  delete env.PICSEE_HEAVY_CONTROL_FD;
-  delete env.PICSEE_HEAVY_FLOCK_FD;
+  const env = { ...fixtureEnv(), HOME: home, MADO_HEAVY_LOCK: path.join(home, '.mado/locks/heavy.lock'),
+    MADO_MDPRO_LOCK: 'off', MDPRO_HEAVY_LOCK_HELD: '', MADO_HEAVY_LOCK_WAIT_SECS: '15', MADO_HEAVY_LOCK_HELD: '',
+    MADO_HEAVY_LOCK_EXEC_SECS: '30' };
+  delete env.MADO_HEAVY_CONTROL_FD;
+  delete env.MADO_HEAVY_FLOCK_FD;
   return env;
 }
 
@@ -195,7 +195,7 @@ test('trashLaneLeaderExitWithSurvivingDescendantStopsTheLane', () => {
 
 test('trashLaneUnverifiedCleanupStopsTheLane', () => {
   // Injected unknown process state stands in for an unkillable survivor.
-  const result = lane({}, { childEnv: { PICSEE_HEAVY_FAULT_QUERY: '1' } });
+  const result = lane({}, { childEnv: { MADO_HEAVY_FAULT_QUERY: '1' } });
   assert.equal(result.status, 70, result.output);
   assert.deepEqual(result.calls, ['first']);
   assert.match(result.stdout, /SURVIVOR M\.first\(\): cleanup not verified/);

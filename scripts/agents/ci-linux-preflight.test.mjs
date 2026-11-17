@@ -63,7 +63,7 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
   const calls = join(base, 'calls.jsonl');
   const inputs = join(base, 'inputs.txt');
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, REAL_PYTHON: realPython, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, PICSEE_LINUX_HOST: '' };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, REAL_PYTHON: realPython, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, MADO_LINUX_HOST: '' };
   return { base, repo, hostHome, bin, calls, inputs, sha, env };
 }
 function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }

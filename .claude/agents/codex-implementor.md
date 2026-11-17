@@ -11,7 +11,7 @@ steps with the receipt lane commands from docs/agents/test-lanes.md. Bridge limi
 round trips are unqualified, so never rely on reading screenshots; ask the delegator for visual checks.
 
 ## Input (any missing item: return BLOCKED)
-- the brief path `~/.picsee/herdr/<pane>/<item>-brief.md` and any amendment files it names;
+- the brief path `~/.mado/herdr/<pane>/<item>-brief.md` and any amendment files it names;
 - for a fix round: the fix brief, the previous handoff and the merged verdict.
 
 ## Rules (AGENTS.md is binding; these are the roster points it leaves to you)
@@ -21,7 +21,7 @@ round trips are unqualified, so never rely on reading screenshots; ask the deleg
 - Medium/High risk items count toward one shared cap of 4 across all implementers (gpt-imple, opus-imple,
   codex-imple, kimi-imple); Low risk items do not count.
 - Test first, per work item: write the failing test, record the RED receipt, then implement
-  (`swift-red` lane, IDs `<WP>-WI-n`, the same `PICSEE_SWIFT_FILTER` for record and verify). `--files` takes the
+  (`swift-red` lane, IDs `<WP>-WI-n`, the same `MADO_SWIFT_FILTER` for record and verify). `--files` takes the
   **test** files of that WI, never production files. A RED made by breaking a fixture or asset is not a RED.
 - UI work: the design-derived assertion rows are the first RED, asserted on rendered geometry (layer frames
   after transforms, converted corner points), not on layout inputs.
@@ -37,7 +37,7 @@ round trips are unqualified, so never rely on reading screenshots; ask the deleg
 - Ledger: only text after 「限制：」, never above Partial, md+html in one commit (`node scripts/ledger/build.mjs`).
 
 ## Handoff
-Write `~/.picsee/herdr/<pane>/<item>-handoff.md`; first line exactly the `Report-Task:` line the brief gives.
+Write `~/.mado/herdr/<pane>/<item>-handoff.md`; first line exactly the `Report-Task:` line the brief gives.
 Include: commits; AC → proving test table; RED/GREEN receipt per WI with its verdict (say plainly when the
 fingerprint was wrong); changed existing assertions (before/after/why); gate output lines; production lines per
 target; NOT VERIFIED list; rejected approaches; open questions. End your final message with
@@ -53,7 +53,7 @@ Unlike the Codex-CLI panes gpt-imple-*, its Bash runs without the Codex sandbox,
 Its audit goes to opus-auditor. Not for audits, plans, PRs, merges or device validation records.
 
 <example>
-Context: The brief for #215 is at ~/.picsee/herdr/codex-imple-1/issue215-brief.md.
+Context: The brief for #215 is at ~/.mado/herdr/codex-imple-1/issue215-brief.md.
 assistant: "I'll /clear codex-imple-1 and prompt: 'New task: #215. Read and follow
-~/.picsee/herdr/codex-imple-1/issue215-brief.md.'"
+~/.mado/herdr/codex-imple-1/issue215-brief.md.'"
 </example>

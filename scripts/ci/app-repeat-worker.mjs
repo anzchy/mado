@@ -13,8 +13,8 @@ export function runAppIteration(options = {}) {
     // Discovery normally creates another local-lock session. CI already owns the machine,
     // and this worker already has its own process group: retain that inherited authorization
     // so the discovery compiler/probe cannot escape the iteration's group.
-    if (env.PICSEE_HEAVY_LOCK_HELD === '1' && command.endsWith('heavy-lock.sh'))
-      settings = {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}};
+    if (env.MADO_HEAVY_LOCK_HELD === '1' && command.endsWith('heavy-lock.sh'))
+      settings = {...settings,env:{...settings.env,MADO_HEAVY_LOCK_HELD:'1'}};
     return nativeSpawn===spawnSync&&command.endsWith('heavy-lock.sh')?
       runAttestedSync(command,args,settings):nativeSpawn(command,args,settings);
   }});
@@ -31,8 +31,8 @@ export function runAppWorker(options={}) {
   }
   const nativeSpawn=options.spawn??spawnSync;
   const spawn=(command,args,settings)=>{
-    const prepared=env.PICSEE_HEAVY_LOCK_HELD==='1'&&command.endsWith('heavy-lock.sh')?
-      {...settings,env:{...settings.env,PICSEE_HEAVY_LOCK_HELD:'1'}}:settings;
+    const prepared=env.MADO_HEAVY_LOCK_HELD==='1'&&command.endsWith('heavy-lock.sh')?
+      {...settings,env:{...settings.env,MADO_HEAVY_LOCK_HELD:'1'}}:settings;
     return nativeSpawn===spawnSync&&command.endsWith('heavy-lock.sh')?
       runAttestedSync(command,args,prepared):nativeSpawn(command,args,prepared);
   };

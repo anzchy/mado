@@ -6,9 +6,9 @@ function setup(options) {
   const fd=Math.max(3,stdio.length);
   while(stdio.length<=fd)stdio.push('ignore');
   stdio[fd]='pipe';
-  const env={...(options.env??process.env),PICSEE_HEAVY_ATTEST_FD:String(fd)};
-  delete env.PICSEE_HEAVY_STATUS_PATH;
-  delete env.PICSEE_HEAVY_STATUS_DIR;
+  const env={...(options.env??process.env),MADO_HEAVY_ATTEST_FD:String(fd)};
+  delete env.MADO_HEAVY_STATUS_PATH;
+  delete env.MADO_HEAVY_STATUS_DIR;
   return {fd,stdio,env};
 }
 

@@ -17,7 +17,7 @@ truly can't work.**
 - **Record every deviation** where automation took a different path from a real user (e.g. activating the
   app instead of clicking its window).
 
-Store run briefs under `~/.picsee/device-briefs/`; this keeps them separate from mdpro's `dtrack` session.
+Store run briefs under `~/.mado/device-briefs/`; this keeps them separate from mdpro's `dtrack` session.
 
 ## 1. When this lane is the right one
 
@@ -50,15 +50,15 @@ the machine, chip, memory, macOS version, display and scale.
 The MacBook procedure, first passed on 2026-11-01 (#131: doctor 12 PASS, scale 2.0, a 960×640 pt window captured at
 1920×1280 px):
 
-- **Session.** The owner opens Terminal.app on the MacBook's desktop and runs `tmux new -s picsee-mbp`, then
+- **Session.** The owner opens Terminal.app on the MacBook's desktop and runs `tmux new -s mado-mbp`, then
   `caffeinate -dimsu &` inside it. Started from SSH, tmux is not on `PATH`: use `/opt/homebrew/bin/tmux`.
 - **Permissions (owner only).** Terminal.app needs Screen & System Audio Recording and the permission that macOS 27
   lists as **Privacy & Security → Device Control and Data Access** (Accessibility on earlier macOS). Restart Terminal and
   tmux after granting. Check from inside tmux: `AXIsProcessTrustedWithOptions` and `CGPreflightScreenCaptureAccess`
   both return true. Plain SSH processes do not have them, so `osascript` over SSH fails with `-1728`.
 - **Running a step.** Write a script on the MacBook that logs to the run directory, start it with
-  `tmux send-keys -t picsee-mbp '<script>' Enter`, and poll the log over SSH. Set
-  `PICSEE_XCODE=/Applications/Xcode-26.6.app`. Pass `--expected-sha` the 8-character short SHA that `build.sh` prints
+  `tmux send-keys -t mado-mbp '<script>' Enter`, and poll the log over SSH. Set
+  `MADO_XCODE=/Applications/Xcode-26.6.app`. Pass `--expected-sha` the 8-character short SHA that `build.sh` prints
   (for example `235e94ef`), not 7 characters.
 - **First launch.** Sparkle's "Check for updates automatically?" window can sit behind the main window. Until it is
   answered for the bundle ID, `launch.sh`, `doctor.sh` and `shot.sh` fail with "missing visible Mado window" (#355).
@@ -99,7 +99,7 @@ Quit the previous run's instance first (§11 cleanup kills it by its recorded PI
 ```bash
 export PATH=/opt/homebrew/bin:$PATH
 RUN_ID="$(date +%Y%m%d-%H%M%S)-<ledger-ids>"
-RUN_DIR="$HOME/.picsee/device-runs/$RUN_ID"
+RUN_DIR="$HOME/.mado/device-runs/$RUN_ID"
 scripts/device/build.sh "$RUN_DIR"
 APP="$(cat "$RUN_DIR/bundle.path")"
 ```
@@ -117,7 +117,7 @@ Release baseline. A Release performance run needs its own explicit build and rec
 
 The locked Xcode is **26.6, build 17F113** (decided 2026-10-22, following the Mac mini). The helper uses the
 first of `/Applications/Xcode-26.6.app` and `/Applications/Xcode.app` whose `xcodebuild -version` reports that
-build. `PICSEE_XCODE` explicitly overrides this search but is checked against the same build. On the MacBook,
+build. `MADO_XCODE` explicitly overrides this search but is checked against the same build. On the MacBook,
 Xcode 26.6 sits beside Xcode 27.1; Mado is never built with 27.1.
 Confirm `xcodebuild -version` prints `Build version 17F113` before building. Product and scheme `Mado`, bundle identifier
 `io.github.anzchy.mado` (#547, ADR-0017; renamed by #550/#551). Run long builds in the background and monitor `build.log`. If you test a Debug build, say so in the record: it's a different binary, and
@@ -356,7 +356,7 @@ NOT VERIFIED entries for features the skeleton cannot exercise.
 
 **Proof run: 2026-10-22**, MacBook Pro M4, 24 GiB, macOS 27.0.1, internal Retina @2x, Xcode 26.6 (17F113),
 signed Debug. Runtime implementation SHA `4037cb6`; run `20261022-issue4-fix2-proof` under
-`~/.picsee/device-runs/`. Build → launch → doctor → window capture → resize/readback/restore → doctor →
+`~/.mado/device-runs/`. Build → launch → doctor → window capture → resize/readback/restore → doctor →
 cleanup passed. Both doctors printed twelve PASS lines. The window-only PNG is 1920×1344 for a 960×672 pt
 window. `size.sh` set 800×600, a separate System Events call read 800×600, then size was restored to
 960×672. Cleanup terminated PID 38809, retired ownership and preserved the PNG, logs and report. This
@@ -384,11 +384,11 @@ Rerun the proof after changes to build, signing, launch, doctor or capture.
 
 Run from the worktree root. Requires Python ≥ 3.9, Node (tests only), macOS tools, XcodeGen on PATH and the
 locked Xcode. By default the helper selects the first matching locked build from `/Applications/Xcode-26.6.app`
-and `/Applications/Xcode.app`; `PICSEE_XCODE` overrides the application path, never the required build version.
+and `/Applications/Xcode.app`; `MADO_XCODE` overrides the application path, never the required build version.
 
 ```bash
 export PATH=/opt/homebrew/bin:$PATH
-RUN_DIR="$HOME/.picsee/device-runs/$(date +%Y%m%d-%H%M%S)-<ledger-ids>"
+RUN_DIR="$HOME/.mado/device-runs/$(date +%Y%m%d-%H%M%S)-<ledger-ids>"
 scripts/device/build.sh "$RUN_DIR"
 scripts/device/launch.sh "$RUN_DIR"
 scripts/device/doctor.sh "$RUN_DIR" --expected-sha "$(git rev-parse --short HEAD)"
@@ -409,8 +409,8 @@ Offline doctor contract tests use `scripts/device/doctor.sh --fixture <observati
 verdict formatting and non-zero failures and do not constitute device evidence. Real doctor input lives
 in `doctor-input.json`. The test runner uses harmless copied sleep processes. Node tests allocate `fs.mkdtempSync` directories
 under `os.tmpdir()` and remove them in `after()`; Python offline fixtures use `TemporaryDirectory` with
-cleanup. Tests never write under `~/.picsee/device-runs/`. Run evidence stays outside the worktree. Build artifacts remain
-inside `.build/device-<run-id>/`. Heavy jobs use `scripts/heavy-lock.sh`: picsee flock first, then mdpro’s directory lock, for **best effort** serialization. Only the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call; never wrap an interactive or bare shell (`zsh`, `bash`, or `sh` without a script or `-c`), a REPL, a sleep/wait, or a persistent session, and never hold the lock while reading, thinking, or editing (see mdpro `docs/reference/20261023-heavy-lock-incident.md`, “Heavy-lock incident, 2026-10-23”, and mdpro `docs/adr/0135-one-heavy-lock-tool-serves-every-project-queues-in-arrival-order-and-admits-by-memory.md`, ADR-0135 “One heavy-lock tool serves every project, queues in arrival order, and admits by memory”). `PICSEE_MDPRO_LOCK` overrides the shared path (`off` skips); `PICSEE_MDPRO_SCRIPT` selects the optional interop test script. With inherited `MDPRO_HEAVY_LOCK_HELD=1`, reverse nesting has no verified handoff: it is unavailable and exits 70 before flock acquisition or workload launch; #665 will restore this path. Picsee-parent nesting remains available when its authenticated parent owns the shared lock. Limits: mdpro stale-reclaim races, SIGKILL of the picsee holder, and groups surviving KILL can overlap workers. picsee never reclaims stale directories: after timeout, check the owner’s `cmd` with `pgrep -f`, confirm no job processes remain, then manually remove the directory. After job exit, survivors are reported after 5 seconds and every 60 seconds; `PICSEE_HEAVY_LOCK_DRAIN_SECS` (default 30) bounds draining, then uses the same TERM/grace/KILL sequence as INT/TERM, waiting at most 5 seconds more. An empty group releases normally; survivors produce a warning and retain the directory. Drain timeout preserves the job status.
+cleanup. Tests never write under `~/.mado/device-runs/`. Run evidence stays outside the worktree. Build artifacts remain
+inside `.build/device-<run-id>/`. Heavy jobs use `scripts/heavy-lock.sh`: picsee flock first, then mdpro’s directory lock, for **best effort** serialization. Only the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call; never wrap an interactive or bare shell (`zsh`, `bash`, or `sh` without a script or `-c`), a REPL, a sleep/wait, or a persistent session, and never hold the lock while reading, thinking, or editing (see mdpro `docs/reference/20261023-heavy-lock-incident.md`, “Heavy-lock incident, 2026-10-23”, and mdpro `docs/adr/0135-one-heavy-lock-tool-serves-every-project-queues-in-arrival-order-and-admits-by-memory.md`, ADR-0135 “One heavy-lock tool serves every project, queues in arrival order, and admits by memory”). `MADO_MDPRO_LOCK` overrides the shared path (`off` skips); `MADO_MDPRO_SCRIPT` selects the optional interop test script. With inherited `MDPRO_HEAVY_LOCK_HELD=1`, reverse nesting has no verified handoff: it is unavailable and exits 70 before flock acquisition or workload launch; #665 will restore this path. Picsee-parent nesting remains available when its authenticated parent owns the shared lock. Limits: mdpro stale-reclaim races, SIGKILL of the picsee holder, and groups surviving KILL can overlap workers. picsee never reclaims stale directories: after timeout, check the owner’s `cmd` with `pgrep -f`, confirm no job processes remain, then manually remove the directory. After job exit, survivors are reported after 5 seconds and every 60 seconds; `MADO_HEAVY_LOCK_DRAIN_SECS` (default 30) bounds draining, then uses the same TERM/grace/KILL sequence as INT/TERM, waiting at most 5 seconds more. An empty group releases normally; survivors produce a warning and retain the directory. Drain timeout preserves the job status.
 
 ## 16. Recording the result
 

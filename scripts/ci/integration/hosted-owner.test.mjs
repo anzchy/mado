@@ -36,18 +36,18 @@ test('hostedOwnerClearsTransientUnrelatedUnknownBeforeCleanupDecision',t=>{
     `const host=spawn(process.execPath,['-e','setTimeout(()=>{},850)'],`+
     `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
     `writeFileSync(${JSON.stringify(hostPath)},String(host.pid));host.unref();setTimeout(()=>{},250);\n`);
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+  const env={...process.env,MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'status.json'),MADO_HEAVY_LOCK:path.join(dir,'heavy.lock'),
     MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath,MADO_HOST_QUERY_DIAGNOSTICS:'1'};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   delete env.MDPRO_HEAVY_LOCK_HELD;
   const run=spawnSync(lock,[process.execPath,'--loader',loader,owner,process.execPath,runner],
     {env,encoding:'utf8',timeout:8000});
   assert.match(run.stderr,/transient unrelated unreadable PID/,run.stdout+run.stderr);
   assert.equal(run.status,0,run.stdout+run.stderr);
   assert.ok(ownerEvents(run.stderr,'registration').some(event=>event.result==='registered'));
-  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
+  assert.equal(JSON.parse(readFileSync(env.MADO_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
 });
 for(const failure of [
   {name:'unrelated PID',reply:'{...snapshot,unknown:[...snapshot.unknown,{pid:999999,reason:"fixture post-drain unreadable PID"}]}'},
@@ -75,11 +75,11 @@ for(const failure of [
     `const host=spawn(process.execPath,['-e','setTimeout(()=>{},850)'],`+
     `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
     `host.unref();setTimeout(()=>{},250);\n`);
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+  const env={...process.env,MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'status.json'),MADO_HEAVY_LOCK:path.join(dir,'heavy.lock'),
     MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   delete env.MDPRO_HEAVY_LOCK_HELD;
   const run=spawnSync(lock,[process.execPath,'--loader',loader,owner,process.execPath,runner],
     {env,encoding:'utf8',timeout:8000});
@@ -108,15 +108,15 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
     `const host=spawn(process.execPath,['-e','setTimeout(()=>{},600)'],`+
     `{detached:true,env:{...process.env,MADO_TEST_RUN_TOKEN:process.env.MADO_TEST_RUN_TOKEN},stdio:'ignore'});`+
     `writeFileSync(${JSON.stringify(pidPath)},String(host.pid));host.unref();setTimeout(()=>{},150);\n`);
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+  const env={...process.env,MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'status.json'),MADO_HEAVY_LOCK:path.join(dir,'heavy.lock'),
     MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
   delete env.MADO_HOST_QUERY_DIAGNOSTICS;
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
-  if(process.env.PICSEE_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),status:run.status,signal:run.signal,
+  if(process.env.MADO_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),status:run.status,signal:run.signal,
     error:run.error?.message??null,stdout:run.stdout,stderr:run.stderr,
     files:readdirSync(dir).sort().filter(name=>name==='status.json'||name==='host.pid'||
       name.includes('.guardian-')).map(name=>({name,content:readFileSync(path.join(dir,name),'utf8')}))},null,2));
@@ -124,7 +124,7 @@ test('hostedAppLaunchServicesHostIsRegisteredBeforeCleanupCompletes',t=>{
   const pid=Number(readFileSync(pidPath,'utf8'));
   assert.ok(Number.isInteger(pid)&&pid>0);
   assert.ok(ownerEvents(run.stderr,'registration').some(event=>event.result==='registered'&&event.pid===pid));
-  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
+  assert.equal(JSON.parse(readFileSync(env.MADO_HEAVY_STATUS_PATH,'utf8')).cleanup,'complete');
   const queries=ownerEvents(run.stderr,'query');
   const registrations=ownerEvents(run.stderr,'registration');
   const [decision]=ownerEvents(run.stderr,'decision');
@@ -150,11 +150,11 @@ test('hostedAppLaunchServicesMissingRegistrationFailsClosed',async t=>{
   const dir=mkdtempSync(path.join(tmpdir(),'hosted-owner-missing-'));
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const runner=path.join(dir,'runner.mjs');writeFileSync(runner,'setTimeout(()=>{},100);\n');
-  const env={...process.env,PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+  const env={...process.env,MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'status.json'),MADO_HEAVY_LOCK:path.join(dir,'heavy.lock'),
     MADO_TEST_RUN_TOKEN:randomUUID(),MADO_HOST_EXECUTABLE:process.execPath};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,owner,process.execPath,runner],{env,encoding:'utf8',timeout:8000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.match(run.stderr,/host cleanup incomplete or unregistered/);
@@ -163,7 +163,7 @@ test('hostedAppLaunchServicesMissingRegistrationFailsClosed',async t=>{
   assert.equal(decision.observed,false);
   assert.deepEqual(decision.registeredPids,[]);
   assert.ok(decision.refusedBy.includes('host-never-observed'));
-  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).cleanup,'incomplete');
+  assert.equal(JSON.parse(readFileSync(env.MADO_HEAVY_STATUS_PATH,'utf8')).cleanup,'incomplete');
   const guardians=readdirSync(dir).filter(name=>name.includes('.guardian-')&&name.endsWith('.owner'));
   assert.equal(guardians.length,1,'expected one guardian owner record');
   for(const name of guardians){
@@ -194,16 +194,16 @@ test('hostedAppLaneRegistersDetachedResistantHostUnderOuterTimeout',t=>{
   writeFileSync(runner,`import {runHostedAppLane} from ${JSON.stringify(lane)};`+
     `process.exitCode=runHostedAppLane({env:process.env,evidencePath:${JSON.stringify(path.join(dir,'evidence.log'))}}).status;\n`);
   const env={...process.env,PATH:dir+path.delimiter+process.env.PATH,
-    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',
-    PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'4',
-    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',PICSEE_HEAVY_STATUS_PATH:path.join(dir,'status.json'),
-    PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),
+    MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',
+    MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'4',
+    MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',MADO_HEAVY_STATUS_PATH:path.join(dir,'status.json'),
+    MADO_HEAVY_LOCK:path.join(dir,'heavy.lock'),
     MADO_HOST_OWNERSHIP_REQUIRED:'1',MADO_HOST_EXECUTABLE:process.execPath};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,runner],{env,encoding:'utf8',timeout:9000});
   assert.equal(existsSync(hostPath),true,run.stdout+run.stderr);
   const pid=Number(readFileSync(hostPath,'utf8'));
   assert.equal(alive(pid),false,`registered host ${pid} survived outer timeout`);
   assert.equal(run.status===70||run.status===124,true,run.stdout+run.stderr);
-  assert.equal(JSON.parse(readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8')).timedOut,true);
+  assert.equal(JSON.parse(readFileSync(env.MADO_HEAVY_STATUS_PATH,'utf8')).timedOut,true);
 });

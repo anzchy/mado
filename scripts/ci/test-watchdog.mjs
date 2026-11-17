@@ -11,7 +11,7 @@
 //     [--sample-seconds 10] [--capture-seconds 90] [--grace-seconds 15] [--snapshot-seconds 30] [--no-spindump]
 //     [--match 'swiftpm-testing|PackageTests'] -- swift test …
 //
-// PICSEE_WATCHDOG_NO_SPINDUMP=1 has the same effect as --no-spindump.
+// MADO_WATCHDOG_NO_SPINDUMP=1 has the same effect as --no-spindump.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -29,7 +29,7 @@ export function parseArgs(argv, env = process.env) {
   const split = argv.indexOf('--');
   if (split < 0 || split === argv.length - 1) throw Error('usage: test-watchdog.mjs [options] -- <command …>');
   const options = { ...DEFAULTS, command: argv.slice(split + 1) };
-  if (env.PICSEE_WATCHDOG_NO_SPINDUMP === '1') options.spindump = false;
+  if (env.MADO_WATCHDOG_NO_SPINDUMP === '1') options.spindump = false;
   const flags = argv.slice(0, split);
   const number = (flag, value) => {
     const n = Number(value);

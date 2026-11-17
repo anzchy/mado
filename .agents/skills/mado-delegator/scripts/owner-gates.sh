@@ -1,7 +1,7 @@
 #!/bin/zsh
 # owner-gates.sh <worktree> <sha> <prefix> [base=origin/main] — the delegator's own rerun of every gate on an
 # implementer's head; run this branch's own copy, never a stale checkout. Writes <out>/<prefix>-summary.txt (out defaults to
-# ~/.picsee/herdr/delegator, override with PICSEE_GATES_OUT) plus one log per gate. The summary includes
+# ~/.mado/herdr/delegator, override with MADO_GATES_OUT) plus one log per gate. The summary includes
 # swift/lcov (or native-input skip), xcodegen, xcodebuild, apptests-retained=<exit> <run>/<fail>,
 # apptests-hosted (default skip; OWNER_GATES_HOSTED=1 runs it), apptests compatibility, scoped node
 # suite skips, node, ledger, diffcheck, design, failure facts, and DONE after every selected lane finishes.
@@ -13,12 +13,12 @@
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
-wt=$1 sha=$2 p=$3 base=${4:-origin/main} o=${PICSEE_GATES_OUT:-$HOME/.picsee/herdr/delegator}
+wt=$1 sha=$2 p=$3 base=${4:-origin/main} o=${MADO_GATES_OUT:-$HOME/.mado/herdr/delegator}
 s=$o/$p-summary.txt
 summary_error() { echo "owner-gates: cannot write summary $s" >&2; exit 1; }
 mkdir -p "$o" || summary_error
 : > "$s" || summary_error
-export PATH=$HOME/.picsee/tools/xcodegen/bin:/opt/homebrew/bin:$PATH
+export PATH=$HOME/.mado/tools/xcodegen/bin:/opt/homebrew/bin:$PATH
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 cd $wt 2>/dev/null || { echo "no worktree $wt" > $s || summary_error; exit 2; }
 [[ "$(git rev-parse HEAD 2>/dev/null)" == "$(git rev-parse "$sha" 2>/dev/null)" ]] || { echo "head mismatch" > $s || summary_error; exit 2; }
@@ -30,7 +30,7 @@ for op in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_H
 done
 [[ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] || refuse "tracked changes in $wt; commit or stash them and rerun in a clean worktree at the head"
 hl=$wt/scripts/heavy-lock.sh
-export PICSEE_HEAVY_LOCK_WAIT_SECS=${PICSEE_HEAVY_LOCK_WAIT_SECS:-3600}
+export MADO_HEAVY_LOCK_WAIT_SECS=${MADO_HEAVY_LOCK_WAIT_SECS:-3600}
 mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-base of $base and HEAD"
 diff_file=$o/$p-diff.txt
 git diff --name-only --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
@@ -98,7 +98,7 @@ if grep -Eq "$app_facing" "$diff_file"; then
   lane_result xcodebuild $build_code
   echo "xcodebuild: build-for-testing exit=$build_code" >> "$s"
   if (( build_code == 0 )); then
-    env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoAppTests\.' > "$o/$p-apptests-retained.log" 2>&1
+    env -u MADO_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoAppTests\.' > "$o/$p-apptests-retained.log" 2>&1
     retained_code=$?
   else
     echo "retained: build-for-testing failed (exit $build_code)" > "$o/$p-apptests-retained.log"
@@ -112,7 +112,7 @@ if grep -Eq "$app_facing" "$diff_file"; then
   lane_result apptests-retained $retained_code "${retained_counts:-0/0}"
   if [[ ${OWNER_GATES_HOSTED:-0} == 1 ]]; then
     if (( build_code == 0 )); then
-      env -u PICSEE_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoHostedFocusTests\.' > "$o/$p-apptests-hosted.log" 2>&1
+      env -u MADO_APP_FILTER $hl node scripts/tdd/app-lane.mjs '^MadoHostedFocusTests\.' > "$o/$p-apptests-hosted.log" 2>&1
       hosted_code=$?
       if (( hosted_code == 0 )) && ! grep -Eq '^Tests run: [1-9][0-9]*, Failures: 0' "$o/$p-apptests-hosted.log"; then
         echo 'apptests-hosted: missing positive passing count' >> "$o/$p-apptests-hosted.log"

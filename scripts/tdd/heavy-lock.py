@@ -26,11 +26,11 @@ MAX_DURATION_SECONDS = 1_000_000_000
 
 
 def execution_budget(command):
-    override = os.environ.get('PICSEE_HEAVY_LOCK_EXEC_SECS')
+    override = os.environ.get('MADO_HEAVY_LOCK_EXEC_SECS')
     if override is not None:
-        value = nonnegative_env('PICSEE_HEAVY_LOCK_EXEC_SECS', override)
+        value = nonnegative_env('MADO_HEAVY_LOCK_EXEC_SECS', override)
         if value == 0:
-            raise ValueError('PICSEE_HEAVY_LOCK_EXEC_SECS must be positive')
+            raise ValueError('MADO_HEAVY_LOCK_EXEC_SECS must be positive')
         return value
     name = Path(command[0]).name
     args = command[1:]
@@ -63,7 +63,7 @@ def process_rows(command=None):
     """Return live PID/PGID rows, or None when the query cannot prove absence.
 
     `command` replaces /bin/ps only for the exit-query test plan (exit_query)."""
-    if os.environ.get('PICSEE_HEAVY_FAULT_QUERY') == '1':
+    if os.environ.get('MADO_HEAVY_FAULT_QUERY') == '1':
         return None
     try:
         # Absolute path (#705 T3): the job's PATH must not choose the program
@@ -153,7 +153,7 @@ exit_query_plan = {'tokens': None, 'next': 0}
 
 def exit_query():
     """The process query used after the leader exits."""
-    plan = os.environ.get('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN')
+    plan = os.environ.get('MADO_HEAVY_FAULT_EXIT_QUERY_PLAN')
     if not plan:
         return process_rows()
     if exit_query_plan['tokens'] is None:
@@ -208,15 +208,15 @@ def guardian_main(read_fd, ready_fd):
     """Hold the acquiring FD and finish cleanup if its supervisor disappears."""
     for caught in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
         signal.signal(caught, signal.SIG_IGN)
-    owner_path = os.environ.get('PICSEE_HEAVY_GUARDIAN_OWNER')
+    owner_path = os.environ.get('MADO_HEAVY_GUARDIAN_OWNER')
     if owner_path:
-        argc = os.environ.get('PICSEE_HEAVY_GUARDIAN_ARGC', '')
+        argc = os.environ.get('MADO_HEAVY_GUARDIAN_ARGC', '')
         job = f'argc={argc}' if argc.isdecimal() else 'unknown'
         with os.fdopen(os.open(owner_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as owner:
             owner.write(f'pid={os.getpid()}\n'
                         f'cmd={sys.executable} {Path(__file__).resolve()} --guardian {read_fd} {ready_fd}\n'
                         f'started={time.strftime("%Y-%m-%dT%H:%M:%S%z")}\n'
-                        f'supervisor={os.environ.get("PICSEE_HEAVY_GUARDIAN_SUPERVISOR", "unknown")}\n'
+                        f'supervisor={os.environ.get("MADO_HEAVY_GUARDIAN_SUPERVISOR", "unknown")}\n'
                         f'job={job}\n')
     os.write(ready_fd, b'R')
     os.close(ready_fd)
@@ -344,7 +344,7 @@ def publish_status(path, invocation, cleanup, result, timed_out, drain_expired=F
     destination = Path(path)
     temporary = destination.with_name(destination.name + '.' + invocation + '.tmp')
     try:
-        if os.environ.get('PICSEE_HEAVY_FAULT_STATUS_WRITE') == '1':
+        if os.environ.get('MADO_HEAVY_FAULT_STATUS_WRITE') == '1':
             raise OSError('injected status publication failure')
         with os.fdopen(os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as output:
             json.dump({'id': invocation, 'supervisor': os.getpid(), 'cleanup': cleanup,
@@ -394,22 +394,22 @@ def survivor_details(rows):
 class LockAlert:
     """#672: tell the delegator, through its status loop, that a holder exceeded its budget.
 
-    Writes ~/.picsee/herdr/delegator/lock-alerts/<invocation>.json (0600) and appends one
+    Writes ~/.mado/herdr/delegator/lock-alerts/<invocation>.json (0600) and appends one
     line to attention.log beside it; `listen-notify.py status` reports open alerts as
-    attention. PICSEE_HEAVY_ALERT_DIR overrides the delegator directory. Without it, only
-    the machine lock (~/.picsee/locks/heavy.lock) alerts: test fixtures on private lock
+    attention. MADO_HEAVY_ALERT_DIR overrides the delegator directory. Without it, only
+    the machine lock (~/.mado/locks/heavy.lock) alerts: test fixtures on private lock
     files time out on purpose and must not reach the real attention channel. Alert failures
     are reported on stderr and never change the job's result.
     """
 
     @staticmethod
     def directory_for(lock, fd):
-        chosen = os.environ.get('PICSEE_HEAVY_ALERT_DIR')
+        chosen = os.environ.get('MADO_HEAVY_ALERT_DIR')
         if chosen:
             return Path(chosen)
-        machine = Path.home() / '.picsee/locks/heavy.lock'
+        machine = Path.home() / '.mado/locks/heavy.lock'
         if fd is not None and os.path.abspath(lock) == os.path.abspath(machine):
-            return Path.home() / '.picsee/herdr/delegator'
+            return Path.home() / '.mado/herdr/delegator'
         return None
 
     def __init__(self, record, base):
@@ -600,7 +600,7 @@ def supervised_main():
     command = sys.argv[1:]
     if command[:1] == ['--guardian']:
         return guardian_main(int(command[1]), int(command[2])) if len(command) == 3 else 70
-    inherited_control = os.environ.get('PICSEE_HEAVY_CONTROL_FD')
+    inherited_control = os.environ.get('MADO_HEAVY_CONTROL_FD')
     if command[:1] == ['--register-host']:
         if len(command) != 2 or not inherited_control or not command[1].isdigit():
             print('[heavy-lock] host registration refused: invalid PID or missing control FD', file=sys.stderr, flush=True)
@@ -617,9 +617,9 @@ def supervised_main():
     if not command:
         return 64
     try:
-        wait_seconds = nonnegative_env('PICSEE_HEAVY_LOCK_WAIT_SECS', '1800')
-        grace = nonnegative_env('PICSEE_HEAVY_LOCK_KILL_GRACE_SECS', '10')
-        drain_seconds = nonnegative_env('PICSEE_HEAVY_LOCK_DRAIN_SECS', '30')
+        wait_seconds = nonnegative_env('MADO_HEAVY_LOCK_WAIT_SECS', '1800')
+        grace = nonnegative_env('MADO_HEAVY_LOCK_KILL_GRACE_SECS', '10')
+        drain_seconds = nonnegative_env('MADO_HEAVY_LOCK_DRAIN_SECS', '30')
         budget = execution_budget(command)
         # Both wall-time formatting and monotonic deadline arithmetic must be
         # representable before a lock is acquired or any command is launched.
@@ -629,8 +629,8 @@ def supervised_main():
     except (ValueError, OverflowError, OSError) as error:
         print(f'[heavy-lock] preflight refused: {error}', file=sys.stderr, flush=True)
         return 70
-    held = os.environ.get('PICSEE_HEAVY_LOCK_HELD') == '1'
-    ci_mode = os.environ.get('PICSEE_HEAVY_CI_TOP_LEVEL') == '1'
+    held = os.environ.get('MADO_HEAVY_LOCK_HELD') == '1'
+    ci_mode = os.environ.get('MADO_HEAVY_CI_TOP_LEVEL') == '1'
     nested = held and bool(inherited_control)
     if held and (nested == ci_mode):
         print('[heavy-lock] HELD needs one parent control FD or CI top-level input',
@@ -640,10 +640,10 @@ def supervised_main():
         print('[heavy-lock] CI mode requires HELD=1', file=sys.stderr, flush=True)
         return 70
     if ci_mode and not (os.environ.get('GITHUB_ACTIONS') == 'true' or
-                        os.environ.get('PICSEE_HEAVY_CI_TEST') == '1'):
+                        os.environ.get('MADO_HEAVY_CI_TEST') == '1'):
         print('[heavy-lock] CI mode refused outside workflow', file=sys.stderr, flush=True)
         return 70
-    inherited_flock = os.environ.get('PICSEE_HEAVY_FLOCK_FD')
+    inherited_flock = os.environ.get('MADO_HEAVY_FLOCK_FD')
     parent_deadline = None
     parent_shared = False
     ancestor_control_fd = None
@@ -669,12 +669,12 @@ def supervised_main():
         except (OSError, ValueError) as error:
             print(f'[heavy-lock] nested admission refused: {error}', file=sys.stderr, flush=True)
             return 70
-    status_path = os.environ.get('PICSEE_HEAVY_STATUS_PATH')
-    private_fd_text = os.environ.get('PICSEE_HEAVY_ATTEST_FD')
+    status_path = os.environ.get('MADO_HEAVY_STATUS_PATH')
+    private_fd_text = os.environ.get('MADO_HEAVY_ATTEST_FD')
     private_fd = None
-    if private_fd_text or os.environ.get('PICSEE_HEAVY_STATUS_DIR'):
+    if private_fd_text or os.environ.get('MADO_HEAVY_STATUS_DIR'):
         try:
-            if not private_fd_text or status_path or os.environ.get('PICSEE_HEAVY_STATUS_DIR'):
+            if not private_fd_text or status_path or os.environ.get('MADO_HEAVY_STATUS_DIR'):
                 raise ValueError('invalid private status channel')
             private_fd = int(private_fd_text)
             if private_fd < 3 or private_fd in [int(inherited_control or -1),
@@ -689,13 +689,13 @@ def supervised_main():
     if status_path and Path(status_path).exists():
         print('[heavy-lock] status destination already exists', file=sys.stderr, flush=True)
         return 70
-    lock = Path(os.environ.get('PICSEE_HEAVY_LOCK', str(Path.home() / '.picsee/locks/heavy.lock')))
+    lock = Path(os.environ.get('MADO_HEAVY_LOCK', str(Path.home() / '.mado/locks/heavy.lock')))
     reverse = os.environ.get('MDPRO_HEAVY_LOCK_HELD') == '1'
     if reverse and not parent_shared:
         print('[heavy-lock] reverse mdpro nesting refused: no verified handoff (#665)',
               file=sys.stderr, flush=True)
         return 70
-    shared_path = os.environ.get('PICSEE_MDPRO_LOCK', str(Path.home() / '.cache/mdpro-heavy.lock'))
+    shared_path = os.environ.get('MADO_MDPRO_LOCK', str(Path.home() / '.cache/mdpro-heavy.lock'))
     shared = None if held or reverse or shared_path == 'off' else Path(shared_path)
     fd = None
     if not held:
@@ -755,13 +755,13 @@ def supervised_main():
             guardian_read, guardian_write = os.pipe()
             ready_read, ready_write = os.pipe()
             guardian_env = {**os.environ}
-            guardian_env.pop('PICSEE_HEAVY_FAULT_QUERY', None)
-            guardian_env.pop('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
+            guardian_env.pop('MADO_HEAVY_FAULT_QUERY', None)
+            guardian_env.pop('MADO_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
             guardian_owner = lock.parent / f'heavy.lock.guardian-{invocation}.owner'
             guardian_log = lock.parent / f'heavy.lock.guardian-{invocation}.log'
-            guardian_env['PICSEE_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
-            guardian_env['PICSEE_HEAVY_GUARDIAN_SUPERVISOR'] = str(os.getpid())
-            guardian_env['PICSEE_HEAVY_GUARDIAN_ARGC'] = str(len(command))
+            guardian_env['MADO_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
+            guardian_env['MADO_HEAVY_GUARDIAN_SUPERVISOR'] = str(os.getpid())
+            guardian_env['MADO_HEAVY_GUARDIAN_ARGC'] = str(len(command))
             lock.parent.mkdir(parents=True, exist_ok=True)
             with os.fdopen(os.open(guardian_log, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600),
                            'wb', buffering=0) as guardian_error:
@@ -788,22 +788,22 @@ def supervised_main():
                 raise OSError('private status header publication failed')
         parent_control, worker_control = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
         parent_control.setblocking(False)
-        child_env = {**os.environ, 'PICSEE_HEAVY_LOCK_HELD': '1',
-                     'PICSEE_HEAVY_CONTROL_FD': str(worker_control.fileno())}
-        child_env.pop('PICSEE_HEAVY_CI_TOP_LEVEL', None)
-        child_env.pop('PICSEE_HEAVY_STATUS_PATH', None)
-        child_env.pop('PICSEE_HEAVY_STATUS_DIR', None)
-        child_env.pop('PICSEE_HEAVY_ATTEST_FD', None)
-        child_env.pop('PICSEE_HEAVY_FAULT_STATUS_WRITE', None)
-        child_env.pop('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
+        child_env = {**os.environ, 'MADO_HEAVY_LOCK_HELD': '1',
+                     'MADO_HEAVY_CONTROL_FD': str(worker_control.fileno())}
+        child_env.pop('MADO_HEAVY_CI_TOP_LEVEL', None)
+        child_env.pop('MADO_HEAVY_STATUS_PATH', None)
+        child_env.pop('MADO_HEAVY_STATUS_DIR', None)
+        child_env.pop('MADO_HEAVY_ATTEST_FD', None)
+        child_env.pop('MADO_HEAVY_FAULT_STATUS_WRITE', None)
+        child_env.pop('MADO_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
         if acquired:
             child_env['MDPRO_HEAVY_LOCK_HELD'] = '1'
         if fd is not None:
-            child_env['PICSEE_HEAVY_FLOCK_FD'] = str(fd)
+            child_env['MADO_HEAVY_FLOCK_FD'] = str(fd)
         elif inherited_flock:
-            child_env['PICSEE_HEAVY_FLOCK_FD'] = inherited_flock
+            child_env['MADO_HEAVY_FLOCK_FD'] = inherited_flock
         else:
-            child_env.pop('PICSEE_HEAVY_FLOCK_FD', None)
+            child_env.pop('MADO_HEAVY_FLOCK_FD', None)
         passed = [worker_control.fileno()]
         if guardian_write is not None:
             passed.append(guardian_write)
@@ -827,8 +827,8 @@ def supervised_main():
         guardian_send(guardian_write, 'root', child.pid)
         worker_control.close()
         worker_control = None
-        if os.environ.get('PICSEE_HEAVY_FAULT_AFTER_LAUNCH') == '1':
-            ready = os.environ.get('PICSEE_HEAVY_FAULT_READY_PATH')
+        if os.environ.get('MADO_HEAVY_FAULT_AFTER_LAUNCH') == '1':
+            ready = os.environ.get('MADO_HEAVY_FAULT_READY_PATH')
             if ready:
                 until = time.monotonic() + 1
                 while not Path(ready).exists() and time.monotonic() < until:
@@ -935,7 +935,7 @@ def supervised_main():
             return 70
         if private_fd is not None:
             try:
-                if os.environ.get('PICSEE_HEAVY_FAULT_STATUS_WRITE') == '1':
+                if os.environ.get('MADO_HEAVY_FAULT_STATUS_WRITE') == '1':
                     raise OSError('injected status publication failure')
                 record = (json.dumps({'kind': 'status', 'id': invocation,
                                       'supervisor': os.getpid(), 'cleanup': cleanup,

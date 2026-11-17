@@ -102,7 +102,7 @@ No push, PR, branch switch/deletion, `rm -r`, other worktrees.
 
 ## Handoff
 Done when: the handoff includes the mado-verify evidence comment URL and the exact final head SHA it covers (see Verify).
-`~/.picsee/herdr/<implementer>/<item>-handoff.md`: design; AC table (AC → proving test); RED/GREEN or receipts;
+`~/.mado/herdr/<implementer>/<item>-handoff.md`: design; AC table (AC → proving test); RED/GREEN or receipts;
 changed existing assertions; gates output; `git diff --stat origin/main..HEAD`; production lines per target; NOT
 VERIFIED list; open questions. Reply DONE with the path.
 

@@ -83,7 +83,7 @@ test('SKILL.md step 1 runs App tests the CI way and names the Codex key-window l
   const step1 = skill.slice(skill.indexOf('## 1. Gate ladder'), skill.indexOf('## 2.'));
   assert.match(step1, /build-for-testing/);
   assert.match(step1, /scripts\/tdd\/app-lane\.mjs/);
-  assert.match(step1, /unset PICSEE_APP_FILTER/);
+  assert.match(step1, /unset MADO_APP_FILTER/);
   assert.doesNotMatch(step1, /xcodebuild test -scheme/);
   assert.match(step1, /keyWindow=nil/);
   assert.match(step1, /NOT VERIFIED/);

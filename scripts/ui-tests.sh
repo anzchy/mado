@@ -13,10 +13,10 @@ if [[ $# -gt 2 || ! "$repetitions" =~ ^([1-9]|10)$ ]]; then
 fi
 repo="$PWD"
 run_id="i145-$(date +%Y%m%d-%H%M%S)-$$"
-output="$HOME/.picsee/ui-tests/$run_id"
+output="$HOME/.mado/ui-tests/$run_id"
 mkdir -p "$output"
-derived="$HOME/.picsee/ui-tests/dd"
-ram="$HOME/.picsee/device/ram/with-ram.sh"
+derived="$HOME/.mado/ui-tests/dd"
+ram="$HOME/.mado/device/ram/with-ram.sh"
 lock="$repo/.agents/skills/mado-delegator/scripts/gui-lock.sh"
 selectors=(-only-testing:MadoUITests)
 expected=4

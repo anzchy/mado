@@ -14,9 +14,9 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 const lock = path.join(root, 'scripts/heavy-lock.sh');
 function environment() {
   const home = mkdtempSync(path.join(scratch, 'lock-'));
-  const env = { ...fixtureEnv(), HOME: home, PICSEE_HEAVY_LOCK: path.join(home, '.picsee/locks/heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '15', PICSEE_HEAVY_LOCK_HELD: '' };
-  delete env.PICSEE_HEAVY_CONTROL_FD;
-  delete env.PICSEE_HEAVY_FLOCK_FD;
+  const env = { ...fixtureEnv(), HOME: home, MADO_HEAVY_LOCK: path.join(home, '.mado/locks/heavy.lock'), MADO_MDPRO_LOCK: path.join(home, 'mdpro.lock'), MDPRO_HEAVY_LOCK_HELD: '', MADO_HEAVY_LOCK_WAIT_SECS: '15', MADO_HEAVY_LOCK_HELD: '' };
+  delete env.MADO_HEAVY_CONTROL_FD;
+  delete env.MADO_HEAVY_FLOCK_FD;
   return env;
 }
 function run(args, env) {
@@ -29,19 +29,19 @@ function run(args, env) {
     child.on('close', (code, signal) => resolve({ code, signal, output }));
   });
 }
-const redOnly = process.env.PICSEE_HEAVY_TEST_FILTER;
+const redOnly = process.env.MADO_HEAVY_TEST_FILTER;
 function redTest(name, fn, options = {}) {
   test(name, {...options, skip: redOnly ? redOnly !== name : name.includes('BLOCKED-upstream')}, fn);
 }
 
 redTest('hugeFiniteDeadlineRejectedBeforeLockOrLaunch', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '1e308'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS: '1e308'};
   const marker = path.join(env.HOME, 'launched');
   const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
   assert.ifError(result.error);
   assert.equal(result.status, 70, result.stderr);
   assert.equal(existsSync(marker), false);
-  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK), false, 'preflight precedes lock acquisition');
+  assert.equal(existsSync(env.MADO_HEAVY_LOCK), false, 'preflight precedes lock acquisition');
 });
 
 redTest('missingMalformedOrStaleCleanupStatusRejectsCounts', () => {
@@ -54,7 +54,7 @@ redTest('missingMalformedOrStaleCleanupStatusRejectsCounts', () => {
 });
 
 redTest('publicationFailureNeverReportsComplete', () => {
-  const env={...environment(),PICSEE_HEAVY_FAULT_STATUS_WRITE:'1'};
+  const env={...environment(),MADO_HEAVY_FAULT_STATUS_WRITE:'1'};
   const r=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
   assert.equal(r.status,70,r.stderr);
   assert.equal(r.attested,false);
@@ -62,7 +62,7 @@ redTest('publicationFailureNeverReportsComplete', () => {
 });
 
 redTest('retryUsesFreshUnpredictableInvocationID', () => {
-  const env={...environment(),PICSEE_APP_RESULT_ID:'fixed-ci-id',PICSEE_APP_RESULT_PATH:path.join(scratch,'fixed-ci.json')};
+  const env={...environment(),MADO_APP_RESULT_ID:'fixed-ci-id',MADO_APP_RESULT_PATH:path.join(scratch,'fixed-ci.json')};
   const a=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
   const b=runAttestedSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
   assert.equal(a.status,0,a.stderr);assert.equal(b.status,0,b.stderr);
@@ -75,11 +75,11 @@ redTest('retryUsesFreshUnpredictableInvocationID', () => {
 redTest('privateCleanupDestinationNeverReachesWorkload',()=>{
   const env=environment();
   const r=runAttestedSync(lock,['python3','-c',
-    'import os,json; print(json.dumps({k:os.environ.get(k) for k in ("PICSEE_HEAVY_STATUS_DIR","PICSEE_HEAVY_ATTEST_FD","PICSEE_HEAVY_STATUS_PATH")}))'],
+    'import os,json; print(json.dumps({k:os.environ.get(k) for k in ("MADO_HEAVY_STATUS_DIR","MADO_HEAVY_ATTEST_FD","MADO_HEAVY_STATUS_PATH")}))'],
     {env,encoding:'utf8',timeout:5000});
   assert.equal(r.status,0,r.stderr);
   assert.deepEqual(JSON.parse(r.stdout.trim()),{
-    PICSEE_HEAVY_STATUS_DIR:null,PICSEE_HEAVY_ATTEST_FD:null,PICSEE_HEAVY_STATUS_PATH:null});
+    MADO_HEAVY_STATUS_DIR:null,MADO_HEAVY_ATTEST_FD:null,MADO_HEAVY_STATUS_PATH:null});
   assert.equal(r.stdout.includes(r.invocationID),false);
   assert.equal(r.stderr.includes(r.invocationID),false);
 });
@@ -97,14 +97,14 @@ redTest('privateStatusDestinationIsNotDiscoverableByChild',()=>{
   assert.equal(r.stdout.trim(),'0','a same-user child can enumerate a file destination');
 });
 redTest('stdoutCannotBecomePrivateStatusChannel',()=>{
- const env={...environment(),PICSEE_HEAVY_ATTEST_FD:'1'};
+ const env={...environment(),MADO_HEAVY_ATTEST_FD:'1'};
  const r=spawnSync(lock,['true'],{env,encoding:'utf8',timeout:5000});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
  assert.doesNotMatch(r.stdout,/"kind": "(?:begin|status)"/);
 });
 
 redTest('heldWithoutCredentialRefusesBeforeLaunch', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_HELD:'1'};
+  const env = {...environment(), MADO_HEAVY_LOCK_HELD:'1'};
   const marker = path.join(env.HOME, 'launched');
   const result = spawnSync(lock, ['touch', marker], {env, encoding:'utf8', timeout:5000});
   assert.ifError(result.error);
@@ -122,16 +122,16 @@ redTest('reverseMdproMissingHandoffRefusesBeforeLaunch', () => {
 });
 
 redTest('ciTopLevelRejectsUnverifiedMdproHandoffBeforeLaunch', () => {
-  const env={...environment(),GITHUB_ACTIONS:'true',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'};
+  const env={...environment(),GITHUB_ACTIONS:'true',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'};
   const marker=path.join(env.HOME,'launched');
   const result=spawnSync(lock,['touch',marker],{env,encoding:'utf8',timeout:5000});
   assert.ifError(result.error);
   assert.equal(result.status,70,result.stderr);
   assert.match(result.stderr,/no verified handoff/);
   assert.equal(existsSync(marker),false,'unverified CI input never launches');
-  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),false,'refusal precedes flock creation');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+  assert.equal(existsSync(env.MADO_HEAVY_LOCK),false,'refusal precedes flock creation');
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK),false);
 });
 
 redTest('madoParentSharedOwnershipAuthenticatesNestedMdproFlag', async () => {
@@ -140,11 +140,11 @@ redTest('madoParentSharedOwnershipAuthenticatesNestedMdproFlag', async () => {
   const result=await run(['bash','-c','"$1" touch "$2"; exit $?','_',lock,marker],env);
   assert.equal(result.code,0,result.output);
   assert.equal(existsSync(marker),true);
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK),false);
 });
 
 redTest('nestedMdproFlagNeedsParentSharedOwnership', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const marker=path.join(env.HOME,'nested-launched');
   const result=await run(['bash','-c','MDPRO_HEAVY_LOCK_HELD=1 "$1" touch "$2"; exit $?','_',lock,marker],env);
   assert.equal(result.code,70,result.output);
@@ -153,7 +153,7 @@ redTest('nestedMdproFlagNeedsParentSharedOwnership', async () => {
 });
 
 redTest('reverseMdproDeadlineAndCancelReachWorkload — BLOCKED-upstream RED', async () => {
-  const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1', PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};
+  const env = {...environment(), MDPRO_HEAVY_LOCK_HELD:'1', MADO_HEAVY_LOCK_EXEC_SECS:'10'};
   const pidFile = path.join(env.HOME, 'worker-pid');
   const supervisorPidFile = path.join(env.HOME, 'supervisor-pid');
   const parent = spawn('bash', ['-c',
@@ -174,23 +174,23 @@ redTest('reverseMdproDeadlineAndCancelReachWorkload — BLOCKED-upstream RED', a
 }, {timeout:7000});
 
 redTest('postLaunchSupervisorExceptionCancelsBeforeRelease', async () => {
-  const env = {...environment(), PICSEE_HEAVY_FAULT_AFTER_LAUNCH:'1', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
-  const pidFile = path.join(env.HOME, 'pid');env.PICSEE_HEAVY_FAULT_READY_PATH=pidFile;
+  const env = {...environment(), MADO_HEAVY_FAULT_AFTER_LAUNCH:'1', MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const pidFile = path.join(env.HOME, 'pid');env.MADO_HEAVY_FAULT_READY_PATH=pidFile;
   const result = await run(['python3','-c',
     'import os,pathlib,time,sys; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(1)',pidFile],env);
   assert.equal(result.code, 70, result.output);
   assert.ok(existsSync(pidFile));
   assert.throws(() => process.kill(Number(readFileSync(pidFile,'utf8')),0), {code:'ESRCH'});
-  const competitorEnv={...env};delete competitorEnv.PICSEE_HEAVY_FAULT_AFTER_LAUNCH;
-  delete competitorEnv.PICSEE_HEAVY_FAULT_READY_PATH;
+  const competitorEnv={...env};delete competitorEnv.MADO_HEAVY_FAULT_AFTER_LAUNCH;
+  delete competitorEnv.MADO_HEAVY_FAULT_READY_PATH;
   assert.equal((await run(['true'],competitorEnv)).code,0);
 });
 
 redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS:'0.4', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
-    PICSEE_MDPRO_LOCK:'off'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS:'0.4', MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
+    MADO_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid');
-  const script = `PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)' "$2"; :`;
+  const script = `MADO_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)' "$2"; :`;
   const result = await run(['bash','-c',script,'_',lock,pidFile],env);
   assert.equal(result.code,124,result.output);
   assert.ok(existsSync(pidFile),'nested descendant launched');
@@ -203,7 +203,7 @@ redTest('outerTimeoutKillsNestedTermResistantDescendants', async () => {
 // snapshot: its parent is gone, nothing signals it again, the stop reports
 // survivors and keeps the shared lock. KILL must repeat until the group is empty.
 redTest('timeoutKillsMembersForkedAfterTheKillSnapshot', async () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS:'1', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.2'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS:'1', MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.2'};
   const manifest = path.join(env.HOME, 'forked-pids');
   // Each forked member appends its PID in one write; the forker ignores TERM and never stops forking.
   const forker = `process.on('SIGTERM',()=>{});const {spawn}=require('node:child_process'),fs=require('node:fs');` +
@@ -213,7 +213,7 @@ redTest('timeoutKillsMembersForkedAfterTheKillSnapshot', async () => {
     assert.match(result.output,/execution timeout/);
     assert.equal(result.code,124,result.output);
     assert.doesNotMatch(result.output,/incomplete cleanup/);
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,'a complete cleanup releases the shared lock');
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK),false,'a complete cleanup releases the shared lock');
     const forked = publishedPIDLines(manifest) ?? [];
     assert.ok(forked.length > 10, `the job kept forking (${forked.length} members)`);
     assert.deepEqual(forked.filter(pidAlive), [], 'every forked member is gone');
@@ -231,8 +231,8 @@ redTest('jobKilledBySigkillExits137WithoutTraceback', async () => {
   assert.equal(result.signal,null,result.output);
   assert.equal(result.code,137,result.output);
   assert.doesNotMatch(result.output,/Traceback|OSError|Invalid argument/);
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,'the shared lock is released');
-  const next = await run(['/bin/sh','-c','echo admitted'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'10'});
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK),false,'the shared lock is released');
+  const next = await run(['/bin/sh','-c','echo admitted'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'10'});
   assert.equal(next.code,0,next.output);
   assert.match(next.output,/admitted/);
 }, {timeout:30000});
@@ -247,11 +247,11 @@ test('job killed by a catchable signal is still re-raised', async () => {
 }, {timeout:30000});
 
 redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', PICSEE_MDPRO_LOCK:'off'};
+  const env = {...environment(), MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1', MADO_MDPRO_LOCK:'off'};
   const pidFile = path.join(env.HOME,'nested-pid'), outerGroup=path.join(env.HOME,'outer-group');
   // Keep Bash alive as the session leader: Linux can tail-exec a final command,
   // making the nested supervisor a session leader that cannot call setpgid.
-  const script = `ps -o pgid= -p $$ > "$3"; PICSEE_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"; :`;
+  const script = `ps -o pgid= -p $$ > "$3"; MADO_HEAVY_LOCK_KILL_GRACE_SECS=5 "$1" python3 -c 'import os,pathlib,signal,time,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())+" "+str(os.getpgrp())); time.sleep(2)' "$2"; :`;
   const holder = start(['bash','-c',script,'_',lock,pidFile,outerGroup],env);
   await until(()=>existsSync(pidFile),'nested descendant launched');
   const [nestedPid,nestedGroup]=readFileSync(pidFile,'utf8').split(' ').map(Number);
@@ -263,8 +263,8 @@ redTest('outerCancelKillsNestedTermResistantDescendants', async () => {
 }, {timeout:7000});
 
 redTest('outerTimeoutAfterIntermediateSupervisorDeathKillsGrandchild', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_EXEC_SECS:'5',
-    PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5',
+    MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
   const middle=path.join(env.HOME,'middle.sh'),inner=path.join(env.HOME,'inner.sh');
   const middlePid=path.join(env.HOME,'middle-supervisor-pid'),workerPid=path.join(env.HOME,'grandchild-pid');
   writeFileSync(middle,'"$1" bash "$2" "$1" "$4" &\necho $! > "$3"\nwait\nsleep 8\n');
@@ -279,7 +279,7 @@ redTest('outerTimeoutAfterIntermediateSupervisorDeathKillsGrandchild', async () 
     const result=await holder.done;
     assert.equal(result.code,124,result.output);
     assert.throws(()=>process.kill(pid,0),{code:'ESRCH'},'outer owns grandchild after middle dies');
-    assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'})).code,0,
+    assert.equal((await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.2'})).code,0,
       'outer releases only after grandchild drain');
   } finally {
     if(pid)try{process.kill(pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}
@@ -288,7 +288,7 @@ redTest('outerTimeoutAfterIntermediateSupervisorDeathKillsGrandchild', async () 
 }, {timeout:18000});
 
 redTest('nestedFlockCredentialSurvivesThreeLevels', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const middle=path.join(env.HOME,'middle.sh'),inner=path.join(env.HOME,'inner.sh');
   const marker=path.join(env.HOME,'launched');
   writeFileSync(middle,'"$1" bash "$2" "$1" "$3"\nexit $?');
@@ -299,9 +299,9 @@ redTest('nestedFlockCredentialSurvivesThreeLevels', async () => {
 }, {timeout:7000});
 
 redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const status=path.join(env.HOME,'nested-status.json'), sibling=path.join(env.HOME,'sibling');
-  const script='PICSEE_HEAVY_STATUS_PATH="$1" "$2" true; touch "$3"; sleep 1';
+  const script='MADO_HEAVY_STATUS_PATH="$1" "$2" true; touch "$3"; sleep 1';
   const holder=start(['bash','-c',script,'_',status,lock,sibling],env);
   try {
     await until(()=>existsSync(sibling),'nested completed while ancestor is alive');
@@ -312,10 +312,10 @@ redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
 }, {timeout:7000});
 
 redTest('realRunProcessGroupNeverReportsDrainedWithSurvivors', async () => {
-  const env={...environment(),PICSEE_HEAVY_FAULT_QUERY:'1',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.1',PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_HEAVY_FAULT_QUERY:'1',MADO_HEAVY_LOCK_DRAIN_SECS:'0.1',MADO_MDPRO_LOCK:'off'};
   const pidFile=path.join(env.HOME,'survivor-pid');
   const status=path.join(env.HOME,'status.json');
-  env.PICSEE_HEAVY_STATUS_PATH=status;
+  env.MADO_HEAVY_STATUS_PATH=status;
   const result=await run(['bash','-c',
     'python3 -c "import os,pathlib,signal,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(2)" "$1" </dev/null >/dev/null 2>&1 & while ! test -f "$1"; do sleep 0.01; done; exit 1',
     '_',pidFile],env);
@@ -323,14 +323,14 @@ redTest('realRunProcessGroupNeverReportsDrainedWithSurvivors', async () => {
   assert.ok(existsSync(pidFile),'real descendant was launched');
   assert.equal(JSON.parse(readFileSync(status,'utf8')).cleanup,'incomplete');
   assert.match(result.output,/unknown|incomplete/i);
-  const contenderEnv={...env};delete contenderEnv.PICSEE_HEAVY_FAULT_QUERY;
-  delete contenderEnv.PICSEE_HEAVY_STATUS_PATH;
+  const contenderEnv={...env};delete contenderEnv.MADO_HEAVY_FAULT_QUERY;
+  delete contenderEnv.MADO_HEAVY_STATUS_PATH;
   assert.equal((await run(['true'],contenderEnv)).code,0);
   assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
 });
 
 redTest('nestedExecutionKeepsLockUntilLastProtectedDescendantExits', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const hostPid=path.join(env.HOME,'host-pid'),hostDone=path.join(env.HOME,'host-done'),commandDone=path.join(env.HOME,'command-done');
   const script=`python3 -c 'import os,pathlib,sys,time; p=os.fork();
 if p==0:
@@ -339,7 +339,7 @@ os.waitpid(p,0) if False else None' "$1" "$2"; while ! test -f "$1"; do sleep 0.
   const holder=start(['bash','-c',script,'_',hostPid,hostDone,lock,commandDone],env);
   await until(()=>existsSync(hostPid),'out-of-group host launched');
   await until(()=>existsSync(commandDone),'worker command completed');
-  const contender=await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'});
+  const contender=await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.2'});
   assert.equal(contender.code,75,contender.output);
   assert.equal((await holder.done).code,0,'host registration succeeded');
   assert.ok(existsSync(hostDone));
@@ -347,7 +347,7 @@ os.waitpid(p,0) if False else None' "$1" "$2"; while ! test -f "$1"; do sleep 0.
 }, {timeout:7000});
 
 redTest('guardianRetainsLockAfterSupervisorDeathWithOutOfGroupHost', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_WAIT_SECS:'2'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_WAIT_SECS:'2'};
   const hostPid=path.join(env.HOME,'host-pid'), registered=path.join(env.HOME,'registered');
   const script=`python3 -c 'import os,pathlib,sys,time; p=os.fork();
 if p==0:
@@ -364,16 +364,16 @@ if p==0:
 }, {timeout:7000});
 
 redTest('orphanedGuardianWithoutRootReleasesFlockAndLeavesDiagnostics', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const pidFile=path.join(env.HOME,'guardian-pid');
   const fixture=`import fcntl,os,pathlib,subprocess,sys,time
-lock=pathlib.Path(os.environ['PICSEE_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
+lock=pathlib.Path(os.environ['MADO_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
 fd=os.open(str(lock),os.O_CREAT|os.O_RDWR,0o600);fcntl.flock(fd,fcntl.LOCK_EX)
 updates_r,updates_w=os.pipe();ready_r,ready_w=os.pipe()
 owner=lock.parent/'heavy.lock.guardian-repro.owner'
 log=lock.parent/'heavy.lock.guardian-repro.log'
 with open(log,'ab',buffering=0) as error:
- guardian_env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_ARGC='1')
+ guardian_env=dict(os.environ,MADO_HEAVY_GUARDIAN_OWNER=str(owner),MADO_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),MADO_HEAVY_GUARDIAN_ARGC='1')
  guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(updates_r),str(ready_w)],env=guardian_env,pass_fds=(updates_r,ready_w,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
 os.close(updates_r);os.close(ready_w)
 assert os.read(ready_r,1)==b'R'
@@ -386,13 +386,13 @@ time.sleep(30)`;
     guardianPid=Number(readFileSync(pidFile,'utf8'));
     supervisor.kill('SIGKILL');
     await new Promise(resolve=>supervisor.once('close',resolve));
-    const contender=await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'1'});
+    const contender=await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'1'});
     assert.equal(contender.code,0,'orphaned guardian must release flock within one second');
-    const owner=readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-repro.owner'),'utf8');
+    const owner=readFileSync(path.join(env.HOME,'.mado/locks/heavy.lock.guardian-repro.owner'),'utf8');
     assert.match(owner,new RegExp(`^pid=${guardianPid}$`,'m'));
     assert.match(owner,/^cmd=.+heavy-lock.py --guardian/m);
     assert.match(owner,/^started=.+/m);
-    assert.match(readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-repro.log'),'utf8'),/root was never published/);
+    assert.match(readFileSync(path.join(env.HOME,'.mado/locks/heavy.lock.guardian-repro.log'),'utf8'),/root was never published/);
   } finally {
     supervisor.kill('SIGKILL');
     if(guardianPid) try {process.kill(guardianPid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
@@ -410,7 +410,7 @@ redTest('orphanedGuardianDiagnosticsNeverPersistJobArguments', async () => {
     await until(()=>existsSync(ready),'worker launched');
     holder.child.kill('SIGKILL');
     await holder.done;
-    const diagnostics=path.join(env.HOME,'.picsee/locks');
+    const diagnostics=path.join(env.HOME,'.mado/locks');
     await until(()=>readdirSync(diagnostics).some(name=>name.endsWith('.log') &&
       readFileSync(path.join(diagnostics,name),'utf8').includes('supervisor disappeared')),
       'guardian orphan cleanup');
@@ -422,7 +422,7 @@ redTest('orphanedGuardianDiagnosticsNeverPersistJobArguments', async () => {
     }
     assert.match(readFileSync(path.join(diagnostics,files.find(name=>name.endsWith('.owner'))),'utf8'),
       /^job=argc=\d+$/m);
-    const sharedOwner=readFileSync(path.join(env.PICSEE_MDPRO_LOCK,'owner'),'utf8');
+    const sharedOwner=readFileSync(path.join(env.MADO_MDPRO_LOCK,'owner'),'utf8');
     assert.equal(sharedOwner.includes(secret),false,'shared owner must not retain the job argument');
   } finally {
     holder.child.kill('SIGKILL');
@@ -430,15 +430,15 @@ redTest('orphanedGuardianDiagnosticsNeverPersistJobArguments', async () => {
 }, {timeout:7000});
 
 redTest('guardianRootPublicationHasDeadlineWhileSupervisorLives', async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const ready=path.join(env.HOME,'ready');
   const fixture=`import fcntl,os,pathlib,subprocess,sys,time
-lock=pathlib.Path(os.environ['PICSEE_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
+lock=pathlib.Path(os.environ['MADO_HEAVY_LOCK']);lock.parent.mkdir(parents=True,exist_ok=True)
 fd=os.open(str(lock),os.O_CREAT|os.O_RDWR,0o600);fcntl.flock(fd,fcntl.LOCK_EX)
 r,w=os.pipe();rr,rw=os.pipe()
 owner=lock.parent/'heavy.lock.guardian-deadline.owner';log=lock.parent/'heavy.lock.guardian-deadline.log'
 with open(log,'ab',buffering=0) as error:
- env=dict(os.environ,PICSEE_HEAVY_GUARDIAN_OWNER=str(owner),PICSEE_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),PICSEE_HEAVY_GUARDIAN_ARGC='1')
+ env=dict(os.environ,MADO_HEAVY_GUARDIAN_OWNER=str(owner),MADO_HEAVY_GUARDIAN_SUPERVISOR=str(os.getpid()),MADO_HEAVY_GUARDIAN_ARGC='1')
  guardian=subprocess.Popen([sys.executable,'scripts/tdd/heavy-lock.py','--guardian',str(r),str(rw)],env=env,pass_fds=(r,rw,fd),start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=error)
 os.close(r);os.close(rw);assert os.read(rr,1)==b'R'
 pathlib.Path(sys.argv[1]).write_text(str(guardian.pid))
@@ -448,39 +448,39 @@ time.sleep(30)`;
   try {
     await until(()=>existsSync(ready),'guardian ready');
     guardianPid=Number(readFileSync(ready,'utf8'));
-    const log=path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-deadline.log');
+    const log=path.join(env.HOME,'.mado/locks/heavy.lock.guardian-deadline.log');
     await until(()=>readFileSync(log,'utf8').includes('root was never published before deadline'),
       'guardian publication deadline');
     assert.equal(supervisor.exitCode,null,'supervisor is still alive at guardian deadline');
-    assert.match(readFileSync(path.join(env.HOME,'.picsee/locks/heavy.lock.guardian-deadline.owner'),'utf8'),
+    assert.match(readFileSync(path.join(env.HOME,'.mado/locks/heavy.lock.guardian-deadline.owner'),'utf8'),
       new RegExp(`^pid=${guardianPid}$`,'m'));
   } finally {
     supervisor.kill('SIGKILL');
     await new Promise(resolve=>supervisor.once('close',resolve));
     if(guardianPid) try {process.kill(guardianPid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
   }
-  assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'1'})).code,0);
+  assert.equal((await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'1'})).code,0);
 }, {timeout:7000});
 
 redTest('ciAppInvocationPreservesHeldSupervision', async () => {
-  const env={...environment(),PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',
-    PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off'};
-  const statusPath=path.join(env.HOME,'ci-status.json');env.PICSEE_HEAVY_STATUS_PATH=statusPath;
-  const result=await run(['bash','-c','test -n "$PICSEE_HEAVY_CONTROL_FD" && test "$PICSEE_HEAVY_LOCK_HELD" = 1'],env);
+  const env={...environment(),MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',
+    MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off'};
+  const statusPath=path.join(env.HOME,'ci-status.json');env.MADO_HEAVY_STATUS_PATH=statusPath;
+  const result=await run(['bash','-c','test -n "$MADO_HEAVY_CONTROL_FD" && test "$MADO_HEAVY_LOCK_HELD" = 1'],env);
   assert.equal(result.code,0,result.output);
   assert.equal(JSON.parse(readFileSync(statusPath,'utf8')).cleanup,'complete');
   const workflow=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
   const step=workflow.slice(workflow.indexOf('- name: Run App tests'),workflow.indexOf('- name: Report App test evidence'));
-  assert.match(step,/PICSEE_HEAVY_CI_TOP_LEVEL/);
-  assert.match(step,/PICSEE_HEAVY_LOCK_EXEC_SECS=2400 scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+  assert.match(step,/MADO_HEAVY_CI_TOP_LEVEL/);
+  assert.match(step,/MADO_HEAVY_LOCK_EXEC_SECS=2400 scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
 });
 redTest('ciSupervisedAppStepsOutlastTheirOwnDeadlines', () => {
   const workflow=readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8');
   const app=workflow.slice(workflow.indexOf('- name: Run App tests'),workflow.indexOf('- name: Report App test evidence'));
   const compare=workflow.slice(workflow.indexOf('- name: Run App host comparison'),workflow.indexOf('- name: Upload App host comparison'));
-  const repeat=app.match(/PICSEE_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/ci\/app-repeat\.mjs/);
-  const ordinary=app.match(/PICSEE_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
-  const hosted=compare.match(/PICSEE_HEAVY_LOCK_EXEC_SECS:\s*['"]?(\d+)/);
+  const repeat=app.match(/MADO_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/ci\/app-repeat\.mjs/);
+  const ordinary=app.match(/MADO_HEAVY_LOCK_EXEC_SECS=(\d+) scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs/);
+  const hosted=compare.match(/MADO_HEAVY_LOCK_EXEC_SECS:\s*['"]?(\d+)/);
   assert.ok(repeat,'repeat outer budget is explicit');
   assert.ok(ordinary,'App lane outer budget is explicit');
   assert.ok(hosted,'comparison outer budget is explicit');
@@ -490,7 +490,7 @@ redTest('ciSupervisedAppStepsOutlastTheirOwnDeadlines', () => {
 });
 test('uses picsee machine-wide default and exports nesting flag', () => {
   const env = environment();
-  const r = spawnSync(lock, ['bash', '-c', 'test "$PICSEE_HEAVY_LOCK_HELD" = 1 && test -f "$HOME/.picsee/locks/heavy.lock"'], { env });
+  const r = spawnSync(lock, ['bash', '-c', 'test "$MADO_HEAVY_LOCK_HELD" = 1 && test -f "$HOME/.mado/locks/heavy.lock"'], { env });
   assert.equal(r.status, 0, r.stderr.toString());
 });
 test('two independent invocations serialize command lifetimes', async () => {
@@ -504,7 +504,7 @@ test('two independent invocations serialize command lifetimes', async () => {
 test('nested use shares held flag without deadlock', () => {
   const env = environment();
   // The explicit exit keeps Bash as parent on Linux while preserving nested status.
-  const r = spawnSync(lock, ['bash', '-c', 'test "$PICSEE_HEAVY_LOCK_HELD" = 1 && "$1" true; status=$?; exit "$status"', '_', lock], { env, timeout: 5000 });
+  const r = spawnSync(lock, ['bash', '-c', 'test "$MADO_HEAVY_LOCK_HELD" = 1 && "$1" true; status=$?; exit "$status"', '_', lock], { env, timeout: 5000 });
   assert.equal(r.status, 0, r.stderr.toString());
 });
 test('preserves child exit code', () => {
@@ -542,7 +542,7 @@ test('HUP stops the command before releasing the lock', async () => {
 
 for (const sig of ['SIGINT', 'SIGHUP']) {
   redTest(`groupDirected${sig}StopsWorkerAndReleasesLock`, async () => {
-    const env={...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+    const env={...environment(), MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
     const pidFile=path.join(env.HOME,'group-worker');
     const child=spawn(lock,['python3','-c',
       'import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)',pidFile],
@@ -556,7 +556,7 @@ for (const sig of ['SIGINT', 'SIGHUP']) {
       assert.equal(result.signal,sig,output);
       const pid=Number(readFileSync(pidFile,'utf8'));
       assert.throws(()=>process.kill(pid,0),{code:'ESRCH'},'group cancellation drains worker');
-      assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
+      assert.equal((await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
         'lock released after worker drain');
     } finally {
       try {process.kill(-child.pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
@@ -566,7 +566,7 @@ for (const sig of ['SIGINT', 'SIGHUP']) {
 }
 
 redTest('guardianLossStillDrainsWorkerBeforeExit70', async () => {
-  const env={...environment(),PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  const env={...environment(),MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
   const pidFile=path.join(env.HOME,'worker-pid');
   const holder=start(['python3','-c',
     'import os,pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(3)',pidFile],env);
@@ -583,9 +583,9 @@ redTest('guardianLossStillDrainsWorkerBeforeExit70', async () => {
     assert.ok(Date.now()-began<1500,'guardian loss stops the worker promptly');
     assert.equal(result.code,70,result.output);
     assert.throws(()=>process.kill(Number(readFileSync(pidFile,'utf8')),0),{code:'ESRCH'});
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK),false,
       'verified guardian-loss cleanup releases shared ownership');
-    assert.equal((await run(['true'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
+    assert.equal((await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.5'})).code,0,
       'guardian-loss cleanup released both locks');
   } finally {
     holder.child.kill('SIGTERM');
@@ -607,7 +607,7 @@ function start(args, env) {
   return {child,done,output:()=>output};
 }
 test('SIGKILLed supervisor drains its child before admitting two waiters', {timeout:25000}, async () => {
-  const env={...environment(),PICSEE_MDPRO_LOCK:'off'};
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const events=path.join(env.HOME,'events');
   const release=path.join(env.HOME,'release');
   const holder=start(['bash','-c','echo holder-start >> "$1"; for ((i=0;i<600;i++)); do test -f "$2" && break; sleep 0.02; done; echo holder-end >> "$1"','_',events,release],env);
@@ -646,7 +646,7 @@ test('lock wait timeout keeps exit 75 without entering the command', async () =>
   const holder=start(['bash','-c','touch "$1"; sleep 4','_',ready],env);
   try {
     await until(()=>existsSync(ready),'holder owns kernel lock');
-    const waiting=await run(['bash','-c','echo must-not-run'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'1'});
+    const waiting=await run(['bash','-c','echo must-not-run'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'1'});
     assert.equal(waiting.code,75);
     assert.doesNotMatch(waiting.output,/must-not-run/);
   } finally {
@@ -657,10 +657,10 @@ test('lock wait timeout keeps exit 75 without entering the command', async () =>
 
 // Shared-lock contract: every path is private to this test's temporary directory.
 function fakeHolder(env, pid) {
-  mkdirSync(env.PICSEE_MDPRO_LOCK);
-  writeFileSync(path.join(env.PICSEE_MDPRO_LOCK, 'owner'), `pid=${pid}\nstarted=fixture\ncwd=/fixture\ncmd=sleep\n`);
+  mkdirSync(env.MADO_MDPRO_LOCK);
+  writeFileSync(path.join(env.MADO_MDPRO_LOCK, 'owner'), `pid=${pid}\nstarted=fixture\ncwd=/fixture\ncmd=sleep\n`);
 }
-function releaseFake(env) { rmSync(env.PICSEE_MDPRO_LOCK, { recursive: true, force: true }); }
+function releaseFake(env) { rmSync(env.MADO_MDPRO_LOCK, { recursive: true, force: true }); }
 const pause = ms => new Promise(r => setTimeout(r, ms));
 test('AC-1 live mdpro holder blocks picsee until release', async () => {
   const env=environment(), ready=path.join(env.HOME,'ready');
@@ -679,7 +679,7 @@ test('AC-2 shared owner is live and describes the job; exits and signal propagat
     const job=start(['bash','-c',`touch "$1"; while ! test -f "$2"; do sleep 0.02; done; ${ending}`,'_',ready,release],env);
     try {
       await until(()=>existsSync(ready),'job started');
-      const owner=readFileSync(path.join(env.PICSEE_MDPRO_LOCK,'owner'),'utf8');
+      const owner=readFileSync(path.join(env.MADO_MDPRO_LOCK,'owner'),'utf8');
       const pid=Number(owner.match(/^pid=(\d+)$/m)[1]);
       process.kill(pid,0);
       assert.equal(pid,job.child.pid);
@@ -690,31 +690,31 @@ test('AC-2 shared owner is live and describes the job; exits and signal propagat
     const result=await job.done;
     assert.equal(result.code,ending==='exit 0'?0:ending==='exit 3'?3:null);
     assert.equal(result.signal,ending.startsWith('kill')?'SIGTERM':null);
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK),false);
   }
 });
 test('AC-3 stale and ownerless mdpro locks time out without mutation or launch', async () => {
   for (const ownerless of [false,true]) {
-    const env={...environment(),PICSEE_HEAVY_LOCK_WAIT_SECS:'0.15'};
+    const env={...environment(),MADO_HEAVY_LOCK_WAIT_SECS:'0.15'};
     const dead=spawn('true'); await new Promise(r=>dead.on('close',r));
     fakeHolder(env,dead.pid);
-    if(ownerless) rmSync(path.join(env.PICSEE_MDPRO_LOCK,'owner'));
-    const before=statSync(env.PICSEE_MDPRO_LOCK);
-    const contents=readdirSync(env.PICSEE_MDPRO_LOCK);
+    if(ownerless) rmSync(path.join(env.MADO_MDPRO_LOCK,'owner'));
+    const before=statSync(env.MADO_MDPRO_LOCK);
+    const contents=readdirSync(env.MADO_MDPRO_LOCK);
     const result=await run(['echo','must-not-launch'],env);
     assert.equal(result.code,75,result.output);
     assert.doesNotMatch(result.output,/must-not-launch|reclaiming stale/);
     assert.match(result.output,/waiting for an mdpro waiter to reclaim it/);
     assert.match(result.output,/inspect the owner PID and its process group/);
-    assert.equal(statSync(env.PICSEE_MDPRO_LOCK).ino,before.ino);
-    assert.equal(statSync(env.PICSEE_MDPRO_LOCK).mtimeMs,before.mtimeMs);
-    assert.deepEqual(readdirSync(env.PICSEE_MDPRO_LOCK),contents);
+    assert.equal(statSync(env.MADO_MDPRO_LOCK).ino,before.ino);
+    assert.equal(statSync(env.MADO_MDPRO_LOCK).mtimeMs,before.mtimeMs);
+    assert.deepEqual(readdirSync(env.MADO_MDPRO_LOCK),contents);
     assert.ok(!readdirSync(env.HOME).some(n=>n.includes('.stale.')));
   }
 });
 test('AC-4 INT and TERM keep shared lock through group kill grace', async () => {
   for(const sig of ['SIGINT','SIGTERM']) {
-    const env={...environment(),PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.5'};
+    const env={...environment(),MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.5'};
     const ready=path.join(env.HOME,'ready');
     const job=start(['python3','-c','import signal,time,pathlib,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(__import__("os").getpid())); time.sleep(3)',ready],env);
     await until(()=>existsSync(ready),'ignoring child started');
@@ -722,39 +722,39 @@ test('AC-4 INT and TERM keep shared lock through group kill grace', async () => 
     try {
       job.child.kill(sig); await pause(150);
       process.kill(pid,0);
-      assert.ok(existsSync(env.PICSEE_MDPRO_LOCK),'held while child ignores TERM');
+      assert.ok(existsSync(env.MADO_MDPRO_LOCK),'held while child ignores TERM');
     } finally { await job.done; }
     assert.equal((await job.done).signal,sig);
     assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false);
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK),false);
   }
 });
 test('AC-5 shared timeout exits 75 and releases picsee flock', async () => {
   const env=environment(); fakeHolder(env,process.pid);
   try {
-    const result=await run(['echo','must-not-run'],{...env,PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'});
+    const result=await run(['echo','must-not-run'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.2'});
     assert.equal(result.code,75,result.output);
     assert.doesNotMatch(result.output,/must-not-run/);
-    assert.equal((await run(['true'],{...env,PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'})).code,0);
-    assert.ok(existsSync(env.PICSEE_MDPRO_LOCK),'live peer never reclaimed');
+    assert.equal((await run(['true'],{...env,MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_WAIT_SECS:'0.2'})).code,0);
+    assert.ok(existsSync(env.MADO_MDPRO_LOCK),'live peer never reclaimed');
   } finally { releaseFake(env); }
 });
 test('AC-6 opt-out does not invent mdpro ownership; direct HELD needs a credential', async () => {
   for(const direct of [false,true]) {
-    const env={...environment(),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:direct?'1':''};
+    const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_HELD:direct?'1':''};
     const result=await run(['bash','-c','test -z "$MDPRO_HEAVY_LOCK_HELD"'],env);
     assert.equal(result.code,direct?70:0,result.output);
-    assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),!direct);
+    assert.equal(existsSync(env.MADO_HEAVY_LOCK),!direct);
   }
   assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],environment())).code,0);
-  assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],{...environment(),PICSEE_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'})).code,70);
+  assert.equal((await run(['bash','-c','test "$MDPRO_HEAVY_LOCK_HELD" = 1'],{...environment(),MADO_HEAVY_LOCK_HELD:'1',MDPRO_HEAVY_LOCK_HELD:'1'})).code,70);
 });
-const mdproLock=process.env.PICSEE_MDPRO_SCRIPT;
+const mdproLock=process.env.MADO_MDPRO_SCRIPT;
 test('AC-7 real mdpro script serializes in both directions', {timeout:30000}, async t => {
-  if (!mdproLock) { t.skip('PICSEE_MDPRO_SCRIPT not set'); return; }
+  if (!mdproLock) { t.skip('MADO_MDPRO_SCRIPT not set'); return; }
   for(const first of ['picsee','mdpro']) {
     const env=environment(), events=path.join(env.HOME,'events');
-    env.MDPRO_HEAVY_LOCK=env.PICSEE_MDPRO_LOCK;
+    env.MDPRO_HEAVY_LOCK=env.MADO_MDPRO_LOCK;
     function launch(which,args) {
       const child=spawn(which==='picsee'?lock:mdproLock,args,{env,cwd:root});
       let output=''; child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
@@ -776,11 +776,11 @@ test('B2 leader exit retains directory until same-group worker finishes', async 
     const env=environment(), ready=path.join(env.HOME,'worker'), done=path.join(env.HOME,'done'), entered=path.join(env.HOME,'waiter');
     const job=start(['bash','-c',`(touch "$1"; sleep 1; touch "$2") & ${ending}`,'_',ready,done],env);
     await until(()=>existsSync(ready),'background worker started');
-    const waiter=spawn('bash',['-c','while ! mkdir "$1" 2>/dev/null; do sleep 0.02; done; touch "$2"; rmdir "$1"','_',env.PICSEE_MDPRO_LOCK,entered]);
+    const waiter=spawn('bash',['-c','while ! mkdir "$1" 2>/dev/null; do sleep 0.02; done; touch "$2"; rmdir "$1"','_',env.MADO_MDPRO_LOCK,entered]);
     const waiterDone=new Promise(r=>waiter.on('close',r));
     try {
       await pause(200);
-      assert.ok(existsSync(env.PICSEE_MDPRO_LOCK),'directory held for worker');
+      assert.ok(existsSync(env.MADO_MDPRO_LOCK),'directory held for worker');
       assert.equal(existsSync(entered),false,'mdpro waiter stays blocked');
     } finally { await job.done; await waiterDone; }
     assert.ok(existsSync(done));
@@ -791,28 +791,28 @@ test('B2 leader exit retains directory until same-group worker finishes', async 
 });
 
 test('N2 reverse nesting refuses before picsee flock and leaves the shared lock untouched', async () => {
-  const env={...environment(),MDPRO_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_LOCK_WAIT_SECS:'0.2'};
+  const env={...environment(),MDPRO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_LOCK_WAIT_SECS:'0.2'};
   fakeHolder(env,process.pid);
-  const before=statSync(env.PICSEE_MDPRO_LOCK);
-  const result=await run(['bash','-c','test "$PICSEE_HEAVY_LOCK_HELD" = 1 && test "$MDPRO_HEAVY_LOCK_HELD" = 1 && test -f "$PICSEE_HEAVY_LOCK"'],env);
+  const before=statSync(env.MADO_MDPRO_LOCK);
+  const result=await run(['bash','-c','test "$MADO_HEAVY_LOCK_HELD" = 1 && test "$MDPRO_HEAVY_LOCK_HELD" = 1 && test -f "$MADO_HEAVY_LOCK"'],env);
   assert.equal(result.code,70,result.output);
   assert.match(result.output,/no verified handoff/);
-  assert.equal(existsSync(env.PICSEE_HEAVY_LOCK),false);
-  assert.equal(statSync(env.PICSEE_MDPRO_LOCK).ino,before.ino);
-  assert.ok(existsSync(path.join(env.PICSEE_MDPRO_LOCK,'owner')));
+  assert.equal(existsSync(env.MADO_HEAVY_LOCK),false);
+  assert.equal(statSync(env.MADO_MDPRO_LOCK).ino,before.ino);
+  assert.ok(existsSync(path.join(env.MADO_MDPRO_LOCK,'owner')));
 });
 test('N4 file at shared lock path fails clearly without traceback', async () => {
-  const env=environment(); writeFileSync(env.PICSEE_MDPRO_LOCK,'peer');
+  const env=environment(); writeFileSync(env.MADO_MDPRO_LOCK,'peer');
   const result=await run(['echo','must-not-launch'],env);
   assert.equal(result.code,75);
   assert.match(result.output,/not a directory/);
   assert.doesNotMatch(result.output,/Traceback|must-not-launch/);
-  assert.equal(readFileSync(env.PICSEE_MDPRO_LOCK,'utf8'),'peer');
+  assert.equal(readFileSync(env.MADO_MDPRO_LOCK,'utf8'),'peer');
 });
 
 for (const mode of ['survivors','publication','heartbeat']) {
   test(`fault injection: ${mode}`, () => {
-    const env={...environment(),PICSEE_HEAVY_LOCK_WAIT_SECS:mode==='heartbeat'?'200':'0.1',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0'};
+    const env={...environment(),MADO_HEAVY_LOCK_WAIT_SECS:mode==='heartbeat'?'200':'0.1',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0'};
     if(mode==='heartbeat') fakeHolder(env,process.pid);
     const result=spawnSync('python3',['scripts/tdd/fixtures/heavy-lock-faults.py','scripts/tdd/heavy-lock.py',mode],{env,encoding:'utf8',timeout:5000});
     assert.ifError(result.error);
@@ -846,7 +846,7 @@ test('R1 contended reverse nesting fails promptly without disturbing the flock h
 
 for (const mode of ['vanished']) {
   test(`R2/R3 fault injection: ${mode}`, () => {
-    const env={...environment(),PICSEE_HEAVY_LOCK_DRAIN_SECS:mode==='drain-message'?'100':'0.2',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0'};
+    const env={...environment(),MADO_HEAVY_LOCK_DRAIN_SECS:mode==='drain-message'?'100':'0.2',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0'};
     const result=spawnSync('python3',['scripts/tdd/fixtures/heavy-lock-faults.py','scripts/tdd/heavy-lock.py',mode],{env,encoding:'utf8',timeout:5000});
     assert.ifError(result.error);
     assert.equal(result.status,0,result.stderr);
@@ -856,9 +856,9 @@ for (const mode of ['vanished']) {
 
 
 test('F4 drain bound stops worker before real mdpro waiter enters and preserves status 3', {timeout:15000}, async t => {
-  if (!mdproLock) { t.skip('PICSEE_MDPRO_SCRIPT not set'); return; }
-  const env={...environment(),PICSEE_HEAVY_LOCK_DRAIN_SECS:'1',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
-  env.MDPRO_HEAVY_LOCK=env.PICSEE_MDPRO_LOCK;
+  if (!mdproLock) { t.skip('MADO_MDPRO_SCRIPT not set'); return; }
+  const env={...environment(),MADO_HEAVY_LOCK_DRAIN_SECS:'1',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1'};
+  env.MDPRO_HEAVY_LOCK=env.MADO_MDPRO_LOCK;
   const ready=path.join(env.HOME,'worker'), entered=path.join(env.HOME,'entered');
   const job=start(['bash','-c','(sleep 30) </dev/null >/dev/null 2>&1 & echo $! > "$1"; exit 3','_',ready],env);
   let pid, waiter, waiterDone;
@@ -876,7 +876,7 @@ test('F4 drain bound stops worker before real mdpro waiter enters and preserves 
     assert.equal(peer.code,0,peer.output);
     assert.equal(readFileSync(entered,'utf8'),'gone\n','mdpro must never enter beside surviving worker');
     assert.throws(()=>process.kill(pid,0),{code:'ESRCH'},'worker gone after drain termination');
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK),false,'normal cleanup after group empties');
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK),false,'normal cleanup after group empties');
   } finally {
     if(pid) { try { process.kill(pid,'SIGKILL'); } catch(error) { if(error.code!=='ESRCH') throw error; } }
     await job.done;
@@ -892,7 +892,7 @@ test('F5 real-kernel unreaped zombie group drains without exception', {skip: pro
 });
 for (const mode of ['eperm-signal']) {
   test(`F5 supervisor ignores EPERM while signalling a verified PID`, () => {
-    const env = {...environment(), PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
+    const env = {...environment(), MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
     const r = spawnSync('python3', ['scripts/tdd/fixtures/heavy-lock-faults.py', 'scripts/tdd/heavy-lock.py', mode], {
       env, timeout: 5000,
     });
@@ -904,12 +904,12 @@ for (const mode of ['eperm-signal']) {
 // #672 WI-2: the delegator learns about an over-budget holder from its own status loop.
 const listenNotify = path.join(root, '.agents/skills/mado-delegator/scripts/listen-notify.py');
 function lockAlerts(home) {
-  const dir = path.join(home, '.picsee/herdr/delegator/lock-alerts');
+  const dir = path.join(home, '.mado/herdr/delegator/lock-alerts');
   return existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith('.json')).map(name => path.join(dir, name)) : [];
 }
 
 redTest('lockAgeAlertFiresWhenHolderExceedsBudget', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.5', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS: '0.5', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
   const command = ['bash', '-c', 'sleep 30 & wait', 'lock-age-fixture'];
   const result = spawnSync(lock, command, {env, encoding: 'utf8', timeout: 20000});
   assert.equal(result.status, 124, result.stderr);
@@ -936,14 +936,14 @@ redTest('lockAgeAlertFiresWhenHolderExceedsBudget', () => {
   assert.equal(alert.cleanup, 'complete');
   assert.deepEqual(alert.survivorsAfterCleanup, []);
   assert.deepEqual(alert.retainedLocks, [
-    {kind: 'picsee-flock', path: env.PICSEE_HEAVY_LOCK, retained: false},
-    {kind: 'mdpro-directory', path: env.PICSEE_MDPRO_LOCK, retained: false},
+    {kind: 'picsee-flock', path: env.MADO_HEAVY_LOCK, retained: false},
+    {kind: 'mdpro-directory', path: env.MADO_MDPRO_LOCK, retained: false},
   ]);
-  const log = readFileSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log'), 'utf8');
+  const log = readFileSync(path.join(env.HOME, '.mado/herdr/delegator/attention.log'), 'utf8');
   assert.equal(log.split('\n').filter(Boolean).length, 1);
   assert.match(log, new RegExp(`heavy-lock holder exceeded its 0\\.5s budget; pid ${alert.pid} pgid ${alert.pgid}; alert ${alerts[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   const status = spawnSync('python3', [listenNotify, 'status', '--state-root',
-    path.join(env.HOME, '.picsee/herdr/delegator/listeners')], {encoding: 'utf8', timeout: 10000});
+    path.join(env.HOME, '.mado/herdr/delegator/listeners')], {encoding: 'utf8', timeout: 10000});
   assert.equal(status.status, 3, status.stderr);
   assert.match(status.stdout, new RegExp(`^attention lock-alert ${alert.id} phase=cleanup cleanup=complete budget=0\\.5s pid=${alert.pid}`, 'm'));
 });
@@ -953,7 +953,7 @@ redTest('lockAgeAlertFiresWhenHolderExceedsBudget', () => {
 // whether owned members exist. Both queries run here: the membership snapshot
 // and the survivor details of the deadline alert.
 redTest('processQueryIgnoresPathPs', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.5', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS: '0.5', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2'};
   const bin = path.join(env.HOME, 'fake-bin'), sentinel = path.join(env.HOME, 'fake-ps-ran');
   mkdirSync(bin);
   writeFileSync(path.join(bin, 'ps'), `#!/bin/sh\necho "$@" >> '${sentinel}'\nexit 1\n`, {mode: 0o755});
@@ -971,8 +971,8 @@ redTest('processQueryIgnoresPathPs', () => {
 });
 
 redTest('lockAgeAlertKeepsRetainedLockPathsWhenCleanupIsUnknown', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '0.3', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0',
-    PICSEE_HEAVY_FAULT_QUERY: '1'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS: '0.3', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0',
+    MADO_HEAVY_FAULT_QUERY: '1'};
   const result = spawnSync(lock, ['sleep', '2'], {env, encoding: 'utf8', timeout: 20000});
   assert.equal(result.status, 70, result.stderr);
   const [file] = lockAlerts(env.HOME);
@@ -982,30 +982,30 @@ redTest('lockAgeAlertKeepsRetainedLockPathsWhenCleanupIsUnknown', () => {
   assert.equal(alert.survivorsAtDeadline, null, 'an unavailable process query is unknown, never empty');
   assert.equal(alert.survivorsAfterCleanup, null);
   assert.deepEqual(alert.retainedLocks.map(lock => lock.retained), [true, true]);
-  rmSync(env.PICSEE_MDPRO_LOCK, {recursive: true, force: true});
+  rmSync(env.MADO_MDPRO_LOCK, {recursive: true, force: true});
 });
 
 redTest('lockAgeAlertStaysSilentWithinBudget', () => {
-  const env = {...environment(), PICSEE_HEAVY_LOCK_EXEC_SECS: '5'};
+  const env = {...environment(), MADO_HEAVY_LOCK_EXEC_SECS: '5'};
   const result = spawnSync(lock, ['true'], {env, encoding: 'utf8', timeout: 10000});
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(lockAlerts(env.HOME), []);
-  assert.equal(existsSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log')), false);
+  assert.equal(existsSync(path.join(env.HOME, '.mado/herdr/delegator/attention.log')), false);
 });
 
 redTest('lockAgeAlertIgnoresPrivateLocksUnlessAnAlertDirIsGiven', () => {
   // Test fixtures run heavy-lock on a private lock file; their deliberate timeouts must not
   // reach the delegator's real attention channel. The machine lock, or an explicit
-  // PICSEE_HEAVY_ALERT_DIR, is what alerts.
+  // MADO_HEAVY_ALERT_DIR, is what alerts.
   const base = environment();
-  const env = {...base, PICSEE_HEAVY_LOCK: path.join(base.HOME, 'private', 'heavy.lock'),
-    PICSEE_HEAVY_LOCK_EXEC_SECS: '0.3', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
+  const env = {...base, MADO_HEAVY_LOCK: path.join(base.HOME, 'private', 'heavy.lock'),
+    MADO_HEAVY_LOCK_EXEC_SECS: '0.3', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0'};
   const result = spawnSync(lock, ['sleep', '5'], {env, encoding: 'utf8', timeout: 20000});
   assert.equal(result.status, 124, result.stderr);
   assert.deepEqual(lockAlerts(env.HOME), []);
-  assert.equal(existsSync(path.join(env.HOME, '.picsee/herdr/delegator/attention.log')), false);
+  assert.equal(existsSync(path.join(env.HOME, '.mado/herdr/delegator/attention.log')), false);
   const chosen = path.join(base.HOME, 'chosen-alerts');
-  const explicit = spawnSync(lock, ['sleep', '5'], {env: {...env, PICSEE_HEAVY_ALERT_DIR: chosen}, encoding: 'utf8', timeout: 20000});
+  const explicit = spawnSync(lock, ['sleep', '5'], {env: {...env, MADO_HEAVY_ALERT_DIR: chosen}, encoding: 'utf8', timeout: 20000});
   assert.equal(explicit.status, 124, explicit.stderr);
   assert.equal(readdirSync(path.join(chosen, 'lock-alerts')).filter(name => name.endsWith('.json')).length, 1);
 });

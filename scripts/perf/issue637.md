@@ -5,8 +5,8 @@ Run this from the authorized Terminal.app session after obtaining the shared des
 ```sh
 python3 scripts/perf/issue637-run.py \
   --app .build/dd-i637-release/Build/Products/Release/Mado.app \
-  --image "$HOME/.picsee/testassets/generated/S3/noise-48mp.png" \
-  --out "$HOME/.picsee/device/i637-perf-<unique-run-id>" \
+  --image "$HOME/.mado/testassets/generated/S3/noise-48mp.png" \
+  --out "$HOME/.mado/device/i637-perf-<unique-run-id>" \
   --run-id '<gui-lock-run-id>' \
   --gui-acquisition-id '<gui-lock-acquisition-id>' \
   --iterations 40

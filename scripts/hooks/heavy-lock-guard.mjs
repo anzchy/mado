@@ -5,7 +5,7 @@
 // scripts/tdd/*-lane.mjs lanes and tdd-guardian receipt.js record/verify take
 // the lock themselves and pass untouched; wrapping trash-lane.mjs in
 // heavy-lock.sh is denied (docs/agents/test-lanes.md: 不要用外层包它).
-// PICSEE_HEAVY_LOCK_HELD=1 written in the command is not an exemption: it is
+// MADO_HEAVY_LOCK_HELD=1 written in the command is not an exemption: it is
 // only a nesting hint and a Bash tool call has no parent lock FD.
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';

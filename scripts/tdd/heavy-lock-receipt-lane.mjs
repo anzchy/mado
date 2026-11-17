@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Run one named process contract for a focused RED receipt.
 import {spawnSync} from 'node:child_process';
-const name=process.env.PICSEE_HEAVY_TEST_FILTER;
-const file=process.env.PICSEE_HEAVY_TEST_FILE??'scripts/tdd/heavy-lock.test.mjs';
+const name=process.env.MADO_HEAVY_TEST_FILTER;
+const file=process.env.MADO_HEAVY_TEST_FILE??'scripts/tdd/heavy-lock.test.mjs';
 if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','scripts/tdd/app-lane.test.mjs','scripts/tdd/unit-lane.test.mjs',
   'scripts/ci/integration/hosted-owner.test.mjs',
   'scripts/ci/integration/hosted-compare.test.mjs',
@@ -12,7 +12,7 @@ if(!['scripts/tdd/heavy-lock.test.mjs','scripts/tdd/swift-lane.test.mjs','script
   'scripts/tdd/fixture-env.test.mjs','scripts/tdd/fixture-pid.test.mjs','scripts/tdd/escalation.test.mjs','scripts/tdd/heavy-lock-exit-query.test.mjs'].includes(file)){
   process.stderr.write('unsupported process contract file\n');process.exit(70);
 }
-if(!name){process.stderr.write('PICSEE_HEAVY_TEST_FILTER is required\n');process.exit(70);}
+if(!name){process.stderr.write('MADO_HEAVY_TEST_FILTER is required\n');process.exit(70);}
 const exact='^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$';
 const run=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern',exact,file],
   {encoding:'utf8',maxBuffer:16*1024*1024,timeout:30000});

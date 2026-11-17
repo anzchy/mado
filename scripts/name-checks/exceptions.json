@@ -1,27 +1,7 @@
 [
   {
-    "prefix": "docs/adr/",
-    "reason": "ADRs retain historical and future identity decisions verbatim (ADR-0017)."
-  },
-  {
-    "prefix": "docs/validation/",
-    "reason": "Validation records describe the identity actually tested and are not rewritten."
-  },
-  {
-    "prefix": "evidence/",
-    "reason": "Static research evidence retains original product names."
-  },
-  {
-    "pathRegex": "^\\.claude/tdd-guardian/(?:plan|tests|attack|coverage|gate|review|repro|i[0-9]+)[^/]*\\.md$",
-    "reason": "Frozen TDD plans, RED and validation records retain their original names; config and executable tooling are still scanned."
-  },
-  {
     "path": "appcast.xml",
     "reason": "The installed old app's feed is frozen with its existing entries (ADR-0017)."
-  },
-  {
-    "path": "docs/knowledge/former-name.md",
-    "reason": "The former-name note must name both identities; this reserved path is for the later docs ticket."
   },
   {
     "path": "scripts/name-checks/identity.json",
@@ -38,10 +18,6 @@
   {
     "path": "scripts/name-checks/code-name.test.mjs",
     "reason": "Independent scanner fixtures must exercise both names and exception boundaries."
-  },
-  {
-    "path": "scripts/name-checks/README.md",
-    "reason": "Checker documentation explains both settings and the deliberate failure proof."
   },
   {
     "pattern": "\\bPICSEE_[A-Z0-9_]+\\b",
@@ -82,13 +58,6 @@
       "content"
     ],
     "reason": "#554: repository URLs and their escaped fixture spellings move after the code series."
-  },
-  {
-    "pattern": "design/(?:prototypes/picsee-browser|picsee-ui-system)\\b",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#553: executable consumers must continue reading deferred existing design paths."
   },
   {
     "pattern": "picsee\\.native-design-spec/v1",
@@ -241,14 +210,6 @@
     "reason": "#556: UI fixture marker is persistent tooling data and must remain paired with existing runtime records."
   },
   {
-    "path": "scripts/verify_design_catalog.js",
-    "pattern": "/(?:prototypes/picsee-browser|picsee-ui-system)\\b",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#553: relative design fetches keep reading existing prototype paths until design migration."
-  },
-  {
     "pathRegex": "^scripts/tests/ui-test-(?:runtime|prompts)\\.test\\.py$",
     "pattern": "picsee-(?:prompt-test|runtime-test|ui-refusal)",
     "scopes": [
@@ -288,14 +249,6 @@
     "reason": "#556: safety-rule fixture exercises installed historical signing-rule argv; it is not a build target."
   },
   {
-    "path": "scripts/agents/ui-parity-pr-body-lint.mjs",
-    "pattern": "picsee(?=.{0,2}/herdr)",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#556: escaped regex spelling of the existing .picsee/herdr audit path contract."
-  },
-  {
     "pathRegex": "^scripts/testassets/(?:generate|test_checks)\\.py$",
     "pattern": "PICSEE(?= (?:deliberately corrupt image|text fixture))",
     "scopes": [
@@ -318,22 +271,6 @@
       "content"
     ],
     "reason": "#556: the borrowed GUI-lease verifier must match the unchanged gui-lock.sh owner project token until both ends migrate."
-  },
-  {
-    "pathRegex": "^\\.github/workflows/release\\.yml$",
-    "pattern": "Picsee\\-\\$VERSION\\.dmg|Picsee\\-notarize\\.zip|picsee\\-release\\.keychain\\-db|picsee\\ \\$VERSION|(?<=packages )picsee(?=,)",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#552: only the existing DMG, notarization ZIP, temporary keychain and release-title/prose tokens are deferred; schemes/app bundles/bundle IDs stay checked."
-  },
-  {
-    "pathRegex": "^scripts/release/appcast\\.mjs$",
-    "pattern": "picsee(?='s Sparkle appcast)|(?<=<title>)picsee(?=<| \\$\\{escape\\(item\\.shortVersion\\)\\})|(?<=<description>)picsee(?= updates)",
-    "scopes": [
-      "content"
-    ],
-    "reason": "#552: existing frozen-feed prose/XML titles remain the historical feed identity; live build identifiers stay checked."
   },
   {
     "pathRegex": "^scripts/release/.*\\.test\\.mjs$",
@@ -522,5 +459,13 @@
       "content"
     ],
     "reason": "Frozen historical release isolation and retained build-history oracles name the old DMG and preceding release explicitly; no production identity is exempt."
+  },
+  {
+    "pathRegex": "^scripts/heavy-lock\\.sh$",
+    "pattern": "PICSEE_\\(HEAVY\\|MDPRO\\)|(?<=\\$\\{legacy#)PICSEE_(?=\\})|(?<=\\{!)legacy|(?<=\\^)PICSEE_(?=\\(HEAVY)",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556 compat window: legacy PICSEE_HEAVY*/PICSEE_MDPRO* variables are mapped to MADO_*; remove with the fallback."
   }
 ]
