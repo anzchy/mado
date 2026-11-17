@@ -37,7 +37,8 @@ enum RSLayouts {
                                texts: ["中文测试", "SIDE", "Hello Mado"])
     static let d5 = RS.Layout(rects: [RS.r(0, 0, 100, 60), RS.r(150, 0, 250, 20), RS.r(400, 0, 500, 20),
                                       RS.r(150, 40, 250, 60)], texts: ["T", "A", "B", "C"])
-    /// Every line is a bridge: the neighbour graph is the 4-cycle X–s1–Y–s2.
+    /// The neighbour graph is the 4-cycle X–s1–Y–s2. Before fix round 1 every line was a bridge;
+    /// now (688-RS2-WI-1) only X and Y are: s1 and s2 are shorter than both lines they touch.
     static let allBridge = RS.Layout(rects: [RS.r(0, 0, 100, 40), RS.r(300, 30, 400, 70), RS.r(150, 32, 200, 36),
                                              RS.r(220, 36, 270, 40)], texts: ["X", "Y", "s1", "s2"])
     static let margins = RS.Layout(rects: [RS.r(0, 0, 100, 20), RS.r(130, 30, 230, 50)], texts: ["A", "B"])
@@ -78,17 +79,20 @@ private func check(_ layout: RS.Layout, anchorPoint: CGPoint?, _ sweep: RSSweep)
         #expect(RS.normalized(RSLayouts.ce3.resolver.rows) == [[0, 1, 2]])
         #expect(RS.normalized(RSLayouts.ce4.resolver.rows) == [[0, 1], [2]])
         #expect(RS.normalized(RSLayouts.d5.resolver.rows) == [[1, 2], [3]])
-        #expect(RS.normalized(RSLayouts.allBridge.resolver.rows) == [[0, 1, 2, 3]])
+        #expect(RS.normalized(RSLayouts.allBridge.resolver.rows) == [[2], [3]])
         #expect(TextRowResolver(rects: [], axis: .horizontal).rows.isEmpty)
     }
 
-    @Test func issue688RSAllBridgeFallback() {
+    @Test func issue688RS2FormerAllBridgeLayoutKeepsItsShortLines() {
+        // 688-RS2-WI-1: was issue688RSAllBridgeFallback (rows [[0,1,2,3]], snaps up to 150 pt).
         let resolver = RSLayouts.allBridge.resolver
-        #expect(RS.normalized(resolver.rows) == [[0, 1, 2, 3]])
-        #expect(resolver.lineIndex(at: CGPoint(x: 450, y: 50), anchorLine: 0) == 1)
-        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 100), anchorLine: 0) == 2)
-        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 100), anchorLine: nil) == 2)
-        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 100), anchorLine: 3) == 3)
+        #expect(RS.normalized(resolver.rows) == [[2], [3]])
+        #expect(resolver.lineIndex(at: CGPoint(x: 450, y: 50), anchorLine: 0) == 3)
+        #expect(resolver.lineIndex(at: CGPoint(x: 205, y: 10), anchorLine: 0) == 2)
+        // Bands 32…36 and 36…40 both contain y = 36 and both rows give a line level with it.
+        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 36), anchorLine: 0) == 2)
+        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 36), anchorLine: nil) == 2)
+        #expect(resolver.lineIndex(at: CGPoint(x: 210, y: 36), anchorLine: 3) == 3)
     }
 
     @Test func issue688RSEmptyRects() {
@@ -250,16 +254,18 @@ private func check(_ layout: RS.Layout, anchorPoint: CGPoint?, _ sweep: RSSweep)
         #expect(resolver.lineIndex(at: CGPoint(x: 200, y: 30), anchorLine: 2) == 0)
     }
 
-    @Test func issue688RSFallbackOnlyWhenEveryLineIsABridge() {
+    @Test func issue688RS2FormerAllBridgeLayoutWithAnotherRow() {
+        // 688-RS2-WI-1: was issue688RSFallbackOnlyWhenEveryLineIsABridge (rows [[4]]).
         let resolver = TextRowResolver(rects: RSLayouts.allBridge.rects + [RS.r(0, 200, 100, 220)], axis: .horizontal)
-        #expect(RS.normalized(resolver.rows) == [[4]])
-        #expect(resolver.lineIndex(at: CGPoint(x: 450, y: 50), anchorLine: 0) == 4)
+        #expect(RS.normalized(resolver.rows) == [[2], [3], [4]])
+        #expect(resolver.lineIndex(at: CGPoint(x: 450, y: 50), anchorLine: 0) == 3)
     }
 
-    @Test func issue688RSFallbackRowsAreComponentsOfAllLines() {
+    @Test func issue688RS2FormerAllBridgeLayoutTwice() {
+        // 688-RS2-WI-1: was issue688RSFallbackRowsAreComponentsOfAllLines ([[0,1,2,3],[4,5,6,7]]).
         let copy = RSLayouts.allBridge.rects.map { $0.offsetBy(dx: 0, dy: 200) }
         let resolver = TextRowResolver(rects: RSLayouts.allBridge.rects + copy, axis: .horizontal)
-        #expect(RS.normalized(resolver.rows) == [[0, 1, 2, 3], [4, 5, 6, 7]])
+        #expect(RS.normalized(resolver.rows) == [[2], [3], [6], [7]])
     }
 
     @Test func issue688RSNilAnchorTakesLeftCandidate() {

@@ -38,28 +38,85 @@ enum RSGenerator {
 
     private struct Entry { var rect: CGRect; var text: String; var row: Int? }
 
+    /// Fix round 1: extra layout kinds, each on its own seeds so the 400 plain layouts stay
+    /// identical. `inflate` (F2): a tall member that is not a bridge stretches its row's band into
+    /// the next row's band. `skew` (F1): rows of 3–6 segments, each shifted by d (0 < |d| ≤ 0.4 of
+    /// the height, either tilt), as in a slightly rotated photo. `tight` (F1): flat rows that
+    /// overlap the next row by 1 pt up to a quarter of the shorter height. `stretched` (F1): a
+    /// partly stretched Vision box beside two adjacent rows (tight or ordinary spacing), covering
+    /// at least three quarters of each; it is a bridge.
+    enum Kind { case plain, inflate, skew, tight, stretched }
+    static let extraSeeds: [(kind: Kind, seeds: [UInt64])] = [
+        (.inflate, [0xF2_01, 0xF2_02, 0xF2_03, 0xF2_04, 0xF2_05]),
+        (.skew, [0xF1_51, 0xF1_52, 0xF1_53]),
+        (.tight, [0xF1_71, 0xF1_72, 0xF1_73]),
+        (.stretched, [0xF1_B1, 0xF1_B2, 0xF1_B3])
+    ]
+    static let extraPerSeed = 20
+
     static func all() -> [RSGenerated] {
         seeds.flatMap { seed in
             var rng = RSSplitMix64(state: seed)
             return (0..<layoutsPerSeed).map { make(&rng, seed: seed, index: $0) }
+        } + extraSeeds.flatMap { extra in
+            extra.seeds.flatMap { seed in
+                var rng = RSSplitMix64(state: seed)
+                return (0..<extraPerSeed).map { make(&rng, seed: seed, index: $0, kind: extra.kind) }
+            }
         }
     }
 
-    static func make(_ rng: inout RSSplitMix64, seed: UInt64, index: Int) -> RSGenerated {
+    static func make(_ rng: inout RSSplitMix64, seed: UInt64, index: Int, kind: Kind = .plain) -> RSGenerated {
         func text() -> String { (0..<rng.int(1, 8)).map { _ in alphabet[rng.int(0, alphabet.count - 1)] }.joined() }
         var entries: [Entry] = []
-        let rowCount = rng.int(1, 4)
+        let rowCount = kind == .plain ? rng.int(1, 4) : rng.int(2, 4)
+        let tight = kind == .tight || (kind == .stretched && rng.int(0, 1) == 0)
         var top = 40
+        var tops: [Int] = [], heights: [Int] = []
         for row in 0..<rowCount {
             let height = [12, 16, 20][rng.int(0, 2)]
+            if tight, let lastTop = tops.last, let lastHeight = heights.last {
+                top = lastTop + lastHeight - rng.int(1, min(lastHeight, height) / 4)
+            }
+            tops.append(top); heights.append(height)
             var x = 100 + rng.int(0, 20)
+            if kind == .skew {
+                let d = rng.int(1, height * 2 / 5) * (rng.int(0, 1) == 0 ? 1 : -1)
+                let count = rng.int(3, 6), base = d < 0 ? -d * (count - 1) : 0
+                for i in 0..<count {
+                    let y = top + base + i * d, width = rng.int(40, 120)
+                    entries.append(Entry(rect: RS.r(CGFloat(x), CGFloat(y), CGFloat(x + width), CGFloat(y + height)),
+                                         text: text(), row: row))
+                    x += width + rng.int(15, 40)
+                }
+                top += abs(d) * (count - 1) + height + rng.int(8, 30)
+                continue
+            }
             for _ in 0..<rng.int(1, 3) {
-                let dy = rng.int(-2, 2), width = rng.int(30, 200)
+                let jitter = rng.int(-2, 2), width = rng.int(30, 200)
+                let dy = kind == .tight || kind == .stretched ? 0 : jitter
                 entries.append(Entry(rect: RS.r(CGFloat(x), CGFloat(top + dy), CGFloat(x + width),
                                                 CGFloat(top + dy + height)), text: text(), row: row))
                 x += width + rng.int(15, 60)
             }
             top += height + rng.int(8, 30)
+        }
+        if kind == .stretched {
+            let r = rng.int(0, rowCount - 2)
+            let low = tops[r] + rng.int(0, heights[r] / 4)
+            let high = tops[r + 1] + heights[r + 1] - rng.int(0, heights[r + 1] / 4)
+            let x = Int(entries.map(\.rect.maxX).max()!) + rng.int(15, 40)
+            entries.append(Entry(rect: RS.r(CGFloat(x), CGFloat(low), CGFloat(x + rng.int(30, 55)), CGFloat(high)),
+                                 text: text(), row: nil))
+        }
+        if kind == .inflate {
+            // A tall member of row r reaching into row r+1 by less than half of r+1's height
+            // (−3 pt covers the ±2 pt jitter), so it neighbours row r's lines but not row r+1's.
+            let r = rng.int(0, rowCount - 2)
+            let x = Int(entries.map(\.rect.maxX).max()!) + rng.int(15, 40)
+            let bottom = tops[r + 1] + heights[r + 1] / 2 - 3
+            entries.append(Entry(rect: RS.r(CGFloat(x), CGFloat(tops[r]), CGFloat(x + rng.int(30, 80)), CGFloat(bottom)),
+                                 text: text(), row: r))
         }
         var hasNested = false
         if rng.int(0, 2) == 0 {
@@ -107,6 +164,11 @@ enum RSGenerator {
                 points += [CGPoint(x: (a.maxX + b.minX) / 2, y: mid), CGPoint(x: a.maxX + 1, y: mid),
                            CGPoint(x: b.minX - 1, y: mid)]
             }
+            // Level with each member, just past either end of the row (F2: overlapping bands).
+            for m in members {
+                points += [CGPoint(x: members.map(\.minX).min()! - 3, y: m.midY),
+                           CGPoint(x: members.map(\.maxX).max()! + 3, y: m.midY)]
+            }
             points += [CGPoint(x: members.map(\.minX).min()! - 5, y: mid),
                        CGPoint(x: members.map(\.maxX).max()! + 5, y: mid)]
         }
@@ -143,20 +205,56 @@ enum RSGenerator {
         let best = distances.min()!
         return distances.indices.filter { distances[$0] == best }
     }
+    /// The line a true row gives for an endpoint off every box: covering member nearest
+    /// perpendicularly, else the extreme-edge candidates around the point resolved against the
+    /// anchor in reading order (straddle: the anchor's side). Written here from the rule text.
+    static func oracleCandidate(_ g: RSGenerated, row: Int, _ p: CGPoint, anchor: Int?) -> Int {
+        let rects = g.layout.rects, members = g.truthRows[row]
+        func own(_ i: Int) -> CGFloat { max(rects[i].minY - p.y, 0, p.y - rects[i].maxY) }
+        let covering = members.filter { rects[$0].minX <= p.x && p.x <= rects[$0].maxX }
+        if !covering.isEmpty { return covering.min { (own($0), $0) < (own($1), $1) }! }
+        let before = members.filter { rects[$0].maxX < p.x }.max { (rects[$0].maxX, -$0) < (rects[$1].maxX, -$1) }
+        let after = members.filter { rects[$0].minX > p.x }.min { (rects[$0].minX, $0) < (rects[$1].minX, $1) }
+        guard let before else { return after! }
+        guard let after else { return before }
+        guard let anchor else { return before }
+        if before >= anchor, after >= anchor { return min(before, after) }
+        if before <= anchor, after <= anchor { return max(before, after) }
+        return rects[anchor].midX < p.x ? before : after
+    }
+    /// The true row an endpoint off every box belongs to: nearest band; on a band tie, the row
+    /// whose line is nearest the pointer perpendicularly; then the anchor's row; then the lowest.
+    static func oracleRow(_ g: RSGenerated, _ p: CGPoint, anchor: Int?) -> Int {
+        let nearest = oracleNearestRows(g, p)
+        guard nearest.count > 1 else { return nearest[0] }
+        let rects = g.layout.rects
+        let distance = nearest.map { row -> CGFloat in
+            let line = rects[oracleCandidate(g, row: row, p, anchor: anchor)]
+            return max(line.minY - p.y, 0, p.y - line.maxY)
+        }
+        let tied = nearest.indices.filter { distance[$0] == distance.min()! }.map { nearest[$0] }
+        if tied.count == 1 { return tied[0] }
+        if let anchor, let row = tied.first(where: { g.truthRows[$0].contains(anchor) }) { return row }
+        return tied.min()!
+    }
     static func oracleHit(_ rects: [CGRect], _ point: CGPoint) -> Int? {
         for i in rects.indices where rects[i].contains(point) { return i }
         return nil
     }
 }
 
+/// Failure reports stay short (seed, layout index, a clipped detail; the layout regenerates
+/// from the seed and index): long multi-line issue text from parallel tests can split the
+/// runner's result lines, which makes the receipt lane reject the run.
 private struct RSFailures {
     var name: String
     var items: [String] = []
-    mutating func add(_ g: RSGenerated, _ detail: String) { items.append("\(name): \(g) \(detail)") }
+    mutating func add(_ g: RSGenerated, _ detail: String) {
+        items.append("\(name): seed=\(g.seed) layout#\(g.index) \(detail.prefix(160))")
+    }
     func report(_ start: ContinuousClock.Instant, sourceLocation: SourceLocation = #_sourceLocation) {
-        print("\(name): \(ContinuousClock.now - start) for \(RSGenerator.seeds.count * RSGenerator.layoutsPerSeed) layouts")
-        #expect(items.isEmpty, "\(items.count) failures; first: \(items.prefix(3).joined(separator: "\n"))",
-                sourceLocation: sourceLocation)
+        print("\(name): \(ContinuousClock.now - start) for \(Issue688TextRowResolverPropertyTests.layouts.count) layouts")
+        #expect(items.isEmpty, "\(items.count) failures; first: \(items.first ?? "")", sourceLocation: sourceLocation)
     }
 }
 
@@ -394,13 +492,10 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
             let resolver = g.layout.resolver
             for a in anchors {
                 guard let anchorLine = resolver.hitLine(at: a) else { continue }
-                let anchorRow = g.truthRows.firstIndex { $0.contains(anchorLine) }
                 for e in ends where RSGenerator.oracleHit(g.layout.rects, e) == nil {
-                    let nearest = RSGenerator.oracleNearestRows(g, e)
-                    let allowed: [Int]
-                    if nearest.count == 1 { allowed = nearest }
-                    else if let anchorRow, nearest.contains(anchorRow) { allowed = [anchorRow] }
-                    else { continue }
+                    // Fix round 1 (F2): every band tie is decided by the oracle, including
+                    // multi-row ties without the anchor's row.
+                    let allowed = [RSGenerator.oracleRow(g, e, anchor: anchorLine)]
                     guard let line = resolver.lineIndex(at: e, anchorLine: anchorLine) else {
                         failures.add(g, "nil a=\(a) e=\(e)"); continue
                     }
@@ -435,12 +530,17 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
         failures.report(start)
     }
 
+    private func oracleBottom(_ g: RSGenerated, _ row: [Int]) -> CGFloat { row.map { g.layout.rects[$0].maxY }.max()! }
+
     @Test func issue688RSFullRange() {
         let start = ContinuousClock.now
         var failures = RSFailures(name: "I8")
         var checked = 0
         each { g, _, _ in
-            guard g.bridges.isEmpty, !g.hasNested else { return }
+            // The last line must close the bottom row (an inflated member is appended last but
+            // belongs to an upper row).
+            let bottom = g.truthRows.max { oracleBottom(g, $0) < oracleBottom(g, $1) }!
+            guard g.bridges.isEmpty, !g.hasNested, bottom.contains(g.layout.rects.count - 1) else { return }
             let cell = g.layout.cellsOf(0)[0]
             let anchor = CGPoint(x: cell.minX + 0.1 * cell.width, y: cell.midY)
             let end = CGPoint(x: g.layout.rects.map(\.maxX).max()! + 20, y: g.layout.rects.map(\.maxY).max()! + 20)
