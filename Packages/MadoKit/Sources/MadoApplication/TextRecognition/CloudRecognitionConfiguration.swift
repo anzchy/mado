@@ -27,9 +27,10 @@ public struct CloudRecognitionConfiguration: CloudRecognitionSettings {
                                preferences: any CloudRecognitionPreferencePort,
                                keys: BaiduCloudCredentialStore,
                                reachability: any NetworkReachabilityPort,
-                               cloud: any CloudTextRecognitionProviding) -> TextRecognitionService {
+                               cloud: any CloudTextRecognitionProviding,
+                               report: (@Sendable (CloudRecognitionOutcome) -> Void)? = nil) -> TextRecognitionService {
         TextRecognitionService(onDevice: onDevice,
                                settings: CloudRecognitionConfiguration(preferences: preferences, reachability: reachability),
-                               credentialStore: keys, cloud: cloud)
+                               credentialStore: keys, cloud: cloud, report: report)
     }
 }
