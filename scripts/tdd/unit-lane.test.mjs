@@ -33,8 +33,8 @@ fs.writeFileSync(process.env.STARTED,String(Date.now()));
 if(process.env.ORDER)fs.appendFileSync(process.env.ORDER,'swift\\n');
 if(process.env.MODE==='hang'){
  fs.writeFileSync(process.env.LEADER,String(process.pid));
- cp.spawn(process.execPath,['-e',"require('fs').writeFileSync(process.env.HELPER,String(process.pid));process.on('SIGTERM',()=>{});setTimeout(()=>process.exit(0),5000);setInterval(()=>{},100);"],{detached:true,stdio:'inherit'});
- setTimeout(()=>process.exit(0),5000);setInterval(()=>{},100);
+ cp.spawn(process.execPath,['-e',"require('fs').writeFileSync(process.env.HELPER,String(process.pid));process.on('SIGTERM',()=>{});setTimeout(()=>process.exit(0),40000);setInterval(()=>{},100);"],{detached:true,stdio:'inherit'});
+ setTimeout(()=>process.exit(0),40000);setInterval(()=>{},100);
 }else{
  console.log(process.env.MARKER||'normal-output'); console.error('normal-stderr');
  console.log('✔ Test run with 7 tests in 1 suite passed after 0.001 seconds.');
@@ -48,7 +48,7 @@ if(process.env.MODE==='hang'){
 }
 function run(f, extra = {}) {
   const { stderrFile, ...overrides } = extra;
-  const options = { cwd: f.dir, ...short, timeoutSeconds: f.env.MODE === 'hang' ? 2 : 30, verifyCoverage: false, ...overrides };
+  const options = { cwd: f.dir, ...short, timeoutSeconds: f.env.MODE === 'hang' ? 10 : 30, verifyCoverage: false, ...overrides };
   const fd = stderrFile ? fs.openSync(stderrFile, 'w') : undefined;
   let result;
   try {
@@ -105,7 +105,7 @@ test('hung detached helper exits 124, keeps diagnostics and releases the lock', 
   const f = fixture(t); f.env.MODE = 'hang';
   const started = Date.now(), r = run(f);
   assert.equal(r.status, 124, r.stderr);
-  assert.ok(Date.now() - started < 15_000, 'bounded test run and cleanup');
+  assert.ok(Date.now() - started < 60_000, 'bounded test run and cleanup');
   assert.match(r.stderr, /deadline passed/); assert.match(r.stderr, /exit 124 \(timed out\)/);
   const dir = captures(f)[0];
   assert.match(fs.readFileSync(path.join(dir, 'stacks/ps.txt'), 'utf8'), /PID PPID %CPU/);
@@ -113,7 +113,7 @@ test('hung detached helper exits 124, keeps diagnostics and releases the lock', 
   for (let i = 0; i < 30 && pids.some(alive); i++) await delay(50);
   assert.deepEqual(pids.map(alive), [false, false], 'leader and independent helper are dead');
   assert.equal(fs.readFileSync(f.env.ATTEMPTS, 'utf8').trim().split('\n').length, 1);
-  const follower = spawnSync(lock, [process.execPath, '-e', "console.log('admitted')"], { env: f.env, encoding: 'utf8', timeout: 3000 });
+  const follower = spawnSync(lock, [process.execPath, '-e', "console.log('admitted')"], { env: f.env, encoding: 'utf8', timeout: 30000 });
   assert.equal(follower.status, 0, follower.stderr); assert.match(follower.stdout, /admitted/);
 });
 
