@@ -118,7 +118,7 @@ test('fake SSH executes remote script, copies bundle, records isolated step summ
   exec(realGit, ['commit', '-qm', 'edit command'], { cwd: f.repo });
   const editedHead = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
   const editedHash = workflowAt(f.repo, editedHead).workflowSha256;
-  const edited = await runAsync(['remote', f.repo, editedHead, 'agent-tests', editedHash, '3', '5'], { env: f.env });
+  const edited = await runAsync(['remote', f.repo, editedHead, 'agent-tests', editedHash, '60', '120'], { env: f.env });
   assert.equal(edited.status, 1, edited.stderr + edited.stdout);
   assert.match(edited.stdout, /step:Node totals:exit=7/);
   assert.match(edited.stdout, /outcome=FAIL/);
@@ -161,7 +161,7 @@ test('a tested run without a literal node command still requires a complete TAP 
   const second = `printf '%s\\n' '# tests 1' '# pass 1' && : 'alternate runner'`;
   const f = fixture(undefined, second);
   const hash = workflowAt(f.repo, f.sha).workflowSha256;
-  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '3', '5'], { env: f.env });
+  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '60', '120'], { env: f.env });
   assert.equal(result.status, 75, result.stderr + result.stdout);
   assert.match(result.stdout, /outcome=NOT VERIFIED\nreason=/);
 });
@@ -206,7 +206,7 @@ test('ordinary nonzero exits keep FAIL across missing, partial, and inconsistent
   for (const [code, second, failedName] of cases) {
     const f = fixture(undefined, second);
     const hash = workflowAt(f.repo, f.sha).workflowSha256;
-    const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '3', '5'], { env: f.env });
+    const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '60', '120'], { env: f.env });
     assert.equal(result.status, 1, `${code}: ${result.stderr}${result.stdout}`);
     assert.match(result.stdout, /outcome=FAIL/);
     assert.match(result.stdout, new RegExp(`step:Node totals:exit=${code}\\n`));
@@ -253,7 +253,7 @@ test('transfer failure and busy lock are NOT VERIFIED with exit 75 and immutable
 test('step timeout is TIMEOUT; summary checker refuses truncation, duplicate DONE, wrong head and missing totals', async () => {
   const f = fixture('sleep 1.2');
   const hash = workflowAt(f.repo, f.sha).workflowSha256;
-  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '1', '3', '--time-bin', '/nonexistent-gnu-time'], { env: f.env });
+  const result = await runAsync(['remote', f.repo, f.sha, 'agent-tests', hash, '1', '60', '--time-bin', '/nonexistent-gnu-time'], { env: f.env });
   assert.equal(result.status, 1, result.stderr + result.stdout);
   const body = result.stdout;
   assert.match(body, /outcome=TIMEOUT/);

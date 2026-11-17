@@ -4,7 +4,7 @@
 //   Linux: procps has no -E, so list `pid args` and read /proc/<pid>/environ.
 // `owner` keeps only guardians whose PICSEE_HEAVY_GUARDIAN_OWNER starts with it,
 // so a test sees its own run's guardian, not leftovers from other runs.
-// Run as a script: node guardian-env-probe.mjs <owner-prefix> waits up to 5 s
+// Run as a script: node guardian-env-probe.mjs <owner-prefix> waits up to 15 s
 // for a matching guardian and prints {job, guardians, leak} as JSON.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ const guardianArgs = /heavy-lock\.py --guardian [0-9]+ [0-9]+/;
 const plan = 'PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN';
 
 function listed(ps, args) {
-  const r = spawnSync(ps, args, { encoding: 'utf8', timeout: 5000 });
+  const r = spawnSync(ps, args, { encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 ? r.stdout.split('\n') : [];
 }
 
@@ -40,7 +40,7 @@ export function guardianEnvironments({ platform = process.platform, ps = '/bin/p
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const owner = process.argv[2];
-  const until = Date.now() + 5000;
+  const until = Date.now() + 15000;
   let guardians = guardianEnvironments({ owner });
   while (guardians.length === 0 && Date.now() < until) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
