@@ -68,6 +68,7 @@ const DISPLAY_PANEL_ESC = 'Esc closes the open Display panel, a popover dismissa
 const ANNOTATE_ONLY = 'only in Annotate Mode';
 const RECORDER = 'Esc cancels and Delete clears the Capture shortcut recorder in Settings › 截图 (#685), not a Mado command';
 const ANNOTATE_SHEET = 'Esc and Return answer the unsaved-marks sheet (取消 / 存储), a sheet\'s own buttons, not a command';
+const HELPER_EDIT_KEYS = 'the positions of ⌘A/C/X/V/Z in the Capture helper\'s text panel on a non-Latin layout (#687c fix r2), not a Mado command';
 export const KEY_SITES = {
   'Packages/MadoKit/Sources/MadoMacUI/Grid/GridBrowserView.swift': {
     123: 'key:grid-arrows', 124: 'key:grid-arrows', 125: 'key:grid-arrows', 126: 'key:grid-arrows',
@@ -102,6 +103,8 @@ export const KEY_SITES = {
     76: { excluded: ANNOTATE_ONLY } },
   'App/CanvasWindowController+AnnotateUI.swift': { 53: { excluded: ANNOTATE_SHEET }, 36: { excluded: ANNOTATE_SHEET },
     76: { excluded: ANNOTATE_SHEET } },
+  'App/CaptureHelper/CaptureRecogniseText.swift': { 0: { excluded: HELPER_EDIT_KEYS }, 8: { excluded: HELPER_EDIT_KEYS },
+    7: { excluded: HELPER_EDIT_KEYS }, 9: { excluded: HELPER_EDIT_KEYS }, 6: { excluded: HELPER_EDIT_KEYS } },
   'App/CaptureHelper/CaptureSelectionPanel.swift': { 53: { excluded: 'Esc cancels a transient helper Capture selection, not a Mado command' } },
   'App/UI/CaptureShortcutField.swift': {
     53: { excluded: RECORDER }, 51: { excluded: RECORDER }, 117: { excluded: RECORDER } },
@@ -131,7 +134,7 @@ export const CHARACTER_EXCLUSIONS = {
     anchor: /let character = event\.charactersIgnoringModifiers/g },
   'App/CaptureHelper/CaptureRecogniseText.swift': {
     reason: 'the standard Edit keys (⌘A/C/X/V/Z, ⇧⌘Z) in the Capture helper\'s text panel, which has no Edit menu (#687c)',
-    anchor: /switch \(event\.charactersIgnoringModifiers\?\.lowercased\(\), modifiers\)/g },
+    anchor: /let typed = event\.charactersIgnoringModifiers\?\.lowercased\(\)/g },
 };
 
 /** Key codes a Swift source handles: keyCode == N, case N inside switch …keyCode { }, [N, M].contains(….keyCode)
