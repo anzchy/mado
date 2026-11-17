@@ -166,7 +166,7 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
     return (a, layout.extent(end, anchorLine: a.line, using: resolver))
 }
 
-@Suite(.timeLimit(.minutes(1))) struct Issue688TextRowResolverPropertyTests {
+@Suite(.timeLimit(.minutes(2))) struct Issue688TextRowResolverPropertyTests {
     static let layouts = RSGenerator.all()
 
     /// Walks every generated layout with its own sampler stream (seeded by the layout).

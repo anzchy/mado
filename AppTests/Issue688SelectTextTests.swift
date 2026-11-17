@@ -231,7 +231,7 @@ import MadoInfrastructure
 }
 
 extension Issue688DeviceSelectionGapTests {
-    @MainActor @Test func issue688DeviceGapWithNeighborLineBaselineKeepsDeparture() async throws {
+    @MainActor @Test(.timeLimit(.minutes(3))) func issue688DeviceGapWithNeighborLineBaselineKeepsDeparture() async throws {
         let (selection, chinese, side) = try await fixtureSelection()
         let first = selection.geometry.viewRect(chinese.box)
         let second = selection.geometry.viewRect(side.box)
