@@ -2,6 +2,7 @@ import Foundation
 import MadoApplication
 import MadoInfrastructure
 import Network
+import OSLog
 import Security
 
 /// The Cloud Recognition keys as generic passwords in the user's keychain (ADR-0019): readable after the first
@@ -70,7 +71,14 @@ enum CloudRecognitionAppServices {
     static let preferences: any CloudRecognitionPreferencePort = UserDefaultsCloudRecognitionPreferences(defaults: .standard)
     static let keys = BaiduCloudCredentialStore(secrets: KeychainSecretStore(), service: keychainService)
     static let reachability = NWPathReachability()
-    static let cloud = BaiduTextRecognitionProvider(transport: URLSessionHTTPTransport())
+    /// #689b dev1: one line per explicit Recognise Text (engine, skip or fallback reason) and one per failed Baidu
+    /// attempt (stage, HTTP status, error_code, error_msg). The strings never hold keys, the token or the image, so
+    /// they are public; watch with `log stream --predicate 'subsystem == "io.github.anzchy.mado" && category ==
+    /// "cloud-recognition"'`.
+    static let logger = Logger(subsystem: "io.github.anzchy.mado", category: "cloud-recognition")
+    static let cloud = BaiduTextRecognitionProvider(transport: URLSessionHTTPTransport(), onFailure: { detail in
+        logger.notice("\(detail.logMessage, privacy: .public)")
+    })
 
     static var settingsModel: CloudRecognitionSettingsModel {
         CloudRecognitionSettingsModel(preferences: preferences, keys: keys)
@@ -79,6 +87,8 @@ enum CloudRecognitionAppServices {
     /// The service Recognise Text uses (#687b wires it into the action).
     static func recognitionService(onDevice: any OnDeviceTextRecognitionProviding) -> TextRecognitionService {
         CloudRecognitionConfiguration.service(onDevice: onDevice, preferences: preferences, keys: keys,
-                                              reachability: reachability, cloud: cloud)
+                                              reachability: reachability, cloud: cloud, report: { outcome in
+            logger.notice("recognise-text \(outcome.logMessage, privacy: .public)")
+        })
     }
 }
