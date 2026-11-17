@@ -104,7 +104,7 @@ struct CaptureRecogniseTextStrings {
     private let announce: (String) -> Void
     private var model: RecogniseTextModel?
     private var run = UUID()
-    /// Bumped by `dismiss()`; a `recognise` read that began under an older value is stale.
+    /// Bumped by `dismiss()`; a `recognise` whose ticket holds an older value is stale.
     private var generation: UInt64 = 0
     private var announcedRun: UUID?
     private var visibleFrame: NSRect = .zero
@@ -160,20 +160,27 @@ struct CaptureRecogniseTextStrings {
         return model.start(png, identity: thisRun)
     }
 
-    /// 截图并识别文字's read, then `present`, unless a Capture, another selection or quitting called `dismiss()` while the
-    /// read ran: that result is dropped (nothing shown, nothing copied), and so is its failure (#687c fix r1 F1).
+    /// One 截图并识别文字 operation, taken when its selection completes.
+    struct Ticket: Equatable { fileprivate let generation: UInt64 }
+
+    /// A ticket for the operation whose selection just completed; take it before any `Task` starts.
+    func ticket() -> Ticket { Ticket(generation: generation) }
+
+    /// 截图并识别文字's read, then `present`, unless a Capture, another selection or quitting called `dismiss()` after
+    /// `ticket` was taken: before the read starts (#687c fix r2 F1b), the read never runs; while it runs (fix r1 F1),
+    /// its result is dropped (nothing shown, nothing copied), and so is its failure.
     /// Returns the recognition task when it presented.
-    func recognise(read: @MainActor () async throws -> (png: Data, visibleFrame: NSRect),
+    func recognise(ticket: Ticket, read: @MainActor () async throws -> (png: Data, visibleFrame: NSRect),
                    willPresent: @MainActor () -> Void = {}) async throws -> Task<Void, Never>? {
-        let generation = self.generation
+        guard ticket == self.ticket() else { return nil }
         let png: Data, frame: NSRect
         do {
             (png, frame) = try await read()
         } catch {
-            guard generation == self.generation else { return nil }
+            guard ticket == self.ticket() else { return nil }
             throw error
         }
-        guard generation == self.generation else { return nil }
+        guard ticket == self.ticket() else { return nil }
         willPresent()
         return present(png: png, visibleFrame: frame)
     }
