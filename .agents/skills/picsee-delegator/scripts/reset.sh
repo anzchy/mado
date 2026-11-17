@@ -173,6 +173,24 @@ except (ValueError, KeyError, TypeError):
     pass
 '
 }
+# Codex drops the herdr agent name and pane label after /new or a relaunch; every lookup by name then fails
+# ("status , not idle", agent_not_found). Re-apply both from the <name> <pane> arguments before the status check,
+# and again on every exit, since /new erases them. A failed rename must never abort a reset.
+restore_names() {
+  herdr agent rename $pane $name >/dev/null 2>&1 || true
+  herdr pane rename $pane $name >/dev/null 2>&1 || true
+}
+restore_names
+trap restore_names EXIT
+# On a failed reset the pane content is the only evidence of why; keep the last screen read (stdout stays one line).
+dump_dir=${PICSEE_RESET_DUMP_DIR-$HOME/.picsee/herdr/delegator}
+screen=""
+dump_screen() {
+  local file=$dump_dir/reset-fail-$name-$(date +%Y%m%d-%H%M%S).txt
+  if mkdir -p "$dump_dir" 2>/dev/null && print -r -- "$screen" > "$file" 2>/dev/null; then
+    echo "reset $name: pane screen saved to $file" >&2
+  fi
+}
 st=$(herdr agent get $name 2>&1 | grep -oE '"agent_status":"[a-z]+"' | cut -d'"' -f4)
 case $st in idle|done) ;; *) echo "FAIL reset $name: status $st, not idle"; exit 1;; esac
 old=$(herdr agent get $name 2>&1 | grep -oE '"value":"[^"]+"' | head -1 | cut -d'"' -f4)
@@ -184,7 +202,8 @@ for i in 1 2 3; do
   herdr pane send-keys $pane enter >/dev/null; sleep 3
   herdr pane read $pane 2>&1 | grep -q 'Where should the new conversation run' && break
 done
-herdr pane read $pane 2>&1 | grep -q 'Where should the new conversation run' || { echo "FAIL reset $name: chooser never appeared"; exit 1; }
+screen=$(herdr pane read $pane 2>&1)
+print -r -- "$screen" | grep -q 'Where should the new conversation run' || { echo "FAIL reset $name: chooser never appeared"; dump_screen; exit 1; }
 herdr pane send-keys $pane enter >/dev/null
 # MCP startup can delay the context footer; wait for it before judging the reset.
 typeset -F SECONDS
@@ -196,7 +215,8 @@ while true; do
   if [[ -n $old_pane_session && -n $current_session && $current_session != "$old_pane_session" ]]; then
     session_proof=1
   fi
-  parsed=$(herdr pane read $pane --source recent-unwrapped --lines 2000 2>&1 | footer $session_proof)
+  screen=$(herdr pane read $pane --source recent-unwrapped --lines 2000 2>&1)
+  parsed=$(print -r -- "$screen" | footer $session_proof)
   [[ ${parsed%%:*} == 1 ]] && boundary_seen=1
   ctx=${parsed#*:}
   [[ -n $ctx ]] && break
@@ -206,9 +226,10 @@ while true; do
     else
       echo "FAIL reset $name: no context line after ${context_secs}s"
     fi
+    dump_screen
     exit 1
   fi
   sleep $poll_secs
 done
-case $ctx in "Context 0% used") ;; *) echo "FAIL reset $name: $ctx after /new"; exit 1;; esac
+case $ctx in "Context 0% used") ;; *) echo "FAIL reset $name: $ctx after /new"; dump_screen; exit 1;; esac
 echo "reset $name old_session=$old $ctx (verify the session id changes after the next turn)"
