@@ -97,10 +97,16 @@ public struct TextRecognitionService: Sendable {
     private let settings: (any CloudRecognitionSettings)?
     private let credentialStore: (any CloudCredentialStore)?
     private let cloud: (any CloudTextRecognitionProviding)?
+    private let report: (@Sendable (CloudRecognitionOutcome) -> Void)?
 
-    public init(onDevice: any OnDeviceTextRecognitionProviding, settings: (any CloudRecognitionSettings)? = nil, credentialStore: (any CloudCredentialStore)? = nil, cloud: (any CloudTextRecognitionProviding)? = nil) {
+    /// `report` hears, once per explicit run with a cloud provider, whether Baidu answered, was skipped or failed
+    /// (#689b dev1); selection runs and cancelled runs report nothing.
+    public init(onDevice: any OnDeviceTextRecognitionProviding, settings: (any CloudRecognitionSettings)? = nil,
+                credentialStore: (any CloudCredentialStore)? = nil, cloud: (any CloudTextRecognitionProviding)? = nil,
+                report: (@Sendable (CloudRecognitionOutcome) -> Void)? = nil) {
         self.onDevice = onDevice
         self.settings = settings; self.credentialStore = credentialStore; self.cloud = cloud
+        self.report = report
     }
 
     public func recognise(_ image: Data, intent: TextRecognitionIntent) async throws(TextRecognitionError) -> TextRecognitionResult {
@@ -113,23 +119,24 @@ public struct TextRecognitionService: Sendable {
                                          isEmpty: text.isEmpty, lines: lines)
         }
         if case .explicit = intent, let settings, let credentialStore, let cloud {
-            let options = await settings.options()
-            if options.enabled, case .granted = options.consent, options.online,
-               let credentials = await credentialStore.credentials(),
-               !credentials.apiKey.isEmpty, !credentials.secretKey.isEmpty {
-                do {
+            switch await cloudChoice(settings: settings, store: credentialStore) {
+            case .skip(let reason):
+                report?(.skipped(reason))
+            case .cloud(let credentials):
+                do throws(TextRecognitionError) {
                     let text = try await cloud.recognise(image, credentials: credentials)
                     if Task.isCancelled { throw TextRecognitionError.cancelled }
+                    report?(.cloud)
                     return TextRecognitionResult(text: text, characterCount: text.count, engine: .cloud, isEmpty: text.isEmpty)
                 } catch {
-                    let cloudError = error as? TextRecognitionError
-                    if Task.isCancelled || cloudError == .cancelled { throw TextRecognitionError.cancelled }
-                    let reason: CloudFallbackReason = switch cloudError {
-                    case .cloudAuth?: .auth
-                    case .cloudQuota?: .quota
-                    case .cloudOffline?: .offline
+                    if Task.isCancelled || error == .cancelled { throw TextRecognitionError.cancelled }
+                    let reason: CloudFallbackReason = switch error {
+                    case .cloudAuth: .auth
+                    case .cloudQuota: .quota
+                    case .cloudOffline: .offline
                     default: .failure
                     }
+                    report?(.fallback(reason, error))
                     let text = try await onDevice.recognise(image)
                     if Task.isCancelled { throw TextRecognitionError.cancelled }
                     return TextRecognitionResult(text: text, characterCount: text.count, engine: .onDevice, isEmpty: text.isEmpty, fallbackReason: reason)
@@ -144,5 +151,17 @@ public struct TextRecognitionService: Sendable {
             engine: .onDevice,
             isEmpty: text.isEmpty
         )
+    }
+
+    /// The keys when every condition allows Baidu, or the first unmet condition.
+    private enum CloudChoice { case cloud(CloudCredentials), skip(CloudSkipReason) }
+    private func cloudChoice(settings: any CloudRecognitionSettings, store: any CloudCredentialStore) async -> CloudChoice {
+        let options = await settings.options()
+        guard options.enabled else { return .skip(.disabled) }
+        guard case .granted = options.consent else { return .skip(.consentNotGiven) }
+        guard options.online else { return .skip(.offline) }
+        guard let credentials = await store.credentials(), !credentials.apiKey.isEmpty,
+              !credentials.secretKey.isEmpty else { return .skip(.noKeys) }
+        return .cloud(credentials)
     }
 }
