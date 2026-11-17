@@ -33,7 +33,7 @@ SCREENS = Path(__file__).with_name("fixtures") / "claude-screens"
 DIALOG_SCREEN = (SCREENS / "dialog-ask-one.ansi").read_text()
 
 
-def claude_screen(*box, label=" picsee-delegator ─"):
+def claude_screen(*box, label=" mado-delegator ─"):
     lines = ["✻ Crunched for 2m 3s · done 11:14 PM",
              " " * 80 + "✘ Auto-update failed · Run claude doctor",
              GREY + "─" * 100 + label + "\x1b[0m", *box, GREY + "─" * 120 + "\x1b[0m",

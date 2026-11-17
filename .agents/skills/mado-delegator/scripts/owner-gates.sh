@@ -137,7 +137,7 @@ else
   echo 'apptests-hosted=skipped (no App-facing change)' >> "$s"
   echo 'apptests=skip (no App-facing change)' >> "$s"
 fi
-node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs .agents/skills/picsee-delegator/scripts/*.test.mjs)
+node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs .agents/skills/mado-delegator/scripts/*.test.mjs)
 if (( agents )); then
   node_suites+=(scripts/agents/*.test.mjs)
 else

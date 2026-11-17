@@ -4,7 +4,7 @@
 
 ## 1. 权威来源与验证边界
 
-- 设计规则以本文件及用户明确决定为准；开发阶段与范围以 [开发计划](../docs/PICSEE_DEVELOPMENT_PLAN.md) 为准，原生状态/图像管线以 [架构](../docs/PICSEE_ARCHITECTURE.md) 为准。
+- 设计规则以本文件及用户明确决定为准；开发阶段与范围以 [开发计划](../docs/MADO_DEVELOPMENT_PLAN.md) 为准，原生状态/图像管线以 [架构](../docs/MADO_ARCHITECTURE.md) 为准。
 - Token 的运行时实值在 `picsee-ui-system/tokens/{globals,light,dark}.css`；组件契约在 `picsee-ui-system/components/`。下表只是语义摘要，调整后须同步导出。
 - 原生实施输入见 [组件与原生映射](picsee-ui-system/native/README.md)：限定原生角色白名单、组件输入/状态、SwiftUI/AppKit归属及P0-08验收。Web三个primitive的代码不代表已有原生组件。
 - [当前交互原型](prototypes/picsee-browser/viewer-v2.html) 验证 Space、翻图、Esc、主题和已有面板等交互；其初版与 revisions 仅是 Mado 演进记录。

@@ -100,7 +100,7 @@ xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED
 
 | 你要做的事 | 先读 |
 |---|---|
-| 了解计划与架构 | [开发计划](docs/PICSEE_DEVELOPMENT_PLAN.md)、[架构](docs/PICSEE_ARCHITECTURE.md)、[架构决定（ADR）](docs/adr/) |
+| 了解计划与架构 | [开发计划](docs/MADO_DEVELOPMENT_PLAN.md)、[架构](docs/MADO_ARCHITECTURE.md)、[架构决定（ADR）](docs/adr/) |
 | 确认某项功能的状态与验收 | [功能账簿](docs/feature-ledger.md)、[功能验收指南](docs/guide/feature-verification-guide.md) |
 | UI、颜色、间距、组件 | [C 设计主规范](design/DESIGN.md)、[设计系统与原生映射](design/picsee-ui-system/native/README.md)、[20 份状态稿](design/prototypes/picsee-browser/states/README.md)、[交互原型](design/prototypes/picsee-browser/README.md)、[设计交接与 Stitch 来源](docs/design/STITCH_HANDOFF.md) |
 | 发布新版本 | [发布手册](docs/release/README.md) |

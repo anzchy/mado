@@ -100,7 +100,7 @@ class GuiLockTests(GuiLockBase):
         self.acquire("run-1")
         values = dict(line.split("=", 1) for line in self.owner.read_text().splitlines())
         self.assertEqual((values["expected_minutes"], values["purpose"], values["session"]),
-                         ("30", "device run", "picsee-delegator"))
+                         ("30", "device run", "mado-delegator"))
 
     def test_each_acquisition_gets_a_fresh_id_and_a_stale_id_is_refused(self):
         first = self.acquire("run-1")

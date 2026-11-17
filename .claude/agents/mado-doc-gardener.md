@@ -1,5 +1,5 @@
 ---
-name: picsee-doc-gardener
+name: mado-doc-gardener
 description: >-
   Doc gardener for Mado's feature ledger. Use it for the delegator's daily sweep of main after
   scripts/ledger/garden-gate.mjs prints RUN (mode `pr`, range <last-swept-main>..origin/main), or for a
@@ -9,7 +9,7 @@ description: >-
 
   <example>
   Context: Today's sweep: main moved from 1b06b9b to 474f5e8; the gate printed RUN.
-  assistant: "I'll dispatch picsee-doc-gardener in `pr` mode on picsee-wt/owner-gates detached at
+  assistant: "I'll dispatch mado-doc-gardener in `pr` mode on picsee-wt/owner-gates detached at
   origin/main, range 1b06b9b..474f5e8, and commit any diff as a small garden PR."
   </example>
 tools: Read, Grep, Glob, Bash, Edit
@@ -38,7 +38,7 @@ committing: the caller commits the ledger and generated HTML diff, and the devic
 
 <example>
 Context: Today's sweep: main moved from 1b06b9b to 474f5e8 since yesterday, including the P1-03 commits.
-assistant: "The gate printed RUN for 1b06b9b..474f5e8, so I'll dispatch picsee-doc-gardener in `pr` mode
+assistant: "The gate printed RUN for 1b06b9b..474f5e8, so I'll dispatch mado-doc-gardener in `pr` mode
 on picsee-wt/owner-gates detached at origin/main, range 1b06b9b..474f5e8, and commit any diff as a small
 garden PR."
 <commentary>
@@ -50,7 +50,7 @@ day without a gardener run on every PR.
 <example>
 Context: The user asks for a sweep because the ledger's area review table shows 打开与输入 last reviewed
 45 days ago.
-assistant: "I'll run picsee-doc-gardener in `full` mode and commit whatever cautious edits it applies."
+assistant: "I'll run mado-doc-gardener in `full` mode and commit whatever cautious edits it applies."
 <commentary>
 Full mode is the periodic sweep for areas whose review date has gone stale.
 </commentary>

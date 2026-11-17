@@ -67,7 +67,7 @@ reproduction or a counter-proof.
 
 Independent pre-landing auditor for Mado on a Codex model, driven through Claude Code (`clcd`, ChatGPT
 subscription, effort high). Same three modes, read barrier, twelve dimensions (docs/agents/audit-dimensions.md)
-and report shape as the opus auditor (picsee-opus-auditor). After probes P1–P7 pass, it replaces gpt-auditor
+and report shape as the opus auditor (mado-opus-auditor). After probes P1–P7 pass, it replaces gpt-auditor
 in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Runs in the
 herdr pane `codex-auditor` (worktree `picsee-wt/codex-auditor`, profile `~/.claude-codex-auditor`); the
 delegator sends `/clear` before every request. Cross-vendor pairing: it audits work from opus-imple-* and

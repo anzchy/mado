@@ -2,7 +2,7 @@
 
 This is the single list of audit dimensions for Mado. Both auditors load it:
 - `gpt-auditor` (Codex);
-- `opus-auditor` (Claude Code on Opus, in its own herdr pane; `.claude/agents/picsee-opus-auditor.md`).
+- `opus-auditor` (Claude Code on Opus, in its own herdr pane; `.claude/agents/mado-opus-auditor.md`).
 
 Change it here, never in a brief or an agent wrapper. The two verdicts can only challenge each other
 if they cover the same ground, so a dimension one auditor checks and the other doesn't is a defect
@@ -26,7 +26,7 @@ in the process, not a style choice.
 
 | ID | Dimension | What it asks in Mado |
 |---|---|---|
-| D1 | Design & architecture fit | Does the change belong, in this target, now? Does it respect the target split and dependency direction in [architecture §2.1](../PICSEE_ARCHITECTURE.md), and the ADRs in `docs/adr/` (for example ADR-001: AppKit owns windows)? Is it the simplest design that meets the brief, with no speculative generality? |
+| D1 | Design & architecture fit | Does the change belong, in this target, now? Does it respect the target split and dependency direction in [architecture §2.1](../MADO_ARCHITECTURE.md), and the ADRs in `docs/adr/` (for example ADR-001: AppKit owns windows)? Is it the simplest design that meets the brief, with no speculative generality? |
 | D2 | Correctness & reliability | Does it do what the brief's ACs say on ordinary and edge paths? Covers error handling, failure and recovery paths (a missing file, a revoked grant, a corrupt image), and state left behind after a failure. |
 | D3 | Concurrency & cancellation | Swift 6 isolation (`@MainActor`, `Sendable`, actors), data races, ordering, re-entrancy. A cancelled or superseded request must never deliver a stale result. No blocking I/O or decoding on the main thread. |
 | D4 | Security, privacy & sandbox | The sandbox stays on and entitlements stay minimal. Covers security-scoped bookmark lifetime and whether access is released, secrets, and personal paths or e-mail in logs. Log fields are `.public` only when they are non-personal. No research material (`evidence/`, `design/`, npm, HTML/CSS) in any target. |

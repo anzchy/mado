@@ -2,7 +2,7 @@
 
 版本：v0.2 · 更新：2026-10-21 · 状态：可用于拆分开发任务的设计草案，尚无实现或性能验收结果。
 
-已确定技术路线：**Swift + SwiftUI + AppKit**。配套文件：[分阶段开发计划](./PICSEE_DEVELOPMENT_PLAN.md)。
+已确定技术路线：**Swift + SwiftUI + AppKit**。配套文件：[分阶段开发计划](./MADO_DEVELOPMENT_PLAN.md)。
 
 ## 1. 目标、依据与设计边界
 
@@ -79,7 +79,7 @@ flowchart TD
 | `MadoApplication` | 窗口 Session、应用用例、状态协调；依赖 Core | 不创建 NSWindow，不执行阻塞文件 I/O |
 | `MadoInfrastructure` | ImageIO、FileAccess、FolderBrowser、CacheStore、事件监听、持久化；依赖 Core | 不知道窗口、cell 或 SwiftUI Binding |
 
-P0-03 首个实验切片（#7）的画布偏离已在 P1-03（#37）结束：可复用绘制与输入在 `Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift`，Session 持有缩放模式，纯坐标规则在 MadoCore。画布通过离屏 AppKit 绘制与公开输入入口测试，纳入 package 的 100% 行/函数覆盖率门槛；`App/CanvasInputBridge.swift` 仅提取无法可靠合成的捏合事件字段。窗口与全屏交接仍在 `App/CanvasWindowController.swift`，原生接线不由 package 覆盖率证明。P0-09（#10/#11）纯值命令目录在 Core，Application 的 CommandRouter 现以每窗口 ViewerSession 为目标，由 Session 决定命令启用、选择/预览、chrome 与 Inspector/焦点状态，App 仅实现宿主效果；规则与测试见[开发计划 §1.4 状态表](./PICSEE_DEVELOPMENT_PLAN.md#viewersession-状态表p0-0911)。画布已在 P1-03 迁入 MadoMacUI，缩放模式由 Session 持有。P0-05/06（#9）已用共享准入 actor 和一条有界 OperationQueue 替换串行执行器；窗口取消自己的订阅，运行中的 File Grant 保留到解码真实返回。P1-04/P1-05（#41）的渐进加载编排由 MadoApplication 的 `ViewerImageLoader` 持有并经 Session 测试：初始 ≤512px 预览之后请求首个非预览视口档（即使边长相同），放大时才请求更高细节；App 仅提供源获取与原生呈现接线，原生接线仍不由 package 单元测试证明。
+P0-03 首个实验切片（#7）的画布偏离已在 P1-03（#37）结束：可复用绘制与输入在 `Packages/MadoKit/Sources/MadoMacUI/Canvas/CanvasView.swift`，Session 持有缩放模式，纯坐标规则在 MadoCore。画布通过离屏 AppKit 绘制与公开输入入口测试，纳入 package 的 100% 行/函数覆盖率门槛；`App/CanvasInputBridge.swift` 仅提取无法可靠合成的捏合事件字段。窗口与全屏交接仍在 `App/CanvasWindowController.swift`，原生接线不由 package 覆盖率证明。P0-09（#10/#11）纯值命令目录在 Core，Application 的 CommandRouter 现以每窗口 ViewerSession 为目标，由 Session 决定命令启用、选择/预览、chrome 与 Inspector/焦点状态，App 仅实现宿主效果；规则与测试见[开发计划 §1.4 状态表](./MADO_DEVELOPMENT_PLAN.md#viewersession-状态表p0-0911)。画布已在 P1-03 迁入 MadoMacUI，缩放模式由 Session 持有。P0-05/06（#9）已用共享准入 actor 和一条有界 OperationQueue 替换串行执行器；窗口取消自己的订阅，运行中的 File Grant 保留到解码真实返回。P1-04/P1-05（#41）的渐进加载编排由 MadoApplication 的 `ViewerImageLoader` 持有并经 Session 测试：初始 ≤512px 预览之后请求首个非预览视口档（即使边长相同），放大时才请求更高细节；App 仅提供源获取与原生呈现接线，原生接线仍不由 package 单元测试证明。
 
 Application 通过 Core 中的小型协议调用 Infrastructure；App 是组合根，不建立通用 DI 框架。 原生设计资源与可复用视觉按[组件与原生映射](../design/picsee-ui-system/native/README.md)收敛到现有UI target内的DesignSystem逻辑分组，供SwiftUI/AppKit共享；不新增第六个production target。SwiftUI 页面位于 App/UI，必要的可复用桥接位于 MacUI。测试可使用假服务，真实 I/O 集成测试另行覆盖。
 
@@ -302,7 +302,7 @@ Finder 排序作为 P7 适配层：独立 `.DS_Store` reader，失败统一回�
 
 **已确认的浏览布局（2026-10-21 第二稿）：以 C“沉浸隐去”为主方案。** 大图模式不保留顶部工具横栏；侧栏/返回入口在左下，缩放组在图片区域右下，缩略图条默认收起。静止后隐藏控件，靠近底边或按 Tab 唤回；菜单展开或键盘正在操作控件时保持可见。当前仅保留 C，已移除 A/B 方案入口；网格顶部导航和文件夹标题横区也移除，侧栏开关固定在窗口底栏最左，搜索与排序改到底部入口。第二稿网格默认单行文件名与细边框选中态，主题/帮助/密度进入显示菜单；外观默认跟随系统，提供始终显示大图工具的偏好，2.5 秒隐藏延迟仍为待实测的原型参数。原生实现区分窗口拖动与图片平移，并保留可靠的系统窗口控件和菜单命令；缩放按 backing pixel 定义 1:1，不以适应窗口倍率代替真实百分比。详见 [交互方案记录](../design/prototypes/picsee-browser/VIEWER_OPTIONS.md)。
 
-基础命令路由从P0/P1建立，C显隐在P1、Filmstrip在P2、网格/基础多选/图片右键/基础Inspector在P3完成；P4仅扩展多窗口、预设和高级输入。Filmstrip展开时整合文件名、序号与翻图按钮，移除重复的中部导航组；不缩小主图或恢复顶部应用工具栏。详细20页到任务映射见 [开发计划](./PICSEE_DEVELOPMENT_PLAN.md)。
+基础命令路由从P0/P1建立，C显隐在P1、Filmstrip在P2、网格/基础多选/图片右键/基础Inspector在P3完成；P4仅扩展多窗口、预设和高级输入。Filmstrip展开时整合文件名、序号与翻图按钮，移除重复的中部导航组；不缩小主图或恢复顶部应用工具栏。详细20页到任务映射见 [开发计划](./MADO_DEVELOPMENT_PLAN.md)。
 
 ### 7.2 多窗口与桌面 pins
 

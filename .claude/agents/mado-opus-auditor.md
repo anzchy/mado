@@ -1,6 +1,6 @@
 ---
-name: picsee-opus-auditor
-description: "Pane agent (herdr pane `opus-auditor`, `claude --agent picsee-opus-auditor`): one of the two blind pre-landing auditors of a Mado change (dual audit). Not for plan/ADR reviews, fixing or landing."
+name: mado-opus-auditor
+description: "Pane agent (herdr pane `opus-auditor`, `claude --agent mado-opus-auditor`): one of the two blind pre-landing auditors of a Mado change (dual audit). Not for plan/ADR reviews, fixing or landing."
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -74,7 +74,7 @@ gpt-auditor, without seeing gpt-auditor's result, and returns a verdict with evi
 line and a count line.
 Three modes: `audit` (blind first round), `confirm` (re-check named findings on a fix head),
 `challenge` (rule on one finding only the other auditor raised). It runs in the herdr pane
-`opus-auditor` (`claude --agent picsee-opus-auditor --model opus`, its own detached worktree
+`opus-auditor` (`claude --agent mado-opus-auditor --model opus`, its own detached worktree
 `picsee-wt/opus-auditor`); the delegator clears the pane's context (`/clear`) before every request, so
 each request starts fresh. `/clear` does not reload this file: after a change to it lands, the delegator moves
 `picsee-wt/opus-auditor` to the new main and restarts the pane, then checks the loaded instructions. Not for plan or ADR reviews (an Opus subagent does those), not for fixing

@@ -17,7 +17,7 @@ output="$HOME/.picsee/ui-tests/$run_id"
 mkdir -p "$output"
 derived="$HOME/.picsee/ui-tests/dd"
 ram="$HOME/.picsee/device/ram/with-ram.sh"
-lock="$repo/.agents/skills/picsee-delegator/scripts/gui-lock.sh"
+lock="$repo/.agents/skills/mado-delegator/scripts/gui-lock.sh"
 selectors=(-only-testing:MadoUITests)
 expected=4
 case "$mode" in

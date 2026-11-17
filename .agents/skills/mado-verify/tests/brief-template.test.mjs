@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 // Owner 2026-11-14: 「…不需要hook，在brief template中，验证的漏洞…」 — the brief, not a hook, requires mado-verify.
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
-const templates = '.agents/skills/picsee-delegator/references/templates';
+const templates = '.agents/skills/mado-delegator/references/templates';
 const section = (text, heading) => {
   const start = text.indexOf(heading);
   assert.notEqual(start, -1, `missing ${heading}`);
@@ -48,7 +48,7 @@ test('fix brief template asks for a new mado-verify run on the fix head', () => 
 });
 
 test('delegator loop: briefs keep the Verify section; record check before audit and before merge', () => {
-  const skill = read('.agents/skills/picsee-delegator/SKILL.md');
+  const skill = read('.agents/skills/mado-delegator/SKILL.md');
   const step = n => skill.slice(skill.indexOf(`\n${n}. **`), skill.indexOf(`\n${n + 1}. **`));
   assert.match(step(2), /Verify \(mado-verify\)/);
   assert.match(step(2), /hand-written brief/);
@@ -58,7 +58,7 @@ test('delegator loop: briefs keep the Verify section; record check before audit 
 });
 
 test('delegator check steps pin the issue, open the comment by hand, and handle a rebase (fix round 1)', () => {
-  const skill = read('.agents/skills/picsee-delegator/SKILL.md');
+  const skill = read('.agents/skills/mado-delegator/SKILL.md');
   const step = n => skill.slice(skill.indexOf(`\n${n}. **`), skill.indexOf(`\n${n + 1}. **`));
   assert.match(step(4), /evidence\.mjs check --head <sha> --issue <n>/);
   assert.match(step(4), /open the comment by hand/);

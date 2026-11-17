@@ -49,7 +49,7 @@ Three causes stand out:
 | `.claude/rules/` | 1 file, `10-spec-before-implementation.md`, 43 lines, always on (no `paths:`) | 16 files, 2,109 lines; 7 always on |
 | Global `~/.claude/CLAUDE.md` | 5 lines (gstack routing) | — |
 | **Always-on per session** | **192 lines, 17,041 bytes**, about 5.0k tokens (estimate: one token per CJK character plus one per four other characters). Auto-memory adds a 28-line `MEMORY.md` (4,174 bytes, about 1.0k tokens) | **1,936 lines**, 31–36k tokens |
-| Per-role load (on demand) | Delegator: `picsee-delegator/SKILL.md` 168 lines (about 3.9k tokens) plus `references/guide.md` 833 lines, 63,843 bytes (about 16k). Auditor: agent file 92 lines plus `audit-dimensions.md` 107 (about 3.6k). Gardener: agent 43 lines plus `doc-gardening.md` 188 plus the ledger, 475 lines and **135,761 bytes (about 41k tokens)** | Rules 70 and 71: 988 lines, always on |
+| Per-role load (on demand) | Delegator: `mado-delegator/SKILL.md` 168 lines (about 3.9k tokens) plus `references/guide.md` 833 lines, 63,843 bytes (about 16k). Auditor: agent file 92 lines plus `audit-dimensions.md` 107 (about 3.6k). Gardener: agent 43 lines plus `doc-gardening.md` 188 plus the ledger, 475 lines and **135,761 bytes (about 41k tokens)** | Rules 70 and 71: 988 lines, always on |
 | Machine-local process rules | 29 memory files, 564 lines (merge on green, push guard, heavy lanes serial, GUI lock, implementer order…). Codex does not load them | — |
 | `.claude/agents/` and `.codex/` | 7 agents, 417 lines; `.codex/agents` 1 file; `.codex/rules/picsee.rules` 203 lines | 3 agents, 264 lines |
 | Skills | `.agents/skills`: 24 skills, 116 files, 10,292 lines. `.claude/skills`: 3 symlinks and 20 copied directories (60 files); 19 are identical to `.agents`, and `pr` has drifted | 17 + 14 + 72 files |
@@ -103,7 +103,7 @@ Controls compared with what they cost and what they caught:
 
 ## Part 2. Architecture and platform
 
-### 2.1 Measured: structure against `docs/PICSEE_ARCHITECTURE.md`
+### 2.1 Measured: structure against `docs/MADO_ARCHITECTURE.md`
 
 | Target | Files / lines | Tests (files / lines / test functions) | What the architecture doc says, and what the code does |
 |---|---|---|---|
@@ -151,7 +151,7 @@ The files changed by the most commits, all time:
 | 5 | `PicseeApplication/Browser/FolderScanCoordinator.swift` | 49 |
 | 6 | `PicseeMacUI/Grid/GridBrowserView.swift` | 46 |
 | 7 | `PicseeMacUI/Grid/GridShellView.swift` | 42 |
-| 8–9 | `docs/PICSEE_DEVELOPMENT_PLAN.md`; `picsee-delegator/references/guide.md` | 35 each |
+| 8–9 | `docs/MADO_DEVELOPMENT_PLAN.md`; `mado-delegator/references/guide.md` | 35 each |
 
 Other files asked about: `project.yml` 11, `scripts/verify_design_catalog.js` 10, `design/…/states/manifest.json` 12, `TestAssets/manifest.json` 3, `.claude/tdd-guardian/receipts.json` 0 (ignored).
 

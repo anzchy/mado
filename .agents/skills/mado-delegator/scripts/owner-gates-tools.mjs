@@ -92,7 +92,7 @@ async function main() {
   } else if (cmd === 'preflight') {
     const [wt, script] = args;
     let own = false;
-    try { own = fs.realpathSync(script) === fs.realpathSync(path.join(wt, '.agents/skills/picsee-delegator/scripts/owner-gates.sh')); }
+    try { own = fs.realpathSync(script) === fs.realpathSync(path.join(wt, '.agents/skills/mado-delegator/scripts/owner-gates.sh')); }
     catch { own = false; }
     let playwright = false;
     if (fs.existsSync(path.join(wt, 'node_modules/playwright'))) {

@@ -28,7 +28,7 @@
   ├─ ③ 在独立验收会话中跑 macos-device-test（本机 mini）
   ├─ ④ 读结论表，写/提交 docs/validation/P<n>.md
   ├─ ⑤ 你按记录更新账簿行，运行 npm run ledger:build，把 Markdown 与 HTML 一起提交
-  ├─ ⑥ 跑 picsee-doc-gardener（pr 模式）
+  ├─ ⑥ 跑 mado-doc-gardener（pr 模式）
   └─ ⑦ 按 gardener 结果处理，把 Ledger-Gardener 行放进 PR 描述，开 PR
 ```
 
@@ -95,7 +95,7 @@ brief 是给验收会话的任务单，放在 `~/.picsee/device-briefs/brief-<�
 ### ③ 开新会话跑 macos-device-test
 
 在本机开一个**独立验收会话**，不要用写这段代码的会话：实现者不能给自己出验收记录。
-先运行 `.agents/skills/picsee-delegator/scripts/gui-lock.sh status`；开始操作界面前获取共享 GUI 锁，
+先运行 `.agents/skills/mado-delegator/scripts/gui-lock.sh status`；开始操作界面前获取共享 GUI 锁，
 被占用时不要驱动桌面，也不要触碰 mdpro 的会话。然后调用技能：
 
 ```text
@@ -175,11 +175,11 @@ Validated-by: <设备测试角色> run=20261105-143012-VIEW-02-03
 
 ### ⑥ 跑 doc gardener
 
-gardener 不再随 PR 运行（用户 2026-11-04：「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」）。验证记录 PR 的描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`；合入 main 后，delegator 每天的扫描会覆盖它（规程「When it runs」）。
-每日扫描时，先跑 `node scripts/ledger/garden-gate.mjs <上次扫到的 main> origin/main`，输出 RUN 才调用 gardener。在 Claude Code 用 `picsee-doc-gardener` subagent，或在 Codex 用同名 custom agent，提供这些参数：
+gardener 不再随 PR 运行（用户 2026-11-04：「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」）。验证记录 PR 的描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`；合入 main 后，delegator 每天的扫描会覆盖它（规程「When it runs」）。
+每日扫描时，先跑 `node scripts/ledger/garden-gate.mjs <上次扫到的 main> origin/main`，输出 RUN 才调用 gardener。在 Claude Code 用 `mado-doc-gardener` subagent，或在 Codex 用同名 custom agent，提供这些参数：
 
 ```text
-用 picsee-doc-gardener 跑 pr 模式：worktree picsee-wt/owner-gates（detached 在 origin/main），base <上次扫到的 main>，head <origin/main SHA>。
+用 mado-doc-gardener 跑 pr 模式：worktree picsee-wt/owner-gates（detached 在 origin/main），base <上次扫到的 main>，head <origin/main SHA>。
 ```
 
 它读这次改动、对应到账簿行、检查证据，报告写到 `~/.picsee/gardening/<分支>-<head7>.md`，最后一行是 PR 用的结论行。
@@ -231,7 +231,7 @@ trailer 只是声明，真正的保证仍是流程：验收一定在新会话里
 - 功能账簿规则：[`docs/feature-ledger.md`](../feature-ledger.md)「验证」「防止验收被悄悄放宽」
 - 设备验收技能：`.agents/skills/macos-device-test/SKILL.md`，运行步骤在同目录 `features/`
 - gardener 规程：[`docs/agents/doc-gardening.md`](../agents/doc-gardening.md)
-- 开发计划与验收门槛：[`docs/PICSEE_DEVELOPMENT_PLAN.md`](../PICSEE_DEVELOPMENT_PLAN.md)
+- 开发计划与验收门槛：[`docs/MADO_DEVELOPMENT_PLAN.md`](../MADO_DEVELOPMENT_PLAN.md)
 - 术语：[`GLOSSARY.md`](../../GLOSSARY.md)
 
 ## #499 首页按钮的可选原生渲染检查

@@ -1,4 +1,4 @@
-name = "picsee-doc-gardener"
+name = "mado-doc-gardener"
 description = "Checks which feature-ledger rows a change made stale and applies only cautious ledger edits. Use for the daily main sweep after scripts/ledger/garden-gate.mjs prints RUN, or for a full sweep on request; not for writing code, device validation or committing."
 model = "gpt-6-astra"
 model_reasoning_effort = "high"

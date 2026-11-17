@@ -37,7 +37,7 @@ test('SKILL.md step 1 points to the list and the exact two-rerun procedure, with
   assert.match(step1, /node --test --test-name-pattern=/);
   assert.match(step1, /exactly one known-flaky test/i);
   assert.match(step1, /twice/);
-  const owner = fs.readFileSync(path.join(root, '.agents/skills/picsee-delegator/scripts/owner-gates.sh'), 'utf8');
+  const owner = fs.readFileSync(path.join(root, '.agents/skills/mado-delegator/scripts/owner-gates.sh'), 'utf8');
   assert.doesNotMatch(owner, /known-flakes|retry/i);
   assert.match(fs.readFileSync(path.join(root, 'docs/agents/ci-flake-repro.md'), 'utf8'), /known-flakes\.json/);
 });

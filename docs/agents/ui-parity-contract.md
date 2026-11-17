@@ -5,7 +5,7 @@
 ## 依据与范围
 
 - 视觉和交互方向以用户决定及 [`design/DESIGN.md`](../../design/DESIGN.md) 为准；**具体状态的布局、内容、显隐和交互目标是该状态在 `design/prototypes/picsee-browser/states/` 中的 HTML**。SwiftUI/AppKit 的颜色、points/backing pixels、组件和系统边界按[原生映射](../../design/picsee-ui-system/native/README.md)。若原型与设计规范冲突，先修设计源并取得该设计变更所需的用户决定，再改原生实现；不在 Swift 里悄悄创造例外。
-- 20 个正式状态的唯一目录是 [`states/manifest.json`](../../design/prototypes/picsee-browser/states/manifest.json)。开发计划 [§1.3](../PICSEE_DEVELOPMENT_PLAN.md) 决定每页归属的工作包；[功能账簿](../feature-ledger.md)决定当前实现状态及「怎么确认」。`viewer-v2.html` 只提供已写出的交互参考。HTML 中的按钮、示例文件名或静态蓝框不证明原生功能、权限或可访问性已实现。
+- 20 个正式状态的唯一目录是 [`states/manifest.json`](../../design/prototypes/picsee-browser/states/manifest.json)。开发计划 [§1.3](../MADO_DEVELOPMENT_PLAN.md) 决定每页归属的工作包；[功能账簿](../feature-ledger.md)决定当前实现状态及「怎么确认」。`viewer-v2.html` 只提供已写出的交互参考。HTML 中的按钮、示例文件名或静态蓝框不证明原生功能、权限或可访问性已实现。
 - 原生系统标题栏、菜单、字体栅格化、真实文件内容等按原生映射处理。每个与 HTML 不同的选择都在 brief 的「原生例外」列写具体元素、依据和预期结果；原生映射没有规定的差异，应先修设计或实现，不把它事后称为系统例外。
 
 ## #502 · 原生系统焦点环边界

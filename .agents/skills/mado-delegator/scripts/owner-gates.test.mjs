@@ -11,12 +11,12 @@ const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
 function fixture(t, mode = 'pass', covered = 2, npmInstalled = true, options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const rel of ['.agents/skills/picsee-delegator/scripts/owner-gates.sh', '.agents/skills/picsee-delegator/scripts/owner-gates-tools.mjs', 'scripts/ci/native-inputs.mjs', 'scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/status-channel.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
+  for (const rel of ['.agents/skills/mado-delegator/scripts/owner-gates.sh', '.agents/skills/mado-delegator/scripts/owner-gates-tools.mjs', 'scripts/ci/native-inputs.mjs', 'scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/status-channel.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
     const dest = path.join(dir, rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(root, rel), dest);
   }
   if (process.env.OWNER_GATES_SCRIPT_OVERRIDE)
-    fs.copyFileSync(process.env.OWNER_GATES_SCRIPT_OVERRIDE, path.join(dir, '.agents/skills/picsee-delegator/scripts/owner-gates.sh'));
-  fs.writeFileSync(path.join(dir, '.agents/skills/picsee-delegator/scripts/fixture.test.mjs'), '');
+    fs.copyFileSync(process.env.OWNER_GATES_SCRIPT_OVERRIDE, path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'));
+  fs.writeFileSync(path.join(dir, '.agents/skills/mado-delegator/scripts/fixture.test.mjs'), '');
   for (const group of ['agents', 'tdd', 'ledger', 'name-checks']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
   fs.mkdirSync(path.join(dir, 'scripts', 'ci'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'name-checks-ci.test.mjs'), '');
@@ -61,7 +61,7 @@ node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/picsee-delegator/scripts/owner-gates.sh'),
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
     MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), PICSEE_GATES_OUT: out,
     PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
@@ -80,7 +80,7 @@ test('owner node lane runs the name-check tests required by CI', t => {
   const args = fs.readFileSync(f.nodeMarker, 'utf8').split('\n');
   assert.ok(args.includes('scripts/name-checks/fixture.test.mjs'), args.join('\n'));
   assert.ok(args.includes('scripts/ci/name-checks-ci.test.mjs'), args.join('\n'));
-  assert.ok(args.includes('.agents/skills/picsee-delegator/scripts/fixture.test.mjs'), args.join('\n'));
+  assert.ok(args.includes('.agents/skills/mado-delegator/scripts/fixture.test.mjs'), args.join('\n'));
 });
 
 test('invalid select output refuses before every lane', t => {

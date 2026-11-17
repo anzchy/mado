@@ -2,7 +2,7 @@
 
 更新：2026-10-28 · 版本：v0.5 · 状态以[功能账簿](./feature-ledger.md)为准（账簿无 Shipped）。v0.0.1 内部按用户旅程推进（[ADR-013](adr/0013-build-by-user-journey-slices.md)，§1.6、§14）。剩余任务见 §14。
 
-技术路线：**Swift + SwiftUI + AppKit**。先阅读 [架构设计](./PICSEE_ARCHITECTURE.md)；功能依据为 Picview 功能清单 `docs/PICVIEW_FEATURES.md` 与技术分析 `docs/PICVIEW_ANALYSIS.md`（本地研究资料，不在公开仓库）。本计划不表示任何原生阶段已验收通过：实际有什么以[功能账簿](./feature-ledger.md)为准，真机记录在 `docs/validation/P*.md`。原生工程已由 P0-01 建立（`project.yml` + `Packages/MadoKit`）。
+技术路线：**Swift + SwiftUI + AppKit**。先阅读 [架构设计](./MADO_ARCHITECTURE.md)；功能依据为 Picview 功能清单 `docs/PICVIEW_FEATURES.md` 与技术分析 `docs/PICVIEW_ANALYSIS.md`（本地研究资料，不在公开仓库）。本计划不表示任何原生阶段已验收通过：实际有什么以[功能账簿](./feature-ledger.md)为准，真机记录在 `docs/validation/P*.md`。原生工程已由 P0-01 建立（`project.yml` + `Packages/MadoKit`）。
 
 设计依据按顺序为：用户确认的 **C · Quiet Image Canvas**、[主设计规范](../design/DESIGN.md)、[20页本地 mockup 索引](../design/prototypes/picsee-browser/states/index.html)与[本地补充说明](design/C_LAYOUT_ADDITIONS.md)。Stitch 云端未采纳的07/08等探索稿不作为实现基线。原生代码不打包 HTML/CSS 或 Stitch/REA/npm 运行时。
 
@@ -446,7 +446,7 @@ Rust、Windows/iOS、账号、云同步、语义搜图、批量资产管理/批�
 
 ## 13. 历史快照
 
-v0.2 的完成定义与 2026-10-25 状态表已由 §14 取代，见 git 历史；旧 v0.1 快照保存在 `evidence/plans/PICSEE_DEVELOPMENT_PLAN-v0.1.md`。原则仍有效：每个切片交付实际可运行行为和收据，不先把 20 张 HTML 逐页重画为孤立 SwiftUI 视图，也不从 Stitch 生成代码另建 Web 运行时。
+v0.2 的完成定义与 2026-10-25 状态表已由 §14 取代，见 git 历史；旧 v0.1 快照保存在 `evidence/plans/MADO_DEVELOPMENT_PLAN-v0.1.md`。原则仍有效：每个切片交付实际可运行行为和收据，不先把 20 张 HTML 逐页重画为孤立 SwiftUI 视图，也不从 Stitch 生成代码另建 Web 运行时。
 
 ## 14. v0.0.1 前剩余任务（按用户旅程，2026-10-28）
 

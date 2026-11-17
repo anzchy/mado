@@ -57,7 +57,7 @@ test("a clean release bundle passes, including the B4 samples, Sparkle and its l
 test("every forbidden path is reported, each by its own path", () => {
   const forbidden = [
     "Contents/Resources/evidence/strings.txt",
-    "Contents/Resources/docs/PICSEE_ARCHITECTURE.md",
+    "Contents/Resources/docs/MADO_ARCHITECTURE.md",
     "Contents/Resources/design/DESIGN.md",
     "Contents/Resources/TestAssets/synthetic/landscape-3x2.png",
     "Contents/Resources/node_modules/rea-agents/package.json",

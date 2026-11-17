@@ -597,7 +597,7 @@ test('CLI rejects coverage evidence after any declared coverage input changes', 
     'project.yml', 'TestAssets/fixture.png', 'design/tokens.css', 'scripts/perf/fixtures/data.json',
     '.github/workflows/ci.yml', '.github/actions/xcode-setup/action.yml', 'scripts/ci/test.sh',
     'scripts/tdd/swift-lcov.sh', 'scripts/heavy-lock.sh', '.claude/tdd-guardian/config.json',
-    '.agents/skills/picsee-delegator/scripts/owner-gates.sh', '.agents/skills/picsee-delegator/scripts/lcov-total.py'];
+    '.agents/skills/mado-delegator/scripts/owner-gates.sh', '.agents/skills/mado-delegator/scripts/lcov-total.py'];
   for (const file of files) {
     git('checkout', '-q', '--detach', base);
     change(file);

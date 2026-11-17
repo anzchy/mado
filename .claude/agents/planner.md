@@ -15,8 +15,8 @@ dispatch. User decisions are quoted verbatim and never reinterpreted.
 - the output path (default `~/.picsee/herdr/gpt-planner/<item>-plan.md`).
 
 ## Read first
-`AGENTS.md`; the template `git -C <main> show main:.agents/skills/picsee-delegator/references/templates/brief-template.md`;
-the WP in `docs/PICSEE_DEVELOPMENT_PLAN.md`; `docs/PICSEE_ARCHITECTURE.md` §2; the ledger rows; the ADRs it
+`AGENTS.md`; the template `git -C <main> show main:.agents/skills/mado-delegator/references/templates/brief-template.md`;
+the WP in `docs/MADO_DEVELOPMENT_PLAN.md`; `docs/MADO_ARCHITECTURE.md` §2; the ledger rows; the ADRs it
 touches; for UI, `docs/agents/ui-parity-contract.md` and the pinned HTML (read with `git show <sha>:<path>`).
 Read the code you fence: every owned path in the draft must exist at the main SHA or be marked `new`.
 
@@ -30,7 +30,7 @@ Read the code you fence: every owned path in the draft must exist at the main SH
 - Tier by the migration plan's risk table (High: FileAccess/sandbox/bookmark, cache/SQLite, file writes,
   entitlements, signing, CI, dependencies). Never lower a tier the request gives.
 - Over ~400 production lines: split into work items (`<WP>-WI-n`), each with its own RED.
-- Run `python3 .agents/skills/picsee-delegator/scripts/overlap-check.py claim -- <owned paths>` from the main
+- Run `python3 .agents/skills/mado-delegator/scripts/overlap-check.py claim -- <owned paths>` from the main
   checkout and paste the result; a `SHARED` file is an open question, not something you resolve.
 - Never invent numbers (sizes, timings, budgets); point to the source or write `NOT VERIFIED`.
 

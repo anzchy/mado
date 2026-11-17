@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const checklistPath = 'docs/agents/interaction-lifecycle-checklist.md';
-const templates = '.agents/skills/picsee-delegator/references/templates';
+const templates = '.agents/skills/mado-delegator/references/templates';
 const briefTemplate = `${templates}/brief-template.md`;
 const auditTemplate = `${templates}/audit-request-template.md`;
 const implementerAgents = ['.claude/agents/opus-implementor.md', '.claude/agents/codex-implementor.md'];

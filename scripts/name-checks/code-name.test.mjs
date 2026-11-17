@@ -221,8 +221,8 @@ test('a shorthand enum identifier is code while quoted or slash-qualified dot di
 test('production tooling spans under the delegator skill cannot conceal live app identifiers', () => {
   const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
   const root = repo();
-  const path = '.agents/skills/picsee-delegator/scripts/owner-gates.sh';
-  const tooling = 'picsee-delegator PICSEE_LOCK "~/.picsee/state" picsee-wt';
+  const path = '.agents/skills/mado-delegator/scripts/owner-gates.sh';
+  const tooling = 'PICSEE_LOCK "~/.picsee/state" picsee-wt';
   file(root, path, `${tooling} -scheme Picsee\n`);
   const before = scan(root, 'Mado', exceptions);
   assert.equal(before.length, 1, before.join('\n'));
@@ -233,7 +233,8 @@ test('production tooling spans under the delegator skill cannot conceal live app
   assert.equal(after.length, before.length + 2, after.join('\n'));
   assert.deepEqual(after.filter(message => !message.includes(':2:')), before);
   assert.ok(after.every(message => !message.includes(':path:')));
-  assert.deepEqual(scan(root, 'Picsee', exceptions), []);
+  // The skill directory itself now carries the Mado name, so only content is compared here.
+  assert.deepEqual(scan(root, 'Picsee', exceptions).filter(message => !message.includes(':path:')), []);
 });
 
 test('deferred executable tooling never conceals live schemes, modules or bundle identities', () => {
@@ -251,9 +252,9 @@ test('reviewed release, roster and ledger artifacts cannot hide adjacent live id
   const exceptions = JSON.parse(readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8'));
   for (const path of ['.github/workflows/release.yml', 'scripts/release/appcast.mjs',
     'scripts/release/workflow-steps.test.mjs', 'scripts/release/check-package.test.mjs',
-    '.agents/skills/picsee-delegator/scripts/gui-lock.sh',
-    '.agents/skills/picsee-delegator/scripts/prefs.py',
-    '.agents/skills/picsee-delegator/scripts/listen-notify.py',
+    '.agents/skills/mado-delegator/scripts/gui-lock.sh',
+    '.agents/skills/mado-delegator/scripts/prefs.py',
+    '.agents/skills/mado-delegator/scripts/listen-notify.py',
     'scripts/ledger/build.mjs', 'scripts/ledger/garden-gate.test.mjs']) {
     const root = repo();
     file(root, path, '-scheme Picsee\nRelease/Picsee.app\nopen Picsee.app\nio.github.anzchy.picsee\nimport PicseeCore\n');

@@ -4,7 +4,7 @@
 
 ## 1. 层级和归属
 
-保留[架构](../../../docs/PICSEE_ARCHITECTURE.md)的五个production targets。MadoDesignKit是逻辑命名，不新增target。
+保留[架构](../../../docs/MADO_ARCHITECTURE.md)的五个production targets。MadoDesignKit是逻辑命名，不新增target。
 
 | 层 | 建议归属 | 责任 |
 | --- | --- | --- |
@@ -97,7 +97,7 @@ SwiftUI侧可用[FocusState](https://developer.apple.com/documentation/swiftui/f
 
 ## 6. P0-08交付门槛
 
-对应[开发计划](../../../docs/PICSEE_DEVELOPMENT_PLAN.md)P0-08；P0-03/09提供像素与命令验证。
+对应[开发计划](../../../docs/MADO_DEVELOPMENT_PLAN.md)P0-08；P0-03/09提供像素与命令验证。
 
 | 检查 | 必须提供的证据 |
 | --- | --- |

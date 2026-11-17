@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const read = relative => readFileSync(new URL(`../../${relative}`, import.meta.url), 'utf8');
 const workflow = read('.github/workflows/ci.yml');
 const locked = read('scripts/tdd/unit-locked.mjs');
-const owner = read('.agents/skills/picsee-delegator/scripts/owner-gates.sh');
+const owner = read('.agents/skills/mado-delegator/scripts/owner-gates.sh');
 const cache = read('scripts/ci/cache-key.mjs');
 const flags = '-Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all';
 

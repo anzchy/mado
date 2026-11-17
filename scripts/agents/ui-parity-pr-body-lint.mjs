@@ -62,7 +62,7 @@ const gateInputs = {
   ledger: ledgerInputs,
   'design-check': ['App/', 'Packages/', 'design/', 'scripts/', 'package.json', 'package-lock.json', '.github/workflows/ci.yml'],
   // Swift coverage also reads its runner, LCOV exporter/aggregator and gate config.
-  'package-coverage': [...codeInputs, '.agents/skills/picsee-delegator/scripts/', '.claude/tdd-guardian/config.json'],
+  'package-coverage': [...codeInputs, '.agents/skills/mado-delegator/scripts/', '.claude/tdd-guardian/config.json'],
   'diff-check': null,
   audit: null,
   'device-smoke': null,

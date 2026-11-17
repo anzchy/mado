@@ -460,7 +460,7 @@ def capture(source, run, dry_ax=False):
     (run / 'fixtures.sha256.json').write_text(json.dumps({p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in fixtures.iterdir()}, indent=2) + '\n')
     invoke([source / 'scripts/device/build.sh', run], timeout=7200, cwd=source)
-    lock = source / '.agents/skills/picsee-delegator/scripts/gui-lock.sh'
+    lock = source / '.agents/skills/mado-delegator/scripts/gui-lock.sh'
     batch = run.name
     acquired = invoke([lock, 'acquire', batch, 90, 'issue637 WindowServer regression'])
     match = re.search(r'acquisition_id=([0-9a-f-]+)', acquired)
