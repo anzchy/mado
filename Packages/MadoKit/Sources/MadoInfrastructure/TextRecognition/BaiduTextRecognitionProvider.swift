@@ -25,7 +25,8 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
 
     private let onFailure: (@Sendable (CloudFailureDetail) -> Void)?
 
-    /// `onFailure` hears each failed attempt's detail (#689b dev1); it never carries keys, the token or the image.
+    /// `onFailure` hears each failed attempt's detail (#689b dev1); it never carries server text, keys, the token or
+    /// the image (#689b dev2).
     public init(transport: any HTTPTransport, now: @escaping @Sendable () -> Date = Date.init,
                 onFailure: (@Sendable (CloudFailureDetail) -> Void)? = nil) {
         self.transport = transport
@@ -64,15 +65,13 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         let payload = try Self.object(response, stage: .recognition)
         if let code = payload["error_code"] as? Int {
             if [100, 110, 111].contains(code), token?.credentials == credentials { token = nil }
-            let message = Self.clean(payload["error_msg"] as? String,
-                                     hiding: [credentials.apiKey, credentials.secretKey, accessToken])
             throw Failure(Self.map(code), CloudFailureDetail(stage: .recognition, httpStatus: response.statusCode,
-                                                             errorCode: code, errorMessage: message))
+                                                             errorCode: code, reason: Self.reason(code)))
         }
         guard response.statusCode == 200, let lines = payload["words_result"] as? [[String: Any]],
               lines.allSatisfy({ $0["words"] is String }) else {
             throw Failure(.cloudFailure, CloudFailureDetail(stage: .recognition, httpStatus: response.statusCode,
-                                                            errorMessage: "no words_result"))
+                                                            reason: .noWordsResult))
         }
         return lines.compactMap { $0["words"] as? String }.joined(separator: "\n")
     }
@@ -111,17 +110,16 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             catch { throw Self.transportFailure(error, stage: .token) }
             let payload = try Self.object(response, stage: .token)
             if payload["error"] != nil || payload["error_code"] != nil {
-                // Baidu's OAuth answer is {error, error_description}; its API errors are {error_code, error_msg}.
-                let oauth = [payload["error"] as? String, payload["error_description"] as? String].compactMap { $0 }
-                let message = (payload["error_msg"] as? String) ?? oauth.joined(separator: ": ")
-                throw Failure(.cloudAuth, CloudFailureDetail(stage: .token, httpStatus: response.statusCode,
-                    errorCode: payload["error_code"] as? Int,
-                    errorMessage: Self.clean(message, hiding: [credentials.apiKey, credentials.secretKey])))
+                // Baidu's OAuth answer is {error, error_description}; its API errors are {error_code, error_msg}. Only
+                // the numeric code or an RFC 6749 error name is kept; the server's text is dropped.
+                let code = payload["error_code"] as? Int
+                throw Failure(.cloudAuth, CloudFailureDetail(stage: .token, httpStatus: response.statusCode, errorCode: code,
+                    reason: code.map(Self.reason) ?? Self.oauthReason(payload["error"])))
             }
             guard response.statusCode == 200, let value = payload["access_token"] as? String,
                   !value.isEmpty, let lifetime = payload["expires_in"] as? Double, lifetime > 0 else {
                 throw Failure(.cloudAuth, CloudFailureDetail(stage: .token, httpStatus: response.statusCode,
-                                                             errorMessage: "no access_token"))
+                                                             reason: .noAccessToken))
             }
             return (value, now().addingTimeInterval(lifetime))
         }
@@ -164,16 +162,9 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     private static func object(_ response: HTTPResponse, stage: CloudFailureDetail.Stage) throws(Failure) -> [String: Any] {
         guard let value = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any] else {
             throw Failure(.cloudFailure, CloudFailureDetail(stage: stage, httpStatus: response.statusCode,
-                                                            errorMessage: "unreadable response"))
+                                                            reason: .unreadableResponse))
         }
         return value
-    }
-
-    /// Baidu's message for the log: the keys and the token replaced, one line, at most 200 characters.
-    private static func clean(_ message: String?, hiding secrets: [String]) -> String? {
-        guard var text = message else { return nil }
-        for secret in secrets.filter({ !$0.isEmpty }) { text = text.replacingOccurrences(of: secret, with: "<redacted>") }
-        return String(text.components(separatedBy: .newlines).joined(separator: " ").prefix(200))
     }
 
     private static func map(_ code: Int) -> TextRecognitionError {
@@ -182,6 +173,26 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         case 17, 18, 19: .cloudQuota
         default: .cloudFailure
         }
+    }
+
+    /// The log's reason for a Baidu error_code (#689b dev2): 6 no permission, 17/18/19 quota, 100/110/111 token.
+    private static func reason(_ code: Int) -> CloudFailureDetail.Reason {
+        switch code {
+        case 6: .permission
+        case 17, 18, 19: .quota
+        case 100, 110, 111: .auth
+        default: .other
+        }
+    }
+
+    /// The log's reason for an OAuth `error`: only an RFC 6749 §5.2 name is kept, anything else is `other`.
+    private static func oauthReason(_ error: Any?) -> CloudFailureDetail.Reason {
+        let names: [String: CloudFailureDetail.Reason] = [
+            "invalid_request": .invalidRequest, "invalid_client": .invalidClient, "invalid_grant": .invalidGrant,
+            "unauthorized_client": .unauthorizedClient, "unsupported_grant_type": .unsupportedGrantType,
+            "invalid_scope": .invalidScope
+        ]
+        return (error as? String).flatMap { names[$0] } ?? .other
     }
 
     private static func form(_ value: String) -> String {
