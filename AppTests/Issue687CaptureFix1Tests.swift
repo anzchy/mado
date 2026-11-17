@@ -299,6 +299,25 @@ private final class Fix1Recognitions: @unchecked Sendable {
     #expect(CaptureRecogniseTextPanel.editAction(for: keyUp) == nil)
 }
 
+/// Fix round 2 N1: on a layout whose ⌘ keys type no ASCII letter (Russian, Greek, Hebrew), the key's position picks
+/// the Edit action as a localized Edit menu would; an ASCII letter (US, Dvorak, ABC) still decides by itself.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue687CaptureFix2EditKeysOnNonLatinLayouts() throws {
+    let window = NSWindow()
+    let expected: [(String, UInt16, NSEvent.ModifierFlags, String?)] = [
+        ("ф", 0, .command, "selectAll:"), ("с", 8, .command, "copy:"), ("ч", 7, .command, "cut:"),
+        ("м", 9, .command, "paste:"), ("я", 6, .command, "undo:"), ("Я", 6, [.command, .shift], "redo:"),
+        ("α", 0, .command, "selectAll:"), ("ψ", 8, .command, "copy:"), ("ש", 0, .command, "selectAll:"),
+        ("ф", 0, [], nil), ("ф", 0, [.command, .option], nil), ("й", 12, .command, nil), ("ц", 13, .command, nil),
+        // An ASCII letter decides: Dvorak's key at C's position types "j", which is not ⌘C.
+        ("j", 8, .command, nil), ("c", 34, .command, "copy:")
+    ]
+    for (characters, code, modifiers, action) in expected {
+        let event = try fix1Key(characters, code: code, modifiers: modifiers, window: window)
+        #expect(CaptureRecogniseTextPanel.editAction(for: event).map(NSStringFromSelector) == action,
+                "\(modifiers.rawValue) \(characters) \(code)")
+    }
+}
+
 /// ⌘A selects all of the editor's text and ⌘Z / ⇧⌘Z undo and redo typing, from real key events on the panel.
 @MainActor @Test(.timeLimit(.minutes(3))) func issue687CaptureFix1PanelEditorAnswersSelectAllAndUndo() async throws {
     let h = Fix1Harness()

@@ -21,11 +21,14 @@ final class CaptureRecogniseTextPanel: NSPanel {
     }
 
     /// The Edit command a key equivalent stands for: the helper is an accessory app with no Edit menu, so the panel
-    /// maps them itself (#687c fix r1 M1).
+    /// maps them itself (#687c fix r1 M1). A key that types no ASCII letter (Russian, Greek, Hebrew) counts by its
+    /// position, as a localized Edit menu does (fix r2 N1).
     static func editAction(for event: NSEvent) -> Selector? {
         guard event.type == .keyDown else { return nil }
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        let action: String? = switch (event.charactersIgnoringModifiers?.lowercased(), modifiers) {
+        let typed = event.charactersIgnoringModifiers?.lowercased()
+        let key = typed.flatMap { $0.allSatisfy(\.isASCII) ? $0 : nil } ?? latinKey(event)
+        let action: String? = switch (key, modifiers) {
         case ("a", [.command]): "selectAll:"
         case ("c", [.command]): "copy:"
         case ("x", [.command]): "cut:"
@@ -35,6 +38,18 @@ final class CaptureRecogniseTextPanel: NSPanel {
         default: nil
         }
         return action.map(NSSelectorFromString)
+    }
+
+    /// The ANSI letter at the key's position, for the five Edit keys only.
+    private static func latinKey(_ event: NSEvent) -> String? {
+        switch event.keyCode {
+        case 0: "a"
+        case 8: "c"
+        case 7: "x"
+        case 9: "v"
+        case 6: "z"
+        default: nil
+        }
     }
 
     /// Sends the Edit action up the responder chain from the first responder, as an Edit menu item would: only to a
