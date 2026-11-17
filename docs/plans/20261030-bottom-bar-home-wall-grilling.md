@@ -1,6 +1,6 @@
 # Bottom Bar at 80% and the Home Image Wall: grilling record
 
-2026-10-30, `/grill-with-docs 底栏常驻80%和首页图片墙`. The owner made every decision below; picsee-delegator asked the questions and checked the facts. Terms are in [GLOSSARY.md](../../GLOSSARY.md): **Home**, **Image Wall** and **Bottom Bar**.
+2026-10-30, `/grill-with-docs 底栏常驻80%和首页图片墙`. The owner made every decision below; mado-delegator asked the questions and checked the facts. Terms are in [GLOSSARY.md](../../GLOSSARY.md): **Home**, **Image Wall** and **Bottom Bar**.
 
 This is grilling only. The next steps are `/to-spec` and then `/to-tickets`. No implementation starts before the tickets exist (`.claude/rules/10-spec-before-implementation.md`).
 

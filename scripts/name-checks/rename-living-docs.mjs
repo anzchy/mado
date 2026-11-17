@@ -52,7 +52,7 @@ for (const path of paths) {
   const frozen = /^docs\/(?:adr|validation)\/.*\.md$/.test(path);
   if (path === 'docs/release/notes-template.md') continue; // executable release input owned by #552
   if (path === 'scripts/name-checks/README.md') continue; // documents both identities deliberately
-  if (!frozen && !living(path) && path !== 'scripts/ledger/build.mjs' && path !== '.codex/agents/picsee-doc-gardener.toml' && path !== '.github/ISSUE_TEMPLATE/bug_report.yml') continue;
+  if (!frozen && !living(path) && path !== 'scripts/ledger/build.mjs' && path !== '.codex/agents/mado-doc-gardener.toml' && path !== '.github/ISSUE_TEMPLATE/bug_report.yml') continue;
   const old = readFileSync(file, 'utf8');
   let next;
   if (frozen) next = old.includes(note.trim()) ? old : old + note;

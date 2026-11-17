@@ -902,7 +902,7 @@ for (const mode of ['eperm-signal']) {
 }
 
 // #672 WI-2: the delegator learns about an over-budget holder from its own status loop.
-const listenNotify = path.join(root, '.agents/skills/picsee-delegator/scripts/listen-notify.py');
+const listenNotify = path.join(root, '.agents/skills/mado-delegator/scripts/listen-notify.py');
 function lockAlerts(home) {
   const dir = path.join(home, '.picsee/herdr/delegator/lock-alerts');
   return existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith('.json')).map(name => path.join(dir, name)) : [];

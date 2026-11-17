@@ -65,10 +65,6 @@
     "reason": "Local worktree directory names move in tooling ticket 8."
   },
   {
-    "pattern": "\\bpicsee-(?:delegator|doc-gardener)\\b",
-    "reason": "Roster role and skill identifiers move in tooling ticket 8; adjacent app identifiers remain checked."
-  },
-  {
     "pathRegex": "(?:^|/)[^/]+\\.md$",
     "reason": "#553: living prose documentation is renamed in the docs step; historical Markdown and test evidence remain as written. Executable scripts are not exempt."
   },
@@ -193,7 +189,7 @@
     "reason": "Frozen RED scaffolding/audit evidence must retain original source fingerprints and names."
   },
   {
-    "path": ".agents/skills/picsee-delegator/agents/openai.yaml",
+    "path": ".agents/skills/mado-delegator/agents/openai.yaml",
     "reason": "#556: roster agent descriptor follows the deferred role name."
   },
   {
@@ -348,7 +344,7 @@
     "reason": "#552/#556: specifically enumerated historical release artifact/version/feed fixtures, negative build-path fixtures and temporary test prefixes; only the labelled historical Info fixture and layout adapter may contain old bundle data."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/gui-lock\\.sh$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/gui-lock\\.sh$",
     "pattern": "project=picsee|(?<=values\\[\"project\"\\] != \")picsee(?=\")|20261027-desktop-gui-lock-agreement-with-picsee\\.md",
     "scopes": [
       "content"
@@ -372,7 +368,7 @@
     "reason": "#552/#556: release-signing wizard title, temp prefix and existing Apple/Sparkle credential labels/account; no scheme, app bundle or bundle-ID exemption."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/listen-notify\\.py$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/listen-notify\\.py$",
     "pattern": "picsee_poll_report|\\[picsee-listener event|(?<=shipped )picsee(?= roster poller)",
     "scopes": [
       "content"
@@ -380,7 +376,7 @@
     "reason": "#556: explicit poller module, listener event prefix and roster description remain coordinated tooling identity."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/panel-choose\\.sh$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/panel-choose\\.sh$",
     "pattern": "(?<=run's )Picsee(?=:)",
     "scopes": [
       "content"
@@ -388,7 +384,7 @@
     "reason": "#556: existing helper comment phrase remains tooling prose; executable app identities are not exempt."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/rebase-verify-tree\\.py$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/rebase-verify-tree\\.py$",
     "pattern": "picsee-rebase-verify-",
     "scopes": [
       "content"
@@ -396,7 +392,7 @@
     "reason": "#556: existing rebase-check temporary directory prefix."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/reset\\.sh$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/reset\\.sh$",
     "pattern": "picsee fresh-context rule",
     "scopes": [
       "content"
@@ -404,7 +400,7 @@
     "reason": "#556: named roster reset rule in helper comment."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_delegator_scripts\\.py$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/test_delegator_scripts\\.py$",
     "pattern": "nonexistent-picsee-worktree|picsee_missing_tool_423",
     "scopes": [
       "content"
@@ -412,7 +408,7 @@
     "reason": "#556: two explicit negative tooling fixtures, not live build identities."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_gui_lock\\.py$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/test_gui_lock\\.py$",
     "pattern": "project=picsee|(?<=project=\")picsee(?=\")|(?<=values\\[\"project\"\\], \")picsee(?=\")|picsee_id|picsee-heavy\\.lock|test_mdpro_lock_is_busy_for_picsee_and_not_releasable|test_picsee_lock_is_busy_for_mdpro_and_not_releasable|picsee(?=\\x27s owner)",
     "scopes": [
       "content"
@@ -420,7 +416,7 @@
     "reason": "#556: named GUI-lock project-value assertions, interop test/variable names and isolated lock fixture."
   },
   {
-    "pathRegex": "^\\.agents/skills/picsee-delegator/scripts/test_listen_notify\\.py$",
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/test_listen_notify\\.py$",
     "pattern": "picsee-timeline|picsee(?= git:)|/tmp/picsee|real-picsee|alias-picsee",
     "scopes": [
       "content"
@@ -428,12 +424,12 @@
     "reason": "#556: named listener screen/CWD fixtures; no app scheme, app bundle or bundle ID."
   },
   {
-    "prefix": ".agents/skills/picsee-delegator/scripts/fixtures/",
+    "prefix": ".agents/skills/mado-delegator/scripts/fixtures/",
     "reason": "Historical non-executable terminal captures retain their original roster display names."
   },
   {
     "pathRegex": "^scripts/ledger/build(?:\\.test)?\\.mjs$",
-    "pattern": "picsee-ledger-theme|(?<=\u529f\u80fd\u8d26\u7c3f \u00b7 )picsee(?=</title>)|picsee(?= \u00b7 \u529f\u80fd\u8d26\u7c3f</span>)",
+    "pattern": "picsee-ledger-theme|(?<=功能账簿 · )picsee(?=</title>)|picsee(?= · 功能账簿</span>)",
     "scopes": [
       "content"
     ],
@@ -449,7 +445,7 @@
   },
   {
     "path": "scripts/ledger/build.test.mjs",
-    "pattern": "Part 1 \u2014 picsee \u73b0\u5728\u6709\u4ec0\u4e48|picsee-ledger-",
+    "pattern": "Part 1 — picsee 现在有什么|picsee-ledger-",
     "scopes": [
       "content"
     ],

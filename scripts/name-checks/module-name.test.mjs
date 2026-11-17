@@ -24,7 +24,7 @@ test('replay from a subdirectory preserves paired fixtures, tool leases and lega
     'scripts/ledger/fixtures/garden-gate-ledger.md': '| ID | 能力 | 状态 | 验证 | 计划 | 在哪 | 怎么确认 |\n| ACCESS-01 | grant | Partial | unit | P0-09 | `Config/Picsee.entitlements` | unchanged |\n',
     'Packages/PicseeKit/Tests/PicseeMacUITests/Issue499PrimaryFrameTests.swift': 'guard lines.contains("project=mado") else { return }\n',
     'AppTests/Issue220UpdateConfigurationTests.swift': 'let message = "Mado feed awaits #552; never use Mado’s frozen feed"\n',
-    '.agents/skills/picsee-delegator/scripts/prefs.py': 'path = "io.github.anzchy.picsee/Data/Library/Preferences/io.github.anzchy.picsee.plist"\n',
+    '.agents/skills/mado-delegator/scripts/prefs.py': 'path = "io.github.anzchy.picsee/Data/Library/Preferences/io.github.anzchy.picsee.plist"\n',
   };
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -41,7 +41,7 @@ test('replay from a subdirectory preserves paired fixtures, tool leases and lega
   assert.match(readFileSync(join(root, 'scripts/ledger/fixtures/garden-gate-ledger.md'), 'utf8'), /`Config\/Mado\.entitlements`/);
   assert.match(readFileSync(join(root, 'Packages/MadoKit/Tests/MadoMacUITests/Issue499PrimaryFrameTests.swift'), 'utf8'), /"project=picsee"/);
   assert.match(readFileSync(join(root, 'AppTests/Issue220UpdateConfigurationTests.swift'), 'utf8'), /never use the frozen legacy feed/);
-  assert.equal(readFileSync(join(root, '.agents/skills/picsee-delegator/scripts/prefs.py'), 'utf8'), 'path = "io.github.anzchy.mado/Data/Library/Preferences/io.github.anzchy.mado.plist"\n');
+  assert.equal(readFileSync(join(root, '.agents/skills/mado-delegator/scripts/prefs.py'), 'utf8'), 'path = "io.github.anzchy.mado/Data/Library/Preferences/io.github.anzchy.mado.plist"\n');
   assert.equal(readFileSync(script, 'utf8'), before);
   const snapshot = () => execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean)
     .map(path => [path, lstatSync(join(root, path)).isSymbolicLink() ? readlinkSync(join(root, path)) : readFileSync(join(root, path)).toString('base64')]);

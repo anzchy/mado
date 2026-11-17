@@ -36,7 +36,7 @@ with `/clear`), so the request file is your only memory: it names everything you
   `git log`. Read-only inspection commands are allowed; do not run builds or tests unless the
   request asks for a lane re-run.
 - gpt-auditor writes only its report, `~/.picsee/herdr/gpt-auditor/<item>-r<round>.md`. opus-auditor
-  (pane, `claude --agent picsee-opus-auditor --model opus`) writes only its report,
+  (pane, `claude --agent mado-opus-auditor --model opus`) writes only its report,
   `~/.picsee/herdr/opus-auditor/<item>-r<round>.md` (or the path the request names), and ends with the VERDICT block.
 - Never paste certificate e-mail lines or personal paths beyond the repo into the report summary.
 

@@ -1,8 +1,8 @@
 # Doc gardening: keeping the feature ledger true
 
 This is the single procedure for the Mado doc gardener. Two thin wrappers load it:
-- `.claude/agents/picsee-doc-gardener.md` for Claude Code;
-- `.codex/agents/picsee-doc-gardener.toml` for Codex.
+- `.claude/agents/mado-doc-gardener.md` for Claude Code;
+- `.codex/agents/mado-doc-gardener.toml` for Codex.
 
 Change the procedure here, never in a wrapper.
 
@@ -17,7 +17,7 @@ catches the rows those changes made stale. This follows two published practices:
 
 ## When it runs
 
-**Once a day, on main** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」, choosing
+**Once a day, on main** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」, choosing
 a daily sweep on main). PRs no longer wait for a gardener run: opening or re-pushing a PR runs neither the gate
 nor the gardener, and the PR body carries `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`.
 The commit that changes a behaviour still rewrites its row; the daily sweep catches what it missed.
@@ -66,9 +66,9 @@ gardener's or gate's line for its range (see Output).
 
 ### 每日扫描步骤（从 AGENTS.md 原样挪来，2026-11-15）
 
-用户 2026-11-04：「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」，选择「每天在 main 上统一扫一次」。规程见 [`docs/agents/doc-gardening.md`](docs/agents/doc-gardening.md)「When it runs」。
+用户 2026-11-04：「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」，选择「每天在 main 上统一扫一次」。规程见 [`docs/agents/doc-gardening.md`](docs/agents/doc-gardening.md)「When it runs」。
 
-1. **每天一次**：delegator 在 `origin/main` 的干净 detached worktree 里，对 `<上次扫到的 main>..origin/main` 先跑 `node scripts/ledger/garden-gate.mjs`；输出 `RUN` 时运行 **picsee-doc-gardener**（Claude Code：subagent；Codex：custom agent），模式 `pr`。
+1. **每天一次**：delegator 在 `origin/main` 的干净 detached worktree 里，对 `<上次扫到的 main>..origin/main` 先跑 `node scripts/ledger/garden-gate.mjs`；输出 `RUN` 时运行 **mado-doc-gardener**（Claude Code：subagent；Codex：custom agent），模式 `pr`。
 2. 按结果处理：
 
    | 结果 | 怎么做 |
@@ -112,7 +112,7 @@ A wrong downgrade costs one re-check. A wrong upgrade is the false claim the led
 1. **Inputs.** You need the mode; for `pr`, the branch's worktree path, the base and the head SHA; and the
    PR's ID or branch name. Anything missing returns BLOCKED.
 2. **Read** `docs/feature-ledger.md` in full: its rules first, then its rows. Read the work package IDs in
-   `docs/PICSEE_DEVELOPMENT_PLAN.md`.
+   `docs/MADO_DEVELOPMENT_PLAN.md`.
 3. **Collect the change.**
    - `git diff --name-status -M <base> <head>`
    - `git log --format='%H %s%n%b' <base>..<head>`
@@ -123,7 +123,7 @@ A wrong downgrade costs one re-check. A wrong upgrade is the false claim the led
    - **plan**: a work package ID in a commit message or the branch name is in its 计划 cell;
    - **surface**: a changed file adds or removes a declared name, meaning a CommandRouter command ID, a
      menu item identifier, a `DisplayPreferences` key, an entitlement, or an `Info.plist` UTType. Use the
-     source tree layout in `docs/PICSEE_ARCHITECTURE.md` to find them.
+     source tree layout in `docs/MADO_ARCHITECTURE.md` to find them.
 5. **Judge each touched row.** Each row lands in exactly one of these:
    - **Updated.** The range already edits that row consistently.
    - **Stale.** Behaviour on the row's paths changed, but the row did not. Propose the edit: the new state,

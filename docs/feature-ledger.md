@@ -1,12 +1,12 @@
 # 功能账簿
 
-**Mado** · 首次建账 2026-10-21 · 分支 `main` · 依据 [分阶段开发计划 v0.2](./PICSEE_DEVELOPMENT_PLAN.md)
+**Mado** · 首次建账 2026-10-21 · 分支 `main` · 依据 [分阶段开发计划 v0.2](./MADO_DEVELOPMENT_PLAN.md)
 
 这份账簿只回答一件事：**Mado 原生 App 现在实际有什么**。每一项能力占一行，写明状态、代码位置，以及在运行中的 App 里怎么确认。
 
 建账时还没有任何 Swift 源文件，所以每一行都是 `Absent`。这些行是**先写好的验收**：「怎么确认」现在就写成将来要做的操作，实现之后只改状态、验证、位置三格，验收不跟着实现降低（见「防止验收被悄悄放宽」）。
 
-它不是 changelog、计划或 ADR。什么时候变的看 git 历史和 `CHANGELOG.md`；先后顺序与验收门槛看 `docs/PICSEE_DEVELOPMENT_PLAN.md`；为什么这样做看 `docs/adr/`；实测数据和过程记录看 `docs/validation/P*.md`。
+它不是 changelog、计划或 ADR。什么时候变的看 git 历史和 `CHANGELOG.md`；先后顺序与验收门槛看 `docs/MADO_DEVELOPMENT_PLAN.md`；为什么这样做看 `docs/adr/`；实测数据和过程记录看 `docs/validation/P*.md`。
 
 浏览器原型 `design/prototypes/` 和 `design/prototypes/picsee-browser/states/` 里的 mockup **不算** Mado 的能力。它们是设计输入，在本账簿里不能把任何一行推到 `Absent` 以外。
 
@@ -465,7 +465,7 @@ OPEN-01、OPEN-04、OPEN-08、A11Y-02、A11Y-04 的「怎么确认」验收前�
 owner 在 b5c8de1 之后的三处编辑已核对：OPEN-01 限制恢复了真冷启动、中文像素、加载/取消未验，并注明 P1-07 与 #92 记录早于 B4；OPEN-08 限制点名「降低透明度」拖入时相纸隐藏；A11Y-04 列出「松开即可打开」为第六条新文案，catalog 中 en 与 zh-Hans 齐全（B4 新增 6 个键，与限制一致）。OPEN-01、OPEN-04、OPEN-08、A11Y-02、A11Y-04 的「怎么确认」验收前缀与 c3584cc 相同；OPEN-08 的 Absent→Partial 升级（b306409e）未改验收，只在验收句与「限制：」之间多一个空格。范围内没有真机或 Shipped 升级，`docs/validation/` 未变，无自证项。`node scripts/ledger/build.mjs --check` 在 cfa1830 通过。
 
 提议（owner 处理）：
-- OPEN-08 限制：「计划 P3-16 未写此例外」不成立。计划 P3-16（`docs/PICSEE_DEVELOPMENT_PLAN.md` 第 262 行）写明「降低透明度（拖入时隐藏相纸）」，与代码（`FirstLaunchView.swift` 的 targetAlpha，`reduceTransparency && dragActive ? 0`）一致。上一轮 gardener 提议的「计划没有此例外」是错误的，建议改写为与计划一致。
+- OPEN-08 限制：「计划 P3-16 未写此例外」不成立。计划 P3-16（`docs/MADO_DEVELOPMENT_PLAN.md` 第 262 行）写明「降低透明度（拖入时隐藏相纸）」，与代码（`FirstLaunchView.swift` 的 targetAlpha，`reduceTransparency && dragActive ? 0`）一致。上一轮 gardener 提议的「计划没有此例外」是错误的，建议改写为与计划一致。
 - OPEN-08 限制：计划 P3-16 同行还写明「减弱动态效果（即时变暗、无淡化与展开）」。代码中 `FirstLaunchView.swift` 的 `expanded = dragActive && !reduceMotion` 使开启「减少动态效果」时中央照片不展开，而验收句写「中央照片展开」。建议在限制里点名，与计划一致。
 
 路径命中但没有可见变化的行，与上一节相同（CanvasWindowController 只接线首次打开的拖入回调；ViewerStateHost 的失败态几何与 AX 子树不变，OPEN-05；空目录页由 EmptyFolderStateView 绘制，FOLDER-08；非空态的 composeState 仍只用于失败态）。Part 3 区域行已是 2026-10-30 doc-gardener，本次只追加备注。

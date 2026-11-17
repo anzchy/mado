@@ -25,7 +25,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | `manifest.json` | 唯一页面目录：名称、文件、视口、来源类别及每页 HTML 的 SHA256 | 是 |
 | `index.html` | 从manifest加载的浏览索引，不另维护一份页面列表 | 是 |
 | 25个同名HTML | 正式静态状态；不声明按钮行为已实现 | 是 |
-| `journeys.html` | 用户旅程图，是[计划 §1.6](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md)旅程索引的视图（ADR-013），两者不一致时以 §1.6 为准；卡片只引用本目录的状态稿，不显示实现进度（进度看功能账簿）。不是状态稿，不进 `manifest.json`，由 `index.html` 链接 | 是 |
+| `journeys.html` | 用户旅程图，是[计划 §1.6](../../../../docs/MADO_DEVELOPMENT_PLAN.md)旅程索引的视图（ADR-013），两者不一致时以 §1.6 为准；卡片只引用本目录的状态稿，不显示实现进度（进度看功能账簿）。不是状态稿，不进 `manifest.json`，由 `index.html` 链接 | 是 |
 | `home-image-wall.html` | 首页图片墙参考稿，图片墙外观的来源：2026-10-30 用户在三个方向中选定 C（斜置拼贴、缓慢漂移）并要求放大（「选C，但是图片墙可以放大」），之后定为「C 取代 B4 外观，保留拖入反馈」（[grilling 记录](../../../../docs/plans/20261030-bottom-bar-home-wall-grilling.md)，spec #311）。正式状态是 21 `first-launch.html`（#317），`design:check` 从本页读取倾斜、透明度、圆角、阴影和漂移的期望值；21 的中央是 B4 的，不取本页的中央（#441）。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照 21，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
 | `grid-footer-fill.html` | 打开文件夹后的常驻底栏参考稿，80% 底栏外观的来源：2026-10-30 用户选定「填充 80%（很实）」、不要顶部分隔线（「不要，靠 80% 底色区分」），只有未打开文件夹的窗口没有底栏（「只有未打开文件夹的窗口没有底栏」），spec #311。正式状态是 11/12 和其他画网格底栏的页面（#317），`design:check` 从本页读取填充、分隔线和左侧竖线的期望值。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照这些正式页，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
 | `assets/images/`、`assets/manifest.json` | 13个按内容哈希命名的共享图片，替代95处重复base64 | 是 |
@@ -131,7 +131,7 @@ Owner 于 2026-11-03 选定「Keep focus on the action (Recommended)」：设计
 
 画网格底栏的 11 页（11、12、15、22、23、24、26、29、30、31、32）共用同一段 `<style data-bottom-bar>`：底栏绝对定位在窗口底部，网格滚动区和侧栏伸到它后面，底部留白加上底栏的 40px，内容仍能完整滚出底栏。#317 的检查从两张参考稿读取期望值，比较 21 的图片墙和拖入状态（21 的中央不与参考稿比较，按 B4 中央检查：提示、按钮、间距 18、没有格式标签行，#441）、每个底栏页的填充、分隔线、左侧竖线和滚动区；显示大图命令栏的页面原先固定为 #317 之前的 `sha256`（用户：「不改，只改网格底栏」）；#347 按用户确认的磨砂工具组设计更新 14/16/33 三项 pin；#447 再更新 13/25/27 三项 pin，加入浅色对照并保留原深色外观，其他大图页的 pin 保持不变。
 
-以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
+以 [主设计规范](../../../DESIGN.md)、[组件与原生映射](../../../picsee-ui-system/native/README.md) 和 [实施计划](../../../../docs/MADO_DEVELOPMENT_PLAN.md) 为依据。浏览器交互仍在 [viewer-v2.html](../viewer-v2.html)，完整状态稿不等于原生实现。
 
 `.stitch/` 仅为本地捕获/生成/迁移工作目录，整体忽略。当前机器可保留 `.stitch/deliverables` 指向本目录的兼容链接；仓库和预览均不依赖这个链接。截图与运行检查输出属于 `evidence/`，无需复制到每份稿旁边。
 

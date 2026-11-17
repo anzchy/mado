@@ -80,7 +80,7 @@ So:
   confirm it is idle before starting, and never send it commands or otherwise touch it.
 - **Take the shared desktop GUI lock first** (agreed with mdpro; mdpro ADR-0141 WI-2). The lock is the directory
   `~/.cache/desktop-gui.lock/`, and its key=value `owner` file is the one that counts. Acquire it with
-  `.agents/skills/picsee-delegator/scripts/gui-lock.sh acquire <run-id> <minutes> "<purpose>"` before the first launch,
+  `.agents/skills/mado-delegator/scripts/gui-lock.sh acquire <run-id> <minutes> "<purpose>"` before the first launch,
   keystroke, click or screenshot, and keep the `acquisition_id=<uuid>` from its `ACQUIRED` line. Hold it across
   relaunches, and release it after cleanup, also on aborted runs, with
   `gui-lock.sh release <run-id> --acquisition-id <uuid>`.

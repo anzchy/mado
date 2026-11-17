@@ -82,7 +82,7 @@ for (const path of tracked()) {
   }
   if (path.endsWith('/Issue499PrimaryFrameTests.swift')) after = after.replaceAll('project=mado', 'project=picsee');
   if (path === 'AppTests/Issue220UpdateConfigurationTests.swift') after = after.replaceAll('never use Mado’s frozen feed', 'never use the frozen legacy feed');
-  if (path === '.agents/skills/picsee-delegator/scripts/prefs.py') after = after.replaceAll('io.github.anzchy.picsee', 'io.github.anzchy.mado');
+  if (path === '.agents/skills/mado-delegator/scripts/prefs.py') after = after.replaceAll('io.github.anzchy.picsee', 'io.github.anzchy.mado');
   if (after !== before) { writeFileSync(path, after); changed++; }
 }
 console.log(`Mado module replay: ${changed} tracked text files rewritten`);

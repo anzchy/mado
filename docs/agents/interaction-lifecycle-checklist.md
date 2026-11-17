@@ -7,7 +7,7 @@ on. This file names those cases once so briefs, test matrices and audits all use
 
 Visual and state dimensions — longest zh/en label, light/dark, @1x/@2x, viewport breakpoints — are **not** repeated
 here. They live in the
-[brief template](../../.agents/skills/picsee-delegator/references/templates/brief-template.md) sections
+[brief template](../../.agents/skills/mado-delegator/references/templates/brief-template.md) sections
 "UI design contract" and "Design-derived assertions" (content pressure column), and in [`ui-parity-contract.md`](ui-parity-contract.md). Do not multiply each lifecycle case by each visual
 dimension; there is no quota.
 

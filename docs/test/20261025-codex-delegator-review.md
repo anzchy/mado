@@ -1,6 +1,6 @@
 # Codex delegator 接手期复核报告
 
-日期：2026-10-25 · 复核者：picsee-delegator（Claude Code，Opus） · 对象：Codex delegator 2026-10-24 接手至暂停期间的全部工作
+日期：2026-10-25 · 复核者：mado-delegator（Claude Code，Opus） · 对象：Codex delegator 2026-10-24 接手至暂停期间的全部工作
 
 依据：GitHub PR/issue 状态、main `00a5c6d` 与本地分支的 Git 对象、Codex delegator 的暂停 handoff、opus-auditor 的独立盲审报告、签名 App 在 Mac mini @1x 上的探查运行。机器本地证据（审计报告、运行截图、日志）留在 `~/.picsee/`，不进仓库；本文只引用其 ID 与结论。
 
@@ -129,6 +129,6 @@
 3. **P2-04**：按 §5-② 决定合入时机。
 4. **P3-10**：在 P3-01 修复后的头上恢复，换新监听事件，从未提交状态继续 TDD；完成后补 page 11/12/23/24/29 对照。
 
-**第 3 步 · 继续 v0.0.1**：按[开发计划 §14](../PICSEE_DEVELOPMENT_PLAN.md)推进；用 `/grill-with-docs` 定 §5 与 §14.5 的决定，`/to-spec` 写 v0.0.1 收尾 spec，`/to-tickets` 补 P2-07/08/09、P3-05～09/12/13 等未建 issue 的工作包。
+**第 3 步 · 继续 v0.0.1**：按[开发计划 §14](../MADO_DEVELOPMENT_PLAN.md)推进；用 `/grill-with-docs` 定 §5 与 §14.5 的决定，`/to-spec` 写 v0.0.1 收尾 spec，`/to-tickets` 补 P2-07/08/09、P3-05～09/12/13 等未建 issue 的工作包。
 
 **约束**：Codex 额度约 4%，第 2 步的实现会受限；在额度重置前优先做不需要 Codex 的事（清理、决定、spec/tickets、Opus 审计、设备验证）。

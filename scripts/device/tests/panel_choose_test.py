@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
-HELPER = ROOT / '.agents/skills/picsee-delegator/scripts/panel-choose.sh'
+HELPER = ROOT / '.agents/skills/mado-delegator/scripts/panel-choose.sh'
 PINYIN = 'com.bytedance.inputmethod.doubaoime.pinyin'
 KEYS = [['5', 'command', 'shift'], ['36'], ['36']]
 
@@ -100,7 +100,7 @@ class PanelChoose(unittest.TestCase):
         self.repo, self.state, self.bin = (base / name for name in ('repo', 'state', 'bin'))
         self.state.mkdir()
         self.bin.mkdir()
-        self.helper = self.repo / '.agents/skills/picsee-delegator/scripts/panel-choose.sh'
+        self.helper = self.repo / '.agents/skills/mado-delegator/scripts/panel-choose.sh'
         self.helper.parent.mkdir(parents=True)
         shutil.copy(HELPER, self.helper)
         subprocess.run(['git', 'init', '-q', str(self.repo)], check=True)

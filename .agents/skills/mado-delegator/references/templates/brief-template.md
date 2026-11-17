@@ -75,7 +75,7 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
 
 ## Gates
 Follow `.agents/skills/mado-verify/SKILL.md` step 1: a clean worktree at the committed head, `git diff --check`, then
-this branch's `.agents/skills/picsee-delegator/scripts/owner-gates.sh <worktree> <head-sha> <prefix>` (Swift, coverage,
+this branch's `.agents/skills/mado-delegator/scripts/owner-gates.sh <worktree> <head-sha> <prefix>` (Swift, coverage,
 xcodegen, unsigned build, the full App tests when the change is App-facing, node, ledger, diff check, design). Known
 flakes: only the two-rerun procedure in step 1. Paste the summary lines and decisive log lines in the handoff. Only
 the heavy job itself goes under `scripts/heavy-lock.sh`, one command per call, in the foreground.

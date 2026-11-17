@@ -27,10 +27,10 @@ main{grid-area:main;overflow:auto;padding:16px 24px 48px}.content{max-width:1180
 <main id="main">
 <div class="content">
 <h1>功能账簿</h1>
-<p class="meta"><strong>Mado</strong> · 首次建账 2026-10-21 · 分支 <code>main</code> · 依据 <a href="./PICSEE_DEVELOPMENT_PLAN.md">分阶段开发计划 v0.2</a></p>
+<p class="meta"><strong>Mado</strong> · 首次建账 2026-10-21 · 分支 <code>main</code> · 依据 <a href="./MADO_DEVELOPMENT_PLAN.md">分阶段开发计划 v0.2</a></p>
 <p>这份账簿只回答一件事：<strong>Mado 原生 App 现在实际有什么</strong>。每一项能力占一行，写明状态、代码位置，以及在运行中的 App 里怎么确认。</p>
 <p>建账时还没有任何 Swift 源文件，所以每一行都是 <code>Absent</code>。这些行是<strong>先写好的验收</strong>：「怎么确认」现在就写成将来要做的操作，实现之后只改状态、验证、位置三格，验收不跟着实现降低（见「防止验收被悄悄放宽」）。</p>
-<p>它不是 changelog、计划或 ADR。什么时候变的看 git 历史和 <code>CHANGELOG.md</code>；先后顺序与验收门槛看 <code>docs/PICSEE_DEVELOPMENT_PLAN.md</code>；为什么这样做看 <code>docs/adr/</code>；实测数据和过程记录看 <code>docs/validation/P*.md</code>。</p>
+<p>它不是 changelog、计划或 ADR。什么时候变的看 git 历史和 <code>CHANGELOG.md</code>；先后顺序与验收门槛看 <code>docs/MADO_DEVELOPMENT_PLAN.md</code>；为什么这样做看 <code>docs/adr/</code>；实测数据和过程记录看 <code>docs/validation/P*.md</code>。</p>
 <p>浏览器原型 <code>design/prototypes/</code> 和 <code>design/prototypes/picsee-browser/states/</code> 里的 mockup <strong>不算</strong> Mado 的能力。它们是设计输入，在本账簿里不能把任何一行推到 <code>Absent</code> 以外。</p>
 <h2 id="状态">状态</h2>
 <p>状态只能是下面五个词之一，枚举是封闭的：</p>
@@ -346,7 +346,7 @@ main{grid-area:main;overflow:auto;padding:16px 24px 48px}.content{max-width:1180
 <h3 id="2026-10-30-202-首次打开-b4-散落相纸-第四次复跑c3584cc-cfa1830gardener-pr">2026-10-30 #202 首次打开 B4 散落相纸 第四次复跑（c3584cc..cfa1830，gardener pr）</h3>
 <p>owner 在 b5c8de1 之后的三处编辑已核对：OPEN-01 限制恢复了真冷启动、中文像素、加载/取消未验，并注明 P1-07 与 #92 记录早于 B4；OPEN-08 限制点名「降低透明度」拖入时相纸隐藏；A11Y-04 列出「松开即可打开」为第六条新文案，catalog 中 en 与 zh-Hans 齐全（B4 新增 6 个键，与限制一致）。OPEN-01、OPEN-04、OPEN-08、A11Y-02、A11Y-04 的「怎么确认」验收前缀与 c3584cc 相同；OPEN-08 的 Absent→Partial 升级（b306409e）未改验收，只在验收句与「限制：」之间多一个空格。范围内没有真机或 Shipped 升级，<code>docs/validation/</code> 未变，无自证项。<code>node scripts/ledger/build.mjs --check</code> 在 cfa1830 通过。</p>
 <p>提议（owner 处理）：</p>
-<ul><li>OPEN-08 限制：「计划 P3-16 未写此例外」不成立。计划 P3-16（<code>docs/PICSEE_DEVELOPMENT_PLAN.md</code> 第 262 行）写明「降低透明度（拖入时隐藏相纸）」，与代码（<code>FirstLaunchView.swift</code> 的 targetAlpha，<code>reduceTransparency &amp;&amp; dragActive ? 0</code>）一致。上一轮 gardener 提议的「计划没有此例外」是错误的，建议改写为与计划一致。</li><li>OPEN-08 限制：计划 P3-16 同行还写明「减弱动态效果（即时变暗、无淡化与展开）」。代码中 <code>FirstLaunchView.swift</code> 的 <code>expanded = dragActive &amp;&amp; !reduceMotion</code> 使开启「减少动态效果」时中央照片不展开，而验收句写「中央照片展开」。建议在限制里点名，与计划一致。</li></ul>
+<ul><li>OPEN-08 限制：「计划 P3-16 未写此例外」不成立。计划 P3-16（<code>docs/MADO_DEVELOPMENT_PLAN.md</code> 第 262 行）写明「降低透明度（拖入时隐藏相纸）」，与代码（<code>FirstLaunchView.swift</code> 的 targetAlpha，<code>reduceTransparency &amp;&amp; dragActive ? 0</code>）一致。上一轮 gardener 提议的「计划没有此例外」是错误的，建议改写为与计划一致。</li><li>OPEN-08 限制：计划 P3-16 同行还写明「减弱动态效果（即时变暗、无淡化与展开）」。代码中 <code>FirstLaunchView.swift</code> 的 <code>expanded = dragActive &amp;&amp; !reduceMotion</code> 使开启「减少动态效果」时中央照片不展开，而验收句写「中央照片展开」。建议在限制里点名，与计划一致。</li></ul>
 <p>路径命中但没有可见变化的行，与上一节相同（CanvasWindowController 只接线首次打开的拖入回调；ViewerStateHost 的失败态几何与 AX 子树不变，OPEN-05；空目录页由 EmptyFolderStateView 绘制，FOLDER-08；非空态的 composeState 仍只用于失败态）。Part 3 区域行已是 2026-10-30 doc-gardener，本次只追加备注。</p>
 <p>这次没有检查什么：未运行测试、构建或 App，未做真机或签名对照，未实走减少动态效果与降低透明度；未核对 B4 样图的 SHA-256 与授权；未读取审计报告或 PR 评论；未判断 B4 样图进入 .app 是否影响 DIST-03（该行的在哪为 —，不属于本次触及的行）。</p>
 <h3 id="2026-10-30-298-侧栏监听先订阅后读取test-sidebar-watch-flake-298140244b-22efc2dgardener-pr">2026-10-30 #298 侧栏监听先订阅后读取（test/sidebar-watch-flake-298，140244b..22efc2d，gardener pr）</h3>

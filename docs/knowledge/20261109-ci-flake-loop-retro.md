@@ -1,6 +1,6 @@
 # 复盘：App 测试在 CI 上偶发失败的循环（2026-11-05 至 11-09）
 
-写于 2026-11-09，picsee-delegator。Owner 原话：
+写于 2026-11-09，mado-delegator。Owner 原话：
 
 - 「把 CI 循环遇到的问题总结出来，问 fable 和 Codex gpt-6.1 Astra high，看看如何解决，提出可能原因和最佳实践解决方案」
 - 「合并后，你写一个复盘的文档，保存到 @docs/knowledge 这里之后用于保存一些我不知道的dev 知识，包括最佳实践，你可以参考mdpro，看看它怎么做的」

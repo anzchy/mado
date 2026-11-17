@@ -34,7 +34,7 @@ test('living documentation has no stale package/module/scheme/product/flag/build
 test('identifier scanner catches app identities beside narrowly allowed tooling references', () => {
   for (const value of ['Packages/PicseeKit', 'PicseeCore', 'PicseeInfrastructureTests', '-scheme Picsee',
     'Picsee.app', 'PicseeGitSHA', '-PicseeReady', 'io.github.anzchy.picsee']) {
-    assert.ok(staleIdentifiers(`~/.picsee/ PICSEE_XCODE picsee-delegator ${value}`).length, value);
+    assert.ok(staleIdentifiers(`~/.picsee/ PICSEE_XCODE mado-delegator ${value}`).length, value);
   }
-  assert.deepEqual(staleIdentifiers('~/.picsee/ PICSEE_XCODE picsee-delegator anzchy/picsee docs/PICSEE_ARCHITECTURE.md'), []);
+  assert.deepEqual(staleIdentifiers('~/.picsee/ PICSEE_XCODE mado-delegator anzchy/picsee docs/MADO_ARCHITECTURE.md'), []);
 });

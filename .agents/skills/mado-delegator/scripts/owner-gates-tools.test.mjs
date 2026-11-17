@@ -15,7 +15,7 @@ test('WI-1 skips both optional suites only for reviewed native-only paths', () =
     'docs/agents/ui-parity-contract.md','.agents/skills/ci-linux-preflight/scripts/preflight.mjs',
     '.claude/agents/auditor.md','docs/agents/interaction-lifecycle-checklist.md',
     'scripts/agents/lifecycle-checklist-refs.test.mjs','scripts/git-hooks/pre-push','scripts/design/design-check.mjs',
-    '.claude/tdd-guardian/config.json','.agents/skills/picsee-delegator/scripts/listen-notify.py',
+    '.claude/tdd-guardian/config.json','.agents/skills/mado-delegator/scripts/listen-notify.py',
     'scripts/tdd/app-lane.mjs','docs/guide.md']) {
     const selected = selectSuites([file]);
     assert.equal(selected.agents, true, file);

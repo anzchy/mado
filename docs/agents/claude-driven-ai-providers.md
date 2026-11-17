@@ -6,7 +6,7 @@
 日期：2026-10-28 · 作者：opus-auditor（应用户要求起草）· 状态：**提案，未实测**。
 本指南说明怎样用 [xiaolai/claude-driven-ai-providers](https://github.com/xiaolai/claude-driven-ai-providers)（下称 clai）
 让 Claude Code 驱动 Codex（ChatGPT 订阅）与 Kimi 模型，并在 Mado 现有 herdr 规程里加入五个角色：
-researcher、planner、opus-implementor、codex-implementor、codex-auditor（doc gardener 沿用现有 `picsee-doc-gardener`）。
+researcher、planner、opus-implementor、codex-implementor、codex-auditor（doc gardener 沿用现有 `mado-doc-gardener`）。
 
 标 **【待验证】** 的步骤还没有在本机跑过，第一次执行时按「9. 首次探针」逐项确认，结果记进 handoff 日志。
 
@@ -30,8 +30,8 @@ researcher、planner、opus-implementor、codex-implementor、codex-auditor（do
 | opus-implementor | `opus-implementor.md` | `opus-imple-<n>` | 原生 `claude` · Opus | 代码 + `<item>-handoff.md` |
 | codex-implementor | `codex-implementor.md` | `codex-imple-<n>` | `clcd` · gpt-6.1-sol · medium | 代码 + `<item>-handoff.md` |
 | codex-auditor | `codex-auditor.md` | `codex-auditor` | `clcd` · gpt-6.1-sol · high | `~/.picsee/herdr/codex-auditor/<item>-r<round>.md` |
-| opus-auditor | 现有 `picsee-opus-auditor.md` | `opus-auditor`（w1:p6） | 原生 `claude` · Opus | 不变 |
-| doc gardener | 现有 `picsee-doc-gardener.md` | 不占 pane | delegator 调用的 Haiku subagent | 不变 |
+| opus-auditor | 现有 `mado-opus-auditor.md` | `opus-auditor`（w1:p6） | 原生 `claude` · Opus | 不变 |
+| doc gardener | 现有 `mado-doc-gardener.md` | 不占 pane | delegator 调用的 Haiku subagent | 不变 |
 
 模型 ID 以 `clai probe codex` / `clai probe kimi` 的输出为准；表中只是 2026-10-27 注册表默认值。
 没有任何价格、速度、质量的实测数字；分配理由：
@@ -170,7 +170,7 @@ Output: ~/.picsee/herdr/gpt-planner/p318-plan.md, Report-Task: p318-plan-r1.
 3. Medium/High：grill → spec → tickets 后由 planner 出草稿 brief；Low：delegator 写 brief。delegator 审读、`overlap-check.py claim`、定稿到实现者目录。
 4. 实现者实现、交 handoff；delegator 用 listener 等结果。
 5. 按第 6 节配对派审计；delegator 后台跑 `owner-gates.sh`。
-6. 处理 verdict、rebase、gardener、Device-Smoke、PR、合并——与 `picsee-delegator` skill 第 5–10 步相同。
+6. 处理 verdict、rebase、gardener、Device-Smoke、PR、合并——与 `mado-delegator` skill 第 5–10 步相同。
 
 ## 8. 额度与成本
 
@@ -215,7 +215,7 @@ P1 失败的备用方案：不用 `herdr agent start`，直接
 - 「取代 gpt-auditor，跨厂商配对」：codex-auditor 在探针 P1–P7 通过后取代 gpt-auditor 参与双审；原生 gpt-auditor pane 留作备用。
 - 「计入，总上限 4」：Medium/High 指任务风险级别，所有实现者共用 4 个名额；Low 不计入。
 - 「Medium/High 必经，Low 不用」：planner 在 grill → spec → tickets 后为 Medium/High 起草 brief；Low brief 由 delegator 写。
-- 「去掉，但单独一次改动」：`picsee-opus-auditor`、`picsee-doc-gardener` 的改名留待后续独立 PR。
+- 「去掉，但单独一次改动」：`mado-opus-auditor`、`mado-doc-gardener` 的改名留待后续独立 PR。
 
 ## 12. 回退
 

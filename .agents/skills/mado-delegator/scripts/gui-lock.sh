@@ -15,7 +15,7 @@
 # Never remove another project's lock. A lock that looks stale is reported to the user, never removed.
 #
 # usage:
-#   gui-lock.sh acquire <run-id> [expected_minutes=30] [purpose] [session=picsee-delegator]
+#   gui-lock.sh acquire <run-id> [expected_minutes=30] [purpose] [session=mado-delegator]
 #       → exit 0 and `ACQUIRED <run-id> acquisition_id=<uuid>` on stdout; 75 busy
 #   gui-lock.sh wait <run-id> [expected_minutes] [purpose] [session] [max_wait_min=60]   → poll 60 s; 75 on timeout
 #   gui-lock.sh release <run-id> --acquisition-id <uuid>   → only the acquisition that printed this id
@@ -166,7 +166,7 @@ def main(args):
         batch = args[1]
         expected = args[2] if len(args) > 2 else "30"
         purpose = args[3] if len(args) > 3 else "device run"
-        session = args[4] if len(args) > 4 else "picsee-delegator"
+        session = args[4] if len(args) > 4 else "mado-delegator"
         attempts = 1 if command == "acquire" else int(args[5]) if len(args) > 5 else 60
         if attempts <= 0:
             raise Refused("invalid wait limit")

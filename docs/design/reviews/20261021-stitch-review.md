@@ -71,5 +71,5 @@
 - 当前清单：`evidence/stitch-screens-user-review-fresh-20261021.json`，返回 31 项且 isTruncated=false；包含历史探索和设计资产，不等于 31 份正式设计。
 - 新稿清单与原始 HTML/截图：`evidence/stitch-new-pages-20261021/`。
 - 原型实测：`evidence/stitch-review-prototype-features-20261021.json`，胶片条 12 项、浅色 Inspector 背景 rgb(255,255,255)。
-- 对照：`.stitch/DESIGN.md`、`PICSEE_DEVELOPMENT_PLAN.md` P2-06/P4-06/P5 与范围边界、`viewer-layout.jsx`、`viewer-options.jsx`。
+- 对照：`.stitch/DESIGN.md`、`MADO_DEVELOPMENT_PLAN.md` P2-06/P4-06/P5 与范围边界、`viewer-layout.jsx`、`viewer-options.jsx`。
 - API 列表没有创建者/时间字段；当前 list 也未列出先前可单独 get 的 13 修正资源，因此不能仅凭列表缺项推断已被删除。新增判定以本次五个新 ID 与既有操作收据差异为准。

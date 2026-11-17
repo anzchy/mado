@@ -1,8 +1,8 @@
 # Delegator guide (Mado herdr roster) — full reference
 
-This is the long reference behind `SKILL.md`. Paths to helpers are under `.agents/skills/picsee-delegator/scripts/`.
+This is the long reference behind `SKILL.md`. Paths to helpers are under `.agents/skills/mado-delegator/scripts/`.
 
-For the agent that takes over **picsee-delegator**: Claude Code, Codex or anything else that can run a shell. It
+For the agent that takes over **mado-delegator**: Claude Code, Codex or anything else that can run a shell. It
 describes how the roster has actually been run on the Mac mini since 2026-10-22. AGENTS.md, the feature ledger,
 `docs/agents/doc-gardening.md`, `docs/agents/audit-dimensions.md` and the roster plan
 (`docs/plans/20261021-herdr-roster-migration-plan.md`) stay authoritative. Where this guide disagrees with them,
@@ -47,12 +47,12 @@ is green.
 
 | Pane | Name | Agent / model | Worktree | Role |
 |---|---|---|---|---|
-| w1:p1 | picsee-delegator | Claude Code, Opus (or you) | main checkout | delegator |
+| w1:p1 | mado-delegator | Claude Code, Opus (or you) | main checkout | delegator |
 | w1:p2 | gpt-imple-1 | Target Codex `gpt-6-sol`, effort `medium`, after its current work/fix rounds end | `picsee-wt/gpt-imple-1` | Medium/High implementer |
 | w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` (transition applied) | `picsee-wt/gpt-imple-2` | Medium/High implementer |
 | w1:p4 | gpt-imple-3 | Codex `gpt-5.6-sol` | `picsee-wt/gpt-imple-3` | **retired** (do not dispatch); was Low-only implementer |
 | w1:p5 | gpt-auditor | Codex `gpt-6-astra`, reasoning high (paused the morning of 2026-10-25, restored the same afternoon) | `picsee-wt/gpt-auditor` (detached) | blind auditor (with opus-auditor) |
-| w1:p6 | opus-auditor | Claude Code, `--agent picsee-opus-auditor --model opus` | `picsee-wt/opus-auditor` (detached) | blind auditor (with gpt-auditor) |
+| w1:p6 | opus-auditor | Claude Code, `--agent mado-opus-auditor --model opus` | `picsee-wt/opus-auditor` (detached) | blind auditor (with gpt-auditor) |
 | w1:p7 | kimi-imple-1 | Kimi Code CLI, **K3.1 Pro, thinking effort high** (user rule) | `picsee-wt/kimi-imple-1` | **retired 2026-11-01** (do not dispatch); was Medium/High implementer |
 | w1:p9 | opus-imple-1 | Claude Code, Opus | `picsee-wt/opus-imple-1` | implementer |
 | w1:pB | opus-imple-2 | Claude Code, Opus | `picsee-wt/opus-imple-2` | implementer |
@@ -113,7 +113,7 @@ listener mode below. It requires both a fresh report with exactly one `Report-Ta
 `herdr` idle/done; a scrolled
 pane showing old activity cannot prevent detection. The older screen poller remains available for tasks without a
 report. Run
-`.agents/skills/picsee-delegator/scripts/poll-idle.sh <agent> [interval] [max_min]` in the background. It prints
+`.agents/skills/mado-delegator/scripts/poll-idle.sh <agent> [interval] [max_min]` in the background. It prints
 `<agent> idle|question <time>`, using these rules:
 
 - A question screen ("to answer", "enter submit") exits immediately.
@@ -238,7 +238,7 @@ One complete Codex implementation-round command is (the agent must put the line
 `Report-Task: issue90-implementation-r1` in its unique report):
 
 ```sh
-python3 .agents/skills/picsee-delegator/scripts/listen-notify.py start \
+python3 .agents/skills/mado-delegator/scripts/listen-notify.py start \
   --event 'issue90-implementation-r1-head-<sha7>' \
   --task 'issue90-implementation-r1' \
   --route codex-thread \
@@ -325,8 +325,8 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 
 | Agent | Reset | Notes |
 |---|---|---|
-| Codex (p2–p5) | `.agents/skills/picsee-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`PICSEE_RESET_CONTEXT_SECS`, interval `PICSEE_RESET_POLL_SECS`, default 0.25 s; both timers must be positive plain decimals ≤300 s) and requires a fresh `>_ OpenAI Codex (v…)` header over an empty transcript above the bottom-most footer showing `Context 0% used` in the same read. A changed `herdr pane get` session ID is also sufficient proof with that footer, but is optional: herdr normally updates the ID only after the first turn, so an unchanged ID does not block success. Reads use `--source recent-unwrapped --lines 2000` so a short visible pane does not cut off the title above the logo. Parse from the last unfenced title, ignoring older scrollback, `/new` echoes and chooser residue above it. A title after residue needs an immediate nonblank cwd line below it; a leading title (or one directly after a leading cwd line) also counts. Cwd metadata is an unspaced `~/…` or multi-component absolute path, never a slash command such as `/new`. Blank lines, braille/box-drawing logo and the known welcome tip may precede one exact empty input placeholder; only blanks and known footer hints (`? for shortcuts`, `? for help`, `? for commands`) may follow that placeholder before the footer. A repeated placeholder, tip or box art after it invalidates title proof. Any user prompt, tool/message/output line, model reply, quoted or fenced transcript, or unknown text between the title and bottom-most footer invalidates header proof; keep polling even if that old footer is nonzero. `/new` and startup text alone cannot prove a fresh session. Both standalone and Codex status-bar footers count. Only the footer below the last boundary counts; a footer under a still-visible chooser is ignored. A missing boundary fails even if a markerless footer says 0%. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
-| opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent picsee-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
+| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/reset.sh <name> <pane>` | Sends `/new`, then Enter twice (the "Where should the new conversation run?" chooser). Polls for the context line for up to 30 s (`PICSEE_RESET_CONTEXT_SECS`, interval `PICSEE_RESET_POLL_SECS`, default 0.25 s; both timers must be positive plain decimals ≤300 s) and requires a fresh `>_ OpenAI Codex (v…)` header over an empty transcript above the bottom-most footer showing `Context 0% used` in the same read. A changed `herdr pane get` session ID is also sufficient proof with that footer, but is optional: herdr normally updates the ID only after the first turn, so an unchanged ID does not block success. Reads use `--source recent-unwrapped --lines 2000` so a short visible pane does not cut off the title above the logo. Parse from the last unfenced title, ignoring older scrollback, `/new` echoes and chooser residue above it. A title after residue needs an immediate nonblank cwd line below it; a leading title (or one directly after a leading cwd line) also counts. Cwd metadata is an unspaced `~/…` or multi-component absolute path, never a slash command such as `/new`. Blank lines, braille/box-drawing logo and the known welcome tip may precede one exact empty input placeholder; only blanks and known footer hints (`? for shortcuts`, `? for help`, `? for commands`) may follow that placeholder before the footer. A repeated placeholder, tip or box art after it invalidates title proof. Any user prompt, tool/message/output line, model reply, quoted or fenced transcript, or unknown text between the title and bottom-most footer invalidates header proof; keep polling even if that old footer is nonzero. `/new` and startup text alone cannot prove a fresh session. Both standalone and Codex status-bar footers count. Only the footer below the last boundary counts; a footer under a still-visible chooser is ignored. A missing boundary fails even if a markerless footer says 0%. Zoom first if the pane is tiny. If the next prompt "didn't land" (still 0% and idle after 20 s), send it again. |
+| opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent mado-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
 | kimi-imple-1 (p7), **retired 2026-11-01, do not dispatch** | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
 
@@ -487,14 +487,14 @@ a fix, then the fresh-context confirm, inside the 2-round cap.
 
 Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse --git-dir)/rb.log`.
 
-`.agents/skills/picsee-delegator/scripts/rebase-ledger.sh [origin/main]` (run inside the PR worktree) automates the two ledger cases below and stops, leaving the rebase in progress, on anything else.
+`.agents/skills/mado-delegator/scripts/rebase-ledger.sh [origin/main]` (run inside the PR worktree) automates the two ledger cases below and stops, leaving the rebase in progress, on anything else.
 
 - **Only `docs/feature-ledger.html` conflicts.** Regenerate and continue, in a loop:
   `node scripts/ledger/build.mjs && git add docs/feature-ledger.html && GIT_EDITOR=true git rebase --continue`.
-- **`docs/feature-ledger.md` row conflicts.** `.agents/skills/picsee-delegator/scripts/resolve_rows.py` does a three-way merge
+- **`docs/feature-ledger.md` row conflicts.** `.agents/skills/mado-delegator/scripts/resolve_rows.py` does a three-way merge
   by row key (stage 1/2/3). It keeps main's text and appends the commit's added suffix. It stops on rows that need
   manual merging, for example when both sides rewrote the same 限制 clause; merge those by hand.
-- **Part 3 area-review conflicts.** Use `.agents/skills/picsee-delegator/scripts/resolve_part3.py <file>`. It keeps main's row and, reading the merge base
+- **Part 3 area-review conflicts.** Use `.agents/skills/mado-delegator/scripts/resolve_part3.py <file>`. It keeps main's row and, reading the merge base
   (`git show :1:docs/feature-ledger.md`), appends the branch's suffix over the base note verbatim, keeping the newer
   review date with its reviewer. A branch that edited base text, a row with no base or mismatched cells stays
   UNRESOLVED for you to merge by hand, so main's notes are never dropped (the old "take theirs" rule silently dropped them on #243, 2026-10-28).
@@ -553,14 +553,14 @@ keep branches short, integrate often, and never let two branches own one core mo
 
 ### 5.7 Doc gardener
 
-**Once a day on main, not per PR** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」,
+**Once a day on main, not per PR** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」,
 choosing a daily sweep on main). Rules: `docs/agents/doc-gardening.md` §When it runs. PR bodies carry
 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`.
 
 Daily: in `picsee-wt/owner-gates`, `git switch --detach origin/main`, then
 `node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`). On `RUN`:
-- **Claude:** the `picsee-doc-gardener` subagent. It runs on Haiku (`model: haiku` in its agent file; user decision
-  2026-10-25: 「picsee-doc-gardener will be powered by Haiku model, from now on」); do not override the model when
+- **Claude:** the `mado-doc-gardener` subagent. It runs on Haiku (`model: haiku` in its agent file; user decision
+  2026-10-25: 「mado-doc-gardener will be powered by Haiku model, from now on」); do not override the model when
   dispatching it.
 - **Codex:** the custom agent of the same name.
 
@@ -646,7 +646,7 @@ know about the lock. Both projects use the shared lock (mdpro ADR-0134 decision 
   mouse, drags, `screencapture`, app activation. Keep it across relaunch sub-runs.
 - **When to release it:** only after the app has quit (after `cleanup.sh`), including aborted runs. Builds, log
   reads and shell work don't need it; builds use the heavy lock.
-- **Helper:** `.agents/skills/picsee-delegator/scripts/gui-lock.sh acquire|wait|release|status`. `acquire` and `wait`
+- **Helper:** `.agents/skills/mado-delegator/scripts/gui-lock.sh acquire|wait|release|status`. `acquire` and `wait`
   print `ACQUIRED <run-id> acquisition_id=<uuid>`; keep the id for `release <run-id> --acquisition-id <uuid>`. It
   exits 75 when the lock is busy (and when `wait` times out); `release` exits 1 (`REFUSED`) unless the owner is
   well formed, `project=picsee`, and carries the same batch and acquisition id.
@@ -669,14 +669,14 @@ Driving tools (all synthetic input, which must be disclosed in the record):
 - `scripts/device/kc.sh RUN KEYCODE [command shift …]` for named keys: Return 36, Esc 53, Tab 48, ←→ 123/124,
   ⌘O = `31 command`, ⌘W = `13 command`, ⌘Q = `12 command`, ⌘⇧G = `5 command shift`. `key.sh` types exactly one
   printable character and nothing else.
-- `.agents/skills/picsee-delegator/scripts/panel-choose.sh RUN PATH`: in an open NSOpenPanel or powerbox of the run's
+- `.agents/skills/mado-delegator/scripts/panel-choose.sh RUN PATH`: in an open NSOpenPanel or powerbox of the run's
   Mado (needs `RUN/picsee.pid`; the ⌘O AXDialog window, or the reconnect sheet of window 1, not yet driven live), press ⌘⇧G, write the path into the Go-to field **through accessibility**, read it back,
   press Return, check the sheet closed, then press Return for Open and check the panel closed. Any mismatch fails before Open. It prints
   `input-source: <id>` (read-only) for the record and doesn't touch the pasteboard. The old ⌘A ⌘V paste never reached
   the field (run probe-228, 2026-10-28): every pick silently took the panel's remembered folder.
-- `.agents/skills/picsee-delegator/scripts/drag2.sh X0 Y0 X1 Y1`: a CGEvent drag from a Finder list-view row with a press-hold. Finder starts a real
+- `.agents/skills/mado-delegator/scripts/drag2.sh X0 Y0 X1 Y1`: a CGEvent drag from a Finder list-view row with a press-hold. Finder starts a real
   drag session. computer-use drags never arrived.
-- `.agents/skills/picsee-delegator/scripts/menus.sh PID` (menu item enabled states), `scripts/axlist.sh PID`, `scripts/click.sh`/`move.sh X Y`, AX clicks via
+- `.agents/skills/mado-delegator/scripts/menus.sh PID` (menu item enabled states), `scripts/axlist.sh PID`, `scripts/click.sh`/`move.sh X Y`, AX clicks via
   `osascript -e 'tell application "System Events" to tell (first process whose unix id is PID) to click …'`.
 - Window title via `get name of every window`. Screenshots: `screencapture -x -R480,110,960,640` (window region)
   into `$RUN_DIR/shots/`. Never put screenshots in the repo.
@@ -717,7 +717,7 @@ Rules and gotchas:
 - a numbered check table with ledger ID, check and result;
 - the "没有检查的" list.
 
-Update only the 限制 of the affected rows. Commit with the trailer `Validated-by: picsee-delegator
+Update only the 限制 of the affected rows. Commit with the trailer `Validated-by: mado-delegator
 run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 
 **When validation finds a defect** (as with #73):
@@ -784,7 +784,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | `log show` failed with "too many arguments" | zsh builtin `log` shadows `/usr/bin/log` | call `/usr/bin/log` |
 | Coverage awk printed `lines /` | wrong lcov path | `swift-lcov.sh` writes `coverage/lcov.info` |
 | `key.sh` typed letters instead of Tab/Esc | `key.sh` is single-character only | `kc.sh` with keycodes |
-| Open panel path couldn't be typed | `key.sh` is one character | `.agents/skills/picsee-delegator/scripts/panel-choose.sh` (AX value write, read back; disclose it) |
+| Open panel path couldn't be typed | `key.sh` is one character | `.agents/skills/mado-delegator/scripts/panel-choose.sh` (AX value write, read back; disclose it) |
 | Probe picks all landed in one folder; the helper reported success | the synthetic ⌘V never reached the Go-to field, so Return confirmed the remembered folder | `panel-choose.sh` now writes the path via AX and reads it back; check the probe's own output before trusting a matrix |
 | Open panel showed `…095720-跑01-grid-explore、fixtures、grid` and never navigated (2026-10-25) | `panel-choose.sh` typed the path with `keystroke` under a Chinese IME (Doubao Pinyin) | Fixed in #119 by a pasteboard paste, which itself never reached the field (probe-228); since 2026-10-28 the helper writes the AX value. Never switch the user's input source |
 | `launch.sh` failed in a relaunch dir | missing `bundle.path`/`build.json` | copy both from the first run dir |
@@ -827,7 +827,7 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | Audit reports | Active: `~/.picsee/herdr/opus-auditor/opus-<item>-audit-r<n>.md`, `-confirm-r<n>.md`; historical gpt-auditor reports remain evidence but receive no new dispatches |
 | Gardener reports | `~/.picsee/gardening/` |
 | Device runs (evidence, screenshots, logs) | `~/.picsee/device-runs/<run-id>/` |
-| Delegator scripts and templates | `.agents/skills/picsee-delegator/scripts/`, `.agents/skills/picsee-delegator/references/templates/` (`.claude/skills/picsee-delegator` is a symlink to the same folder); the auditors' rules file is installed at `~/.picsee/herdr/delegator/audit-brief.md` (copy of `references/templates/audit-brief.md`) |
+| Delegator scripts and templates | `.agents/skills/mado-delegator/scripts/`, `.agents/skills/mado-delegator/references/templates/` (`.claude/skills/mado-delegator` is a symlink to the same folder); the auditors' rules file is installed at `~/.picsee/herdr/delegator/audit-brief.md` (copy of `references/templates/audit-brief.md`) |
 | Heavy lock | `scripts/heavy-lock.sh`; flock `~/.picsee/locks/heavy.lock` (never delete) |
 
 A Claude delegator also keeps auto-memory under `~/.claude/projects/-Users-jack-Documents-mac-app-picsee/memory/`. A

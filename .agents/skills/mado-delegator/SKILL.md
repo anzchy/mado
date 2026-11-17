@@ -1,6 +1,6 @@
 ---
-name: picsee-delegator
-description: "Run Mado's herdr roster as the delegator: briefs, audits, pane control, gates, PRs and merges, device records. Use when acting as or taking over picsee-delegator. Not for writing product code or auditing a diff yourself."
+name: mado-delegator
+description: "Run Mado's herdr roster as the delegator: briefs, audits, pane control, gates, PRs and merges, device records. Use when acting as or taking over mado-delegator. Not for writing product code or auditing a diff yourself."
 when_to_use: "Also when you need the brief/audit/confirm templates, the pane-control scripts, or the ledger-aware rebase; plan work packages, file issues, apply verdicts under the severity policy, run the doc gardener."
 ---
 
@@ -13,7 +13,7 @@ every tier gets two blind audits in parallel, `gpt-auditor` and `opus-auditor`, 
 (user, 2026-10-25: 「分层：PR 自动测 + 批次真机」): automated design-derived assertions per PR, signed device parity in batches
 (see [the parity contract](../../../docs/agents/ui-parity-contract.md)).
 Full reference: [references/guide.md](references/guide.md) — read it once before your first dispatch.
-`$SK` below means this folder: `.agents/skills/picsee-delegator` (`.claude/skills/picsee-delegator` is a symlink to it).
+`$SK` below means this folder: `.agents/skills/mado-delegator` (`.claude/skills/mado-delegator` is a symlink to it).
 
 ## Start of a session
 
@@ -42,7 +42,7 @@ a successful guarded dry-run before a remote write (see `scripts/codex-rules/REA
 | w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
 | w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
 | w1:p5 | gpt-auditor | Codex `gpt-6-sol`, effort `medium`; for a device run only, restart it with `-s danger-full-access` (its sandbox cannot run `pgrep`) and restart without it afterwards | `$SK/scripts/reset.sh` |
-| w1:p6 | opus-auditor | Claude `--agent picsee-opus-auditor --model opus` | send `/clear` + Enter, confirm `Context 0%` |
+| w1:p6 | opus-auditor | Claude `--agent mado-opus-auditor --model opus` | send `/clear` + Enter, confirm `Context 0%` |
 | w1:p9 | opus-imple-1 | Claude Opus implementer (added 2026-10-25) | `/clear` + Enter |
 
 Any implementer pane may take Medium/High work (user 2026-10-25: "now codex usage is sufficient, fire up all gpt-imple-*
@@ -114,11 +114,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
-7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后picsee-doc-gardener 每天跑一次，当前跑得太频繁了」).
+7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」).
    PRs carry `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)`; don't run the gate or the
    gardener on open or re-push. Once a day, in `picsee-wt/owner-gates` detached at `origin/main`, run
    `node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main` (`~/.picsee/gardening/last-daily-sweep`); on
-   `RUN`, `picsee-doc-gardener` (Claude subagent on Haiku / Codex custom agent), mode `pr`, that range. UPDATED /
+   `RUN`, `mado-doc-gardener` (Claude subagent on Haiku / Codex custom agent), mode `pr`, that range. UPDATED /
    NEEDS-OWNER → one small `docs(ledger): garden <b>..<h>` PR (限制/在哪 only; acceptance changes only in a separate
    commit quoting the user); BLOCK → tell the user, open an issue. Record the swept head. Keep the weekly `full` run
    (`docs/agents/doc-gardening.md` §When it runs).
@@ -168,7 +168,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    (aborted runs too). Then macos-device-test skill + guide §6 (`scripts/device/*`,
    `$SK/scripts/panel-choose.sh`, `drag2.sh`, `menus.sh`). For UI work, capture and independently review the
    signed App and pinned HTML states under [the parity contract](../../../docs/agents/ui-parity-contract.md).
-   Record in `docs/validation/P<n>.md` with `Validated-by: picsee-delegator run=<id>`;
+   Record in `docs/validation/P<n>.md` with `Validated-by: mado-delegator run=<id>`;
    garden; PR. Defect found → issue + FAIL limit + fix brief + re-validate.
 10. **Log** — update `~/.picsee/timeline.json` and append the handoff log; record user decisions verbatim.
 
