@@ -862,6 +862,10 @@ class ResolvePart3Tests(unittest.TestCase):
 
 
 LIVE_RESET_SCREEN = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex.txt").read_text()
+# Fresh Codex 0.167.0 screens saved by reset.sh's failure dump (2026-11-16): the footer has a second hint line
+# "← for agents · ? for shortcuts", and a pane launched in YOLO mode has a "permissions: YOLO mode" line under the cwd.
+LIVE_RESET_SCREEN_0167 = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex-0167.txt").read_text()
+LIVE_RESET_SCREEN_0167_YOLO = Path(__file__).with_name("fixtures").joinpath("reset-fresh-codex-0167-yolo.txt").read_text()
 
 
 class ResetTests(unittest.TestCase):
@@ -1198,6 +1202,24 @@ esac
     def test_successful_reset_leaves_no_dump(self):
         result, _ = self.run_reset()
         self.assertEqual(result.dumps, {})
+
+    def test_codex_0167_footer_hint_line_does_not_revoke_a_fresh_screen(self):
+        result, _ = self.run_reset(context=LIVE_RESET_SCREEN_0167, ready_boundary="", locale="C")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_yolo_permissions_header_line_is_header_metadata(self):
+        result, _ = self.run_reset(context=LIVE_RESET_SCREEN_0167_YOLO, ready_boundary="", locale="C")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_permissions_line_outside_the_header_still_counts_as_transcript(self):
+        # A "permissions:" line that is not directly under the title's cwd line must not be forgiven.
+        lines = LIVE_RESET_SCREEN_0167.splitlines()
+        at = next(i for i, line in enumerate(lines) if line.strip() == "› Ask Codex to do anything")
+        spoofed = "\n".join(lines[:at] + ["permissions: YOLO mode"] + lines[at:])
+        result, _ = self.run_reset(context=spoofed, ready_boundary="", locale="C", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
 
     def test_done_status_can_reset(self):
         result, _ = self.run_reset(status="done")
