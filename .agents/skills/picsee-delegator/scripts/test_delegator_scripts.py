@@ -872,7 +872,8 @@ class ResetTests(unittest.TestCase):
 
     def run_reset(self, *, delay=0, context="Context 0% used", status="idle", chooser=True, deadline="2",
                   poll="0.01", prefix="", startup=">_ OpenAI Codex (v0.166.0)", timer_var=None, old_context="",
-                  ready_boundary=">_ OpenAI Codex (v0.166.0)", locale=None, session_before="", session_after="", session_delay=0, pane_height=0):
+                  ready_boundary=">_ OpenAI Codex (v0.166.0)", locale=None, session_before="", session_after="", session_delay=0, pane_height=0,
+                  name_lost=False, rename_fail=False):
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -881,7 +882,20 @@ class ResetTests(unittest.TestCase):
             herdr.write_text('''#!/bin/sh
 case "$1 $2" in
   'agent get')
+    # Codex drops the herdr agent name after /new or a relaunch; until renamed, lookups fail.
+    if [ "$RESET_NAME_LOST" = 1 ] && ! grep -q 'rename-agent' "$RESET_STATE/events" 2>/dev/null; then
+      printf '{"error":{"code":"agent_not_found","message":"agent target not found"}}\\n'
+      exit 1
+    fi
     printf '{"agent_status":"%s","value":"old-session"}\\n' "$RESET_STATUS"
+    ;;
+  'agent rename')
+    echo "rename-agent $3 $4" >> "$RESET_STATE/events"
+    [ "$RESET_RENAME_FAIL" != 1 ] || exit 1
+    ;;
+  'pane rename')
+    echo "rename-pane $3 $4" >> "$RESET_STATE/events"
+    [ "$RESET_RENAME_FAIL" != 1 ] || exit 1
     ;;
   'pane get')
     count=0
@@ -896,6 +910,7 @@ case "$1 $2" in
     ;;
   'pane send-text')
     echo sent >> "$RESET_STATE/sends"
+    echo new-session-requested >> "$RESET_STATE/events"
     echo 0 > "$RESET_STATE/enters"
     echo 0 > "$RESET_STATE/reads"
     ;;
@@ -953,6 +968,8 @@ esac
                    "RESET_DELAY": str(delay), "RESET_CONTEXT": context, "RESET_PANE_HEIGHT": str(pane_height),
                    "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
                    "RESET_OLD_CONTEXT": old_context, "RESET_READY_BOUNDARY": ready_boundary,
+                   "RESET_NAME_LOST": str(int(name_lost)), "RESET_RENAME_FAIL": str(int(rename_fail)),
+                   "PICSEE_RESET_DUMP_DIR": str(root / "dumps"),
                    "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": poll}
             if locale:
                 env["LC_ALL"] = locale
@@ -966,6 +983,8 @@ esac
                                     capture_output=True, text=True, env=env, timeout=5)
             result.pane_sends = (root / "sends").read_text() if (root / "sends").exists() else ""
             result.pane_gets = int((root / "gets").read_text()) if (root / "gets").exists() else 0
+            result.events = (root / "events").read_text().splitlines() if (root / "events").exists() else []
+            result.dumps = {p.name: p.read_text() for p in (root / "dumps").glob("*")} if (root / "dumps").exists() else {}
             return result, time.monotonic() - started
 
     def test_real_saved_screen_with_missing_session_id_succeeds(self):
@@ -1126,6 +1145,59 @@ esac
                 result, _ = self.run_reset(delay=delay)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(result.stdout, self.SUCCESS)
+
+    RENAMES = ["rename-agent fixture-pane fixture-agent", "rename-pane fixture-pane fixture-agent"]
+
+    def test_lost_agent_name_is_restored_before_the_status_check(self):
+        # Codex drops the herdr agent name on /new or relaunch; reset used to fail with "status , not idle".
+        result, _ = self.run_reset(name_lost=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+        self.assertEqual(result.events[:2], self.RENAMES)
+
+    def test_names_are_restored_again_after_the_new_session_starts(self):
+        result, _ = self.run_reset()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.events,
+                         self.RENAMES + ["new-session-requested"] + self.RENAMES)
+
+    def test_names_are_restored_even_when_the_boundary_check_fails(self):
+        result, _ = self.run_reset(context="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.events[-2:], self.RENAMES)
+
+    def test_rename_failure_never_aborts_a_reset(self):
+        result, _ = self.run_reset(rename_fail=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.SUCCESS)
+
+    def test_failed_reset_dumps_the_last_screen_to_stderr_named_path(self):
+        result, _ = self.run_reset(context="", deadline="0.1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: no context line after 0.1s\n")
+        self.assertEqual(len(result.dumps), 1, result.dumps)
+        (name, text), = result.dumps.items()
+        self.assertTrue(name.startswith("reset-fail-fixture-agent-"), name)
+        self.assertIn(">_ OpenAI Codex (v0.166.0)", text)
+        self.assertIn(name, result.stderr)
+
+    def test_boundary_failure_also_dumps_the_screen(self):
+        result, _ = self.run_reset(delay=3, context="Context 12% used", deadline="0.1",
+                                   prefix="Context 0% used\n/new")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.NO_BOUNDARY)
+        self.assertEqual(len(result.dumps), 1, result.dumps)
+        self.assertIn("Context 0% used", next(iter(result.dumps.values())))
+
+    def test_chooser_failure_dumps_the_screen(self):
+        result, _ = self.run_reset(chooser=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "FAIL reset fixture-agent: chooser never appeared\n")
+        self.assertIn("ordinary pane, no chooser", next(iter(result.dumps.values())))
+
+    def test_successful_reset_leaves_no_dump(self):
+        result, _ = self.run_reset()
+        self.assertEqual(result.dumps, {})
 
     def test_done_status_can_reset(self):
         result, _ = self.run_reset(status="done")
