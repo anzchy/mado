@@ -83,6 +83,11 @@ struct CloudRecognitionSettingsEnvironment {
     private let savedKeys: NSTextField
     private var remove: NSButton!
     private let message: NSTextField
+    private var keysHint: NSTextField!
+    private var fallback: NSTextField!
+    /// The 密钥 row's geometry, for `layoutKeyRows()`.
+    private var keysRow = (top: CGFloat(0), valueX: CGFloat(0), valueWidth: CGFloat(0), width: CGFloat(0),
+                           entryBottom: CGFloat(0))
     private var refreshID = 0
     private var busy = false
 
@@ -227,23 +232,61 @@ struct CloudRecognitionSettingsEnvironment {
         savedKeys.maximumNumberOfLines = 1
         savedKeys.lineBreakMode = .byTruncatingMiddle
         savedKeys.setAccessibilityIdentifier("settings.capture.ocr-saved-keys")
-        savedKeys.frame = NSRect(x: valueX, y: top + 4, width: remove.frame.minX - 8 - valueX, height: 18)
         addSubview(savedKeys)
-        top = save.frame.maxY + 6
+        keysRow = (top, valueX, valueWidth, width, save.frame.maxY)
         let keysHint = Self.text(localize("Keys are stored in the keychain."), muted: true)
         keysHint.setAccessibilityIdentifier("settings.capture.ocr-keys-hint")
-        top = measured(keysHint, top: top) + 4
+        _ = measured(keysHint, top: 0)
+        self.keysHint = keysHint
         message.textColor = DesignColor.errorText.nsColor
         message.maximumNumberOfLines = 2
         message.setAccessibilityIdentifier("settings.capture.ocr-message")
-        message.frame = NSRect(x: valueX, y: top, width: valueWidth, height: 32)
+        message.frame = NSRect(x: valueX, y: 0, width: valueWidth, height: 0)
         addSubview(message)
-        top += 40
         let fallback = Self.text(localize(Self.fallbackHint), muted: true)
         fallback.setAccessibilityIdentifier("settings.capture.ocr-fallback-hint")
-        top = measured(fallback, top: top)
-        frame.size.height = top + 16
+        _ = measured(fallback, top: 0)
+        self.fallback = fallback
+        // The group keeps the height of its tallest arrangement (移除密钥 under the key line, a two-line message);
+        // the rows themselves move up when those are not shown, so any spare room is below the last note.
+        let tallestKeys = max(save.frame.maxY, top + 26 + remove.frame.height) + 6
+        frame.size.height = tallestKeys + keysHint.frame.height + 4 + 32 + 8 + fallback.frame.height + 16
         show(CloudRecognitionSettingsState(isOn: false, hasKeys: false, consent: .notAsked, maskedAPIKey: nil))
+    }
+
+    /// #689b dev1: the saved-key line shows in full (移除密钥 moves under it when both do not fit on one row), and
+    /// the error slot takes room only while it holds a message.
+    private func layoutKeyRows() {
+        let row = keysRow
+        var top = row.entryBottom + 6
+        if !savedKeys.isHidden {
+            let needed = savedKeys.attributedStringValue.size().width.rounded(.up) + 4
+            let besideRemove = row.width - remove.frame.width - 8 - row.valueX
+            if needed <= besideRemove {
+                savedKeys.frame = NSRect(x: row.valueX, y: row.top + 4, width: besideRemove, height: 18)
+                remove.frame.origin = NSPoint(x: row.width - remove.frame.width, y: row.top)
+                top = max(row.entryBottom, row.top + remove.frame.height) + 6
+            } else {
+                savedKeys.frame = NSRect(x: row.valueX, y: row.top + 4, width: row.valueWidth, height: 18)
+                remove.frame.origin = NSPoint(x: row.valueX, y: row.top + 26)
+                top = remove.frame.maxY + 6
+            }
+        }
+        keysHint.frame.origin.y = top
+        top = keysHint.frame.maxY + 4
+        message.isHidden = message.stringValue.isEmpty
+        if !message.isHidden {
+            let height = message.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: row.valueWidth,
+                                                                  height: .greatestFiniteMagnitude)).height.rounded(.up)
+            message.frame = NSRect(x: row.valueX, y: top, width: row.valueWidth, height: min(height, 32))
+            top = message.frame.maxY + 4
+        }
+        fallback.frame.origin.y = top + 4
+    }
+
+    private func setMessage(_ text: String) {
+        message.stringValue = text
+        layoutKeyRows()
     }
 
     func refresh() {
@@ -265,6 +308,7 @@ struct CloudRecognitionSettingsEnvironment {
         savedKeys.stringValue = state.maskedAPIKey.map {
             String(format: localize("API Key %1$@ · Secret Key %2$@"), $0, CloudKeyMask.hidden)
         } ?? ""
+        layoutKeyRows()
     }
 
     /// One change at a time: each finishes by reading the model back, so the switch never shows a state the
@@ -283,19 +327,19 @@ struct CloudRecognitionSettingsEnvironment {
     @objc private func changeSwitch(_ sender: NSSwitch) {
         let wantsOn = sender.state == .on
         sender.state = .off
-        message.stringValue = ""
+        setMessage("")
         perform { [self] in
             guard wantsOn else { await environment.model.disable(); return }
             switch await environment.model.requestEnable() {
             case .enabled: break
-            case .needsKeys: message.stringValue = localize("Save the keys first.")
+            case .needsKeys: setMessage(localize("Save the keys first."))
             case .needsConsent:
                 let alert = Self.consentAlert(localize: localize, openURL: openURL)
                 let agreed = await withCheckedContinuation { continuation in
                     environment.presentConsent(window, alert) { continuation.resume(returning: $0) }
                 }
                 if await environment.model.answerConsent(granted: agreed) == .needsKeys {
-                    message.stringValue = localize("Save the keys first.")
+                    setMessage(localize("Save the keys first."))
                 }
             }
         }
@@ -304,25 +348,25 @@ struct CloudRecognitionSettingsEnvironment {
     @objc private func saveKeys(_ sender: NSButton) {
         let api = apiKey.stringValue
         let secret = secretKey.stringValue
-        message.stringValue = ""
+        setMessage("")
         perform { [self] in
             do throws(CloudKeyError) {
                 try await environment.model.saveKeys(apiKey: api, secretKey: secret)
                 apiKey.stringValue = ""
                 secretKey.stringValue = ""
             } catch .emptyKey {
-                message.stringValue = localize("Enter both the API Key and the Secret Key.")
+                setMessage(localize("Enter both the API Key and the Secret Key."))
             } catch {
-                message.stringValue = localize("The keys could not be saved to the keychain.")
+                setMessage(localize("The keys could not be saved to the keychain."))
             }
         }
     }
 
     @objc private func removeKeys(_ sender: NSButton) {
-        message.stringValue = ""
+        setMessage("")
         perform { [self] in
             do throws(CloudKeyError) { try await environment.model.removeKeys() }
-            catch { message.stringValue = localize("The keys could not be removed from the keychain.") }
+            catch { setMessage(localize("The keys could not be removed from the keychain.")) }
         }
     }
 }
