@@ -29,7 +29,7 @@ over everything merged since the last sweep, and starts the gardener only when i
 node scripts/ledger/garden-gate.mjs <last-swept-main> origin/main
 ```
 
-`<last-swept-main>` is the main head the previous sweep covered, kept in `~/.picsee/gardening/last-daily-sweep`
+`<last-swept-main>` is the main head the previous sweep covered, kept in `~/.mado/gardening/last-daily-sweep`
 (machine-local). After the sweep, write the new main head there. An `UPDATED` or `NEEDS-OWNER` result lands as one
 small PR (`docs(ledger): garden <base7>..<head7>`). A `BLOCK` on main means a merged commit weakened acceptance or
 upgraded a row without evidence: tell the user, open an issue, and fix it in that PR.
@@ -169,7 +169,7 @@ A wrong downgrade costs one re-check. A wrong upgrade is the false claim the led
    (or `node scripts/ledger/build.mjs`) so `docs/feature-ledger.html` matches. Do not stage or commit.
    The caller reviews `git diff -- docs/feature-ledger.md docs/feature-ledger.html` and commits both files as
    `docs(ledger): garden <base7>..<head7>`.
-8. **Write the report** to `~/.picsee/gardening/<branch>-<head7>.md`, creating the folder if needed, and
+8. **Write the report** to `~/.mado/gardening/<branch>-<head7>.md`, creating the folder if needed, and
    return it as your final message.
 
 In `full` mode, take the base as the commit that last touched each area's Part 3 row, then run steps

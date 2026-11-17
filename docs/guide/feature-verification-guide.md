@@ -41,12 +41,12 @@
 
 | 项目 | 怎么做 | 怎么确认 |
 |---|---|---|
-| Xcode | 锁定 **Xcode 26.6（build 17F113）**。脚本依次检查 `/Applications/Xcode-26.6.app`、`/Applications/Xcode.app`；`PICSEE_XCODE` 可显式覆盖 | 选中路径的 `Contents/Developer/usr/bin/xcodebuild -version` 输出 `Build version 17F113` |
+| Xcode | 锁定 **Xcode 26.6（build 17F113）**。脚本依次检查 `/Applications/Xcode-26.6.app`、`/Applications/Xcode.app`；`MADO_XCODE` 可显式覆盖 | 选中路径的 `Contents/Developer/usr/bin/xcodebuild -version` 输出 `Build version 17F113` |
 | XcodeGen | 本机已装（`/opt/homebrew/bin/xcodegen`） | `xcodegen --version` |
 | 签名 | 钥匙串里已有团队 `GRT84NAK4T` 的 Apple Development 证书（2027-01-31 到期） | `security find-identity -v -p codesigning` 里能看到它 |
 | 终端权限 | 运行验收会话的终端 App 已获所需的**屏幕录制**和**辅助功能**权限；验收时不自行更改隐私设置 | computer use 截图能看到桌面 |
 | 输入法 | 验收前切到 **ABC** | 菜单栏输入法图标 |
-| 运行目录 | `mkdir -p ~/.picsee/device-runs` | 目录存在 |
+| 运行目录 | `mkdir -p ~/.mado/device-runs` | 目录存在 |
 | 已安装的 Mado | 用户自己的 Mado 可保留安装，但验收时不能运行 | `pgrep -fl Mado` 没有输出 |
 
 本机 mini 是 1920×1080 @1x，也是计划 §10.1 的性能基准；除 @2x 外，所有真机验收都只在这里跑。
@@ -71,7 +71,7 @@ NOT VERIFIED。mini 上由具备桌面与构建权限的独立验收会话执行
 
 ### ② 写 brief
 
-brief 是给验收会话的任务单，放在 `~/.picsee/device-briefs/brief-<日期>-<ID>.md`（不进仓库）。至少写这些：
+brief 是给验收会话的任务单，放在 `~/.mado/device-briefs/brief-<日期>-<ID>.md`（不进仓库）。至少写这些：
 
 ```markdown
 # Brief 2026-11-05 VIEW-02-03
@@ -86,7 +86,7 @@ brief 是给验收会话的任务单，放在 `~/.picsee/device-briefs/brief-<�
 - 运行步骤：features/canvas-pixels.md
 - 沙盒容器：保持现状
 - 需要用户动手的步骤：VIEW-03 触控板捏合 —— 到这一步停下来叫我
-- 报告写到：~/.picsee/device-runs/<run-id>/report.md
+- 报告写到：~/.mado/device-runs/<run-id>/report.md
 ```
 
 需要冷启动状态时，在 brief 里写明涉及的存储文件、备份和恢复步骤，并记录这次运行获得的用户同意；
@@ -99,7 +99,7 @@ brief 是给验收会话的任务单，放在 `~/.picsee/device-briefs/brief-<�
 被占用时不要驱动桌面，也不要触碰 mdpro 的会话。然后调用技能：
 
 ```text
-$macos-device-test 读 ~/.picsee/device-briefs/brief-2026-11-05-VIEW-02-03.md，按里面写的执行，报告写到 brief 指定的位置。brief 说需要我动手的时候停下来叫我。
+$macos-device-test 读 ~/.mado/device-briefs/brief-2026-11-05-VIEW-02-03.md，按里面写的执行，报告写到 brief 指定的位置。brief 说需要我动手的时候停下来叫我。
 ```
 
 Claude Code 使用同一份 brief，调用 `/macos-device-test`。
@@ -117,7 +117,7 @@ SSH shell 里签名或启动。该路径未配置时不要换验收标准，直�
 - 会话停下来叫你时（例如触控板捏合、按物理 Esc），照做后告诉它继续；
 - 运行期间别动鼠标键盘，别切到别的 App。
 
-截图和日志都在 `~/.picsee/device-runs/<run-id>/`，**永远不进仓库**（仓库是公开的）。
+截图和日志都在 `~/.mado/device-runs/<run-id>/`，**永远不进仓库**（仓库是公开的）。
 
 ### ④ 读结论表，写验证记录
 
@@ -182,7 +182,7 @@ gardener 不再随 PR 运行（用户 2026-11-04：「之后mado-doc-gardener �
 用 mado-doc-gardener 跑 pr 模式：worktree picsee-wt/owner-gates（detached 在 origin/main），base <上次扫到的 main>，head <origin/main SHA>。
 ```
 
-它读这次改动、对应到账簿行、检查证据，报告写到 `~/.picsee/gardening/<分支>-<head7>.md`，最后一行是 PR 用的结论行。
+它读这次改动、对应到账簿行、检查证据，报告写到 `~/.mado/gardening/<分支>-<head7>.md`，最后一行是 PR 用的结论行。
 
 ### ⑦ 按结论处理，开 PR
 
@@ -220,7 +220,7 @@ computer-use 的直接 Escape 路径仍未验证。
 - `Validated-by` 的角色，同时出现在这次改动里实现提交的 `Implemented-by` 上；
 - 验证记录和代码改动在同一次提交里。
 
-trailer 只是声明，真正的保证仍是流程：验收一定在新会话里跑，运行 ID 对应 `~/.picsee/device-runs/` 里真实存在的报告。
+trailer 只是声明，真正的保证仍是流程：验收一定在新会话里跑，运行 ID 对应 `~/.mado/device-runs/` 里真实存在的报告。
 
 **截图能不能放进 PR 或 issue？**
 不建议。截图会暴露桌面内容，而仓库与 issue 都是公开的。PR 里放验证记录的链接和结论表即可；确实需要图时，
@@ -245,7 +245,7 @@ trailer 只是声明，真正的保证仍是流程：验收一定在新会话里
 
 ```sh
 PICSEE_I499_GUI_ACQUISITION='<当前调用者的 acquisition_id>' \
-  ~/.picsee/device/ram/with-ram.sh i499-render scripts/heavy-lock.sh \
+  ~/.mado/device/ram/with-ram.sh i499-render scripts/heavy-lock.sh \
   swift test --package-path Packages/MadoKit --filter issue499RealHomePrimaryFrame
 ```
 

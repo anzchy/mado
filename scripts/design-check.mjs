@@ -2,7 +2,7 @@
 // npm run design:check — check shortcuts.html against the command model (scripts/design/shortcut-model.mjs), serve
 // design/ and states/ on two local ports, then run scripts/verify_design_catalog.js in headless Chromium (Playwright
 // pinned in package-lock.json). Exits 1 when the check fails, 2 when it cannot start.
-// Ports: PICSEE_DESIGN_PORT and PICSEE_STATES_PORT, default a free port chosen at listen time. PICSEE_DESIGN_SCREENSHOT
+// Ports: PICSEE_DESIGN_PORT and PICSEE_STATES_PORT, default a free port chosen at listen time. MADO_DESIGN_SCREENSHOT
 // sets the preview screenshot path, default a temporary directory (never the repo).
 // The servers run in this process, not `python3 -m http.server`: that server resolves the bind address with
 // socket.getfqdn() between bind() and listen(), a reverse-DNS lookup that left the port closed for 15 s on a macOS
@@ -72,7 +72,7 @@ try {
   const { chromium } = await import('playwright');
   const design = await serve('design', portFrom('PICSEE_DESIGN_PORT'));
   const states = await serve('design/prototypes/picsee-browser/states', portFrom('PICSEE_STATES_PORT'));
-  const screenshot = process.env.PICSEE_DESIGN_SCREENSHOT
+  const screenshot = process.env.MADO_DESIGN_SCREENSHOT
     || path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'picsee-design-check-')), 'design-material-preview.png');
   browser = await chromium.launch();
   const page = await browser.newPage();

@@ -56,7 +56,7 @@ Owner 于 2026-11-04 选择「Native exception (Recommended)」：App 的原生�
 
 ## 对照与审计
 
-1. 使用相同 manifest 视口、外观、语言和确定性素材，在 HTTP 预览里渲染 HTML；在**签名且 sandbox 开启**的 App 中经真实入口到达同一状态。按 `$macos-device-test` 先查并取得共享 GUI 锁，记录 App 完整 SHA、签名、设备/macOS、窗口 bounds、backing scale、设计 tree OID、HTML/manifest 哈希和运行 ID。窗口原图、网页原图、日志与比对图保存在 `~/.picsee/device-runs/<run-id>/`，不进公开仓库。
+1. 使用相同 manifest 视口、外观、语言和确定性素材，在 HTTP 预览里渲染 HTML；在**签名且 sandbox 开启**的 App 中经真实入口到达同一状态。按 `$macos-device-test` 先查并取得共享 GUI 锁，记录 App 完整 SHA、签名、设备/macOS、窗口 bounds、backing scale、设计 tree OID、HTML/manifest 哈希和运行 ID。窗口原图、网页原图、日志与比对图保存在 `~/.mado/device-runs/<run-id>/`，不进公开仓库。
 2. 独立于实现者的验收者以窗口截图的同一坐标系对照。逐区域报告位置和尺寸（points 与 backing pixels 分开）、边距/层级、文字裁切与字体、颜色/对比、图标和可见状态；注明测量位置、实际值、设计值和偏差。系统边界按 brief 中预先列出的例外判断。只能遮住已列明且会变化的照片/文件数据，不能遮住控件或文字缺失。
 3. 静态像素之外，用 App 真正操作 Space/方向键/Esc、菜单、窗口缩放、浅深切换、焦点/Tab、可访问性、中文和错误恢复等本工作包相关入口。浏览器截图、单元测试和 `@1x` 通过都不能替代另一个入口或 `@2x`。未实现状态标 `PENDING`；未捕获的尺寸、主题、语言、设备或动作逐项写 `NOT VERIFIED` 和原因。
 4. 当前独立审计者（2026-10-25 起 gpt-auditor 与 opus-auditor 双审，见 roster 计划）对原始截图、构建输入和行为记录作独立审查，按严重度列出差异和复现步骤。修复后，delegator 安排指定的独立设备验收角色在共享 GUI 锁下重建签名 App、重拍受影响状态并交付新原图和准确的修复版 SHA；审计者 只审核该批原图、记录与 SHA，不操作 App。缺少重拍证据的状态保持 `NOT VERIFIED`。轮次完成只说明交付范围内的结论，不自动代表 20 页全通过。PR 列出已比对、待实现和未验证的状态及仍开放发现。
@@ -97,7 +97,7 @@ Checker-Change: <40-hex-head-SHA> families=<family-list> — <rationale> — aud
 - `family-list` 用逗号分隔小写 `ledger`、`design`，不得重复或写未知名称；必须覆盖所有发生变化的类别，顺序任意，允许多列另一个已知类别。例如 `families=ledger,design`。
 - `rationale` 是同一行内的修改理由，去除空白及 `-`、`–`、`—` 分隔符后必须非空；用两侧各有至少一个空格或 tab 的 `—` 分隔三个字段，缺少任一侧空白都会失败。
 - `audits` 至少列出两条规范化后不同、以逗号分隔的独立审计引用，因为 checker 变更仍须双独立 diff 审计。只接受以下两类（引用内部无空白）：
-  - herdr 报告：`~/.picsee/herdr/<auditor>-auditor/<id>-audit<suffix>.md` 或同目录的 `<id>-confirm<suffix>.md`，使用这个与仓库路径无关的写法。`auditor` 为小写字母/数字组，以单个 `-` 连接；`id` 以字母或数字开头，余下及可为空的 `suffix` 只含字母、数字、`.`、`_`、`-`。可加由字母、数字、`_`、`-` 组成的非空 `#anchor`。先按 POSIX 规则折叠路径中的 `.`、`..` 和重复 `/`，再验证格式并去掉 anchor 比较身份；同一报告的不同段落不算两份报告。
+  - herdr 报告：`~/.mado/herdr/<auditor>-auditor/<id>-audit<suffix>.md` 或同目录的 `<id>-confirm<suffix>.md`，使用这个与仓库路径无关的写法。`auditor` 为小写字母/数字组，以单个 `-` 连接；`id` 以字母或数字开头，余下及可为空的 `suffix` 只含字母、数字、`.`、`_`、`-`。可加由字母、数字、`_`、`-` 组成的非空 `#anchor`。先按 POSIX 规则折叠路径中的 `.`、`..` 和重复 `/`，再验证格式并去掉 anchor 比较身份；同一报告的不同段落不算两份报告。
   - 本仓库 PR review/comment：`https://github.com/anzchy/picsee/pull/<number>#pullrequestreview-<number>` 或 `https://github.com/anzchy/picsee/pull/<number>#issuecomment-<number>`；number 均为无前导零的正整数，URL 按完整字符串比较，不能附加 query 或其他路径。
 - 不接受 issue 编号、普通网页 URL、任意 Markdown 文件名，或占位引用。报告路径中以 `. / _ -` 为边界的 `TBD`、`none`、`todo`、`x`、`n/a`、`n-a`（不区分大小写）均视为占位符。例如 `TBD.md,none.md`、`http://x,http://y`、同报告的 `#r1,#r2` 均失败。lint 用于拦截诚实误填；不访问网络或读取本地报告来证明真实性，审查者仍负责确认报告存在、审计者独立且明确覆盖 checker 修改。
 
@@ -109,7 +109,7 @@ pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI 
 
 - **范围**：diff 改变了用户能看到或触发的 App 行为（通常即触及 UI/交互区的账簿行）。只改文档、测试或无 App 接线的模型代码的 PR 免做，PR 描述写一行 `Device-Smoke: n/a — <理由>`。
 - **谁做**：不是实现者的角色（delegator，或有设备权限的审计者）。实现者仍不启动 App、不驱动 GUI。
-- **怎么做**：按 `$macos-device-test`，对 **PR head** 运行 `scripts/device/build.sh`，取共享 GUI 锁，`launch.sh`，`doctor.sh` 全部通过；按 `features/` 里对应配方，经真实用户路径走**一条**变更路径（配方缺失先补写，见 #176）；记录动作与结果状态，`cleanup.sh` 后释放锁。证据留在 `~/.picsee/device-runs/<run-id>/`。
+- **怎么做**：按 `$macos-device-test`，对 **PR head** 运行 `scripts/device/build.sh`，取共享 GUI 锁，`launch.sh`，`doctor.sh` 全部通过；按 `features/` 里对应配方，经真实用户路径走**一条**变更路径（配方缺失先补写，见 #176）；记录动作与结果状态，`cleanup.sh` 后释放锁。证据留在 `~/.mado/device-runs/<run-id>/`。
 - **结论**：PR 描述写 `Device-Smoke: PASS|FAIL|NOT VERIFIED <head7> run=<id> — <走过的路径>`。`FAIL` 阻止合入，修复后重做；`NOT VERIFIED` 须写明具体阻碍（例如仅 @2x 可达）并经用户同意才能合入。
 - **时效**：结论只覆盖那份补丁。rebase 后，`rebase-verify.sh` 把审计过的完整 full-index 补丁用 `git apply --cached --3way` 在新 base 的隔离 index 中重放，并要求所得树与 new head 精确一致（仅排除由 `rebase-ledger.sh` 重写、由 ledger gate 检查的 `docs/feature-ledger.md` 和 `docs/feature-ledger.html`），比较范围保留路径、重命名、删除、文件模式和二进制内容。`CODE same` 表示重放成功且树精确匹配，即使上游改了编辑附近的上下文也可保留结论；补丁 hash 只用于诊断，不决定相等。`CODE differ` 时重新做组合审计和 smoke。测试、文档、design 与依赖文件也在比较范围内；exit 4 表示任一比较补丁为空，不提供结论沿用证据，delegator 须检查两段范围并取得适用的新证据、重跑 gates。
 - **不是升级**：冒烟不写 `docs/validation` 记录，不升级账簿行，也不替代批次真机对照；它只把「没人在真实 App 里走过这条路」挡在合入之前。
@@ -125,7 +125,7 @@ pre-push 遇到 checker 变化仍将该类本地检查延迟给 CI，输出 `CI 
 
 - `PENDING` 只用于本次工作包尚未实现且无法由当前 App 抵达、并明确归属后续工作包的状态；已经可达的状态不得用 `PENDING` 绕过。例外：计划 §1.3 已按引用用户原话或 ADR 的决定把某状态的原生归属改给后续工作包（例如 2026-10-25「先合入，page24 归 P3-10」）。此时本工作包拥有的部分仍是必验行，只有其余部分记 `PENDING(<WP>)`，并在 PR 中引用该决定。
 - 原型目录里其余未受本次改动影响的状态仍逐项如实报告，不能借局部通过宣称 20 页、@2x 或所有交互已经一致。当前 #92 的历史偏移按其独立清单继续追踪。
-- 证据目录留在 `~/.picsee/`，公开 PR 只写非敏感的 ID、哈希和结论。
+- 证据目录留在 `~/.mado/`，公开 PR 只写非敏感的 ID、哈希和结论。
 
 CI 可检查构建、单元/渲染断言、manifest 和账簿同步；它不能单独证明签名 App 在所有窗口、显示倍率和交互状态下与设计一致。因此视觉通过只来自批次真机证据和独立审计，CI 绿灯与 `AUTO-PASS` 都不是视觉通过。
 

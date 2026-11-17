@@ -79,7 +79,7 @@ function say(write, line) { write(`trash-lane: ${line}\n`); }
 export function runScenarios({ scenarios, manifest, swift = 'swift', cwd = root, env = process.env,
   scenarioSeconds = TRASH_LIMITS.scenarioSeconds, graceSeconds = TRASH_LIMITS.graceSeconds,
   drainSeconds = TRASH_LIMITS.drainSeconds, write = text => process.stdout.write(text) }) {
-  if (env.PICSEE_HEAVY_LOCK_HELD !== '1' || !env.PICSEE_HEAVY_CONTROL_FD) {
+  if (env.MADO_HEAVY_LOCK_HELD !== '1' || !env.MADO_HEAVY_CONTROL_FD) {
     say(write, 'refused: the run phase must run inside one heavy-lock admission');
     return 70;
   }
@@ -89,8 +89,8 @@ export function runScenarios({ scenarios, manifest, swift = 'swift', cwd = root,
   const totals = { passed: 0, failed: 0, missing: [] };
   for (const [index, id] of scenarios.entries()) {
     say(write, `scenario ${index + 1}/${scenarios.length} ${id} (deadline ${scenarioSeconds}s)`);
-    const childEnv = { ...env, PICSEE_HEAVY_LOCK_EXEC_SECS: String(scenarioSeconds),
-      PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: String(graceSeconds), PICSEE_HEAVY_LOCK_DRAIN_SECS: String(drainSeconds) };
+    const childEnv = { ...env, MADO_HEAVY_LOCK_EXEC_SECS: String(scenarioSeconds),
+      MADO_HEAVY_LOCK_KILL_GRACE_SECS: String(graceSeconds), MADO_HEAVY_LOCK_DRAIN_SECS: String(drainSeconds) };
     const run = runAttestedSync(lock, [swift, 'test', '--skip-build', ...swiftFlags(manifest),
       '--filter', scenarioFilter(id)], { cwd, env: childEnv, stdio, maxBuffer: 64 * 1024 * 1024,
       timeout: (scenarioSeconds + graceSeconds + TRASH_LIMITS.killWaitSeconds + 15) * 1000 }, { rejectDrain: true });
@@ -162,7 +162,7 @@ function main(argv) {
     return 64;
   }
   const env = { ...process.env };
-  for (const name of ['PICSEE_HEAVY_LOCK_EXEC_SECS', 'PICSEE_HEAVY_LOCK_KILL_GRACE_SECS', 'PICSEE_HEAVY_LOCK_DRAIN_SECS'])
+  for (const name of ['MADO_HEAVY_LOCK_EXEC_SECS', 'MADO_HEAVY_LOCK_KILL_GRACE_SECS', 'MADO_HEAVY_LOCK_DRAIN_SECS'])
     delete env[name];
   if (!prerequisites({ swift: 'swift', env, write })) return 70;
   if (argv[0] === '--discover') {
@@ -190,7 +190,7 @@ function main(argv) {
     if (listed.status !== 0) say(write, 'PREREQUISITE MISSING: integration listing failed');
     return 70;
   }
-  const runEnv = { ...env, PICSEE_HEAVY_LOCK_EXEC_SECS: String(TRASH_LIMITS.commandSeconds) };
+  const runEnv = { ...env, MADO_HEAVY_LOCK_EXEC_SECS: String(TRASH_LIMITS.commandSeconds) };
   const run = spawnSync(lock, [process.execPath, fileURLToPath(import.meta.url), '--scenarios-under-lock'],
     { cwd: root, env: runEnv, stdio: 'inherit' });
   const code = status(run);

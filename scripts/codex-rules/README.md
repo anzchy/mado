@@ -47,8 +47,8 @@ After rebasing an owned unmerged PR branch, obtain the exact current remote tip 
 `python3 scripts/codex-rules/push-guard.py --expected-remote-oid <full-oid>`. The lease
 must be the observed tip; never use the guarded force option on `main`.
 
-Optional mdpro interop tests use `PICSEE_MDPRO_SCRIPT` for mdpro’s `scripts/heavy-lock.sh`
-(Node heavy-lock tests) and `PICSEE_MDPRO_GUI_SCRIPT` for mdpro’s
+Optional mdpro interop tests use `MADO_MDPRO_SCRIPT` for mdpro’s `scripts/heavy-lock.sh`
+(Node heavy-lock tests) and `MADO_MDPRO_GUI_SCRIPT` for mdpro’s
 `.agents/skills/mdpro-delegator/scripts/gui-lock.sh` (Python GUI-lock tests).
 Run the GUI script in its repository so its heavy-lock dependency is available; only an
 unset GUI variable skips, while a configured invalid script or dependency fails.
@@ -95,7 +95,7 @@ moves. After moving the repository, reinstall from the trusted base; preserve th
 snapshot and verify `test -x "$(git config --get core.hooksPath)/pre-push"` before relying on it.
 
 Git invokes the hook during the push started by `push-guard.py`, after that guard checks role
-and destination. Set `PICSEE_PR_BODY=/absolute/path/to/body.md` to also lint the body against
+and destination. Set `MADO_PR_BODY=/absolute/path/to/body.md` to also lint the body against
 the exact local OID Git is pushing. It blocks a supplied body when the pushed commit is not
 HEAD. Deletion records skip body lint. No Swift, Xcode or browser design suite runs.
 

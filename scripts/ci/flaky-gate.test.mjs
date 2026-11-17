@@ -144,7 +144,7 @@ test('every second attempt determines status, never a third',()=>{
 test('disable flag, success and ineligible failures never retry',()=>{
   const cases=[pass,result(fixtures[0].replaceAll(names[0],'unknown')),result(fixtures[0].replace('180.000 seconds','other')),result('',{status:70}),result(fixtures[0],{signal:'SIGKILL',status:null})];
   for(const r of cases){const h=harness([r,pass]);assert.equal(h.status,parseAppResult(r).status);assert.equal(h.calls,1);assert.doesNotMatch(h.stdout,/retrying once/);}
-  const h=harness([result(),pass],{env:{PICSEE_APP_LANE_NO_RETRY:'1'}});assert.equal(h.status,1);assert.equal(h.calls,1);assert.doesNotMatch(h.stdout,/retrying once/);assert.match(h.stdout,/first-attempt failures:/);
+  const h=harness([result(),pass],{env:{MADO_APP_LANE_NO_RETRY:'1'}});assert.equal(h.status,1);assert.equal(h.calls,1);assert.doesNotMatch(h.stdout,/retrying once/);assert.match(h.stdout,/first-attempt failures:/);
 });
 test('real Node child process transports recorded output, stderr and exit status',()=>{
   let n=0;const text=fixtures[1], h=harness([],{spawn:()=>spawnSync(process.execPath,['-e',`process.stdout.write(${JSON.stringify(n++?passing:text)});process.stderr.write('real stderr\\n');process.exit(${n===1?1:0})`],{encoding:'utf8'})});
@@ -173,7 +173,7 @@ test('flaky gate CLI refuses missing metadata, invalid status and unreadable log
 });
 test('injected process boundary uses locked native command and preserves environment',()=>{
   let command,args,options;
-  const h=harness([pass],{env:{PICSEE_APP_LANE_NO_RETRY:'1',EXAMPLE:'kept'},spawn:(...values)=>{[command,args,options]=values;return pass;}});
+  const h=harness([pass],{env:{MADO_APP_LANE_NO_RETRY:'1',EXAMPLE:'kept'},spawn:(...values)=>{[command,args,options]=values;return pass;}});
   assert.equal(h.status,0);assert.match(command,/scripts\/heavy-lock\.sh$/);assert.deepEqual(args,['xcrun','xctest','.build/dd-ci/Build/Products/Debug/MadoAppTests.xctest']);assert.equal(options.env.EXAMPLE,'kept');assert.equal(options.env.SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH,'1');
 });
 test('default output streams emit final result using recorded Node transport',()=>{
@@ -215,9 +215,9 @@ test('first App attempt upload is nonfatal while App tests retain their exit sta
   assert.match(upload, /^          path: \.build\/app-lane-attempt1\.log$/m);
   assert.ok(lane, 'App lane step exists');
   // The real pipeline exit-status contract is exercised in ci-workflow.test.mjs.
-  assert.match(lane, /PICSEE_HEAVY_CI_TOP_LEVEL: '1'/);
-  assert.match(lane, /PICSEE_HEAVY_STATUS_PATH: \.build\/app-heavy-cleanup-/);
-  assert.match(lane, /else\n +PICSEE_HEAVY_LOCK_EXEC_SECS=2400 scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs\n +fi\n +\} 2>&1 \| tee \.build\/app-tests\.log/m);
+  assert.match(lane, /MADO_HEAVY_CI_TOP_LEVEL: '1'/);
+  assert.match(lane, /MADO_HEAVY_STATUS_PATH: \.build\/app-heavy-cleanup-/);
+  assert.match(lane, /else\n +MADO_HEAVY_LOCK_EXEC_SECS=2400 scripts\/heavy-lock\.sh node scripts\/tdd\/app-lane\.mjs\n +fi\n +\} 2>&1 \| tee \.build\/app-tests\.log/m);
   assert.doesNotMatch(lane, /continue-on-error:/);
 });
 

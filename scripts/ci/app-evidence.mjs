@@ -12,7 +12,7 @@ export function reportAppEvidence(env = process.env) {
   const repeated = !Number.isSafeInteger(repeat) || repeat !== 1;
   const eventProvenance = ['push', 'pull_request'].includes(env.EVENT_NAME) ||
     (env.EVENT_NAME === 'workflow_dispatch' && env.APP_TESTS === 'true');
-  const requestedDiagnostic = !eventProvenance || Boolean(env.APP_FILTER) || repeated || env.PICSEE_APP_LANE_NO_RETRY === '1';
+  const requestedDiagnostic = !eventProvenance || Boolean(env.APP_FILTER) || repeated || env.MADO_APP_LANE_NO_RETRY === '1';
   const valid = record && record.version === 1 && typeof record.runId === 'string' && record.runId.length > 0 &&
     record.runId === env.APP_RESULT_ID && record.complete === true &&
     [1, 2].includes(record.attempts) && [0, 1, 70].includes(record.status) &&

@@ -29,11 +29,11 @@ while read -r local_ref local_oid remote_ref remote_oid; do
     node scripts/design/shortcut-model.mjs
   )
   rm -rf "$snapshot/tree"
-  if [ -n "${PICSEE_PR_BODY:-}" ]; then
-    node "$repo/scripts/agents/local-pr-lint.mjs" --body-file "$PICSEE_PR_BODY" --expect "$local_oid"
+  if [ -n "${MADO_PR_BODY:-}" ]; then
+    node "$repo/scripts/agents/local-pr-lint.mjs" --body-file "$MADO_PR_BODY" --expect "$local_oid"
   fi
 done
-if [ -n "${PICSEE_PR_BODY:-}" ] && [ "$saw_input" = 0 ]; then
+if [ -n "${MADO_PR_BODY:-}" ] && [ "$saw_input" = 0 ]; then
   echo 'pre-push: no push input; cannot bind PR body to the pushed commit' >&2
   exit 2
 fi

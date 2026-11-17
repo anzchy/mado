@@ -23,11 +23,11 @@ test('hosted comparison registers a live host after a 2.5 second registration st
     `process.exitCode=runAppCompare({out:${JSON.stringify(out)},hostExecutable:${JSON.stringify(process.execPath)}});\n`);
   const env={...process.env,PATH:dir+path.delimiter+process.env.PATH,
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',
-    APP_REPEAT_DEADLINE_MS:String(Date.now()+15000),PICSEE_HEAVY_LOCK_HELD:'1',
-    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'18',PICSEE_HEAVY_LOCK_DRAIN_SECS:'2'};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
-  delete env.MDPRO_HEAVY_LOCK_HELD;delete env.PICSEE_HEAVY_CI_BOUNDARY_REQUIRED;
+    APP_REPEAT_DEADLINE_MS:String(Date.now()+15000),MADO_HEAVY_LOCK_HELD:'1',
+    MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',
+    MADO_HEAVY_LOCK_EXEC_SECS:'18',MADO_HEAVY_LOCK_DRAIN_SECS:'2'};
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MDPRO_HEAVY_LOCK_HELD;delete env.MADO_HEAVY_CI_BOUNDARY_REQUIRED;
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
   const log=existsSync(path.join(out,'iter-01.log'))?readFileSync(path.join(out,'iter-01.log'),'utf8'):'';
   assert.equal(run.status,0,run.stderr+'\n'+log);
@@ -50,11 +50,11 @@ test('registration refusal reports transport and parent reason while retaining s
     `process.exitCode=runAppCompare({out:${JSON.stringify(out)},hostExecutable:${JSON.stringify(process.execPath)}});\n`);
   const env={...process.env,PATH:dir+path.delimiter+process.env.PATH,
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',
-    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),PICSEE_HEAVY_LOCK_HELD:'1',
-    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'15',PICSEE_HEAVY_LOCK_DRAIN_SECS:'2'};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
-  delete env.MDPRO_HEAVY_LOCK_HELD;delete env.PICSEE_HEAVY_CI_BOUNDARY_REQUIRED;
+    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),MADO_HEAVY_LOCK_HELD:'1',
+    MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',
+    MADO_HEAVY_LOCK_EXEC_SECS:'15',MADO_HEAVY_LOCK_DRAIN_SECS:'2'};
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+  delete env.MDPRO_HEAVY_LOCK_HELD;delete env.MADO_HEAVY_CI_BOUNDARY_REQUIRED;
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:17000});
   const log=readFileSync(path.join(out,'iter-01.log'),'utf8');
   assert.equal(run.status,70,run.stderr+'\n'+log);

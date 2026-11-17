@@ -27,17 +27,17 @@ test('hostedCompareRealProcessesRequireHostDrainBeforeSecondIteration',t=>{
     `process.exitCode=runAppCompare({out:${JSON.stringify(out)},hostExecutable:${JSON.stringify(process.execPath)}});\n`);
   const env={...process.env,PATH:dir+path.delimiter+process.env.PATH,
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
-    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),PICSEE_HEAVY_LOCK_HELD:'1',
-    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'15',MADO_HOST_QUERY_DIAGNOSTICS:'1',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'heavy-status.json')};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),MADO_HEAVY_LOCK_HELD:'1',
+    MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',
+    MADO_HEAVY_LOCK_EXEC_SECS:'15',MADO_HOST_QUERY_DIAGNOSTICS:'1',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'heavy-status.json')};
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const startedAt=Date.now();
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
-  if(process.env.PICSEE_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),deadline:env.APP_REPEAT_DEADLINE_MS,
+  if(process.env.MADO_HOST_TRACE_TAP!=='0')t.diagnostic(JSON.stringify({startedAt,endedAt:Date.now(),deadline:env.APP_REPEAT_DEADLINE_MS,
     status:run.status,signal:run.signal,error:run.error?.message??null,stdout:run.stdout,stderr:run.stderr,
     files:existsSync(out)?readdirSync(out).sort().map(name=>({name,content:readFileSync(path.join(out,name),'utf8')})):[],
-    heavyStatus:existsSync(env.PICSEE_HEAVY_STATUS_PATH)?readFileSync(env.PICSEE_HEAVY_STATUS_PATH,'utf8'):null},null,2));
+    heavyStatus:existsSync(env.MADO_HEAVY_STATUS_PATH)?readFileSync(env.MADO_HEAVY_STATUS_PATH,'utf8'):null},null,2));
   assert.equal(run.status,0,run.stdout+run.stderr);
   const report=JSON.parse(readFileSync(path.join(out,'summary.json'),'utf8'));
   assert.equal(report.iterations.length,2);
@@ -78,10 +78,10 @@ test('hostedCompareRejectsContradictoryRealWorkerBeforeSecondIteration',t=>{
     `hostExecutable:${JSON.stringify(process.execPath)}});\n`);
   const env={...process.env,PATH:dir+path.delimiter+process.env.PATH,
     APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
-    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),PICSEE_HEAVY_LOCK_HELD:'1',
-    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_LOCK_EXEC_SECS:'15',PICSEE_HEAVY_STATUS_PATH:path.join(dir,'cleanup-status.json')};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+    APP_REPEAT_DEADLINE_MS:String(Date.now()+12000),MADO_HEAVY_LOCK_HELD:'1',
+    MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off',
+    MADO_HEAVY_LOCK_EXEC_SECS:'15',MADO_HEAVY_STATUS_PATH:path.join(dir,'cleanup-status.json')};
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
   const run=spawnSync(lock,[process.execPath,wrapper],{env,encoding:'utf8',timeout:20000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.doesNotMatch(run.stdout,/TOTAL \d+ PASS/);

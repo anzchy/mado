@@ -5,11 +5,11 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {runHostedBuild} from './hosted-build.mjs';
 
-const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',APP_COMPARE_MODE:'hosted',GITHUB_SHA:'current-sha'};
+const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'5',APP_COMPARE_MODE:'hosted',GITHUB_SHA:'current-sha'};
 const temporary=t=>{const dir=mkdtempSync(path.join(tmpdir(),'hosted-build-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return dir;};
 test('hostedBuildPassesInheritedSupervisionDescriptor',t=>{
   const out=temporary(t),calls=[];
-  const status=runHostedBuild({env:{...env,PICSEE_HEAVY_CONTROL_FD:'5'},out,
+  const status=runHostedBuild({env:{...env,MADO_HEAVY_CONTROL_FD:'5'},out,
     spawn:(command,args,settings)=>{calls.push({command,args,settings});return {status:0,stdout:'built\n',stderr:''};},
     stdout:()=>{},stderr:()=>{}});
   assert.equal(status,0);
@@ -29,7 +29,7 @@ test('hosted build uses current Mado scheme and records current SHA without base
   assert.equal(record.complete,true);assert.equal(record.status,0);
 });
 test('removed mode, non-dispatch context and missing ownership reject before native build',t=>{
-  for(const patch of [{APP_COMPARE_MODE:'legacy'},{GITHUB_EVENT_NAME:'push'},{PICSEE_HEAVY_LOCK_HELD:'0'}]){
+  for(const patch of [{APP_COMPARE_MODE:'legacy'},{GITHUB_EVENT_NAME:'push'},{MADO_HEAVY_LOCK_HELD:'0'}]){
     let calls=0;assert.equal(runHostedBuild({env:{...env,...patch},out:temporary(t),spawn:()=>{calls++;return {status:0};},stderr:()=>{}}),64);assert.equal(calls,0);
   }
 });

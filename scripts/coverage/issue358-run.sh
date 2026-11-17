@@ -7,7 +7,7 @@ out="${1:-$repo_root/.build/issue358-coverage}"
 mkdir -p "$out"
 before="$(date +%s)"
 head="$(git rev-parse HEAD)"
-export PICSEE_HEAVY_LOCK_WAIT_SECS="${PICSEE_HEAVY_LOCK_WAIT_SECS:-7200}"
+export MADO_HEAVY_LOCK_WAIT_SECS="${MADO_HEAVY_LOCK_WAIT_SECS:-7200}"
 
 scripts/heavy-lock.sh swift test --package-path Packages/MadoKit --enable-code-coverage --jobs 4 > "$out/tests.log" 2>&1
 binary="Packages/MadoKit/.build/arm64-apple-macosx/debug/MadoKitPackageTests.xctest/Contents/MacOS/MadoKitPackageTests"

@@ -61,7 +61,7 @@ const USAGE = `usage:
   measure-p3-08.sh resources --app … --fixture … --tier … --driver '<cmd>' --browse '<cmd>' --out <new run dir>
       [--rounds 3] [--disk-high-water-bytes N]
   measure-p3-08.sh parse <run dir>
-The driver and browse commands get PICSEE_P308_PID, PICSEE_P308_FIXTURE, PICSEE_P308_SAMPLE and PICSEE_P308_RUN_DIR.`;
+The driver and browse commands get MADO_P308_PID, MADO_P308_FIXTURE, MADO_P308_SAMPLE and MADO_P308_RUN_DIR.`;
 
 /** mado's thumbnail cache inside its sandbox container (ThumbnailDiskCache's default directory). Pure. */
 export function cacheDirectory(bundleID, home = homedir()) {
@@ -170,8 +170,8 @@ function runCommand(command, env) {
 /** Runs the driver once and waits for the GridFirstThumbnails end of a scan begun after it started. */
 async function sample(options, run, record, index, priming) {
   const startUs = nowMicros();
-  runCommand(options.driver, { PICSEE_P308_PID: String(record.pid), PICSEE_P308_FIXTURE: options.fixture,
-    PICSEE_P308_SAMPLE: String(index), PICSEE_P308_RUN_DIR: options.out });
+  runCommand(options.driver, { MADO_P308_PID: String(record.pid), MADO_P308_FIXTURE: options.fixture,
+    MADO_P308_SAMPLE: String(index), MADO_P308_RUN_DIR: options.out });
   const deadline = Date.now() + options.timeoutSeconds * 1000;
   let text = '';
   while (Date.now() < deadline) {
@@ -285,8 +285,8 @@ async function resources(options) {
   try {
     for (let round = 1; round <= options.rounds; round += 1) {
       await sample(options, run, record, round, false);
-      if (options.browse) runCommand(options.browse, { PICSEE_P308_PID: String(record.pid), PICSEE_P308_FIXTURE: options.fixture,
-        PICSEE_P308_SAMPLE: String(round), PICSEE_P308_RUN_DIR: options.out });
+      if (options.browse) runCommand(options.browse, { MADO_P308_PID: String(record.pid), MADO_P308_FIXTURE: options.fixture,
+        MADO_P308_SAMPLE: String(round), MADO_P308_RUN_DIR: options.out });
       const rss = Number(quiet('/bin/ps', ['-o', 'rss=', '-p', String(record.pid)]));
       const du = quiet('/usr/bin/du', ['-sk', run.cache]);
       const snapshots = parseNdjson(signpostLog(record.pid, run.windows[0].startUs)).events.filter((e) => e.name === 'ResourceSnapshot');

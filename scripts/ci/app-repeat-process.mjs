@@ -13,10 +13,10 @@ const heavyLock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
 const hostRegistrationTimeoutMilliseconds=8000;
 
 function inheritedStdio(env,base){
-  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
-  if(env.PICSEE_HEAVY_LOCK_HELD==='1'&&(!Number.isInteger(control)||control<3||control>64))
+  const control=Number(env.MADO_HEAVY_CONTROL_FD);
+  if(env.MADO_HEAVY_LOCK_HELD==='1'&&(!Number.isInteger(control)||control<3||control>64))
     throw new Error('missing inherited supervision control FD');
-  const passed=[env.PICSEE_HEAVY_CONTROL_FD,env.PICSEE_HEAVY_FLOCK_FD]
+  const passed=[env.MADO_HEAVY_CONTROL_FD,env.MADO_HEAVY_FLOCK_FD]
     .filter(value=>value!==undefined&&value!=='').map(Number);
   const stdio=[...base];
   for(const fd of passed){
@@ -96,7 +96,7 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
       const added=state.identities.slice(count);
       log('owned host registered '+JSON.stringify(added));
       if(env.MADO_HOST_QUERY_DIAGNOSTICS==='1')log('host registration '+JSON.stringify({at:now(),identities:added}));
-      if(env.PICSEE_HEAVY_LOCK_HELD==='1')for(const identity of added){
+      if(env.MADO_HEAVY_LOCK_HELD==='1')for(const identity of added){
         const registrationStarted=Date.now();
         const registered=spawnSync(heavyLock,['--register-host',String(identity.pid)],
           {env,stdio:inheritedStdio(env,['ignore','ignore','pipe']),encoding:'utf8',
@@ -165,8 +165,8 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
     }
     if(startupStopped||now()>=deadline)return await finish(70,false);
     const childEnv={...env};if(env.MADO_TEST_RUN_TOKEN)childEnv.TEST_RUNNER_MADO_TEST_RUN_TOKEN=env.MADO_TEST_RUN_TOKEN;
-    delete childEnv.PICSEE_REPEAT_ATTEST_FD;delete childEnv.PICSEE_REPEAT_STATUS_DIR;
-    const held=env.PICSEE_HEAVY_LOCK_HELD==='1';
+    delete childEnv.MADO_REPEAT_ATTEST_FD;delete childEnv.MADO_REPEAT_STATUS_DIR;
+    const held=env.MADO_HEAVY_LOCK_HELD==='1';
     const fd=openSync(logPath,'a');try{
       child=spawn(held?heavyLock:command,held?[command,...args]:args,{env:childEnv,
         detached:!held,stdio:inheritedStdio(env,['ignore',fd,fd])});
@@ -247,9 +247,9 @@ export async function runProcessGroup({command,args=[],env=process.env,logPath,d
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const [deadline,logPath,command,...args]=process.argv.slice(2);
   try{
-    const held=process.env.PICSEE_HEAVY_LOCK_HELD==='1';
-    const attestFd=Number(process.env.PICSEE_REPEAT_ATTEST_FD);
-    const statusDir=process.env.PICSEE_REPEAT_STATUS_DIR;
+    const held=process.env.MADO_HEAVY_LOCK_HELD==='1';
+    const attestFd=Number(process.env.MADO_REPEAT_ATTEST_FD);
+    const statusDir=process.env.MADO_REPEAT_STATUS_DIR;
     if(held&&(!Number.isInteger(attestFd)||attestFd<3||!statusDir))throw new Error('missing private repeat status channel');
     const id=held?randomBytes(16).toString('hex'):null;
     const statusPath=held?path.join(statusDir,`${id}.json`):null;

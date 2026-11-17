@@ -101,7 +101,7 @@ async function main() {
         playwright = fs.existsSync(imported.chromium.executablePath());
       } catch { playwright = false; }
     }
-    const lock = process.env.PICSEE_HEAVY_LOCK ?? path.join(process.env.HOME, '.picsee/locks/heavy.lock');
+    const lock = process.env.MADO_HEAVY_LOCK ?? path.join(process.env.HOME, '.mado/locks/heavy.lock');
     const inspected = inspectLock(lock);
     const reason = preflight({scriptsOwn:own, nodeModules:fs.existsSync(path.join(wt, 'node_modules')),
       playwright, holder:inspected.holder});

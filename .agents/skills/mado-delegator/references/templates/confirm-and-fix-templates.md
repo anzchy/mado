@@ -6,7 +6,7 @@
 <If the implementer's context was reset: "Your context was reset. Read your handoff … and the brief … first.">
 Branch <branch> @ <head7>. <Step 0: rebase onto origin/main — expected conflicts only in xcstrings / ledger md /
 ledger html (regenerate); never pipe git rebase; a conflict elsewhere: stop and report.> Reports (unblinded for you):
-~/.picsee/herdr/gpt-auditor/<item>-r1.md and ~/.picsee/herdr/opus-auditor/<item>-r1.md.
+~/.mado/herdr/gpt-auditor/<item>-r1.md and ~/.mado/herdr/opus-auditor/<item>-r1.md.
 
 ## Must fix (blocking; confirm round follows)
 F1 [High] <one-paragraph trace> Fix: <direction, not code>. Tests: <continuation-gated / deterministic cases>.
@@ -32,7 +32,7 @@ and the head SHA it covers. Do not push.
 ```
 # Confirm round <k>: #<n> <item>. Fresh context.
 
-Read `~/.picsee/herdr/delegator/audit-brief.md` first: the confirm-phase read barrier and the scratch-isolation rule.
+Read `~/.mado/herdr/delegator/audit-brief.md` first: the confirm-phase read barrier and the scratch-isolation rule.
 
 - Item <item>, tier <tier>. <Rebased onto <sha7> before fixing; rebased round-one head <sha7>.> Branch `<branch>` @
   <head7>, worktree <path>. Full range <base>..<head7>. Fix diff <r1head>..<head7>.
@@ -42,14 +42,14 @@ Read `~/.picsee/herdr/delegator/audit-brief.md` first: the confirm-phase read ba
 - Medium fixes (judged here only for regressions): <list>
 Still open (do not re-judge): <list>.
 
-Your own earlier report: ~/.picsee/herdr/<auditor>/<item>-r1.md. Fix brief: <path>. Handoff `Fix round <k>`: <path>.
+Your own earlier report: ~/.mado/herdr/<auditor>/<item>-r1.md. Fix brief: <path>. Handoff `Fix round <k>`: <path>.
 
 ## Scope
 - each finding above: CLOSED / PARTIAL / OPEN with evidence;
 - any Critical or High that the fix diff or the rebase introduced, exposed or worsened.
 
 <test-run paragraph as in the audit request, per auditor>
-Write ~/.picsee/herdr/<auditor>/<item>-confirm.md and end with the VERDICT / COUNT block.
+Write ~/.mado/herdr/<auditor>/<item>-confirm.md and end with the VERDICT / COUNT block.
 ```
 
 For the auditor who did NOT raise a High, say so: "raised by the other auditor; you did not raise it — judge it fresh".

@@ -63,9 +63,9 @@ Without it, the rule "every open issue has a milestone" would force these into v
 **How.**
 - `/to-spec` and `/to-tickets` create the spec and tickets. The delegator then links the spec under its parent and sets the milestone on the spec and every ticket.
 - At dispatch, the delegator runs the query (`milestone:v0.0.1 -is:blocked label:ready-for-agent -has:sub-issue`), drops anything claimed or overlapping, and picks by journey order.
-- A read-only check (planned) fails when an open issue has no milestone, a ticket has no parent, or an earlier release waits on a later one. `~/.picsee/timeline.json` becomes a view generated from the same data.
+- A read-only check (planned) fails when an open issue has no milestone, a ticket has no parent, or an earlier release waits on a later one. `~/.mado/timeline.json` becomes a view generated from the same data.
 
-Decision: the owner chose 「Yes, list first, then apply」, 「Rescope #130 as the v0.0.1 parent」 and 「Split it」 (#142). Change list: `~/.picsee/herdr/delegator/tracker-change-list.md`. Reviews: `review-tracker-research.md`, `review-tracker-codex.md` in the same folder.
+Decision: the owner chose 「Yes, list first, then apply」, 「Rescope #130 as the v0.0.1 parent」 and 「Split it」 (#142). Change list: `~/.mado/herdr/delegator/tracker-change-list.md`. Reviews: `review-tracker-research.md`, `review-tracker-codex.md` in the same folder.
 
 ---
 

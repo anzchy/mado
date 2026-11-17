@@ -87,7 +87,7 @@ for(const hostLife of [650,10000])test(`permanently hung real query blocks overl
   const out=mkdtempSync(path.join(tmpdir(),'i393-k-overlap-'));t.after(()=>rmSync(out,{recursive:true,force:true}));
   let launches=0;
   const status=runAppRepeat({repeat:2,out,deadline:Date.now()+10000,
-    env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},spawn:()=>{
+    env:{MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'},stdout:()=>{},spawn:()=>{
     launches++;return {status:0,stdout:JSON.stringify(result),stderr:''};
   }});
   assert.equal(status,70);assert.equal(launches,1,'real failed drain result prevents the next iteration');

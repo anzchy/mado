@@ -14,11 +14,11 @@ const envFor = dir => ({APP_RESULT_PATH:join(dir,'result.json'), APP_RESULT_ID:'
 const fixture = t => { const dir=mkdtempSync(join(tmpdir(),'app-structured-')); t.after(()=>rmSync(dir,{recursive:true,force:true})); return dir; };
 function lane(dir, sequence=[pass], options={}) {
   let attempts=0, stdout='',stderr='';
-  const env={PICSEE_APP_RESULT_PATH:join(dir,'result.json'),PICSEE_APP_RESULT_ID:'this-run',...options.env};
+  const env={MADO_APP_RESULT_PATH:join(dir,'result.json'),MADO_APP_RESULT_ID:'this-run',...options.env};
   const status=runAppLane({evidencePath:join(dir,'first.log'),stdout:s=>stdout+=s,stderr:s=>stderr+=s,...options,env,
     spawn:()=>{const next=sequence[attempts++]; if(next instanceof Error)throw next; return next;}});
-  assert.equal(existsSync(env.PICSEE_APP_RESULT_PATH),true,'lane must write structured result evidence');
-  return {status,attempts,stdout,stderr,record:JSON.parse(readFileSync(env.PICSEE_APP_RESULT_PATH,'utf8'))};
+  assert.equal(existsSync(env.MADO_APP_RESULT_PATH),true,'lane must write structured result evidence');
+  return {status,attempts,stdout,stderr,record:JSON.parse(readFileSync(env.MADO_APP_RESULT_PATH,'utf8'))};
 }
 test('lane structured direct and retry evidence drives reporter independently of human wording',t=>{
   const dir=fixture(t), env=envFor(dir);
@@ -55,14 +55,14 @@ test('lane resets reused evidence before usage quarantine and process failures; 
   }
   lane(dir);const thrown=lane(dir,[new Error('fixture spawn error')]);assert.equal(thrown.status,70);assert.equal(thrown.record.status,70);
   const marker=join(dir,'file');writeFileSync(marker,'intact');let stderr='';let calls=0;
-  const status=runAppLane({env:{PICSEE_APP_RESULT_PATH:join(marker,'result.json'),PICSEE_APP_RESULT_ID:'this-run'},spawn:()=>{calls++;return pass;},stdout:()=>{},stderr:s=>stderr+=s});
+  const status=runAppLane({env:{MADO_APP_RESULT_PATH:join(marker,'result.json'),MADO_APP_RESULT_ID:'this-run'},spawn:()=>{calls++;return pass;},stdout:()=>{},stderr:s=>stderr+=s});
   assert.equal(status,70);assert.equal(calls,0);assert.match(stderr,/structured.*evidence/i);assert.equal(readFileSync(marker,'utf8'),'intact');
 });
 test('normal full policy is formal; requested and effective diagnostic policies never are',t=>{
   const dir=fixture(t), env=envFor(dir);
   const good=lane(dir).record;
   for(const event of ['push','pull_request','workflow_dispatch'])assert.equal(reportAppEvidence({...env,EVENT_NAME:event}).formal,true);
-  for(const patch of [{APP_FILTER:'passing'},{APP_REPEAT:'2'},{PICSEE_APP_LANE_NO_RETRY:'1'}]) {
+  for(const patch of [{APP_FILTER:'passing'},{APP_REPEAT:'2'},{MADO_APP_LANE_NO_RETRY:'1'}]) {
     const report=reportAppEvidence({...env,EVENT_NAME:'workflow_dispatch',...patch});
     assert.equal(report.formal,false);assert.equal(report.diagnostic,true);assert.match(report.status,/diagnostic/);
   }
@@ -70,7 +70,7 @@ test('normal full policy is formal; requested and effective diagnostic policies 
     writeFileSync(env.APP_RESULT_PATH,JSON.stringify({...good,...patch}));
     const report=reportAppEvidence({...env,EVENT_NAME:'workflow_dispatch'});assert.equal(report.formal,false);assert.equal(report.diagnostic,true);
   }
-  const noRetry=lane(dir,[pass],{env:{PICSEE_APP_LANE_NO_RETRY:'1'}});assert.equal(noRetry.record.retryEnabled,false);
+  const noRetry=lane(dir,[pass],{env:{MADO_APP_LANE_NO_RETRY:'1'}});assert.equal(noRetry.record.retryEnabled,false);
   const custom=join(dir,'quarantine.json');writeFileSync(custom,'[]');const got=lane(dir,[pass],{quarantinePath:custom});assert.equal(got.record.defaultQuarantine,false);
   const repeat=reportAppEvidence({...env,EVENT_NAME:'workflow_dispatch',APP_REPEAT:'3',APP_RESULT_PATH:join(dir,'absent')});
   assert.equal(repeat.formal,false);assert.equal(repeat.retried,'unknown');assert.match(repeat.status,/diagnostic/);assert.doesNotMatch(repeat.status,/passed directly/);

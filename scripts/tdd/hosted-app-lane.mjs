@@ -9,12 +9,12 @@ import { runAttestedSync } from './status-channel.mjs';
 const lock = fileURLToPath(new URL('../heavy-lock.sh', import.meta.url));
 const hostOwner=fileURLToPath(new URL('./hosted-xcode-owner.mjs',import.meta.url));
 function inheritedControlStdio(env){
-  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return undefined;
-  const control=Number(env.PICSEE_HEAVY_CONTROL_FD);
+  if(env.MADO_HEAVY_LOCK_HELD!=='1')return undefined;
+  const control=Number(env.MADO_HEAVY_CONTROL_FD);
   if(!Number.isInteger(control)||control<3||control>64)throw new Error('missing inherited heavy-lock control FD');
   const fds=[control];
-  if(env.PICSEE_HEAVY_FLOCK_FD){
-    const flock=Number(env.PICSEE_HEAVY_FLOCK_FD);
+  if(env.MADO_HEAVY_FLOCK_FD){
+    const flock=Number(env.MADO_HEAVY_FLOCK_FD);
     if(!Number.isInteger(flock)||flock<3||flock>64)throw new Error('invalid inherited heavy-lock flock FD');
     fds.push(flock);
   }
@@ -108,7 +108,7 @@ export function parseHostedResult(run, summary, tree, expected) {
 }
 
 export function runHostedAppLane({ spawn = spawnSync, env = process.env, selected = hostedTestNames,
-  derivedDataPath = env.PICSEE_APP_DERIVED_DATA_PATH ?? '.build/dd-ci', stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s),
+  derivedDataPath = env.MADO_APP_DERIVED_DATA_PATH ?? '.build/dd-ci', stdout = s => process.stdout.write(s), stderr = s => process.stderr.write(s),
   evidencePath = '.build/app-lane-hosted-attempt1.log' } = {}) {
   mkdirSync('.build', {recursive:true});
   const directory = mkdtempSync(path.resolve('.build/hosted-'));
@@ -116,7 +116,7 @@ export function runHostedAppLane({ spawn = spawnSync, env = process.env, selecte
   const settings = { encoding:'utf8', maxBuffer:32 * 1024 * 1024, timeout:2100000,
     env:{...env, TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1',
       SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:'1'},
-    ...(env.PICSEE_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
+    ...(env.MADO_HEAVY_LOCK_HELD==='1'?{stdio:inheritedControlStdio(env)}:{}) };
   const processStarted = Date.now();
   let run;
   try {

@@ -219,7 +219,7 @@ class ListenerTests(unittest.TestCase):
                 self.assertEqual(argv, READ_ARGV)
                 return self.completed(argv, stdout=claude_screen(EMPTY_BOX))
             self.assertEqual(argv[:4], ["herdr", "pane", "run", "w1:p1"])
-            self.assertEqual(argv[4], ": PICSEE_LISTENER_EVENT_" + config["event"])
+            self.assertEqual(argv[4], ": MADO_LISTENER_EVENT_" + config["event"])
             return self.completed(argv)
 
         self.assertEqual(listen_notify.run_event(self.event_dir, run=run), "delivered")

@@ -47,7 +47,7 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
       `const member=spawn(process.execPath,['-e',${JSON.stringify(childSource)}],{stdio:'ignore'});`+
       `writeFileSync(${JSON.stringify(pidPath)},String(member.pid));\n`+
       `while(!existsSync(${JSON.stringify(path.join(directory,'member-ready'))}))await new Promise(r=>setTimeout(r,10));\n`+
-      `const fd=Number(process.env.PICSEE_HEAVY_CONTROL_FD),stdio=['ignore','ignore','ignore'];`+
+      `const fd=Number(process.env.MADO_HEAVY_CONTROL_FD),stdio=['ignore','ignore','ignore'];`+
       `while(stdio.length<=fd)stdio.push('ignore');stdio[fd]=fd;\n`+
       (registered?`const host=spawn(process.execPath,['-e',${JSON.stringify(childSource)}],{detached:true,stdio:'ignore'});`+
         `writeFileSync(${JSON.stringify(hostPath)},String(host.pid));`+
@@ -56,12 +56,12 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
       `const mark=spawnSync(${JSON.stringify(lock)},['--mark-host-unknown'],`+
       `{env:process.env,stdio,timeout:2000});if(mark.status!==0)process.exit(73);`+
       `writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{},1000);\n`);
-    const env={...fixtureEnv(),PICSEE_HEAVY_LOCK:lockPath,PICSEE_MDPRO_LOCK:'off',
-      PICSEE_HEAVY_LOCK_WAIT_SECS:'0.3',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
-      PICSEE_HEAVY_LOCK_EXEC_SECS:'5',PICSEE_HEAVY_STATUS_PATH:statusPath,
-      ...(mode==='ci'?{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1'}:
-        {PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CI_TOP_LEVEL:''})};
-    delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
+    const env={...fixtureEnv(),MADO_HEAVY_LOCK:lockPath,MADO_MDPRO_LOCK:'off',
+      MADO_HEAVY_LOCK_WAIT_SECS:'0.3',MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
+      MADO_HEAVY_LOCK_EXEC_SECS:'5',MADO_HEAVY_STATUS_PATH:statusPath,
+      ...(mode==='ci'?{MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1'}:
+        {MADO_HEAVY_LOCK_HELD:'',MADO_HEAVY_CI_TOP_LEVEL:''})};
+    delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
     let result;
     if(trigger==='timeout')result=spawnSync(lock,[process.execPath,runner],{env,encoding:'utf8',timeout:30000});
     else{
@@ -81,8 +81,8 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
     for(const pid of owned)assert.equal(alive(pid),false,`${mode}/${trigger}: known PID ${pid} survived`);
     const guardian=guardianPID(directory);
     await wait(()=>!alive(guardian),`${mode}/${trigger}: guardian exits`);
-    const nextEnv={...env,PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CI_TOP_LEVEL:'',PICSEE_HEAVY_CI_TEST:'',
-      PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};delete nextEnv.PICSEE_HEAVY_STATUS_PATH;
+    const nextEnv={...env,MADO_HEAVY_LOCK_HELD:'',MADO_HEAVY_CI_TOP_LEVEL:'',MADO_HEAVY_CI_TEST:'',
+      MADO_HEAVY_LOCK_EXEC_SECS:'10'};delete nextEnv.MADO_HEAVY_STATUS_PATH;
     const next=spawnSync(lock,['true'],{env:nextEnv,encoding:'utf8',timeout:20000});
     assert.equal(next.status,0,`${mode}/${trigger}: flock not reusable: ${next.stderr}`);
     assert.equal(alive(sentinel.pid),true,'unrelated process survives');

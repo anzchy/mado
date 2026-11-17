@@ -453,7 +453,7 @@ class OwnerGatesRefusalTests(unittest.TestCase):
     def run_gates(self, worktree, sha):
         with tempfile.TemporaryDirectory() as out:
             result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")), worktree, sha, "t"],
-                                    capture_output=True, text=True, env={**os.environ, "PICSEE_GATES_OUT": out})
+                                    capture_output=True, text=True, env={**os.environ, "MADO_GATES_OUT": out})
             return result.returncode, (Path(out) / "t-summary.txt").read_text()
 
     def test_unwritable_summary_refuses_before_running_lanes(self):
@@ -462,7 +462,7 @@ class OwnerGatesRefusalTests(unittest.TestCase):
             (out / "t-summary.txt").mkdir()
             result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")),
                                      str(Path(__file__).resolve().parent), "HEAD", "t", "HEAD"],
-                                    env={**os.environ, "PICSEE_GATES_OUT": str(out)},
+                                    env={**os.environ, "MADO_GATES_OUT": str(out)},
                                     capture_output=True, text=True, timeout=10)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("cannot write summary", result.stderr)
@@ -496,7 +496,7 @@ class OwnerGatesRefusalTests(unittest.TestCase):
             setup(work, work / ".git")
             result = subprocess.run(["zsh", str(Path(__file__).with_name("owner-gates.sh")), str(work), "HEAD", "t", "HEAD"],
                                     capture_output=True, text=True, timeout=20,
-                                    env={**env, "PICSEE_GATES_OUT": str(out)})
+                                    env={**env, "MADO_GATES_OUT": str(out)})
             summary = (out / "t-summary.txt").read_text()
             return result.returncode, summary, sorted(p.name for p in out.iterdir()), result
 
@@ -552,10 +552,10 @@ class OwnerGatesDesignTests(unittest.TestCase):
             with self.subTest(design_rc=design_rc), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 work, home, out, tools = (root / name for name in ("work", "home", "out", "tools"))
-                commands = home / ".picsee/tools/xcodegen/bin"
+                commands = home / ".mado/tools/xcodegen/bin"
                 for directory in (work, out, tools, commands, work / "scripts/tdd", work / "coverage"):
                     directory.mkdir(parents=True, exist_ok=True)
-                env = {**os.environ, "HOME": str(home), "PICSEE_GATES_OUT": str(out),
+                env = {**os.environ, "HOME": str(home), "MADO_GATES_OUT": str(out),
                        "DESIGN_RC": str(design_rc), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
                 git(work, "init", "-q", "-b", "main", env=env)
@@ -582,7 +582,7 @@ class OwnerGatesDesignTests(unittest.TestCase):
                 executable(commands / "npm", '''
 [ "$*" = 'run design:check' ] || exit 90
 [ "$TEST_HEAVY_HELD" = 1 ] || exit 91
-grep -q '^DONE$' "$PICSEE_GATES_OUT/t-summary.txt" && exit 92
+grep -q '^DONE$' "$MADO_GATES_OUT/t-summary.txt" && exit 92
 echo "design fixture rc=$DESIGN_RC"
 exit "$DESIGN_RC"
 ''')
@@ -607,10 +607,10 @@ class OwnerGatesExitTests(unittest.TestCase):
             for path in (work, out, commands, tools, work / "scripts/tdd", work / "coverage"):
                 path.mkdir(parents=True, exist_ok=True)
             env = {**os.environ, "HOME": str(root / "home"), "PATH": str(commands) + ":" + os.environ["PATH"],
-                   "PICSEE_GATES_OUT": str(out), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+                   "MADO_GATES_OUT": str(out), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
             # owner-gates prepends this directory, before any installed native tools.
-            first = root / "home/.picsee/tools/xcodegen/bin"
+            first = root / "home/.mado/tools/xcodegen/bin"
             first.mkdir(parents=True)
             git(work, "init", "-q", "-b", "main", env=env)
             git(work, "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "fixture", env=env)
@@ -681,13 +681,13 @@ class OwnerGatesAppTestsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             work, out, tools = root / "work", root / "out", root / "tools"
-            first = root / "home/.picsee/tools/xcodegen/bin"
+            first = root / "home/.mado/tools/xcodegen/bin"
             for path in (work, out, tools, first, work / "scripts/tdd", work / "node_modules"):
                 path.mkdir(parents=True, exist_ok=True)
             calls = root / "calls"
-            env = {**os.environ, "HOME": str(root / "home"), "PICSEE_GATES_OUT": str(out),
+            env = {**os.environ, "HOME": str(root / "home"), "MADO_GATES_OUT": str(out),
                    "APP_RC": str(rc), "APP_OUT": output, "BUILD_RC": str(build_rc), "CALLS": str(calls),
-                   "PICSEE_APP_FILTER": "leftoverFilter",
+                   "MADO_APP_FILTER": "leftoverFilter",
                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
             for folder in ("agents", "tdd", "ledger", "name-checks", "ci"):
@@ -716,7 +716,7 @@ class OwnerGatesAppTestsTests(unittest.TestCase):
             executable(first / "node", '''[ "$1" = scripts/tdd/unit-lane.mjs ] && echo "Test run with 1 tests passed"
 if [ "$1" = scripts/tdd/app-lane.mjs ]; then
   [ "$TEST_HEAVY_HELD" = 1 ] || exit 91
-  echo "node $* filter=${PICSEE_APP_FILTER-unset}" >> "$CALLS"
+  echo "node $* filter=${MADO_APP_FILTER-unset}" >> "$CALLS"
   printf '%s' "$APP_OUT"
   exit "$APP_RC"
 fi
@@ -973,14 +973,14 @@ esac
                    "RESET_PREFIX": prefix, "RESET_STARTUP": startup,
                    "RESET_OLD_CONTEXT": old_context, "RESET_READY_BOUNDARY": ready_boundary,
                    "RESET_NAME_LOST": str(int(name_lost)), "RESET_RENAME_FAIL": str(int(rename_fail)),
-                   "PICSEE_RESET_DUMP_DIR": str(root / "dumps"),
-                   "PICSEE_RESET_CONTEXT_SECS": deadline, "PICSEE_RESET_POLL_SECS": poll}
+                   "MADO_RESET_DUMP_DIR": str(root / "dumps"),
+                   "MADO_RESET_CONTEXT_SECS": deadline, "MADO_RESET_POLL_SECS": poll}
             if locale:
                 env["LC_ALL"] = locale
             if timer_var:
                 env[timer_var] = deadline
-                if timer_var == "PICSEE_RESET_POLL_SECS":
-                    env["PICSEE_RESET_CONTEXT_SECS"] = "2"
+                if timer_var == "MADO_RESET_POLL_SECS":
+                    env["MADO_RESET_CONTEXT_SECS"] = "2"
             started = time.monotonic()
             result = subprocess.run(["zsh", str(Path(__file__).with_name("reset.sh")),
                                      "fixture-agent", "fixture-pane"],
@@ -1235,7 +1235,7 @@ esac
     def test_invalid_timers_fail_before_any_pane_input(self):
         invalid = ("0", "-1", "abc", "", " ", "inf", "Inf", "nan", "NaN", "1e400",
                    "300.01", "999999999999999999999999999999", "1+1", "a[$(exit 91)]")
-        for var in ("PICSEE_RESET_CONTEXT_SECS", "PICSEE_RESET_POLL_SECS"):
+        for var in ("MADO_RESET_CONTEXT_SECS", "MADO_RESET_POLL_SECS"):
             for value in invalid:
                 with self.subTest(var=var, value=value):
                     result, _ = self.run_reset(deadline=value, timer_var=var)
@@ -1244,7 +1244,7 @@ esac
                     self.assertEqual(result.pane_sends, "")
 
     def test_positive_decimal_timer_boundaries(self):
-        for var in ("PICSEE_RESET_CONTEXT_SECS", "PICSEE_RESET_POLL_SECS"):
+        for var in ("MADO_RESET_CONTEXT_SECS", "MADO_RESET_POLL_SECS"):
             for value in ("0.01", "300"):
                 with self.subTest(var=var, value=value):
                     result, _ = self.run_reset(deadline=value, timer_var=var)

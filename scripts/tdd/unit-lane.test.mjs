@@ -28,7 +28,7 @@ function fixture(t) {
   fs.writeFileSync(path.join(bin, 'swift'), `#!${process.execPath}
 const fs=require('node:fs'), cp=require('node:child_process');
 fs.appendFileSync(process.env.ATTEMPTS,JSON.stringify(process.argv.slice(2))+'\\n');
-if(process.env.PICSEE_HEAVY_LOCK_HELD!=='1')process.exit(23);
+if(process.env.MADO_HEAVY_LOCK_HELD!=='1')process.exit(23);
 fs.writeFileSync(process.env.STARTED,String(Date.now()));
 if(process.env.ORDER)fs.appendFileSync(process.env.ORDER,'swift\\n');
 if(process.env.MODE==='hang'){
@@ -41,8 +41,8 @@ if(process.env.MODE==='hang'){
  process.exit(Number(process.env.STATUS||0));
 }
 `, { mode: 0o755 });
-  const env = { ...fixtureEnv(), PATH: `${bin}:${process.env.PATH}`, PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'),
-    PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'), PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
+  const env = { ...fixtureEnv(), PATH: `${bin}:${process.env.PATH}`, MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'),
+    MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'), MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
     ATTEMPTS: path.join(dir, 'attempts'), STARTED: path.join(dir, 'started'), LEADER: path.join(dir, 'leader'), HELPER: path.join(dir, 'helper') };
   return { dir, env };
 }
@@ -80,7 +80,7 @@ test('atomic probe, fresh profile cleanup, Swift coverage command and strict eva
   f.env.ORDER = path.join(f.dir, 'order');
   for (const [name, marker] of [['package-coverage-clear.mjs', 'clear'], ['package-coverage-local.mjs', 'evaluate']]) {
     fs.writeFileSync(path.join(f.dir, 'scripts/ci', name),
-      `import fs from 'node:fs';if(process.env.PICSEE_HEAVY_LOCK_HELD!=='1')process.exit(23);fs.appendFileSync(process.env.ORDER,${JSON.stringify(marker + '\n')});`);
+      `import fs from 'node:fs';if(process.env.MADO_HEAVY_LOCK_HELD!=='1')process.exit(23);fs.appendFileSync(process.env.ORDER,${JSON.stringify(marker + '\n')});`);
   }
   const r = run(f, { verifyCoverage: true });
   assert.equal(r.status, 0, r.stderr);
@@ -149,7 +149,7 @@ with open(lock_path,'w') as owner:
    break
   time.sleep(.02)
  else: raise RuntimeError('actual heavy-lock waiting marker was not observed within twenty seconds')
-`, f.env.PICSEE_HEAVY_LOCK, ready, released, stderrFile, proofFile, f.env.STARTED,
+`, f.env.MADO_HEAVY_LOCK, ready, released, stderrFile, proofFile, f.env.STARTED,
   String(queueBudgetSeconds), String(queueHoldSeconds)]);
   let holderOutput = '';
   holder.stderr.on('data', chunk => { holderOutput += chunk; });
@@ -169,7 +169,7 @@ with open(lock_path,'w') as owner:
     assert.equal(proof.executionBudgetSeconds, queueBudgetSeconds);
     assert.equal(proof.holdSeconds, queueHoldSeconds);
     assert.equal(proof.startedBeforeRelease, false);
-    assert.equal(proof.waitingMarker, `[heavy-lock] waiting for ${f.env.PICSEE_HEAVY_LOCK}`);
+    assert.equal(proof.waitingMarker, `[heavy-lock] waiting for ${f.env.MADO_HEAVY_LOCK}`);
     assert.ok(BigInt(proof.releasedMonotonicNs) - BigInt(proof.queuedMonotonicNs) > BigInt(queueBudgetSeconds) * 1_000_000_000n,
       'observed lock blocking exceeds the actual thirty-second execution budget');
     assert.match(r.stderr, /deadline in 30 s/);
@@ -183,7 +183,7 @@ with open(lock_path,'w') as owner:
 // the heavy-lock drain; the forced stop must not leave a green package gate.
 test('unitDrainExpiryWithSurvivingDescendantHasNoGreenGate', t => {
   const f = fixture(t);
-  f.env.PICSEE_HEAVY_LOCK_DRAIN_SECS = '0.2'; f.env.PICSEE_HEAVY_LOCK_KILL_GRACE_SECS = '0.1';
+  f.env.MADO_HEAVY_LOCK_DRAIN_SECS = '0.2'; f.env.MADO_HEAVY_LOCK_KILL_GRACE_SECS = '0.1';
   // The watchdog already reaps Swift's own group; a survivor that outlives the
   // drain sits in heavy-lock's root group, here left by the coverage evaluator.
   fs.writeFileSync(path.join(f.dir, 'scripts/ci/package-coverage-clear.mjs'), '');
@@ -299,11 +299,11 @@ if(args.includes('-A')){
 }else{const r=cp.spawnSync('/bin/ps',args,{encoding:'utf8',maxBuffer:64*1024*1024});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exitCode=r.status??1;}
 `);
   const env = { ...fixtureEnv(), PATH: `${bin}:${process.env.PATH}`, M1_MODE: mode,
-    PICSEE_HEAVY_LOCK: path.join(dir, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(dir, 'shared.lock'),
-    PICSEE_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '', PICSEE_HEAVY_LOCK_WAIT_SECS: '7200',
+    MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
+    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '', MADO_HEAVY_LOCK_WAIT_SECS: '7200',
     M1_OWNED: files.owned, M1_LEADER_READY: files.leaderReady, M1_HELPER_READY: files.helperReady,
     M1_DIAGNOSTIC: files.diagnostic, M1_ENTERED: files.entered, M1_SNAPSHOTS: files.snapshots, M1_LEAVE: files.leave,
-    PICSEE_WATCHDOG_NO_SPINDUMP: '1' };
+    MADO_WATCHDOG_NO_SPINDUMP: '1' };
   return { dir, bin, files, env, jobs: [] };
 }
 

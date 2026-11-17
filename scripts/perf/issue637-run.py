@@ -64,7 +64,7 @@ def verify_app(app):
 
 
 def verify_image(image):
-    if not image.is_file() or not image.is_relative_to(Path.home() / '.picsee' / 'testassets' / 'generated' / 'S3'):
+    if not image.is_file() or not image.is_relative_to(Path.home() / '.mado' / 'testassets' / 'generated' / 'S3'):
         raise RuntimeError('image must be an existing generated S3 TestAssets image')
     details = checked(['/usr/bin/sips', '-g', 'pixelWidth', '-g', 'pixelHeight', image])
     width = int(re.search(r'pixelWidth:\s*(\d+)', details).group(1))

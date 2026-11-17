@@ -32,7 +32,7 @@ test('parseArgs takes options before -- and the command after it', () => {
   assert.deepEqual([defaults.sampleSeconds, defaults.captureSeconds, defaults.graceSeconds, defaults.snapshotSeconds,
     defaults.spindump], [10, 90, 15, 30, true]);
   assert.equal(parseArgs(['--out', 'o', '--timeout-seconds', '5', '--', 'true'],
-    { PICSEE_WATCHDOG_NO_SPINDUMP: '1' }).spindump, false);
+    { MADO_WATCHDOG_NO_SPINDUMP: '1' }).spindump, false);
 });
 
 test('parseArgs rejects a missing command, output, budget or value', () => {

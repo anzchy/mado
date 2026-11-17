@@ -12,7 +12,7 @@ Use this skill for an independent device acceptance run. Start with the relevant
 - The device tester must differ from the feature implementer. A validation record written by the implementer cannot establish `真机` or `Shipped`.
 - Before any desktop action, run `.agents/skills/mado-delegator/scripts/gui-lock.sh status`. Acquire the shared GUI lock for the run before launching, activating, clicking, typing, or capturing, and keep the `acquisition_id` it prints. Hold it through relaunches and release it after cleanup, including failed runs, with `gui-lock.sh release <run-id> --acquisition-id <uuid>`. If another project holds it, drive no GUI.
 - Check for an existing Mado process before launch. Never drive or terminate an instance the run did not start, including the user's installed copy. Keep the sandbox enabled; use normal powerbox grants. Do not alter privacy settings, pregrant folders, or edit the container without the user's approval.
-- Keep screenshots, logs, fixtures, and briefs under `~/.picsee/`, outside the repository. Use the recorded PID and build SHA to tie evidence to this run.
+- Keep screenshots, logs, fixtures, and briefs under `~/.mado/`, outside the repository. Use the recorded PID and build SHA to tie evidence to this run.
 
 ## Sequence
 

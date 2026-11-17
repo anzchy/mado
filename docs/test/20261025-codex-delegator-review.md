@@ -2,7 +2,7 @@
 
 日期：2026-10-25 · 复核者：mado-delegator（Claude Code，Opus） · 对象：Codex delegator 2026-10-24 接手至暂停期间的全部工作
 
-依据：GitHub PR/issue 状态、main `00a5c6d` 与本地分支的 Git 对象、Codex delegator 的暂停 handoff、opus-auditor 的独立盲审报告、签名 App 在 Mac mini @1x 上的探查运行。机器本地证据（审计报告、运行截图、日志）留在 `~/.picsee/`，不进仓库；本文只引用其 ID 与结论。
+依据：GitHub PR/issue 状态、main `00a5c6d` 与本地分支的 Git 对象、Codex delegator 的暂停 handoff、opus-auditor 的独立盲审报告、签名 App 在 Mac mini @1x 上的探查运行。机器本地证据（审计报告、运行截图、日志）留在 `~/.mado/`，不进仓库；本文只引用其 ID 与结论。
 
 本报告不改变任何账簿状态或验收。五个独立盲审已于 2026-10-25 全部完成；修复轮的 confirm 结果另行更新。
 
@@ -119,9 +119,9 @@
 **第 1 步 · 清理现场（2026-10-25 执行）**
 1. ✅ 主 checkout 已回到 main（快进到 `00a5c6d`）；P2-04 分支移到 `picsee-wt/p204`。
 2. ✅ 10 个已合并临时 worktree 已用 `git worktree remove` 移除（逐个复查干净、无未合入提交；`--force` 仅因工具状态目录 `.claude/`、`.tokenize/`、`.build/`）。
-3. ✅ Kimi 的旧 P2-03 改动已导出补丁备份到 `~/.picsee/handoff/20261025-kimi-p203-discard/` 后还原，`kimi-imple-1` 工作区干净。
+3. ✅ Kimi 的旧 P2-03 改动已导出补丁备份到 `~/.mado/handoff/20261025-kimi-p203-discard/` 后还原，`kimi-imple-1` 工作区干净。
 4. 远端分支：67 个非 main 远端分支全部对应已 MERGED 的 PR，且远端 tip 与 PR 最终 head 一致，经 GitHub API 删除（不经 `git push`）；未合入的 p2/p3 分支从未推送，不受影响。
-5. 待办：编辑 #109 描述去掉本机路径（需用户同意）；重写 `audit-queue.json` 与 `~/.picsee/timeline.json`；修 `panel-choose.sh`（Low）；文档 PR 把 roster/skill 的审计规则改为 Opus 单审。gpt-auditor 暂停，pane 上的换模型提示不作答。
+5. 待办：编辑 #109 描述去掉本机路径（需用户同意）；重写 `audit-queue.json` 与 `~/.mado/timeline.json`；修 `panel-choose.sh`（Low）；文档 PR 把 roster/skill 的审计规则改为 Opus 单审。gpt-auditor 暂停，pane 上的换模型提示不作答。
 
 **第 2 步 · 修复并合入本地工作（按依赖顺序）**
 1. **P3-03 + P3-04 作为一组**：修 H1 与面向用户的 Medium（M1/M3/M4 至少写清范围），P3-04 rebase 后完成分类器重构与 100% 覆盖率，独立安全复审；两者一起合入，避免无淘汰的缓存单独上线。

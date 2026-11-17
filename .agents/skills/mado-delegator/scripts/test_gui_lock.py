@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("gui-lock.sh")
-# Optional real mdpro GUI script: PICSEE_MDPRO_GUI_SCRIPT must name it in its repository,
+# Optional real mdpro GUI script: MADO_MDPRO_GUI_SCRIPT must name it in its repository,
 # so its repository-relative heavy-lock dependency remains available. Never copy it.
 UUID4 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 ACQUIRED = re.compile(r"ACQUIRED (\S+) acquisition_id=(\S+)\n\Z")
@@ -34,8 +34,8 @@ class GuiLockBase(unittest.TestCase):
         self.lock = self.cache / "desktop-gui.lock"
         self.owner = self.lock / "owner"
         self.mutex = self.cache / "desktop-gui.mutex"
-        self.env = {**os.environ, "HOME": str(self.home), "PICSEE_GUI_LOCK_TEST": "1",
-                    "PICSEE_GUI_LOCK_WAIT_SECONDS": "0.05"}
+        self.env = {**os.environ, "HOME": str(self.home), "MADO_GUI_LOCK_TEST": "1",
+                    "MADO_GUI_LOCK_WAIT_SECONDS": "0.05"}
 
     def run_lock(self, *args, script=SCRIPT, env=None):
         return subprocess.run(["zsh", str(script), *args], capture_output=True, text=True,
@@ -50,7 +50,7 @@ class GuiLockBase(unittest.TestCase):
         return match.group(2)
 
     def checkpoint_env(self, name):
-        return {**self.env, "PICSEE_GUI_LOCK_PRE_MUTEX_FILE": str(self.home / f"pre-mutex-{name}")}
+        return {**self.env, "MADO_GUI_LOCK_PRE_MUTEX_FILE": str(self.home / f"pre-mutex-{name}")}
 
     def wait_for_checkpoint(self, name):
         # The child has reached the flock call; give it time to return if the mutex were not held.
@@ -128,7 +128,7 @@ class GuiLockTests(GuiLockBase):
         held = self.acquire("run-1")
         waiter = subprocess.Popen(["zsh", str(SCRIPT), "wait", "run-2", "30", "p", "s", "100"],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                  env={**self.env, "PICSEE_GUI_LOCK_WAIT_SECONDS": "0.02"})
+                                  env={**self.env, "MADO_GUI_LOCK_WAIT_SECONDS": "0.02"})
         time.sleep(0.2)
         self.assertEqual(self.run_lock("release", "run-1", "--acquisition-id", held).returncode, 0)
         out, err = waiter.communicate(timeout=30)
@@ -284,9 +284,9 @@ class GuiLockTests(GuiLockBase):
 class MdproInteropTests(GuiLockBase):
     def setUp(self):
         super().setUp()
-        script = os.environ.get("PICSEE_MDPRO_GUI_SCRIPT")
+        script = os.environ.get("MADO_MDPRO_GUI_SCRIPT")
         if script is None:
-            self.skipTest("PICSEE_MDPRO_GUI_SCRIPT not set (requires mdpro GUI script)")
+            self.skipTest("MADO_MDPRO_GUI_SCRIPT not set (requires mdpro GUI script)")
         self.mdpro = Path(script).expanduser()
         if not self.mdpro.is_file():
             self.fail(f"mdpro GUI script unavailable: {self.mdpro}")
@@ -302,8 +302,8 @@ class MdproInteropTests(GuiLockBase):
                                "MDPRO_LOAD_GUARD_LOG": str(self.home / "load-guard.log"),
                                "MDPRO_LOAD_GUARD_ACTIVE": str(self.home / "load-guard-active"),
                                "TMPDIR": str(self.home),
-                               "PICSEE_MDPRO_LOCK": str(self.home / "mdpro-heavy.lock"),
-                               "PICSEE_HEAVY_LOCK": str(self.home / "picsee-heavy.lock")})
+                               "MADO_MDPRO_LOCK": str(self.home / "mdpro-heavy.lock"),
+                               "MADO_HEAVY_LOCK": str(self.home / "picsee-heavy.lock")})
 
     def run_mdpro(self, *args):
         result = self.run_lock(*args, script=self.mdpro, env=self.mdpro_env)
@@ -347,9 +347,9 @@ class MdproInteropTests(GuiLockBase):
 class MdproInteropFixtureTests(unittest.TestCase):
     def interop_result(self, script):
         env = dict(os.environ)
-        env.pop("PICSEE_MDPRO_GUI_SCRIPT", None)
+        env.pop("MADO_MDPRO_GUI_SCRIPT", None)
         if script is not None:
-            env["PICSEE_MDPRO_GUI_SCRIPT"] = str(script)
+            env["MADO_MDPRO_GUI_SCRIPT"] = str(script)
         result = unittest.TestResult()
         with patch.dict(os.environ, env, clear=True):
             unittest.defaultTestLoader.loadTestsFromTestCase(MdproInteropTests).run(result)
@@ -364,7 +364,7 @@ class MdproInteropFixtureTests(unittest.TestCase):
             self.assertIn(reason, message)
 
     def test_unset_script_skips_explicitly(self):
-        self.assert_pair_skipped(None, "PICSEE_MDPRO_GUI_SCRIPT not set")
+        self.assert_pair_skipped(None, "MADO_MDPRO_GUI_SCRIPT not set")
 
     def assert_pair_failed(self, script, reason):
         result = self.interop_result(script)
@@ -375,8 +375,8 @@ class MdproInteropFixtureTests(unittest.TestCase):
             self.assertIn(reason, message)
 
     def test_legacy_heavy_script_variable_does_not_configure_gui(self):
-        with patch.dict(os.environ, {"PICSEE_MDPRO_SCRIPT": "/missing/heavy-lock.sh"}):
-            self.assert_pair_skipped(None, "PICSEE_MDPRO_GUI_SCRIPT not set")
+        with patch.dict(os.environ, {"MADO_MDPRO_SCRIPT": "/missing/heavy-lock.sh"}):
+            self.assert_pair_skipped(None, "MADO_MDPRO_GUI_SCRIPT not set")
 
     def test_unavailable_script_or_dependency_fails_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -439,7 +439,7 @@ class MdproInteropFixtureTests(unittest.TestCase):
             owner.write_text("sentinel owner bytes\n")
             result = unittest.TestResult()
             with patch.dict(os.environ, {"MDPRO_HEAVY_LOCK": str(sentinel),
-                                         "PICSEE_MDPRO_LOCK": str(sentinel),
+                                         "MADO_MDPRO_LOCK": str(sentinel),
                                          "MDPRO_LOAD_GUARD_LOG": str(owner),
                                          "MDPRO_LOAD_GUARD_ACTIVE": str(sentinel)}):
                 AbortedInterop("test_abort").run(result)

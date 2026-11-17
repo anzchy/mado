@@ -308,8 +308,8 @@ pause
 # ── 5 ────────────────────────────────────────────────────────────────────
 stage "Sparkle update-signing key (automatic)"
 say "Downloads the latest Sparkle release tools and creates an EdDSA key pair for update signing."
-if has_secret SPARKLE_ED_PRIVATE_KEY && [[ -s "$HOME/.picsee/release/sparkle-public-ed-key.txt" ]] && confirm "A Sparkle key is already in GitHub Secrets. Keep it and skip this stage?"; then
-  note "Kept the existing Sparkle key; public key: $(cat "$HOME/.picsee/release/sparkle-public-ed-key.txt")"
+if has_secret SPARKLE_ED_PRIVATE_KEY && [[ -s "$HOME/.mado/release/sparkle-public-ed-key.txt" ]] && confirm "A Sparkle key is already in GitHub Secrets. Keep it and skip this stage?"; then
+  note "Kept the existing Sparkle key; public key: $(cat "$HOME/.mado/release/sparkle-public-ed-key.txt")"
 else
 SPARKLE_TAG=$(gh release view --repo sparkle-project/Sparkle --json tagName -q .tagName)
 note "Sparkle $SPARKLE_TAG"
@@ -321,9 +321,9 @@ say "Sparkle keeps the private key in your login keychain (account 'picsee'); ma
 "$GEN" --account picsee -x "$WORK/sparkle-private-key.txt" >/dev/null
 PUB=$("$GEN" --account picsee -p | tail -1)
 set_secret SPARKLE_ED_PRIVATE_KEY "$(cat "$WORK/sparkle-private-key.txt")"
-mkdir -p "$HOME/.picsee/release"
-printf '%s\n' "$PUB" > "$HOME/.picsee/release/sparkle-public-ed-key.txt"
-note "Public key (not secret) saved to ~/.picsee/release/sparkle-public-ed-key.txt for #220 (Info.plist SUPublicEDKey):"
+mkdir -p "$HOME/.mado/release"
+printf '%s\n' "$PUB" > "$HOME/.mado/release/sparkle-public-ed-key.txt"
+note "Public key (not secret) saved to ~/.mado/release/sparkle-public-ed-key.txt for #220 (Info.plist SUPublicEDKey):"
 say "$PUB"
 fi
 pause

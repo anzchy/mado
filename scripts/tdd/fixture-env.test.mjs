@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { fixtureEnv } from './fixture-env.mjs';
 
 const here = path => fileURLToPath(new URL(path, import.meta.url));
-const stripped = name => name.startsWith('PICSEE_HEAVY_') || name === 'MDPRO_HEAVY_LOCK_HELD' || name === 'NODE_TEST_CONTEXT';
+const stripped = name => name.startsWith('MADO_HEAVY_') || name === 'MDPRO_HEAVY_LOCK_HELD' || name === 'NODE_TEST_CONTEXT';
 
 // Replace process.env's contents for the duration of fn, then restore them exactly.
 function withEnv(map, fn) {
@@ -24,34 +24,34 @@ function mulberry32(seed) {
 }
 
 test('fixtureEnv strips the handoff by prefix and keeps look-alikes', () => {
-  const env = { PATH: '/bin', PICSEE_HEAVY_LOCK_HELD: '1', PICSEE_HEAVY_CONTROL_FD: '3', PICSEE_HEAVY_FLOCK_FD: '5',
-    PICSEE_HEAVY_ZZZ: 'x', MDPRO_HEAVY_LOCK_HELD: '1', NODE_TEST_CONTEXT: 'child-v8',
-    PICSEE_HEAVYX: '1', XPICSEE_HEAVY_A: '1', MDPRO_HEAVY_LOCK: '1', PICSEE_APP_FILTER: 'a' };
+  const env = { PATH: '/bin', MADO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_CONTROL_FD: '3', MADO_HEAVY_FLOCK_FD: '5',
+    MADO_HEAVY_ZZZ: 'x', MDPRO_HEAVY_LOCK_HELD: '1', NODE_TEST_CONTEXT: 'child-v8',
+    MADO_HEAVYX: '1', XMADO_HEAVY_A: '1', MDPRO_HEAVY_LOCK: '1', MADO_APP_FILTER: 'a' };
   const out = withEnv(env, () => fixtureEnv());
-  assert.deepEqual(Object.keys(out).sort(), ['MDPRO_HEAVY_LOCK', 'PATH', 'PICSEE_APP_FILTER', 'PICSEE_HEAVYX', 'XPICSEE_HEAVY_A']);
+  assert.deepEqual(Object.keys(out).sort(), ['MADO_APP_FILTER', 'MADO_HEAVYX', 'MDPRO_HEAVY_LOCK', 'PATH', 'XMADO_HEAVY_A']);
 });
 
 test('fixtureEnv keeps other values, returns a copy and never mutates process.env', () => {
-  const env = { PATH: '/usr/bin:/bin', HOME: '/home/x', PICSEE_APP_FILTER: 'x', PICSEE_HEAVY_LOCK_HELD: '1' };
+  const env = { PATH: '/usr/bin:/bin', HOME: '/home/x', MADO_APP_FILTER: 'x', MADO_HEAVY_LOCK_HELD: '1' };
   withEnv(env, () => {
     const before = JSON.stringify(process.env);
     const out = fixtureEnv();
     assert.notEqual(out, process.env);
-    assert.deepEqual(out, { PATH: '/usr/bin:/bin', HOME: '/home/x', PICSEE_APP_FILTER: 'x' });
+    assert.deepEqual(out, { PATH: '/usr/bin:/bin', HOME: '/home/x', MADO_APP_FILTER: 'x' });
     out.PATH = 'changed';
     assert.equal(JSON.stringify(process.env), before);
   });
 });
 
 test('fixtureEnv overrides win, including stripped names', () => {
-  const out = withEnv({ PICSEE_HEAVY_LOCK: 'a', PICSEE_APP_FILTER: 'z', KEEP: 'k' },
-    () => fixtureEnv({ PICSEE_HEAVY_LOCK: '/tmp/l', PICSEE_APP_FILTER: 'y', KEEP: undefined }));
-  assert.deepEqual(out, { PICSEE_HEAVY_LOCK: '/tmp/l', PICSEE_APP_FILTER: 'y' });
+  const out = withEnv({ MADO_HEAVY_LOCK: 'a', MADO_APP_FILTER: 'z', KEEP: 'k' },
+    () => fixtureEnv({ MADO_HEAVY_LOCK: '/tmp/l', MADO_APP_FILTER: 'y', KEEP: undefined }));
+  assert.deepEqual(out, { MADO_HEAVY_LOCK: '/tmp/l', MADO_APP_FILTER: 'y' });
 });
 
 test('fixtureEnv law over seeded random environments', () => {
-  const names = ['PICSEE_HEAVY_LOCK_HELD', 'PICSEE_HEAVY_CONTROL_FD', 'PICSEE_HEAVY_Q', 'MDPRO_HEAVY_LOCK_HELD', 'NODE_TEST_CONTEXT',
-    'PICSEE_HEAVYX', 'XPICSEE_HEAVY_', 'MDPRO_HEAVY_LOCK_HELDX', 'NODE_TEST', 'PATH', 'HOME', 'PICSEE_APP_FILTER', 'A', 'B'];
+  const names = ['MADO_HEAVY_LOCK_HELD', 'MADO_HEAVY_CONTROL_FD', 'MADO_HEAVY_Q', 'MDPRO_HEAVY_LOCK_HELD', 'NODE_TEST_CONTEXT',
+    'MADO_HEAVYX', 'XMADO_HEAVY_', 'MDPRO_HEAVY_LOCK_HELDX', 'NODE_TEST', 'PATH', 'HOME', 'MADO_APP_FILTER', 'A', 'B'];
   for (const seed of [1, 7, 705, 2026]) {
     const random = mulberry32(seed);
     for (let i = 0; i < 200; i++) {
@@ -91,7 +91,7 @@ test('no in-scope fixture copies process.env without fixtureEnv', () => {
 
 // One supervisor-launching test per file, run as an independent node --test under
 // the handoff a heavy-lock job gives its children (FD numbers not open here).
-const contaminated = { PICSEE_HEAVY_LOCK_HELD: '1', PICSEE_HEAVY_CONTROL_FD: '3', PICSEE_HEAVY_FLOCK_FD: '5', MDPRO_HEAVY_LOCK_HELD: '1' };
+const contaminated = { MADO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_CONTROL_FD: '3', MADO_HEAVY_FLOCK_FD: '5', MDPRO_HEAVY_LOCK_HELD: '1' };
 for (const [file, name] of [
   ['app-lane.test.mjs', 'heldAndUnheldLanesPreservePassAndAssertionFailure App'],
   ['host-unknown-fix1.test.mjs', 'hostUnknownStillDrainsKnownWorkAndReleasesGuardian'],

@@ -35,7 +35,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tier", choices=["small", "all"], default="small")
     parser.add_argument(
-        "--output", type=Path, default=Path.home() / ".picsee/testassets"
+        "--output", type=Path, default=Path.home() / ".mado/testassets"
     )
     parser.add_argument(
         "--manifest", type=Path, default=ROOT / "TestAssets/manifest.json"

@@ -4,7 +4,7 @@
 // handling cancellation, registration and the execution deadline. It releases
 // only after a successful snapshot shows no owned member; survivors go to the
 // existing drain; an exhausted budget is still unknown cleanup (70, shared lock
-// kept). PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=<file> scripts the post-exit
+// kept). MADO_HEAVY_FAULT_EXIT_QUERY_PLAN=<file> scripts the post-exit
 // queries with real substitute processes and logs each consumed token.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -117,13 +117,13 @@ for seed in (1, 7, 705, 2026):
 // ---- real supervisor runs ---------------------------------------------------
 function environment(extra = {}) {
   const home = mkdtempSync(path.join(scratch, 'run-'));
-  return fixtureEnv({ HOME: home, PICSEE_HEAVY_LOCK: path.join(home, 'heavy.lock'), PICSEE_MDPRO_LOCK: path.join(home, 'mdpro.lock'),
-    PICSEE_HEAVY_LOCK_WAIT_SECS: '15', ...extra });
+  return fixtureEnv({ HOME: home, MADO_HEAVY_LOCK: path.join(home, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(home, 'mdpro.lock'),
+    MADO_HEAVY_LOCK_WAIT_SECS: '15', ...extra });
 }
 function withPlan(env, tokens) {
   const file = path.join(env.HOME, 'query-plan');
   writeFileSync(file, tokens.join(','));
-  env.PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN = file;
+  env.MADO_HEAVY_FAULT_EXIT_QUERY_PLAN = file;
   return () => existsSync(`${file}.log`) ? readFileSync(`${file}.log`, 'utf8').trim().split('\n').filter(Boolean)
     .map(line => { const [token, at] = line.split(' '); return { token, at: Number(at) }; }) : [];
 }
@@ -153,7 +153,7 @@ test('exitQueryOneFailureThenEmptyReleases', { timeout: 25000 }, async () => {
   assert.doesNotMatch(r.output, /unknown cleanup/);
   assert.deepEqual(log().map(t => t.token), ['error', 'real']);
   assert.ok(log()[1].at - log()[0].at >= 0.15, 'the retry waits its interval');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false, 'shared lock released');
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), false, 'shared lock released');
 });
 
 test('exitQueryTimeoutMalformedOrRepeatedErrorThenEmptyReleases', { timeout: 25000 }, async () => {
@@ -162,7 +162,7 @@ test('exitQueryTimeoutMalformedOrRepeatedErrorThenEmptyReleases', { timeout: 250
     const r = await start(['true'], env).done;
     assert.equal(r.code, 0, `${tokens}: ${r.output}`);
     assert.deepEqual(log().map(t => t.token), tokens);
-    assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false, `${tokens}: shared lock released`);
+    assert.equal(existsSync(env.MADO_MDPRO_LOCK), false, `${tokens}: shared lock released`);
   }
 });
 
@@ -175,7 +175,7 @@ test('exitQueryPermanentFailureIsUnknownAfterFourSpacedAttempts', { timeout: 250
   assert.deepEqual(tokens.map(t => t.token), ['error', 'error', 'error', 'error']);
   for (let i = 1; i < tokens.length; i++) assert.ok(tokens[i].at - tokens[i - 1].at >= 0.15, `attempt ${i + 1} waited its interval`);
   assert.ok(tokens.at(-1).at - tokens[0].at < 5, 'within the 5 s budget');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), true, 'unknown cleanup keeps the shared lock');
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), true, 'unknown cleanup keeps the shared lock');
 });
 
 test('exitQueryPermanentTimeoutIsBounded', { timeout: 25000 }, async () => {
@@ -187,7 +187,7 @@ test('exitQueryPermanentTimeoutIsBounded', { timeout: 25000 }, async () => {
   assert.ok(tokens.length >= 1 && tokens.length <= 4, JSON.stringify(tokens));
   assert.ok(tokens.every(t => t.token === 'timeout'));
   assert.ok(r.at - readExit(marker).wall < 8000, `bounded after the leader exit (${r.at - readExit(marker).wall} ms)`);
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), true);
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), true);
 });
 
 test('exitQueryTokensAreConsumedOnlyAfterTheLeaderExits', { timeout: 25000 }, async () => {
@@ -218,16 +218,16 @@ echo "error: unsupported SysV option" >&2
 exit 1
 `, { mode: 0o755 });
   const environ = (pid, vars) => { mkdirSync(path.join(proc, pid), { recursive: true }); writeFileSync(path.join(proc, pid, 'environ'), vars.map(v => `${v}\0`).join('')); };
-  environ('4242', ['HOME=/h', 'PICSEE_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-a.owner', 'PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=/h/query-plan']);
-  environ('4343', ['HOME=/other', 'PICSEE_HEAVY_GUARDIAN_OWNER=/other/heavy.lock.guardian-b.owner']);
-  environ('4545', ['PICSEE_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-c.owner']);
+  environ('4242', ['HOME=/h', 'MADO_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-a.owner', 'MADO_HEAVY_FAULT_EXIT_QUERY_PLAN=/h/query-plan']);
+  environ('4343', ['HOME=/other', 'MADO_HEAVY_GUARDIAN_OWNER=/other/heavy.lock.guardian-b.owner']);
+  environ('4545', ['MADO_HEAVY_GUARDIAN_OWNER=/h/heavy.lock.guardian-c.owner']);
   // 4444 exited between the listing and the read: it has no environ file.
   const all = guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc });
   assert.deepEqual(all.map(g => g.pid), [4242, 4343]);
   const ours = guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/h/' });
   assert.deepEqual(ours.map(g => g.pid), [4242]);
-  assert.match(ours[0].env, /PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=\/h\/query-plan/);
-  assert.deepEqual(guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/other/' }).map(g => g.env.includes('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=')), [false]);
+  assert.match(ours[0].env, /MADO_HEAVY_FAULT_EXIT_QUERY_PLAN=\/h\/query-plan/);
+  assert.deepEqual(guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/other/' }).map(g => g.env.includes('MADO_HEAVY_FAULT_EXIT_QUERY_PLAN=')), [false]);
 });
 
 test('exitQueryPlanIsNotInheritedByJobOrGuardian', { timeout: 60000 }, async () => {
@@ -247,7 +247,7 @@ test('exitQueryExhaustedPlanFallsBackToRealQueries', { timeout: 25000 }, async (
   const r = await start(['true'], env).done;
   assert.equal(r.code, 0, r.output);
   assert.deepEqual(log().map(t => t.token), ['error']);
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false);
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), false);
 });
 
 // The leader leaves a worker that replaces itself by forking every 0.1 s for
@@ -276,11 +276,11 @@ open(marker, 'w').write(f"{time.monotonic()} {time.time()*1000}")`, marker, ende
   assert.ok(existsSync(ended), 'the worker chain finished by itself');
   assert.ok(Number(readFileSync(admitted, 'utf8')) >= Number(readFileSync(ended, 'utf8')),
     'the competitor was admitted only after the last worker ended');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false);
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), false);
 });
 
 test('exitQueryRetryNeverResetsTheDrainDeadline', { timeout: 25000 }, async () => {
-  const env = environment({ PICSEE_HEAVY_LOCK_DRAIN_SECS: '2', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
+  const env = environment({ MADO_HEAVY_LOCK_DRAIN_SECS: '2', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
   const log = withPlan(env, Array(20).fill(['real', 'error']).flat()), marker = path.join(env.HOME, 'exit');
   const job = ['python3', '-c', `import os,subprocess,sys,time
 subprocess.Popen(['/bin/sleep', '30'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -295,7 +295,7 @@ open(sys.argv[1], 'w').write(f"{time.monotonic()} {time.time()*1000}")`, marker]
 });
 
 test('exitQueryRetryStillHandlesCancellation', { timeout: 25000 }, async () => {
-  const env = environment({ PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
+  const env = environment({ MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
   const log = withPlan(env, Array(10).fill('timeout')), marker = path.join(env.HOME, 'exit');
   const run = start(exitJob(marker), env);
   await waitFor(() => existsSync(marker), 15000, 'leader exited');
@@ -309,11 +309,11 @@ test('exitQueryRetryStillHandlesCancellation', { timeout: 25000 }, async () => {
   await pause(1500);
   assert.equal(log().length, consumed, 'no query after the run ended');
   assert.ok(consumed < 4, 'cancellation preempted the retry');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false, 'complete stop releases the shared lock');
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), false, 'complete stop releases the shared lock');
 });
 
 test('exitQueryRetryStillHandlesTheExecutionDeadline', { timeout: 25000 }, async () => {
-  const env = environment({ PICSEE_HEAVY_LOCK_EXEC_SECS: '1.5', PICSEE_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
+  const env = environment({ MADO_HEAVY_LOCK_EXEC_SECS: '1.5', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
   const log = withPlan(env, Array(10).fill('timeout')), marker = path.join(env.HOME, 'exit');
   const job = ['python3', '-c', 'import sys,time; time.sleep(0.5); open(sys.argv[1],"w").write(f"{time.monotonic()} {time.time()*1000}")', marker];
   const run = start(job, env);
@@ -326,5 +326,5 @@ test('exitQueryRetryStillHandlesTheExecutionDeadline', { timeout: 25000 }, async
   assert.ok(consumed >= 1 && consumed < 4, JSON.stringify(log()));
   await pause(1500);
   assert.equal(log().length, consumed, 'no query after the run ended');
-  assert.equal(existsSync(env.PICSEE_MDPRO_LOCK), false);
+  assert.equal(existsSync(env.MADO_MDPRO_LOCK), false);
 });

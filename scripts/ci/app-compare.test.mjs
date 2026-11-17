@@ -12,9 +12,9 @@ import {randomBytes} from 'node:crypto';
 
 function attestedResult(settings,status,details={}){
   const id=randomBytes(16).toString('hex');
-  const statusPath=path.join(settings.env.PICSEE_REPEAT_STATUS_DIR,`${id}.json`);
+  const statusPath=path.join(settings.env.MADO_REPEAT_STATUS_DIR,`${id}.json`);
   writeFileSync(statusPath,JSON.stringify({id,supervisor:43210,cleanup:'complete',commandExit:status})+'\n');
-  const output=[];output[Number(settings.env.PICSEE_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
+  const output=[];output[Number(settings.env.MADO_REPEAT_ATTEST_FD)]=JSON.stringify({id,statusPath,supervisor:43210})+'\n';
   return {...result(JSON.stringify({status,...details})),output};
 }
 
@@ -27,19 +27,19 @@ test('CI Host ownership lane refuses cleared inherited supervision before tests 
   const marker=path.join(dir,'ran');
   const fixture=path.join(dir,'fixture.test.mjs');
   writeFileSync(fixture,`import test from 'node:test';import {writeFileSync} from 'node:fs';test('must not run',()=>writeFileSync(${JSON.stringify(marker)},'ran'));\n`);
-  const env={...process.env,PICSEE_HEAVY_CI_BOUNDARY_REQUIRED:'1',PICSEE_HEAVY_LOCK_HELD:'1',
-    PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1',PICSEE_MDPRO_LOCK:'off'};
-  delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;
+  const env={...process.env,MADO_HEAVY_CI_BOUNDARY_REQUIRED:'1',MADO_HEAVY_LOCK_HELD:'1',
+    MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_HEAVY_CI_TEST:'1',MADO_MDPRO_LOCK:'off'};
+  delete env.MADO_HEAVY_CONTROL_FD;delete env.MADO_HEAVY_FLOCK_FD;
   delete env.NODE_TEST_CONTEXT;
   const lock=path.join(root,'scripts/heavy-lock.sh');
   const lane=path.join(root,'scripts/tdd/node-lane.mjs');
-  const run=spawnSync(lock,['env','-u','PICSEE_HEAVY_LOCK_HELD',process.execPath,lane,fixture],{
+  const run=spawnSync(lock,['env','-u','MADO_HEAVY_LOCK_HELD',process.execPath,lane,fixture],{
     env,
     encoding:'utf8',timeout:10000});
   assert.equal(run.status,70,run.stdout+run.stderr);
   assert.match(run.stderr,/CI Host ownership boundary missing/);
   const noTop=spawnSync(lock,[process.execPath,lane,fixture],{
-    env:{...env,PICSEE_HEAVY_CI_TOP_LEVEL:''},encoding:'utf8',timeout:10000});
+    env:{...env,MADO_HEAVY_CI_TOP_LEVEL:''},encoding:'utf8',timeout:10000});
   assert.equal(noTop.status,70,noTop.stdout+noTop.stderr);
   assert.match(noTop.stderr,/HELD needs one parent control FD or CI top-level input/);
   assert.equal(existsSync(marker),false);
@@ -73,8 +73,8 @@ test(`ownership integration ${mode} step preserves ${outcome} runner outcome and
   if(outcome==='crash')writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
     'process.kill(process.ppid,"SIGTERM");process.exit(0);\n'); // Interrupt only this fixture's own test-runner parent.
   const env={...process.env,APP_COMPARE_MODE:mode,GITHUB_ACTIONS:'true',
-    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_MDPRO_LOCK:'off',
-    PICSEE_HEAVY_STATUS_PATH:path.join(dir,'.build','cleanup.json')};delete env.NODE_OPTIONS;
+    MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_MDPRO_LOCK:'off',
+    MADO_HEAVY_STATUS_PATH:path.join(dir,'.build','cleanup.json')};delete env.NODE_OPTIONS;
   delete env.NODE_TEST_CONTEXT; // This subprocess is a new runner, not an outer test worker.
   if(outcome==='zero'){
     // An empty shard produces a genuine zero-test root. An empty test file
@@ -103,8 +103,8 @@ function harness(t,{mode='hosted',scope='focus',native,...options}={}) {
   const quarantinePath=path.join(dir,'quarantine.json');writeFileSync(quarantinePath,'[]\n');
   const calls=[];let output='';
   assert.equal(typeof comparison.runComparisonIteration,'function','comparison iteration API must exist');
-  const env={APP_COMPARE_MODE:mode,APP_COMPARE_SCOPE:scope,PICSEE_APP_LANE_NO_RETRY:'1',
-    PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',MADO_TEST_RUN_TOKEN:'token-hosted',
+  const env={APP_COMPARE_MODE:mode,APP_COMPARE_SCOPE:scope,MADO_APP_LANE_NO_RETRY:'1',
+    MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'5',MADO_TEST_RUN_TOKEN:'token-hosted',
     MADO_APP_COMPARE_RESULT_PATH:path.join(dir,'comparison.json'),GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'};
   const status=comparison.runComparisonIteration({cwd:root,expectedMode:mode,env,quarantinePath,
     evidencePath:path.join(dir,'attempt.log'),stdout:s=>output+=s,stderr:s=>output+=s,
@@ -131,7 +131,7 @@ test('hosted focus executes hosted mechanism without unhosted runs',t=>{
 
 test('hostedAppLaunchPassesSupervisionDescriptor',t=>{
   const h=harness(t,{mode:'hosted',env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',
-    PICSEE_APP_LANE_NO_RETRY:'1',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'5',
+    MADO_APP_LANE_NO_RETRY:'1',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'5',
     MADO_TEST_RUN_TOKEN:'token-hosted',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'}});
   const call=h.calls.find(entry=>entry.args.includes('test-without-building'));
   assert.ok(call,'hosted native command launched');
@@ -141,10 +141,10 @@ test('hostedAppLaunchPassesSupervisionDescriptor',t=>{
 test('mode/scope/forwarding and retry/quarantine violations fail before native work',t=>{
   for(const patch of [
     {expectedMode:'normal'},
-    {env:{APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'invalid',PICSEE_APP_LANE_NO_RETRY:'1'}},
-    {env:{APP_COMPARE_SCOPE:'focus',PICSEE_APP_LANE_NO_RETRY:'1'}},
-    {env:{APP_COMPARE_MODE:'unknown',APP_COMPARE_SCOPE:'focus',PICSEE_APP_LANE_NO_RETRY:'1'}},
-    {env:{APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'focus',PICSEE_APP_LANE_NO_RETRY:'0'}},
+    {env:{APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'invalid',MADO_APP_LANE_NO_RETRY:'1'}},
+    {env:{APP_COMPARE_SCOPE:'focus',MADO_APP_LANE_NO_RETRY:'1'}},
+    {env:{APP_COMPARE_MODE:'unknown',APP_COMPARE_SCOPE:'focus',MADO_APP_LANE_NO_RETRY:'1'}},
+    {env:{APP_COMPARE_MODE:'legacy',APP_COMPARE_SCOPE:'focus',MADO_APP_LANE_NO_RETRY:'0'}},
   ]) {
     const h=harness(t,patch);assert.notEqual(h.status,0,h.output);assert.equal(h.calls.length,0);
   }
@@ -153,7 +153,7 @@ test('mode/scope/forwarding and retry/quarantine violations fail before native w
 test('actual worker entry rejects dropped expected-mode forwarding before launching native work',()=>{
   assert.equal(typeof worker.runAppWorker,'function');
   let calls=0,output='';
-  const status=worker.runAppWorker({expectedMode:'legacy',env:{APP_COMPARE_SCOPE:'focus',PICSEE_APP_LANE_NO_RETRY:'1'},
+  const status=worker.runAppWorker({expectedMode:'legacy',env:{APP_COMPARE_SCOPE:'focus',MADO_APP_LANE_NO_RETRY:'1'},
     spawn:()=>{calls++;throw new Error('must not launch');},stdout:s=>output+=s,stderr:s=>output+=s});
   assert.notEqual(status,0,output);assert.equal(calls,0);
 });
@@ -162,7 +162,7 @@ test('repeat sidecars preserve exact mode, unique tokens, timings and independen
   const dir=mkdtempSync(path.join(tmpdir(),'i393-repeat-timing-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   let clock=100;const calls=[];
   const status=runAppRepeat({repeat:3,filter:'',out:dir,now:()=>clock,deadline:10000,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'same-sha',RUNNER_OS:'macOS'},
     stdout:()=>{},spawn:(_cmd,args,settings)=>{
       calls.push({args,settings});clock+=25;writeFileSync(args[2],'native evidence\n');
       return attestedResult(settings,calls.length===2?1:0,{drained:true});
@@ -185,7 +185,7 @@ test('repeat sidecars preserve exact mode, unique tokens, timings and independen
 test('repeat records unstarted refused iterations without fabricated execution durations',t=>{
   const dir=mkdtempSync(path.join(tmpdir(),'i393-repeat-refused-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const status=runAppRepeat({repeat:2,filter:'',out:dir,now:()=>100,deadline:10000,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
     spawn:(_cmd,args)=>{writeFileSync(args[2],'undrained\n');return result(JSON.stringify({status:70,drained:false}));}});
   assert.equal(status,70);
   assert.equal(existsSync(path.join(dir,'iter-02.json')),true,'refused iteration has explicit evidence');
@@ -197,7 +197,7 @@ test('normal retained-only filtered repeat does not require a hosted process tha
   const dir=mkdtempSync(path.join(tmpdir(),'i393-retained-filter-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   let captured;
   const status=runAppRepeat({repeat:1,filter:'^MadoAppTests\\.retainedOnly\\(\\)$',out:dir,deadline:10000,now:()=>100,
-    env:{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},spawn:(_cmd,args,settings)=>{
+    env:{MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'},stdout:()=>{},spawn:(_cmd,args,settings)=>{
       captured=settings.env;writeFileSync(args[2],'retained-only\n');return attestedResult(settings,0,{drained:true});
     }});
   assert.equal(status,0);assert.equal(captured.MADO_HOST_OWNERSHIP_REQUIRED,undefined);
@@ -209,7 +209,7 @@ test('comparison coordinator requires current matching worker evidence before tr
   for(const variant of ['missing','stale','wrong-mode','wrong-scope','wrong-sha','wrong-status','incomplete','matching']) {
     const dir=mkdtempSync(path.join(tmpdir(),'i393-current-record-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
     const status=comparison.runAppCompare({out:dir,now:()=>100,deadline:10000,stdout:()=>{},
-      env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'final-sha'},
+      env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'1',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4',GITHUB_SHA:'final-sha'},
       spawn:(_cmd,args,settings)=>{
         writeFileSync(args[2],'current worker output\n');
         const packet={version:1,runId:settings.env.MADO_APP_COMPARE_RESULT_ID,complete:true,status:0,
@@ -233,7 +233,7 @@ test('hosted compare refuses the next native iteration after contradictory worke
   let launched=0;
   const status=comparison.runAppCompare({out:dir,now:()=>100,deadline:10000,stdout:()=>{},
     env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',APP_REPEAT:'2',
-      PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},
+      MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'},
     spawn:(_cmd,args,settings)=>{
       launched++;
       writeFileSync(args[2],'worker completed\n');
@@ -250,7 +250,7 @@ test('comparison rows preserve ownership proof and label supervised duration wit
   let clock=100;
   const hostOwnership={observed:true,drained:true,identities:[{pid:123,birth:'1:2'}],signals:[],unknown:[],live:[]};
   const status=runAppRepeat({repeat:1,filter:'',out:dir,deadline:10000,now:()=>clock,
-    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
+    env:{APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CONTROL_FD:'4'},stdout:()=>{},
     spawn:(_cmd,args,settings)=>{clock+=25;writeFileSync(args[2],'owned host gone\n');return attestedResult(settings,0,{drained:true,group:456,hostOwnership});}});
   assert.equal(status,0);
   const row=JSON.parse(readFileSync(path.join(dir,'iter-01.json'),'utf8'));

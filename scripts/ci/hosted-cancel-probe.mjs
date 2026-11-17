@@ -14,16 +14,16 @@ export async function runHostedCancelProbe({env=process.env,cwd=process.cwd(),ou
   try{
     mkdirSync(out,{recursive:true});save();
     const attemptPath=mkdtempSync(path.join(out,'attempt-'));result.attemptPath=attemptPath;save();
-    if(command===undefined&&env.PICSEE_HEAVY_LOCK_HELD!=='1')throw new Error('actual hosted cancellation requires the heavy-lock authorization');
-    const derived=env.PICSEE_APP_DERIVED_DATA_PATH??'.build/dd-ci';
+    if(command===undefined&&env.MADO_HEAVY_LOCK_HELD!=='1')throw new Error('actual hosted cancellation requires the heavy-lock authorization');
+    const derived=env.MADO_APP_DERIVED_DATA_PATH??'.build/dd-ci';
     const expected=realpathSync(executable??path.resolve(cwd,derived,'Build/Products/Debug/Mado.app/Contents/MacOS/Mado'));
     const quarantine=path.join(attemptPath,'quarantine.json');writeFileSync(quarantine,'[]\n');
     const worker=fileURLToPath(new URL('./app-repeat-worker.mjs',import.meta.url));
     const workerArgs=args??[worker,quarantine,path.join(attemptPath,'worker-evidence.json'),'hosted'];
-    const childEnv={...env,APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',PICSEE_APP_LANE_NO_RETRY:'1',
+    const childEnv={...env,APP_COMPARE_MODE:'hosted',APP_COMPARE_SCOPE:'focus',MADO_APP_LANE_NO_RETRY:'1',
       MADO_TEST_RUN_TOKEN:token,TEST_RUNNER_MADO_TEST_RUN_TOKEN:token,MADO_HOST_OWNERSHIP_REQUIRED:'1',
       MADO_HOST_EXECUTABLE:expected,MADO_APP_COMPARE_RESULT_PATH:path.join(attemptPath,'comparison.json')};
-    delete childEnv.PICSEE_APP_FILTER;
+    delete childEnv.MADO_APP_FILTER;
     result.supervisor=await runProcessGroup({command:command??process.execPath,args:workerArgs,env:childEnv,
       logPath:path.join(attemptPath,'native.log'),deadline:Math.min(deadline??Infinity,Date.now()+120000),
       graceMs,drainMs,cancelOnHostObserved:true,preparedInspector,inspectorSpawn,hostQuery,hostSignal,groupSignal,signal,now});

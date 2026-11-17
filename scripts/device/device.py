@@ -31,7 +31,7 @@ def checked(argv, timeout=30, strip=True):
     return r.stdout.strip() if strip else r.stdout
 
 def select_xcode(candidates=DEFAULT_XCODE_APPS):
-    explicit = os.environ.get('PICSEE_XCODE')
+    explicit = os.environ.get('MADO_XCODE')
     choices = (Path(explicit),) if explicit else tuple(Path(path) for path in candidates)
     for app in choices:
         try:

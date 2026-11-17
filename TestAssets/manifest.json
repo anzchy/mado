@@ -29,8 +29,8 @@
   "generator_sha256": "278d9c76c58bfd30ae1bdf8270632ca2a70561da884e0b57fa0a9ba52722d9d4",
   "roots": {
     "1": "TestAssets/",
-    "2": "~/.picsee/testassets/generated/",
-    "3": "~/.picsee/testassets/"
+    "2": "~/.mado/testassets/generated/",
+    "3": "~/.mado/testassets/"
   },
   "performance_rule": "Flat synthetic images must never feed performance numbers. All generated fixtures here are correctness/stress data, not a photo performance baseline.",
   "gaps": [

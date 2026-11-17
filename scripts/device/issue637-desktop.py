@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """#637 WindowServer regression. Run from a Screen Recording-authorized Terminal.app.
 
-    python3 scripts/device/issue637-desktop.py run --out ~/.picsee/device-runs/i637-<id>
+    python3 scripts/device/issue637-desktop.py run --out ~/.mado/device-runs/i637-<id>
 
 The run builds and launches the committed signed app, drives its real Settings,
 opens generated file-grant images, saves window captures, and writes verdict.json.

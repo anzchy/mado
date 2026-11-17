@@ -35,7 +35,7 @@
 | 11-08 | 第 1 轮：只观察、不改类。单个 ×20 → 10 失败，全量 ×5 → 1 失败 | 运行 42501799200、42501802460 [V] |
 | 11-08 | 第 2 轮：给弹窗起名，看到是「Browsing Needs Folder Access」授权弹窗，调用栈指向 `openFolder` 的 catch | #597 评论 [V] |
 | 11-08 | 第 3 轮：打印 catch 时的状态，看清竞争（见 §3 R1）。#603 修复并移除隔离 | PR #603，7f123efd [V] |
-| 11-09 | Fable 和 Codex（`gpt-6-astra` high；账号不支持 `gpt-6.1-astra`）独立评审整个循环 | `~/.picsee/herdr/delegator/ci-loop-review/` [V] |
+| 11-09 | Fable 和 Codex（`gpt-6-astra` high；账号不支持 `gpt-6.1-astra`）独立评审整个循环 | `~/.mado/herdr/delegator/ci-loop-review/` [V] |
 | 11-09 | #606：循环和失败时的 AppKit 状态打印进 main。实现中自己又踩了三个坑（§5） | PR #607，e78d6436 [V] |
 
 ## 3. 原因

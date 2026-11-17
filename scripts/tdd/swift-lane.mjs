@@ -1,7 +1,7 @@
 /**
  * Swift receipt adapter, adapted from mdpro scripts/cargo-test-lane.mjs @9f133f1d.
  * Usage: node scripts/tdd/swift-lane.mjs [filter]
- * Or set PICSEE_SWIFT_FILTER for receipt.js record AND verify (env is inherited).
+ * Or set MADO_SWIFT_FILTER for receipt.js record AND verify (env is inherited).
  * Always runs SwiftPM under the mado heavy lock. No filter => 64; no completed
  * tests / compile failure / inconsistent outcome => 70 (runner-error/environment).
  * Completed assertion failure => 1 plus Maven counts; pass => 0 plus counts.
@@ -140,9 +140,9 @@ function reraise(signal) {
 
 export function supervisedStdio(env) {
   const stdio=['inherit','pipe','pipe'];
-  if(env.PICSEE_HEAVY_LOCK_HELD!=='1')return stdio;
-  for(const name of ['PICSEE_HEAVY_CONTROL_FD','PICSEE_HEAVY_FLOCK_FD']){
-    if(name==='PICSEE_HEAVY_FLOCK_FD'&&!env[name])continue;
+  if(env.MADO_HEAVY_LOCK_HELD!=='1')return stdio;
+  for(const name of ['MADO_HEAVY_CONTROL_FD','MADO_HEAVY_FLOCK_FD']){
+    if(name==='MADO_HEAVY_FLOCK_FD'&&!env[name])continue;
     const fd=Number(env[name]);
     if(!Number.isInteger(fd)||fd<3||fd>64)throw new Error(`invalid inherited ${name}`);
     while(stdio.length<=fd)stdio.push('ignore');
@@ -153,9 +153,9 @@ export function supervisedStdio(env) {
 
 /** argv is only a filter, never shell code or arbitrary runner arguments. */
 function main(argv) {
-  const filter = argv[0] ?? process.env.PICSEE_SWIFT_FILTER;
+  const filter = argv[0] ?? process.env.MADO_SWIFT_FILTER;
   if (argv.length > 1 || !filter?.trim()) {
-    process.stderr.write("usage: node scripts/tdd/swift-lane.mjs [filter]; or set PICSEE_SWIFT_FILTER for record and verify\n");
+    process.stderr.write("usage: node scripts/tdd/swift-lane.mjs [filter]; or set MADO_SWIFT_FILTER for record and verify\n");
     process.exitCode = 64;
     return;
   }

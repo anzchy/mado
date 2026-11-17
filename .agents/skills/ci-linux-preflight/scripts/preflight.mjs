@@ -55,7 +55,7 @@ function resolveHead(repo, value) {
 }
 
 function writeAttempt(head, summary, rawLog) {
-  const dir = join(homedir(), '.picsee/ci-linux', head);
+  const dir = join(homedir(), '.mado/ci-linux', head);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const stamp = new Date().toISOString().replaceAll(':', '').replaceAll('-', '').replaceAll('.', '') + '-' + randomBytes(3).toString('hex');
   const name = `${stamp}-summary.txt`;
@@ -80,8 +80,8 @@ function local(value, opts) {
     if (unstaged.status !== 0 || staged.status !== 0) throw Object.assign(new Error('tracked worktree is dirty; use --allow-dirty'), { exitCode: 2 });
   }
   const workflow = workflowAt(repo, head, opts.job);
-  const host = process.env.PICSEE_LINUX_HOST || 'mado-ci-linux';
-  if (!/^[A-Za-z0-9._-]+$/.test(host) || host.startsWith('-')) throw Object.assign(new Error('invalid PICSEE_LINUX_HOST'), { exitCode: 2 });
+  const host = process.env.MADO_LINUX_HOST || 'mado-ci-linux';
+  if (!/^[A-Za-z0-9._-]+$/.test(host) || host.startsWith('-')) throw Object.assign(new Error('invalid MADO_LINUX_HOST'), { exitCode: 2 });
   const temp = mkdtempSync(join(tmpdir(), 'ci-linux-preflight-'));
   const bundle = join(temp, 'head.bundle');
   const ref = `refs/preflight/${head}`;

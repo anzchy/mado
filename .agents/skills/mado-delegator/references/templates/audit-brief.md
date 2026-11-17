@@ -18,7 +18,7 @@ other dimension list, including one remembered from an earlier round.
 
 | Phase | May read | Must not read |
 |---|---|---|
-| round one (`audit`) | the range, the brief, the handoff, run evidence the request names | any other auditor's verdict or folder, `~/.picsee/herdr/delegator/` except this file and your request, PR comments, `gh` |
+| round one (`audit`) | the range, the brief, the handoff, run evidence the request names | any other auditor's verdict or folder, `~/.mado/herdr/delegator/` except this file and your request, PR comments, `gh` |
 | `confirm` | the report files, merged verdict and counter-proofs your request names, from completed earlier rounds | the other auditor's current-round report, PR comments, `gh` |
 | `challenge` | the one finding and its evidence as the request quotes them | anything else from the other auditor |
 
@@ -26,24 +26,24 @@ Every request starts in a fresh conversation (gpt-auditor is reset with `/new`; 
 with `/clear`), so the request file is your only memory: it names everything you may use.
 
 ## Blind and read-only
-- Never read the other auditor's folder under `~/.picsee/herdr/` (`gpt-auditor/` or
-  `opus-auditor/`, whichever is not yours), nor `~/.picsee/herdr/delegator/` except this file,
+- Never read the other auditor's folder under `~/.mado/herdr/` (`gpt-auditor/` or
+  `opus-auditor/`, whichever is not yours), nor `~/.mado/herdr/delegator/` except this file,
   nor any PR comment. Run no `gh` commands at all.
-- The implementor's handoff (`~/.picsee/herdr/<implementor>/<item>-handoff.md`) and brief are claims
+- The implementor's handoff (`~/.mado/herdr/<implementor>/<item>-handoff.md`) and brief are claims
   to test, not facts. You may read them.
 - Never edit, stage, commit, merge, rebase, check out or reset anything in any repo. Use
   `git show <sha>:<path>`, `git diff --no-ext-diff <base> <sha>`, `git diff-tree --no-ext-diff` and
   `git log`. Read-only inspection commands are allowed; do not run builds or tests unless the
   request asks for a lane re-run.
-- gpt-auditor writes only its report, `~/.picsee/herdr/gpt-auditor/<item>-r<round>.md`. opus-auditor
+- gpt-auditor writes only its report, `~/.mado/herdr/gpt-auditor/<item>-r<round>.md`. opus-auditor
   (pane, `claude --agent mado-opus-auditor --model opus`) writes only its report,
-  `~/.picsee/herdr/opus-auditor/<item>-r<round>.md` (or the path the request names), and ends with the VERDICT block.
+  `~/.mado/herdr/opus-auditor/<item>-r<round>.md` (or the path the request names), and ends with the VERDICT block.
 - Never paste certificate e-mail lines or personal paths beyond the repo into the report summary.
 
 ## RED receipt evidence
 
 For each implementation commit, compare each `Red-Receipt:` trailer against its receipt in
-`~/.picsee/archive/tdd-guardian/receipts/<ID>.json` (or `<ID>.<worktree>.json` on a collision).
+`~/.mado/archive/tdd-guardian/receipts/<ID>.json` (or `<ID>.<worktree>.json` on a collision).
 The archive envelope records `worktree` and the complete `receipt`. Match ID, lane, `red.kind`,
 `spec-files=N` against the `test_files` key count, a present `verified_at`, and terminal verdict.
 `spec-files` counts specification files, not tests; preserve any `SEPARATION-BROKEN` verdict as a finding.

@@ -186,7 +186,7 @@ J1–J4 是 v0.0.1 的排期；J5 属于 P7 增强（#680，owner 2026-11-13 选
 - [ ] `P0-04` 在启用 sandbox 的应用里验证打开单文件、授权父目录、bookmark 跨重启恢复、关闭后释放范围。
 - [ ] `P0-05` ImageIO 对代表性小图、48MP 大图、带方向照片、透明图、坏文件做尺寸受限解码；记录实际字节与耗时，并实测各解码 lane 的并发上限、重任务 lane 与预取数量对首图时间和内存峰值的影响（ADR-003）。
 - [ ] `P0-06` 受控 OperationQueue 包装异步接口与准入 actor（ADR-003）：覆盖排队/执行时取消、只完成一次、内存预约释放，并用测试检查 ADR-003 列出的五条不变量。
-- [ ] `P0-07` 建立素材 manifest、指标脚本/日志约定和 ADR-002～007 初稿（ADR-001 已在 grilling 中定稿）；记录需要更改的默认值。素材分三层：① 小型自校验素材（1px 棋盘格、坐标网格、EXIF 方向 1–8、alpha 渐变、截断/损坏/超限头）由确定性脚本 `scripts/testassets/` 生成，脚本、文件与 `TestAssets/manifest.json` 入库；② S2 批量与 S3 48MP/100MP 由同一脚本按需生成到 `~/.picsee/testassets/`，只入库参数与预期哈希；③ 真实照片内容（带 EXIF 的 JPEG/HEIC、S4 的 RAW/GIF/PDF）按 URL 下载并校验 sha256，来源限 CC0/宽松许可，manifest 记录 URL、许可与哈希，文件不入库。不用 Git LFS。合成平涂图不得用于性能数字：性能采样用第③层真实照片或带照片噪声的合成图，并在记录里写明。
+- [ ] `P0-07` 建立素材 manifest、指标脚本/日志约定和 ADR-002～007 初稿（ADR-001 已在 grilling 中定稿）；记录需要更改的默认值。素材分三层：① 小型自校验素材（1px 棋盘格、坐标网格、EXIF 方向 1–8、alpha 渐变、截断/损坏/超限头）由确定性脚本 `scripts/testassets/` 生成，脚本、文件与 `TestAssets/manifest.json` 入库；② S2 批量与 S3 48MP/100MP 由同一脚本按需生成到 `~/.mado/testassets/`，只入库参数与预期哈希；③ 真实照片内容（带 EXIF 的 JPEG/HEIC、S4 的 RAW/GIF/PDF）按 URL 下载并校验 sha256，来源限 CC0/宽松许可，manifest 记录 URL、许可与哈希，文件不入库。不用 Git LFS。合成平涂图不得用于性能数字：性能采样用第③层真实照片或带照片噪声的合成图，并在记录里写明。
 - [ ] `P0-08` 建立 MadoDesignKit 的原生颜色/排版/间距/图标映射（位于现有 UI target 内，不额外拆 target）；以[组件与原生映射规范](../design/picsee-ui-system/native/README.md)为输入，实现30页组件状态预览，核对TOKEN_REGISTRY的源哈希并记录原生控件与CSS token的合理差异。文档准备完成不等于本工作包已实现。
 - [ ] `P0-09` 最小 CommandRouter、焦点上下文和选择/预览状态表；冻结1.4节默认值，原生菜单、SwiftUI按钮与AppKit输入共用入口。
 

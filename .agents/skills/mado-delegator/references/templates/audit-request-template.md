@@ -8,14 +8,14 @@ Risk tier: **<tier>** (<why>). <Raise to High if it changes FileAccess, AccessIn
 Info.plist.> Audit D1–D12 at full depth from docs/agents/audit-dimensions.md on main (<tier> policy under the severity
 table). Use the severity table, COVERAGE line and report shape exactly.
 
-Rules: ~/.picsee/herdr/delegator/audit-brief.md (blind, read-only, no gh, scratch isolation).
+Rules: ~/.mado/herdr/delegator/audit-brief.md (blind, read-only, no gh, scratch isolation).
 
 Inputs:
-- the brief: ~/.picsee/herdr/<implementer>/<brief>.md; scope amendments: <files>;
-- the handoff, a claim to test: ~/.picsee/herdr/<implementer>/<item>-handoff.md; evidence in <dir>;
+- the brief: ~/.mado/herdr/<implementer>/<brief>.md; scope amendments: <files>;
+- the handoff, a claim to test: ~/.mado/herdr/<implementer>/<item>-handoff.md; evidence in <dir>;
 - receipts (Codex implementers): `node ~/.claude/plugins/cache/xiaolai/tdd-guardian/0.10.2/scripts/tdd-guardian/receipt.js show`
   from the implementer worktree. Compare every implementation commit's `Red-Receipt:` lines with the matching
-  `{schemaVersion, worktree, receipt}` envelope in `~/.picsee/archive/tdd-guardian/receipts/<ID>.json` or
+  `{schemaVersion, worktree, receipt}` envelope in `~/.mado/archive/tdd-guardian/receipts/<ID>.json` or
   `<ID>.<worktree>.json`: ID, lane, red.kind, test_files key count (`spec-files=N`), verified_at and terminal verdict.
   Before the post-merge archive exists, inspect the named local receipt; the delegator archives it before cleanup.
   Missing or mismatched evidence is a finding, not proof of test-first work. (Kimi: no receipts — judge the pasted RED/GREEN in the handoff.)
@@ -40,4 +40,4 @@ Beyond the dimensions, judge these specifically:
 - <5–10 bullets on the risky points: correctness traces, cancellation/generations, fences held, ledger honesty,
   tests discriminate, RED genuine, size rule>
 
-gpt-auditor and opus-auditor each get this request blind and at the same time (dual audit, at most 2 rounds; the 2026-10-25 single-audit override 「Opus单审，gpt暂停」 was lifted the same afternoon). Do not launch the app or run device scripts. Do not run Swift tests in the auditor pane; judge code, original evidence and supplied gate outputs, and identify where a signed device run is still needed. Write ~/.picsee/herdr/opus-auditor/opus-<item>-audit-r1.md (gpt-auditor: ~/.picsee/herdr/gpt-auditor/gpt-<item>-audit-r1.md) (exactly one `Report-Task:` line) with the report shape's VERDICT / COVERAGE / COUNT block. The delegator reruns owner gates; poll completion is not audit acceptance.
+gpt-auditor and opus-auditor each get this request blind and at the same time (dual audit, at most 2 rounds; the 2026-10-25 single-audit override 「Opus单审，gpt暂停」 was lifted the same afternoon). Do not launch the app or run device scripts. Do not run Swift tests in the auditor pane; judge code, original evidence and supplied gate outputs, and identify where a signed device run is still needed. Write ~/.mado/herdr/opus-auditor/opus-<item>-audit-r1.md (gpt-auditor: ~/.mado/herdr/gpt-auditor/gpt-<item>-audit-r1.md) (exactly one `Report-Task:` line) with the report shape's VERDICT / COVERAGE / COUNT block. The delegator reruns owner gates; poll completion is not audit acceptance.

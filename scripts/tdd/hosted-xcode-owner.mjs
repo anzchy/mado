@@ -10,7 +10,7 @@ const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
 const [command,...args]=process.argv.slice(2);
 const token=process.env.MADO_TEST_RUN_TOKEN;
 const executable=process.env.MADO_HOST_EXECUTABLE;
-const control=Number(process.env.PICSEE_HEAVY_CONTROL_FD);
+const control=Number(process.env.MADO_HEAVY_CONTROL_FD);
 if(!command||!token||!executable||!Number.isInteger(control)||control<3||control>64){
   process.stderr.write('hosted-owner: missing host identity or parent registration channel; cleanup incomplete\n');
   process.exit(70);
@@ -23,7 +23,7 @@ try{canonical=realpathSync(executable);}catch{
 const stdio=['ignore','ignore','ignore'];
 while(stdio.length<=control)stdio.push('ignore');
 stdio[control]=control;
-const flock=Number(process.env.PICSEE_HEAVY_FLOCK_FD);
+const flock=Number(process.env.MADO_HEAVY_FLOCK_FD);
 if(Number.isInteger(flock)&&flock>=3&&flock<=64){while(stdio.length<=flock)stdio.push('ignore');stdio[flock]=flock;}
 const identities=new Map();
 const certainty=createHostedOwnerCertainty();

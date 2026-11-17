@@ -51,8 +51,8 @@ def with_mutex(operation):
     cache.mkdir(parents=True, exist_ok=True)
     fd = os.open(mutex, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        checkpoint = os.environ.get("PICSEE_GUI_LOCK_PRE_MUTEX_FILE")
-        if checkpoint and os.environ.get("PICSEE_GUI_LOCK_TEST") == "1":
+        checkpoint = os.environ.get("MADO_GUI_LOCK_PRE_MUTEX_FILE")
+        if checkpoint and os.environ.get("MADO_GUI_LOCK_TEST") == "1":
             pathlib.Path(checkpoint).touch()
         fcntl.flock(fd, fcntl.LOCK_EX)
         return operation()
@@ -171,8 +171,8 @@ def main(args):
         if attempts <= 0:
             raise Refused("invalid wait limit")
         interval = 60.0
-        if os.environ.get("PICSEE_GUI_LOCK_TEST") == "1":
-            interval = float(os.environ.get("PICSEE_GUI_LOCK_WAIT_SECONDS", "60"))
+        if os.environ.get("MADO_GUI_LOCK_TEST") == "1":
+            interval = float(os.environ.get("MADO_GUI_LOCK_WAIT_SECONDS", "60"))
             if not 0 <= interval <= 60:
                 raise Refused("invalid test wait interval")
         for attempt in range(attempts):

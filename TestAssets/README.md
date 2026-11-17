@@ -13,8 +13,8 @@ Generated fixtures are dedicated to CC0-1.0. No Git LFS is used in this reposito
 | Tier | Location | Content |
 |---|---|---|
 | ① | committed `TestAssets/synthetic/` | 20 small self-verifying files; byte sizes and SHA-256 in manifest |
-| ② | `~/.picsee/testassets/generated/` | S2: 5,000 mixed PNG/TIFF files, 50 groups, nested directories and repeated basenames; S3: valid 8,000×6,000 (48MP) and 10,000×10,000 (100MP) noise PNGs |
-| ③ | `~/.picsee/testassets/photos/` | CC0 real-scene Nikon Z8 SDR JPEG and HEIC, both with EXIF; immutable source URLs, bytes, SHA-256 and licence evidence in manifest |
+| ② | `~/.mado/testassets/generated/` | S2: 5,000 mixed PNG/TIFF files, 50 groups, nested directories and repeated basenames; S3: valid 8,000×6,000 (48MP) and 10,000×10,000 (100MP) noise PNGs |
+| ③ | `~/.mado/testassets/photos/` | CC0 real-scene Nikon Z8 SDR JPEG and HEIC, both with EXIF; immutable source URLs, bytes, SHA-256 and licence evidence in manifest |
 
 The checkerboard path and bytes, and the coordinate-grid path and bytes, were landed first for #7. They are
 1024×768 and 1280×960 respectively. Each grid cell is labelled by its top-left **image-pixel** coordinates,
@@ -52,8 +52,8 @@ in P0-07. In particular, the tiny S2 corpus proves enumeration topology, not rea
 python3 scripts/testassets/generate.py --output TestAssets
 python3 scripts/testassets/check.py
 scripts/heavy-lock.sh python3 scripts/testassets/determinism.py --tier all
-scripts/heavy-lock.sh python3 scripts/testassets/generate.py --tier bulk --output ~/.picsee/testassets/generated
-scripts/heavy-lock.sh python3 scripts/testassets/generate.py --tier large --output ~/.picsee/testassets/generated
+scripts/heavy-lock.sh python3 scripts/testassets/generate.py --tier bulk --output ~/.mado/testassets/generated
+scripts/heavy-lock.sh python3 scripts/testassets/generate.py --tier large --output ~/.mado/testassets/generated
 python3 scripts/testassets/download.py
 python3 scripts/testassets/check.py --external --native
 python3 scripts/testassets/check_lock.py

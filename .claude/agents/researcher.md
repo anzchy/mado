@@ -11,7 +11,7 @@ behaviour: the user and the delegator do; the planner turns your note into a pla
 ## Input (any missing item: return BLOCKED)
 - the item id and the question, in one or two sentences;
 - the paths you may read beyond the repo (for example `docs/PICVIEW_FEATURES.md`, `docs/PICVIEW_ANALYSIS.md`);
-- the output path (default `~/.picsee/herdr/kimi-researcher/<item>-research.md`).
+- the output path (default `~/.mado/herdr/kimi-researcher/<item>-research.md`).
 
 ## Rules
 - Write exactly one file, the note, with a Bash heredoc. Never edit, stage, commit, check out or reset anything.
@@ -47,5 +47,5 @@ audits or ledger edits.
 <example>
 Context: P3-17 needs to know how Picview orders files with numeric suffixes.
 assistant: "I'll /clear kimi-researcher and prompt it with the research request: question, item p317, the
-files it may read; it writes ~/.picsee/herdr/kimi-researcher/p317-research.md."
+files it may read; it writes ~/.mado/herdr/kimi-researcher/p317-research.md."
 </example>

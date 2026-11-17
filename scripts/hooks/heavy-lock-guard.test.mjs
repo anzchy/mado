@@ -14,7 +14,7 @@ test('denies bare heavy commands', () => {
     'xcodegen generate',
     "xcodebuild build -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath .build/dd-ci",
     'cd Packages/MadoKit && swift test --filter foo',
-    'PICSEE_HEAVY_LOCK_HELD=1 swift test --package-path Packages/MadoKit',
+    'MADO_HEAVY_LOCK_HELD=1 swift test --package-path Packages/MadoKit',
     'env FOO=1 swift test',
     'time xcodebuild test -scheme Mado',
     'xcrun xcodebuild -list',
@@ -30,8 +30,8 @@ test('allows heavy commands under scripts/heavy-lock.sh', () => {
     'scripts/heavy-lock.sh swift test --package-path Packages/MadoKit',
     './scripts/heavy-lock.sh xcodegen generate',
     '/Users/x/picsee-wt/a/scripts/heavy-lock.sh xcodebuild build -scheme Mado',
-    '~/.picsee/device/ram/with-ram.sh unit scripts/heavy-lock.sh swift test --package-path Packages/MadoKit',
-    'PICSEE_HEAVY_LOCK_WAIT_SECS=60 scripts/heavy-lock.sh swift test',
+    '~/.mado/device/ram/with-ram.sh unit scripts/heavy-lock.sh swift test --package-path Packages/MadoKit',
+    'MADO_HEAVY_LOCK_WAIT_SECS=60 scripts/heavy-lock.sh swift test',
     "scripts/heavy-lock.sh bash -c 'xcodegen generate && xcodebuild build'",
   ]) assert.equal(decide(bash(c)), null, c);
 });

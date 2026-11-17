@@ -82,10 +82,10 @@ def main():
     parser.add_argument(
         "--generated-root",
         type=Path,
-        default=Path.home() / ".picsee/testassets/generated",
+        default=Path.home() / ".mado/testassets/generated",
     )
     parser.add_argument(
-        "--photo-root", type=Path, default=Path.home() / ".picsee/testassets/photos"
+        "--photo-root", type=Path, default=Path.home() / ".mado/testassets/photos"
     )
     args = parser.parse_args()
     assets = [
@@ -140,8 +140,8 @@ def main():
         ).hexdigest(),
         roots={
             "1": "TestAssets/",
-            "2": "~/.picsee/testassets/generated/",
-            "3": "~/.picsee/testassets/",
+            "2": "~/.mado/testassets/generated/",
+            "3": "~/.mado/testassets/",
         },
         performance_rule="Flat synthetic images must never feed performance numbers. All generated fixtures here are correctness/stress data, not a photo performance baseline.",
         gaps=[

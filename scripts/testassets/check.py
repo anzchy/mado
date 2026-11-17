@@ -322,10 +322,10 @@ def main():
     p.add_argument(
         "--generated-root",
         type=Path,
-        default=Path.home() / ".picsee/testassets/generated",
+        default=Path.home() / ".mado/testassets/generated",
     )
     p.add_argument(
-        "--external-root", type=Path, default=Path.home() / ".picsee/testassets"
+        "--external-root", type=Path, default=Path.home() / ".mado/testassets"
     )
     p.add_argument("--external", action="store_true")
     p.add_argument("--native", action="store_true")
