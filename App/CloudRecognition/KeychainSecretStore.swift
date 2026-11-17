@@ -73,9 +73,9 @@ enum CloudRecognitionAppServices {
     static let reachability = NWPathReachability()
     /// #689b dev1/dev2: one line per delivered explicit Recognise Text (engine, skip or fallback reason) and one per
     /// failed Baidu attempt (stage, HTTP status, error_code, a fixed reason id, or the transport error's code). The
-    /// strings are built only from enums and numbers, never from server text, keys, the token or the image, so they
-    /// are public; watch with `log stream --predicate 'subsystem == "io.github.anzchy.mado" && category ==
-    /// "cloud-recognition"'`.
+    /// strings are built only from enums, numbers and local error type or domain names, never from server text, keys,
+    /// the token or the image, so they are public; watch with `log stream --predicate 'subsystem ==
+    /// "io.github.anzchy.mado" && category == "cloud-recognition"'`.
     static let logger = Logger(subsystem: "io.github.anzchy.mado", category: "cloud-recognition")
     static let cloud = BaiduTextRecognitionProvider(transport: URLSessionHTTPTransport(), onFailure: { detail in
         logger.notice("\(detail.logMessage, privacy: .public)")

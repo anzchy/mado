@@ -354,7 +354,8 @@ func issue689bD2LogMessageIgnoresServerText() async throws {
     let carriers: [(String?) throws -> [Result<HTTPResponse, any Error>]] = [
         { [token, try json(body(["error_code": 216100], "error_msg", $0))] },
         { [try json(body(["error": "invalid_client"], "error_description", $0), status: 401)] },
-        { [try json(["error": $0 ?? "nonsense"], status: 401)] }
+        { [try json(["error": $0 ?? "nonsense"], status: 401)] },
+        { [try json(body(["error_code": 4], "error_msg", $0))] }
     ]
     for (index, carrier) in carriers.enumerated() {
         var seen: [CloudFailureDetail] = []
