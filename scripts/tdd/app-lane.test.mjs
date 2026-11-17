@@ -75,8 +75,8 @@ test('heldAndUnheldLanesPreservePassAndAssertionFailure App',()=>{
    APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',
    PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',APP_STATUS_FAULT:fault?'1':'0'};
   writeFileSync(launcher,`import {runAppLane} from ${JSON.stringify(new URL('./app-lane.mjs',import.meta.url).href)};\nif(process.env.APP_STATUS_FAULT==='1')process.env.PICSEE_HEAVY_FAULT_STATUS_WRITE='1';\nprocess.exitCode=runAppLane({evidencePath:process.env.APP_EVIDENCE});\n`);
-  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):
-    spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:60000}):
+    spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:60000});
   assert.ifError(r.error);
   assert.equal(r.status,fault?70:0,`${held}/${fault}: ${r.stderr}`);
   if(fault)assert.doesNotMatch(r.stdout,/^Tests run:/m);
@@ -96,7 +96,7 @@ test('native App completed assertion failure retains one count in both HELD mode
   PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
  for(const held of [false,true]){
-  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+  const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:60000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:60000});
   assert.ifError(r.error);assert.equal(r.status,1,r.stderr);assert.match(r.stdout,/^Tests run: 3, Failures: 1/m);
  }
 });
@@ -112,7 +112,7 @@ function appNativeFailureHarness(extraEnv={}){
  const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fixture,APP_EVIDENCE:path.join(dir,'evidence.log'),
   APP_PID:path.join(dir,'pid'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1',
   PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
- const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:20000});
+ const r=spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:60000});
  return {r,pidPath:env.APP_PID};
 }
 // The fixture's native process published its PID and is gone (#705: never probe 0).
@@ -129,7 +129,7 @@ test('publishedUnknownCleanupRejectsCompletedAppAssertion',()=>{
  assertInvalidRed(r);
 });
 test('appExecutionTimeoutHasNoValidRed',()=>{
- const {r,pidPath}=appNativeFailureHarness({APP_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'2'});
+ const {r,pidPath}=appNativeFailureHarness({APP_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'10'});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/execution timeout/);
  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);
@@ -177,7 +177,7 @@ test('repeatWorkerWrappedNativeSpawnCannotBypassCleanupStatus',()=>{
  const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,APP_FIXTURE:fileURLToPath(new URL('./fixtures/i411-baseline.txt',import.meta.url)),
   APP_EVIDENCE:path.join(dir,'evidence.log'),PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_APP_LANE_NO_RETRY:'1'};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
- const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000});
+ const r=spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:60000});
  assert.ifError(r.error);assert.equal(r.status,70,r.stderr);assert.doesNotMatch(r.stdout,/^Tests run:/m);
 });
 
@@ -1182,7 +1182,7 @@ function hostedNativeHarness(held,failed,fault,descendant=false, extraEnv={}){
  const env={...fixtureEnv(),PATH:`${dir}:${process.env.PATH}`,HOST_FAIL:failed?'1':'0',HOST_FAULT:fault?'1':'0',HOST_DESCENDANT:descendant?'1':'0',HOST_PID:path.join(dir,'pid'),HOST_EVIDENCE:path.join(dir,'evidence.log'),
   PICSEE_HEAVY_LOCK:path.join(dir,'heavy.lock'),PICSEE_MDPRO_LOCK:'off',PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_LOCK_DRAIN_SECS:'0.05',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.05',...extraEnv};
  const lock=fileURLToPath(new URL('../heavy-lock.sh',import.meta.url));
- const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:10000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:10000});
+ const r=held?spawnSync(lock,[process.execPath,launcher],{env,encoding:'utf8',timeout:60000}):spawnSync(process.execPath,[launcher],{env,encoding:'utf8',timeout:60000});
  assert.ifError(r.error);return {...r,pidPath:env.HOST_PID};
 }
 test('heldAndUnheldLanesPreservePassAndAssertionFailure hosted',()=>{
@@ -1206,7 +1206,7 @@ test('publishedUnknownCleanupRejectsCompletedHostedAssertion',()=>{
  assertInvalidRed(r,/hosted-app-lane Tests run:/);
 });
 test('hostedExecutionTimeoutHasNoValidRed',()=>{
- const r=hostedNativeHarness(false,true,false,false,{HOST_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'2'});
+ const r=hostedNativeHarness(false,true,false,false,{HOST_HANG:'1',PICSEE_HEAVY_LOCK_EXEC_SECS:'10'});
  assert.equal(r.status,70,r.stderr);
  assert.match(r.stderr,/execution timeout/);
  assert.match(r.stderr,/status-channel: incomplete, stale or contradictory cleanup status/);

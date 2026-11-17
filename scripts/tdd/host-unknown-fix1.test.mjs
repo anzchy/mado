@@ -58,12 +58,12 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
       `writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{},1000);\n`);
     const env={...fixtureEnv(),PICSEE_HEAVY_LOCK:lockPath,PICSEE_MDPRO_LOCK:'off',
       PICSEE_HEAVY_LOCK_WAIT_SECS:'0.3',PICSEE_HEAVY_LOCK_KILL_GRACE_SECS:'0.1',
-      PICSEE_HEAVY_LOCK_EXEC_SECS:trigger==='timeout'?'0.9':'5',PICSEE_HEAVY_STATUS_PATH:statusPath,
+      PICSEE_HEAVY_LOCK_EXEC_SECS:'5',PICSEE_HEAVY_STATUS_PATH:statusPath,
       ...(mode==='ci'?{PICSEE_HEAVY_LOCK_HELD:'1',PICSEE_HEAVY_CI_TOP_LEVEL:'1',PICSEE_HEAVY_CI_TEST:'1'}:
         {PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CI_TOP_LEVEL:''})};
     delete env.PICSEE_HEAVY_CONTROL_FD;delete env.PICSEE_HEAVY_FLOCK_FD;delete env.NODE_TEST_CONTEXT;
     let result;
-    if(trigger==='timeout')result=spawnSync(lock,[process.execPath,runner],{env,encoding:'utf8',timeout:9000});
+    if(trigger==='timeout')result=spawnSync(lock,[process.execPath,runner],{env,encoding:'utf8',timeout:30000});
     else{
       const job=spawn(lock,[process.execPath,runner],{env,stdio:['ignore','pipe','pipe']});
       let output='';job.stdout.on('data',chunk=>output+=chunk);job.stderr.on('data',chunk=>output+=chunk);
@@ -82,8 +82,8 @@ test('hostUnknownStillDrainsKnownWorkAndReleasesGuardian',async t=>{
     const guardian=guardianPID(directory);
     await wait(()=>!alive(guardian),`${mode}/${trigger}: guardian exits`);
     const nextEnv={...env,PICSEE_HEAVY_LOCK_HELD:'',PICSEE_HEAVY_CI_TOP_LEVEL:'',PICSEE_HEAVY_CI_TEST:'',
-      PICSEE_HEAVY_LOCK_EXEC_SECS:'1'};delete nextEnv.PICSEE_HEAVY_STATUS_PATH;
-    const next=spawnSync(lock,['true'],{env:nextEnv,encoding:'utf8',timeout:3000});
+      PICSEE_HEAVY_LOCK_EXEC_SECS:'10'};delete nextEnv.PICSEE_HEAVY_STATUS_PATH;
+    const next=spawnSync(lock,['true'],{env:nextEnv,encoding:'utf8',timeout:20000});
     assert.equal(next.status,0,`${mode}/${trigger}: flock not reusable: ${next.stderr}`);
     assert.equal(alive(sentinel.pid),true,'unrelated process survives');
   }

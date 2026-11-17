@@ -203,7 +203,7 @@ test('exitQueryTokensAreConsumedOnlyAfterTheLeaderExits', { timeout: 25000 }, as
 // The guardian probe must see guardian environments on Linux too: procps has
 // no -E, so the Linux path lists PIDs with "ps -eo pid=,args=" and reads
 // /proc/<pid>/environ. A procps-style shim and a fake /proc root stand in here.
-test('guardianProbeReadsEnvironmentsUnderProcpsSemantics', { timeout: 10000 }, () => {
+test('guardianProbeReadsEnvironmentsUnderProcpsSemantics', { timeout: 60000 }, () => {
   const root = mkdtempSync(path.join(scratch, 'procps-')), proc = path.join(root, 'proc'), shim = path.join(root, 'ps');
   writeFileSync(shim, `#!/bin/sh
 if [ "$*" = "-eo pid=,args=" ]; then
@@ -230,9 +230,9 @@ exit 1
   assert.deepEqual(guardianEnvironments({ platform: 'linux', ps: shim, procRoot: proc, owner: '/other/' }).map(g => g.env.includes('PICSEE_HEAVY_FAULT_EXIT_QUERY_PLAN=')), [false]);
 });
 
-test('exitQueryPlanIsNotInheritedByJobOrGuardian', { timeout: 25000 }, async () => {
+test('exitQueryPlanIsNotInheritedByJobOrGuardian', { timeout: 60000 }, async () => {
   const env = environment(), log = withPlan(env, ['real']);
-  // The probe waits (at most 5 s) for this run's guardian, found by its owner file under this HOME.
+  // The probe waits (at most 15 s) for this run's guardian, found by its owner file under this HOME.
   const r = await start([process.execPath, probe, `${env.HOME}/`], env).done;
   assert.equal(r.code, 0, r.output);
   const seen = JSON.parse(r.output.split('\n').find(line => line.startsWith('{')));

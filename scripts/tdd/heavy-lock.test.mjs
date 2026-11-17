@@ -668,9 +668,8 @@ test('AC-1 live mdpro holder blocks picsee until release', async () => {
   fakeHolder(env,sleeper.pid);
   const job=start(['touch',ready],env);
   try {
-    await pause(250);
+    await until(()=>/held by:.*pid=/.test(job.output()),'waiter reports the live holder');
     assert.equal(existsSync(ready),false);
-    assert.match(job.output(),/held by:.*pid=/);
   } finally { releaseFake(env); sleeper.kill(); await job.done; }
   assert.ok(existsSync(ready));
 });
