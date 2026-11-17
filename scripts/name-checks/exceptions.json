@@ -467,5 +467,13 @@
       "content"
     ],
     "reason": "#556 compat window: legacy PICSEE_HEAVY*/PICSEE_MDPRO* variables are mapped to MADO_*; remove with the fallback."
+  },
+  {
+    "pathRegex": "^scripts/tdd/heavy-lock-compat\\.test\\.mjs$",
+    "pattern": "PICSEE_(?:HEAVY_LOCK|MDPRO_LOCK)|\\(PICSEE\\|MADO\\)|\\bPICSEE\\b",
+    "scopes": [
+      "content"
+    ],
+    "reason": "#556 compat window: the test deliberately sets the legacy PICSEE_HEAVY_LOCK/PICSEE_MDPRO_LOCK variables; remove with the heavy-lock.sh fallback."
   }
 ]
