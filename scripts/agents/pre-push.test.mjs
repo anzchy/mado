@@ -14,7 +14,8 @@ const gates = sha => '## Gates\n\n| Lane | Status | SHA | Source |\n| --- | --- 
 
 function fixture(t) {
   const repo = mkdtempSync(join(tmpdir(), 'picsee-pre-push-test-'));
-  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  // A git child of the fixture can still be writing under .git when cleanup starts (ENOTEMPTY); retry briefly.
+  t.after(() => rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const write = (file, content) => { mkdirSync(join(repo, file, '..'), { recursive: true }); writeFileSync(join(repo, file), content); };
   const paths = execFileSync('git', ['ls-files', '-z', 'App', 'Packages/MadoKit/Sources'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
