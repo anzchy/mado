@@ -104,9 +104,10 @@ struct ImageTextGeometry {
             index = hit
         } else if requireHit { return nil }
         else {
-            // Text-editor drag behavior: choose the vertical row before choosing
-            // a line. Horizontal proximity must never pull an endpoint to another
-            // row. In a same-row gap, stop at the line on the anchor's side.
+            // Text-editor drag behavior: choose a line by the endpoint's own
+            // perpendicular position, then its directly overlapping row. A tall
+            // line must not chain two separate rows together. Horizontal gaps
+            // clamp by the anchor side or by the direction of a cross-row drag.
             index = endpointOutsideBoxes(at: point, rects: rects)
         }
         let line = lines[index]
@@ -134,33 +135,31 @@ struct ImageTextGeometry {
         func alongMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxX : rects[i].maxY }
         func perpMin(_ i: Int) -> CGFloat { horizontal ? rects[i].minY : rects[i].minX }
         func perpMax(_ i: Int) -> CGFloat { horizontal ? rects[i].maxY : rects[i].maxX }
-        var rows: [[Int]] = []
-        for index in rects.indices.sorted(by: { (perpMin($0) + perpMax($0)) < (perpMin($1) + perpMax($1)) }) {
-            if let row = rows.indices.first(where: { row in
-                rows[row].contains { member in
-                    let overlap = min(perpMax(index), perpMax(member)) - max(perpMin(index), perpMin(member))
-                    let shorter = min(perpMax(index) - perpMin(index), perpMax(member) - perpMin(member))
-                    return overlap >= shorter * 0.5
-                }
-            }) {
-                rows[row].append(index)
-            } else {
-                rows.append([index])
-            }
+        func perpendicularDistance(_ i: Int) -> CGFloat {
+            max(max(perpMin(i) - perpendicular, 0), perpendicular - perpMax(i))
         }
-        // A band containing the endpoint wins; between bands, use the nearer one.
-        let row = rows.min { lhs, rhs in
-            @MainActor func score(_ members: [Int]) -> (CGFloat, CGFloat) {
-                let low = members.map { perpMin($0) }.min() ?? 0
-                let high = members.map { perpMax($0) }.max() ?? 0
-                return (max(max(low - perpendicular, 0), perpendicular - high), abs((low + high) / 2 - perpendicular))
-            }
-            let a = score(lhs), b = score(rhs)
-            return a.0 == b.0 ? a.1 < b.1 : a.0 < b.0
-        }!.sorted { alongMin($0) < alongMin($1) }
+        // Prefer a box containing this perpendicular coordinate; otherwise use
+        // the nearest box edge. The center breaks ties between containing boxes.
+        let seed = rects.indices.min { lhs, rhs in
+            let left = perpendicularDistance(lhs), right = perpendicularDistance(rhs)
+            if left != right { return left < right }
+            let leftCenter = abs((perpMin(lhs) + perpMax(lhs)) / 2 - perpendicular)
+            let rightCenter = abs((perpMin(rhs) + perpMax(rhs)) / 2 - perpendicular)
+            if leftCenter != rightCenter { return leftCenter < rightCenter }
+            let leftHeight = perpMax(lhs) - perpMin(lhs)
+            let rightHeight = perpMax(rhs) - perpMin(rhs)
+            return leftHeight == rightHeight ? lhs < rhs : leftHeight < rightHeight
+        }!
+        let row = rects.indices.filter { index in
+            let overlap = min(perpMax(seed), perpMax(index)) - max(perpMin(seed), perpMin(index))
+            let shorter = min(perpMax(seed) - perpMin(seed), perpMax(index) - perpMin(index))
+            return overlap >= shorter * 0.5
+        }.sorted { alongMin($0) < alongMin($1) }
         let onAnchorRow = anchor.map { row.contains($0.line) } ?? false
         if coordinate <= alongMin(row[0]) { return row[0] }
-        if coordinate >= alongMax(row[row.count - 1]) { return row[row.count - 1] }
+        if let rowEnd = row.max(by: { alongMax($0) < alongMax($1) }), coordinate >= alongMax(rowEnd) {
+            return rowEnd
+        }
         for (position, index) in row.enumerated() {
             if coordinate >= alongMin(index), coordinate <= alongMax(index) { return index }
             guard position + 1 < row.count else { continue }
@@ -169,9 +168,7 @@ struct ImageTextGeometry {
                 if onAnchorRow {
                     return row.firstIndex(of: anchor!.line)! <= position ? index : next
                 }
-                let anchorRect = rects[anchor!.line]
-                let anchorCoordinate = horizontal ? anchorRect.midX : anchorRect.midY
-                return coordinate >= anchorCoordinate ? index : next
+                return seed > anchor!.line ? index : next
             }
         }
         return row.min { abs((alongMin($0) + alongMax($0)) / 2 - coordinate) < abs((alongMin($1) + alongMax($1)) / 2 - coordinate) }!

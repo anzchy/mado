@@ -95,6 +95,18 @@ import MadoInfrastructure
         #expect(selection.selectedText == hello.text)
     }
 
+    @MainActor @Test func issue688DeviceReverseDragIntoUpperGapStartsAtSIDE() async throws {
+        let (selection, _, side) = try await fixtureSelection()
+        let hello = try #require(selection.lines.first { $0.text == "Hello Mado" })
+        let helloRect = selection.geometry.viewRect(hello.box)
+        let sideIndex = try #require(selection.lines.firstIndex { $0.text == side.text })
+        #expect(selection.begin(at: CGPoint(x: helloRect.minX + 1, y: helloRect.midY)))
+        selection.drag(to: CGPoint(x: 500, y: 90))
+        #expect(selection.extent?.line == sideIndex)
+        #expect(selection.extent?.offset == 0)
+        #expect(selection.selectedText?.hasPrefix("SIDE\n") == true)
+    }
+
     @MainActor @Test func issue688DeviceAndOrientedImageGapKeepDraggedLine() async throws {
         for asset in ["mixed.png", "mixed-orientation-6.jpg"] {
             let (selection, chinese, side) = try await fixtureSelection(asset: asset)
@@ -130,11 +142,11 @@ import MadoInfrastructure
     @MainActor private func makeSelection(_ entries: [(String, CGRect)]) -> ImageTextSelection {
         let selection = ImageTextSelection()
         selection.geometry = ImageTextGeometry(transform: CanvasTransform(backingScale: 1),
-                                               imageSize: CGSize(width: 600, height: 100))
+                                               imageSize: CGSize(width: 600, height: 160))
         selection.lines = entries.map { text, rect in
             TextRecognitionLine(text: text,
-                                box: CGRect(x: rect.minX / 600, y: 1 - rect.maxY / 100,
-                                            width: rect.width / 600, height: rect.height / 100))
+                                box: CGRect(x: rect.minX / 600, y: 1 - rect.maxY / 160,
+                                            width: rect.width / 600, height: rect.height / 160))
         }
         return selection
     }
@@ -164,6 +176,57 @@ import MadoInfrastructure
         #expect(selection.begin(at: CGPoint(x: 1, y: 10)))
         selection.drag(to: CGPoint(x: 380, y: 10))
         #expect(selection.selectedText == "A\nB")
+    }
+
+    @MainActor @Test func issue688PriceLayoutKeepsUpperLineAtBothOvershoots() {
+        let selection = makeSelection([("16", CGRect(x: 0, y: 0, width: 120, height: 48)),
+                                       ("November", CGRect(x: 140, y: 4, width: 120, height: 16)),
+                                       ("Monday", CGRect(x: 150, y: 28, width: 150, height: 16))])
+        #expect(selection.begin(at: CGPoint(x: 141, y: 12)))
+        for x in [330.0, 280.0] {
+            selection.drag(to: CGPoint(x: x, y: 12))
+            #expect(selection.extent?.line == 1)
+            #expect(selection.selectedText == "November")
+        }
+    }
+
+    @MainActor @Test func issue688TallLineDoesNotPullLowerOvershootToUpper() {
+        let selection = makeSelection([("big", CGRect(x: 0, y: 0, width: 200, height: 120)),
+                                       ("a", CGRect(x: 300, y: 0, width: 200, height: 20)),
+                                       ("b", CGRect(x: 300, y: 40, width: 200, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 301, y: 55)))
+        selection.drag(to: CGPoint(x: 600, y: 55))
+        #expect(selection.extent?.line == 2)
+        #expect(selection.selectedText == "b")
+    }
+
+    @MainActor @Test func issue688TallBridgeDoesNotChainSeparateRows() {
+        let selection = makeSelection([("A", CGRect(x: 0, y: 0, width: 100, height: 20)),
+                                       ("tall", CGRect(x: 200, y: 0, width: 100, height: 60)),
+                                       ("C", CGRect(x: 10, y: 40, width: 100, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 1, y: 10)))
+        selection.drag(to: CGPoint(x: 120, y: 10))
+        #expect(selection.extent?.line == 0)
+        #expect(selection.selectedText == "A")
+    }
+
+    @MainActor @Test func issue688RowEndUsesLargestMaxX() {
+        let selection = makeSelection([("wide", CGRect(x: 0, y: 0, width: 300, height: 20)),
+                                       ("short", CGRect(x: 200, y: 0, width: 50, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 1, y: 10)))
+        selection.drag(to: CGPoint(x: 350, y: 10))
+        #expect(selection.extent?.line == 0)
+        #expect(selection.selectedText == "wide")
+    }
+
+    @MainActor @Test func issue688ForwardDragIntoNextRowGapStopsBeforeGap() {
+        let selection = makeSelection([("A", CGRect(x: 500, y: 0, width: 100, height: 20)),
+                                       ("B", CGRect(x: 0, y: 30, width: 100, height: 20)),
+                                       ("C", CGRect(x: 200, y: 30, width: 100, height: 20))])
+        #expect(selection.begin(at: CGPoint(x: 501, y: 10)))
+        selection.drag(to: CGPoint(x: 110, y: 40))
+        #expect(selection.extent?.line == 1)
+        #expect(selection.extent?.offset == 1)
     }
 }
 
