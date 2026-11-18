@@ -126,6 +126,7 @@ func issue706CancelOnlyReleasesItsOwnBlockingRequest() {
 private final class BlockingCanceller: @unchecked Sendable {
     let performEntered = DispatchSemaphore(value: 0)
     let cancelEntered = DispatchSemaphore(value: 0)
+    let releasePerform = DispatchSemaphore(value: 0)
     let releaseCancel = DispatchSemaphore(value: 0)
     let throwsTypedError: Bool
     private let lock = NSLock()
@@ -135,7 +136,7 @@ private final class BlockingCanceller: @unchecked Sendable {
 
     func perform() throws {
         performEntered.signal()
-        if cancelEntered.wait(timeout: .now() + .seconds(30)) == .timedOut {
+        if releasePerform.wait(timeout: .now() + .seconds(30)) == .timedOut {
             lock.lock(); timedOut = true; lock.unlock()
         }
         if throwsTypedError { throw TextRecognitionError.recognitionFailed(domain: "BlockingCanceller", code: 1) }
@@ -148,6 +149,24 @@ private final class BlockingCanceller: @unchecked Sendable {
     }
 
     var didTimeOut: Bool { lock.lock(); defer { lock.unlock() }; return timedOut }
+}
+
+/// The fake's perform can finish even when the asynchronous cancel callback is delayed.
+@Test(.timeLimit(.minutes(2)))
+func issue706BlockingCancellerPerformDoesNotWaitForCancelCallback() {
+    let fake = BlockingCanceller()
+    let finished = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+        defer { finished.signal() }
+        try? fake.perform()
+    }
+    #expect(fake.performEntered.wait(timeout: .now() + .seconds(10)) == .success)
+    fake.releasePerform.signal()
+    let completed = finished.wait(timeout: .now() + .seconds(1))
+    #expect(completed == .success)
+    fake.cancelEntered.signal()
+    if completed == .timedOut { _ = finished.wait(timeout: .now() + .seconds(10)) }
+    #expect(!fake.didTimeOut)
 }
 
 /// #706: cancelling a recognition never waits for Vision's cancel to return. On CI the
@@ -171,6 +190,7 @@ func issue706CancelDoesNotWaitForVisionCancel() async throws {
     task.cancel()
     let cancelTook = ContinuousClock.now - started
     fake.releaseCancel.signal()
+    fake.releasePerform.signal()
 
     let result = await task.value
     #expect(cancelTook < .milliseconds(500))
@@ -198,6 +218,7 @@ func issue711CancelledTaskOverridesTypedRequestError() async throws {
     task.cancel()
     let cancelTook = ContinuousClock.now - started
     fake.releaseCancel.signal()
+    fake.releasePerform.signal()
 
     let result = await task.value
     #expect(cancelTook < .milliseconds(500))
