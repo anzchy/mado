@@ -25,7 +25,7 @@ Run gates in a clean worktree at the head: commit first, and never during a reba
 
 ## 2. Test integrity
 
-Create `.build/mado-verify` first, then run `node .agents/skills/mado-verify/scripts/test-integrity.mjs --base <merge-base> > .build/mado-verify/integrity.json`. Inspect removed `#expect` / `XCTAssert`, new weak assertions, `.disabled` / `XCTSkip` / quarantine, retries, timeout changes and `exit(0)`. Compare before/after test counts. Read each WI's tdd-guardian RED receipt and SEPARATION verdict; if none exists, say so. Explain **every hit** in the evidence and handoff, including any `SEPARATION-BROKEN`. Hits are review findings, not automatic failures.
+Create `.build/mado-verify` first, then run `node .agents/skills/mado-verify/scripts/test-integrity.mjs --base <merge-base> > .build/mado-verify/integrity.json`. Inspect removed or changed `#expect` / `XCTAssert`, new weak assertions, `.disabled(` / `XCTSkip` / `.enabled(if: false)`, retries, removed or increased `.timeLimit`, decreased or removed numeric test `timeout:`, and `exit(0)`. The scan ignores comments and strings; it groups identical findings and lists their locations. Compare before/after test counts, including Swift Testing `@Test` declarations. Read each WI's tdd-guardian RED receipt and SEPARATION verdict; if none exists, say so. Explain **every hit** in the evidence and handoff, including any `SEPARATION-BROKEN`. Hits are review findings, not automatic failures.
 
 ## 3. Extra checks by change type
 

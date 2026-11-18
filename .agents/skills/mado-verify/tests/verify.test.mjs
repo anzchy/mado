@@ -35,12 +35,12 @@ function marker(home, worktree, branch, issue = 651, task = 'i651-20261111-a', h
 
 test('integrity scan reports assertion removal, skips, retry, timeout, exit and counts', t => {
   const f = fixture(t);
-  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testOne() { #expect(true == true); XCTSkip(); .disabled; retry; timeout: 120; exit(0) }\nfunc testTwo() {}\n');
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), 'func testOne() { #expect(true == true); XCTSkip(); .disabled("reason"); retry(); exit(0) }\nfunc testTwo() {}\n');
   f.commit();
   const r = run('node', [script('test-integrity.mjs'), '--base', f.base], f.dir);
   assert.equal(r.status, 0, r.stderr);
   const report = JSON.parse(r.stdout);
-  for (const type of ['assertion-removed', 'skip', 'retry', 'timeout', 'exit-zero']) assert.ok(report.hits.some(x => x.type === type), type);
+  for (const type of ['assertion-removed', 'skip', 'retry', 'exit-zero']) assert.ok(report.hits.some(x => x.type === type), type);
   assert.equal(report.testCounts.before, 1); assert.equal(report.testCounts.after, 2);
   assert.ok(report.receipts.some(x => x.status === 'MISSING-RED'));
 });
@@ -52,6 +52,57 @@ test('integrity scan ignores a non-test script whose name contains test', t => {
   const r = run('node', [script('test-integrity.mjs'), '--base', f.base], f.dir);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(JSON.parse(r.stdout).hits.length, 0);
+});
+
+test('integrity counts Swift Testing declarations and ignores budget increases', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test func a() {}\n@Test("x") func b() {}\n@Test(.timeLimit(.seconds(40))) func c() {}\n// @Test func ignored() {}\nlet sample = "@Test func ignoredAgain() {}"\n');
+  f.commit();
+  const r = run('node', [script('test-integrity.mjs'), '--base', f.base], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).testCounts.after, 3);
+});
+
+test('integrity flags real weakening and ignores comments and process timeouts', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test(.timeLimit(.seconds(20))) func a() { #expect(value) }\n');
+  f.commit();
+  const before = f.head();
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test(.disabled("reason")) func a() { }\n// timeout and skip in a comment\nspawnSync(cmd, [], { timeout: 3000 })\n');
+  f.commit();
+  const r = run('node', [script('test-integrity.mjs'), '--base', before], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  const types = JSON.parse(r.stdout).hits.map(hit => hit.type);
+  assert.ok(types.includes('assertion-removed'));
+  assert.ok(types.includes('skip'));
+  assert.ok(types.includes('timeout'));
+  assert.equal(JSON.parse(r.stdout).hits.some(hit => /comment|spawnSync/.test(hit.text)), false);
+});
+
+test('integrity groups matching findings with every location', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test func a() {}\n@Test func a() {}\n');
+  f.commit(); const before = f.head();
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test(.disabled("reason")) func a() {}\n@Test(.disabled("reason")) func a() {}\n');
+  f.commit();
+  const r = run('node', [script('test-integrity.mjs'), '--base', before], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  const skipped = JSON.parse(r.stdout).hits.filter(hit => hit.type === 'skip');
+  assert.equal(skipped.length, 1);
+  assert.deepEqual(skipped[0].locations.map(x => x.line), [1, 2]);
+});
+
+test('integrity catches a shortened test timeout and enabled flip', t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test(.enabled(if: true)) func a() {}\ntest("a", { timeout: 1000 }, fn)\n');
+  f.commit(); const before = f.head();
+  fs.writeFileSync(path.join(f.dir, 'sample.test.swift'), '@Test(.enabled(if: false)) func a() {}\ntest("a", { timeout: 500 }, fn)\n');
+  f.commit();
+  const r = run('node', [script('test-integrity.mjs'), '--base', before], f.dir);
+  assert.equal(r.status, 0, r.stderr);
+  const types = JSON.parse(r.stdout).hits.map(hit => hit.type);
+  assert.ok(types.includes('skip'));
+  assert.ok(types.includes('timeout'));
 });
 
 test('evidence renderer scans privacy and record writer requires a real comment URL', t => {
