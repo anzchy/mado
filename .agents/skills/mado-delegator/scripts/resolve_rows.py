@@ -17,12 +17,22 @@ for l in ours:
     k = key(l)
     if k and k in T and T[k] != B.get(k):
         b, t = B[k], T[k]
-        if l == b: l = t
-        elif t.startswith(b.rstrip(' |')) and t.endswith(' |'):
-            suffix = t[len(b.rstrip(' |')):-2]
-            l = l.rstrip(' |') + suffix + ' |'
-        else:
-            print('manual row', k); print(' base ', b); print(' ours ', l); print(' theirs', t); sys.exit(3)
+        bc, oc, tc = b.split('|'), l.split('|'), t.split('|')
+        if len(bc) != len(oc) or len(bc) != len(tc):
+            print('manual row', k, 'cell count differs'); sys.exit(3)
+        merged = []
+        for i, (base_cell, ours_cell, theirs_cell) in enumerate(zip(bc, oc, tc)):
+            if ours_cell == theirs_cell or theirs_cell == base_cell:
+                merged.append(ours_cell)
+            elif ours_cell == base_cell:
+                merged.append(theirs_cell)
+            else:
+                print('manual row', k, 'cell', i)
+                print(' base cell', repr(base_cell))
+                print(' ours cell', repr(ours_cell))
+                print(' theirs cell', repr(theirs_cell))
+                sys.exit(3)
+        l = '|'.join(merged)
     out.append(l)
 open('docs/feature-ledger.md','w').write('\n'.join(out))
 print('resolved')
