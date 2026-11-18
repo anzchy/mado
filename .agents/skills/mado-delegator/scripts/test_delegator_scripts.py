@@ -101,6 +101,7 @@ class RebaseLedgerTests(unittest.TestCase):
             (f'[{green}]', [], 'GREEN', 0), (f'[{red}]', [], 'RED', 1),
             (f'[{pending}]', [], 'PENDING', 1), (f'[{green},{green}]', ['--two-green'], 'GREEN', 0),
             (f'[{green},{red}]', ['--two-green'], 'RED', 1),
+            (f'[{pending},{green},{green}]', ['--two-green'], 'GREEN', 0),
         ]:
             env = {**self.env, 'GH_RUNS': runs, 'PATH': str(bin_dir) + os.pathsep + os.environ['PATH']}
             result = subprocess.run(['zsh', str(script), *args], cwd=self.work, env=env,
