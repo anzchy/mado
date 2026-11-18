@@ -13,23 +13,34 @@ private final class BlockingRecogniser: @unchecked Sendable {
     private var entered = 0
     private var starved = 0
     private var cancelled = 0
-    private let release = DispatchSemaphore(value: 0)
+    private var releases: [ObjectIdentifier: DispatchSemaphore] = [:]
     let deadline: DispatchTimeInterval
 
     init(deadline: DispatchTimeInterval) { self.deadline = deadline }
 
-    func perform() throws {
-        lock.lock(); entered += 1; lock.unlock()
+    func perform(_ request: VNRecognizeTextRequest) throws {
+        lock.lock()
+        entered += 1
+        let key = ObjectIdentifier(request)
+        let release = releases[key] ?? DispatchSemaphore(value: 0)
+        releases[key] = release
+        lock.unlock()
         if release.wait(timeout: .now() + deadline) == .timedOut {
-            lock.lock(); starved += 1; lock.unlock()
+            lock.lock(); starved += 1; releases.removeValue(forKey: key); lock.unlock()
             throw NSError(domain: "BlockingRecogniser", code: 1)
         }
+        lock.lock(); releases.removeValue(forKey: key); lock.unlock()
         throw NSError(domain: "BlockingRecogniser", code: 2)
     }
 
     func cancel(_ request: VNRecognizeTextRequest) {
         request.cancel()
-        lock.lock(); cancelled += 1; lock.unlock()
+        lock.lock()
+        cancelled += 1
+        let key = ObjectIdentifier(request)
+        let release = releases[key] ?? DispatchSemaphore(value: 0)
+        releases[key] = release
+        lock.unlock()
         release.signal()
     }
 
@@ -55,7 +66,7 @@ func issue706SaturatedBlockingRequestsCancelPromptly() async throws {
     let width = ProcessInfo.processInfo.activeProcessorCount + 2
     let recogniser = BlockingRecogniser(deadline: .seconds(3))
     let provider = OnDeviceTextRecognitionProvider(
-        performRequest: { _, _ in try recogniser.perform() },
+        performRequest: { _, request in try recogniser.perform(request) },
         cancelRequest: { recogniser.cancel($0) }
     )
     let bytes = try saturationImage()
@@ -83,6 +94,31 @@ func issue706SaturatedBlockingRequestsCancelPromptly() async throws {
     #expect(recogniser.enteredCount >= 1)
     #expect(recogniser.starvedCount == 0)
     #expect(results.allSatisfy { $0 == .cancelled })
+}
+
+/// Cancelling an unrelated request must not release a parked perform.
+@Test(.timeLimit(.minutes(2)))
+func issue706CancelOnlyReleasesItsOwnBlockingRequest() {
+    let recogniser = BlockingRecogniser(deadline: .seconds(30))
+    let parked = VNRecognizeTextRequest()
+    let unrelated = VNRecognizeTextRequest()
+    let finished = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+        defer { finished.signal() }
+        try? recogniser.perform(parked)
+    }
+    let enteredDeadline = ContinuousClock.now + .seconds(10)
+    while recogniser.enteredCount == 0 && ContinuousClock.now < enteredDeadline {
+        Thread.sleep(forTimeInterval: 0.001)
+    }
+    #expect(recogniser.enteredCount == 1)
+
+    recogniser.cancel(unrelated)
+    #expect(finished.wait(timeout: .now() + .milliseconds(100)) == .timedOut)
+
+    recogniser.cancel(parked)
+    #expect(finished.wait(timeout: .now() + .seconds(10)) == .success)
+    #expect(recogniser.starvedCount == 0)
 }
 
 /// A fake whose cancel blocks the calling thread, as `-[VNCanceller signalCancellation]`
