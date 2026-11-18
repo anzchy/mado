@@ -131,6 +131,48 @@ class RebaseLedgerTests(unittest.TestCase):
         self.assertTrue((self.work / ".git/rebase-merge").is_dir())
 
 
+class ResolveRowsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.repo = Path(self.tmp.name)
+        self.env = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@example.invalid',
+                    'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@example.invalid'}
+        git(self.repo, 'init', '-q', '-b', 'main', env=self.env)
+        (self.repo / 'docs').mkdir()
+        self.path = self.repo / 'docs/feature-ledger.md'
+        self.base = '| EXT-01 | Name | Planned | unit | WP | place | acceptance |\n'
+        self.path.write_text(self.base)
+        git(self.repo, 'add', '.', env=self.env)
+        git(self.repo, 'commit', '-qm', 'base', env=self.env)
+
+    def conflict(self, ours, theirs):
+        git(self.repo, 'switch', '-qc', 'topic', env=self.env)
+        self.path.write_text(theirs)
+        git(self.repo, 'commit', '-qam', 'topic', env=self.env)
+        git(self.repo, 'switch', '-q', 'main', env=self.env)
+        self.path.write_text(ours)
+        git(self.repo, 'commit', '-qam', 'main', env=self.env)
+        subprocess.run(['git', 'merge', 'topic'], cwd=self.repo, env=self.env, capture_output=True)
+        return subprocess.run(['python3', str(SCRIPT.with_name('resolve_rows.py'))], cwd=self.repo,
+                              capture_output=True, text=True)
+
+    def test_different_cells_merge(self):
+        result = self.conflict(self.base.replace('Name', 'Main name'),
+                               self.base.replace('acceptance', 'topic acceptance'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('| Main name |', self.path.read_text())
+        self.assertIn('| topic acceptance |', self.path.read_text())
+
+    def test_same_cell_different_sentence_stops(self):
+        result = self.conflict(self.base.replace('acceptance', 'main sentence'),
+                               self.base.replace('acceptance', 'topic sentence'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('base cell', result.stdout)
+        self.assertIn('ours cell', result.stdout)
+        self.assertIn('theirs cell', result.stdout)
+
+
 class RebaseVerifyTests(unittest.TestCase):
     """rebase-verify.sh compares an audited range with its rebased range."""
 
