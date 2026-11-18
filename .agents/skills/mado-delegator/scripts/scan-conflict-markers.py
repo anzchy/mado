@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reject paired Git conflict markers in tracked text at each commit in a range."""
+import re
 import subprocess
 import sys
 
@@ -23,7 +24,10 @@ def main():
         by_path = {}
         for line in matches.stdout.splitlines():
             rest = line[len(commit) + 1:]
-            path, _, marker = rest.rsplit(b':', 2)
+            match = re.match(rb'^(.*):[0-9]+:(.*)$', rest)
+            if not match:
+                continue
+            path, marker = match.groups()
             by_path.setdefault(path, set()).add(marker[:7])
         for raw_path, markers in by_path.items():
             if markers == {b'<<<<<<<', b'>>>>>>>'}:
