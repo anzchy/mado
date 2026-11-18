@@ -1,6 +1,6 @@
-# Request, event and grant format
+# Request, event and lease format
 
-All files are JSON, never edited in place. Directory `~/.mado/broker/`, mode 0700, files 0600. Creation of `requests/` and `events/` files is **atomic and exclusive**: write a tmp file, then `link(tmp, final)` (fails if `final` exists), then unlink the tmp. `grants/`, `state/`, `status.md` and `notices/` are replaced with `rename(2)` by the single scheduler (overwrite is intended there). Every free-text field below (`task`, `priority.why`, `extend.reason`, `blocked.holder`) is limited to 120 characters of `[A-Za-z0-9 #._:/+-]` and treated as data everywhere; the same limit applies to any owner-file text copied into `status.md`, and a malformed-request note never echoes raw content (id and the rule it broke only).
+All files are JSON, never edited in place. Directory `~/.mado/broker/`, mode 0700, files 0600. Creation of `requests/` and `events/` files is **atomic and exclusive**: write a tmp file, then `link(tmp, final)` (fails if `final` exists), then unlink the tmp. `leases/`, `state/`, `status.md` and `notices/` are replaced with `rename(2)` by the single scheduler (overwrite is intended there). Every free-text field below (`task`, `priority.why`, `extend.reason`, `blocked.holder`) is limited to 120 characters of `[A-Za-z0-9 #._:/+-]` and treated as data everywhere; the same limit applies to any owner-file text copied into `status.md`, and a malformed-request note never echoes raw content (id and the rule it broke only).
 
 ## Ids
 
@@ -41,21 +41,21 @@ All files are JSON, never edited in place. Directory `~/.mado/broker/`, mode 070
 | `priority.class` | 1 blocks a merge, a CI fix or the other project's critical path (`why` required); 2 normal; 3 background |
 | `submitted_at`, `earliest`, `deadline` | ISO-8601 **with offset**; `earliest` and `deadline` may be `null`; a deadline is a request, never a guarantee |
 | `depends_on` | ids that must be `done` first |
-| `supersedes` | id of a still-queued request this one replaces (an amendment is a new request and the old one becomes `cancelled`); a granted or running request cannot be superseded, only `extend`ed or `cancel`led |
+| `supersedes` | id of a still-queued request this one replaces (an amendment is a new request and the old one becomes `cancelled`); a leased or running request cannot be superseded, only `extend`ed or `cancel`led |
 
 ## Events `events/<id>.<n>.json` (requester writes, `n` = 1, 2, … per request, exclusive create)
 
 `running` (`pid`, `pid_started_at`), `extend` (new `p50`/`p90`, reason), `blocked` (`holder` taken from its owner file), `done` (`actual_minutes`, `outcome` = `passed|failed|cancelled`, `peak_ram_gb` or `null`), `cancel`. Only the requester writes events; only the scheduler writes everything else. The requester picks `n` as one more than the highest existing file for that id and creates with `link`; on `EEXIST` it re-reads and takes the next number (two writers, for example a cancellation and a completion, therefore get different numbers). **The first terminal event (`done` or `cancel`) by `n` wins**; later events are logged in `events.log` and ignored.
 
-## Grant `grants/<id>.json` (scheduler only)
+## Lease `leases/<id>.json` (scheduler only)
 
 ```json
-{ "id": "…", "generation": 41, "not_before": "2026-11-17T21:50:00-08:00",
-  "start_by": "2026-11-17T22:00:00-08:00", "rule": "C1,C2", "decided_at": "2026-11-17T21:46:10-08:00" }
+{ "id": "…", "granted_at": "2026-11-17T21:50:00-08:00", "start_by": "2026-11-17T22:00:00-08:00",
+  "expires_at": "2026-11-17T22:35:00-08:00", "tokens": ["heavy"], "rule": "C1,C2" }
 ```
 
-`not_before` is the planned start; the grant becomes **usable** at `usable_at` = `not_before` or later, when every conflicting predecessor is done (see "Using a grant" in `ordering-policy.md`), and `start_by` = `usable_at` + `grace_minutes` (config). `generation` is a counter written into each grant file that increases when that request's grant is republished; `broker-check` compares the generation in the file with the one the requester read, under the directory lock, right before the requester takes the real lock, so a replaced grant cannot be used. A grant is a plan, not a reservation: only `broker-check` returning `GO` admits a start.
+A lease is issued only when the job can start now: no active lease conflicts with it (the table in `ordering-policy.md`). `start_by` = `granted_at` + `grace_minutes`; `expires_at` is the planned end (`granted_at` + grace + `p90`) and never ends a running job. `tokens` are what the lease holds (`heavy`, `gui`, or all of them for a `network` job). `broker-check <id>` under the directory lock returns `GO` while the lease exists and `start_by` has not passed, otherwise `NO-LEASE`. There is no future grant, no plan and no republish: the scheduler never changes or revokes a lease; it ends only by `done`, `cancel`, expiry unstarted, or `abandoned`.
 
 ## State `state/<id>.json` (scheduler only)
 
-`state` (`submitted, queued, granted, running, done, cancelled, expired, abandoned, blocked`), `waited_since` (original submission time, kept through re-queues), `effective_class`, `last_event`.
+`state` (`submitted, queued, leased, running, done, cancelled, expired, abandoned`; `blocked` is a flag on a running or leased request while its requester waits on a foreign holder), `waited_since` (original submission time, kept through re-queues), `effective_class`, `last_event`.
