@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>PR #764 复盘：发生了什么、两份独立复盘、正确的流程</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#fbfbfc;--ink:#1a1a1a;--mut:#6b7280;--line:#e5e7eb;--red:#dc2626;--redbg:#fee2e2;--amb:#b45309;--ambbg:#fef3c7;--grn:#15803d;--grnbg:#dcfce7;--blu:#2563eb;--blubg:#dbeafe}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"SF Pro Text","PingFang SC",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:20px;margin:44px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:15px;margin:0 0 6px}
+.sub{color:var(--mut);margin:0 0 24px}
+.tag{display:inline-block;font-size:12px;border-radius:999px;padding:1px 9px;margin-right:4px;font-weight:600}
+.t-main{background:var(--redbg);color:var(--red)}.t-proc{background:var(--ambbg);color:var(--amb)}.t-ok{background:var(--grnbg);color:var(--grn)}.t-pr{background:var(--blubg);color:var(--blu)}
+.tl{position:relative;margin:8px 0 0 12px;padding-left:22px;border-left:2px solid var(--line)}
+.ev{position:relative;margin:0 0 14px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.ev:before{content:"";position:absolute;left:-30px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--mut);border:2px solid var(--bg)}
+.ev.bad:before{background:var(--red)}.ev.warn:before{background:var(--amb)}.ev.good:before{background:var(--grn)}
+.ev .when{font-size:12px;color:var(--mut)}code{background:#f1f2f4;border-radius:4px;padding:0 5px;font-size:13px}
+.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:800px){.lanes{grid-template-columns:1fr}}
+.lane{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.lane.m{border-top:4px solid var(--red)}.lane.p{border-top:4px solid var(--amb)}.lane.c{border-top:4px solid var(--blu)}
+.lane ul{margin:6px 0 0;padding-left:18px}
+.flow{display:flex;flex-direction:column;margin-top:10px}
+.step{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.arrow{text-align:center;color:var(--mut);line-height:1.1;height:18px}
+.n{width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.step.gate{border-left:5px solid var(--red)}.step.new{border-left:5px solid var(--grn);background:#f6fdf8}
+.step .why{color:var(--mut);font-size:13px}
+.cmp{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);font-size:14px}
+.cmp th,.cmp td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.cmp th{background:#f3f4f6}
+.cmp td:nth-child(2){background:#fff7f7}.cmp td:nth-child(3){background:#f6fdf8}
+.box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-top:12px}
+.stop{background:var(--redbg);border:1px solid #fecaca;color:#7f1d1d;border-radius:8px;padding:10px 14px;margin:6px 0;font-weight:600}
+.fork{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:800px){.fork{grid-template-columns:1fr}}
+</style></head><body><main>
+<h1>PR #764 复盘：为什么这么久，以及没有问题时的流程</h1>
+<p class="sub">票 #687（Capture 后识别文字）· 分支 <code>feat/687c-capture-recognise-text</code> · 数据来自 git 记录、CI run、Fable 与 Codex 两份复盘 · 2026-11-18</p>
+
+<div class="box"><b>结论：</b>#764 自己的代码没有造成任何一次 CI 失败。拖住它的是三件事：<span class="tag t-main">main 本身是红的</span><span class="tag t-proc">PR 描述漏了一行</span><span class="tag t-proc">反复 rebase 与重取证据</span>。后两件是流程缺口，工单 #766 补上。</div>
+
+<h2>1 · 发生了什么（时间线）</h2>
+<div class="tl">
+ <div class="ev good"><div class="when">11-16</div><h3>功能做完、两轮审计、真机冒烟通过</h3>审计过的 head <code>086de658</code>（代码与 <code>58a36170</code> 相同）。随后因项目改名暂停两天，分支没有推送。</div>
+ <div class="ev warn"><div class="when">11-18 08:47Z</div><h3>首次推送并开 PR，head <code>34bbcc9e</code></h3>这已经是对 main 的第 3 次 rebase 结果。<span class="tag t-proc">流程</span></div>
+ <div class="ev bad"><div class="when">11-18 08:48Z</div><h3>两项检查红：PR body Gates、CI</h3>① 缺 <code>Checker-Change:</code> 行（PR 改了 <code>scripts/design/shortcut-model.mjs</code>）<span class="tag t-proc">流程</span>　② 取消测试 <code>issue706…</code> / <code>issue711…</code> 失败 <span class="tag t-main">main / CI</span></div>
+ <div class="ev warn"><div class="when">11-18 上午</div><h3>#748、#763、#761 先于它合并</h3>分支保护要求与 main 同步，每合并一个就要重新 rebase、重新取证据。#761 还和台账 EXT-01 同一句话冲突。<span class="tag t-proc">流程</span></div>
+ <div class="ev bad"><div class="when">rebase 当中</div><h3>我的 rebase 把冲突标记提交进台账</h3>只在备份分支 <code>13b2810e</code>，82 秒后重做，<b>从未推送</b>。rebase 脚本没有冲突标记检查。<span class="tag t-proc">流程</span></div>
+ <div class="ev warn"><div class="when">11-18 09:32Z</div><h3>新 head <code>f4fcd17e</code>；PR 描述补 <code>Checker-Change:</code></h3>mado-verify <code>i687cv3</code> 在新 head 上全绿（swift 2430 个测试一次通过）。</div>
+ <div class="ev bad"><div class="when">11-18 09:42Z / 09:54Z</div><h3>CI 同样两个取消测试再红；我重跑一次，仍红</h3>main 在 <code>dccd03cf</code> 上 25 分钟前已经红在同一个测试。重跑没有带来新信息。<span class="tag t-main">main / CI</span> <span class="tag t-proc">流程</span></div>
+ <div class="ev bad"><div class="when">现在</div><h3>等 i749b 修 main，然后再 rebase 一次</h3>#749 在 main 仍红时被关掉了，已重新打开。</div>
+</div>
+
+<h2>2 · 失败从哪来</h2>
+<div class="lanes">
+ <div class="lane m"><h3><span class="tag t-main">main / CI</span> 唯一的硬阻塞</h3><ul>
+  <li><code>issue706CancelDoesNotWaitForVisionCancel</code>、<code>issue711…</code> 在 <code>!fake.didTimeOut</code> 上失败</li>
+  <li>本机 2430 个测试全过，CI 上约 45–66 秒后失败</li>
+  <li>#754 已合并但没治好；main 近 5 次含它的 CI 里 4 次红在这上面</li>
+  <li>推断机制（未复现）：假对象等 30 秒，测试在协作线程池上恢复得比这更晚</li></ul></div>
+ <div class="lane p"><h3><span class="tag t-proc">流程与工具</span> 本可避免</h3><ul>
+  <li>缺 <code>Checker-Change:</code>，两次（<code>34bbcc9e</code>、<code>f4fcd17e</code>）；本地 lint 存在，但 <code>push-guard.py</code> 没接，<code>pre-push</code> 只提示“交给 CI”</li>
+  <li>rebase 脚本无冲突标记检查；台账同一行两边都改时解析器直接停</li>
+  <li>先合并的 PR 逼出两次多余 rebase 与两次台账冲突</li>
+  <li>main 红着还重跑同一个失败 job</li>
+  <li>关 #749 时没等 main 转绿</li></ul></div>
+ <div class="lane c"><h3><span class="tag t-pr">PR 自己的代码</span> 审计阶段已修</h3><ul>
+  <li>过期识别结果覆盖剪贴板（两个窗口，两次修复）</li>
+  <li>辅助进程缺编辑快捷键；非拉丁键盘布局回退</li>
+  <li>这些由审计发现，没有进入 CI；<b>没有一次 CI 失败来自它们</b></li></ul></div>
+</div>
+
+<h2>3 · 没有问题时，正确的流程</h2>
+<p class="sub">绿色是 #766 新增的步骤，红色边框是硬停止点。</p>
+<div class="flow">
+ <div class="step"><div class="n">1</div><div><h3>实现者交 handoff + mado-verify 记录</h3><span class="why">每个 head 一条记录（规则不变）</span></div></div><div class="arrow">▼</div>
+ <div class="step"><div class="n">2</div><div><h3>双审计（盲审，最多 2 轮）→ 修 → 确认</h3><span class="why">C/H 未清零则问你</span></div></div><div class="arrow">▼</div>
+ <div class="step gate new"><div class="n">3</div><div><h3>检查 main：<code>main-ci-status.sh</code></h3><span class="why">最近一次 main CI 必须是绿的。红：<b>停</b>，先修 main，告诉你。不启动 rebase / 验证 / owner-gates。</span></div></div><div class="arrow">▼</div>
+ <div class="step new"><div class="n">4</div><div><h3>选队首：最早审计完成且已就绪的 PR</h3><span class="why">只对它做一次 rebase，紧挨着合并之前。不 rebase 后面的 PR。</span></div></div><div class="arrow">▼</div>
+ <div class="step"><div class="n">5</div><div><h3><code>rebase-ledger.sh</code> → <code>rebase-verify.sh</code></h3><span class="why">新：逐提交扫冲突标记；台账同行不同单元格自动合并，同一单元格冲突才停。</span></div></div><div class="arrow">▼</div>
+ <div class="step new"><div class="n">6</div><div><h3>重写 PR 描述：Gates 表 SHA、<code>Checker-Change:</code>，跑 <code>local-pr-lint --expect &lt;head&gt;</code></h3><span class="why">改了 <code>scripts/design</code> 或 <code>scripts/ledger</code> 就必须有这一行并引用两份审计。</span></div></div><div class="arrow">▼</div>
+ <div class="step new"><div class="n">7</div><div><h3><code>push-guard.py</code> 推送（内含同样的 lint，失败不推）</h3><span class="why">不再把一个注定被 PR body Gates 打回的 head 推上去。</span></div></div><div class="arrow">▼</div>
+ <div class="step gate"><div class="n">8</div><div><h3>等 CI 全绿</h3><span class="why">失败时先对照 main 最近一次 run：同一个失败 → 不重跑，回到第 3 步。</span></div></div><div class="arrow">▼</div>
+ <div class="step"><div class="n">9</div><div><h3>合并（rebase-merge）→ 中文验收评论 → 关 issue</h3><span class="why">修 flake / 测试的 ticket 要等 main 连续两次绿再关。</span></div></div>
+</div>
+
+<div class="fork" style="margin-top:16px">
+ <div class="box"><h3>第 3 步判红时</h3><div class="stop">STOP · main CI 红（run N）</div>→ 派 opus-imple-1 修 main（现在是 <code>i749b</code>）→ 修复合并 → 再回到第 3 步。已就绪的 PR 原地等待，不烧 rebase 次数。</div>
+ <div class="box"><h3>第 8 步判红时</h3>① 失败与 main 最近一次相同 → 不重跑，转第 3 步　② 失败与 main 不同 → 看日志，属于这个 PR 才修　③ 没人知道原因 → 才允许重跑一次，并记下原因</div>
+</div>
+
+<h2>4 · #764 这次 vs. 改后的流程</h2>
+<table class="cmp"><tr><th></th><th>这次</th><th>改后</th></tr>
+<tr><td>main 红着</td><td>继续 rebase、取证据、重跑</td><td>第 3 步停止，先修 main</td></tr>
+<tr><td>PR 描述漏 Checker-Change</td><td>推上去，被 CI 打回两次</td><td>push-guard 内置 lint，推送前就拦住，并打印模板</td></tr>
+<tr><td>rebase 提交了冲突标记</td><td>靠我自己事后发现</td><td>脚本逐提交扫描，命中即失败</td></tr>
+<tr><td>台账同一行两边都改</td><td>解析器停，手写一次性脚本</td><td>按单元格三方合并，真冲突才停并打印三份内容</td></tr>
+<tr><td>多个 PR 排队</td><td>先合并的 PR 逼出多余 rebase</td><td>最早就绪的先合，合并前才 rebase 一次</td></tr>
+<tr><td>修 flake 的 ticket</td><td>#749 在 main 仍红时关闭</td><td>main 连续两次绿才关</td></tr></table>
+
+<h2>5 · 没改的和仍待你决定的</h2>
+<div class="box"><ul style="margin:0;padding-left:18px">
+<li>mado-verify 每个 head 一条记录的规则没有改。“代码相同的 head 不重跑”仍是待你决定的提案（<code>docs/research/20261117-mado-verify-review.md</code> §5）。</li>
+<li>取消测试的根因是读源码的推断，没有复现；<code>i749b</code> 要先在 CI 条件下重现再修。</li>
+<li>工单 <b>#766</b> 里有逐文件的改动清单，优先级排在最前（仅次于 #749）。</li></ul></div>
+<h2>6 · 两份独立复盘（Fable 与 Codex）</h2>
+<p class="sub">两位都只读，不改任何东西。Fable 能访问 GitHub；Codex 的沙箱连不上，只读了本地 git 和 handoff。原文见下，已按事实核对过的部分去掉了我 brief 里的两处错（PR 是 11-18 才开的，不是 11-16；冲突标记在备份 head <code>13b2810e</code>，不是 <code>34bbcc9e</code>）。</p>
+<div class="box"><h3>口径差别</h3>Codex 把审计里找出的缺陷也算进“失败”（过期读取竞态、非拉丁键盘布局）。Fable 只算 CI 和 gate 的失败，所以结论是“没有一项来自这个 PR 的代码”。两种说法都对：那些缺陷在审计阶段就修掉了，没有进 CI。</div>
+<table class="cmp"><tr><th>原因</th><th>Fable（有 GitHub 访问）</th><th>Codex（只有本地）</th></tr>
+<tr><td>取消测试在 CI 失败</td><td>main / CI。PR 与 main 共 4 个 run（<code>44270101888</code>、<code>44276820535</code> 第 2 次、<code>44264940020</code>、<code>44272891771</code>）。机制是读源码推断：假对象等 30 秒，测试在协作线程池上恢复得更晚，未复现</td><td>同一判断。#754（<code>c203ff2a</code>）留下了这个依赖；本地后续提交 <code>c5971bc7</code> 把取消与释放移到独立线程并加确定性回归测试</td></tr>
+<tr><td>缺 <code>Checker-Change:</code></td><td>流程，两次（<code>44270101311</code>、<code>44276825272</code>）；本地一条 lint 命令就能发现，完全可避免</td><td>没能查看那次 run，规则确认需要这一行</td></tr>
+<tr><td>反复 rebase 与证据</td><td>审计后 4 个 head（<code>58a36170</code>、<code>086de658</code>、<code>34bbcc9e</code>、<code>f4fcd17e</code>）、3 次完整 gate；#748/#763/#761 先合并逼出两次 rebase 与两次台账冲突</td><td>每个新 head 要重取 head 绑定证据与 checker 确认</td></tr>
+<tr><td>冲突标记入库</td><td>备份 head <code>13b2810e</code> 的 <code>feature-ledger.md</code> 314–324 行，82 秒后重做，从未推送；<code>rebase-verify.sh</code> 没有标记检查</td><td>同；建议每次接受解决方案前扫一遍标记</td></tr>
+<tr><td>本地 gate 无效</td><td>11-16 多次：apptests=70、swift=124、node=1，每次不同的 flaky 集合</td><td>node 进程监管测试超时、App 测试 key-window 超时、共享锁残留</td></tr>
+<tr><td>重跑同一个失败 job</td><td>main 25 分钟前刚红在同一个测试，重跑不会提供新信息</td><td>—</td></tr>
+<tr><td>#749 关得太早</td><td>#749 在 08:44Z 关闭，而 main 在 08:21Z 已再次失败</td><td>—</td></tr>
+<tr><td>PR 自己的代码缺陷</td><td>无一次 CI 失败来自本 PR 的代码；diff 不碰 <code>MadoInfrastructure</code></td><td>过期识别结果覆盖剪贴板（<code>af24b3dc</code>、<code>1c2ca294</code>）；辅助进程缺编辑键（<code>506289f5</code>）与非拉丁布局回退（<code>a5cfd70a</code>）；均在审计中修复</td></tr>
+<tr><td>测试环境摩擦</td><td>—</td><td>RED 阶段卡在暂停的桩、pasteboard 断言拒绝 AppKit 字符串别名、integrity 扫描器少计测试；不是产品回归</td></tr></table>
+
+<h3 style="margin-top:18px">各自排出的三项改进</h3>
+<div class="lanes" style="grid-template-columns:1fr 1fr">
+ <div class="lane c"><h3>Fable</h3><ol style="margin:6px 0 0;padding-left:18px"><li>修或串行化 #706/#711 测试并重开 #749；加规则“main 最近一次 CI 红时不启动 rebase 与验证循环”。一个只改测试的 PR，约 1–2 小时加一轮 CI。唯一解锁 #764 的事。</li><li>PR 描述在 <code>gh pr create</code>/<code>gh pr edit</code> 前本地跑 lint，最好放进 push-guard。约 30 分钟。</li><li>已审计的 PR 最早的先合并，合并前才 rebase 一次；台账一律用行级解析器，<code>rebase-verify.sh</code> 加标记 grep。约一小时加一条顺序规则。合并队列更好但没有 <code>merge_group</code> 触发器，成本更高。</li></ol></div>
+ <div class="lane c"><h3>Codex</h3><ol style="margin:6px 0 0;padding-left:18px"><li>去掉依赖调度时序的测试协调，从 #749 后续开始，并在受控的执行器饥饿条件下验证。1–2 天。</li><li>串行化最终落地准备：队首 rebase 一次，验证结果 base/head，只在证明等价时沿用旧审计。2–4 天。</li><li>自动化最终预检：冲突标记、对当前 head 的 PR 描述 lint 与 checker 确认、带保留意见的结构化冒烟结论。1–2 天。</li></ol></div>
+</div>
+<div class="box"><h3>两边都没能核实</h3>Fable：第 1 次 attempt 的失败日志（<code>gh</code> 返回了第 2 次的日志）；“步骤 6 被误判”只能确认报告里写的是 5/5 通过；没有 11-17 之后的 delegator 日志；没找到专门跟踪红 main 的 issue（现在 #749 已重新打开）。Codex：完整 CI run 列表、PR 时间线与评论、分支保护、当前合并状态、<code>44270101311</code>/<code>44270101888</code> 两次失败。</div>
+<p class="sub" style="margin-top:12px">后续工作：<a href="https://github.com/anzchy/mado/issues/766">#766</a>（工作流加固，优先级最前）与 <a href="https://github.com/anzchy/mado/issues/749">#749</a>（红 main）。</p>
+</main></body></html>
