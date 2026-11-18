@@ -10,7 +10,15 @@ const root = fileURLToPath(new URL('../../../../', import.meta.url));
 test('project Claude settings register no Stop hook and keep the plugin', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'));
   assert.equal(settings.enabledPlugins['tdd-guardian@xiaolai'], true);
-  assert.equal(settings.hooks, undefined);
+  assert.equal(settings.hooks?.Stop, undefined);
+  for (const entries of Object.values(settings.hooks ?? {})) {
+    for (const entry of entries) {
+      for (const hook of entry.hooks ?? []) {
+        assert.equal(typeof hook.command, 'string');
+        assert.doesNotMatch(hook.command, /mado-verify|stop-hook/);
+      }
+    }
+  }
   assert.doesNotMatch(JSON.stringify(settings), /mado-verify|stop-hook/);
 });
 
