@@ -1,6 +1,23 @@
 import Foundation
 import Testing
 
+/// Runs the wait independently of the cooperative pool that other parallel tests occupy.
+private actor DedicatedCancellationWait {
+    nonisolated let queue = DispatchSerialQueue(label: "app.mado.tests.issue606.wait")
+    nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
+
+    func run(signal: AsyncStream<Void>.Continuation, finished: DispatchSemaphore) async -> String {
+        defer { finished.signal() }
+        do {
+            try await waitUntil(fileID: "fixture", line: 606) {
+                signal.yield()
+                return false
+            }
+            return "unexpected return"
+        } catch { return String(describing: error) }
+    }
+}
+
 @MainActor private func holdMainActorUntilWaitFinishes(_ finished: DispatchSemaphore) -> Bool {
     finished.wait(timeout: .now() + 5) == .success
 }
@@ -11,16 +28,8 @@ import Testing
 func issue606CancelledBackgroundWaitDoesNotHopToBusyMainActor() async {
     let (started, signal) = AsyncStream<Void>.makeStream()
     let finished = DispatchSemaphore(value: 0)
-    let waiter = Task.detached {
-        defer { finished.signal() }
-        do {
-            try await waitUntil(fileID: "fixture", line: 606) {
-                signal.yield()
-                return false
-            }
-            return "unexpected return"
-        } catch { return String(describing: error) }
-    }
+    let runner = DedicatedCancellationWait()
+    let waiter = Task { await runner.run(signal: signal, finished: finished) }
     var starts = started.makeAsyncIterator()
     _ = await starts.next()
     waiter.cancel()
