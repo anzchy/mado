@@ -34,9 +34,10 @@ class MergeGateTests(unittest.TestCase):
 case "$1 $2" in
   'run list') printf '%s\\n' "$GH_MAIN" ;;
   'pr view') printf '{"headRefOid":"%s","isDraft":false,"body":"body","createdAt":"2026-01-02T00:00:00Z"}\\n' "$GH_HEAD" ;;
-  'pr list') printf '%s\\n' "$GH_PRS" ;;
+  'pr list') [ "${GH_LOOKUP_FAIL:-0}" = 1 ] && exit 9; printf '%s\\n' "$GH_PRS" ;;
   'pr checks') printf '%s\\n' "$GH_CHECKS" ;;
   'pr merge') echo "$*" >> "$GH_MERGE_LOG" ;;
+  'pr comment') echo "$*" >> "$GH_MERGE_LOG" ;;
   *) exit 9 ;;
 esac
 ''')
@@ -53,31 +54,49 @@ esac
         return subprocess.run(['sh', str(SCRIPT), '12'], cwd=self.repo, env={**self.env, **extra},
                               capture_output=True, text=True)
 
-    def test_green_ready_pr_merges(self):
+    def test_green_ready_pr_reports_would_allow_without_merging(self):
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('pr merge --rebase 12', (self.root / 'merged').read_text())
+        self.assertIn('would-allow', result.stdout)
+        self.assertFalse((self.root / 'merged').exists())
 
     def test_red_main_blocks_merge(self):
         main = '[{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"failure"}]'
         result = self.run_gate(GH_MAIN=main)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('main CI', result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('would-refuse condition-failed: main CI', result.stdout + result.stderr)
         self.assertFalse((self.root / 'merged').exists())
 
     def test_older_ready_pr_blocks_merge(self):
         prs = '[{"number":11,"createdAt":"2026-01-01T00:00:00Z","isDraft":false}]'
         result = self.run_gate(GH_PRS=prs)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('older ready PR', result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('would-refuse condition-failed: older ready PR', result.stdout + result.stderr)
 
     def test_failing_check_evidence_or_lint_blocks_merge(self):
         for extra in ({'GH_CHECKS': '[{"name":"CI","state":"FAILURE"}]'},
                       {'NODE_FAIL': 'evidence'}, {'NODE_FAIL': 'lint'}):
             with self.subTest(extra=extra):
                 result = self.run_gate(**extra)
-                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.returncode, 0)
+                self.assertIn('would-refuse condition-failed:', result.stdout + result.stderr)
                 self.assertFalse((self.root / 'merged').exists())
+
+    def test_lookup_failure_is_distinct_and_suggests_retry_or_override(self):
+        result = self.run_gate(GH_LOOKUP_FAIL='1')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('would-refuse lookup-failed:', result.stdout)
+        self.assertIn('retry or use the override', result.stdout)
+
+    def test_override_logs_and_comments_with_reason(self):
+        result = self.run_gate(MADO_MERGE_GATE_OVERRIDE='owner reviewed CI failure',
+                               GH_MAIN='[{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"failure"}]',
+                               HOME=str(self.root))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('override recorded', result.stdout)
+        log = self.root / '.mado/handoff/merge-gate-overrides.log'
+        self.assertIn('owner reviewed CI failure', log.read_text())
+        self.assertIn('pr comment 12', (self.root / 'merged').read_text())
 
 
 if __name__ == '__main__':

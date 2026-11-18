@@ -22,14 +22,6 @@ def main():
         content += Path(__file__).with_name('restricted-role.rules').read_text()
     else:
         content += '# PR ownership is granted; push only through the checked push-guard.py entry point.\n'
-        content += '''# Merge only through the checked merge-gate.sh entry point.
-prefix_rule(
-    pattern = ["gh", "pr", "merge"],
-    decision = "forbidden",
-    justification = "Use .agents/skills/mado-delegator/scripts/merge-gate.sh; it checks main CI, evidence, PR checks, body lint and oldest-ready order. A human may merge by hand outside Codex after reviewing these conditions.",
-    match = ["gh pr merge 12", "gh pr merge --rebase 12"],
-)
-'''
     fd, temp = tempfile.mkstemp(prefix='.role-', dir=directory)
     try:
         with os.fdopen(fd, 'w') as stream:
