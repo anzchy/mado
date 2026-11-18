@@ -43,6 +43,9 @@ reload changed rules. In the restarted delegator session, a direct
 that the common rule loaded. Check both observations without an actual remote write.
 
 For an ordinary topic push: `python3 scripts/codex-rules/push-guard.py`.
+The delegator merges through `.agents/skills/mado-delegator/scripts/merge-gate.sh <pr>`;
+its role overlay denies a bare `gh pr merge`. A human may merge by hand outside Codex
+after checking main CI, mado-verify evidence, PR checks, body lint, and oldest-ready order.
 After rebasing an owned unmerged PR branch, obtain the exact current remote tip and use
 `python3 scripts/codex-rules/push-guard.py --expected-remote-oid <full-oid>`. The lease
 must be the observed tip; never use the guarded force option on `main`.
