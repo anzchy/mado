@@ -184,7 +184,7 @@ func issue706CancelDoesNotWaitForVisionCancel() async throws {
         catch { return error }
     }
     await withCheckedContinuation { done in
-        DispatchQueue.global().async { fake.performEntered.wait(); done.resume() }
+        Thread.detachNewThread { fake.performEntered.wait(); done.resume() }
     }
     let started = ContinuousClock.now
     task.cancel()
@@ -212,7 +212,7 @@ func issue711CancelledTaskOverridesTypedRequestError() async throws {
         catch { return error }
     }
     await withCheckedContinuation { done in
-        DispatchQueue.global().async { fake.performEntered.wait(); done.resume() }
+        Thread.detachNewThread { fake.performEntered.wait(); done.resume() }
     }
     let started = ContinuousClock.now
     task.cancel()
