@@ -16,7 +16,7 @@ for (const role of ['delegator', 'implementor', 'auditor']) {
     for(const argv of [['gh','pr','create'],['gh','pr','merge','12'],['gh','pr','close','12']]) {
       const result=spawnSync('codex',['execpolicy','check','--rules',join(dir,'.codex/rules/picsee.rules'),'--rules',join(dir,'.codex/rules/picsee-role.rules'),'--',...argv],{encoding:'utf8'});
       assert.equal(result.status,0,result.stderr);
-      assert.equal(JSON.parse(result.stdout).decision==='forbidden',role!=='delegator',JSON.stringify(argv));
+      assert.equal(JSON.parse(result.stdout).decision==='forbidden',role!=='delegator' || argv[2]==='merge',JSON.stringify(argv));
     }
     for(const argv of [
       ['git','push','origin','feature'],
