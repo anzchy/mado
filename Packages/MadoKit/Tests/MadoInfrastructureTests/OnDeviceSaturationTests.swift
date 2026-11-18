@@ -121,34 +121,32 @@ func issue706CancelOnlyReleasesItsOwnBlockingRequest() {
     #expect(recogniser.starvedCount == 0)
 }
 
-/// A fake whose cancel blocks the calling thread, as `-[VNCanceller signalCancellation]`
-/// did on CI, until the test lets it go (or a deadline passes, so a failure cannot hang).
-private final class BlockingCanceller: @unchecked Sendable {
-    let performEntered = DispatchSemaphore(value: 0)
-    let cancelEntered = DispatchSemaphore(value: 0)
-    let releasePerform = DispatchSemaphore(value: 0)
-    let releaseCancel = DispatchSemaphore(value: 0)
-    let throwsTypedError: Bool
-    private let lock = NSLock()
-    private var timedOut = false
-
-    init(throwsTypedError: Bool = false) { self.throwsTypedError = throwsTypedError }
-
-    func perform() throws {
-        performEntered.signal()
-        if releasePerform.wait(timeout: .now() + .seconds(30)) == .timedOut {
-            lock.lock(); timedOut = true; lock.unlock()
-        }
-        if throwsTypedError { throw TextRecognitionError.recognitionFailed(domain: "BlockingCanceller", code: 1) }
-        throw NSError(domain: "BlockingCanceller", code: 1)
+/// #749: on CI every cooperative thread stayed busy for over 30 s, so the test could not get
+/// back to cancel and release the fake before its perform deadline. Cancelling and releasing
+/// must not wait for the test's executor: hold that executor past a short perform deadline.
+@available(macOS 15.0, *)
+@Test(.timeLimit(.minutes(1)))
+func issue749CancelAndReleaseDoNotWaitForTheTestExecutor() async throws {
+    let fake = BlockingCanceller(performDeadline: .seconds(1))
+    let provider = OnDeviceTextRecognitionProvider(
+        performRequest: { _, _ in try fake.perform() },
+        cancelRequest: { fake.cancel($0) }
+    )
+    let bytes = try saturationImage()
+    let task = Task { () -> TextRecognitionError? in
+        do throws(TextRecognitionError) { _ = try await provider.recognise(bytes); return nil }
+        catch { return error }
+    }
+    let executor = HoldableExecutor()
+    let cancelTook = await withTaskExecutorPreference(executor) { () async -> Duration in
+        executor.hold(for: 3)
+        return await cancelAndRelease(fake, task)
     }
 
-    func cancel(_ request: VNRecognizeTextRequest) {
-        cancelEntered.signal()
-        _ = releaseCancel.wait(timeout: .now() + .seconds(2))
-    }
-
-    var didTimeOut: Bool { lock.lock(); defer { lock.unlock() }; return timedOut }
+    let result = await task.value
+    #expect(cancelTook < .milliseconds(500))
+    #expect(!fake.didTimeOut)
+    #expect(result == .cancelled)
 }
 
 /// The fake's perform can finish even when the asynchronous cancel callback is delayed.
@@ -183,14 +181,7 @@ func issue706CancelDoesNotWaitForVisionCancel() async throws {
         do throws(TextRecognitionError) { _ = try await provider.recognise(bytes); return nil }
         catch { return error }
     }
-    await withCheckedContinuation { done in
-        Thread.detachNewThread { fake.performEntered.wait(); done.resume() }
-    }
-    let started = ContinuousClock.now
-    task.cancel()
-    let cancelTook = ContinuousClock.now - started
-    fake.releaseCancel.signal()
-    fake.releasePerform.signal()
+    let cancelTook = await cancelAndRelease(fake, task)
 
     let result = await task.value
     #expect(cancelTook < .milliseconds(500))
@@ -211,14 +202,7 @@ func issue711CancelledTaskOverridesTypedRequestError() async throws {
         do throws(TextRecognitionError) { _ = try await provider.recognise(bytes); return nil }
         catch { return error }
     }
-    await withCheckedContinuation { done in
-        Thread.detachNewThread { fake.performEntered.wait(); done.resume() }
-    }
-    let started = ContinuousClock.now
-    task.cancel()
-    let cancelTook = ContinuousClock.now - started
-    fake.releaseCancel.signal()
-    fake.releasePerform.signal()
+    let cancelTook = await cancelAndRelease(fake, task)
 
     let result = await task.value
     #expect(cancelTook < .milliseconds(500))
