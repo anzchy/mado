@@ -45,7 +45,8 @@ public struct TextRowResolver: Sendable {
         func shorter(_ i: Int, _ j: Int) -> CGFloat { min(high[i] - low[i], high[j] - low[j]) }
         var neighbour = Array(repeating: Array(repeating: false, count: count), count: count)
         for i in 0..<count {
-            for j in 0..<count where i != j {
+            for j in 0..<count {
+                guard i != j else { continue }
                 neighbour[i][j] = overlap(i, j) > 0.5 * shorter(i, j)
             }
         }
@@ -64,12 +65,14 @@ public struct TextRowResolver: Sendable {
         let members = bridges.count == count ? Array(0..<count) : (0..<count).filter { !bridges.contains($0) }
         var rowOf = [Int: Int]()
         var rows: [[Int]] = []
-        for start in members where rowOf[start] == nil {
+        for start in members {
+            guard rowOf[start] == nil else { continue }
             var row = [start]
             rowOf[start] = rows.count
             var next = 0
             while next < row.count {
-                for other in members where rowOf[other] == nil && neighbour[row[next]][other] {
+                for other in members {
+                    guard rowOf[other] == nil && neighbour[row[next]][other] else { continue }
                     rowOf[other] = rows.count
                     row.append(other)
                 }
