@@ -37,6 +37,7 @@ class RebaseLedgerTests(unittest.TestCase):
         git(self.origin, "commit", "-qm", "init", env=self.env)
         git(root, "clone", "-q", str(self.origin), str(self.work), env=self.env)
         git(self.work, "switch", "-qc", "topic", env=self.env)
+        self.stub_ci(("in_progress", ""))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -89,7 +90,7 @@ class RebaseLedgerTests(unittest.TestCase):
 
     def test_main_ci_status_green_red_pending_and_two_green(self):
         bin_dir = self.work / "bin"
-        bin_dir.mkdir()
+        bin_dir.mkdir(exist_ok=True)
         stub = bin_dir / "gh"
         stub.write_text("#!/bin/sh\nprintf '%s\\n' \"$GH_RUNS\"\n")
         stub.chmod(0o755)
