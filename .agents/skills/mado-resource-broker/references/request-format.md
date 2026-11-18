@@ -1,6 +1,6 @@
 # Request, event and grant format
 
-All files are JSON, written atomically (tmp file + rename) and never edited in place. Directory `~/.mado/broker/`, mode 0700, files 0600.
+All files are JSON, never edited in place. Directory `~/.mado/broker/`, mode 0700, files 0600. Creation of `requests/` and `events/` files is **atomic and exclusive**: write a tmp file, then `link(tmp, final)` (fails if `final` exists), then unlink the tmp. `grants/`, `state/`, `status.md` and `notices/` are replaced with `rename(2)` by the single scheduler (overwrite is intended there). Every free-text field below (`task`, `priority.why`, `extend.reason`, `blocked.holder`) is limited to 120 characters of `[A-Za-z0-9 #._:/+-]` and treated as data everywhere; the same limit applies to any owner-file text copied into `status.md`, and a malformed-request note never echoes raw content (id and the rule it broke only).
 
 ## Ids
 
@@ -45,7 +45,7 @@ All files are JSON, written atomically (tmp file + rename) and never edited in p
 
 ## Events `events/<id>.<n>.json` (requester writes, `n` = 1, 2, … per request, exclusive create)
 
-`running` (`pid`, `pid_started_at`), `extend` (new `p50`/`p90`, reason), `blocked` (`holder` taken from its owner file), `done` (`actual_minutes`, `outcome` = `passed|failed|cancelled`, `peak_ram_gb` or `null`), `cancel`. Only the requester writes events; only the scheduler writes everything else.
+`running` (`pid`, `pid_started_at`), `extend` (new `p50`/`p90`, reason), `blocked` (`holder` taken from its owner file), `done` (`actual_minutes`, `outcome` = `passed|failed|cancelled`, `peak_ram_gb` or `null`), `cancel`. Only the requester writes events; only the scheduler writes everything else. The requester picks `n` as one more than the highest existing file for that id and creates with `link`; on `EEXIST` it re-reads and takes the next number (two writers, for example a cancellation and a completion, therefore get different numbers). **The first terminal event (`done` or `cancel`) by `n` wins**; later events are logged in `events.log` and ignored.
 
 ## Grant `grants/<id>.json` (scheduler only)
 
@@ -54,7 +54,7 @@ All files are JSON, written atomically (tmp file + rename) and never edited in p
   "start_by": "2026-11-17T22:00:00-08:00", "rule": "C1,C2", "decided_at": "2026-11-17T21:46:10-08:00" }
 ```
 
-`start_by` = `not_before` + `grace_minutes` (config). `generation` is a scheduler-wide counter that increases on every published decision; `broker-check` compares it under a directory lock right before the requester takes the real lock, so a displaced grant cannot be used after it was replaced. A grant whose `not_before` has already passed is **committed**: the scheduler only replaces it if it expired (`start_by` passed) or the requester cancelled.
+`not_before` is the planned start; the grant becomes **usable** at `usable_at` = `not_before` or later, when every conflicting predecessor is done (see "Using a grant" in `ordering-policy.md`), and `start_by` = `usable_at` + `grace_minutes` (config). `generation` is a counter written into each grant file that increases when that request's grant is republished; `broker-check` compares the generation in the file with the one the requester read, under the directory lock, right before the requester takes the real lock, so a replaced grant cannot be used. A grant is a plan, not a reservation: only `broker-check` returning `GO` admits a start.
 
 ## State `state/<id>.json` (scheduler only)
 
