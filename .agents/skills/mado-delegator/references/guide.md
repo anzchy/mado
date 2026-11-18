@@ -630,7 +630,9 @@ Then wait for CI and merge:
 
 ```sh
 for i in $(seq 1 20); do [ "$(gh pr checks $P | wc -l)" -gt 0 ] && break; sleep 15; done   # checks may not register at once
-gh pr checks $P --watch --interval 30; .agents/skills/mado-delegator/scripts/merge-gate.sh $P; git pull --ff-only origin main
+gh pr checks $P --watch --interval 30; .agents/skills/mado-delegator/scripts/merge-gate.sh $P
+# Shadow verdict only: compare it with reality, then merge manually under the existing rules.
+gh pr merge $P --rebase; git pull --ff-only origin main
 ```
 
 ---

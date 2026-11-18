@@ -146,7 +146,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    The PR head after a rebase is covered by step 6's `rebase-verify.sh` `CODE same`; a `CODE differ` rebase needs a new
    mado-verify run on the new head, and the check for that head, before merge.
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
-   to register, `gh pr checks --watch`, then `$SK/scripts/merge-gate.sh <pr>` (the checked merge entry point; bare `gh pr merge` is denied for the delegator). A human can merge by hand outside Codex after reviewing the same conditions. Merge is authorised when no blocking C/H,
+   to register, `gh pr checks --watch`, then run `$SK/scripts/merge-gate.sh <pr>` in shadow mode and compare its `would-allow`/`would-refuse` verdict with the actual conditions. It never blocks or merges; keep merging manually for three matching shadow merges before a later PR adds a bare-merge deny rule. `MADO_MERGE_GATE_OVERRIDE="<reason>"` logs an override and posts a PR comment. A human can merge in the web UI. Merge is authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a. Merge as soon as an item is ready; don't hold a green branch for
    another. **After every merge, archive the merged item's receipts from its implementer worktree, pane homes included**:
    when `.claude/tdd-guardian/receipts.json` exists, run `node scripts/tdd/archive-receipts.mjs <worktree>` there
