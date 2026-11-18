@@ -102,7 +102,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    confirm. Other Medium/Low → PR "Still open". If consulting
    [confirm-and-fix-templates.md](references/templates/confirm-and-fix-templates.md), fill its `<auditor>` placeholders
    once per auditor.
-6. **Rebase** — Do not start a rebase/verify/gates cycle while main's latest CI run is red; tell the owner. Check `$SK/scripts/main-ci-status.sh` first. `$SK/scripts/rebase-ledger.sh` in the PR worktree (never pipe `git rebase`; it keeps `#` body
+6. **Rebase** — Do not start a rebase/verify/gates cycle while main's latest CI run is red; tell the owner. Check `$SK/scripts/main-ci-status.sh` first. Close CI-flake and test-fix tickets with `$SK/scripts/close-issue.sh <n>` only after two completed green main CI runs; direct `gh issue close` remains possible but does not check this condition. `$SK/scripts/rebase-ledger.sh` in the PR worktree (never pipe `git rebase`; it keeps `#` body
    lines), then `$SK/scripts/rebase-verify.sh <old-base> <audited-head> <new-base> <new-head>`. A verdict covers a
    patch: replay the audited full-index patch with `git apply --cached --3way` in an isolated index on the new
    base, then require an exact tree match with the new head. Only `docs/feature-ledger.md` and
