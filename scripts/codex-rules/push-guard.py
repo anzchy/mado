@@ -2,10 +2,12 @@
 """Push the current picsee topic branch through a checked delegator entry point."""
 
 import argparse
+import json
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 
 # The repository is renamed anzchy/picsee -> anzchy/mado (#554); both names stay approved.
@@ -21,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--expected-remote-oid', metavar='OID', help='exact remote tip for a lease-protected rebase push')
+    parser.add_argument('--skip-pr-lint', metavar='REASON', help='skip PR-body lint with a printed reason')
     args = parser.parse_args()
 
     script_root = Path(__file__).resolve().parents[2]
@@ -39,6 +42,33 @@ def main():
         parser.error('push only the current topic branch, never main or a detached HEAD')
     if len(push_urls) != 1 or push_urls[0] not in APPROVED_PUSH_URLS:
         parser.error('origin must have exactly one anzchy/picsee or anzchy/mado push URL')
+
+    if args.skip_pr_lint:
+        print(f'push-guard: skipping PR-body lint: {args.skip_pr_lint}', file=sys.stderr)
+    else:
+        query = subprocess.run(['gh', 'pr', 'list', '--head', branch, '--json', 'number,body'],
+                               check=False, text=True, capture_output=True)
+        if query.returncode:
+            print(f'push-guard: cannot query PR body: {query.stderr.strip()}', file=sys.stderr)
+            return 2
+        try:
+            prs = json.loads(query.stdout)
+        except (ValueError, TypeError) as error:
+            print(f'push-guard: invalid PR query: {error}', file=sys.stderr)
+            return 2
+        if len(prs) > 1:
+            print('push-guard: branch has multiple PRs; cannot select body', file=sys.stderr)
+            return 2
+        if prs:
+            with tempfile.TemporaryDirectory(prefix='mado-pr-body-') as temporary:
+                body = Path(temporary) / 'body.md'
+                body.write_text(prs[0]['body'] or '')
+                lint = subprocess.run(['node', str(worktree / 'scripts/agents/local-pr-lint.mjs'),
+                                       '--body-file', str(body), '--base', 'origin/main',
+                                       '--expect', git('rev-parse', 'HEAD')], check=False)
+                if lint.returncode:
+                    print(f'push-guard: PR #{prs[0]["number"]} body lint failed', file=sys.stderr)
+                    return lint.returncode
 
     ref = f'refs/heads/{branch}'
     command = ['git', 'push']

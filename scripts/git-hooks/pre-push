@@ -94,6 +94,14 @@ while read -r local_ref local_oid remote_ref remote_oid; do
   shortcut_changed=0
   if checker_changed scripts/ledger; then ledger_changed=1; fi
   if checker_changed scripts/design; then shortcut_changed=1; fi
+  if [ "$ledger_changed" = 1 ] || [ "$shortcut_changed" = 1 ]; then
+    families=''
+    [ "$ledger_changed" = 1 ] && families=ledger
+    if [ "$shortcut_changed" = 1 ]; then
+      [ -n "$families" ] && families="$families,design" || families=design
+    fi
+    echo "Checker-Change: $local_oid families=$families — <rationale> — audits: ~/.mado/herdr/<a>-auditor/<id>-confirm….md,~/.mado/herdr/<b>-auditor/<id>-confirm….md"
+  fi
   # Run only base code. A changed checker needs CI's review/execution authority;
   # do not run topic code or block legitimate changes using obsolete checker data.
   rm -rf "$snapshot/tree/scripts"
