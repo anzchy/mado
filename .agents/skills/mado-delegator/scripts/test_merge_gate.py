@@ -98,6 +98,12 @@ esac
         self.assertIn('owner reviewed CI failure', log.read_text())
         self.assertIn('pr comment 12', (self.root / 'merged').read_text())
 
+    def test_blank_override_reason_is_rejected_without_comment(self):
+        result = self.run_gate(MADO_MERGE_GATE_OVERRIDE='  ', HOME=str(self.root))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('reason must be nonempty', result.stderr)
+        self.assertFalse((self.root / 'merged').exists())
+
 
 if __name__ == '__main__':
     unittest.main()
