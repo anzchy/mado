@@ -12,13 +12,13 @@ A lease holds **tokens**: a `heavy` request holds `{heavy}`, a `gui` request hol
 | **gui** | conflict (default) | conflict | conflict |
 | **network** | conflict | conflict | conflict |
 
-The table lives in `config.json` (`conflicts`); the only entry intended to change is heavy↔gui, after calibration. A lease is **active** from the moment it is written until the job reaches `done`, `cancelled` or `abandoned`, or the lease expires unstarted; a running job keeps its lease even past its estimate.
+The table lives in `config.json` (`conflicts`); the only entry intended to change is heavy↔gui, after calibration. A lease is **active** from the moment its file is written until the job reaches `done`, `cancelled` or `abandoned`, or the lease expires **unclaimed**; a claimed or running job keeps its lease even past its estimate. **Every real-lock holder visible in the owner files that has no lease** (an unmanaged participant, a fallback job, an mdpro job) counts as an active **pseudo-lease** holding the tokens of its kind (`heavy` for the heavy lock, `gui` for the desktop lock) and the table applies to it exactly as to a lease; the broker cannot stop it but never issues a lease the table forbids against a holder it can see.
 
 ## Hard constraints
 
 - **H1** The scheduler issues a lease only if no active lease conflicts with it, per the table. Together with "a lease is the only admission" this is the whole mutual-exclusion rule of the broker: at most one `heavy`, at most one `gui`, `network` alone, heavy and gui together only if the table allows it.
 - **H2** Never issue a lease to a request whose `depends_on` is not `done`; a dependency that ends `cancelled` or `abandoned` cancels its dependents.
-- **H3** Hold (issue nothing for that token) while the live facts show a problem: `kern.memorystatus_level` below `min_free_percent` (initial 25), `kern.memorystatus_vm_pressure_level` not normal, or one-minute load above `max_load_per_core` × cores (initial 2.0). These are the quantities `~/.mado/device/ram/with-ram.sh` already samples; the observed free percentage during Mado builds was 44–55%. An **unknown holder** (a real lock whose owner file is not in the broker's records) holds only the token it holds; it is reported to the owner and never touched.
+- **H3** Hold (issue nothing for that token) while the live facts show a problem: `kern.memorystatus_level` below `min_free_percent` (initial 25), `kern.memorystatus_vm_pressure_level` not normal, or one-minute load above `max_load_per_core` × cores (initial 2.0). These are the quantities `~/.mado/device/ram/with-ram.sh` already samples; the observed free percentage during Mado builds was 44–55%. An **unknown holder** is handled as a pseudo-lease (see above), reported to the owner and never touched.
 - **H4** Never end, shorten or revoke a running job or an active lease. A lease ends by `done`, `cancel`, expiry unstarted, or `abandoned`.
 
 ## Choosing the next request (each tick, in this order)
@@ -28,13 +28,13 @@ The table lives in `config.json` (`conflicts`); the only entry intended to chang
 3. **Deadline.** A request whose `deadline` is within `2 × p90` of now gets `effective_class − 1` (floor 1) and is flagged; a deadline that cannot be met is flagged to both delegators and the owner, never met by breaking H1–H4.
 4. **Fairness filter.** If one project has had `fairness_max_consecutive` (initial 2) consecutive heavy leases and the other project has an eligible heavy request whose `effective_class` is at most the best candidate's, the candidates are restricted to the other project for this slot (a filter before the ordering key, so shortest-first cannot override it).
 5. **Ordering key** over the remaining candidates: `effective_class` ascending; among requests that have aged at least once, earliest `waited_since` first; otherwise smallest `p90` first (the calibrated value, C6); then earliest submission; then project name.
-6. **Protect the next higher-class job.** Let `top` be the best request by the ordering key among queued requests whose only missing condition is an unfinished dependency that currently holds an active lease. Its expected start is the dependency lease's expected end, `max(started_at + p90, now)` (an overrunning job counts as ending now). A candidate of lower effective class than `top` that conflicts with `top` is issued a lease only if `now + its p90 <= expected start of top`; otherwise it waits. If there is no such `top`, this step does nothing.
+6. **Protect the next higher-class job.** Let `top` be the best request by the ordering key among queued requests that depend, **directly or through a chain of queued requests**, on a request that currently holds an active lease and whose only missing conditions are those dependencies. Its expected start is the active lease's expected end, `max(started_at + p90, now)` (an overrunning job counts as ending now), plus the `p90` of each queued request in the chain between them. A candidate of lower effective class than `top` that conflicts with `top` is issued a lease only if `now + its p90 <= expected start of top`; otherwise it waits. If there is no such `top`, this step does nothing.
 
 The first candidate that survives steps 1–6 gets the lease; at most one lease is issued per tick per token set, and the tick re-evaluates after each issue.
 
 ## C5 Heavy and GUI overlap
 
-Off by default (`conflicts.heavy_gui: true`). When switched off after calibration, a GUI request with `performance_sensitive: false` may be leased while a heavy lease is active only if the free memory headroom (`kern.memorystatus_level` converted to GB of the machine's RAM) exceeds the sum of both requests' remaining `ram_gb_peak` plus `reserve_gb`; the declared peaks, not only the current percentage, decide.
+Off by default (`conflicts.heavy_gui: true`). It is a **pair predicate evaluated in both directions**, whichever request of the pair is being leased now (a GUI request while a heavy lease is active, or a heavy request while a GUI lease is active). When switched off after calibration, a pair may overlap only if the GUI request has `performance_sensitive: false` and the free memory headroom (`kern.memorystatus_level` converted to GB of the machine's RAM) exceeds the sum of both requests' remaining `ram_gb_peak` plus `reserve_gb`; the declared peaks, not only the current percentage, decide.
 
 ## C6 Calibration
 
@@ -42,7 +42,7 @@ Group by `(project, task_kind)`. The sample is the last 20 finished jobs of the 
 
 ## Lease timing
 
-`start_by = granted_at + grace_minutes` (initial 10); a lease not started by then expires and the request returns to the queue with its original submission time. `expires_at = granted_at + grace_minutes + p90` is the planned end; it never ends a running job (H4). A running job sends `extend` at 80% of its current `p90`; at 2 × `p90` the scheduler flags it to both delegators and the owner. The lease stays active until `done`, `cancel` or `abandoned`.
+`start_by = granted_at + grace_minutes` (initial 10); a lease **not claimed** by then expires and the request returns to the queue with its original submission time; a lease claimed by `broker-check` never expires (see SKILL.md, steps 3 and 7). `expires_at = granted_at + grace_minutes + p90` is the planned end; it never ends a running job (H4). A running job sends `extend` at 80% of its current `p90`; at 2 × `p90` the scheduler flags it to both delegators and the owner. The lease stays active until `done`, `cancel` or `abandoned`.
 
 ## Stall rule (the broker must not block people)
 
@@ -54,8 +54,10 @@ If the candidate set (step 1 without the H3 condition) is non-empty, no conflict
 
 ## Notices
 
-`notices/<requester>.md` lines come from fixed templates filled with validated tokens only: request id, a code (`LEASED`, `EXPIRED`, `OVERRUN`, `ABANDONED`, `BLOCKED-BY-UNKNOWN-HOLDER`, `DEADLINE-AT-RISK`, `STALL`, `QUESTION`, `STALE-BROKER`), a number or a timestamp. No text taken from a request, event or owner file appears in a notice.
+`notices/<requester>.md` lines come from fixed templates filled with validated tokens only: a per-requester sequence number, request id, a code (`LEASED`, `EXPIRED`, `OVERRUN`, `ABANDONED`, `BLOCKED-BY-UNKNOWN-HOLDER`, `DEADLINE-AT-RISK`, `STALL`, `QUESTION`, `STALE-BROKER`), a number or a timestamp. No text taken from a request, event or owner file appears in a notice.
 
 ## Measurement (before any number is trusted)
 
 The initial values are not measured for this scheduler. Before the pane is enabled: collect a week of `with-ram.sh` samples and the lock `owner` start and stop times to set `min_free_percent`, `max_load_per_core` and the per-kind default durations; record the result and date next to each number in `config.json`. Until then C5 stays off.
+
+Delivery is best-effort and idempotent: every line carries its sequence number, delegators de-duplicate on it and read `notices/` and `status.md` directly, so a repeated or missed relay by the monitor (for example after its daily `/clear`) is harmless.
