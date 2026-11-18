@@ -11,6 +11,7 @@ script_dir=${0:A:h}
 set -o pipefail
 (( $# == 4 )) || { echo "usage: rebase-verify.sh <old-base> <old-head> <new-base> <new-head>"; exit 3; }
 for r in "$@"; do git rev-parse -q --verify "$r^{commit}" >/dev/null || { echo "unknown commit: $r"; exit 3; }; done
+python3 "$script_dir/scan-conflict-markers.py" "$3..$4" || exit 8
 repo_root=$(git rev-parse --show-toplevel)
 msgs() { git log --reverse --format='%s%n%b%n--' "$1..$2"; }
 # Blob IDs and hunk offsets may change on a clean rebase. Retain hunk lengths,

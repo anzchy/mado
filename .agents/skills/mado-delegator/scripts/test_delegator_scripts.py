@@ -77,6 +77,16 @@ class RebaseLedgerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("PENDING", result.stdout)
 
+    def test_rebase_rejects_paired_conflict_markers_but_not_setext_underline(self):
+        self.commit(self.work, "topic", **{"code.txt": "<<<<<<< ours\ntext\n=======\ntext\n>>>>>>> theirs\n"})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("code.txt", result.stdout)
+
+    def test_rebase_accepts_standalone_equals_underline(self):
+        self.commit(self.work, "topic", **{"code.txt": "heading\n=======\n"})
+        self.assertEqual(self.run_script().returncode, 0)
+
     def test_main_ci_status_green_red_pending_and_two_green(self):
         bin_dir = self.work / "bin"
         bin_dir.mkdir()
@@ -165,6 +175,12 @@ class RebaseVerifyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("MESSAGES same", result.stdout)
         self.assertIn("CODE same", result.stdout)
+
+    def test_verify_rejects_paired_conflict_markers(self):
+        self.commit("feat: topic\n\n#7 P1-01 VIEW-01", **{"App/a.swift": "<<<<<<< ours\na\n=======\nb\n>>>>>>> theirs\n"})
+        result = self.verify()
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("App/a.swift", result.stdout)
 
     def test_conflict_resolution_that_changes_code_exits_1(self):
         self.commit("feat: topic\n\n#7 P1-01 VIEW-01", **{"App/a.swift": "a3\n"})

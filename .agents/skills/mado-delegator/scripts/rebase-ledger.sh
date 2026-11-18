@@ -22,7 +22,11 @@ if [[ $ci == RED\ * && $allow_red == 0 ]]; then
 fi
 git fetch -q origin || exit 1
 gd=$(git rev-parse --git-dir)
-git -c core.commentChar=";" rebase "$up" > "$gd/rb.log" 2>&1 && { echo "DONE clean"; exit 0; }
+git -c core.commentChar=";" rebase "$up" > "$gd/rb.log" 2>&1 && {
+  echo "DONE clean"
+  python3 "$here/scan-conflict-markers.py" "$up..HEAD" || exit 8
+  exit 0
+}
 for i in $(seq 1 50); do
   c=$(git diff --name-only --diff-filter=U)
   for f in ${=c}; do
@@ -33,6 +37,11 @@ for i in $(seq 1 50); do
   node scripts/ledger/build.mjs >/dev/null || exit 4
   git add docs/feature-ledger.md docs/feature-ledger.html
   GIT_EDITOR=true git -c core.commentChar=";" rebase --continue > "$gd/rb.log" 2>&1
-  [[ -d $gd/rebase-merge ]] || { echo "DONE resolved"; node scripts/ledger/build.mjs --check && exit 0; exit 5; }
+  [[ -d $gd/rebase-merge ]] || {
+    echo "DONE resolved"
+    node scripts/ledger/build.mjs --check || exit 5
+    python3 "$here/scan-conflict-markers.py" "$up..HEAD" || exit 8
+    exit 0
+  }
 done
 echo "STOP too many steps"; exit 6
