@@ -50,9 +50,54 @@ class RebaseLedgerTests(unittest.TestCase):
         git(repo, "add", *files, env=self.env)
         git(repo, "commit", "-qm", message, env=self.env)
 
-    def run_script(self):
-        return subprocess.run(["zsh", str(SCRIPT), "origin/main"], cwd=self.work, capture_output=True, text=True,
+    def run_script(self, *args):
+        return subprocess.run(["zsh", str(SCRIPT), "origin/main", *args], cwd=self.work, capture_output=True, text=True,
                               env=self.env)
+
+    def stub_ci(self, status):
+        bin_dir = self.work / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        (bin_dir / "gh").write_text("#!/bin/sh\nprintf '%s\\n' '[{\"databaseId\":42,\"headSha\":\"abc\",\"status\":\"" +
+                                    status[0] + "\",\"conclusion\":\"" + status[1] + "\"}]'\n")
+        (bin_dir / "gh").chmod(0o755)
+        self.env["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
+
+    def test_red_main_refuses_before_rebase_unless_overridden(self):
+        self.stub_ci(("completed", "failure"))
+        self.commit(self.work, "topic", **{"code.txt": "topic\n"})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertIn("main CI is red (run 42)", result.stdout)
+        self.assertEqual(self.run_script("--allow-red-main").returncode, 0)
+
+    def test_pending_main_warns_and_continues(self):
+        self.stub_ci(("in_progress", ""))
+        self.commit(self.work, "topic", **{"code.txt": "topic\n"})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("PENDING", result.stdout)
+
+    def test_main_ci_status_green_red_pending_and_two_green(self):
+        bin_dir = self.work / "bin"
+        bin_dir.mkdir()
+        stub = bin_dir / "gh"
+        stub.write_text("#!/bin/sh\nprintf '%s\\n' \"$GH_RUNS\"\n")
+        stub.chmod(0o755)
+        script = SCRIPT.with_name("main-ci-status.sh")
+        green = '{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"success"}'
+        red = '{"databaseId":41,"headSha":"def","status":"completed","conclusion":"failure"}'
+        pending = '{"databaseId":43,"headSha":"ghi","status":"in_progress","conclusion":""}'
+        for runs, args, status, code in [
+            (f'[{green}]', [], 'GREEN', 0), (f'[{red}]', [], 'RED', 1),
+            (f'[{pending}]', [], 'PENDING', 1), (f'[{green},{green}]', ['--two-green'], 'GREEN', 0),
+            (f'[{green},{red}]', ['--two-green'], 'RED', 1),
+        ]:
+            env = {**self.env, 'GH_RUNS': runs, 'PATH': str(bin_dir) + os.pathsep + os.environ['PATH']}
+            result = subprocess.run(['zsh', str(script), *args], cwd=self.work, env=env,
+                                    capture_output=True, text=True)
+            with self.subTest(runs=runs, args=args):
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertTrue(result.stdout.startswith(status), result.stdout)
 
     def test_resolved_html_conflict_keeps_body_lines_starting_with_hash(self):
         self.commit(self.origin, "docs: main side", **{"docs/feature-ledger.html": "<p>main</p>\n"})

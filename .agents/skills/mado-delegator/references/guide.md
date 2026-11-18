@@ -475,6 +475,8 @@ a fix, then the fresh-context confirm, inside the 2-round cap.
 
 ### 5.5 Applying the verdict and severity policy
 
+A CI flake or test-fix ticket closes only after `.agents/skills/mado-delegator/scripts/main-ci-status.sh --two-green` passes.
+
 - **Critical/High** blocks. Fix round, then a fresh-context confirm from opus-auditor. At most **2 auditor rounds** per
   item: round 1 is the blind audit, round 2 the confirm. If any Critical/High is still open (or newly raised) after
   round 2, do not brief another fix or confirm: report the open findings, their traces and the options to the user, who
@@ -485,9 +487,13 @@ a fix, then the fresh-context confirm, inside the 2-round cap.
 
 ### 5.6 Rebase onto main
 
+Do not start a rebase/verify/gates cycle while main's latest CI run is red; tell the owner. Run
+`.agents/skills/mado-delegator/scripts/main-ci-status.sh` first. A PENDING result warns but does not block;
+`rebase-ledger.sh --allow-red-main` is an explicit override for a known red main.
+
 Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse --git-dir)/rb.log`.
 
-`.agents/skills/mado-delegator/scripts/rebase-ledger.sh [origin/main]` (run inside the PR worktree) automates the two ledger cases below and stops, leaving the rebase in progress, on anything else.
+`.agents/skills/mado-delegator/scripts/rebase-ledger.sh [origin/main] [--allow-red-main]` (run inside the PR worktree) automates the two ledger cases below and stops, leaving the rebase in progress, on anything else.
 
 - **Only `docs/feature-ledger.html` conflicts.** Regenerate and continue, in a loop:
   `node scripts/ledger/build.mjs && git add docs/feature-ledger.html && GIT_EDITOR=true git rebase --continue`.
@@ -588,6 +594,9 @@ Typical NEEDS-OWNER causes:
 `docs(ledger)` commit. Do the same for plan text the decision invalidates (§10 metrics, WP lines).
 
 ### 5.8 PR and merge
+
+Rerun a failed CI job only when it did not fail on main's latest run. A CI flake or test-fix ticket
+closes only after `.agents/skills/mado-delegator/scripts/main-ci-status.sh --two-green` passes.
 
 PR body sections:
 - **Summary**, what and why;
