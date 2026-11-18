@@ -39,7 +39,11 @@ class PushGuardTests(unittest.TestCase):
 
         with patch.object(guard, '__file__', str(self.root / 'scripts/codex-rules/push-guard.py')):
             with patch.object(guard, 'git', side_effect=fake_git):
-                with patch.object(guard.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+                def fake_run(command, **kwargs):
+                    if command[:3] == ['gh', 'pr', 'list']:
+                        return SimpleNamespace(returncode=0, stdout='[]')
+                    return SimpleNamespace(returncode=0)
+                with patch.object(guard.subprocess, 'run', side_effect=fake_run) as run:
                     with patch.object(sys, 'argv', ['push-guard.py', *args]):
                         result = guard.main()
         return result, run
@@ -47,14 +51,14 @@ class PushGuardTests(unittest.TestCase):
     def test_ordinary_push_is_current_topic_branch_only(self):
         result, run = self.invoke('--dry-run')
         self.assertEqual(result, 0)
-        run.assert_called_once_with(['git', 'push', '--dry-run', self.remotes[0],
+        run.assert_any_call(['git', 'push', '--dry-run', self.remotes[0],
                                      'HEAD:refs/heads/fix/topic'], check=False)
 
     def test_rebased_push_requires_exact_lease_oid(self):
         oid = 'a' * 40
         result, run = self.invoke('--expected-remote-oid', oid)
         self.assertEqual(result, 0)
-        run.assert_called_once_with(['git', 'push',
+        run.assert_any_call(['git', 'push',
                                      f'--force-with-lease=refs/heads/fix/topic:{oid}',
                                      self.remotes[0], 'HEAD:refs/heads/fix/topic'], check=False)
 
@@ -81,7 +85,7 @@ class PushGuardTests(unittest.TestCase):
             except SystemExit:
                 self.fail(f'{url} was refused')
             self.assertEqual(result, 0, url)
-            run.assert_called_once_with(['git', 'push', '--dry-run', url, 'HEAD:refs/heads/fix/topic'], check=False)
+            run.assert_any_call(['git', 'push', '--dry-run', url, 'HEAD:refs/heads/fix/topic'], check=False)
 
     def test_rejects_near_miss_push_urls(self):
         for remotes in [
@@ -107,6 +111,36 @@ class PushGuardTests(unittest.TestCase):
         self.remotes.append('https://example.invalid/unapproved.git')
         with self.assertRaises(SystemExit):
             self.invoke()
+
+    def test_existing_pr_must_pass_lint_before_push(self):
+        (self.root / 'scripts/agents').mkdir()
+        (self.root / 'scripts/agents/local-pr-lint.mjs').write_text('')
+        calls = []
+        def fake_git(*argv):
+            if argv == ('rev-parse', '--show-toplevel'): return str(self.root)
+            if argv == ('symbolic-ref', '--quiet', '--short', 'HEAD'): return self.branch
+            if argv == ('remote', 'get-url', '--push', '--all', 'origin'): return self.remotes[0]
+            if argv == ('rev-parse', 'HEAD'): return 'a' * 40
+            raise AssertionError(argv)
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if command[:3] == ['gh', 'pr', 'list']:
+                return SimpleNamespace(returncode=0, stdout='[{"number":12,"body":"## Gates\\nold"}]')
+            if command[0] == 'node' and Path(command[1]).name == 'local-pr-lint.mjs':
+                return SimpleNamespace(returncode=1)
+            return SimpleNamespace(returncode=0)
+        with patch.object(guard, '__file__', str(self.root / 'scripts/codex-rules/push-guard.py')):
+            with patch.object(guard, 'git', side_effect=fake_git):
+                with patch.object(guard.subprocess, 'run', side_effect=fake_run):
+                    with patch.object(sys, 'argv', ['push-guard.py']):
+                        result = guard.main()
+        self.assertNotEqual(result, 0)
+        self.assertFalse(any(c[:2] == ['git', 'push'] for c in calls))
+
+    def test_skip_pr_lint_prints_reason(self):
+        result, run = self.invoke('--skip-pr-lint', 'initial branch setup')
+        self.assertEqual(result, 0)
+        self.assertEqual(run.call_count, 1)
 
 
 if __name__ == '__main__':
