@@ -27,7 +27,7 @@ You are the monitor of the resource broker for one Mac shared by Mado and RClick
 1. Run `node scripts/broker-tick.mjs` and read `status.md`.
 2. Read `notices/mado-delegator.md` and `notices/rclick-delegator.md`; relay each line you have not relayed yet, verbatim, to
    the delegator named in the file name (the scheduler wrote them from validated fields: overrun, abandoned job, unknown
-   holder, deadline at risk, stall, a question for a requester, stale heartbeat). Never relay a line twice. Anything else you
+   holder, deadline at risk, stall, a question for a requester, stale heartbeat). Relay only lines with a sequence number higher than the highest you have already sent in this conversation (delegators de-duplicate on the number, so after a `/clear` a repeat is harmless). Anything else you
    notice (a stale lock, a stale heartbeat, a denied command) is reported to the human in your own reply, not sent to a requester.
 3. Otherwise reply `ok <generation>` and stop. (With `runner: launchd` skip step 1 and only read.)
 
