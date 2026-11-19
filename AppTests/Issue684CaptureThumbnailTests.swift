@@ -119,11 +119,12 @@ private final class FakeClock: @unchecked Sendable {
     #expect(visibleActionIDs(saved.view).isEmpty)
     #expect(view("capture.thumbnail.close", in: saved.view)?.isHiddenOrHasHiddenAncestor == true)
     saved.pointerEntered()
-    #expect(visibleActionIDs(saved.view) == ["capture.thumbnail.action.copy", "capture.thumbnail.action.openInMado",
-                                         "capture.thumbnail.action.moveToTrash"])
+    // #694: 标注 sits between 拷贝 and 在 Mado 中打开; 移到废纸篓 moves to row 2.
+    #expect(visibleActionIDs(saved.view) == ["capture.thumbnail.action.copy", "capture.thumbnail.action.annotate",
+                                         "capture.thumbnail.action.openInMado", "capture.thumbnail.action.moveToTrash"])
     #expect(view("capture.thumbnail.overlay", in: saved.view)?.isHiddenOrHasHiddenAncestor == false)
     #expect(view("capture.thumbnail.close", in: saved.view)?.isHiddenOrHasHiddenAncestor == false)
-    for later in ["annotate", "recognizeText"] {
+    for later in ["recognizeText"] {
         #expect(view("capture.thumbnail.action.\(later)", in: saved.view) == nil)
     }
     saved.pointerExited()
@@ -134,7 +135,7 @@ private final class FakeClock: @unchecked Sendable {
     unsaved.show()
     unsaved.pointerEntered()
     #expect(visibleActionIDs(unsaved.view) == ["capture.thumbnail.action.save", "capture.thumbnail.action.copy",
-                                           "capture.thumbnail.action.openInMado"])
+                                           "capture.thumbnail.action.annotate", "capture.thumbnail.action.openInMado"])
     let titles = ["capture.thumbnail.action.save", "capture.thumbnail.action.copy"].compactMap {
         (view($0, in: unsaved.view) as? NSButton)?.title
     }
