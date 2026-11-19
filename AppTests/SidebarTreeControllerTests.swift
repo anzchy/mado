@@ -29,58 +29,75 @@ private func sameSidebarURL(_ lhs: URL, _ rhs: URL) -> Bool {
     lhs.standardizedFileURL.pathComponents == rhs.standardizedFileURL.pathComponents
 }
 
+/// `impossible` gives a deterministic reason the stage can no longer complete, read from an injected fake's state and
+/// never from elapsed time; the stage then fails at once, so no cutoff below the test's time limit exists (#400, #751).
 @MainActor private func waitForSidebar(_ stage: String, refreshing watch: (any FolderWatching)? = nil,
-    state: () -> String = { "" },
+    state: () -> String = { "" }, impossible: () -> String? = { nil },
     fileID: String = #fileID, line: Int = #line, _ condition: () async -> Bool) async throws {
     watch?.reconcileAll()
-    do { try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) { await condition() } } catch {
-        // On stdout, so CI's uploaded first-attempt log names the state a stuck stage saw (#425).
-        let seen = state()
-        guard !seen.isEmpty else { throw error }
-        print("sidebar stage \(stage) timed out; state: \(seen)")
-        throw ConditionWaitError(description: "\(error); state: \(seen)")
-    }
+    var blocked: String?
+    do { try await waitUntil("sidebar stage: \(stage)", fileID: fileID, line: line) {
+        if await condition() { return true }
+        blocked = impossible(); return blocked != nil
+    } } catch { throw sidebarStageFailure(stage, error, state: state()) }
+    guard let blocked else { return }
+    throw sidebarStageFailure(stage, ConditionWaitError(description:
+        "sidebar stage \(stage) can never complete at \(fileID):\(line): \(blocked)"), state: state())
 }
 
-@MainActor private func sidebarCondition(for seconds: Double,
-    _ condition: () async -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + .seconds(seconds)
-    while await !condition(), ContinuousClock.now < deadline {
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return await condition()
+/// Prints the failed stage on stdout, so CI's uploaded first-attempt log names it and the state it saw (#425).
+@MainActor private func sidebarStageFailure(_ stage: String, _ error: any Error, state seen: String) -> any Error {
+    guard !seen.isEmpty else { print("sidebar stage \(stage) failed: \(error)"); return error }
+    print("sidebar stage \(stage) failed; state: \(seen)")
+    return ConditionWaitError(description: "\(error); state: \(seen)")
 }
 
+/// Holds the first caller after `arm()` until the test calls `release()`. A holder cancelled before that is
+/// abandoned: a re-arming gate arms again so the next caller holds instead (#751); any other gate is then spent.
 private final class SidebarHandoffGate: @unchecked Sendable {
     private let lock = NSLock()
-    private var armed = false
-    private var released = false
-    private var holding = false
+    private let rearmsAbandonedHold: Bool
+    private var armed = false, released = false, holder = 0, holders = 0, abandoned = 0
     private var continuation: CheckedContinuation<Void, Never>?
-    var isHolding: Bool { lock.withLock { holding } }
-    func arm() {
-        lock.withLock { armed = true; released = false; holding = false }
+    init(rearmsAbandonedHold: Bool = false) { self.rearmsAbandonedHold = rearmsAbandonedHold }
+    var isHolding: Bool { lock.withLock { holder != 0 } }
+    var abandonedHolds: Int { lock.withLock { abandoned } }
+    /// Why no caller can hold before the test arms it again, or nil while one still can.
+    var spent: String? {
+        lock.withLock { armed || holder != 0 || released || abandoned == 0 ? nil :
+            "its holder was cancelled before release (\(abandoned)x) and it is no longer armed" }
     }
+    var state: String { lock.withLock { "armed=\(armed) holding=\(holder != 0) released=\(released) abandoned=\(abandoned)" } }
+    func arm() { lock.withLock { armed = true; released = false } }
     func holdIfArmed() async {
-        guard lock.withLock({ () -> Bool in
-            guard armed else { return false }
-            armed = false; holding = true
-            return true
+        guard let id = lock.withLock({ () -> Int? in
+            guard armed else { return nil }
+            armed = false
+            guard !released else { return nil }
+            holders += 1; holder = holders
+            return holders
         }) else { return }
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 let resumeNow = lock.withLock { () -> Bool in
-                    if released { holding = false; return true }
+                    guard holder == id else { return true }
                     self.continuation = continuation
                     return false
                 }
                 if resumeNow { continuation.resume() }
             }
-        } onCancel: { release() }
+        } onCancel: { resume { abandon(id) } }
     }
-    func release() {
+    func release() { resume { released = true; holder = 0; return true } }
+    /// Only the cancelled holder's own hold ends; a later holder of a re-armed gate keeps holding.
+    private func abandon(_ id: Int) -> Bool {
+        guard holder == id else { return false }
+        holder = 0; abandoned += 1; armed = rearmsAbandonedHold
+        return true
+    }
+    private func resume(_ change: () -> Bool) {
         let continuation = lock.withLock { () -> CheckedContinuation<Void, Never>? in
-            released = true; holding = false
+            guard change() else { return nil }
             defer { self.continuation = nil }
             return self.continuation
         }
@@ -92,18 +109,18 @@ private final class SidebarHandoffWatch: FolderWatching, @unchecked Sendable {
     private struct Subscription: FolderWatchSubscription {
         let subscription: any FolderWatchSubscription
         let didCancel: @Sendable () -> Void
-        func cancel() async {
-            await subscription.cancel()
-            didCancel()
-        }
+        func cancel() async { await subscription.cancel(); didCancel() }
     }
     private let hub: WatchHub
-    private let gate = SidebarHandoffGate()
+    private let gate = SidebarHandoffGate(rearmsAbandonedHold: true)
     private let lock = NSLock()
     private var cancelledSubscriptions = 0
     init(hub: WatchHub) { self.hub = hub }
     var isHolding: Bool { gate.isHolding }
     var cancelledSubscriptionCount: Int { lock.withLock { cancelledSubscriptions } }
+    var abandonedHolds: Int { gate.abandonedHolds }
+    var registrationSpent: String? { gate.spent.map { "the replacement registration gate: \($0)" } }
+    var state: String { "registration gate \(gate.state) cancelled=\(cancelledSubscriptionCount)" }
     func armNextSubscription() { gate.arm() }
     func releaseSubscription() { gate.release() }
     func subscribe(rootID: AccessRootID, folder: URL, recursive: Bool,
@@ -115,23 +132,6 @@ private final class SidebarHandoffWatch: FolderWatching, @unchecked Sendable {
         }
     }
     func reconcileAll() { hub.reconcileAll() }
-}
-
-private final class SidebarHandoffEnumerator: SidebarFolderEnumerating, @unchecked Sendable {
-    private let system = SystemSidebarFolderEnumerator()
-    private let gate = SidebarHandoffGate()
-    var isReadCaptured: Bool { gate.isHolding }
-    func armNextChildrenRead() { gate.arm() }
-    func releaseChildrenRead() { gate.release() }
-    func children(in folder: URL, root: URL) async throws -> [URL] {
-        let children = try await system.children(in: folder, root: root)
-        await gate.holdIfArmed()
-        try Task.checkCancellation()
-        return children
-    }
-    func imageCount(in folder: URL, root: URL) async throws -> Int {
-        try await system.imageCount(in: folder, root: root)
-    }
 }
 
 private final class SidebarHandoffEventSource: FolderEventSource, @unchecked Sendable {
@@ -414,11 +414,55 @@ private actor SwitchingSidebarCounter: SidebarFolderEnumerating {
     #expect(!tree.rows.contains(where: { sameSidebarURL($0.folderURL, b) }))
 }
 
-private enum SidebarHandoffDelivery {
+private final class SidebarHandoffEnumerator: SidebarFolderEnumerating, @unchecked Sendable {
+    private let system = SystemSidebarFolderEnumerator()
+    private let gate = SidebarHandoffGate(rearmsAbandonedHold: true)
+    var isReadCaptured: Bool { gate.isHolding }
+    var readSpent: String? { gate.spent.map { "the children read gate: \($0)" } }
+    var state: String { "read gate \(gate.state)" }
+    func armNextChildrenRead() { gate.arm() }
+    func releaseChildrenRead() { gate.release() }
+    func children(in folder: URL, root: URL) async throws -> [URL] {
+        let children = try await system.children(in: folder, root: root)
+        await gate.holdIfArmed()
+        try Task.checkCancellation()
+        return children
+    }
+    func imageCount(in folder: URL, root: URL) async throws -> Int {
+        try await system.imageCount(in: folder, root: root)
+    }
+}
+
+/// Holds the folder scan until the test lets it go, so the scan's first complete snapshot, and the canonical sidebar
+/// load that snapshot starts, land at a point the test picks (#751).
+private final class SidebarHandoffScanner: FolderScanning, @unchecked Sendable {
+    private let browser = FolderBrowser()
+    private let gate = SidebarHandoffGate()
+    init() { gate.arm() }
+    var state: String { "scan gate \(gate.state)" }
+    func releaseScan() { gate.release() }
+    func scan(in folder: URL, root: ItemIdentityRoot, options: FolderScanOptions,
+        emit: @Sendable ([FolderEntry]) async throws -> Void) async throws {
+        await gate.holdIfArmed()
+        try await browser.scan(in: folder, root: root, options: options, emit: emit)
+    }
+}
+
+enum SidebarHandoffDelivery: Sendable {
     case beforeRegistrationRelease, afterOldSubscriptionRetires, duringOwnedRead
 }
 
-@MainActor private func expectSidebarHandoffDelivery(_ delivery: SidebarHandoffDelivery) async throws {
+/// An extra sidebar load the fixture can force at a fixed point of the handoff (#751).
+enum SidebarHandoffOrdering: Sendable {
+    /// The scan runs freely; its canonical sidebar load lands wherever the runner puts it.
+    case free
+    /// O1: the scan waits until a reconcile load holds the replacement registration. Its first complete snapshot then
+    /// starts the canonical sidebar load, which cancels the load that holds the registration.
+    case canonicalLoadCancelsHeldRegistration
+}
+
+@MainActor func expectSidebarHandoffDelivery(_ delivery: SidebarHandoffDelivery,
+    ordering: SidebarHandoffOrdering = .free) async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -443,58 +487,57 @@ private enum SidebarHandoffDelivery {
         preferencesStore: InMemoryDisplayPreferencesStore(), accessServices: Task { services },
         motionPolicy: MotionPolicy(source: SidebarMotionSource()))
     defer { controller.window?.close() }
-    let enumerator = SidebarHandoffEnumerator()
+    let enumerator = SidebarHandoffEnumerator(), scanner = SidebarHandoffScanner()
     controller.sidebarBrowserOverride = SidebarFolderBrowser(access: access, enumerator: enumerator)
-    defer { enumerator.releaseChildrenRead(); watch.releaseSubscription() }
+    if case .canonicalLoadCancelsHeldRegistration = ordering { controller.folderScanningOverride = scanner }
+    defer { enumerator.releaseChildrenRead(); watch.releaseSubscription(); scanner.releaseScan() }
     controller.browseRecoveredFolder(a, rootID: root)
     let tree = try sidebarTree(controller)
-    try await waitForSidebar("initial tree") {
+    let state = { "\(sidebarState(controller, tree: tree, testRoot: base)); \(watch.state); \(enumerator.state); \(scanner.state)" }
+    try await waitForSidebar("initial tree", state: state) {
         tree.rows.first(where: { sameSidebarURL($0.folderURL, b) })?.countLabel.stringValue == "1"
     }
     let initialCancellationBaseline = watch.cancelledSubscriptionCount
     enumerator.armNextChildrenRead()
     watch.armNextSubscription()
     watch.reconcileAll()
-    try await waitForSidebar("first refresh boundary") { enumerator.isReadCaptured || watch.isHolding }
-    var subscriptionFirst = false
-    if watch.isHolding && !enumerator.isReadCaptured {
-        _ = await sidebarCondition(for: 0.25) { enumerator.isReadCaptured }
-        if !enumerator.isReadCaptured {
-            subscriptionFirst = true
-            watch.releaseSubscription()
+    // A sidebar load subscribes before it reads (#298), so the first load after arming holds the registration
+    // before any read is captured. A load cancelled while it holds re-arms its gate for the load that replaced it.
+    try await waitForSidebar("replacement registration held", state: state,
+        impossible: { watch.registrationSpent }) { watch.isHolding }
+    if case .canonicalLoadCancelsHeldRegistration = ordering {
+        let abandoned = watch.abandonedHolds
+        scanner.releaseScan()
+        try await waitForSidebar("canonical load cancelled the held registration", state: state) {
+            watch.abandonedHolds > abandoned
         }
+        try await waitForSidebar("canonical load holds the registration", state: state,
+            impossible: { watch.registrationSpent }) { watch.isHolding }
     }
-    try await waitForSidebar("captured children without D") { enumerator.isReadCaptured }
-    if !subscriptionFirst {
-        try await waitForSidebar("replacement registration held") { watch.isHolding }
-    } else if case .afterOldSubscriptionRetires = delivery {
-        try await waitForSidebar("old subscription retired before event") {
+    watch.releaseSubscription()
+    try await waitForSidebar("captured children without D", state: state,
+        impossible: { enumerator.readSpent }) { enumerator.isReadCaptured }
+    if case .afterOldSubscriptionRetires = delivery {
+        try await waitForSidebar("old subscription retired before event", state: state) {
             watch.cancelledSubscriptionCount > initialCancellationBaseline
         }
     }
     let d = a.appendingPathComponent("D")
     try fm.createDirectory(at: d, withIntermediateDirectories: true)
     source.emit(.changed(d))
+    // The registration was released before the read was captured (#298), so a second release is a no-op: each case
+    // orders the delivered change against the captured read and the old subscription's retirement.
     switch delivery {
     case .beforeRegistrationRelease:
         clock.fireScheduledChanges()
         watch.releaseSubscription()
-    case .afterOldSubscriptionRetires:
-        let retirementBaseline = watch.cancelledSubscriptionCount
-        watch.releaseSubscription()
-        if !subscriptionFirst {
-            try await waitForSidebar("old subscription retired after event") {
-                watch.cancelledSubscriptionCount > retirementBaseline
-            }
-        }
-        clock.fireScheduledChanges()
-    case .duringOwnedRead:
+    case .afterOldSubscriptionRetires, .duringOwnedRead:
         watch.releaseSubscription()
         clock.fireScheduledChanges()
     }
     enumerator.releaseChildrenRead()
     // One external change must refresh D with count 0 without another event or reconcile.
-    try await waitForSidebar("D refreshed to count 0 by one external change") {
+    try await waitForSidebar("D refreshed to count 0 by one external change", state: state) {
         tree.rows.first(where: { sameSidebarURL($0.folderURL, d) })?.countLabel.stringValue == "0"
     }
     #expect(tree.rows.contains { sameSidebarURL($0.folderURL, b) })
