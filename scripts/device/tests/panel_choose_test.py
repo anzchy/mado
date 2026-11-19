@@ -37,6 +37,10 @@ if name in ('pbcopy', 'pbpaste'):
     fail('clipboard access forbidden')
 elif name == 'sleep':
     event(args=args)
+    if state.get('pending_dismiss'):
+        state['panel_open'] = False
+        state['pending_dismiss'] = False
+        save()
 elif name == 'kc.sh':
     keys = args[1:]
     state['keys'].append(keys)
@@ -53,6 +57,7 @@ elif name == 'kc.sh':
             state['panel_open'] = False
         elif state['focused'] and not os.environ.get('FAKE_GO_CLOSE_TIMEOUT'):
             state['sheets'] = 0
+            state['pending_dismiss'] = bool(os.environ.get('FAKE_ASYNC_GO_DISMISS'))
     elif keys == ['36'] and state['panel_open']:
         if not os.environ.get('FAKE_PANEL_CLOSE_TIMEOUT'):
             state['panel_open'] = False
@@ -61,7 +66,10 @@ elif name == 'kc.sh':
                 receipt = Path(os.environ['HOME']) / 'Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/recent-folders.json'
                 receipt.parent.mkdir(parents=True, exist_ok=True)
                 from urllib.parse import quote
-                receipt.write_text(json.dumps({'schemaVersion': 1, 'items': [{'url': 'file://' + quote(state['selected'])}]}))
+                chosen = os.path.realpath(state['selected']).rstrip('/') + '/'
+                item = {'schemaVersion': 1, 'url': 'file://' + quote(chosen)}
+                receipt.write_text(json.dumps({'schemaVersion': 1, 'items': [item]}
+                                              if os.environ.get('FAKE_ENVELOPE') else [item]))
     elif keys == ['53']:
         state['cancelled'] = True
     save()
@@ -136,7 +144,7 @@ class PanelChoose(unittest.TestCase):
             pidfile.write_text(pid)
         (self.state / 'state.json').write_text(json.dumps(dict(
             mode=mode, panel_open=mode != 'none', sheets=0, field=None,
-            selected=None, cancelled=False, focused=False, keys=[])))
+            selected=None, cancelled=False, focused=False, pending_dismiss=False, keys=[])))
         (self.state / 'log.jsonl').unlink(missing_ok=True)
         environment = dict(PATH=f'{self.bin}:/usr/bin:/bin', HOME=self.temp.name,
                            FAKE_STATE=str(self.state), **env)
@@ -157,6 +165,10 @@ class PanelChoose(unittest.TestCase):
     def calls(self, tool):
         return [event for event in self.log if event['tool'] == tool]
 
+    def receipt_data(self):
+        path = Path(self.temp.name) / 'Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/recent-folders.json'
+        return json.loads(path.read_text())
+
     def assertRefused(self):
         self.assertNotIn('chose:', self.out)
         self.assertIsNone(self.snapshot['selected'])
@@ -167,6 +179,8 @@ class PanelChoose(unittest.TestCase):
         self.assertIn('chose: /tmp/a b', self.out)
         self.assertEqual(self.snapshot['field'], '/tmp/a b')
         self.assertEqual(self.snapshot['selected'], '/tmp/a b')
+        self.assertIsInstance(self.receipt_data(), list)
+        self.assertTrue(self.receipt_data()[0]['url'].endswith('/'))
         self.assertEqual(self.snapshot['keys'], KEYS)
         self.assertEqual(self.snapshot['sheets'], 0)
         self.assertFalse(self.snapshot['panel_open'])
@@ -239,7 +253,7 @@ class PanelChoose(unittest.TestCase):
         self.assertIn('panel still open after Open', self.err)
         self.assertEqual(self.snapshot['keys'], KEYS + [['53']])
         self.assertTrue(self.snapshot['cancelled'])
-        self.assertEqual(len(self.calls('sleep')), 20)
+        self.assertEqual(len(self.calls('sleep')), 22)
         self.assertRefused()
 
     def test_go_return_dismisses_panel_without_choice(self):
@@ -257,7 +271,29 @@ class PanelChoose(unittest.TestCase):
     def test_wrong_choice_is_refused_even_after_panel_closes(self):
         self.assertNotEqual(self.run_helper(FAKE_WRONG_SELECTED='1'), 0)
         self.assertIn('chosen path differs', self.err)
+        self.assertIn("chosen='/wrong/path'", self.err)
+        self.assertIn(f"target={os.path.realpath('/tmp/x')!r}", self.err)
         self.assertNotIn('chose:', self.out)
+
+    def test_symlink_spelling_matches_canonical_app_receipt(self):
+        actual = Path(self.temp.name) / 'canonical folder'
+        actual.mkdir()
+        alias = Path(self.temp.name) / 'alias'
+        alias.symlink_to(actual, target_is_directory=True)
+        self.assertEqual(self.run_helper(str(alias)), 0, self.err)
+        self.assertEqual(self.snapshot['selected'], str(alias))
+        self.assertEqual(self.receipt_data()[0]['url'], 'file://' + os.path.realpath(actual).replace(' ', '%20') + '/')
+
+    def test_interim_envelope_receipt_still_works(self):
+        self.assertEqual(self.run_helper(FAKE_ENVELOPE='1'), 0, self.err)
+        self.assertIsInstance(self.receipt_data(), dict)
+        self.assertEqual(self.snapshot['selected'], '/tmp/x')
+
+    def test_async_go_dismissal_is_checked_before_open(self):
+        self.assertNotEqual(self.run_helper(FAKE_ASYNC_GO_DISMISS='1'), 0)
+        self.assertIn('panel closed before Open', self.err)
+        self.assertEqual(self.snapshot['keys'], KEYS[:2])
+        self.assertRefused()
 
     def test_return_requires_verified_go_field_focus(self):
         self.assertNotEqual(self.run_helper(FAKE_FOCUS_FAIL='1'), 0)

@@ -1,6 +1,6 @@
 #!/bin/zsh
-# panel-choose.sh RUN_DIR PATH — in an open NSOpenPanel/powerbox of the run's Picsee: ⌘⇧G, write PATH into the
-# Go-to field through accessibility, read it back, Return (go), check the sheet closed, Return (Open/Grant).
+# panel-choose.sh RUN_DIR FOLDER — choose a folder grant in the run's open panel. It confirms Go-to field focus,
+# panel closure and a fresh matching app recents entry. File choices or panels that do not write recents fail closed.
 # 2026-10-28: the old ⌘A ⌘V paste never reached the Go-to field (run probe-228), so Return confirmed whatever folder
 # the panel remembered and every pick landed in the wrong place while the script reported success. Writing the
 # AX value bypasses the pasteboard and the input method (#119), and every step is verified; any mismatch fails
@@ -10,7 +10,7 @@ cd "$(git -C "${0:A:h}" rev-parse --show-toplevel)" || exit 1
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 run=$1 target=$2
 receipt="$HOME/Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/recent-folders.json"
-receipt_before=$(python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_mtime_ns if os.path.exists(sys.argv[1]) else 0)' "$receipt") || exit 1
+receipt_before=$(python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_mtime_ns if os.path.exists(sys.argv[1]) else 0)' "$receipt" 2>/dev/null) || { print -u2 'FAIL panel-choose — could not read app recents timestamp; nothing chosen'; exit 1 }
 [[ -r $run/picsee.pid ]] || { print -u2 "FAIL panel-choose — no $run/picsee.pid; launch through scripts/device/launch.sh or record the identity first"; exit 1 }
 pid=${"$(<$run/picsee.pid)"%%$'\n'*}
 [[ $pid == <-> ]] || { print -u2 -r -- "FAIL panel-choose — $run/picsee.pid does not start with a pid line"; exit 1 }
@@ -46,6 +46,10 @@ ax 'set focused of text field 1 of sheet 1 to true' >/dev/null
 key 36 || exit 1
 panel_open || { print -u2 'FAIL panel-choose — panel closed before Open; nothing chosen'; exit 1 }
 wait_sheets 0 || { print -u2 -r -- "FAIL panel-choose — Go-to sheet still open after Return (path not found?); nothing chosen"; key 53; exit 1 }
+for t in {1..3}; do
+  panel_open || { print -u2 'FAIL panel-choose — panel closed before Open; nothing chosen'; exit 1 }
+  [[ $t == 3 ]] || sleep 0.1
+done
 key 36 || exit 1
 for t in {1..20}; do panel_open || break; sleep 0.25; done
 panel_open && { print -u2 -r -- "FAIL panel-choose — panel still open after Open (button disabled or wrong kind of item?); nothing chosen"; key 53; exit 1 }
@@ -63,7 +67,9 @@ else:
         items = data['items'] if isinstance(data, dict) else data
         url = items[0]['url']
         chosen = unquote(urlparse(url).path or url.removeprefix('file://'))
-        print('matched' if chosen == target else 'mismatch')
+        chosen = os.path.realpath(chosen).rstrip('/') or '/'
+        target = os.path.realpath(target).rstrip('/') or '/'
+        print('matched' if chosen == target else f'mismatch chosen={chosen!r} target={target!r}')
     except (OSError, ValueError, KeyError, IndexError, TypeError):
         print('missing')
 PY
@@ -72,8 +78,8 @@ PY
   sleep 0.25
 done
 [[ $choice_state == matched ]] || {
-  if [[ $choice_state == mismatch ]]; then
-    print -u2 'FAIL panel-choose — chosen path differs from target; nothing chosen'
+  if [[ $choice_state == mismatch* ]]; then
+    print -u2 -r -- "FAIL panel-choose — chosen path differs from target (${choice_state#mismatch }); nothing chosen"
   else
     print -u2 'FAIL panel-choose — panel closed but no confirmed choice in app recents; nothing chosen'
   fi
