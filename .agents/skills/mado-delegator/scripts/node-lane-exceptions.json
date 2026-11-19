@@ -1,0 +1,10 @@
+{
+  "$comment": "Reviewed exceptions to the owner-gates node lane (#750). Each entry is a node test path or one-level glob that a .github/workflows/*.yml node command runs and the local lane does not, with the reason and the ticket that owns closing the gap. owner-gates prints them as node-excepted=…; owner-gates-tools.test.mjs fails on an entry without reason or ticket, or one that matches no CI test.",
+  "exceptions": [
+    {
+      "file": "scripts/ci/integration/*.test.mjs",
+      "reason": "CI runs these host-ownership integration tests as `scripts/heavy-lock.sh node scripts/tdd/node-lane.mjs …` with MADO_HEAVY_CI_BOUNDARY_REQUIRED=1 and a CI top-level lock input; node-lane.mjs refuses without that supervision boundary, and the owner-gates node lane takes no heavy lock.",
+      "ticket": "#735"
+    }
+  ]
+}

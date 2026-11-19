@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { selectSuites, failureFact, preflight, inspectLock } from './owner-gates-tools.mjs';
+import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 test('WI-1 skips both optional suites only for reviewed native-only paths', () => {
@@ -72,4 +72,71 @@ test('WI-3 live supervised holder waits instead of refusing', async t => {
   fs.writeFileSync(`${lock}.guardian-live.owner`, owner.replace(`supervisor=${process.pid}`, 'supervisor=999999'));
   assert.deepEqual(inspectLock(lock), {holder:{pid:child.pid, orphaned:true}, staleRecords:0});
   assert.match(preflight({scriptsOwn:true, nodeModules:true, playwright:true, holder:inspectLock(lock).holder}), /supervisor=dead/);
+});
+
+// #750: the local node lane covers every node test path the workflows run, or lists it as a reviewed exception.
+const repo = new URL('../../../..', import.meta.url).pathname;
+const workflowTexts = () => fs.readdirSync(path.join(repo, '.github/workflows')).filter(f => /\.ya?ml$/.test(f))
+  .map(f => fs.readFileSync(path.join(repo, '.github/workflows', f), 'utf8'));
+
+test('750 workflow parser reads node --test and node-lane commands only', () => {
+  const text = [
+    '      - run: node --test scripts/a/*.test.mjs scripts/b/x.test.cjs',
+    '        run: |',
+    '          python3 -m unittest discover -s scripts/device/tests',
+    '          node --test --test-reporter=spec "scripts/c/y.test.mjs"',
+    '        run: scripts/heavy-lock.sh node scripts/tdd/node-lane.mjs scripts/d/*.test.mjs > .build/out.tap 2>&1',
+    '        run: node scripts/ci/cache-key.mjs spm "$MANIFEST"',
+  ].join('\n');
+  assert.deepEqual(workflowNodeTests(text), ['scripts/a/*.test.mjs', 'scripts/b/x.test.cjs', 'scripts/c/y.test.mjs', 'scripts/d/*.test.mjs']);
+});
+
+test('750 every node test the workflows run is in the local lane or a reviewed exception', () => {
+  const exceptions = readExceptions(NODE_LANE_EXCEPTIONS);
+  const ci = [...new Set(workflowTexts().flatMap(workflowNodeTests).flatMap(p => expandPattern(repo, p)))];
+  assert.ok(ci.length > 60, `expanded CI node tests: ${ci.length}`);
+  assert.ok(ci.includes('scripts/ci/for-where-ban.test.mjs'));
+  assert.deepEqual(uncoveredWorkflowTests(repo, workflowTexts(), exceptions), []);
+});
+
+test('750 a CI test directory the lane does not know is reported', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-parity-'));
+  try {
+    for (const rel of ['scripts/ci/a.test.mjs', 'scripts/brand-new/b.test.mjs', 'scripts/ci/integration/c.test.mjs']) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), {recursive: true}); fs.writeFileSync(path.join(dir, rel), '');
+    }
+    const text = 'run: node --test scripts/ci/*.test.mjs scripts/brand-new/*.test.mjs\nrun: node scripts/tdd/node-lane.mjs scripts/ci/integration/*.test.mjs';
+    assert.deepEqual(uncoveredWorkflowTests(dir, [text], []), ['scripts/brand-new/b.test.mjs', 'scripts/ci/integration/c.test.mjs']);
+    assert.deepEqual(uncoveredWorkflowTests(dir, [text], [{file: 'scripts/ci/integration/*.test.mjs', reason: 'x'.repeat(30), ticket: '#1'}]), ['scripts/brand-new/b.test.mjs']);
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('750 the lane runs scripts/ci (for-where ban included) and the mado-verify tests on every diff', () => {
+  const exceptions = readExceptions(NODE_LANE_EXCEPTIONS);
+  for (const choice of [{agents: false, tdd: false}, {agents: true, tdd: true}]) {
+    const {files} = nodeLaneFiles(repo, choice, exceptions);
+    for (const file of ['scripts/ci/for-where-ban.test.mjs', 'scripts/ci/name-checks-ci.test.mjs', 'scripts/release/appcast.test.mjs',
+      'scripts/hooks/git-add-guard.test.mjs', '.agents/skills/mado-verify/tests/verify.test.mjs',
+      '.agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs']) assert.ok(files.includes(file), `${file} with ${JSON.stringify(choice)}`);
+    assert.equal(files.includes('scripts/agents/pre-push.test.mjs'), choice.agents);
+    assert.equal(files.some(f => f.startsWith('scripts/tdd/')), choice.tdd);
+  }
+});
+
+test('750 every exception names a reason and a ticket, matches a CI test, and is not also run', () => {
+  const exceptions = readExceptions(NODE_LANE_EXCEPTIONS);
+  const ci = [...new Set(workflowTexts().flatMap(workflowNodeTests).flatMap(p => expandPattern(repo, p)))];
+  const {files, excepted} = nodeLaneFiles(repo, {agents: true, tdd: true}, exceptions);
+  for (const entry of exceptions) {
+    assert.match(entry.ticket, /^#[1-9]\d*$/, entry.file);
+    assert.ok(entry.reason.length >= 20, entry.file);
+    const matched = expandPattern(repo, entry.file);
+    assert.ok(matched.length && matched.every(f => ci.includes(f)), `${entry.file} matches no CI test`);
+    for (const file of matched) { assert.ok(!files.includes(file), file); assert.ok(excepted.includes(file), file); }
+  }
+  for (const bad of [[{file: 'scripts/ci/a.test.mjs', reason: 'x'.repeat(30)}], [{file: 'scripts/ci/a.test.mjs', ticket: '#1'}], [{file: '', reason: 'x'.repeat(30), ticket: '#1'}]]) {
+    const file = path.join(os.tmpdir(), `lane-exceptions-${process.pid}.json`);
+    fs.writeFileSync(file, JSON.stringify({exceptions: bad}));
+    try { assert.throws(() => readExceptions(file), /exception/); } finally { fs.rmSync(file, {force: true}); }
+  }
 });

@@ -80,6 +80,65 @@ export function inspectLock(lock) {
   return {holder:null, staleRecords:0};
 }
 
+// #750: the local node lane runs every node test the workflows run (.github/workflows/*.yml `node --test` and
+// node-lane.mjs commands), except the reviewed entries of node-lane-exceptions.json; owner-gates-tools.test.mjs checks it.
+// `agents` and `tdd` stay optional for reviewed native-only diffs (selectSuites); CI runs them on every PR.
+export const NODE_LANE = Object.freeze({
+  always: ['scripts/ci/*.test.mjs', 'scripts/ledger/*.test.mjs', 'scripts/name-checks/*.test.mjs', 'scripts/release/*.test.mjs',
+    'scripts/perf/*.test.mjs', 'scripts/hooks/*.test.mjs', 'scripts/device/tests/*.test.cjs',
+    '.agents/skills/mado-delegator/scripts/*.test.mjs', '.agents/skills/mado-verify/tests/*.test.mjs'],
+  agents: ['scripts/agents/*.test.mjs'],
+  tdd: ['scripts/tdd/*.test.mjs'],
+});
+export const NODE_LANE_EXCEPTIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'node-lane-exceptions.json');
+
+// Text match, no YAML parser: the test paths of each `node --test …` or `node scripts/tdd/node-lane.mjs …` command.
+export function workflowNodeTests(text) {
+  const paths = [];
+  for (const line of text.split('\n')) {
+    const command = /\bnode\s+(?:--test\b|scripts\/tdd\/node-lane\.mjs\b)(.*)$/.exec(line);
+    if (!command) continue;
+    for (const raw of command[1].split(/\s*(?:[<>|;]|&&)/)[0].trim().split(/\s+/)) {
+      const token = raw.replace(/^["']|["']$/g, '');
+      if (!token.startsWith('-') && /\.test\.[cm]?js$/.test(token) && !paths.includes(token)) paths.push(token);
+    }
+  }
+  return paths;
+}
+
+// `dir/name` or `dir/*.test.mjs` (one `*` level, as the workflows use); returns existing files, repo-relative, sorted.
+export function expandPattern(root, pattern) {
+  const dir = path.posix.dirname(pattern), base = path.posix.basename(pattern);
+  if (!base.includes('*')) return fs.existsSync(path.join(root, pattern)) ? [pattern] : [];
+  const re = new RegExp(`^${base.split('*').map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')}$`);
+  let names;
+  try { names = fs.readdirSync(path.join(root, dir), {withFileTypes: true}); } catch { return []; }
+  return names.filter(entry => entry.isFile() && re.test(entry.name)).map(entry => `${dir}/${entry.name}`).sort();
+}
+
+export function readExceptions(file) {
+  const list = JSON.parse(fs.readFileSync(file, 'utf8')).exceptions;
+  if (!Array.isArray(list)) throw new Error(`invalid node lane exception list in ${file}`);
+  for (const entry of list)
+    if (typeof entry?.file !== 'string' || !entry.file || typeof entry.reason !== 'string' || entry.reason.trim().length < 20 ||
+        typeof entry.ticket !== 'string' || !/^#[1-9]\d*$/.test(entry.ticket))
+      throw new Error(`invalid node lane exception ${JSON.stringify(entry)}: needs file, reason and ticket (#n)`);
+  return list;
+}
+
+export function nodeLaneFiles(root, {agents, tdd}, exceptions) {
+  const patterns = [...NODE_LANE.always, ...(agents ? NODE_LANE.agents : []), ...(tdd ? NODE_LANE.tdd : [])];
+  const excepted = [...new Set(exceptions.flatMap(entry => expandPattern(root, entry.file)))].sort();
+  const files = [...new Set(patterns.flatMap(pattern => expandPattern(root, pattern)))].filter(file => !excepted.includes(file));
+  return {files, excepted};
+}
+
+export function uncoveredWorkflowTests(root, texts, exceptions) {
+  const ci = [...new Set(texts.flatMap(workflowNodeTests).flatMap(pattern => expandPattern(root, pattern)))];
+  const {files, excepted} = nodeLaneFiles(root, {agents: true, tdd: true}, exceptions);
+  return ci.filter(file => !files.includes(file) && !excepted.includes(file)).sort();
+}
+
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === 'select') {
@@ -110,6 +169,12 @@ async function main() {
       if (inspected.staleRecords) console.log(`preflight: stale-owner-records=${inspected.staleRecords}`);
       console.log('preflight: ok');
     }
-  } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight'); process.exitCode = 2; }
+  } else if (cmd === 'node-suites') {
+    const [wt, agents, tdd] = args;
+    const {files, excepted} = nodeLaneFiles(wt, {agents: agents === '1', tdd: tdd === '1'}, readExceptions(NODE_LANE_EXCEPTIONS));
+    if (!files.length) throw new Error('node lane matched no test files');
+    console.log(`excepted=${excepted.length} (${excepted.join(', ') || 'none'})`);
+    for (const file of files) console.log(file);
+  } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites'); process.exitCode = 2; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
