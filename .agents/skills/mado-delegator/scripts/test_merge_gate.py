@@ -34,7 +34,7 @@ class MergeGateTests(unittest.TestCase):
 case "$1 $2" in
   'run list') printf '%s\\n' "$GH_MAIN" ;;
   'pr view') printf '{"headRefOid":"%s","isDraft":false,"body":"body","createdAt":"2026-01-02T00:00:00Z"}\\n' "$GH_HEAD" ;;
-  'pr list') [ "${GH_LOOKUP_FAIL:-0}" = 1 ] && exit 9; printf '%s\\n' "$GH_PRS" ;;
+  'pr list') [ "${GH_LOOKUP_FAIL:-0}" = 1 ] && exit 9; case " $* " in *' --limit 200 '*) printf '%s\\n' "$GH_PRS" ;; *) echo '[]';; esac ;;
   'pr checks') printf '%s\\n' "$GH_CHECKS" ;;
   'pr merge') echo "$*" >> "$GH_MERGE_LOG" ;;
   'pr comment') echo "$*" >> "$GH_MERGE_LOG" ;;
@@ -50,8 +50,8 @@ esac
                     'GH_MAIN': '[{"databaseId":1,"headSha":"abc","status":"completed","conclusion":"success"}]',
                     'GH_PRS': '[]', 'GH_CHECKS': '[{"name":"CI","state":"SUCCESS"}]'}
 
-    def run_gate(self, **extra):
-        return subprocess.run(['sh', str(SCRIPT), '12'], cwd=self.repo, env={**self.env, **extra},
+    def run_gate(self, *args, **extra):
+        return subprocess.run(['sh', str(SCRIPT), '12', *args], cwd=self.repo, env={**self.env, **extra},
                               capture_output=True, text=True)
 
     def test_green_ready_pr_reports_would_allow_without_merging(self):
@@ -72,6 +72,31 @@ esac
         result = self.run_gate(GH_PRS=prs)
         self.assertEqual(result.returncode, 0)
         self.assertIn('would-refuse condition-failed: older ready PR', result.stdout + result.stderr)
+
+    def test_older_ready_pr_at_position_31_blocks_merge(self):
+        rows = [{'number': n, 'createdAt': '2026-02-01T00:00:00Z', 'isDraft': False}
+                for n in range(20, 50)]
+        rows.append({'number': 11, 'createdAt': '2026-01-01T00:00:00Z', 'isDraft': False})
+        result = self.run_gate(GH_PRS=json.dumps(rows))
+        self.assertIn('would-refuse condition-failed: older ready PR #11', result.stdout)
+
+    def test_rebased_head_uses_audited_record_with_code_same(self):
+        old = self.head
+        env = self.env
+        (self.repo / 'file').write_text('changed')
+        subprocess.run(['git', 'commit', '-qam', 'new head'], cwd=self.repo, check=True, env=env)
+        new = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        subprocess.run(['git', 'update-ref', 'refs/remotes/origin/main', old], cwd=self.repo, check=True)
+        verifier = self.repo / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'
+        verifier.parent.mkdir(parents=True)
+        verifier.write_text('#!/bin/sh\necho "MESSAGES same"\necho "CODE same replayed-tree"\n')
+        verifier.chmod(0o755)
+        result = self.run_gate('--audited', old, GH_HEAD=new)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('would-allow', result.stdout)
+        self.assertFalse((self.root / 'merged').exists())
+        missing = self.run_gate(GH_HEAD=new)
+        self.assertIn('would-refuse condition-failed: --audited <sha> required', missing.stdout)
 
     def test_failing_check_evidence_or_lint_blocks_merge(self):
         for extra in ({'GH_CHECKS': '[{"name":"CI","state":"FAILURE"}]'},

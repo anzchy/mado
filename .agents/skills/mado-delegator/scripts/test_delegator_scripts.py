@@ -78,6 +78,17 @@ class RebaseLedgerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("PENDING", result.stdout)
 
+    def test_failed_main_lookup_refuses_before_rebase(self):
+        (self.work / 'bin/gh').write_text('#!/bin/sh\necho "HTTP 502" >&2\nexit 9\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 9, result.stdout + result.stderr)
+        self.assertIn('main CI lookup failed; retry or pass --allow-red-main', result.stdout)
+
+    def test_stderr_warning_before_red_still_refuses(self):
+        (self.work / 'bin/gh').write_text('#!/bin/sh\necho warning >&2\nprintf "%s\\n" \'[{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"failure"}]\'\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+
     def test_rebase_rejects_paired_conflict_markers_but_not_setext_underline(self):
         self.commit(self.work, "topic", **{"code.txt": "<<<<<<< ours\ntext\n=======\ntext\n>>>>>>> theirs\n"})
         result = self.run_script()
@@ -92,7 +103,7 @@ class RebaseLedgerTests(unittest.TestCase):
         bin_dir = self.work / "bin"
         bin_dir.mkdir(exist_ok=True)
         stub = bin_dir / "gh"
-        stub.write_text("#!/bin/sh\nprintf '%s\\n' \"$GH_RUNS\"\n")
+        stub.write_text("#!/bin/sh\ncase \" $* \" in *' --event push '*) ;; *) exit 9;; esac\nprintf '%s\\n' \"$GH_RUNS\"\n")
         stub.chmod(0o755)
         script = SCRIPT.with_name("main-ci-status.sh")
         green = '{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"success"}'
@@ -100,9 +111,12 @@ class RebaseLedgerTests(unittest.TestCase):
         pending = '{"databaseId":43,"headSha":"ghi","status":"in_progress","conclusion":""}'
         for runs, args, status, code in [
             (f'[{green}]', [], 'GREEN', 0), (f'[{red}]', [], 'RED', 1),
-            (f'[{pending}]', [], 'PENDING', 1), (f'[{green},{green}]', ['--two-green'], 'GREEN', 0),
+            (f'[{pending}]', [], 'PENDING', 1), (f'[{green},{green}]', ['--two-green'], 'PENDING', 1),
+            (f'[{green},{green.replace("42", "40")}]', ['--two-green'], 'GREEN', 0),
             (f'[{green},{red}]', ['--two-green'], 'RED', 1),
-            (f'[{pending},{green},{green}]', ['--two-green'], 'GREEN', 0),
+            (f'[{pending},{green},{green.replace("42", "40")}]', ['--two-green'], 'GREEN', 0),
+            (f'[{green},{{"databaseId":40,"headSha":"def","status":"completed","conclusion":"cancelled"}}]', ['--two-green'], 'RED', 1),
+            (f'[{green},{{"databaseId":40,"headSha":"def","status":"completed","conclusion":"skipped"}}]', ['--two-green'], 'RED', 1),
         ]:
             env = {**self.env, 'GH_RUNS': runs, 'PATH': str(bin_dir) + os.pathsep + os.environ['PATH']}
             result = subprocess.run(['zsh', str(script), *args], cwd=self.work, env=env,
@@ -110,6 +124,11 @@ class RebaseLedgerTests(unittest.TestCase):
             with self.subTest(runs=runs, args=args):
                 self.assertEqual(result.returncode, code, result.stdout + result.stderr)
                 self.assertTrue(result.stdout.startswith(status), result.stdout)
+        stub.write_text('#!/bin/sh\necho "HTTP 502" >&2\nexit 9\n')
+        result = subprocess.run(['zsh', str(script)], cwd=self.work,
+                                env={**self.env, 'PATH': str(bin_dir) + os.pathsep + os.environ['PATH']},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
 
     def test_resolved_html_conflict_keeps_body_lines_starting_with_hash(self):
         self.commit(self.origin, "docs: main side", **{"docs/feature-ledger.html": "<p>main</p>\n"})
@@ -173,6 +192,18 @@ class ResolveRowsTests(unittest.TestCase):
         self.assertIn('base cell', result.stdout)
         self.assertIn('ours cell', result.stdout)
         self.assertIn('theirs cell', result.stdout)
+
+    def test_two_suffixes_in_same_cell_append(self):
+        result = self.conflict(self.base.replace('acceptance', 'acceptance main note'),
+                               self.base.replace('acceptance', 'acceptance topic note'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('acceptance main note topic note', self.path.read_text())
+
+    def test_ours_suffix_appends_to_theirs_rewrite(self):
+        result = self.conflict(self.base.replace('acceptance', 'acceptance main note'),
+                               self.base.replace('acceptance', 'topic rewrite'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('topic rewrite main note', self.path.read_text())
 
 
 class RebaseVerifyTests(unittest.TestCase):

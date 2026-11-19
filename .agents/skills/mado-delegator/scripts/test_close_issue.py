@@ -17,7 +17,7 @@ class CloseIssueTests(unittest.TestCase):
         stub = root / 'gh'
         stub.write_text('''#!/bin/sh
 case "$1 $2" in
-  'run list') printf '%s\\n' "$GH_RUNS" ;;
+  'run list') case " $* " in *' --event push '*) ;; *) exit 9;; esac; printf '%s\\n' "$GH_RUNS" ;;
   'issue close') echo "$*" >> "$GH_CLOSE_LOG" ;;
   *) exit 9 ;;
 esac
@@ -33,12 +33,14 @@ esac
                               capture_output=True, text=True)
 
     def test_two_green_runs_close_issue(self):
-        result = self.call(f'[{self.green},{self.green}]')
+        second = self.green.replace('"databaseId":1', '"databaseId":3')
+        result = self.call(f'[{self.green},{second}]')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('issue close 749', self.log.read_text())
 
     def test_one_green_or_latest_red_refuses(self):
-        for runs in (f'[{self.green}]', f'[{self.red},{self.green}]'):
+        for runs in (f'[{self.green}]', f'[{self.green},{self.green}]',
+                     f'[{self.red},{self.green}]'):
             with self.subTest(runs=runs):
                 result = self.call(runs)
                 self.assertNotEqual(result.returncode, 0)
