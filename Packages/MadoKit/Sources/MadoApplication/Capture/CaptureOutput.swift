@@ -38,9 +38,9 @@ public protocol CaptureOpenPort: Sendable {
     func openInMado(_ url: URL) async throws
 }
 
-/// Thumbnail actions owned by #684 and #686 (在 Mado 中打开). Annotate (#694) and Recognise Text (#687) come later.
+/// Thumbnail actions owned by #684, #686 (在 Mado 中打开) and #694 (标注). Recognise Text (#687) comes later.
 public enum CaptureThumbnailAction: String, Equatable, Sendable {
-    case save, copy, openInMado, moveToTrash
+    case save, copy, annotate, openInMado, moveToTrash
 }
 
 /// Where Mado is, seen from the helper (#686): the helper is embedded at `<Mado>.app/Contents/Library/LoginItems`.
@@ -83,10 +83,10 @@ public struct CaptureThumbnailState: Equatable, Sendable {
         self.saveFailed = saveFailed
     }
 
-    /// capture-thumbnail.html:19-20: 存储 only while there is no file, then 拷贝, 在 Mado 中打开, then 移到废纸篓 only
-    /// when a file exists.
+    /// capture-thumbnail.html:19-20 and :125: 存储 only while there is no file, then 拷贝, 标注, 在 Mado 中打开, then
+    /// 移到废纸篓 only when a file exists.
     public var actions: [CaptureThumbnailAction] {
-        savedURL == nil ? [.save, .copy, .openInMado] : [.copy, .openInMado, .moveToTrash]
+        savedURL == nil ? [.save, .copy, .annotate, .openInMado] : [.copy, .annotate, .openInMado, .moveToTrash]
     }
 
     public var status: CaptureThumbnailStatus {
@@ -172,9 +172,10 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
         return try await task.value
     }
 
-    /// Moves the saved file to the Trash and closes the thumbnail. Without a file there is nothing to move.
+    /// Moves the saved file to the Trash and closes the thumbnail. Without a file there is nothing to move, and while
+    /// an open in Mado is pending nothing moves, so Mado is never handed a file just moved to the Trash (#694 AC-4).
     public func moveToTrash() async throws {
-        guard let url = state.savedURL else { return }
+        guard !isOpening, let url = state.savedURL else { return }
         try await trash.moveToTrash(url)
         isClosed = true
     }
@@ -185,12 +186,33 @@ public struct CaptureThumbnailLifetime: Equatable, Sendable {
     /// and opens its file; a second click while an open is pending, or after one succeeded and closed the thumbnail,
     /// does nothing, so a double click opens once (#686 fix r2).
     public func openInMado(_ opener: any CaptureOpenPort) async throws {
+        try await open(opener, annotate: nil)
+    }
+
+    /// 标注 (#694): 在 Mado 中打开 with a one-shot hand-off record, so Mado opens the file in Annotate Mode. The record
+    /// is written once the file exists and before the open, and cleared if the open fails. It shares 在 Mado 中打开's
+    /// guard: while either is pending, a click on either does nothing, so the first click decides.
+    public func annotateInMado(_ opener: any CaptureOpenPort, handoff: any CaptureAnnotateHandoffPort,
+                               now: @escaping @Sendable () -> Date = Date.init) async throws {
+        try await open(opener, annotate: (handoff, now))
+    }
+
+    /// True from a click on 在 Mado 中打开 or 标注 until its save and open have returned; the thumbnail's timer and
+    /// 移到废纸篓 wait for it (#694 AC-4).
+    public var isOpeningInMado: Bool { isOpening }
+
+    private func open(_ opener: any CaptureOpenPort,
+                      annotate: (handoff: any CaptureAnnotateHandoffPort, now: @Sendable () -> Date)?) async throws {
         guard !isOpening, !isClosed else { return }
         isOpening = true
         defer { isOpening = false }
         let url = try await savedFile()
         guard !isClosed else { return }
-        try await opener.openInMado(url)
+        if let annotate { annotate.handoff.write(CaptureAnnotateHandoffRecord(fileURL: url, createdAt: annotate.now())) }
+        do { try await opener.openInMado(url) } catch {
+            annotate?.handoff.clear()
+            throw error
+        }
         isClosed = true
     }
 

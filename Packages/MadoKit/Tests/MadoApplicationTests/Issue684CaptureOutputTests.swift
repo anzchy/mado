@@ -65,12 +65,12 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     if save {
         let url = URL(fileURLWithPath: "/Downloads/mado-20261114073012.png")
         #expect(state.savedURL == url)
-        #expect(state.actions == [.copy, .openInMado, .moveToTrash])
+        #expect(state.actions == [.copy, .annotate, .openInMado, .moveToTrash])
         #expect(state.dragPayload == .file(url))
         #expect(state.status == .saved(folder: "~/Downloads", clipboard: copy ? .copied : .notCopied))
     } else {
         #expect(state.savedURL == nil)
-        #expect(state.actions == [.save, .copy, .openInMado])
+        #expect(state.actions == [.save, .copy, .annotate, .openInMado])
         #expect(state.dragPayload == .png(png))
         #expect(state.status == .notSaved(clipboard: copy ? .copied : .notCopied, saveFailed: false))
     }
@@ -83,7 +83,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     #expect(await files.files.count == 1)
     #expect(state.clipboard == .copyFailed)
     #expect(state.status == .saved(folder: "~/Downloads", clipboard: .copyFailed))
-    #expect(state.actions == [.copy, .openInMado, .moveToTrash])
+    #expect(state.actions == [.copy, .annotate, .openInMado, .moveToTrash])
 }
 
 @Test(.timeLimit(.minutes(2))) func issue684WriteFailureStillGivesThumbnail() async throws {
@@ -93,7 +93,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     let state = try await makeSession(files).capture(request: nil, policy: .standard, clipboard: clipboard)
     #expect(state.savedURL == nil)
     #expect(state.saveFailed)
-    #expect(state.actions == [.save, .copy, .openInMado])
+    #expect(state.actions == [.save, .copy, .annotate, .openInMado])
     #expect(state.status == .notSaved(clipboard: .copied, saveFailed: true))
     #expect(await clipboard.writes == [png])
 }
@@ -137,7 +137,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     try await model.save()
     let url = URL(fileURLWithPath: "/Downloads/mado-20261114073012.png")
     #expect(model.state.savedURL == url)
-    #expect(model.state.actions == [.copy, .openInMado, .moveToTrash])
+    #expect(model.state.actions == [.copy, .annotate, .openInMado, .moveToTrash])
     #expect(model.state.status == .saved(folder: "~/Downloads", clipboard: .copied))
     #expect(model.state.dragPayload == .file(url))
     try await model.save()  // already saved: no second file
@@ -182,7 +182,7 @@ func issue684OutputPolicyFourCombinations(save: Bool, copy: Bool) async throws {
     await #expect(throws: CocoaError.self) { try await model.save() }
     #expect(model.state.savedURL == nil)
     #expect(model.state.saveFailed)
-    #expect(model.state.actions == [.save, .copy, .openInMado])
+    #expect(model.state.actions == [.save, .copy, .annotate, .openInMado])
     await files.setFailing(false)
     try await model.save()
     #expect(!model.state.saveFailed)

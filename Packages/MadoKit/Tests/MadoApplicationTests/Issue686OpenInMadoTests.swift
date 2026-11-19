@@ -59,8 +59,8 @@ private let date686 = ISO8601DateFormatter().date(from: "2026-11-15T07:30:12Z")!
     let saved = CaptureThumbnailState(png: png686, savedURL: URL(fileURLWithPath: "/Captures/a.png"), clipboard: .copied,
                                       folderDisplay: "~/Captures")
     let unsaved = CaptureThumbnailState(png: png686, savedURL: nil, clipboard: .copied, folderDisplay: "~/Captures")
-    #expect(saved.actions == [.copy, .openInMado, .moveToTrash])
-    #expect(unsaved.actions == [.save, .copy, .openInMado])
+    #expect(saved.actions == [.copy, .annotate, .openInMado, .moveToTrash])
+    #expect(unsaved.actions == [.save, .copy, .annotate, .openInMado])
     #expect(CaptureThumbnailAction.openInMado.rawValue == "openInMado")
 }
 

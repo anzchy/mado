@@ -148,7 +148,7 @@ private func pinnedPNG() -> Data {
     #expect(decodes.value == 1)
     controller.pointerEntered()
     let before = thumbnailView.actionButtons.map(ObjectIdentifier.init)
-    #expect(before.count == 3)
+    #expect(before.count == 4, "存储 拷贝 标注 在 Mado 中打开 (#694 added 标注)")
     for _ in 0..<12 {
         clock.now += 0.25
         controller.tick()
@@ -159,9 +159,9 @@ private func pinnedPNG() -> Data {
     // A state change (Save) rebuilds the buttons once, still without decoding again.
     let save = try #require(thumbnailView.actionButtons.first { $0.identifier?.rawValue == "save" })
     save.performClick(nil)
-    for _ in 0..<500 where model.state.savedURL == nil || thumbnailView.actionButtons.count != 3
+    for _ in 0..<500 where model.state.savedURL == nil || thumbnailView.actionButtons.count != 4
         || thumbnailView.actionButtons.first?.identifier?.rawValue != "copy" { await Task.yield() }
-    #expect(thumbnailView.actionButtons.compactMap { $0.identifier?.rawValue } == ["copy", "openInMado", "moveToTrash"])
+    #expect(thumbnailView.actionButtons.compactMap { $0.identifier?.rawValue } == ["copy", "annotate", "openInMado", "moveToTrash"])
     let afterSave = thumbnailView.actionButtons.map(ObjectIdentifier.init)
     clock.now += 0.25
     controller.tick()

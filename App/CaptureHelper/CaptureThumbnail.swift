@@ -1,6 +1,7 @@
 import AppKit
 import os
 import MadoApplication
+import MadoInfrastructure
 import MadoMacUI
 
 /// Page 38 `capture-thumbnail.html` variant A: .corner right/bottom 20, gap 6; .thumb 240 wide, border 3
@@ -117,6 +118,7 @@ enum CaptureThumbnailText {
         switch action {
         case .save: "Save"
         case .copy: "Copy"
+        case .annotate: "Annotate"
         case .openInMado: "Open in Mado"
         case .moveToTrash: "Move to Trash"
         }
@@ -126,6 +128,7 @@ enum CaptureThumbnailText {
         switch action {
         case .save: "square.and.arrow.down"
         case .copy: "doc.on.doc"
+        case .annotate: "pencil"
         // capture-thumbnail.html:126: the box with an arrow out of its corner.
         case .openInMado: "arrow.up.forward.app"
         case .moveToTrash: "trash"
@@ -472,6 +475,8 @@ private final class ThumbnailButton: NSButton {
     /// Decoded once; a timer tick never decodes or re-renders (#684 fix r1).
     private let image: CGImage?
     private let opener: any CaptureOpenPort
+    /// #694: where 标注 leaves its one-shot record for Mado.
+    private let handoff: any CaptureAnnotateHandoffPort
     private var timer: Timer?
     /// The status line after an action that failed without changing the Capture's own status.
     private var failureLine: String?
@@ -479,9 +484,12 @@ private final class ThumbnailButton: NSButton {
     init(model: CaptureThumbnailModel, visibleFrame: NSRect, now: @escaping () -> Date = Date.init,
          localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          startsTimer: Bool = true, decodeImage: @escaping (Data) -> CGImage? = CaptureThumbnailController.decode,
-         opener: any CaptureOpenPort = CaptureMadoLauncher()) {
+         opener: any CaptureOpenPort = CaptureMadoLauncher(),
+         handoff: any CaptureAnnotateHandoffPort = UserDefaultsCaptureAnnotateHandoff.shared()
+            ?? UserDefaultsCaptureAnnotateHandoff(defaults: .standard)) {
         image = decodeImage(model.state.png)
         self.opener = opener
+        self.handoff = handoff
         self.model = model
         self.visibleFrame = visibleFrame
         self.now = now
@@ -523,8 +531,9 @@ private final class ThumbnailButton: NSButton {
     }
 
     /// Only checks the lifetime; the thumbnail is re-rendered on show and after an action, never per tick.
+    /// A pending 标注 or 在 Mado 中打开 is never cut short: the thumbnail closes once its open returns (#694 AC-4).
     func tick() {
-        guard isOpen, lifetime.isExpired(at: now()) else { return }
+        guard isOpen, !model.isOpeningInMado, lifetime.isExpired(at: now()) else { return }
         close()
     }
 
@@ -554,8 +563,11 @@ private final class ThumbnailButton: NSButton {
             switch action {
             case .copy: await model.copy()
             case .save: try? await model.save()
-            case .openInMado:
-                do { try await model.openInMado(opener) }
+            case .annotate, .openInMado:
+                do {
+                    if action == .annotate { try await model.annotateInMado(opener, handoff: handoff) }
+                    else { try await model.openInMado(opener) }
+                }
                 // A failed save already shows in the status line (decision 3.5); only a failed open needs its own.
                 catch { if model.state.savedURL != nil { failureLine = localize("Couldn't open in Mado") } }
             case .moveToTrash:
