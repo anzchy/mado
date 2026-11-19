@@ -685,9 +685,9 @@ Driving tools (all synthetic input, which must be disclosed in the record):
 - `scripts/device/kc.sh RUN KEYCODE [command shift …]` for named keys: Return 36, Esc 53, Tab 48, ←→ 123/124,
   ⌘O = `31 command`, ⌘W = `13 command`, ⌘Q = `12 command`, ⌘⇧G = `5 command shift`. `key.sh` types exactly one
   printable character and nothing else.
-- `.agents/skills/mado-delegator/scripts/panel-choose.sh RUN PATH`: in an open NSOpenPanel or powerbox of the run's
-  Mado (needs `RUN/picsee.pid`; the ⌘O AXDialog window, or the reconnect sheet of window 1, not yet driven live), press ⌘⇧G, write the path into the Go-to field **through accessibility**, read it back,
-  press Return, check the sheet closed, then press Return for Open and check the panel closed. Any mismatch fails before Open. It prints
+- `.agents/skills/mado-delegator/scripts/panel-choose.sh RUN FOLDER`: for folder grants in an open NSOpenPanel or powerbox of the run's
+  Mado (needs `RUN/picsee.pid`; the ⌘O AXDialog window, or the reconnect sheet of window 1, not yet driven live), press ⌘⇧G, write the folder path into the Go-to field **through accessibility**, read it back,
+  confirm field focus before Return, check the sheet closed while the panel remains open, then press Return for Open. It reports `chose:` only after the panel closes and the app writes a fresh recent-folder receipt matching the canonical requested path. File choices and panels that write no recents fail with `no confirmed choice`. It prints
   `input-source: <id>` (read-only) for the record and doesn't touch the pasteboard. The old ⌘A ⌘V paste never reached
   the field (run probe-228, 2026-10-28): every pick silently took the panel's remembered folder.
 - `.agents/skills/mado-delegator/scripts/drag2.sh X0 Y0 X1 Y1`: a CGEvent drag from a Finder list-view row with a press-hold. Finder starts a real
