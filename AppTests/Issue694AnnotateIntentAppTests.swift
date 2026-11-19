@@ -22,7 +22,7 @@ import MadoMacUI
     return controller
 }
 
-@MainActor @Suite(.serialized) struct Issue694AnnotateIntentAppTests {
+@MainActor @Suite(.serialized, .timeLimit(.minutes(3))) struct Issue694AnnotateIntentAppTests {
     /// Cold: no image on screen; the Capture (a File Grant) opens straight into Annotate Mode.
     @Test func issue694ColdOpenEntersAnnotateMode() async throws {
         let context = try await Issue690Context(grant: false)
