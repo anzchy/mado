@@ -81,19 +81,29 @@ private struct RecursiveTree {
     #expect(Set(await on.entries.map(\.relativePath)) == ["top.png", "sub/nested.png"])
 }
 
+/// The entry limit is injected (#774): creating and deleting 100,000 real links took ~50 s locally and held a cooperative
+/// thread and the runner's disk for the whole CI package run. The recursive scan of the same folder proves the flat
+/// scan really went beyond the limit; the default limit is pinned separately.
 @Test(.timeLimit(.minutes(2))) func p204R3FlatFolderBeyondRecursiveEntryLimitStillCompletes() async throws {
+    #expect(FolderScanOptions().maxVisitedEntries == 100_000)
+    let limit = 8
     let tree = try RecursiveTree(); defer { tree.cleanup() }
     let source = tree.root.appendingPathComponent("seed.txt")
     try Data().write(to: source)
-    for index in 0..<100_000 {
+    for index in 0..<(limit * 2) {
         try FileManager.default.linkItem(at: source,
             to: tree.root.appendingPathComponent(String(format: "%06d.txt", index)))
     }
     let result = RecursiveResults()
-    try await FolderBrowser().scan(in: tree.root, root: tree.identity, options: .init(recursive: false)) {
-        await result.append($0)
-    }
+    try await FolderBrowser().scan(in: tree.root, root: tree.identity,
+        options: .init(recursive: false, maxVisitedEntries: limit)) { await result.append($0) }
     #expect(await result.entries.isEmpty)
+    var limitError: FolderScanLimitError?
+    do {
+        try await FolderBrowser().scan(in: tree.root, root: tree.identity,
+            options: .init(recursive: true, maxVisitedEntries: limit)) { _ in }
+    } catch { limitError = error as? FolderScanLimitError }
+    #expect(limitError == .entryLimit(limit: limit, admittedImages: 0))
 }
 
 @Test(.timeLimit(.minutes(2))) @MainActor func p204R3UnreadableSubdirectoryRetainsPartialFailureSurface() async throws {
