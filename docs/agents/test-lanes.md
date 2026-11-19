@@ -26,3 +26,17 @@ App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.js
 新 API 按此流程先写可编译桩，桩在 record 时是未提交的实现改动，Swift receipt 总会带 `implementation-already-present` MEDIUM；审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。
 
 Trash 集成 lane（#672）：真实 `FileManager.trashItem` 测试只在 `#if MADO_TRASH_INTEGRATION` 内编译，默认包 lane 不运行，名单在 `scripts/tdd/trash-integration.json`。`node scripts/tdd/trash-lane.mjs` 自行取锁：先单独编译（`.build/trash-integration`），再在一次锁内逐个场景运行，每个场景 120 秒，随后 TERM、10 秒、KILL、5 秒；整条命令预算 10 分钟（不含编译）。首个超时或存活进程即停止，不重试；缺前置条件（Swift、`~/.Trash`）或场景被跳过时退出 70 且不输出计数。`node scripts/tdd/trash-lane.mjs --discover` 双向证明默认 lane 不含这些场景、集成 lane 恰好多出它们。不要用外层 `scripts/heavy-lock.sh` 包它。
+
+## 包测试不要长时间占用协作线程池（#774）
+
+CI runner 只有 3 个协作线程。2026-11-18 的两次包运行中，几百个测试在启动后几十秒内一个都没完成，每个测试报 45–80 秒。原因是两类测试长时间占住协作线程或磁盘：
+
+- `p204R3FlatFolderBeyondRecursiveEntryLimitStillCompletes` 在协作线程上同步创建并删除 100,000 个硬链接。本机单独运行 47.7 秒，在 CI 上等于整次包运行的时长。现在改为注入 `maxVisitedEntries`，只建 16 个链接。
+- `Issue688TextRowResolverPropertyTests` 的 8 个属性遍历都是同步 CPU 计算，本机 debug 构建合计一百多秒。现在用 `offCooperativePool`（`MadoApplicationTests/OffCooperativePool.swift`）放到独立的串行队列上运行：仍在原测试的 task 里，`#expect`、`Test.current` 和时间限制不变。
+
+规则：
+
+1. 运行超过约 1 秒的同步 CPU 计算或阻塞等待（`DispatchSemaphore`、`wait(timeout:)`、`Thread.sleep`、大量文件系统操作）不要放在协作线程上。把测试改成 `async`，用 `offCooperativePool { … }` 包住同步部分；需要等待外部线程释放时，用 #770 的 `cancelAndRelease` 写法，在独立线程上等待和释放。
+2. 规模参数可注入时（上限、批量、截止时间），测试注入小值，并另加一个断言，证明这个小值确实被超过；不要为了拿到默认值去创建大量真实文件。默认值单独断言。
+3. 不要靠加长时间限制或减少属性测试的样本来缩短时间。也不要用 `.serialized` 处理 CPU 密集的测试套件：串行后各测试的耗时相加，会全部落在关键路径上。
+4. 合并前在本机完整跑一次包测试（`--skip 'MadoMacUITests\.'`），看最慢的十个测试。新出现的 5 秒以上测试要能说明它占的是 CPU、协作线程，还是在挂起等待。
