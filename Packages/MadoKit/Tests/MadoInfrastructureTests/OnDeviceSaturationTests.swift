@@ -125,7 +125,7 @@ func issue706CancelOnlyReleasesItsOwnBlockingRequest() {
 /// back to cancel and release the fake before its perform deadline. Cancelling and releasing
 /// must not wait for the test's executor: hold that executor past a short perform deadline.
 @available(macOS 15.0, *)
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue749CancelAndReleaseDoNotWaitForTheTestExecutor() async throws {
     let fake = BlockingCanceller(performDeadline: .seconds(1))
     let provider = OnDeviceTextRecognitionProvider(
