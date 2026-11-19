@@ -194,16 +194,41 @@ class ResolveRowsTests(unittest.TestCase):
         self.assertIn('theirs cell', result.stdout)
 
     def test_two_suffixes_in_same_cell_append(self):
-        result = self.conflict(self.base.replace('acceptance', 'acceptance main note'),
-                               self.base.replace('acceptance', 'acceptance topic note'))
+        result = self.conflict(self.base.replace('acceptance', 'acceptance。main note'),
+                               self.base.replace('acceptance', 'acceptance；topic note'))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('acceptance main note topic note', self.path.read_text())
+        self.assertIn('acceptance。main note；topic note', self.path.read_text())
 
     def test_ours_suffix_appends_to_theirs_rewrite(self):
-        result = self.conflict(self.base.replace('acceptance', 'acceptance main note'),
+        result = self.conflict(self.base.replace('acceptance', 'acceptance。main note'),
                                self.base.replace('acceptance', 'topic rewrite'))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('topic rewrite main note', self.path.read_text())
+        self.assertIn('topic rewrite。main note', self.path.read_text())
+
+    def test_nonboundary_prefix_in_same_cell_stops(self):
+        base = self.base.replace('Planned', 'Partial')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'status base', env=self.env)
+        result = self.conflict(base.replace('Partial', 'Shipped'),
+                               base.replace('Partial', 'Partially shipped'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("base cell ' Partial '", result.stdout)
+        self.assertIn("ours cell ' Shipped '", result.stdout)
+        self.assertIn("theirs cell ' Partially shipped '", result.stdout)
+
+    def test_nonboundary_ours_suffix_stops(self):
+        result = self.conflict(self.base.replace('acceptance', 'acceptancely'),
+                               self.base.replace('acceptance', 'topic rewrite'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+
+    def test_new_limit_clause_appends(self):
+        base = self.base.replace('acceptance', '限制：A')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'limit base', env=self.env)
+        result = self.conflict(base.replace('限制：A', '限制：A限制：main'),
+                               base.replace('限制：A', '限制：A限制：topic'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('限制：A限制：main限制：topic', self.path.read_text())
 
 
 class RebaseVerifyTests(unittest.TestCase):

@@ -7,6 +7,7 @@ def key(l):
     m = re.match(r'\| ([A-Z0-9][A-Za-z0-9\-·]*(?: [^|]*)?) \|', l)
     return m.group(1) if l.startswith('| ') and m else None
 def index(lines): return {key(l): l for l in lines if key(l)}
+def clause_suffix(suffix): return suffix.startswith(('。', '；', '限制：'))
 B, T = index(base), index(theirs)
 # non-row lines must agree between base and theirs
 nb = [l for l in base if not key(l)]; nt = [l for l in theirs if not key(l)]
@@ -28,11 +29,13 @@ for l in ours:
                 merged.append(theirs_cell)
             else:
                 base_prefix = base_cell.rstrip()
-                if base_prefix and theirs_cell.startswith(base_prefix) and theirs_cell != base_cell:
-                    merged.append(ours_cell.rstrip() + theirs_cell[len(base_prefix):])
+                theirs_suffix = theirs_cell[len(base_prefix):] if base_prefix and theirs_cell.startswith(base_prefix) else ''
+                ours_suffix = ours_cell[len(base_prefix):] if base_prefix and ours_cell.startswith(base_prefix) else ''
+                if clause_suffix(theirs_suffix):
+                    merged.append(ours_cell.rstrip() + theirs_suffix)
                     continue
-                if base_prefix and ours_cell.startswith(base_prefix) and ours_cell != base_cell:
-                    merged.append(theirs_cell.rstrip() + ours_cell[len(base_prefix):])
+                if clause_suffix(ours_suffix):
+                    merged.append(theirs_cell.rstrip() + ours_suffix)
                     continue
                 print('manual row', k, 'cell', i)
                 print(' base cell', repr(base_cell))
