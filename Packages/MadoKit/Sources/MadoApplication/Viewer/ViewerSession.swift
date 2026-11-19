@@ -48,6 +48,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public private(set) var isMenuTracking = false
     /// #690: Annotate Mode on the shown image; nil outside it.
     public internal(set) var annotateMode: AnnotateModeState?
+    /// #694: enter Annotate Mode once this file shows (a Capture opened from the thumbnail's 标注); nil otherwise.
+    public internal(set) var annotateOnShow: AnnotateOnShowIntent?
     private var orderedItemIDs: [ItemID] = []
     var folderEntryRestore: FolderEntryRestorePoint?
     private var sourceVersion = PreviewSourceVersion(0)

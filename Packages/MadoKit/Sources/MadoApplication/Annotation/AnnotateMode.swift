@@ -24,6 +24,47 @@ public enum AnnotateLeaveOutcome: Equatable, Sendable {
     case refused
 }
 
+/// #694: Annotate Mode is wanted on one file, once it shows. `baseline` is the file shown when it was asked for, so the
+/// image still on screen before the open reaches the loader does not count as another open.
+public struct AnnotateOnShowIntent: Equatable, Sendable {
+    public let id: UUID
+    public let path: String
+    public let baseline: String?
+    /// The loader has had the intent's file.
+    public internal(set) var seen = false
+
+    public init(path: String, baseline: String?, id: UUID = UUID()) {
+        self.id = id
+        self.path = path
+        self.baseline = baseline
+    }
+
+    /// Judged on every change of the loaded file or its status. `shown` is the loader's file as a resolved path.
+    /// The intent's file: shown and admitted (the ⌘E rule) enters; still loading waits; failed or cancelled drops.
+    /// Any other file drops it, except the baseline (or nothing) before the intent's file reached the loader.
+    public mutating func decide(shown: String?, status: ViewerImageStatus, canEnter: Bool) -> AnnotateOnShowDecision {
+        guard let shown, shown == path else {
+            if seen { return .drop }
+            return shown == nil || shown == baseline ? .wait : .drop
+        }
+        seen = true
+        switch status {
+        case .showing, .detailLimited: return canEnter ? .enter : .wait
+        case .loading, .readingFolder: return .wait
+        default: return .drop
+        }
+    }
+}
+
+public enum AnnotateOnShowDecision: Equatable, Sendable {
+    /// The intent's file is not showing yet.
+    case wait
+    /// It shows and Annotate Mode may be entered; the intent is used up.
+    case enter
+    /// Another image took its place, or it failed to load; the intent is dropped.
+    case drop
+}
+
 public enum AnnotateTool: Sendable {
     /// V: picks a mark to nudge.
     case select

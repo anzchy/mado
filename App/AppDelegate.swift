@@ -163,7 +163,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         #endif
-        viewer().openInput(urls)
+        // #694: a Capture opened by the thumbnail's 标注 left a one-shot record naming it in the App Group.
+        let annotate = UserDefaultsCaptureAnnotateHandoff.shared()
+            .flatMap { CaptureAnnotateHandoff.consume($0, opened: urls, now: Date()) }
+        viewer().openInput(urls, annotate: annotate)
         application.activate(ignoringOtherApps: true)
     }
 

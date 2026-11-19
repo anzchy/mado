@@ -181,11 +181,52 @@ extension CanvasWindowController {
     }
 
     /// Opening another image, a folder or a recent folder first leaves Annotate Mode; with unsaved marks the
-    /// answer decides, and `retry` runs the original request once the mode has ended.
+    /// answer decides, and `retry` runs the original request once the mode has ended. #694: every such request ends
+    /// an annotate-on-show intent; an open that wants one sets it again (also on `retry`).
     func annotateAllowsImageChange(retry: @escaping @MainActor () -> Void) -> Bool {
+        session.dropAnnotateOnShow()
         guard session.isAnnotating else { return true }
         leaveAnnotateMode(.changeImage, proceed: retry)
         return false
+    }
+
+    /// #694: a Capture opened by the thumbnail's 标注 enters Annotate Mode once it shows. Watches the loaded file and
+    /// its status until the intent is used up or dropped; each intent has its own watch.
+    func requestAnnotateOnShow(_ url: URL) {
+        session.requestAnnotateOnShow(url)
+        guard let id = session.annotateOnShow?.id else { return }
+        observeAnnotateOnShow(id)
+    }
+
+    private func observeAnnotateOnShow(_ id: UUID) {
+        withObservationTracking {
+            _ = session.imageLoader.fileURL
+            _ = session.imageStatus
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.session.annotateOnShow?.id == id else { return }
+                self.applyAnnotateOnShow()
+                if self.session.annotateOnShow?.id == id { self.observeAnnotateOnShow(id) }
+            }
+        }
+    }
+
+    /// Enters through ⌘E's path, with its admission (no sheet, no other text field).
+    func applyAnnotateOnShow() {
+        guard session.annotateOnShow != nil,
+              session.annotateOnShowDecision(canEnter: canEnterAnnotateFromMenu) == .enter else { return }
+        enterAnnotateMode()
+    }
+
+    /// The input was admitted or refused. If its file never reached the loader (unsupported, a notice, an access
+    /// failure), the intent ends; otherwise it is judged now, for a file that was already showing.
+    func annotateOnShowInputEnded() {
+        guard let intent = session.annotateOnShow else { return }
+        guard session.imageLoader.fileURL.map(CaptureAnnotateHandoff.resolvedPath) == intent.path else {
+            session.dropAnnotateOnShow()
+            return
+        }
+        applyAnnotateOnShow()
     }
 
     /// Keys inside Annotate Mode: the tool letters V A R T H P N, ⌫/⌦, Esc, ⌘Z/⇧⌘Z, and ←/→/↑/↓ nudging the
@@ -304,6 +345,7 @@ extension CanvasWindowController {
 
     /// The close button and ⌘W: asks while marks are unsaved; 存储 closes the window once the copy is written.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        session.dropAnnotateOnShow()
         guard session.isAnnotating else { return true }
         let answer = AnnotateSyncAnswer()
         leaveAnnotateMode(.closeWindow, proceed: { [weak self] in
