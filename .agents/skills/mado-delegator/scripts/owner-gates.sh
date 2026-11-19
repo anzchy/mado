@@ -9,7 +9,8 @@
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
 # The Swift, xcodegen, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
-# Preflight checks npm and Playwright prerequisites before any lane, and refuses with exit 2.
+# Preflight checks npm and Playwright prerequisites, then load and memory (load=… mem_free=… pressure=… line, #760),
+# before any lane, and refuses with exit 2.
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -48,6 +49,16 @@ if (( $? != 0 )); then
   echo "refused: $preflight" > "$s" || summary_error
   exit 2
 fi
+# #760: machine facts before any lane. Over a threshold (OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE,
+# OWNER_GATES_MAX_PRESSURE; defaults in owner-gates-tools.mjs) the run is refused with exit 2: no evidence, not a red lane.
+# Facts that cannot be read are noted in the summary and never refuse.
+load_facts=$(node "$here/owner-gates-tools.mjs" load-preflight)
+if (( $? != 0 )); then
+  load_reason=${${(M)${(f)load_facts}:#refuse: *}#refuse: }
+  { echo "refused: preflight: ${load_reason:-load preflight failed}"; print -r -- "$load_facts" | grep -v '^refuse: '; } > "$s" || summary_error
+  echo "owner-gates: refused: preflight: ${load_reason:-load preflight failed}" >&2
+  exit 2
+fi
 failed=0
 lane_result() {
   local lane=$1 code=$2 detail=${3:-}
@@ -60,6 +71,7 @@ lane_result() {
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
 print -r -- "$preflight" | grep -E '^preflight: stale-owner-records=[0-9]+$' >> "$s" || true
+print -r -- "$load_facts" >> "$s" || summary_error
 if (( native )); then
 node scripts/tdd/unit-lane.mjs > $o/$p-swift.log 2>&1
   swift_code=$?
