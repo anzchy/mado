@@ -13,8 +13,15 @@ for arg in "$@"; do
     *) up=$arg;;
   esac
 done
-ci=$("$here/main-ci-status.sh" 2>&1); ci_rc=$?
+ci=$("$here/main-ci-status.sh"); ci_rc=$?
 echo "$ci"
+if (( ci_rc > 1 )) || [[ $ci != GREEN\ * && $ci != RED\ * && $ci != PENDING\ * ]]; then
+  if (( allow_red == 0 )); then
+    echo 'main CI lookup failed; retry or pass --allow-red-main'
+    exit 9
+  fi
+  echo 'main CI lookup failed; continuing with --allow-red-main'
+fi
 if [[ $ci == RED\ * && $allow_red == 0 ]]; then
   run=${${=ci}[2]}
   echo "main CI is red (run $run); fix main first or pass --allow-red-main"

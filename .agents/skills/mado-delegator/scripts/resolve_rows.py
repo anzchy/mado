@@ -27,6 +27,13 @@ for l in ours:
             elif ours_cell == base_cell:
                 merged.append(theirs_cell)
             else:
+                base_prefix = base_cell.rstrip()
+                if base_prefix and theirs_cell.startswith(base_prefix) and theirs_cell != base_cell:
+                    merged.append(ours_cell.rstrip() + theirs_cell[len(base_prefix):])
+                    continue
+                if base_prefix and ours_cell.startswith(base_prefix) and ours_cell != base_cell:
+                    merged.append(theirs_cell.rstrip() + ours_cell[len(base_prefix):])
+                    continue
                 print('manual row', k, 'cell', i)
                 print(' base cell', repr(base_cell))
                 print(' ours cell', repr(ours_cell))

@@ -25,6 +25,8 @@ def main():
     parser.add_argument('--expected-remote-oid', metavar='OID', help='exact remote tip for a lease-protected rebase push')
     parser.add_argument('--skip-pr-lint', metavar='REASON', help='skip PR-body lint with a printed reason')
     args = parser.parse_args()
+    if args.skip_pr_lint is not None and not args.skip_pr_lint.strip():
+        parser.error('--skip-pr-lint requires a nonblank reason')
 
     script_root = Path(__file__).resolve().parents[2]
     try:
@@ -49,7 +51,7 @@ def main():
         query = subprocess.run(['gh', 'pr', 'list', '--head', branch, '--json', 'number,body'],
                                check=False, text=True, capture_output=True)
         if query.returncode:
-            print(f'push-guard: cannot query PR body: {query.stderr.strip()}', file=sys.stderr)
+            print(f'push-guard: cannot query PR body: {query.stderr.strip()}; retry or use --skip-pr-lint <reason>', file=sys.stderr)
             return 2
         try:
             prs = json.loads(query.stdout)

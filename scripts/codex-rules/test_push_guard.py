@@ -142,6 +142,10 @@ class PushGuardTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(run.call_count, 1)
 
+    def test_blank_skip_reason_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            self.invoke('--skip-pr-lint', '   ')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,9 +1,9 @@
 #!/bin/sh
-# The delegator's checked entry point for merging an audited PR.
+# Shadow check for an audited PR; this script never merges or blocks.
 set -eu
-case "${1:-}" in ''|*[!0-9]*) echo 'usage: merge-gate.sh <pr-number>' >&2; exit 2;; esac
-[ "$#" -eq 1 ] || { echo 'usage: merge-gate.sh <pr-number>' >&2; exit 2; }
-exec python3 - "$1" "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" <<'PY'
+case "${1:-}" in ''|*[!0-9]*) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
+case "$#" in 1) audited='' ;; 3) [ "$2" = --audited ] || exit 2; audited=$3 ;; *) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
+exec python3 - "$1" "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" "$audited" <<'PY'
 import datetime
 import json
 import os
@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 
-pr, scripts = sys.argv[1], pathlib.Path(sys.argv[2])
+pr, scripts, audited = sys.argv[1], pathlib.Path(sys.argv[2]), sys.argv[3]
 
 
 class ConditionFailed(Exception): pass
@@ -47,37 +47,50 @@ try:
 
     if not checks(pr):
         raise ConditionFailed('PR checks are not all passing')
-    for other in json.loads(run(['gh', 'pr', 'list', '--state', 'open', '--json', 'number,createdAt,isDraft'])):
+    for other in json.loads(run(['gh', 'pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,createdAt,isDraft'])):
         if int(other['number']) != int(pr) and not other['isDraft'] and other['createdAt'] < candidate['createdAt']:
             if checks(other['number']):
                 raise ConditionFailed(f'older ready PR #{other["number"]} must merge first')
 
-    worktrees = run(['git', 'worktree', 'list', '--porcelain']).splitlines()
-    for line in worktrees:
-        if not line.startswith('worktree '):
-            continue
-        path = pathlib.Path(line[9:])
-        tip = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=path, text=True, capture_output=True)
-        if tip.returncode == 0 and tip.stdout.strip() == head:
-            record = path / '.build/mado-verify' / f'{head}.json'
-            if record.is_file():
-                break
-    else:
-        raise ConditionFailed(f'no worktree at PR head {head} with a mado-verify record')
+    worktrees = [pathlib.Path(line[9:]) for line in run(['git', 'worktree', 'list', '--porcelain']).splitlines()
+                 if line.startswith('worktree ')]
+    head_worktree = next((path for path in worktrees
+                          if subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=path, text=True,
+                                            capture_output=True).stdout.strip() == head), None)
+    if head_worktree is None:
+        raise ConditionFailed(f'no worktree at PR head {head}')
+    if not audited:
+        if not (head_worktree / '.build/mado-verify' / f'{head}.json').is_file():
+            raise ConditionFailed('--audited <sha> required when PR head has no mado-verify record')
+        audited = head
+    record_worktree = next((path for path in worktrees
+                            if (path / '.build/mado-verify' / f'{audited}.json').is_file()), None)
+    if record_worktree is None:
+        raise ConditionFailed(f'no mado-verify record for audited head {audited}')
+    record = record_worktree / '.build/mado-verify' / f'{audited}.json'
     try:
         issue = json.loads(record.read_text())['issue']
     except (ValueError, KeyError):
         raise ConditionFailed('invalid mado-verify record')
-    evidence = subprocess.run(['node', str(path / '.agents/skills/mado-verify/scripts/evidence.mjs'), 'check',
-                               '--head', head, '--issue', str(issue), '--worktree', str(path)], cwd=path,
+    evidence = subprocess.run(['node', str(record_worktree / '.agents/skills/mado-verify/scripts/evidence.mjs'), 'check',
+                               '--head', audited, '--issue', str(issue), '--worktree', str(record_worktree)], cwd=record_worktree,
                               text=True, capture_output=True)
     if evidence.returncode:
         raise ConditionFailed('mado-verify evidence failed: ' + (evidence.stderr.strip() or evidence.stdout.strip()))
+    if audited != head:
+        old_base = run(['git', 'merge-base', 'origin/main', audited], cwd=head_worktree).strip()
+        new_base = run(['git', 'merge-base', 'origin/main', head], cwd=head_worktree).strip()
+        verify = subprocess.run(['zsh', str(head_worktree / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'),
+                                 old_base, audited, new_base, head], cwd=head_worktree,
+                                text=True, capture_output=True)
+        if verify.returncode or 'CODE same ' not in verify.stdout:
+            raise ConditionFailed('rebase-verify CODE same required for audited head to PR head: ' +
+                                  (verify.stdout.strip() or verify.stderr.strip()))
     with tempfile.TemporaryDirectory(prefix='mado-merge-body-') as temporary:
         body = pathlib.Path(temporary) / 'body.md'
         body.write_text(candidate['body'] or '')
-        lint = subprocess.run(['node', str(path / 'scripts/agents/local-pr-lint.mjs'), '--body-file', str(body),
-                               '--base', 'origin/main', '--expect', head], cwd=path, text=True, capture_output=True)
+        lint = subprocess.run(['node', str(head_worktree / 'scripts/agents/local-pr-lint.mjs'), '--body-file', str(body),
+                               '--base', 'origin/main', '--expect', head], cwd=head_worktree, text=True, capture_output=True)
         if lint.returncode:
             raise ConditionFailed('PR body lint failed: ' + (lint.stderr.strip() or lint.stdout.strip()))
     verdict = 'would-allow'
