@@ -276,144 +276,152 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
         }
     }
 
-    @Test func issue688RSInBoxFirstContaining() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I1")
-        each { g, anchors, ends in
-            let resolver = g.layout.resolver
-            for p in ends + anchors {
-                let hit = RSGenerator.oracleHit(g.layout.rects, p)
-                if resolver.hitLine(at: p) != hit { failures.add(g, "hitLine p=\(p)") }
-                guard let hit else { continue }
-                for a in anchors {
-                    let line = resolver.hitLine(at: a)
-                    if resolver.lineIndex(at: p, anchorLine: line) != hit { failures.add(g, "in-box p=\(p) a=\(a)") }
+    @Test func issue688RSInBoxFirstContaining() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I1")
+            each { g, anchors, ends in
+                let resolver = g.layout.resolver
+                for p in ends + anchors {
+                    let hit = RSGenerator.oracleHit(g.layout.rects, p)
+                    if resolver.hitLine(at: p) != hit { failures.add(g, "hitLine p=\(p)") }
+                    guard let hit else { continue }
+                    for a in anchors {
+                        let line = resolver.hitLine(at: a)
+                        if resolver.lineIndex(at: p, anchorLine: line) != hit { failures.add(g, "in-box p=\(p) a=\(a)") }
+                    }
                 }
             }
+            failures.report(start)
         }
-        failures.report(start)
     }
 
-    @Test func issue688RSEdgeContinuity() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I2")
-        var checked = 0
-        each { g, anchors, _ in
-            let resolver = g.layout.resolver
-            let rects = g.layout.rects
-            for line in rects.indices where !g.bridges.contains(line) {
-                let r = rects[line]
-                let pairs = [(CGPoint(x: r.minX + 0.01, y: r.midY), CGPoint(x: r.minX - 1, y: r.midY)),
-                             (CGPoint(x: r.maxX - 0.01, y: r.midY), CGPoint(x: r.maxX + 1, y: r.midY)),
-                             (CGPoint(x: r.midX, y: r.minY + 0.01), CGPoint(x: r.midX, y: r.minY - 1)),
-                             (CGPoint(x: r.midX, y: r.maxY - 0.01), CGPoint(x: r.midX, y: r.maxY + 1))]
-                let row = g.truthRows.firstIndex { $0.contains(line) }!
-                let mates = g.truthRows[row].filter { $0 != line }
-                let lineAnchor = CGPoint(x: r.minX + 0.3 * g.layout.cellsOf(line)[0].width, y: r.midY)
-                for (inside, outside) in pairs {
-                    guard resolver.hitLine(at: inside) == line else { continue }
-                    let segment = CGRect(x: min(inside.x, outside.x), y: min(inside.y, outside.y),
-                                         width: abs(inside.x - outside.x), height: abs(inside.y - outside.y))
-                        .insetBy(dx: -0.001, dy: -0.001)
-                    if rects.indices.contains(where: { $0 != line && rects[$0].insetBy(dx: -1, dy: -1).intersects(segment) }) {
-                        continue
-                    }
-                    guard RSGenerator.oracleNearestRows(g, outside) == [row] else { continue }
-                    // Leaving L sideways into a gap can land on the row-mate across it, whose
-                    // edge is the same text only when no line's index lies between the two (a
-                    // nested line or a bridge read in between is included by one, not the other).
-                    let across = outside.x < inside.x
-                        ? mates.filter { rects[$0].maxX < outside.x }.max { rects[$0].maxX < rects[$1].maxX }
-                        : outside.x > inside.x ? mates.filter { rects[$0].minX > outside.x }.min { rects[$0].minX < rects[$1].minX } : nil
-                    if let across, abs(across - line) > 1 { continue }
-                    for anchor in [lineAnchor] + anchors.prefix(1) {
-                        let before = g.layout.select(from: anchor, to: inside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
-                        let after = g.layout.select(from: anchor, to: outside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
-                        checked += 1
-                        if before != after {
-                            failures.add(g, "anchor=\(anchor) inside=\(inside) \(before.debugDescription) outside=\(outside) \(after.debugDescription)")
+    @Test func issue688RSEdgeContinuity() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I2")
+            var checked = 0
+            each { g, anchors, _ in
+                let resolver = g.layout.resolver
+                let rects = g.layout.rects
+                for line in rects.indices where !g.bridges.contains(line) {
+                    let r = rects[line]
+                    let pairs = [(CGPoint(x: r.minX + 0.01, y: r.midY), CGPoint(x: r.minX - 1, y: r.midY)),
+                                 (CGPoint(x: r.maxX - 0.01, y: r.midY), CGPoint(x: r.maxX + 1, y: r.midY)),
+                                 (CGPoint(x: r.midX, y: r.minY + 0.01), CGPoint(x: r.midX, y: r.minY - 1)),
+                                 (CGPoint(x: r.midX, y: r.maxY - 0.01), CGPoint(x: r.midX, y: r.maxY + 1))]
+                    let row = g.truthRows.firstIndex { $0.contains(line) }!
+                    let mates = g.truthRows[row].filter { $0 != line }
+                    let lineAnchor = CGPoint(x: r.minX + 0.3 * g.layout.cellsOf(line)[0].width, y: r.midY)
+                    for (inside, outside) in pairs {
+                        guard resolver.hitLine(at: inside) == line else { continue }
+                        let segment = CGRect(x: min(inside.x, outside.x), y: min(inside.y, outside.y),
+                                             width: abs(inside.x - outside.x), height: abs(inside.y - outside.y))
+                            .insetBy(dx: -0.001, dy: -0.001)
+                        if rects.indices.contains(where: { $0 != line && rects[$0].insetBy(dx: -1, dy: -1).intersects(segment) }) {
+                            continue
+                        }
+                        guard RSGenerator.oracleNearestRows(g, outside) == [row] else { continue }
+                        // Leaving L sideways into a gap can land on the row-mate across it, whose
+                        // edge is the same text only when no line's index lies between the two (a
+                        // nested line or a bridge read in between is included by one, not the other).
+                        let across = outside.x < inside.x
+                            ? mates.filter { rects[$0].maxX < outside.x }.max { rects[$0].maxX < rects[$1].maxX }
+                            : outside.x > inside.x ? mates.filter { rects[$0].minX > outside.x }.min { rects[$0].minX < rects[$1].minX } : nil
+                        if let across, abs(across - line) > 1 { continue }
+                        for anchor in [lineAnchor] + anchors.prefix(1) {
+                            let before = g.layout.select(from: anchor, to: inside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
+                            let after = g.layout.select(from: anchor, to: outside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
+                            checked += 1
+                            if before != after {
+                                failures.add(g, "anchor=\(anchor) inside=\(inside) \(before.debugDescription) outside=\(outside) \(after.debugDescription)")
+                            }
                         }
                     }
                 }
             }
+            #expect(checked > 1000, "I2 must exercise enough edges, got \(checked)")
+            failures.report(start)
         }
-        #expect(checked > 1000, "I2 must exercise enough edges, got \(checked)")
-        failures.report(start)
     }
 
-    @Test func issue688RSTallLineInsertionInvariant() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I3")
-        var checked = 0
-        each { g, anchors, ends in
-            guard g.truthRows.count >= 2 else { return }
-            var rng = RSSplitMix64(state: g.seed ^ UInt64(g.index + 1) &* 0x688)
-            let rects = g.layout.rects
-            let tall = RS.r(20, rects.map(\.minY).min()! - 2, 60, rects.map(\.maxY).max()! + 2)
-            for k in [rng.int(0, rects.count), rects.count] {
+    @Test func issue688RSTallLineInsertionInvariant() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I3")
+            var checked = 0
+            each { g, anchors, ends in
+                guard g.truthRows.count >= 2 else { return }
+                var rng = RSSplitMix64(state: g.seed ^ UInt64(g.index + 1) &* 0x688)
+                let rects = g.layout.rects
+                let tall = RS.r(20, rects.map(\.minY).min()! - 2, 60, rects.map(\.maxY).max()! + 2)
+                for k in [rng.int(0, rects.count), rects.count] {
+                    var with = g.layout
+                    with.rects.insert(tall, at: k)
+                    with.texts.insert("T", at: k)
+                    let base = g.layout.resolver, other = with.resolver
+                    func remap(_ p: RS.Position?) -> RS.Position? {
+                        p.map { RS.Position(line: $0.line < k ? $0.line : $0.line + 1, offset: $0.offset) }
+                    }
+                    for a in anchors {
+                        for e in ends {
+                            guard let (oa, oe) = positions(g.layout, base, anchor: a, end: e),
+                                  let (na, ne) = positions(with, other, anchor: a, end: e) else {
+                                failures.add(g, "anchor lost a=\(a)"); continue
+                            }
+                            checked += 1
+                            if remap(oa) != na || remap(oe) != ne {
+                                failures.add(g, "k=\(k) a=\(a) e=\(e) without=\(oa)→\(String(describing: oe)) with=\(na)→\(String(describing: ne))")
+                            } else if k == rects.count, let oe, let ne, g.layout.text(oa, oe) != with.text(na, ne) {
+                                failures.add(g, "k=n text a=\(a) e=\(e)")
+                            }
+                        }
+                    }
+                }
+            }
+            #expect(checked > 10000, "I3 must exercise enough drags, got \(checked)")
+            failures.report(start)
+        }
+    }
+
+    @Test func issue688RSNestedInsertionInvariant() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I4")
+            var checked = 0
+            each { g, anchors, ends in
+                guard !g.hasNested else { return }
+                let rects = g.layout.rects
+                guard let h = rects.indices.first(where: { !g.bridges.contains($0) && rects[$0].width >= 60 }) else { return }
+                var rng = RSSplitMix64(state: g.seed ^ UInt64(g.index + 7) &* 0x4688)
+                let host = rects[h]
+                let short = RS.r(host.minX + 10, host.minY, host.minX + 10 + CGFloat(rng.int(10, Int(host.width) - 20)), host.maxY)
                 var with = g.layout
-                with.rects.insert(tall, at: k)
-                with.texts.insert("T", at: k)
+                with.rects.insert(short, at: h + 1)
+                with.texts.insert("s", at: h + 1)
                 let base = g.layout.resolver, other = with.resolver
-                func remap(_ p: RS.Position?) -> RS.Position? {
-                    p.map { RS.Position(line: $0.line < k ? $0.line : $0.line + 1, offset: $0.offset) }
-                }
                 for a in anchors {
-                    for e in ends {
+                    for e in ends where RSGenerator.oracleHit(rects, e) == nil {
                         guard let (oa, oe) = positions(g.layout, base, anchor: a, end: e),
-                              let (na, ne) = positions(with, other, anchor: a, end: e) else {
-                            failures.add(g, "anchor lost a=\(a)"); continue
+                              let (na, ne) = positions(with, other, anchor: a, end: e), let oe, let ne else {
+                            failures.add(g, "position lost a=\(a) e=\(e)"); continue
                         }
                         checked += 1
-                        if remap(oa) != na || remap(oe) != ne {
-                            failures.add(g, "k=\(k) a=\(a) e=\(e) without=\(oa)→\(String(describing: oe)) with=\(na)→\(String(describing: ne))")
-                        } else if k == rects.count, let oe, let ne, g.layout.text(oa, oe) != with.text(na, ne) {
-                            failures.add(g, "k=n text a=\(a) e=\(e)")
+                        let mapped = RS.Position(line: oe.line <= h ? oe.line : oe.line + 1, offset: oe.offset)
+                        if mapped != ne {
+                            failures.add(g, "H=\(h) a=\(a) e=\(e) without=\(oe) with=\(ne)")
+                            continue
+                        }
+                        let lower = min(na, ne), upper = max(na, ne)
+                        if !(lower.line <= h && upper.line >= h + 1), g.layout.text(oa, oe) != with.text(na, ne) {
+                            failures.add(g, "text a=\(a) e=\(e)")
                         }
                     }
                 }
             }
+            #expect(checked > 5000, "I4 must exercise enough drags, got \(checked)")
+            failures.report(start)
         }
-        #expect(checked > 10000, "I3 must exercise enough drags, got \(checked)")
-        failures.report(start)
-    }
-
-    @Test func issue688RSNestedInsertionInvariant() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I4")
-        var checked = 0
-        each { g, anchors, ends in
-            guard !g.hasNested else { return }
-            let rects = g.layout.rects
-            guard let h = rects.indices.first(where: { !g.bridges.contains($0) && rects[$0].width >= 60 }) else { return }
-            var rng = RSSplitMix64(state: g.seed ^ UInt64(g.index + 7) &* 0x4688)
-            let host = rects[h]
-            let short = RS.r(host.minX + 10, host.minY, host.minX + 10 + CGFloat(rng.int(10, Int(host.width) - 20)), host.maxY)
-            var with = g.layout
-            with.rects.insert(short, at: h + 1)
-            with.texts.insert("s", at: h + 1)
-            let base = g.layout.resolver, other = with.resolver
-            for a in anchors {
-                for e in ends where RSGenerator.oracleHit(rects, e) == nil {
-                    guard let (oa, oe) = positions(g.layout, base, anchor: a, end: e),
-                          let (na, ne) = positions(with, other, anchor: a, end: e), let oe, let ne else {
-                        failures.add(g, "position lost a=\(a) e=\(e)"); continue
-                    }
-                    checked += 1
-                    let mapped = RS.Position(line: oe.line <= h ? oe.line : oe.line + 1, offset: oe.offset)
-                    if mapped != ne {
-                        failures.add(g, "H=\(h) a=\(a) e=\(e) without=\(oe) with=\(ne)")
-                        continue
-                    }
-                    let lower = min(na, ne), upper = max(na, ne)
-                    if !(lower.line <= h && upper.line >= h + 1), g.layout.text(oa, oe) != with.text(na, ne) {
-                        failures.add(g, "text a=\(a) e=\(e)")
-                    }
-                }
-            }
-        }
-        #expect(checked > 5000, "I4 must exercise enough drags, got \(checked)")
-        failures.report(start)
     }
 
     /// The eight symmetries of the square on integer coordinates; odd ones swap the text axis.
@@ -425,53 +433,55 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
     static let mapAxes: [TextRowResolver.Axis] = [.horizontal, .vertical, .horizontal, .vertical,
                                                   .horizontal, .horizontal, .vertical, .vertical]
 
-    @Test func issue688RSDihedralCovariance() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I5")
-        var checked = 0
-        func mapRect(_ r: CGRect, _ map: (CGPoint) -> CGPoint) -> CGRect {
-            let corners = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY)].map(map)
-            return RS.r(min(corners[0].x, corners[1].x), min(corners[0].y, corners[1].y),
-                        max(corners[0].x, corners[1].x), max(corners[0].y, corners[1].y))
-        }
-        each { g, anchors, ends in
-            let shift = { (p: CGPoint) in CGPoint(x: p.x + 0.37, y: p.y + 0.37) }
-            let cells = g.layout.rects.indices.map { g.layout.cellsOf($0) }
-            let edgesX = Set(g.layout.rects.flatMap { [$0.minX, $0.maxX] } + cells.flatMap { $0.map(\.midX) })
-            let edgesY = Set(g.layout.rects.flatMap { [$0.minY, $0.maxY] } + cells.flatMap { $0.map(\.midY) })
-            let points = (ends + anchors).map(shift).filter { !edgesX.contains($0.x) && !edgesY.contains($0.y) }
-            let starts = anchors.map(shift)
-            // The selected text is a function of the two positions over the same strings, so
-            // equal (anchor, extent) positions under every map mean equal copied text. A line
-            // with one cell has no reading direction to recover after a reflection (the App's
-            // offset rule, unchanged here, reads it left to right), so only its line is compared.
-            func key(_ position: RS.Position?) -> RS.Position? {
-                guard let position, cells[position.line].count < 2 else { return position }
-                return RS.Position(line: position.line, offset: 0)
+    @Test func issue688RSDihedralCovariance() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I5")
+            var checked = 0
+            func mapRect(_ r: CGRect, _ map: (CGPoint) -> CGPoint) -> CGRect {
+                let corners = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY)].map(map)
+                return RS.r(min(corners[0].x, corners[1].x), min(corners[0].y, corners[1].y),
+                            max(corners[0].x, corners[1].x), max(corners[0].y, corners[1].y))
             }
-            var base: [RS.Position?] = []
-            for (index, map) in Self.maps.enumerated() {
-                let layout = RS.Layout(rects: g.layout.rects.map { mapRect($0, map) }, texts: g.layout.texts,
-                                       axis: Self.mapAxes[index], cells: cells.map { $0.map { mapRect($0, map) } })
-                let resolver = layout.resolver
-                var found: [RS.Position?] = []
-                for a in starts {
-                    let anchor = layout.anchor(map(a), using: resolver)
-                    for p in points {
-                        found.append(key(anchor))
-                        found.append(key(layout.extent(map(p), anchorLine: anchor?.line, using: resolver)))
+            each { g, anchors, ends in
+                let shift = { (p: CGPoint) in CGPoint(x: p.x + 0.37, y: p.y + 0.37) }
+                let cells = g.layout.rects.indices.map { g.layout.cellsOf($0) }
+                let edgesX = Set(g.layout.rects.flatMap { [$0.minX, $0.maxX] } + cells.flatMap { $0.map(\.midX) })
+                let edgesY = Set(g.layout.rects.flatMap { [$0.minY, $0.maxY] } + cells.flatMap { $0.map(\.midY) })
+                let points = (ends + anchors).map(shift).filter { !edgesX.contains($0.x) && !edgesY.contains($0.y) }
+                let starts = anchors.map(shift)
+                // The selected text is a function of the two positions over the same strings, so
+                // equal (anchor, extent) positions under every map mean equal copied text. A line
+                // with one cell has no reading direction to recover after a reflection (the App's
+                // offset rule, unchanged here, reads it left to right), so only its line is compared.
+                func key(_ position: RS.Position?) -> RS.Position? {
+                    guard let position, cells[position.line].count < 2 else { return position }
+                    return RS.Position(line: position.line, offset: 0)
+                }
+                var base: [RS.Position?] = []
+                for (index, map) in Self.maps.enumerated() {
+                    let layout = RS.Layout(rects: g.layout.rects.map { mapRect($0, map) }, texts: g.layout.texts,
+                                           axis: Self.mapAxes[index], cells: cells.map { $0.map { mapRect($0, map) } })
+                    let resolver = layout.resolver
+                    var found: [RS.Position?] = []
+                    for a in starts {
+                        let anchor = layout.anchor(map(a), using: resolver)
+                        for p in points {
+                            found.append(key(anchor))
+                            found.append(key(layout.extent(map(p), anchorLine: anchor?.line, using: resolver)))
+                        }
+                    }
+                    if index == 0 { base = found; continue }
+                    checked += found.count / 2
+                    if let i = found.indices.first(where: { found[$0] != base[$0] }) {
+                        let a = starts[i / 2 / points.count], p = points[i / 2 % points.count]
+                        failures.add(g, "map \(index) a=\(a) p=\(p) position \(String(describing: base[i]))→\(String(describing: found[i]))")
                     }
                 }
-                if index == 0 { base = found; continue }
-                checked += found.count / 2
-                if let i = found.indices.first(where: { found[$0] != base[$0] }) {
-                    let a = starts[i / 2 / points.count], p = points[i / 2 % points.count]
-                    failures.add(g, "map \(index) a=\(a) p=\(p) position \(String(describing: base[i]))→\(String(describing: found[i]))")
-                }
             }
+            #expect(checked > 10000, "I5 must exercise enough drags, got \(checked)")
+            failures.report(start)
         }
-        #expect(checked > 10000, "I5 must exercise enough drags, got \(checked)")
-        failures.report(start)
     }
 
     @Test func issue688RSRowsMatchGeneratorTruth() {
@@ -485,49 +495,53 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
         failures.report(start)
     }
 
-    @Test func issue688RSRowSafetyAgainstOracle() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I6b")
-        each { g, anchors, ends in
-            let resolver = g.layout.resolver
-            for a in anchors {
-                guard let anchorLine = resolver.hitLine(at: a) else { continue }
-                for e in ends where RSGenerator.oracleHit(g.layout.rects, e) == nil {
-                    // Fix round 1 (F2): every band tie is decided by the oracle, including
-                    // multi-row ties without the anchor's row.
-                    let allowed = [RSGenerator.oracleRow(g, e, anchor: anchorLine)]
-                    guard let line = resolver.lineIndex(at: e, anchorLine: anchorLine) else {
-                        failures.add(g, "nil a=\(a) e=\(e)"); continue
-                    }
-                    if g.bridges.contains(line) || !allowed.contains(where: { g.truthRows[$0].contains(line) }) {
-                        failures.add(g, "a=\(a) e=\(e) line=\(line) allowed rows \(allowed.map { g.truthRows[$0] })")
+    @Test func issue688RSRowSafetyAgainstOracle() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I6b")
+            each { g, anchors, ends in
+                let resolver = g.layout.resolver
+                for a in anchors {
+                    guard let anchorLine = resolver.hitLine(at: a) else { continue }
+                    for e in ends where RSGenerator.oracleHit(g.layout.rects, e) == nil {
+                        // Fix round 1 (F2): every band tie is decided by the oracle, including
+                        // multi-row ties without the anchor's row.
+                        let allowed = [RSGenerator.oracleRow(g, e, anchor: anchorLine)]
+                        guard let line = resolver.lineIndex(at: e, anchorLine: anchorLine) else {
+                            failures.add(g, "nil a=\(a) e=\(e)"); continue
+                        }
+                        if g.bridges.contains(line) || !allowed.contains(where: { g.truthRows[$0].contains(line) }) {
+                            failures.add(g, "a=\(a) e=\(e) line=\(line) allowed rows \(allowed.map { g.truthRows[$0] })")
+                        }
                     }
                 }
             }
+            failures.report(start)
         }
-        failures.report(start)
     }
 
-    @Test func issue688RSContiguity() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I7")
-        each { g, anchors, ends in
-            let resolver = g.layout.resolver
-            let full = Array(g.layout.texts.joined(separator: "\n"))
-            func global(_ p: RS.Position) -> Int {
-                g.layout.texts[..<p.line].reduce(0) { $0 + $1.count + 1 } + p.offset
-            }
-            for a in anchors {
-                for e in ends {
-                    guard let (pa, pe) = positions(g.layout, resolver, anchor: a, end: e), let pe else { continue }
-                    if !(0...g.layout.texts[pe.line].count).contains(pe.offset) { failures.add(g, "offset \(pe)") }
-                    let lower = min(global(pa), global(pe)), upper = max(global(pa), global(pe))
-                    let expected = lower == upper ? nil : String(full[lower..<upper])
-                    if g.layout.text(pa, pe) != expected { failures.add(g, "a=\(a) e=\(e)") }
+    @Test func issue688RSContiguity() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I7")
+            each { g, anchors, ends in
+                let resolver = g.layout.resolver
+                let full = Array(g.layout.texts.joined(separator: "\n"))
+                func global(_ p: RS.Position) -> Int {
+                    g.layout.texts[..<p.line].reduce(0) { $0 + $1.count + 1 } + p.offset
+                }
+                for a in anchors {
+                    for e in ends {
+                        guard let (pa, pe) = positions(g.layout, resolver, anchor: a, end: e), let pe else { continue }
+                        if !(0...g.layout.texts[pe.line].count).contains(pe.offset) { failures.add(g, "offset \(pe)") }
+                        let lower = min(global(pa), global(pe)), upper = max(global(pa), global(pe))
+                        let expected = lower == upper ? nil : String(full[lower..<upper])
+                        if g.layout.text(pa, pe) != expected { failures.add(g, "a=\(a) e=\(e)") }
+                    }
                 }
             }
+            failures.report(start)
         }
-        failures.report(start)
     }
 
     private func oracleBottom(_ g: RSGenerated, _ row: [Int]) -> CGFloat { row.map { g.layout.rects[$0].maxY }.max()! }
@@ -553,19 +567,21 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
         failures.report(start)
     }
 
-    @Test func issue688RSInBoxSymmetry() {
-        let start = ContinuousClock.now
-        var failures = RSFailures(name: "I9")
-        each { g, anchors, ends in
-            let resolver = g.layout.resolver
-            let inBox = (anchors + ends).filter { resolver.hitLine(at: $0) != nil }
-            for a in anchors {
-                for b in inBox where g.layout.select(from: a, to: b) != g.layout.select(from: b, to: a) {
-                    failures.add(g, "a=\(a) b=\(b)")
+    @Test func issue688RSInBoxSymmetry() async {
+        await offCooperativePool {
+            let start = ContinuousClock.now
+            var failures = RSFailures(name: "I9")
+            each { g, anchors, ends in
+                let resolver = g.layout.resolver
+                let inBox = (anchors + ends).filter { resolver.hitLine(at: $0) != nil }
+                for a in anchors {
+                    for b in inBox where g.layout.select(from: a, to: b) != g.layout.select(from: b, to: a) {
+                        failures.add(g, "a=\(a) b=\(b)")
+                    }
                 }
             }
+            failures.report(start)
         }
-        failures.report(start)
     }
 
     @Test func issue688RSDegenerateInputsDeterministic() {
