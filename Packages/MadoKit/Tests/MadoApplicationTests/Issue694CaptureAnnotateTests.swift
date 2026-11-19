@@ -142,7 +142,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 
 /// AC-3: with saving off the Capture is written to the Capture Folder by `CaptureSession.save` exactly once, under the
 /// #682 unique name, before the record is left and before the open.
-@MainActor @Test func issue694AnnotateSaveOffWritesThenOpens() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateSaveOffWritesThenOpens() async throws {
     let files = Files694(existing: ["mado-20261113140532.png"])
     let handoff = Handoff694()
     let opener = Opener694(files: files, handoff: handoff)
@@ -161,7 +161,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
     #expect(!model.isOpeningInMado)
 }
 
-@MainActor @Test func issue694AnnotateOpensSavedFileOnceWithRecord() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateOpensSavedFileOnceWithRecord() async throws {
     let files = Files694()
     let handoff = Handoff694()
     let opener = Opener694(files: files, handoff: handoff)
@@ -175,7 +175,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 }
 
 /// 在 Mado 中打开 leaves no record, so Mado opens that file for viewing only.
-@MainActor @Test func issue694OpenInMadoLeavesNoRecord() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694OpenInMadoLeavesNoRecord() async throws {
     let handoff = Handoff694()
     let opener = Opener694(handoff: handoff)
     let model = model694(saved: true, files: Files694())
@@ -184,7 +184,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
     #expect(handoff.calls.isEmpty)
 }
 
-@MainActor @Test func issue694AnnotateSaveFailureDoesNotOpen() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateSaveFailureDoesNotOpen() async throws {
     let files = Files694(failing: true)
     let handoff = Handoff694()
     let opener = Opener694(files: files, handoff: handoff)
@@ -199,7 +199,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
     #expect(!model.isOpeningInMado)
 }
 
-@MainActor @Test func issue694AnnotateOpenFailureClearsRecord() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateOpenFailureClearsRecord() async throws {
     let handoff = Handoff694()
     let opener = Opener694(handoff: handoff, failing: true)
     let model = model694(saved: true, files: Files694())
@@ -212,7 +212,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 }
 
 /// Two 标注 clicks, or 存储 then 标注, while the write is in flight: one file, one record, one open.
-@MainActor @Test func issue694AnnotateDoubleClickOpensOnce() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateDoubleClickOpensOnce() async throws {
     for saveFirst in [false, true] {
         let files = HeldFiles694()
         let handoff = Handoff694()
@@ -239,7 +239,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 
 /// 标注 then 在 Mado 中打开 (and the reverse) while the first open is pending: one open in total, and the first
 /// click decides whether Mado annotates.
-@MainActor @Test func issue694AnnotateAndOpenShareOneOpen() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694AnnotateAndOpenShareOneOpen() async throws {
     for annotateFirst in [true, false] {
         let handoff = Handoff694()
         let opener = HeldOpener694()
@@ -261,7 +261,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 }
 
 /// AC-4: 移到废纸篓 while an open is pending does nothing, so Mado is never handed a file just moved to the Trash.
-@MainActor @Test func issue694TrashIgnoredWhileOpenPending() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694TrashIgnoredWhileOpenPending() async throws {
     let trash = Trash694()
     let handoff = Handoff694()
     let opener = HeldOpener694()
@@ -282,7 +282,7 @@ private let savedURL694 = URL(fileURLWithPath: "/Captures/mado-20261113140000.pn
 
 /// A new Capture replaces the thumbnail while 标注's write is in flight: the file stays, nothing opens and no record
 /// is left behind.
-@MainActor @Test func issue694ReplacedThumbnailLeavesNoRecord() async throws {
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694ReplacedThumbnailLeavesNoRecord() async throws {
     let files = HeldFiles694()
     let handoff = Handoff694()
     let opener = Opener694(handoff: handoff)
