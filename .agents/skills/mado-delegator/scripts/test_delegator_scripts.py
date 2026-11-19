@@ -230,6 +230,118 @@ class ResolveRowsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('限制：A限制：main限制：topic', self.path.read_text())
 
+    def test_i766_append_after_completed_clause_merges(self):
+        base = self.base.replace('acceptance', '限制：A。')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'clause base', env=self.env)
+        result = self.conflict(base.replace('限制：A。', '限制：A。B（main）。'),
+                               base.replace('限制：A。', '限制：A。C（topic）。'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('限制：A。B（main）。C（topic）。', self.path.read_text())
+
+    def test_spaced_limit_after_completed_clause_merges(self):
+        base = self.base.replace('acceptance', '能打开。')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'clause base', env=self.env)
+        result = self.conflict(base.replace('能打开。', '能打开。 限制：甲。'),
+                               base.replace('能打开。', '能打开。 限制：乙。'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('能打开。 限制：甲。 限制：乙。', self.path.read_text())
+
+    def test_full_width_space_before_limit_clause_merges(self):
+        base = self.base.replace('acceptance', '验收')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'clause base', env=self.env)
+        result = self.conflict(base.replace('验收', '验收　限制：甲'),
+                               base.replace('验收', '验收　限制：乙'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('验收　限制：甲　限制：乙', self.path.read_text())
+
+    def test_spaced_limit_appends_to_rewritten_clause(self):
+        base = self.base.replace('acceptance', '验收。')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'clause base', env=self.env)
+        result = self.conflict(base.replace('验收。', '新验收。'),
+                               base.replace('验收。', '验收。 限制：待真机'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('新验收。 限制：待真机', self.path.read_text())
+
+    def test_plan_list_append_merges(self):
+        base = self.base.replace('WP', 'P2-08')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'plan base', env=self.env)
+        result = self.conflict(base.replace('P2-08', 'P2-08、P3-01'),
+                               base.replace('P2-08', 'P2-08、P4-02'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('P2-08、P3-01、P4-02', self.path.read_text())
+
+    def test_contained_topic_append_takes_longer_cell(self):
+        base = self.base.replace('acceptance', '验收')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收', '验收。A'),
+                               base.replace('验收', '验收。A；B'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('| 验收。A；B |', self.path.read_text())
+
+    def test_contained_main_append_takes_longer_cell(self):
+        base = self.base.replace('acceptance', '能打开')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('能打开', '能打开。限制：A；B'),
+                               base.replace('能打开', '能打开。限制：A'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('| 能打开。限制：A；B |', self.path.read_text())
+
+    def test_partially_shared_clause_stops(self):
+        base = self.base.replace('acceptance', '验收')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收', '验收。A；B'),
+                               base.replace('验收', '验收。A；C'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('base cell', result.stdout)
+        self.assertIn('ours cell', result.stdout)
+        self.assertIn('theirs cell', result.stdout)
+
+    def test_partially_shared_unfinished_clause_stops(self):
+        base = self.base.replace('acceptance', '验收')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收', '验收。A1'),
+                               base.replace('验收', '验收。A2'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('base cell', result.stdout)
+        self.assertIn('ours cell', result.stdout)
+        self.assertIn('theirs cell', result.stdout)
+
+    def test_partially_shared_suffix_stops(self):
+        base = self.base.replace('acceptance', '验收')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收', '验收。A；B'),
+                               base.replace('验收', '验收；B；C'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('base cell', result.stdout)
+        self.assertIn('ours cell', result.stdout)
+        self.assertIn('theirs cell', result.stdout)
+
+    def test_completed_base_does_not_justify_gluing_two_unfinished_appends(self):
+        base = self.base.replace('acceptance', '验收。')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收。', '验收。A'),
+                               base.replace('验收。', '验收。B'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+
+    def test_rewrite_without_end_boundary_rejects_old_base_suffix(self):
+        base = self.base.replace('acceptance', '验收。')
+        self.path.write_text(base)
+        git(self.repo, 'commit', '-qam', 'acceptance base', env=self.env)
+        result = self.conflict(base.replace('验收。', '新验收'),
+                               base.replace('验收。', '验收。B'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+
 
 class RebaseVerifyTests(unittest.TestCase):
     """rebase-verify.sh compares an audited range with its rebased range."""

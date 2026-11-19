@@ -498,8 +498,11 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
 - **Only `docs/feature-ledger.html` conflicts.** Regenerate and continue, in a loop:
   `node scripts/ledger/build.mjs && git add docs/feature-ledger.html && GIT_EDITOR=true git rebase --continue`.
 - **`docs/feature-ledger.md` row conflicts.** `.agents/skills/mado-delegator/scripts/resolve_rows.py` does a three-way merge
-  by row key and cell (stage 1/2/3). Different cells in one row merge; a cell changed differently on both sides
-  stops with base/ours/theirs values, for example when both sides rewrote the same 限制 clause. Merge those by hand.
+  by row key and cell (stage 1/2/3). Different cells in one row merge. Same-cell appends merge only at a clause
+  boundary: the base ends in `。` or `；`, or the suffix (after spaces) starts with `。`, `；`, `限制：`, or `、`.
+  A contained append keeps the longer text; partial overlap, unfinished joins, and rewrites stop with exit 3 and
+  base/ours/theirs values. Inspect those three values, resolve the row by hand, regenerate the ledger HTML, then
+  stage both ledger files and continue the rebase.
 - **Part 3 area-review conflicts.** Use `.agents/skills/mado-delegator/scripts/resolve_part3.py <file>`. It keeps main's row and, reading the merge base
   (`git show :1:docs/feature-ledger.md`), appends the branch's suffix over the base note verbatim, keeping the newer
   review date with its reviewer. A branch that edited base text, a row with no base or mismatched cells stays
