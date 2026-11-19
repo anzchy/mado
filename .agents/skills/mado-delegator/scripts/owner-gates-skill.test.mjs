@@ -15,9 +15,17 @@ const step1 = skill.slice(skill.indexOf('## 1. Gate ladder'), skill.indexOf('## 
 const has = (text, re, label) => assert.ok(re.test(text), `${label}: expected ${re}`);
 const lacks = (text, re, label) => assert.ok(!re.test(text), `${label}: unexpected ${re}`);
 
+// Every `lane_result` call outside comments and the function definition, in any position (`then lane_result …`,
+// `&& lane_result …`); a name that is not a literal lane (quoted, a variable) throws instead of being skipped.
 export function ownerLanes(script) {
   const lanes = [];
-  for (const [, lane] of script.matchAll(/^\s*(?:.*;\s*)?lane_result ([a-z][a-z-]*) /gm)) if (!lanes.includes(lane)) lanes.push(lane);
+  for (const line of script.split('\n')) {
+    if (/^\s*#/.test(line)) continue;
+    for (const [, arg] of line.matchAll(/(?:^|[\s;&|])lane_result(?![\w(-])\s*(\S*)/g)) {
+      if (!/^[a-z][a-z-]*$/.test(arg)) throw new Error(`lane_result with a name the lane test cannot read: ${line.trim()}`);
+      if (!lanes.includes(arg)) lanes.push(arg);
+    }
+  }
   return lanes;
 }
 export function skillLanes(text) {
@@ -30,6 +38,13 @@ test('SKILL.md lists exactly the owner-gates.sh lanes, in order', () => {
   assert.ok(lanes.length >= 10, lanes.join(','));
   assert.deepEqual(skillLanes(step1), lanes);
   for (const gate of MANDATORY_GATES) assert.ok(lanes.includes(gate), `mandatory gate ${gate} is not an owner-gates lane`);
+});
+
+test('fix1 the lane extractor reads then/else lane_result calls and rejects names it cannot read', () => {
+  assert.deepEqual(ownerLanes('x=1\nif true; then lane_result alpha 0; else lane_result alpha 1; fi\n  lane_result beta $?\n'), ['alpha', 'beta']);
+  assert.deepEqual(ownerLanes('lane_result() {\n  local lane=$1\n}\n# lane_result gamma 0\nfoo && lane_result delta 0\n'), ['delta']);
+  assert.throws(() => ownerLanes('lane_result "$name" 0\n'), /lane_result/);
+  assert.throws(() => ownerLanes('if x; then lane_result $lane 0; fi\n'), /lane_result/);
 });
 
 test('the lane comparison fails on a lane or an order the script does not have', () => {

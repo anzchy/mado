@@ -118,8 +118,73 @@ test('750 the lane runs scripts/ci (for-where ban included) and the mado-verify 
     for (const file of ['scripts/ci/for-where-ban.test.mjs', 'scripts/ci/name-checks-ci.test.mjs', 'scripts/release/appcast.test.mjs',
       'scripts/hooks/git-add-guard.test.mjs', '.agents/skills/mado-verify/tests/verify.test.mjs',
       '.agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs']) assert.ok(files.includes(file), `${file} with ${JSON.stringify(choice)}`);
-    assert.equal(files.includes('scripts/agents/pre-push.test.mjs'), choice.agents);
-    assert.equal(files.some(f => f.startsWith('scripts/tdd/')), choice.tdd);
+    // i760-fix1 F1: pr-body.yml runs scripts/agents and scripts/tdd on every PR, so every selection runs them locally too.
+    assert.ok(files.includes('scripts/agents/pre-push.test.mjs'), `scripts/agents with ${JSON.stringify(choice)}`);
+    assert.ok(files.some(f => f.startsWith('scripts/tdd/')), `scripts/tdd with ${JSON.stringify(choice)}`);
+  }
+});
+
+test('fix1 parity holds for every selection owner-gates can make: native-only, tooling-only, mixed, empty', () => {
+  const exceptions = readExceptions(NODE_LANE_EXCEPTIONS);
+  for (const diff of [['App/New.swift'], ['Packages/MadoKit/Sources/MadoCore/Model.swift', 'TestAssets/a.png'], ['scripts/agents/tool.mjs'],
+    ['App/New.swift', 'docs/notes.md'], []]) {
+    const choice = selectSuites(diff);
+    assert.deepEqual(uncoveredWorkflowTests(repo, workflowTexts(), exceptions, choice), [], `selection for ${JSON.stringify(diff)}`);
+    const {files} = nodeLaneFiles(repo, choice, exceptions);
+    assert.ok(files.includes('scripts/agents/pre-push.test.mjs') && files.some(f => f.startsWith('scripts/tdd/')), JSON.stringify(diff));
+  }
+});
+
+// i760-fix1 F2 / opus M1: every command shape either is read or makes the parity check fail; none is dropped silently.
+function shapeRepo(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-shapes-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  for (const rel of ['scripts/newchecks/probe.test.mjs', 'scripts/newchecks/helper-check.mjs', 'scripts/deep/x/y.test.mjs', 'tools/c.test.mjs', 'pr-head/scripts/ci/z.test.mjs']) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), {recursive: true}); fs.writeFileSync(path.join(dir, rel), '');
+  }
+  return dir;
+}
+
+test('fix1 readable shapes: continuation, folded, flags before --test, flag values, plain file arguments', t => {
+  const dir = shapeRepo(t);
+  const readable = {
+    continuation: 'jobs:\n  a:\n    steps:\n      - run: |\n          node --test \\\n            scripts/newchecks/*.test.mjs\n',
+    folded: 'jobs:\n  a:\n    steps:\n      - run: >\n          node --test\n          scripts/newchecks/*.test.mjs\n',
+    flagsBefore: '      - run: node --experimental-vm-modules --test scripts/newchecks/probe.test.mjs\n',
+    flagValue: '      - run: node --test --test-reporter spec scripts/newchecks/probe.test.mjs > out.tap\n',
+    plainFile: '      - run: node --test scripts/newchecks/helper-check.mjs\n',
+  };
+  const expected = {plainFile: ['scripts/newchecks/helper-check.mjs']};
+  for (const [shape, text] of Object.entries(readable)) {
+    assert.deepEqual(uncoveredWorkflowTests(dir, [text], []), expected[shape] ?? ['scripts/newchecks/probe.test.mjs'], shape);
+  }
+  assert.deepEqual(workflowNodeTests(readable.continuation), ['scripts/newchecks/*.test.mjs']);
+  assert.deepEqual(workflowNodeTests(readable.flagValue), ['scripts/newchecks/probe.test.mjs']);
+  // A checkout's working directory is the repository root; comments and step names are not commands.
+  const checkout = '      - uses: actions/checkout@v4\n        with:\n          path: pr-head\n      - working-directory: pr-head\n        run: node --test scripts/newchecks/probe.test.mjs\n';
+  assert.deepEqual(uncoveredWorkflowTests(dir, [checkout], []), ['scripts/newchecks/probe.test.mjs']);
+  assert.deepEqual(uncoveredWorkflowTests(dir, ['      # node --test scripts/gone/*.test.mjs\n      - name: node --test scripts/gone/*.test.mjs\n        run: echo hi\n'], []), []);
+});
+
+test('fix1 unreadable shapes and empty patterns fail the parity check', t => {
+  const dir = shapeRepo(t);
+  const unreadable = {
+    globstar: "      - run: node --test 'scripts/deep/**/*.test.mjs'\n",
+    variable: '      - run: node --test "$T"\n',
+    matrix: '      - run: node --test scripts/${{ matrix.s }}/*.test.mjs\n',
+    directory: '      - run: node --test scripts/newchecks/\n',
+    directoryNoSlash: '      - run: node --test scripts/newchecks\n',
+    cd: '      - run: cd tools && node --test c.test.mjs\n',
+    cdEarlierLine: '      - run: |\n          cd tools\n          node --test c.test.mjs\n',
+    workingDirectory: '      - working-directory: tools\n        run: node --test c.test.mjs\n',
+    noPath: '      - run: node --test\n',
+    nodeLaneNoPath: '      - run: scripts/heavy-lock.sh node scripts/tdd/node-lane.mjs > out.tap\n',
+    emptyPattern: '      - run: node --test scripts/gone/*.test.mjs\n',
+    missingFile: '      - run: node --test scripts/gone/a.test.mjs\n',
+  };
+  for (const [shape, text] of Object.entries(unreadable)) {
+    const problems = uncoveredWorkflowTests(dir, [text], []);
+    assert.ok(problems.length > 0 && problems.every(p => /^(unreadable|no path|no files): /.test(p)), `${shape}: ${JSON.stringify(problems)}`);
   }
 });
 

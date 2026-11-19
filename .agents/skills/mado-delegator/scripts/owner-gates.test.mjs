@@ -235,3 +235,23 @@ test('760 load preflight writes the facts, refuses over a threshold before any l
   assert.equal(unreadable.summary.match(/^preflight-note: .+ unreadable; no refusal on it$/gm)?.length, 3);
   assert.match(unreadable.summary, /^DONE$/m);
 });
+
+test('fix1 a native-only diff still runs the scripts/agents and scripts/tdd suites CI runs on every PR', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift'});
+  assert.equal(f.result.status, 0, f.result.stderr);
+  assert.doesNotMatch(f.summary, /^node-agents=skipped /m);
+  assert.doesNotMatch(f.summary, /^node-tdd=skipped /m);
+  const args = fs.readFileSync(f.nodeMarker, 'utf8').split('\n');
+  for (const file of ['scripts/agents/fixture.test.mjs', 'scripts/tdd/fixture.test.mjs']) assert.ok(args.includes(file), `${file} in ${args.join(' ')}`);
+});
+
+test('fix1 the summary records the thresholds in force when one is set by environment', t => {
+  const set = fixture(t, 'pass', 2, true, {env: {OWNER_GATES_MAX_LOAD: '999', OWNER_GATES_MIN_MEM_FREE: '5'}});
+  assert.equal(set.result.status, 0, set.result.stderr);
+  assert.match(set.summary, /^load=4\.2 mem_free=55% pressure=1\nlimits=999\/5%\/2$/m);
+  const refused = fixture(t, 'pass', 2, true, {env: {OWNER_GATES_MAX_LOAD: '3'}});
+  assert.equal(refused.result.status, 2, refused.result.stderr);
+  assert.match(refused.summary, /^limits=3\/15%\/2$/m);
+  const defaults = fixture(t, 'pass', 2, true, {env: {}});
+  assert.doesNotMatch(defaults.summary, /^limits=/m);
+});
