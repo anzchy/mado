@@ -82,34 +82,96 @@ export function inspectLock(lock) {
 
 // #750: the local node lane runs every node test the workflows run (.github/workflows/*.yml `node --test` and
 // node-lane.mjs commands), except the reviewed entries of node-lane-exceptions.json; owner-gates-tools.test.mjs checks it.
-// `agents` and `tdd` stay optional for reviewed native-only diffs (selectSuites); CI runs them on every PR.
+// i760-fix1: pr-body.yml runs scripts/agents and scripts/tdd on every PR, so the lane runs them for every selection too.
 export const NODE_LANE = Object.freeze({
   always: ['scripts/ci/*.test.mjs', 'scripts/ledger/*.test.mjs', 'scripts/name-checks/*.test.mjs', 'scripts/release/*.test.mjs',
-    'scripts/perf/*.test.mjs', 'scripts/hooks/*.test.mjs', 'scripts/device/tests/*.test.cjs',
-    '.agents/skills/mado-delegator/scripts/*.test.mjs', '.agents/skills/mado-verify/tests/*.test.mjs'],
-  agents: ['scripts/agents/*.test.mjs'],
-  tdd: ['scripts/tdd/*.test.mjs'],
+    'scripts/perf/*.test.mjs', 'scripts/hooks/*.test.mjs', 'scripts/device/tests/*.test.cjs', 'scripts/agents/*.test.mjs',
+    'scripts/tdd/*.test.mjs', '.agents/skills/mado-delegator/scripts/*.test.mjs', '.agents/skills/mado-verify/tests/*.test.mjs'],
 });
 export const NODE_LANE_EXCEPTIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'node-lane-exceptions.json');
 
-// Text match, no YAML parser: the test paths of each `node --test …` or `node scripts/tdd/node-lane.mjs …` command.
-export function workflowNodeTests(text) {
-  const paths = [];
-  for (const line of text.split('\n')) {
-    const command = /\bnode\s+(?:--test\b|scripts\/tdd\/node-lane\.mjs\b)(.*)$/.exec(line);
-    if (!command) continue;
-    for (const raw of command[1].split(/\s*(?:[<>|;]|&&)/)[0].trim().split(/\s+/)) {
-      const token = raw.replace(/^["']|["']$/g, '');
-      if (!token.startsWith('-') && /\.test\.[cm]?js$/.test(token) && !paths.includes(token)) paths.push(token);
+// Text match, no YAML parser. Each step's `run:` value is read whole (plain, quoted, `|` literal, `>` folded), shell `\`
+// continuations are joined, and every `node [flags] --test …` or `node scripts/tdd/node-lane.mjs …` command gives its
+// arguments. Shapes this cannot read are reported as problems, so the parity check fails closed instead of dropping them.
+const VALUE_FLAGS = new Set(['--test-reporter', '--test-reporter-destination', '--test-name-pattern', '--test-skip-pattern',
+  '--test-concurrency', '--test-timeout', '--test-shard', '--import', '--require', '-r', '--loader', '--experimental-loader',
+  '--conditions', '-C', '--env-file', '--input-type']);
+const NODE_TEST = /(?:^|[\s;&|(])node((?:\s+-\S+)*)\s+(--test(?=\s|$)|scripts\/tdd\/node-lane\.mjs(?=\s|$))(.*)$/;
+
+function runBlocks(text) {
+  const lines = text.split('\n'), steps = [], checkouts = new Set();
+  let step = null;
+  const flush = () => {
+    if (step && /^actions\/checkout@/.test(step.uses ?? '') && step.path) checkouts.add(step.path);
+    if (step) steps.push(step);
+  };
+  const scalar = value => value.trim().replace(/^(["'])(.*)\1$/, '$2');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*#/.test(line) || !line.trim()) continue;
+    const item = /^(\s*)-\s+(.*)$/.exec(line);
+    if (item) { flush(); step = {runs: [], indent: item[1].length + 2}; }
+    const body = item ? `${' '.repeat(item[1].length + 2)}${item[2]}` : line;
+    const key = /^(\s*)([A-Za-z-]+):\s*(.*)$/.exec(body);
+    if (!key) continue;
+    const [, indent, name, value] = key;
+    step ??= {runs: []};
+    if (name === 'uses') step.uses = scalar(value);
+    else if (name === 'path') step.path = scalar(value);
+    else if (name === 'working-directory') step.workingDirectory = scalar(value);
+    else if (name === 'run') {
+      const block = /^([|>])[-+]?\d*\s*(?:#.*)?$/.exec(value);
+      if (!block && value.trim()) { step.runs.push(scalar(value)); continue; }
+      const body = [];
+      while (i + 1 < lines.length && (!lines[i + 1].trim() || /^\s*/.exec(lines[i + 1])[0].length > indent.length)) body.push(lines[++i].trim());
+      while (body.length && !body.at(-1)) body.pop();
+      if (block?.[1] === '>') step.runs.push(body.join(' ').replace(/\s{2,}/g, ' '));
+      else step.runs.push(body.join('\n'));
     }
   }
-  return paths;
+  flush();
+  return steps.flatMap(s => s.runs.map(run => ({run, workingDirectory: s.workingDirectory, checkouts})));
 }
+
+export function parseWorkflowNodeTests(text) {
+  const paths = [], problems = [];
+  for (const {run, workingDirectory, checkouts} of runBlocks(text)) {
+    let cd = false;
+    for (const line of run.replace(/\\\n\s*/g, ' ').split('\n')) {
+      const match = NODE_TEST.exec(line);
+      const before = match ? line.slice(0, match.index + 1) : line;
+      if (/(?:^|[\s;&|(])(?:cd|pushd)\s/.test(before)) cd = true;
+      if (!match) continue;
+      const command = match[0].trim();
+      if (cd) { problems.push(`unreadable: cd before the node command (paths are read from the repository root) in: ${command}`); continue; }
+      if (workingDirectory && !checkouts.has(workingDirectory)) {
+        problems.push(`unreadable: working-directory ${workingDirectory} is not a checkout path in: ${command}`); continue;
+      }
+      const args = match[3].split(/\s*(?:&&|\|\||[;|&<>]|\d>)/)[0].trim().split(/\s+/).filter(Boolean);
+      let found = 0;
+      for (let k = 0; k < args.length; k++) {
+        const token = args[k].replace(/^["']|["']$/g, '');
+        if (token.startsWith('-')) { if (VALUE_FLAGS.has(token)) k++; continue; }
+        found++;
+        if (/[$`]/.test(token)) problems.push(`unreadable: ${token} (shell or workflow variable) in: ${command}`);
+        else if (token.includes('**')) problems.push(`unreadable: ${token} (** is not expanded here) in: ${command}`);
+        else if (/[{}[\]?]/.test(token)) problems.push(`unreadable: ${token} (glob syntax other than one *) in: ${command}`);
+        else if (token.endsWith('/')) problems.push(`unreadable: ${token} (directory argument; node 22 runs no directory) in: ${command}`);
+        else if (!paths.includes(token)) paths.push(token);
+      }
+      if (!found) problems.push(`no path: ${command}`);
+    }
+  }
+  return {paths, problems};
+}
+export function workflowNodeTests(text) { return parseWorkflowNodeTests(text).paths; }
 
 // `dir/name` or `dir/*.test.mjs` (one `*` level, as the workflows use); returns existing files, repo-relative, sorted.
 export function expandPattern(root, pattern) {
   const dir = path.posix.dirname(pattern), base = path.posix.basename(pattern);
-  if (!base.includes('*')) return fs.existsSync(path.join(root, pattern)) ? [pattern] : [];
+  if (!base.includes('*')) {
+    try { return fs.statSync(path.join(root, pattern)).isFile() ? [pattern] : []; } catch { return []; }
+  }
   const re = new RegExp(`^${base.split('*').map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')}$`);
   let names;
   try { names = fs.readdirSync(path.join(root, dir), {withFileTypes: true}); } catch { return []; }
@@ -126,17 +188,31 @@ export function readExceptions(file) {
   return list;
 }
 
-export function nodeLaneFiles(root, {agents, tdd}, exceptions) {
-  const patterns = [...NODE_LANE.always, ...(agents ? NODE_LANE.agents : []), ...(tdd ? NODE_LANE.tdd : [])];
+// The selection (selectSuites) no longer narrows the node lane: every CI node suite runs for every diff.
+export function nodeLaneFiles(root, _selection, exceptions) {
   const excepted = [...new Set(exceptions.flatMap(entry => expandPattern(root, entry.file)))].sort();
-  const files = [...new Set(patterns.flatMap(pattern => expandPattern(root, pattern)))].filter(file => !excepted.includes(file));
+  const files = [...new Set(NODE_LANE.always.flatMap(pattern => expandPattern(root, pattern)))].filter(file => !excepted.includes(file));
   return {files, excepted};
 }
 
-export function uncoveredWorkflowTests(root, texts, exceptions) {
-  const ci = [...new Set(texts.flatMap(workflowNodeTests).flatMap(pattern => expandPattern(root, pattern)))];
-  const {files, excepted} = nodeLaneFiles(root, {agents: true, tdd: true}, exceptions);
-  return ci.filter(file => !files.includes(file) && !excepted.includes(file)).sort();
+// Uncovered CI test files, then every problem: an unreadable command shape, a command with no path, or a path that
+// matches no file (`no files: …`, also a directory given without a trailing slash). Empty means the lane covers CI.
+export function uncoveredWorkflowTests(root, texts, exceptions, selection = {agents: true, tdd: true}) {
+  const parsed = texts.map(parseWorkflowNodeTests);
+  const problems = parsed.flatMap(p => p.problems);
+  const patterns = [...new Set(parsed.flatMap(p => p.paths))];
+  const ci = [];
+  for (const pattern of patterns) {
+    const files = expandPattern(root, pattern);
+    if (!files.length) {
+      let directory = false;
+      try { directory = fs.statSync(path.join(root, pattern)).isDirectory(); } catch {}
+      problems.push(directory ? `unreadable: ${pattern} (directory argument; node 22 runs no directory)` : `no files: ${pattern}`);
+    }
+    for (const file of files) if (!ci.includes(file)) ci.push(file);
+  }
+  const {files, excepted} = nodeLaneFiles(root, selection, exceptions);
+  return [...ci.filter(file => !files.includes(file) && !excepted.includes(file)).sort(), ...problems];
 }
 
 // #760: machine facts before any lane. A loaded machine gives "no evidence" (exit 2), never a red lane.
@@ -213,8 +289,8 @@ async function main() {
       console.log('preflight: ok');
     }
   } else if (cmd === 'node-suites') {
-    const [wt, agents, tdd] = args;
-    const {files, excepted} = nodeLaneFiles(wt, {agents: agents === '1', tdd: tdd === '1'}, readExceptions(NODE_LANE_EXCEPTIONS));
+    const [wt] = args;
+    const {files, excepted} = nodeLaneFiles(wt, null, readExceptions(NODE_LANE_EXCEPTIONS));
     if (!files.length) throw new Error('node lane matched no test files');
     console.log(`excepted=${excepted.length} (${excepted.join(', ') || 'none'})`);
     for (const file of files) console.log(file);
@@ -223,6 +299,11 @@ async function main() {
     try { verdict = loadVerdict(readFacts(), loadThresholds()); }
     catch (error) { console.log(`refuse: ${error.message}`); process.exitCode = 2; return; }
     console.log(verdict.line);
+    // i760-fix1 L1: a run with a threshold set by environment says which limits were in force.
+    if (Object.values(LOAD_THRESHOLDS).some(({env}) => (process.env[env] ?? '') !== '')) {
+      const t = loadThresholds();
+      console.log(`limits=${t.maxLoad.value}/${t.minMemFree.value}%/${t.maxPressure.value}`);
+    }
     for (const note of verdict.notes) console.log(note);
     if (verdict.refuse) { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
   } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites|load-preflight'); process.exitCode = 2; }
