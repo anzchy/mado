@@ -2666,8 +2666,10 @@ extension CanvasWindowController: AccessRecoveryHost {
 
 // Native input effects; classification and admission belong to the Session.
 extension CanvasWindowController: ViewerInputHost {
-    func openInput(_ urls: [URL]) {
-        guard annotateAllowsImageChange(retry: { [weak self] in self?.openInput(urls) }) else { return }
+    /// #694: `annotate` is a Capture from the thumbnail's 标注; it enters Annotate Mode once it shows.
+    func openInput(_ urls: [URL], annotate: URL? = nil) {
+        guard annotateAllowsImageChange(retry: { [weak self] in self?.openInput(urls, annotate: annotate) }) else { return }
+        if let annotate { requestAnnotateOnShow(annotate) }
         let operation = inputIntent.begin()
         Task { [weak self] in
             guard let self else { return }
@@ -2684,7 +2686,8 @@ extension CanvasWindowController: ViewerInputHost {
                 let admission = ViewerInputAdmission(access: services.files, pipeline: pipeline,
                     maximumPixelSize: maximum, rootCovering: { await services.files.rootCovering($0) })
                 await session.openInput(input, operation: operation, admission: admission, host: self)
-            } catch { if operation.isCurrent { showAccessError(error) } }
+                if operation.isCurrent { annotateOnShowInputEnded() }
+            } catch { if operation.isCurrent { showAccessError(error); annotateOnShowInputEnded() } }
         }
     }
     private func endInput() { inputIntent.invalidate(); session.endFilePreviewSet() }

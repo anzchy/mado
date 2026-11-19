@@ -22,6 +22,33 @@ extension ViewerSession {
         if inspectorFocus.isVisible { setInspectorVisible(false) }
     }
 
+    /// #694: Annotate Mode is wanted on `url` once it shows (a Capture opened by the thumbnail's 标注). Replaces any
+    /// earlier intent; the file shown now is the baseline that does not count as another open.
+    public func requestAnnotateOnShow(_ url: URL) {
+        annotateOnShow = AnnotateOnShowIntent(path: CaptureAnnotateHandoff.resolvedPath(url),
+                                              baseline: imageLoader.fileURL.map(CaptureAnnotateHandoff.resolvedPath))
+    }
+
+    /// #694: another open, a refused leave, a failed input or a closed window ends the intent.
+    public func dropAnnotateOnShow() { annotateOnShow = nil }
+
+    /// #694: judges the intent against the loaded file now; `.enter` and `.drop` end it. The host enters Annotate Mode
+    /// on `.enter` through its own ⌘E path, with `canEnter` its ⌘E admission.
+    @discardableResult public func annotateOnShowDecision(canEnter: Bool) -> AnnotateOnShowDecision {
+        guard var intent = annotateOnShow else { return .drop }
+        let decision = intent.decide(shown: imageLoader.fileURL.map(CaptureAnnotateHandoff.resolvedPath),
+                                     status: imageStatus, canEnter: canEnter)
+        annotateOnShow = decision == .wait ? intent : nil
+        return decision
+    }
+
+    /// #694: judges the intent with the Session's own admission and enters Annotate Mode when it may.
+    @discardableResult public func applyAnnotateOnShow() -> Bool {
+        guard annotateOnShow != nil, annotateOnShowDecision(canEnter: canEnterAnnotateMode) == .enter else { return false }
+        enterAnnotateMode()
+        return isAnnotating
+    }
+
     /// V and R: only inside Annotate Mode. #693: leaving the crop tool applies a crop in progress.
     public func selectAnnotateTool(_ tool: AnnotateTool) {
         if tool != .crop { applyPendingCrop() }

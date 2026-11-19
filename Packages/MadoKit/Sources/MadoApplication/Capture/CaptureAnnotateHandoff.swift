@@ -31,6 +31,21 @@ public enum CaptureAnnotateHandoff {
     /// keeps an unconsumed record (Mado killed before it read it) from annotating a much later open of the same file.
     public static let freshness: TimeInterval = 60
 
+    /// Mado's side, when an open arrives: the opened file to annotate, or nil. Only one file whose resolved path is the
+    /// record's, at most `freshness` after the helper wrote it, matches; the record is then used up. A stale or
+    /// unreadable record is removed. A fresh record for another file is put back for its own open, which Launch
+    /// Services delivers next.
+    public static func consume(_ store: any CaptureAnnotateHandoffPort, opened urls: [URL], now: Date) -> URL? {
+        guard let record = store.take() else { return nil }
+        let age = now.timeIntervalSince(record.createdAt)
+        guard age >= 0, age <= freshness else { return nil }
+        guard urls.count == 1, let url = urls.first, resolvedPath(url) == record.path else {
+            store.write(record)
+            return nil
+        }
+        return url
+    }
+
     public static func resolvedPath(_ url: URL) -> String {
         url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
     }
