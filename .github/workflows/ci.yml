@@ -105,6 +105,7 @@ jobs:
       - name: Watchdog script tests
         run: node --test scripts/ci/*.test.mjs
       - name: Test macOS device tools
+        timeout-minutes: 2
         run: node --test scripts/device/tests/macos.test.cjs
       - name: Set up Xcode
         uses: ./.github/actions/xcode-setup
@@ -319,6 +320,9 @@ jobs:
       - name: Record repeat job start
         if: github.event_name == 'workflow_dispatch' && inputs.app_repeat > 1
         run: echo "APP_JOB_STARTED_MS=$(node -p 'Date.now()')" >> "$GITHUB_ENV"
+      - name: Record App crash window start
+        # Crash reports written from here on belong to this job (#732).
+        run: echo "APP_CRASH_SINCE_MS=$(node -p 'Date.now()')" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Validate App repeat input
@@ -407,6 +411,30 @@ jobs:
           path: .build/app-repeat
           include-hidden-files: true
           if-no-files-found: warn
+      - name: Summarize App crash evidence
+        # Evidence only (#732): states signal/status, the unfinished test and the exception text; never changes the result.
+        continue-on-error: true
+        if: always()
+        env:
+          APP_TEST_STEP: ${{ steps.app-run.outcome }}
+        run: >-
+          node scripts/ci/app-crash-evidence.mjs --log .build/app-tests.log --result .build/app-result.json
+          --since-ms "$APP_CRASH_SINCE_MS" --outcome "$APP_TEST_STEP" --out .build/crash-evidence
+          --reports-dir "$HOME/Library/Logs/DiagnosticReports" --reports-dir /Library/Logs/DiagnosticReports
+      - name: Upload App crash evidence
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-crash-evidence
+          path: |
+            .build/app-tests.log
+            .build/app-result.json
+            .build/crash-evidence
+            .build/hosted-*/result.xcresult
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save DerivedData
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

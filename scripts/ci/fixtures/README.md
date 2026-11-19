@@ -30,3 +30,14 @@ The pre-rename module spelling is deliberately normalized under the owner's amen
 
 
 `i587-140.txt` is retained as a negative after retiring the #520 retry signature. Both `i587-521-old.txt` (parent source locations 104/105/106) and `i587-521-new.txt` (110/111/112) remain historical negatives after the key-window fixture migration removed issue521 retry authorization. Their sanitized child output is historical evidence and cannot authorize a retry; an unknown child-process failure remains explicitly denied.
+
+## App crash evidence for #732
+
+Used by `scripts/ci/app-crash-evidence.test.mjs`. No native tests were run to create them.
+
+| Fixture | Source | Normalization |
+|---|---|---|
+| `i732-app-43871888435.txt` | Run 43871888435 attempt 2 (PR #730), artifact `app-lane-attempt1` (`.build/app-lane-attempt1.log`: lane stdout, a newline, stderr) | Unchanged. It ends after `◇ Test viewerRecogniseTextNoticeOpensEditablePanelCopyAndEscape() started.` with `status-channel: invalid supervisor exit`; the full lane kept no exception text. |
+| `i732-repeat-43882248877.txt` | Run 43882248877 (dispatch repeat of that test), artifact `app-repeat`, `iter-01.log` | The pre-rename variable `PICSEE_APP_FILTER` is sanitized to `MADO_APP_FILTER`; nothing else changes. It keeps the `NSInternalInconsistencyException` text. |
+| `i732-xctest-sigabrt.ips` | A real local xctest crash report (2026-11-14, macOS 26.4) | Trimmed: the header keeps `app_name`, `timestamp`, `bug_type`, `os_version`, `name`; the body keeps `captureTime`, `procLaunch`, `procName`, `procPath`, `exception`, `termination`, `asi`, `faultingThread`. Threads, images, identifiers and keys are removed. |
+| `i732-xctest-nsexception-derived.ips` | **Derived** from `i732-xctest-sigabrt.ips` | Only `asi` changes: it carries the uncaught-exception line of run 43882248877 under `CoreFoundation`, the shape an uncaught NSException crash report has. Not a native capture. |

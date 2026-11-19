@@ -1,0 +1,73 @@
+app-lane: using MADO_APP_FILTER="viewerRecogniseTextNoticeOpensEditablePanelCopyAndEscape"; unset MADO_APP_FILTER before a full run
+app-lane quarantine none
+app-lane known-flaky test=t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves issue=#379
+app-lane known-flaky test=sidebarCancelRestoresPriorTreeAndWatchRefreshRemovesDeletedChild issue=#425
+app-lane known-flaky test=t229Fix2RecoveryFollowsRootMovedWhileReadable issue=#379
+Test Suite 'Selected tests' started at 2026-11-16 14:10:25.059.
+Test Suite 'MadoAppTests.xctest' started at 2026-11-16 14:10:25.068.
+Test Suite 'MadoAppTests.xctest' passed at 2026-11-16 14:10:25.068.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-11-16 14:10:25.068.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.009) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test viewerRecogniseTextNoticeOpensEditablePanelCopyAndEscape() started.
+*** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'Invalid parameter not satisfying: itemSize.width > 0 && itemSize.height > 0'
+*** First throw call stack:
+(
+	0   CoreFoundation                      0x00000001830c4240 __exceptionPreprocess + 176
+	1   libobjc.A.dylib                     0x0000000182b3e91c objc_exception_throw + 88
+	2   Foundation                          0x00000001849550b0 -[NSCalendarDate initWithCoder:] + 0
+	3   AppKit                              0x0000000187cd9ce0 -[NSCollectionViewFlowLayout setItemSize:] + 144
+	4   MadoMacUI_-34F25A7EA61735C7_Package 0x000000010d1f0c8c $s9MadoMacUI15GridBrowserViewC14updateGeometry031_CDD7628E467A271331A4EC6CA15169L0LLyyF + 1948
+	5   MadoMacUI_-34F25A7EA61735C7_Package 0x000000010d1f889c $s9MadoMacUI15GridBrowserViewC16clipFrameChanged031_CDD7628E467A271331A4EC6CA15169M0LLyyF + 36
+	6   MadoMacUI_-34F25A7EA61735C7_Package 0x000000010d1f8938 $s9MadoMacUI15GridBrowserViewC16clipFrameChanged031_CDD7628E467A271331A4EC6CA15169M0LLyyFTo + 132
+	7   CoreFoundation                      0x000000018304aa3c __CFNOTIFICATIONCENTER_IS_CALLING_OUT_TO_AN_OBSERVER__ + 148
+	8   CoreFoundation                      0x00000001830d710c ___CFXRegistrationPost_block_invoke + 92
+	9   CoreFoundation                      0x00000001830d7050 _CFXRegistrationPost + 440
+	10  CoreFoundation                      0x000000018301944c _CFXNotificationPost + 740
+	11  AppKit                              0x00000001874c3614 -[NSView _postFrameChangeNotification] + 240
+	12  AppKit                              0x00000001874bdbb8 -[NSView setFrameSize:] + 1444
+	13  AppKit                              0x00000001874f0268 -[NSClipView setFrameSize:] + 176
+	14  AppKit                              0x00000001874cb434 -[NSView setFrame:] + 300
+	15  AppKit                              0x000000018750b17c -[NSScrollView _setContentViewFrame:] + 248
+	16  AppKit                              0x000000018750ab40 -[NSScrollView _applyContentAreaLayout:] + 444
+	17  AppKit                              0x00000001875083e4 -[NSScrollView tile] + 480
+	18  AppKit                              0x00000001876a4be8 +[NSScrollerImpPair _updateAllScrollerImpPairsForNewRecommendedScrollerStyle:] + 192
+	19  CoreFoundation                      0x000000018304aa3c __CFNOTIFICATIONCENTER_IS_CALLING_OUT_TO_AN_OBSERVER__ + 148
+	20  CoreFoundation                      0x00000001830d710c ___CFXRegistrationPost_block_invoke + 92
+	21  CoreFoundation                      0x00000001830d7050 _CFXRegistrationPost + 440
+	22  CoreFoundation                      0x000000018301944c _CFXNotificationPost + 740
+	23  Foundation                          0x00000001848514b4 -[NSNotificationCenter postNotificationName:object:userInfo:] + 88
+	24  CoreFoundation                      0x0000000183055b50 __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__ + 28
+	25  CoreFoundation                      0x0000000183055a90 __CFRunLoopDoBlocks + 396
+	26  CoreFoundation                      0x0000000183054ed4 __CFRunLoopRun + 2356
+	27  CoreFoundation                      0x0000000183127508 _CFRunLoopRunSpecificWithOptions + 532
+	28  XCTestCore                          0x0000000104f50ef4 +[XCTWaiter _synchronouslyWaitForTimeInterval:] + 248
+	29  XCTestCore                          0x0000000104f516ac -[XCTWaiter _performWait:manager:completionHandler:] + 892
+	30  XCTestCore                          0x0000000104f4f338 -[XCTWaiter _waitForExpectations:timeout:enforceOrder:synchronously:completionHandler:] + 556
+	31  XCTestCore                          0x0000000104f4f0bc -[XCTWaiter waitForExpectations:timeout:enforceOrder:] + 136
+	32  XCTestCore                          0x0000000104f8c838 __XCTAsyncEnumerateWithWaiter_block_invoke + 296
+	33  XCTestCore                          0x0000000104f8c9b8 __XCTAsyncEnumerate_block_invoke.117 + 64
+	34  XCTestCore                          0x0000000104f8c940 __XCTAsyncEnumerateWithWaiter_block_invoke_2 + 52
+	35  XCTestCore                          0x0000000104f8b868 __72-[XCTExecutionWorker enqueueTestIdentifiersToRun:testIdentifiersToSkip:]_block_invoke_3 + 128
+	36  XCTestCore                          0x0000000104f96010 -[XCTTestRunSession executeTestsWithIdentifiers:skippingTestsWithIdentifiers:completion:] + 380
+	37  XCTestCore                          0x0000000104f8b7a4 __72-[XCTExecutionWorker enqueueTestIdentifiersToRun:testIdentifiersToSkip:]_block_invoke_2 + 156
+	38  XCTestCore                          0x0000000104f8c804 __XCTAsyncEnumerateWithWaiter_block_invoke + 244
+	39  XCTestCore                          0x0000000104f8c9b8 __XCTAsyncEnumerate_block_invoke.117 + 64
+	40  XCTestCore                          0x0000000104f8b600 XCTAsyncEnumerateWithWaiter + 568
+	41  XCTestCore                          0x0000000104f8b378 __72-[XCTExecutionWorker enqueueTestIdentifiersToRun:testIdentifiersToSkip:]_block_invoke + 148
+	42  XCTestCore                          0x0000000104f8b8e8 -[XCTExecutionWorker runWithError:] + 84
+	43  XCTestCore                          0x0000000104f89608 __25-[XCTestDriver _runTests]_block_invoke.400 + 56
+	44  XCTestCore                          0x0000000104fa06b0 -[XCTestObservationCenter _observeTestExecutionForTestBundle:inBlock:] + 104
+	45  XCTestCore                          0x0000000104f88fe0 -[XCTestDriver _runTests] + 1192
+	46  XCTestCore                          0x0000000104f8aff8 _XCTestMain + 96
+	47  xctest                              0x0000000104729e44 $s10xctesttool6xctestO4mainyyFZ + 284
+	48  xctest                              0x0000000104729ee8 xctest + 7912
+	49  dyld                                0x0000000182bcd4e4 start + 6992
+)
+libc++abi: terminating due to uncaught exception of type NSException
+status-channel: invalid supervisor exit
+app-lane: no reliable completed App test result; environment failure
+app-repeat: iteration did not complete; refusing further iterations
