@@ -57,8 +57,9 @@ private actor T232SidebarEnumerator: SidebarFolderEnumerating {
     var totals: T232SidebarReadTotals { T232SidebarReadTotals(children: childrenReads, counts: countReads) }
 }
 
-@MainActor private func t232SidebarWait(_ condition: @MainActor () -> Bool) async throws {
-    while !condition() { await Task.yield() }
+/// Ends with ConditionWaitError when the test is cancelled, through the shared wait (#495).
+@MainActor func t232SidebarWait(_ condition: @MainActor () -> Bool, fileID: String = #fileID, line: Int = #line) async throws {
+    try await waitUntil("t232 sidebar", fileID: fileID, line: line) { condition() }
     #expect(condition())
 }
 
