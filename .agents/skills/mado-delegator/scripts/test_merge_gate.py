@@ -120,6 +120,40 @@ esac
         self.assertEqual(result.returncode, 2)
         self.assertIn('usage: merge-gate.sh', result.stderr)
 
+    def test_rebased_head_with_real_code_difference_is_refused(self):
+        old_base = self.head
+        env = self.env
+        subprocess.run(['git', 'switch', '-qc', 'topic'], cwd=self.repo, check=True, env=env)
+        (self.repo / 'file').write_text('changed')
+        subprocess.run(['git', 'commit', '-qam', 'topic change'], cwd=self.repo, check=True, env=env)
+        old = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        record = self.repo / '.build/mado-verify' / f'{old}.json'
+        record.write_text(json.dumps({'issue': 766, 'head': old, 'commentUrl':
+                                      'https://github.com/anzchy/mado/issues/766#issuecomment-1'}))
+        subprocess.run(['git', 'switch', '-q', 'main'], cwd=self.repo, check=True, env=env)
+        (self.repo / 'main-only').write_text('main advance\n')
+        subprocess.run(['git', 'add', 'main-only'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'commit', '-qm', 'main advance'], cwd=self.repo, check=True, env=env)
+        new_base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        subprocess.run(['git', 'update-ref', 'refs/remotes/origin/main', new_base], cwd=self.repo, check=True)
+        subprocess.run(['git', 'switch', '-q', 'topic'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'rebase', 'main'], cwd=self.repo, check=True, env=env)
+        (self.repo / 'file').write_text('changed-differently')
+        subprocess.run(['git', 'commit', '-qa', '--amend', '--no-edit'], cwd=self.repo, check=True, env=env)
+        new = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        verifier = self.repo / '.agents/skills/mado-delegator/scripts'
+        verifier.mkdir(parents=True)
+        for name in ('rebase-verify.sh', 'rebase-verify-tree.py', 'scan-conflict-markers.py'):
+            shutil.copy2(SCRIPT.with_name(name), verifier / name)
+        proof = subprocess.run(['zsh', str(verifier / 'rebase-verify.sh'), old_base, old, new_base, new],
+                               cwd=self.repo, capture_output=True, text=True)
+        self.assertEqual(proof.returncode, 1, proof.stdout + proof.stderr)
+        self.assertIn('CODE differ ', proof.stdout)
+        result = self.run_gate('--audited', old, GH_HEAD=new)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('would-refuse condition-failed: rebase-verify CODE same required', result.stdout)
+        self.assertFalse((self.root / 'merged').exists())
+
     def test_failing_check_evidence_or_lint_blocks_merge(self):
         for extra in ({'GH_CHECKS': '[{"name":"CI","state":"FAILURE"}]'},
                       {'NODE_FAIL': 'evidence'}, {'NODE_FAIL': 'lint'}):
