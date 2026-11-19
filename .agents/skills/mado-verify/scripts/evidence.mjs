@@ -59,7 +59,7 @@ function check(args) {
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
-  for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is the binding result`);
+  for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is binding for the retained App group, hosted CI binding for the hosted group`);
 }
 try {
   if (mode === 'check') { check(process.argv.slice(3)); process.exit(0); }

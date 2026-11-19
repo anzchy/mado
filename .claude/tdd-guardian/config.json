@@ -301,6 +301,15 @@
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
+    },
+    {
+      "name": "gates-alignment-node",
+      "description": "Manual Node receipts for the owner-gates/mado-verify alignment (#758 lane list and xcodegen lock, #750 node lane parity with the workflows, #760 load and memory preflight).",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-delegator/scripts/owner-gates.test.mjs .agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs .agents/skills/mado-delegator/scripts/owner-gates-skill.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 300000
     }
   ],
   "coverageThresholds": {

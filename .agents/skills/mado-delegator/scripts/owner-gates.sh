@@ -8,7 +8,7 @@
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
-# The Swift, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
+# The Swift, xcodegen, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
 # Preflight checks npm and Playwright prerequisites before any lane, and refuses with exit 2.
 set -u
 here=${0:A:h}
@@ -18,7 +18,8 @@ s=$o/$p-summary.txt
 summary_error() { echo "owner-gates: cannot write summary $s" >&2; exit 1; }
 mkdir -p "$o" || summary_error
 : > "$s" || summary_error
-export PATH=$HOME/.mado/tools/xcodegen/bin:/opt/homebrew/bin:$PATH
+# OWNER_GATES_TOOL_PATH replaces the tool directories put in front of PATH (tests point it at their fakes).
+export PATH=${OWNER_GATES_TOOL_PATH:-$HOME/.mado/tools/xcodegen/bin:/opt/homebrew/bin}:$PATH
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 cd $wt 2>/dev/null || { echo "no worktree $wt" > $s || summary_error; exit 2; }
 [[ "$(git rev-parse HEAD 2>/dev/null)" == "$(git rev-parse "$sha" 2>/dev/null)" ]] || { echo "head mismatch" > $s || summary_error; exit 2; }
@@ -89,7 +90,7 @@ grep -E '^(coverage failed after|Package:|Coverage gate:|Invalid coverage eviden
 awk '/^Uncovered locations:/{section=1;next} /^Large LLVM counters/{section=0} section && /^- /{print}' $o/$p-lcov.log | tr '\n' ' ' >> $s || summary_error
 echo >> $s || summary_error
 fi
-xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
+$hl xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
 if grep -Eq "$app_facing" "$diff_file"; then
   $hl xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
