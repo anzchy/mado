@@ -138,18 +138,18 @@ else
   echo 'apptests-hosted=skipped (no App-facing change)' >> "$s"
   echo 'apptests=skip (no App-facing change)' >> "$s"
 fi
-node_suites=(scripts/ledger/*.test.mjs scripts/name-checks/*.test.mjs scripts/ci/name-checks-ci.test.mjs .agents/skills/mado-delegator/scripts/*.test.mjs)
-if (( agents )); then
-  node_suites+=(scripts/agents/*.test.mjs)
+# #750: the node lane is every node test the workflows run (owner-gates-tools.mjs NODE_LANE, checked against
+# .github/workflows by owner-gates-tools.test.mjs) minus the reviewed node-lane-exceptions.json entries, listed in the summary.
+(( agents )) || echo 'node-agents=skipped (reviewed native-only diff)' >> "$s"
+(( tdd )) || echo 'node-tdd=skipped (reviewed native-only diff)' >> "$s"
+if node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" $agents $tdd 2> "$o/$p-node.log"); then
+  node_suites=("${(@f)node_list}")
+  echo "node-${node_suites[1]}" >> "$s" || summary_error
+  node --test --test-reporter=spec "${(@)node_suites[2,-1]}" > "$o/$p-node.log" 2>&1; lane_result node $?
 else
-  echo 'node-agents=skipped (reviewed native-only diff)' >> "$s"
+  echo "node: cannot list the node lane (owner-gates-tools.mjs node-suites failed)" >> "$o/$p-node.log"
+  lane_result node 70
 fi
-if (( tdd )); then
-  node_suites+=(scripts/tdd/*.test.mjs)
-else
-  echo 'node-tdd=skipped (reviewed native-only diff)' >> "$s"
-fi
-node --test --test-reporter=spec "${(@)node_suites}" > "$o/$p-node.log" 2>&1; lane_result node $?
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
 if [[ ! -d node_modules ]]; then

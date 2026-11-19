@@ -20,6 +20,12 @@ function fixture(t, mode = 'pass', covered = 2, npmInstalled = true, options = {
   for (const group of ['agents', 'tdd', 'ledger', 'name-checks']) { fs.mkdirSync(path.join(dir, 'scripts', group), { recursive: true }); fs.writeFileSync(path.join(dir, 'scripts', group, 'fixture.test.mjs'), ''); }
   fs.mkdirSync(path.join(dir, 'scripts', 'ci'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'name-checks-ci.test.mjs'), '');
+  // #750: the lane also runs every scripts/ci test and the mado-verify tests, minus the reviewed exceptions.
+  fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'for-where-ban.test.mjs'), '');
+  fs.mkdirSync(path.join(dir, '.agents/skills/mado-verify/tests'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.agents/skills/mado-verify/tests/fixture.test.mjs'), '');
+  const exceptions = path.join(root, '.agents/skills/mado-delegator/scripts/node-lane-exceptions.json');
+  if (fs.existsSync(exceptions)) fs.copyFileSync(exceptions, path.join(dir, '.agents/skills/mado-delegator/scripts/node-lane-exceptions.json'));
   const bin = path.join(dir, 'bin'), build = path.join(dir, 'build'), out = path.join(dir, 'out');
   fs.mkdirSync(bin); fs.mkdirSync(path.join(build, 'codecov'), { recursive: true });
   if (npmInstalled) { fs.mkdirSync(path.join(dir, 'node_modules/playwright'), { recursive: true }); fs.writeFileSync(path.join(dir, 'node_modules/playwright/index.mjs'), `export const chromium={executablePath:()=>${JSON.stringify(process.execPath)}};`); }
@@ -187,4 +193,17 @@ test('xcodegen runs through scripts/heavy-lock.sh (758)', t => {
   assert.equal(f.result.status, 0, f.result.stderr);
   assert.match(f.summary, /^xcodegen=0$/m);
   assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
+});
+
+test('750 node lane runs scripts/ci and the mado-verify tests and names its exceptions', t => {
+  for (const diff of ['docs/guide.md', 'App/MadoApp.swift']) {
+    const f = fixture(t, 'pass', 2, true, {diff});
+    assert.equal(f.result.status, 0, f.result.stderr);
+    const args = fs.readFileSync(f.nodeMarker, 'utf8').split('\n');
+    for (const file of ['scripts/ci/for-where-ban.test.mjs', 'scripts/ci/name-checks-ci.test.mjs', '.agents/skills/mado-verify/tests/fixture.test.mjs',
+      'scripts/ledger/fixture.test.mjs', 'scripts/name-checks/fixture.test.mjs', '.agents/skills/mado-delegator/scripts/fixture.test.mjs'])
+      assert.ok(args.includes(file), `${diff}: ${file} in ${args.join(' ')}`);
+    assert.equal(args.filter(a => a === 'scripts/ci/name-checks-ci.test.mjs').length, 1, 'each file once');
+    assert.match(f.summary, /^node-excepted=\d+ /m);
+  }
 });
