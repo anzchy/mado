@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn,spawnSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {realpathSync} from 'node:fs';
 import {queryHostProcesses,createHostOwnership,createAsyncHostOwnership} from './app-host-ownership.mjs';
@@ -87,16 +87,37 @@ test('inner ps receives more than one second but less than outer inspector budge
 test('slow OS inspector can observe a host before the ownership drain deadline',()=>{
   const token='i657-slow-inspector',record=identity({marker:token});
   const reply=JSON.stringify({complete:true,processes:[record],unknown:[]});
-  const spawn=(_command,_args,options)=>spawnSync('/usr/bin/python3',
-    ['-c','import sys,time;time.sleep(1.5);sys.stdout.write(sys.argv[1])',reply],options);
+  let elapsed=0,queryResult;
+  const spawn=(_command,_args,options)=>{
+    assert.equal(options.timeout,5000);
+    elapsed+=3300+1500; // Virtual interpreter startup plus a slow reply, still within the inspector budget.
+    return {status:0,signal:null,stdout:reply,stderr:''};
+  };
   const tracker=createHostOwnership({token,executable,uid,
-    query:()=>queryHostProcesses({token,executable,uid,spawn})});
+    query:()=>queryResult=queryHostProcesses({token,executable,uid,spawn,now:()=>elapsed})});
   tracker.observe();
   const snapshot=tracker.snapshot();
   assert.equal(snapshot.observed,true,'a 1.5-second OS reply must register as an observation');
   assert.equal(snapshot.drained,false,'a live matching host still prevents drain');
   assert.deepEqual(snapshot.unknown,[]);
   assert.deepEqual(snapshot.queryFailures,[]);
+  assert.equal(queryResult.transport.elapsedMilliseconds,4800);
+});
+
+test('inspector timeout cannot register a host or prove ownership drain',()=>{
+  const token='i657-slow-inspector';let elapsed=0;
+  const spawn=(_command,_args,options)=>{
+    elapsed=options.timeout;
+    return {status:null,signal:'SIGTERM',error:{code:'ETIMEDOUT'},stdout:'',stderr:''};
+  };
+  const tracker=createHostOwnership({token,executable,uid,
+    query:()=>queryHostProcesses({token,executable,uid,spawn,now:()=>elapsed})});
+  tracker.observe();
+  const snapshot=tracker.snapshot();
+  assert.equal(snapshot.observed,false);
+  assert.equal(snapshot.drained,false);
+  assert.equal(snapshot.queryFailures.length,1);
+  assert.equal(snapshot.queryFailures[0].transport.errorCode,'ETIMEDOUT');
 });
 
 test('failed query transport facts survive ownership refusal for diagnosis',()=>{
