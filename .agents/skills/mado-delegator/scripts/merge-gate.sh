@@ -2,7 +2,7 @@
 # Shadow check for an audited PR; this script never merges or blocks.
 set -eu
 case "${1:-}" in ''|*[!0-9]*) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
-case "$#" in 1) audited='' ;; 3) [ "$2" = --audited ] || exit 2; audited=$3 ;; *) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
+case "$#" in 1) audited='' ;; 3) [ "$2" = --audited ] || { echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2; }; audited=$3 ;; *) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
 exec python3 - "$1" "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" "$audited" <<'PY'
 import datetime
 import json
