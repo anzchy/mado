@@ -48,12 +48,20 @@ elif name == 'kc.sh':
         if not os.environ.get('FAKE_GO_OPEN_TIMEOUT'):
             state['sheets'] = 1
     elif keys == ['36'] and state['sheets'] == 1:
-        if not os.environ.get('FAKE_GO_CLOSE_TIMEOUT'):
+        if os.environ.get('FAKE_GO_DISMISSES_PANEL'):
+            state['sheets'] = 0
+            state['panel_open'] = False
+        elif state['focused'] and not os.environ.get('FAKE_GO_CLOSE_TIMEOUT'):
             state['sheets'] = 0
     elif keys == ['36'] and state['panel_open']:
         if not os.environ.get('FAKE_PANEL_CLOSE_TIMEOUT'):
-            state['selected'] = state['field']
             state['panel_open'] = False
+            if not os.environ.get('FAKE_CLOSE_NO_CHOICE'):
+                state['selected'] = '/wrong/path' if os.environ.get('FAKE_WRONG_SELECTED') else state['field']
+                receipt = Path(os.environ['HOME']) / 'Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/recent-folders.json'
+                receipt.parent.mkdir(parents=True, exist_ok=True)
+                from urllib.parse import quote
+                receipt.write_text(json.dumps({'schemaVersion': 1, 'items': [{'url': 'file://' + quote(state['selected'])}]}))
     elif keys == ['53']:
         state['cancelled'] = True
     save()
@@ -71,6 +79,11 @@ elif name == 'osascript':
         sys.exit(0)
     if 'return count of sheets' in script:
         print(state['sheets'])
+    elif 'set focused of text field 1 of sheet 1 to true' in script:
+        state['focused'] = not bool(os.environ.get('FAKE_FOCUS_FAIL'))
+        save()
+    elif 'return focused of text field 1 of sheet 1' in script:
+        print('true' if state['focused'] else 'false')
     elif 'set value of text field 1 of sheet 1 to ' in script:
         literal = re.search(r'to "((?:\\.|[^"\\])*)"$', script, re.S)
         if not literal:
@@ -123,7 +136,7 @@ class PanelChoose(unittest.TestCase):
             pidfile.write_text(pid)
         (self.state / 'state.json').write_text(json.dumps(dict(
             mode=mode, panel_open=mode != 'none', sheets=0, field=None,
-            selected=None, cancelled=False, keys=[])))
+            selected=None, cancelled=False, focused=False, keys=[])))
         (self.state / 'log.jsonl').unlink(missing_ok=True)
         environment = dict(PATH=f'{self.bin}:/usr/bin:/bin', HOME=self.temp.name,
                            FAKE_STATE=str(self.state), **env)
@@ -227,6 +240,29 @@ class PanelChoose(unittest.TestCase):
         self.assertEqual(self.snapshot['keys'], KEYS + [['53']])
         self.assertTrue(self.snapshot['cancelled'])
         self.assertEqual(len(self.calls('sleep')), 20)
+        self.assertRefused()
+
+    def test_go_return_dismisses_panel_without_choice(self):
+        self.assertNotEqual(self.run_helper(FAKE_GO_DISMISSES_PANEL='1'), 0)
+        self.assertIn('panel closed before Open', self.err)
+        self.assertEqual(self.snapshot['keys'], KEYS[:2])
+        self.assertRefused()
+
+    def test_panel_closed_without_choice_has_no_success_report(self):
+        self.assertNotEqual(self.run_helper(FAKE_CLOSE_NO_CHOICE='1'), 0)
+        self.assertIn('no confirmed choice', self.err)
+        self.assertEqual(self.snapshot['keys'], KEYS)
+        self.assertRefused()
+
+    def test_wrong_choice_is_refused_even_after_panel_closes(self):
+        self.assertNotEqual(self.run_helper(FAKE_WRONG_SELECTED='1'), 0)
+        self.assertIn('chosen path differs', self.err)
+        self.assertNotIn('chose:', self.out)
+
+    def test_return_requires_verified_go_field_focus(self):
+        self.assertNotEqual(self.run_helper(FAKE_FOCUS_FAIL='1'), 0)
+        self.assertIn('Go-to field is not focused', self.err)
+        self.assertEqual(self.snapshot['keys'], KEYS[:1] + [['53']])
         self.assertRefused()
 
     def test_each_failed_key_stops_the_sequence(self):

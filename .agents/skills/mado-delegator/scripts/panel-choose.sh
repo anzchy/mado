@@ -9,6 +9,8 @@
 cd "$(git -C "${0:A:h}" rev-parse --show-toplevel)" || exit 1
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 run=$1 target=$2
+receipt="$HOME/Library/Containers/io.github.anzchy.mado/Data/Library/Application Support/Mado/recent-folders.json"
+receipt_before=$(python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_mtime_ns if os.path.exists(sys.argv[1]) else 0)' "$receipt") || exit 1
 [[ -r $run/picsee.pid ]] || { print -u2 "FAIL panel-choose — no $run/picsee.pid; launch through scripts/device/launch.sh or record the identity first"; exit 1 }
 pid=${"$(<$run/picsee.pid)"%%$'\n'*}
 [[ $pid == <-> ]] || { print -u2 -r -- "FAIL panel-choose — $run/picsee.pid does not start with a pid line"; exit 1 }
@@ -39,9 +41,42 @@ quoted=${target//\\/\\\\}; quoted=${quoted//\"/\\\"}
 ax "set value of text field 1 of sheet 1 to \"$quoted\"" >/dev/null
 got=$(ax 'return value of text field 1 of sheet 1')
 [[ $got == $target ]] || { print -u2 -r -- "FAIL panel-choose — Go-to field holds '$got', not the target; nothing chosen"; key 53; exit 1 }
+ax 'set focused of text field 1 of sheet 1 to true' >/dev/null
+[[ $(ax 'return focused of text field 1 of sheet 1') == true ]] || { print -u2 'FAIL panel-choose — Go-to field is not focused; nothing chosen'; key 53; exit 1 }
 key 36 || exit 1
+panel_open || { print -u2 'FAIL panel-choose — panel closed before Open; nothing chosen'; exit 1 }
 wait_sheets 0 || { print -u2 -r -- "FAIL panel-choose — Go-to sheet still open after Return (path not found?); nothing chosen"; key 53; exit 1 }
 key 36 || exit 1
 for t in {1..20}; do panel_open || break; sleep 0.25; done
 panel_open && { print -u2 -r -- "FAIL panel-choose — panel still open after Open (button disabled or wrong kind of item?); nothing chosen"; key 53; exit 1 }
+choice_state=missing
+for t in {1..20}; do
+  choice_state=$(python3 - "$receipt" "$receipt_before" "$target" <<'PY'
+import json, os, sys
+from urllib.parse import unquote, urlparse
+path, before, target = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+if not os.path.exists(path) or os.stat(path).st_mtime_ns <= before:
+    print('missing')
+else:
+    try:
+        data = json.load(open(path))
+        items = data['items'] if isinstance(data, dict) else data
+        url = items[0]['url']
+        chosen = unquote(urlparse(url).path or url.removeprefix('file://'))
+        print('matched' if chosen == target else 'mismatch')
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        print('missing')
+PY
+  ) || choice_state=missing
+  [[ $choice_state == matched ]] && break
+  sleep 0.25
+done
+[[ $choice_state == matched ]] || {
+  if [[ $choice_state == mismatch ]]; then
+    print -u2 'FAIL panel-choose — chosen path differs from target; nothing chosen'
+  else
+    print -u2 'FAIL panel-choose — panel closed but no confirmed choice in app recents; nothing chosen'
+  fi
+  exit 1
+}
 print -r -- "chose: $target"
