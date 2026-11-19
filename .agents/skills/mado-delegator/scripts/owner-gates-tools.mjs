@@ -139,6 +139,49 @@ export function uncoveredWorkflowTests(root, texts, exceptions) {
   return ci.filter(file => !files.includes(file) && !excepted.includes(file)).sort();
 }
 
+// #760: machine facts before any lane. A loaded machine gives "no evidence" (exit 2), never a red lane.
+// Defaults come from the 11-08..11-18 RAM samples taken during heavy jobs on the 10-core mini (3,859 samples: memory free
+// never below 33 %, daily means 51-62 %, pressure 1 or 2, never 4) and #735 (false failures at load 22). They refuse only a
+// clearly overloaded machine; the owner sets the real values with the environment variables below.
+export const LOAD_THRESHOLDS = Object.freeze({
+  maxLoad: {env: 'OWNER_GATES_MAX_LOAD', value: 20},
+  minMemFree: {env: 'OWNER_GATES_MIN_MEM_FREE', value: 15},
+  maxPressure: {env: 'OWNER_GATES_MAX_PRESSURE', value: 2},
+});
+export function loadThresholds(env = process.env) {
+  const out = {};
+  for (const [key, {env: name, value}] of Object.entries(LOAD_THRESHOLDS)) {
+    const raw = env[name];
+    if (raw === undefined || raw === '') { out[key] = {name, value}; continue; }
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < 0) throw new Error(`${name}=${raw} is not a non-negative number`);
+    out[key] = {name, value: number};
+  }
+  return out;
+}
+export function parseFacts({loadavg, level, pressure}) {
+  const load = /^\{\s*(\d+(?:\.\d+)?)\s/.exec(loadavg ?? '')?.[1];
+  const integer = text => /^\d+$/.test((text ?? '').trim()) ? Number(text.trim()) : null;
+  return {load: load === undefined ? null : Number(load), memFree: integer(level), pressure: integer(pressure)};
+}
+export function loadVerdict(facts, thresholds) {
+  const show = value => value === null ? 'unknown' : String(value);
+  const line = `load=${show(facts.load)} mem_free=${facts.memFree === null ? 'unknown' : `${facts.memFree}%`} pressure=${show(facts.pressure)}`;
+  const notes = [], over = [];
+  const check = (value, label, test, text) => {
+    if (value === null) notes.push(`preflight-note: ${label} unreadable; no refusal on it`);
+    else if (test(value)) over.push(text(value));
+  };
+  check(facts.load, 'load average', v => v > thresholds.maxLoad.value, v => `load ${v} over ${thresholds.maxLoad.name}=${thresholds.maxLoad.value}`);
+  check(facts.memFree, 'kern.memorystatus_level', v => v < thresholds.minMemFree.value, v => `mem_free ${v}% under ${thresholds.minMemFree.name}=${thresholds.minMemFree.value}`);
+  check(facts.pressure, 'kern.memorystatus_vm_pressure_level', v => v > thresholds.maxPressure.value, v => `pressure ${v} over ${thresholds.maxPressure.name}=${thresholds.maxPressure.value}`);
+  return {line, notes, refuse: over.length ? over.join('; ') : null};
+}
+export function readFacts(sysctl = process.env.OWNER_GATES_SYSCTL || '/usr/sbin/sysctl') {
+  const read = name => { const r = spawnSync(sysctl, ['-n', name], {encoding: 'utf8', timeout: 5000}); return r.status === 0 ? r.stdout.trim() : null; };
+  return parseFacts({loadavg: read('vm.loadavg'), level: read('kern.memorystatus_level'), pressure: read('kern.memorystatus_vm_pressure_level')});
+}
+
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === 'select') {
@@ -175,6 +218,13 @@ async function main() {
     if (!files.length) throw new Error('node lane matched no test files');
     console.log(`excepted=${excepted.length} (${excepted.join(', ') || 'none'})`);
     for (const file of files) console.log(file);
-  } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites'); process.exitCode = 2; }
+  } else if (cmd === 'load-preflight') {
+    let verdict;
+    try { verdict = loadVerdict(readFacts(), loadThresholds()); }
+    catch (error) { console.log(`refuse: ${error.message}`); process.exitCode = 2; return; }
+    console.log(verdict.line);
+    for (const note of verdict.notes) console.log(note);
+    if (verdict.refuse) { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
+  } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites|load-preflight'); process.exitCode = 2; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

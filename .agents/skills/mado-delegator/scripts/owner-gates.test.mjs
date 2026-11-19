@@ -62,6 +62,8 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
   exe('npm', '#!/bin/sh\nexit 0\n');
   exe('xcodegen', '#!/bin/sh\necho "held=$MADO_HEAVY_LOCK_HELD $*" >> "$XCODEGEN_MARKER"\nexit 0\n');
   exe('xcodebuild', '#!/bin/sh\necho "$1" >> "$XCODE_MARKER"\nexit 0\n');
+  // #760: injected machine facts; FAKE_* unset = a quiet machine, 'unreadable' = sysctl fails.
+  exe('sysctl', '#!/bin/sh\ncase "$2" in\n vm.loadavg) v=${FAKE_LOADAVG-"{ 4.20 3.00 2.00 }"};;\n kern.memorystatus_level) v=${FAKE_MEM_LEVEL-55};;\n kern.memorystatus_vm_pressure_level) v=${FAKE_PRESSURE-1};;\n *) exit 1;;\nesac\n[ "$v" = unreadable ] && exit 1\necho "$v"\n');
   const shell = path.join(dir, 'invoke.zsh');
   fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then print $DIFF_PATH; fi;  }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
@@ -74,6 +76,8 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
     MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
   // The fake tools must win over the real xcodegen/Homebrew directories owner-gates.sh puts in front of PATH.
   env.OWNER_GATES_TOOL_PATH = bin;
+  env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
+  Object.assign(env, options.env ?? {});
   if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
   const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
@@ -206,4 +210,28 @@ test('750 node lane runs scripts/ci and the mado-verify tests and names its exce
     assert.equal(args.filter(a => a === 'scripts/ci/name-checks-ci.test.mjs').length, 1, 'each file once');
     assert.match(f.summary, /^node-excepted=\d+ /m);
   }
+});
+
+test('760 load preflight writes the facts, refuses over a threshold before any lane, and only notes unreadable facts', t => {
+  const under = fixture(t, 'pass', 2, true, {env: {}});
+  assert.equal(under.result.status, 0, under.result.stderr);
+  assert.match(under.summary, /^load=4\.2 mem_free=55% pressure=1$/m);
+  assert.match(under.summary, /^DONE$/m);
+  for (const [env, reason] of [[{FAKE_LOADAVG: '{ 23.40 9.00 5.00 }'}, /load 23\.4 over OWNER_GATES_MAX_LOAD=20/],
+    [{FAKE_MEM_LEVEL: '9'}, /mem_free 9% under OWNER_GATES_MIN_MEM_FREE=15/], [{FAKE_PRESSURE: '4'}, /pressure 4 over OWNER_GATES_MAX_PRESSURE=2/],
+    [{OWNER_GATES_MAX_LOAD: '3'}, /load 4\.2 over OWNER_GATES_MAX_LOAD=3/]]) {
+    const over = fixture(t, 'pass', 2, true, {env, diff: 'App/MadoApp.swift'});
+    assert.equal(over.result.status, 2, `${JSON.stringify(env)} ${over.result.stderr}`);
+    assert.match(over.summary, /^refused: preflight: /m);
+    assert.match(over.summary, reason);
+    assert.match(over.summary, /^load=\S+ mem_free=\S+ pressure=\S+$/m);
+    assert.doesNotMatch(over.summary, /^DONE$/m);
+    assert.doesNotMatch(over.summary, /^(swift|xcodegen|xcodebuild|node|design)=/m, 'no lane ran');
+    for (const marker of [over.nodeMarker, over.xcodeMarker, over.xcodegenMarker]) assert.equal(fs.existsSync(marker), false, marker);
+  }
+  const unreadable = fixture(t, 'pass', 2, true, {env: {FAKE_LOADAVG: 'unreadable', FAKE_MEM_LEVEL: 'unreadable', FAKE_PRESSURE: 'unreadable'}});
+  assert.equal(unreadable.result.status, 0, unreadable.result.stderr);
+  assert.match(unreadable.summary, /^load=unknown mem_free=unknown pressure=unknown$/m);
+  assert.equal(unreadable.summary.match(/^preflight-note: .+ unreadable; no refusal on it$/gm)?.length, 3);
+  assert.match(unreadable.summary, /^DONE$/m);
 });
