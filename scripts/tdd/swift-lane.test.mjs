@@ -230,10 +230,11 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   // Pure Node lanes run light tests only, so their discovery stays outside the heavy lock.
   const manualCI=['ci-app-compare-node','ci-code-name-node','ci-crash-evidence-node','ci-host-ownership-node','ci-host-owner-log-node','ci-host-register-node','ci-host-timeout-node','ci-642-removal-node','ci-642-hosted-build-node'];
   const manual631=['ci-package-coverage-clear-node','ci-package-coverage-export-node','ci-package-coverage-node','ci-package-coverage-workflow-node'];
-  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node',...manualCI,...manual631].includes(l.name));
+  const manual758=['gates-alignment-node'];
+  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node',...manualCI,...manual631,...manual758].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);
-  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', 'heavy-lock-node', 'integration', 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-tag-ci-node', 'swift-red', 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
-  for(const name of [...manualCI,...manual631]){
+  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', ...manual758, 'heavy-lock-node', 'integration', 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-tag-ci-node', 'swift-red', 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
+  for(const name of [...manualCI,...manual631,...manual758]){
     const lane=config.lanes.find(l=>l.name===name);
     assert.deepEqual(lane.gateOn,['manual']);
     assert.equal(lane.probeCommand,'node --version');

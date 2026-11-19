@@ -53,7 +53,8 @@ else process.exit(0);
 require('fs').appendFileSync(process.env.EXPORT_MARKER,'export\\n');
 console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered === 2 ? 1 : 0},b\\nFNF:2\\nFNH:${covered}\\nDA:1,1\\nDA:2,${covered === 2 ? 1 : 0}\\nLF:2\\nLH:${covered}\\nend_of_record');
 `);
-  for (const name of ['xcodegen', 'npm']) exe(name, '#!/bin/sh\nexit 0\n');
+  exe('npm', '#!/bin/sh\nexit 0\n');
+  exe('xcodegen', '#!/bin/sh\necho "held=$MADO_HEAVY_LOCK_HELD $*" >> "$XCODEGEN_MARKER"\nexit 0\n');
   exe('xcodebuild', '#!/bin/sh\necho "$1" >> "$XCODE_MARKER"\nexit 0\n');
   const shell = path.join(dir, 'invoke.zsh');
   fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then print $DIFF_PATH; fi;  }
@@ -62,14 +63,17 @@ xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
-    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
+    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
     MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
+  // The fake tools must win over the real xcodegen/Homebrew directories owner-gates.sh puts in front of PATH.
+  env.OWNER_GATES_TOOL_PATH = bin;
   if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
   const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);
-  return { dir, out, result, xcodeMarker: env.XCODE_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
+  if (process.env.OWNER_GATES_SAMPLE === '1') for (const f of fs.readdirSync(out)) console.log(`LOG ${f}\n${fs.readFileSync(path.join(out, f), 'utf8')}`);
+  return { dir, out, result, xcodeMarker: env.XCODE_MARKER, xcodegenMarker: env.XCODEGEN_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
 }
 
 test('owner node lane runs the name-check tests required by CI', t => {
@@ -176,4 +180,11 @@ test('App zero-count and hosted hang cannot turn into a passing compatibility li
     assert.match(f.summary, mode === 'app-empty' ? /apptests-retained: exit=1/ : /apptests-hosted: hung/);
     assert.match(f.summary, /^DONE$/m);
   }
+});
+
+test('xcodegen runs through scripts/heavy-lock.sh (758)', t => {
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr);
+  assert.match(f.summary, /^xcodegen=0$/m);
+  assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
 });
