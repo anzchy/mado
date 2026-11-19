@@ -150,6 +150,17 @@
       "timeoutMs": 120000
     },
     {
+      "name": "ci-crash-evidence-node",
+      "description": "Manual Node-only receipts for App crash evidence and the device-tools step bound (#732, #668). Does not launch App tests.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-crash-evidence.test.mjs scripts/ci/device-tools-workflow.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
       "name": "release-tag-ci-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/release/check-tag-ci.test.mjs scripts/release/release-workflow.test.mjs",
       "probeCommand": "node --version",

@@ -1,0 +1,1309 @@
+
+Test Suite 'All tests' started at 2026-11-16 13:21:28.093.
+Test Suite 'All tests' passed at 2026-11-16 13:21:28.097.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.004) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite AccessProbeLaunchTests started.
+◇ Test runsOnlyWithExplicitLaunchArgument() started.
+✔ Test runsOnlyWithExplicitLaunchArgument() passed after 0.001 seconds.
+◇ Test probeAppLifecycleNeverTouchesProductState() started.
+✔ Test probeAppLifecycleNeverTouchesProductState() passed after 0.093 seconds.
+◇ Test resultsLogUsesFixedMarkerInsteadOfContainerPath() started.
+✔ Test resultsLogUsesFixedMarkerInsteadOfContainerPath() passed after 0.002 seconds.
+◇ Test collectsSequentialFolderPicksUntilCancel() started.
+✔ Test collectsSequentialFolderPicksUntilCancel() passed after 0.001 seconds.
+◇ Test storesBothBookmarkKindsAndWritesJSONLOnEveryRun() started.
+✔ Test storesBothBookmarkKindsAndWritesJSONLOnEveryRun() passed after 0.075 seconds.
+✔ Suite AccessProbeLaunchTests passed after 0.173 seconds.
+◇ Suite AccessRebindRenderedContract started.
+◇ Test t231NotFoundUsesPage26TwoButtonRenderedFrames(_:) started.
+◇ Test case passing 1 argument size → (1280.0, 800.0) to t231NotFoundUsesPage26TwoButtonRenderedFrames(_:) started.
+◇ Test case passing 1 argument size → (800.0, 680.0) to t231NotFoundUsesPage26TwoButtonRenderedFrames(_:) started.
+✔ Test t231NotFoundUsesPage26TwoButtonRenderedFrames(_:) with 2 test cases passed after 0.484 seconds.
+◇ Test t231RebindStripFramesAccessibilityAndKeyboard(_:) started.
+◇ Test case passing 1 argument size → (1280.0, 800.0) to t231RebindStripFramesAccessibilityAndKeyboard(_:) started.
+◇ Test case passing 1 argument size → (800.0, 680.0) to t231RebindStripFramesAccessibilityAndKeyboard(_:) started.
+✔ Test t231RebindStripFramesAccessibilityAndKeyboard(_:) with 2 test cases passed after 0.133 seconds.
+✔ Suite AccessRebindRenderedContract passed after 0.618 seconds.
+◇ Test t231NotFoundCatalogTranslationsAreExact() started.
+✔ Test t231NotFoundCatalogTranslationsAreExact() passed after 0.003 seconds.
+◇ Test emptyRescanClearsAppWindowImageIdentity() started.
+✔ Test emptyRescanClearsAppWindowImageIdentity() passed after 0.261 seconds.
+◇ Test issue136WindowRoutesInspectorCommandTabAndEscape() started.
+✔ Test issue136WindowRoutesInspectorCommandTabAndEscape() passed after 0.499 seconds.
+◇ Test issue136SmokeInspectorMenuEquivalentPreservesGridSearchEditor() started.
+✔ Test issue136SmokeInspectorMenuEquivalentPreservesGridSearchEditor() passed after 0.459 seconds.
+◇ Test issue136CombinedWindowSearchFocusEscapeAndInspectorToggle() started.
+✔ Test issue136CombinedWindowSearchFocusEscapeAndInspectorToggle() passed after 0.183 seconds.
+◇ Test issue136CombinedWindowWatchedSearchRefreshUpdatesInspectorSynchronously() started.
+✔ Test issue136CombinedWindowWatchedSearchRefreshUpdatesInspectorSynchronously() passed after 1.033 seconds.
+◇ Test issue136Combo2DirectSearchUpdatesInspectorWithoutWindowUpdate() started.
+✔ Test issue136Combo2DirectSearchUpdatesInspectorWithoutWindowUpdate() passed after 0.466 seconds.
+◇ Test issue136Combo2TabVisitsFooterAndInspectorInBothDirections() started.
+✔ Test issue136Combo2TabVisitsFooterAndInspectorInBothDirections() passed after 0.094 seconds.
+◇ Test inspectorEscapeRoutesWithTextFieldFocusedAndUnfocused() started.
+✔ Test inspectorEscapeRoutesWithTextFieldFocusedAndUnfocused() passed after 0.116 seconds.
+◇ Test issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThumbnail() started.
+✔ Test issue194ControllerInspectorSharesBudgetAcrossGridResizeAndRejectsLateOldThumbnail() passed after 0.663 seconds.
+◇ Test issue114Fix1EscapeClosesPanelBeforeInspectorRule() started.
+✔ Test issue114Fix1EscapeClosesPanelBeforeInspectorRule() passed after 0.156 seconds.
+◇ Test issue114Fix1TabStaysInPanelWithInspectorVisible() started.
+✔ Test issue114Fix1TabStaysInPanelWithInspectorVisible() passed after 0.148 seconds.
+◇ Test issue114Fix1OutsideClickClosesPanelThroughWindow() started.
+✔ Test issue114Fix1OutsideClickClosesPanelThroughWindow() passed after 0.136 seconds.
+◇ Test issue114SettingsEntryPointsEnabledNoBadge() started.
+✔ Test issue114SettingsEntryPointsEnabledNoBadge() passed after 0.141 seconds.
+◇ Test issue114SettingsControlsWriteStore() started.
+✔ Test issue114SettingsControlsWriteStore() passed after 0.209 seconds.
+◇ Test issue114SettingsControlsPreserveConcurrentFields() started.
+✔ Test issue114SettingsControlsPreserveConcurrentFields() passed after 0.154 seconds.
+◇ Test issue114SettingsSliderClampsAndSnaps() started.
+✔ Test issue114SettingsSliderClampsAndSnaps() passed after 0.240 seconds.
+◇ Test issue114SettingsReflectExternalWrites() started.
+✔ Test issue114SettingsReflectExternalWrites() passed after 0.270 seconds.
+◇ Test issue114SettingsCrossSurfacePersistence() started.
+✔ Test issue114SettingsCrossSurfacePersistence() passed after 0.296 seconds.
+◇ Test issue114SettingsCanvasDisplayPanelEscAndRelaunchedGrid() started.
+✔ Test issue114SettingsCanvasDisplayPanelEscAndRelaunchedGrid() passed after 0.944 seconds.
+◇ Test issue114SettingsAndOpenPanelSyncInProcess() started.
+✔ Test issue114SettingsAndOpenPanelSyncInProcess() passed after 0.224 seconds.
+◇ Test issue137ViewerEmptyFolderShowsPage22AndTileOpensSubfolder() started.
+✔ Test issue137ViewerEmptyFolderShowsPage22AndTileOpensSubfolder() passed after 1.243 seconds.
+◇ Test issue137Page22RefusesSearchCommandEntry() started.
+✔ Test issue137Page22RefusesSearchCommandEntry() passed after 0.370 seconds.
+◇ Test issue140Combo136GridInspectorTracksRevisionsWithoutDuplicateReads() started.
+✔ Test issue140Combo136GridInspectorTracksRevisionsWithoutDuplicateReads() passed after 0.503 seconds.
+◇ Test issue140SearchedViewerRejectsOutOfSetFolderSuccessor() started.
+✔ Test issue140SearchedViewerRejectsOutOfSetFolderSuccessor() passed after 0.082 seconds.
+◇ Test issue140FrozenPreviewRejectsOutOfSetFolderSuccessorThenEmpties() started.
+✔ Test issue140FrozenPreviewRejectsOutOfSetFolderSuccessorThenEmpties() passed after 0.067 seconds.
+◇ Test issue140BothRootImageOpenRoutesBeginOneCompletedScan() started.
+2026-11-16 13:21:38.016 xctest[4049:15790] This NSLayoutConstraint is being configured with a constant that exceeds internal limits.  A smaller value will be substituted, but this problem should be fixed. Break on BOOL _NSLayoutConstraintNumberExceedsLimit(void) to debug.  This will be logged only once.  This may break in the future.
+✔ Test issue140BothRootImageOpenRoutesBeginOneCompletedScan() passed after 0.422 seconds.
+◇ Test issue140NativeOrdinaryDotTrashMoveKeepsViewerLive() started.
+✔ Test issue140NativeOrdinaryDotTrashMoveKeepsViewerLive() passed after 0.326 seconds.
+◇ Test issue140NativeTrashThenSamePathReplacementShowsNewRevision() started.
+✔ Test issue140NativeTrashThenSamePathReplacementShowsNewRevision() passed after 0.342 seconds.
+◇ Test issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet() started.
+✔ Test issue140DisplayedFileGrantTrashClearsWithoutReconnectSheet() passed after 0.436 seconds.
+◇ Test issue140SmokeWatchedRenameUpdatesViewedTitleLabelAndCurrentItem() started.
+✔ Test issue140SmokeWatchedRenameUpdatesViewedTitleLabelAndCurrentItem() passed after 0.488 seconds.
+◇ Test issue140SmokeWatchedAtomicReplacementReloadsPresentedRevision() started.
+✔ Test issue140SmokeWatchedAtomicReplacementReloadsPresentedRevision() passed after 0.907 seconds.
+◇ Test issue140SmokeWatchedDeleteUpdatesBottomImageCount() started.
+✔ Test issue140SmokeWatchedDeleteUpdatesBottomImageCount() passed after 0.459 seconds.
+◇ Test issue140InspectorFollowsWatchedRenameReplacementAndDeletion() started.
+✔ Test issue140InspectorFollowsWatchedRenameReplacementAndDeletion() passed after 1.329 seconds.
+◇ Test issue144CopyPathReplacesPasteboardWithOneStoredPathPerLine() started.
+✔ Test issue144CopyPathReplacesPasteboardWithOneStoredPathPerLine() passed after 0.085 seconds.
+◇ Test issue144MenuCopyUsesCapturedUnselectedTargetAfterCurrentChanges() started.
+✔ Test issue144MenuCopyUsesCapturedUnselectedTargetAfterCurrentChanges() passed after 0.593 seconds.
+◇ Test issue144DeletedDiskTargetsCannotPreviewOrOpenInspectorFromStaleGrid() started.
+✔ Test issue144DeletedDiskTargetsCannotPreviewOrOpenInspectorFromStaleGrid() passed after 0.449 seconds.
+◇ Test issue144MenuQuickLookRestoresGridScrollLikeSpace() started.
+✔ Test issue144MenuQuickLookRestoresGridScrollLikeSpace() passed after 0.590 seconds.
+◇ Test issue144SingleImageMenuQuickLookKeepsCapturedFolderRange() started.
+✔ Test issue144SingleImageMenuQuickLookKeepsCapturedFolderRange() passed after 0.493 seconds.
+◇ Test issue144LateMenuQuickLookDoesNotReplaceAnOpenedViewer() started.
+✔ Test issue144LateMenuQuickLookDoesNotReplaceAnOpenedViewer() passed after 0.391 seconds.
+◇ Test issue150ClosingWindowDropsFolderEntryRestorePoint() started.
+✔ Test issue150ClosingWindowDropsFolderEntryRestorePoint() passed after 0.130 seconds.
+◇ Test issue150ReusedWindowRecordsNewFolderEntryAfterClose() started.
+✔ Test issue150ReusedWindowRecordsNewFolderEntryAfterClose() passed after 0.447 seconds.
+◇ Test issue150FolderEntryRightAfterCloseCancelsToEmptyState() started.
+✔ Test issue150FolderEntryRightAfterCloseCancelsToEmptyState() passed after 0.303 seconds.
+◇ Test issue150OpenGrantedFolderCancelRestoresFilePreviewSet() started.
+✔ Test issue150OpenGrantedFolderCancelRestoresFilePreviewSet() passed after 0.309 seconds.
+◇ Test issue150OpenRecentCancelRestoresFilePreviewSet() started.
+✔ Test issue150OpenRecentCancelRestoresFilePreviewSet() passed after 0.301 seconds.
+◇ Test issue187OpenedGridTakesKeyboardFocusAndFirstDownMovesOneRow(granted:) started.
+◇ Test case passing 1 argument granted → false to issue187OpenedGridTakesKeyboardFocusAndFirstDownMovesOneRow(granted:) started.
+◇ Test case passing 1 argument granted → true to issue187OpenedGridTakesKeyboardFocusAndFirstDownMovesOneRow(granted:) started.
+✔ Test issue187OpenedGridTakesKeyboardFocusAndFirstDownMovesOneRow(granted:) with 2 test cases passed after 1.217 seconds.
+◇ Test issue216AccessServicesGrantsForSessionOverFutureFiles() started.
+✔ Test issue216AccessServicesGrantsForSessionOverFutureFiles() passed after 0.029 seconds.
+◇ Test issue218CacheShowsBusyStateBeforePendingRefreshAndClear() started.
+✔ Test issue218CacheShowsBusyStateBeforePendingRefreshAndClear() passed after 0.257 seconds.
+◇ Test issue218SettingsControlsUseDeclaredImplementedEntryPoints() started.
+✔ Test issue218SettingsControlsUseDeclaredImplementedEntryPoints() passed after 0.097 seconds.
+◇ Test issue218AboutReportIssueOpensSharedEntryPointURL() started.
+✔ Test issue218AboutReportIssueOpensSharedEntryPointURL() passed after 0.144 seconds.
+◇ Test issue218AppearanceSelectionChangesPixelsAndAccessibleValue() started.
+✔ Test issue218AppearanceSelectionChangesPixelsAndAccessibleValue() passed after 0.189 seconds.
+◇ Test issue218RepeatedAppearanceChoiceRemainsSelectedWithPersistentStore() started.
+✔ Test issue218RepeatedAppearanceChoiceRemainsSelectedWithPersistentStore() passed after 0.157 seconds.
+◇ Test issue218EveryButtonTitleFitsActualControlInBothLanguages() started.
+✔ Test issue218EveryButtonTitleFitsActualControlInBothLanguages() passed after 0.214 seconds.
+◇ Test issue218DisplaySectionControlsAreLiveAndSelectingWritesNothing() started.
+✔ Test issue218DisplaySectionControlsAreLiveAndSelectingWritesNothing() passed after 0.164 seconds.
+◇ Test issue218SettingsTextFitsPinnedContentFrames() started.
+✔ Test issue218SettingsTextFitsPinnedContentFrames() passed after 0.154 seconds.
+◇ Test issue218CommandCommaReusesSettingsWindow() started.
+✔ Test issue218CommandCommaReusesSettingsWindow() passed after 0.425 seconds.
+◇ Test issue218PinnedSidebarSurfaceInLightAndDark() started.
+✔ Test issue218PinnedSidebarSurfaceInLightAndDark() passed after 0.173 seconds.
+◇ Test issue218LongestCatalogLabelsFitPinnedColumnsInEnglishAndChinese() started.
+✔ Test issue218LongestCatalogLabelsFitPinnedColumnsInEnglishAndChinese() passed after 0.096 seconds.
+◇ Test issue218CacheClearRequiresConfirmation() started.
+✔ Test issue218CacheClearRequiresConfirmation() passed after 0.442 seconds.
+◇ Test issue218SettingsAndMenuShareAppearanceAndTools() started.
+✔ Test issue218SettingsAndMenuShareAppearanceAndTools() passed after 0.109 seconds.
+◇ Test issue218PinnedSettingsSidebarRenderedFrames() started.
+✔ Test issue218PinnedSettingsSidebarRenderedFrames() passed after 0.251 seconds.
+◇ Test issue218SettingsSectionPersistsAcrossWindowInstances() started.
+✔ Test issue218SettingsSectionPersistsAcrossWindowInstances() passed after 0.691 seconds.
+◇ Test issue220AppDelegatePassesUpdatePortToSettings() started.
+✔ Test issue220AppDelegatePassesUpdatePortToSettings() passed after 0.826 seconds.
+◇ Test issue220AppDelegateWithoutPortShowsInertUpdateControls() started.
+✔ Test issue220AppDelegateWithoutPortShowsInertUpdateControls() passed after 0.167 seconds.
+◇ Test issue220ProductionPathWiresUpdatePortIntoSettings() started.
+✔ Test issue220ProductionPathWiresUpdatePortIntoSettings() passed after 0.002 seconds.
+◇ Test issue220CheckNowFollowsUpdaterAvailability() started.
+✔ Test issue220CheckNowFollowsUpdaterAvailability() passed after 0.161 seconds.
+◇ Test issue220CheckNowAvailabilityIsIgnoredWithoutPort() started.
+✔ Test issue220CheckNowAvailabilityIsIgnoredWithoutPort() passed after 0.185 seconds.
+◇ Test issue220EntitlementsAreExactlyTheSixDecidedKeys() started.
+✔ Test issue220EntitlementsAreExactlyTheSixDecidedKeys() passed after 0.001 seconds.
+◇ Test issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() started.
+✔ Test issue220InfoPlistConfiguresSparkleWithoutProfilingOrForcedChecks() passed after 0.001 seconds.
+◇ Test issue220ProjectPinsSparkleExactly() started.
+✔ Test issue220ProjectPinsSparkleExactly() passed after 0.003 seconds.
+◇ Test issue220UpdatePaneMatchesPinnedFrames() started.
+✔ Test issue220UpdatePaneMatchesPinnedFrames() passed after 0.301 seconds.
+◇ Test issue220LongestUpdateLabelsFitInEnglishAndChinese() started.
+✔ Test issue220LongestUpdateLabelsFitInEnglishAndChinese() passed after 0.070 seconds.
+◇ Test issue220UpdatePaneTextColoursInLightAndDark() started.
+✔ Test issue220UpdatePaneTextColoursInLightAndDark() passed after 0.198 seconds.
+◇ Test issue220UpdateControlsAreEnabledWithoutComingSoon() started.
+✔ Test issue220UpdateControlsAreEnabledWithoutComingSoon() passed after 0.314 seconds.
+◇ Test issue220VersionLabelShowsPortVersionAndBuild(version:build:) started.
+◇ Test case passing 2 arguments version → "2.3.0", build → "57" to issue220VersionLabelShowsPortVersionAndBuild(version:build:) started.
+◇ Test case passing 2 arguments version → nil, build → "57" to issue220VersionLabelShowsPortVersionAndBuild(version:build:) started.
+◇ Test case passing 2 arguments version → "2.3.0", build → nil to issue220VersionLabelShowsPortVersionAndBuild(version:build:) started.
+◇ Test case passing 2 arguments version → nil, build → nil to issue220VersionLabelShowsPortVersionAndBuild(version:build:) started.
+✔ Test issue220VersionLabelShowsPortVersionAndBuild(version:build:) with 4 test cases passed after 0.659 seconds.
+◇ Test issue220AutomaticToggleRoundTripsThroughPort(seed:initial:) started.
+◇ Test case passing 2 arguments seed → 8705, initial → false to issue220AutomaticToggleRoundTripsThroughPort(seed:initial:) started.
+◇ Test case passing 2 arguments seed → 8706, initial → true to issue220AutomaticToggleRoundTripsThroughPort(seed:initial:) started.
+✔ Test issue220AutomaticToggleRoundTripsThroughPort(seed:initial:) with 2 test cases passed after 0.339 seconds.
+◇ Test issue220CheckNowChecksOncePerClickAndShowsResultDate() started.
+✔ Test issue220CheckNowChecksOncePerClickAndShowsResultDate() passed after 0.169 seconds.
+◇ Test issue220LastCheckedRendersDateOrUnknownAndRefreshesOnShow() started.
+✔ Test issue220LastCheckedRendersDateOrUnknownAndRefreshesOnShow() passed after 0.186 seconds.
+◇ Test issue220NilPortDisablesUpdateControlsWithoutComingSoon() started.
+✔ Test issue220NilPortDisablesUpdateControlsWithoutComingSoon() passed after 0.160 seconds.
+◇ Test issue221AboutLinksOpenDestinationsAndStayFocusable() started.
+✔ Test issue221AboutLinksOpenDestinationsAndStayFocusable() passed after 0.220 seconds.
+◇ Test issue221AboutVersionAndBuildUseInjectedBundleInfo() started.
+✔ Test issue221AboutVersionAndBuildUseInjectedBundleInfo() passed after 0.161 seconds.
+◇ Test issue221AboutLicenceTextMatchesPinnedEnglishAndChinese() started.
+✔ Test issue221AboutLicenceTextMatchesPinnedEnglishAndChinese() passed after 0.171 seconds.
+◇ Test issue221PinnedAboutIconTypographyAndParagraphRenderedFrames() started.
+✔ Test issue221PinnedAboutIconTypographyAndParagraphRenderedFrames() passed after 0.196 seconds.
+◇ Test issue221PinnedAboutLinkSpacingAndLicenceWidthRenderedFrames() started.
+✔ Test issue221PinnedAboutLinkSpacingAndLicenceWidthRenderedFrames() passed after 0.164 seconds.
+◇ Test issue221PinnedAboutMutedColorsInLightAndDark() started.
+✔ Test issue221PinnedAboutMutedColorsInLightAndDark() passed after 0.163 seconds.
+◇ Test issue221LocalizedAboutControlsFitPaneInEnglishChineseLightAndDark() started.
+✔ Test issue221LocalizedAboutControlsFitPaneInEnglishChineseLightAndDark() passed after 0.479 seconds.
+◇ Test issue299AboutLinkDeclarationsMatchThePaneEnabledState() started.
+✔ Test issue299AboutLinkDeclarationsMatchThePaneEnabledState() passed after 0.227 seconds.
+◇ Test issue233HeldRenameDuringHeldReconcileReadFollowsWithoutSheet() started.
+✔ Test issue233HeldRenameDuringHeldReconcileReadFollowsWithoutSheet() passed after 0.509 seconds.
+◇ Test issue233DecodeFirstLossClearsAndRejectsLateWork() started.
+✔ Test issue233DecodeFirstLossClearsAndRejectsLateWork() passed after 1.764 seconds.
+◇ Test issue233WakeAndVnodeDetectLossAndRetireObservers() started.
+✔ Test issue233WakeAndVnodeDetectLossAndRetireObservers() passed after 1.662 seconds.
+◇ Test issue233ForegroundForwardingDetectsMissedFileGrantLoss() started.
+✔ Test issue233ForegroundForwardingDetectsMissedFileGrantLoss() passed after 0.657 seconds.
+◇ Test issue233ReconnectSelectionAndCancelStayFileScoped() started.
+✔ Test issue233ReconnectSelectionAndCancelStayFileScoped() passed after 5.254 seconds.
+◇ Test issue233SupersededReconcileFailureNeverAlerts() started.
+✔ Test issue233SupersededReconcileFailureNeverAlerts() passed after 1.588 seconds.
+◇ Test issue233ReconcileLossClearsBeforeSheet() started.
+✔ Test issue233ReconcileLossClearsBeforeSheet() passed after 0.553 seconds.
+◇ Test issue233R2InspectorOnlyPOSIXLossClearsBeforeSheet() started.
+✔ Test issue233R2InspectorOnlyPOSIXLossClearsBeforeSheet() passed after 0.514 seconds.
+◇ Test issue233R2LoaderExistingFilePOSIXLossClearsWhileReconcileHeld() started.
+✔ Test issue233R2LoaderExistingFilePOSIXLossClearsWhileReconcileHeld() passed after 0.464 seconds.
+◇ Test issue233R2StaleMetadataAndProbeNeverClearNewInput() started.
+✔ Test issue233R2StaleMetadataAndProbeNeverClearNewInput() passed after 0.916 seconds.
+◇ Test issue233R2ReadableMetadataAndCorruptDecodeErrorsNeverReconnectOrLoop() started.
+✔ Test issue233R2ReadableMetadataAndCorruptDecodeErrorsNeverReconnectOrLoop() passed after 0.711 seconds.
+◇ Test issue233R2FreshReaderAfterRejectedInputStillDetectsLoss() started.
+✔ Test issue233R2FreshReaderAfterRejectedInputStillDetectsLoss() passed after 1.079 seconds.
+◇ Test issue233R2ProbeMissingLeasePathPreservesRenameAndTrashRecovery() started.
+✔ Test issue233R2ProbeMissingLeasePathPreservesRenameAndTrashRecovery() passed after 1.290 seconds.
+◇ Test issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) started.
+◇ Test case passing 1 argument boundary → "failedReadRelease" to issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) started.
+◇ Test case passing 1 argument boundary → "successfulReadRelease" to issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) started.
+◇ Test case passing 1 argument boundary → "bookmarkSuccess" to issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) started.
+◇ Test case passing 1 argument boundary → "bookmarkFailure" to issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) started.
+✔ Test issue233ReplacedProbeHeldCompletionsNeverDeliver(_:) with 4 test cases passed after 2.394 seconds.
+◇ Test issue238ReadableRootShowsReadFailedInContentArea() started.
+✔ Test issue238ReadableRootShowsReadFailedInContentArea() passed after 0.582 seconds.
+◇ Test issue238RemovedRootShowsLostAccessWithoutReadFailedFlash() started.
+✔ Test issue238RemovedRootShowsLostAccessWithoutReadFailedFlash() passed after 0.958 seconds.
+◇ Test issue238RemovedDescendantWithReadableRootShowsReadFailed() started.
+✔ Test issue238RemovedDescendantWithReadableRootShowsReadFailed() passed after 1.184 seconds.
+◇ Test issue238UnreadableSubfolderWithReadableRootShowsReadFailed() started.
+✔ Test issue238UnreadableSubfolderWithReadableRootShowsReadFailed() passed after 0.742 seconds.
+◇ Test issue238UnreadableChildScanShowsOnlyReadFailed() started.
+✔ Test issue238UnreadableChildScanShowsOnlyReadFailed() passed after 0.901 seconds.
+◇ Test issue238ViewerReadFailureKeepsImageAndArrowNavigation() started.
+✔ Test issue238ViewerReadFailureKeepsImageAndArrowNavigation() passed after 0.716 seconds.
+◇ Test issue238RetrySucceedsThenRetryFailsReturnsToReadFailed() started.
+✔ Test issue238RetrySucceedsThenRetryFailsReturnsToReadFailed() passed after 0.496 seconds.
+◇ Test issue238CancelDuringRetryRestoresReadFailedPage() started.
+✔ Test issue238CancelDuringRetryRestoresReadFailedPage() passed after 0.982 seconds.
+◇ Test issue238ChooseOtherFolderRequestsOpenPanel() started.
+✔ Test issue238ChooseOtherFolderRequestsOpenPanel() passed after 0.301 seconds.
+◇ Test issue238ScanLimitShowsReadFailedWithoutLosingRoot() started.
+✔ Test issue238ScanLimitShowsReadFailedWithoutLosingRoot() passed after 0.469 seconds.
+◇ Test issue238RefreshFailureOnGridKeepsTheGridFooter() started.
+✔ Test issue238RefreshFailureOnGridKeepsTheGridFooter() passed after 0.735 seconds.
+◇ Test issue273TrashDuringReconcileReadClearsWithoutReconnectSheet() started.
+✔ Test issue273TrashDuringReconcileReadClearsWithoutReconnectSheet() passed after 0.261 seconds.
+◇ Test issue273DotTrashMoveDuringReconcileReadFollowsWithoutSheet() started.
+✔ Test issue273DotTrashMoveDuringReconcileReadFollowsWithoutSheet() passed after 0.300 seconds.
+◇ Test issue257RenameDuringHeldReconcileReadFollowsWithoutSheet() started.
+✔ Test issue257RenameDuringHeldReconcileReadFollowsWithoutSheet() passed after 0.326 seconds.
+◇ Test issue273TrashDuringLoaderDetailRequestClearsWithoutReconnectSheet() started.
+✔ Test issue273TrashDuringLoaderDetailRequestClearsWithoutReconnectSheet() passed after 0.458 seconds.
+◇ Test issue273RemovalDuringReconcileReadStillShowsReconnectSheet() started.
+✔ Test issue273RemovalDuringReconcileReadStillShowsReconnectSheet() passed after 0.290 seconds.
+◇ Test issue273FailedReresolutionDuringReconcileReadStillShowsReconnectSheet() started.
+✔ Test issue273FailedReresolutionDuringReconcileReadStillShowsReconnectSheet() passed after 0.266 seconds.
+◇ Test issue281FooterFollowsTheOpenFolderPathUntruncated() started.
+✔ Test issue281FooterFollowsTheOpenFolderPathUntruncated() passed after 0.714 seconds.
+◇ Test issue281RetryAfterFailedReadShowsTheReadingFooter() started.
+✔ Test issue281RetryAfterFailedReadShowsTheReadingFooter() passed after 0.471 seconds.
+◇ Test i287SameIdentityWithoutReferenceRestoresOriginalRoot(_:) started.
+◇ Test case passing 1 argument moved → false to i287SameIdentityWithoutReferenceRestoresOriginalRoot(_:) started.
+◇ Test case passing 1 argument moved → true to i287SameIdentityWithoutReferenceRestoresOriginalRoot(_:) started.
+✔ Test i287SameIdentityWithoutReferenceRestoresOriginalRoot(_:) with 2 test cases passed after 0.051 seconds.
+◇ Test i287DifferentIdentityWithoutReferenceOpensNewRootAndLeavesOriginalLost(_:) started.
+◇ Test case passing 1 argument kind → "other" to i287DifferentIdentityWithoutReferenceOpensNewRootAndLeavesOriginalLost(_:) started.
+◇ Test case passing 1 argument kind → "replacement" to i287DifferentIdentityWithoutReferenceOpensNewRootAndLeavesOriginalLost(_:) started.
+✔ Test i287DifferentIdentityWithoutReferenceOpensNewRootAndLeavesOriginalLost(_:) with 2 test cases passed after 0.025 seconds.
+◇ Test i316PreScanFailureRestoresHome(error:) started.
+◇ Test case passing 1 argument error → .corruptStore to i316PreScanFailureRestoresHome(error:) started.
+◇ Test case passing 1 argument error → .startFailed to i316PreScanFailureRestoresHome(error:) started.
+✔ Test i316PreScanFailureRestoresHome(error:) with 2 test cases passed after 0.353 seconds.
+◇ Test i316PreScanFailureRestoresPriorErrorViewer() started.
+✔ Test i316PreScanFailureRestoresPriorErrorViewer() passed after 0.361 seconds.
+◇ Test i331AppColdHomeHidesControls() started.
+✔ Test i331AppColdHomeHidesControls() passed after 0.099 seconds.
+◇ Test i331AppOpenImageShowsControlsAndReturnHomeHidesThem() started.
+✔ Test i331AppOpenImageShowsControlsAndReturnHomeHidesThem() passed after 0.509 seconds.
+◇ Test i331AppTwoControllersDecideIndependently() started.
+✔ Test i331AppTwoControllersDecideIndependently() passed after 0.502 seconds.
+◇ Test i331AppHomeDisablesNavigationAndZoomCommands() started.
+✔ Test i331AppHomeDisablesNavigationAndZoomCommands() passed after 0.151 seconds.
+◇ Test i331AppFolderLandsOnGridWithOverlayHidden() started.
+✔ Test i331AppFolderLandsOnGridWithOverlayHidden() passed after 0.214 seconds.
+◇ Test issue344InstalledLoopMenuUsesSharedPreferenceAcrossGridPreviewAndFinder() started.
+✔ Test issue344InstalledLoopMenuUsesSharedPreferenceAcrossGridPreviewAndFinder() passed after 0.361 seconds.
+◇ Test issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (0, true, false) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (1, true, true) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (2, true, true) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (0, false, false) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (1, false, false) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (2, false, false) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (1, false, true) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+◇ Test case passing 1 argument scenario → (2, false, true) to issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) started.
+✔ Test issue345GridSpaceMenuWrapEscapeReturnsVisibleCurrentItem(scenario:) with 8 test cases passed after 6.769 seconds.
+◇ Test viewMenuShowsCmdZoomEquivalents() started.
+✔ Test viewMenuShowsCmdZoomEquivalents() passed after 0.109 seconds.
+◇ Test cmdZoomKeysMatchBareKeysThroughMainMenu() started.
+✔ Test cmdZoomKeysMatchBareKeysThroughMainMenu() passed after 1.202 seconds.
+◇ Test bareZoomKeysStillWorkWithToolFocus() started.
+✔ Test bareZoomKeysStillWorkWithToolFocus() passed after 0.191 seconds.
+◇ Test zoomItemsDisabledInGrid() started.
+✔ Test zoomItemsDisabledInGrid() passed after 0.246 seconds.
+◇ Test textFieldKeepsCmdZoomKeys() started.
+✔ Test textFieldKeepsCmdZoomKeys() passed after 0.490 seconds.
+◇ Test textFieldKeepsCmdZoomKeysOnAnyLayout() started.
+✔ Test textFieldKeepsCmdZoomKeysOnAnyLayout() passed after 0.685 seconds.
+◇ Test issue349RealWindowInstallsLargerImageIOThumbnailsAfterKeys() started.
+✔ Test issue349RealWindowInstallsLargerImageIOThumbnailsAfterKeys() passed after 1.091 seconds.
+◇ Test issue349RealGridMenuKeysAndSearchPriority() started.
+✔ Test issue349RealGridMenuKeysAndSearchPriority() passed after 2.874 seconds.
+◇ Test issue349TwoWindowsResizeWithoutLosingTheirCurrentSelection() started.
+✔ Test issue349TwoWindowsResizeWithoutLosingTheirCurrentSelection() passed after 0.838 seconds.
+◇ Test issue349SettingsSliderLiveKeysAndKeyboardAX() started.
+✔ Test issue349SettingsSliderLiveKeysAndKeyboardAX() passed after 0.851 seconds.
+◇ Test issue349ViewerZoomKeepsThumbnailPreferenceAfterGridChange() started.
+✔ Test issue349ViewerZoomKeepsThumbnailPreferenceAfterGridChange() passed after 0.995 seconds.
+◇ Test issue350AppPinchSynchronizesRenderedWindowsSettingsAndPersistence() started.
+✔ Test issue350AppPinchSynchronizesRenderedWindowsSettingsAndPersistence() passed after 0.682 seconds.
+◇ Test issue350ViewerNativePinchStillZoomsImageAfterGridPinch() started.
+✔ Test issue350ViewerNativePinchStillZoomsImageAfterGridPinch() passed after 0.450 seconds.
+◇ Test issue351SettingsSliderUpdatesAllRealViewersAndRestoresAfterReopen() started.
+✔ Test issue351SettingsSliderUpdatesAllRealViewersAndRestoresAfterReopen() passed after 2.563 seconds.
+◇ Test issue351SettingsSliderHasLiveKeyboardAXAndHiddenPaneExclusion() started.
+✔ Test issue351SettingsSliderHasLiveKeyboardAXAndHiddenPaneExclusion() passed after 0.475 seconds.
+◇ Test issue351SettingsDisplayRowsKeepColumnsAndFullLocalizedLabels() started.
+✔ Test issue351SettingsDisplayRowsKeepColumnsAndFullLocalizedLabels() passed after 0.251 seconds.
+◇ Test issue351SettingsEnglishAndChineseOpacityLabelsFitRealFrames() started.
+✔ Test issue351SettingsEnglishAndChineseOpacityLabelsFitRealFrames() passed after 0.280 seconds.
+◇ Suite Issue354Page26CopyTests started.
+◇ Test titlesUseTheActualFolderForBothCauses() started.
+✔ Test titlesUseTheActualFolderForBothCauses() passed after 0.925 seconds.
+✔ Suite Issue354Page26CopyTests passed after 0.926 seconds.
+◇ Test issue359LaunchStartsUpdaterOnceAfterFirstWindowIsVisible() started.
+✔ Test issue359LaunchStartsUpdaterOnceAfterFirstWindowIsVisible() passed after 0.115 seconds.
+◇ Test issue359ActivationAndRelaunchDoNotStartUpdaterAgain() started.
+✔ Test issue359ActivationAndRelaunchDoNotStartUpdaterAgain() passed after 0.102 seconds.
+◇ Test issue359LaunchWithoutUpdatePortShowsWindowAndStartsNothing() started.
+✔ Test issue359LaunchWithoutUpdatePortShowsWindowAndStartsNothing() passed after 0.101 seconds.
+◇ Test issue359SparklePortIsBuiltStoppedAndStartsThroughStartUpdater() started.
+✔ Test issue359SparklePortIsBuiltStoppedAndStartsThroughStartUpdater() passed after 0.001 seconds.
+◇ Test issue362MenuArrowKeysKeepRingAfterTabIn() started.
+✔ Test issue362MenuArrowKeysKeepRingAfterTabIn() passed after 0.496 seconds.
+◇ Test issue362NoOpArrowLeavesNoRingForLaterOpening() started.
+✔ Test issue362NoOpArrowLeavesNoRingForLaterOpening() passed after 0.419 seconds.
+◇ Test issue362CommandIClosingInspectorShowsRing() started.
+✔ Test issue362CommandIClosingInspectorShowsRing() passed after 0.435 seconds.
+◇ Test issue362EscapeClosingInspectorShowsRingThroughController() started.
+✔ Test issue362EscapeClosingInspectorShowsRingThroughController() passed after 0.351 seconds.
+◇ Test i444CtrlCmdSTogglesTheViewersOwnSidebar() started.
+✔ Test i444CtrlCmdSTogglesTheViewersOwnSidebar() passed after 1.091 seconds.
+◇ Test i444SidebarMenuItemValidationTable() started.
+✔ Test i444SidebarMenuItemValidationTable() passed after 0.903 seconds.
+◇ Test i444ReturnToGridToolMatchesEscapeOnTwinControllers(index:) started.
+◇ Test case passing 1 argument index → 0 to i444ReturnToGridToolMatchesEscapeOnTwinControllers(index:) started.
+◇ Test case passing 1 argument index → 3 to i444ReturnToGridToolMatchesEscapeOnTwinControllers(index:) started.
+◇ Test case passing 1 argument index → 5 to i444ReturnToGridToolMatchesEscapeOnTwinControllers(index:) started.
+✔ Test i444ReturnToGridToolMatchesEscapeOnTwinControllers(index:) with 3 test cases passed after 3.607 seconds.
+◇ Test i444MoreMenuStructureAndTwins() started.
+✔ Test i444MoreMenuStructureAndTwins() passed after 0.602 seconds.
+◇ Test i444MoreMenuItemsTakeEffect() started.
+✔ Test i444MoreMenuItemsTakeEffect() passed after 0.547 seconds.
+◇ Test i444OpenAndInspectorStillReachableInViewer() started.
+✔ Test i444OpenAndInspectorStillReachableInViewer() passed after 0.507 seconds.
+◇ Test i444KeysWorkWithSidebarShown() started.
+✔ Test i444KeysWorkWithSidebarShown() passed after 0.675 seconds.
+◇ Test i444GridOnlyPathsInertInViewerWithSidebar() started.
+✔ Test i444GridOnlyPathsInertInViewerWithSidebar() passed after 0.557 seconds.
+◇ Test i444SidebarVisibilityInvariantAcrossSourceTransitions(step:) started.
+◇ Test case passing 1 argument step → "single" to i444SidebarVisibilityInvariantAcrossSourceTransitions(step:) started.
+◇ Test case passing 1 argument step → "grid-return" to i444SidebarVisibilityInvariantAcrossSourceTransitions(step:) started.
+✔ Test i444SidebarVisibilityInvariantAcrossSourceTransitions(step:) with 2 test cases passed after 1.150 seconds.
+◇ Test i444MoreSubmenuCloseKeepsMenuLock() started.
+✔ Test i444MoreSubmenuCloseKeepsMenuLock() passed after 0.609 seconds.
+◇ Test i444SidebarRowClickInViewerOpensThatFoldersGrid() started.
+✔ Test i444SidebarRowClickInViewerOpensThatFoldersGrid() passed after 1.310 seconds.
+◇ Test i444TabReachesTheVisibleInspectorBothWays() started.
+✔ Test i444TabReachesTheVisibleInspectorBothWays() passed after 1.118 seconds.
+◇ Test issue445SameSourceSortAndFilterMenuRefreshPositionWithoutReopening() started.
+✔ Test issue445SameSourceSortAndFilterMenuRefreshPositionWithoutReopening() passed after 1.115 seconds.
+◇ Test issue445SelectedThreeOfTwelvePreviewPagesInSetOrderAndPositions() started.
+✔ Test issue445SelectedThreeOfTwelvePreviewPagesInSetOrderAndPositions() passed after 1.476 seconds.
+◇ Test issue454ReadOwnerChildCancelIgnoresOldParentAndReleasesMask() started.
+✔ Test issue454ReadOwnerChildCancelIgnoresOldParentAndReleasesMask() passed after 0.904 seconds.
+◇ Test issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() started.
+✔ Test issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder() passed after 1.110 seconds.
+◇ Test issue454RetryReadinessWaitsForParentRecount() started.
+✔ Test issue454RetryReadinessWaitsForParentRecount() passed after 0.882 seconds.
+◇ Test issue597StaleReadFailureDoesNotPromptDuringRetry() started.
+✔ Test issue597StaleReadFailureDoesNotPromptDuringRetry() passed after 1.541 seconds.
+◇ Test issue597PreScanFailureStillRestoresAndOffersFolderAccess() started.
+✔ Test issue597PreScanFailureStillRestoresAndOffersFolderAccess() passed after 0.760 seconds.
+◇ Test issue597StartedChildAccessErrorShowsReadFailedWithoutGrant() started.
+✔ Test issue597StartedChildAccessErrorShowsReadFailedWithoutGrant() passed after 1.126 seconds.
+◇ Test issue597LostRootDuringStartedChildReadShowsLostAccessWithoutSheet(accessError:) started.
+◇ Test case passing 1 argument accessError → false to issue597LostRootDuringStartedChildReadShowsLostAccessWithoutSheet(accessError:) started.
+◇ Test case passing 1 argument accessError → true to issue597LostRootDuringStartedChildReadShowsLostAccessWithoutSheet(accessError:) started.
+✔ Test issue597LostRootDuringStartedChildReadShowsLostAccessWithoutSheet(accessError:) with 2 test cases passed after 1.968 seconds.
+◇ Test issue597CorruptStoreStillShowsAccessError(scanStarted:) started.
+◇ Test case passing 1 argument scanStarted → false to issue597CorruptStoreStillShowsAccessError(scanStarted:) started.
+◇ Test case passing 1 argument scanStarted → true to issue597CorruptStoreStillShowsAccessError(scanStarted:) started.
+✔ Test issue597CorruptStoreStillShowsAccessError(scanStarted:) with 2 test cases passed after 1.229 seconds.
+◇ Test issue454RecountPendingRebuildInvalidatesRootChildAndSibling() started.
+✔ Test issue454RecountPendingRebuildInvalidatesRootChildAndSibling() passed after 1.273 seconds.
+◇ Test issue454RecountFailureCannotRevealOldCountWhenReadingEnds() started.
+✔ Test issue454RecountFailureCannotRevealOldCountWhenReadingEnds() passed after 3.072 seconds.
+◇ Test issue454RecountSupersededTwoCannotOverwriteFreshZero() started.
+✔ Test issue454RecountSupersededTwoCannotOverwriteFreshZero() passed after 2.148 seconds.
+◇ Test issue454SidebarCountStaysBlankWhileMainScanIsReading() started.
+✔ Test issue454SidebarCountStaysBlankWhileMainScanIsReading() passed after 0.303 seconds.
+◇ Test issue506CancelledReadRestoresFooterAndSource(previousCount:) started.
+◇ Test case passing 1 argument previousCount → 0 to issue506CancelledReadRestoresFooterAndSource(previousCount:) started.
+◇ Test case passing 1 argument previousCount → 3 to issue506CancelledReadRestoresFooterAndSource(previousCount:) started.
+✔ Test issue506CancelledReadRestoresFooterAndSource(previousCount:) with 2 test cases passed after 1.403 seconds.
+◇ Test issue506SymlinkParentFolderCompletesNormally() started.
+✔ Test issue506SymlinkParentFolderCompletesNormally() passed after 0.349 seconds.
+◇ Test issue506NormalizedFolderCompletesNormally() started.
+✔ Test issue506NormalizedFolderCompletesNormally() passed after 0.299 seconds.
+◇ Test issue507FolderPathsComplete(legacyScanner:) started.
+◇ Test case passing 1 argument legacyScanner → false to issue507FolderPathsComplete(legacyScanner:) started.
+◇ Test case passing 1 argument legacyScanner → true to issue507FolderPathsComplete(legacyScanner:) started.
+✔ Test issue507FolderPathsComplete(legacyScanner:) with 2 test cases passed after 3.897 seconds.
+◇ Test issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget() started.
+✔ Test issue507EquivalentGrantsKeepOneRootAndRejectMissingTarget() passed after 0.046 seconds.
+◇ Test issue507LinkedFirstGrantKeepsCanonicalRootIdentity() started.
+✔ Test issue507LinkedFirstGrantKeepsCanonicalRootIdentity() passed after 0.008 seconds.
+◇ Test issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:) started.
+◇ Test case passing 1 argument legacyScanner → false to issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:) started.
+◇ Test case passing 1 argument legacyScanner → true to issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:) started.
+✔ Test issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner:) with 2 test cases passed after 2.359 seconds.
+◇ Test issue507CancelledFolderPanelLeavesNoGrant() started.
+✔ Test issue507CancelledFolderPanelLeavesNoGrant() passed after 0.447 seconds.
+◇ Test issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt() started.
+✔ Test issue507UnreadableDeliveredFolderKeepsTheSelectedURLForThePrompt() passed after 0.137 seconds.
+◇ Test issue507UnreadableDroppedLinkPromptsForItsTarget() started.
+✔ Test issue507UnreadableDroppedLinkPromptsForItsTarget() passed after 0.131 seconds.
+◇ Test issue507NonFolderInputNeverPromptsForAFolder(input:) started.
+◇ Test case passing 1 argument input → "image" to issue507NonFolderInputNeverPromptsForAFolder(input:) started.
+◇ Test case passing 1 argument input → "link and image" to issue507NonFolderInputNeverPromptsForAFolder(input:) started.
+◇ Test case passing 1 argument input → "stale link" to issue507NonFolderInputNeverPromptsForAFolder(input:) started.
+✔ Test issue507NonFolderInputNeverPromptsForAFolder(input:) with 3 test cases passed after 1.344 seconds.
+◇ Test issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:) started.
+◇ Test case passing 1 argument existing → false to issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:) started.
+◇ Test case passing 1 argument existing → true to issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:) started.
+✔ Test issue507FooterDirectoryBookmarkPreservesDirectoryHint(existing:) with 2 test cases passed after 0.001 seconds.
+◇ Test issue507FooterBookmarkVerifiesRawSymlinkParentSelection() started.
+✔ Test issue507FooterBookmarkVerifiesRawSymlinkParentSelection() passed after 0.003 seconds.
+◇ Test issue512ChildReadKeepsTitleCurrentRowAndFailureDash() started.
+✔ Test issue512ChildReadKeepsTitleCurrentRowAndFailureDash() passed after 0.536 seconds.
+◇ Test issue520TrashBeforeGenericLoadFailureDoesNotReconnect() started.
+✔ Test issue520TrashBeforeGenericLoadFailureDoesNotReconnect() passed after 0.296 seconds.
+◇ Test issue520UnlinkedFileGenericLoadFailureStillReconnects() started.
+✔ Test issue520UnlinkedFileGenericLoadFailureStillReconnects() passed after 0.302 seconds.
+◇ Test issue520DeniedFileGenericLoadFailureStillReconnects() started.
+✔ Test issue520DeniedFileGenericLoadFailureStillReconnects() passed after 0.317 seconds.
+◇ Test issue520TrashClearedBeforeLateGenericFailureStaysEmpty() started.
+✔ Test issue520TrashClearedBeforeLateGenericFailureStaysEmpty() passed after 0.253 seconds.
+◇ Test issue520ReadableGenericLoadFailureDoesNotReconnect() started.
+✔ Test issue520ReadableGenericLoadFailureDoesNotReconnect() passed after 0.270 seconds.
+◇ Test issue520CallbackProbeTrashClearsWithoutSheet() started.
+✔ Test issue520CallbackProbeTrashClearsWithoutSheet() passed after 0.251 seconds.
+◇ Test issue520CallbackProbeUnlinkedFileReconnects() started.
+✔ Test issue520CallbackProbeUnlinkedFileReconnects() passed after 0.378 seconds.
+◇ Test issue520CallbackProbeMovedFileFollowsNewLocation() started.
+✔ Test issue520CallbackProbeMovedFileFollowsNewLocation() passed after 0.356 seconds.
+◇ Test issue630DeniedFixtureWaitsForOverlappingFailureRecovery() started.
+✔ Test issue630DeniedFixtureWaitsForOverlappingFailureRecovery() passed after 7.729 seconds.
+◇ Test issue550SettingsWithoutFeedKeepsBothControlsInertAfterClickAndRefresh() started.
+✔ Test issue550SettingsWithoutFeedKeepsBothControlsInertAfterClickAndRefresh() passed after 0.299 seconds.
+◇ Test issue550SettingsWithRealStoppedFeedKeepsAutomaticAvailableAndPrivacyHint() started.
+✔ Test issue550SettingsWithRealStoppedFeedKeepsAutomaticAvailableAndPrivacyHint() passed after 0.331 seconds.
+◇ Test issue550UnavailableUpdateExplanationHasEnglishAndChineseTextThatFits() started.
+✔ Test issue550UnavailableUpdateExplanationHasEnglishAndChineseTextThatFits() passed after 0.084 seconds.
+◇ Test issue550MissingFeedDisablesUpdatesWithoutConstructingSparkle() started.
+✔ Test issue550MissingFeedDisablesUpdatesWithoutConstructingSparkle() passed after 0.004 seconds.
+◇ Test issue550ConfiguredFeedKeepsUpdateStateAndOperations() started.
+✔ Test issue550ConfiguredFeedKeepsUpdateStateAndOperations() passed after 0.072 seconds.
+◇ Test issue550RealSparkleControllerCanBeConstructedStopped() started.
+✔ Test issue550RealSparkleControllerCanBeConstructedStopped() passed after 0.026 seconds.
+◇ Test issue550RealMissingFeedPortStartAndCheckRemainUnavailable() started.
+✔ Test issue550RealMissingFeedPortStartAndCheckRemainUnavailable() passed after 0.001 seconds.
+◇ Test issue573DeniedSymlinkTargetShowsChooseFileRecovery() started.
+✔ Test issue573DeniedSymlinkTargetShowsChooseFileRecovery() passed after 0.277 seconds.
+◇ Test issue573MixedDropDeniedFirstLinkOffersChooseFile() started.
+✔ Test issue573MixedDropDeniedFirstLinkOffersChooseFile() passed after 0.269 seconds.
+◇ Test issue573NavigatingFromPlainOntoDeniedLinkOffersChooseFile() started.
+✔ Test issue573NavigatingFromPlainOntoDeniedLinkOffersChooseFile() passed after 0.357 seconds.
+◇ Test issue573NilSetMemberHasProvisionalGrantBeforeLoaderRuns() started.
+✔ Test issue573NilSetMemberHasProvisionalGrantBeforeLoaderRuns() passed after 0.086 seconds.
+◇ Test issue695ChooseDeniedLinkTargetKeepsMultiFileSet() started.
+✔ Test issue695ChooseDeniedLinkTargetKeepsMultiFileSet() passed after 1.183 seconds.
+◇ Test issue695ChooseDeniedPlainTargetKeepsMultiFileSet() started.
+✔ Test issue695ChooseDeniedPlainTargetKeepsMultiFileSet() passed after 1.379 seconds.
+◇ Test issue695CancelRecoveryKeepsSetAndPreviousImage() started.
+✔ Test issue695CancelRecoveryKeepsSetAndPreviousImage() passed after 0.418 seconds.
+◇ Test issue695SecondRecoveryKeepsFirstSheetAnswer() started.
+✔ Test issue695SecondRecoveryKeepsFirstSheetAnswer() passed after 1.230 seconds.
+◇ Test issue695DeniedChosenFileKeepsSetAndShowsRecoveryNotice() started.
+✔ Test issue695DeniedChosenFileKeepsSetAndShowsRecoveryNotice() passed after 1.434 seconds.
+◇ Test issue604FailedChildKeepsParentAndReadableSibling() started.
+✔ Test issue604FailedChildKeepsParentAndReadableSibling() passed after 0.545 seconds.
+◇ Test issue604ScanOnlyFailureKeepsRootDespiteSuccessfulSidebarLoad() started.
+✔ Test issue604ScanOnlyFailureKeepsRootDespiteSuccessfulSidebarLoad() passed after 0.605 seconds.
+◇ Test issue604ReadableChildRetainsExistingProjection() started.
+✔ Test issue604ReadableChildRetainsExistingProjection() passed after 0.545 seconds.
+◇ Test issue604RetryKeepsFailureTreeThenRestoresRealCount() started.
+✔ Test issue604RetryKeepsFailureTreeThenRestoresRealCount() passed after 0.785 seconds.
+◇ Test issue604FailureSiblingCanOpen() started.
+✔ Test issue604FailureSiblingCanOpen() passed after 0.684 seconds.
+◇ Test issue604SameOpenLateSidebarSuccessCannotReplaceFailureTree(holdCount:) started.
+◇ Test case passing 1 argument holdCount → false to issue604SameOpenLateSidebarSuccessCannotReplaceFailureTree(holdCount:) started.
+◇ Test case passing 1 argument holdCount → true to issue604SameOpenLateSidebarSuccessCannotReplaceFailureTree(holdCount:) started.
+✔ Test issue604SameOpenLateSidebarSuccessCannotReplaceFailureTree(holdCount:) with 2 test cases passed after 1.498 seconds.
+◇ Test issue604LateOldResultsCannotRebuildNewTree(fails:) started.
+◇ Test case passing 1 argument fails → false to issue604LateOldResultsCannotRebuildNewTree(fails:) started.
+◇ Test case passing 1 argument fails → true to issue604LateOldResultsCannotRebuildNewTree(fails:) started.
+✔ Test issue604LateOldResultsCannotRebuildNewTree(fails:) with 2 test cases passed after 1.853 seconds.
+◇ Test issue604LeaveThenReopenSameFolderStartsNormalL0Fallback() started.
+✔ Test issue604LeaveThenReopenSameFolderStartsNormalL0Fallback() passed after 0.827 seconds.
+◇ Test issue604RealWatchReloadKeepsFailedRootTree() started.
+✔ Test issue604RealWatchReloadKeepsFailedRootTree() passed after 0.899 seconds.
+◇ Test issue606FailureHookPrintsRedactedAlertStateSynchronouslyAndAsynchronously() started.
+✔ Test issue606FailureHookPrintsRedactedAlertStateSynchronouslyAndAsynchronously() passed after 0.120 seconds.
+◇ Test issue606StateOutputBoundsWindowsLinesAndAlertFields() started.
+✔ Test issue606StateOutputBoundsWindowsLinesAndAlertFields() passed after 0.042 seconds.
+◇ Test issue606StateFormatterRedactsPathsAndPreservesWindowFields() started.
+✔ Test issue606StateFormatterRedactsPathsAndPreservesWindowFields() passed after 0.001 seconds.
+◇ Test issue606StateRedactionIsIdempotentAndKeepsSafeText() started.
+✔ Test issue606StateRedactionIsIdempotentAndKeepsSafeText() passed after 0.002 seconds.
+◇ Test issue606WaitFailuresIncludeAppKitState() started.
+✔ Test issue606WaitFailuresIncludeAppKitState() passed after 0.016 seconds.
+◇ Test issue606FailureHookIncludesCurrentWindowsWithPreexistingWindows(preexistingWindowCount:) started.
+◇ Test case passing 1 argument preexistingWindowCount → 0 to issue606FailureHookIncludesCurrentWindowsWithPreexistingWindows(preexistingWindowCount:) started.
+◇ Test case passing 1 argument preexistingWindowCount → 25 to issue606FailureHookIncludesCurrentWindowsWithPreexistingWindows(preexistingWindowCount:) started.
+✔ Test issue606FailureHookIncludesCurrentWindowsWithPreexistingWindows(preexistingWindowCount:) with 2 test cases passed after 0.442 seconds.
+◇ Test issue611BuiltDebugConfigurationNeverConstructsOrStartsUpdater() started.
+✔ Test issue611BuiltDebugConfigurationNeverConstructsOrStartsUpdater() passed after 0.079 seconds.
+◇ Test issue611DisabledDebugPreservesEveryStoredPreferenceCombination() started.
+✔ Test issue611DisabledDebugPreservesEveryStoredPreferenceCombination() passed after 0.011 seconds.
+◇ Test issue611ReleaseAndLegacyConfigurationKeepExistingUpdateBehavior() started.
+✔ Test issue611ReleaseAndLegacyConfigurationKeepExistingUpdateBehavior() passed after 0.006 seconds.
+◇ Test issue611RealDisabledDebugPortIsUnavailable() started.
+✔ Test issue611RealDisabledDebugPortIsUnavailable() passed after 0.001 seconds.
+◇ Test issue611DisabledDebugSettingsReuseUnavailableStateAfterClicksAndRefresh() started.
+✔ Test issue611DisabledDebugSettingsReuseUnavailableStateAfterClicksAndRefresh() passed after 0.095 seconds.
+◇ Test issue630DelayedNativeAccessFailureAfterTrashDoesNotReconnect() started.
+✔ Test issue630DelayedNativeAccessFailureAfterTrashDoesNotReconnect() passed after 0.420 seconds.
+◇ Test issue630DelayedNativeAccessFailureAfterUnlinkReconnects() started.
+✔ Test issue630DelayedNativeAccessFailureAfterUnlinkReconnects() passed after 0.489 seconds.
+◇ Test issue630DelayedNativeAccessFailureFollowsReadableMove() started.
+✔ Test issue630DelayedNativeAccessFailureFollowsReadableMove() passed after 0.614 seconds.
+◇ Test issue682CIDeferredCaptureControlsAreExactAndRejectUnknownDisabledControls() started.
+✔ Test issue682CIDeferredCaptureControlsAreExactAndRejectUnknownDisabledControls() passed after 0.091 seconds.
+◇ Test issue682CaptureLabelsUseLocalizedValues() started.
+✔ Test issue682CaptureLabelsUseLocalizedValues() passed after 0.067 seconds.
+◇ Test issue682CaptureSettingsTabPrecedesUpdatesAndStartsOff() started.
+✔ Test issue682CaptureSettingsTabPrecedesUpdatesAndStartsOff() passed after 0.173 seconds.
+◇ Test issue682CaptureSettingsFirstShowStartsAtTop() started.
+✔ Test issue682CaptureSettingsFirstShowStartsAtTop() passed after 0.265 seconds.
+◇ Test issue682CaptureDesignRowsMatchPinnedSettings() started.
+✔ Test issue682CaptureDesignRowsMatchPinnedSettings() passed after 0.307 seconds.
+◇ Test issue682CaptureSettingsReadsInjectedSwitchAndPermission() started.
+✔ Test issue682CaptureSettingsReadsInjectedSwitchAndPermission() passed after 0.459 seconds.
+◇ Test issue682SettingsControlTitlesFitInEnglishAndChinese() started.
+✔ Test issue682SettingsControlTitlesFitInEnglishAndChinese() passed after 0.234 seconds.
+◇ Test issue682CaptureBarMatchesPinnedInternalLayout() started.
+✔ Test issue682CaptureBarMatchesPinnedInternalLayout() passed after 0.195 seconds.
+◇ Test issue682ScreenPortProducesNativePixelsOnTwoTimesDisplay() started.
+✔ Test issue682ScreenPortProducesNativePixelsOnTwoTimesDisplay() passed after 0.001 seconds.
+◇ Test issue682FirstPermissionRequestIsNotCalledDenied() started.
+✔ Test issue682FirstPermissionRequestIsNotCalledDenied() passed after 0.003 seconds.
+◇ Test issue683CaptureBarEnablesRegionAndWindowButLeavesTextDisabled() started.
+✔ Test issue683CaptureBarEnablesRegionAndWindowButLeavesTextDisabled() passed after 0.042 seconds.
+◇ Test issue683Round2GoneOverlaysAreSkippedForEveryTarget() started.
+✔ Test issue683Round2GoneOverlaysAreSkippedForEveryTarget() passed after 0.001 seconds.
+◇ Test issue683Round2ListedOverlayIsStillExcluded() started.
+✔ Test issue683Round2ListedOverlayIsStillExcluded() passed after 0.001 seconds.
+◇ Test issue683Round2MissingBarStillFails() started.
+✔ Test issue683Round2MissingBarStillFails() passed after 0.001 seconds.
+◇ Test issue683Round2ResolveWindowsDropsGoneOverlaysAndReturnsPlan() started.
+✔ Test issue683Round2ResolveWindowsDropsGoneOverlaysAndReturnsPlan() passed after 0.001 seconds.
+◇ Test issue683Round2NeverShownBarWindowIsOptional() started.
+✔ Test issue683Round2NeverShownBarWindowIsOptional() passed after 0.036 seconds.
+◇ Test issue683Round2FullScreenRequestKeepsNeverShownWindowsOptional() started.
+✔ Test issue683Round2FullScreenRequestKeepsNeverShownWindowsOptional() passed after 0.004 seconds.
+◇ Test issue683Round2OverlayReleasedBeforeResolveStillCaptures() started.
+✔ Test issue683Round2OverlayReleasedBeforeResolveStillCaptures() passed after 0.018 seconds.
+◇ Test issue683Round2DisplayFilterGetsExactlyResolvedWindows() started.
+✔ Test issue683Round2DisplayFilterGetsExactlyResolvedWindows() passed after 0.001 seconds.
+◇ Test issue683Round2DisplayFilterRefusesMissingBarWithoutBuilding() started.
+✔ Test issue683Round2DisplayFilterRefusesMissingBarWithoutBuilding() passed after 0.001 seconds.
+◇ Test issue683Round2RealSCWindowsReachTheRealFilterInitializer() started.
+✔ Test issue683Round2RealSCWindowsReachTheRealFilterInitializer() passed after 0.104 seconds.
+◇ Test issue683Round2CapturePNGBuildsItsFilterThroughTheFactory() started.
+✔ Test issue683Round2CapturePNGBuildsItsFilterThroughTheFactory() passed after 0.252 seconds.
+◇ Test issue683Round2EscapeMidDragThenMouseUpDoesNotCapture() started.
+✔ Test issue683Round2EscapeMidDragThenMouseUpDoesNotCapture() passed after 0.107 seconds.
+◇ Test issue683Round2RegionFinishesOnlyOnce() started.
+✔ Test issue683Round2RegionFinishesOnlyOnce() passed after 0.010 seconds.
+◇ Test issue683Round2NormalDragStillCapturesOnce() started.
+✔ Test issue683Round2NormalDragStillCapturesOnce() passed after 0.007 seconds.
+◇ Test issue683Round2WindowPickFinishesOnlyOnce() started.
+✔ Test issue683Round2WindowPickFinishesOnlyOnce() passed after 0.013 seconds.
+◇ Test issue683Fix3CapturesExcludeThePointer() started.
+✔ Test issue683Fix3CapturesExcludeThePointer() passed after 0.001 seconds.
+◇ Test issue683Fix3HoveredWindowIsNotClickThrough() started.
+✔ Test issue683Fix3HoveredWindowIsNotClickThrough() passed after 0.019 seconds.
+◇ Test issue683Fix3RegionDragRectIsNotClickThrough() started.
+✔ Test issue683Fix3RegionDragRectIsNotClickThrough() passed after 0.023 seconds.
+◇ Test issue683WindowHoverTracksThroughPanelEventPath() started.
+✔ Test issue683WindowHoverTracksThroughPanelEventPath() passed after 0.006 seconds.
+◇ Test issue683WindowOverlayAcceptsFirstClickOnAnotherDisplay() started.
+✔ Test issue683WindowOverlayAcceptsFirstClickOnAnotherDisplay() passed after 0.005 seconds.
+◇ Test issue683WindowEscapeCancelsThroughPanelEventPath() started.
+✔ Test issue683WindowEscapeCancelsThroughPanelEventPath() passed after 0.008 seconds.
+◇ Test issue683WindowEscapeTearsDownOverlayBeforeCancelCallback() started.
+✔ Test issue683WindowEscapeTearsDownOverlayBeforeCancelCallback() passed after 0.005 seconds.
+◇ Test issue683FilterPlanPreservesExclusionsForAllTargets() started.
+✔ Test issue683FilterPlanPreservesExclusionsForAllTargets() passed after 0.001 seconds.
+◇ Test issue683FilterPlanRefusesMissingExcludedWindow() started.
+✔ Test issue683FilterPlanRefusesMissingExcludedWindow() passed after 0.001 seconds.
+◇ Test issue683FilterPlanReturnsActualExcludedWindowObjects() started.
+✔ Test issue683FilterPlanReturnsActualExcludedWindowObjects() passed after 0.001 seconds.
+◇ Test issue683RequestUsesActualBarAndOverlayWindowNumbers() started.
+✔ Test issue683RequestUsesActualBarAndOverlayWindowNumbers() passed after 0.006 seconds.
+◇ Test issue683WindowSelectionAdmissionRejectsSecondPressDuringLoad() started.
+✔ Test issue683WindowSelectionAdmissionRejectsSecondPressDuringLoad() passed after 0.001 seconds.
+◇ Test issue683EscapeCancelsRegionSelectionBeforeCapture() started.
+✔ Test issue683EscapeCancelsRegionSelectionBeforeCapture() passed after 0.004 seconds.
+◇ Test issue683ZeroDragCancelsRegionSelectionBeforeCapture() started.
+✔ Test issue683ZeroDragCancelsRegionSelectionBeforeCapture() passed after 0.005 seconds.
+◇ Test issue684SettingsSwitchesDefaultOnPersistAndGrey() started.
+✔ Test issue684SettingsSwitchesDefaultOnPersistAndGrey() passed after 0.527 seconds.
+◇ Test issue684ThumbnailCornerAndSize() started.
+✔ Test issue684ThumbnailCornerAndSize() passed after 0.166 seconds.
+◇ Test issue684CornerUsesCapturedDisplayVisibleFrame() started.
+✔ Test issue684CornerUsesCapturedDisplayVisibleFrame() passed after 0.018 seconds.
+◇ Test issue684ThumbnailHoverActions() started.
+✔ Test issue684ThumbnailHoverActions() passed after 0.032 seconds.
+◇ Test issue684ThumbnailStatusStrings() started.
+✔ Test issue684ThumbnailStatusStrings() passed after 0.030 seconds.
+◇ Test issue684ThumbnailTimerUsesInjectedClock() started.
+✔ Test issue684ThumbnailTimerUsesInjectedClock() passed after 0.014 seconds.
+◇ Test issue684ThumbnailHoverViewEvents() started.
+✔ Test issue684ThumbnailHoverViewEvents() passed after 0.014 seconds.
+◇ Test issue684NewThumbnailReplacesOld() started.
+✔ Test issue684NewThumbnailReplacesOld() passed after 0.024 seconds.
+◇ Test issue684ThumbnailNeverKeyAndExcluded() started.
+✔ Test issue684ThumbnailNeverKeyAndExcluded() passed after 0.040 seconds.
+◇ Test issue684ThumbnailExcludedFromEveryCaptureKind() started.
+✔ Test issue684ThumbnailExcludedFromEveryCaptureKind() passed after 0.018 seconds.
+◇ Test issue684PasteboardCopyAndNoCopy() started.
+✔ Test issue684PasteboardCopyAndNoCopy() passed after 0.005 seconds.
+◇ Test issue684DragPayloadWriters() started.
+✔ Test issue684DragPayloadWriters() passed after 0.003 seconds.
+◇ Test issue684DragAfterSaveGivesFileAndCopyOnly() started.
+✔ Test issue684DragAfterSaveGivesFileAndCopyOnly() passed after 0.021 seconds.
+◇ Test issue684ThumbnailActionsReachTheModel() started.
+✔ Test issue684ThumbnailActionsReachTheModel() passed after 0.048 seconds.
+◇ Test issue684TrashAdapterMovesToTrashOnly() started.
+✔ Test issue684TrashAdapterMovesToTrashOnly() passed after 0.008 seconds.
+◇ Test issue684FixThumbnailStaysOnCapturedDisplayWhenPointerMoves() started.
+✔ Test issue684FixThumbnailStaysOnCapturedDisplayWhenPointerMoves() passed after 0.001 seconds.
+◇ Test issue684FixPointerInMenuBarStripPicksThatDisplay() started.
+✔ Test issue684FixPointerInMenuBarStripPicksThatDisplay() passed after 0.001 seconds.
+◇ Test issue684FixTickKeepsButtonsAndDecodesOnce() started.
+✔ Test issue684FixTickKeepsButtonsAndDecodesOnce() passed after 0.039 seconds.
+◇ Test issue685CarbonHotKeyIsExclusiveAndReleasable() started.
+✔ Test issue685CarbonHotKeyIsExclusiveAndReleasable() passed after 0.002 seconds.
+◇ Test issue685CarbonModifierFlags() started.
+✔ Test issue685CarbonModifierFlags() passed after 0.001 seconds.
+◇ Test issue685CaptureBarCollapseButtonAndShortcutTooltips() started.
+✔ Test issue685CaptureBarCollapseButtonAndShortcutTooltips() passed after 0.009 seconds.
+◇ Test issue685CollapseShowsOneMenuBarIconAndRestoreBringsTheBarBack() started.
+✔ Test issue685CollapseShowsOneMenuBarIconAndRestoreBringsTheBarBack() passed after 0.004 seconds.
+◇ Test issue685CollapsedIconIsHiddenUntilGoneDuringACaptureAndComesBack() started.
+✔ Test issue685CollapsedIconIsHiddenUntilGoneDuringACaptureAndComesBack() passed after 0.006 seconds.
+◇ Test issue685CollapsedIconComesBackWhenTheCaptureFailsOrIsCancelled() started.
+✔ Test issue685CollapsedIconComesBackWhenTheCaptureFailsOrIsCancelled() passed after 0.005 seconds.
+◇ Test issue685CaptureWithTheBarShownTouchesNoIcon() started.
+✔ Test issue685CaptureWithTheBarShownTouchesNoIcon() passed after 0.001 seconds.
+◇ Test issue685IconThatNeverLeavesDoesNotHoldTheCaptureForever() started.
+✔ Test issue685IconThatNeverLeavesDoesNotHoldTheCaptureForever() passed after 0.003 seconds.
+◇ Test issue685IconRestoredDuringACaptureStaysRemoved() started.
+✔ Test issue685IconRestoredDuringACaptureStaysRemoved() passed after 0.002 seconds.
+◇ Test issue685IconMadeDuringACaptureStartsHidden() started.
+✔ Test issue685IconMadeDuringACaptureStartsHidden() passed after 0.001 seconds.
+◇ Test issue685ScreenReadWaitsTheSettleAfterTheIconLeavesTheList() started.
+✔ Test issue685ScreenReadWaitsTheSettleAfterTheIconLeavesTheList() passed after 0.002 seconds.
+◇ Test issue685IconAlreadyGoneStillWaitsTheSettle() started.
+✔ Test issue685IconAlreadyGoneStillWaitsTheSettle() passed after 0.002 seconds.
+◇ Test issue685IconThatNeverLeavesStillWaitsTheSettleAndLogsOnce() started.
+✔ Test issue685IconThatNeverLeavesStillWaitsTheSettleAndLogsOnce() passed after 0.003 seconds.
+◇ Test issue685CaptureWithTheBarShownGetsNoSettleDelay() started.
+✔ Test issue685CaptureWithTheBarShownGetsNoSettleDelay() passed after 0.001 seconds.
+◇ Test issue685ShortcutFieldsShowBindingsAndMatchTheDesign() started.
+✔ Test issue685ShortcutFieldsShowBindingsAndMatchTheDesign() passed after 0.263 seconds.
+◇ Test issue685RecordingAShortcutRebindsPersistsAndTellsTheHelper() started.
+✔ Test issue685RecordingAShortcutRebindsPersistsAndTellsTheHelper() passed after 0.430 seconds.
+◇ Test issue685RecordingRefusesSystemAndTakenCombosWithAMessage() started.
+✔ Test issue685RecordingRefusesSystemAndTakenCombosWithAMessage() passed after 0.598 seconds.
+◇ Test issue685ComboTheHelperCouldNotRegisterIsNamed() started.
+✔ Test issue685ComboTheHelperCouldNotRegisterIsNamed() passed after 0.349 seconds.
+◇ Test issue685RestoreDefaultsPutsEveryShortcutBack() started.
+✔ Test issue685RestoreDefaultsPutsEveryShortcutBack() passed after 0.382 seconds.
+◇ Test issue685FolderRowShowsTheChosenFolderAndAsksTheHelperToChange() started.
+✔ Test issue685FolderRowShowsTheChosenFolderAndAsksTheHelperToChange() passed after 0.403 seconds.
+◇ Test issue685LoginSwitchFollowsTheSystemStatusAndApproval() started.
+✔ Test issue685LoginSwitchFollowsTheSystemStatusAndApproval() passed after 0.478 seconds.
+◇ Test issue685CaptureBarOffGreysTheNewRows() started.
+✔ Test issue685CaptureBarOffGreysTheNewRows() passed after 0.258 seconds.
+◇ Test issue685MacOS15LineIsTheExactText() started.
+✔ Test issue685MacOS15LineIsTheExactText() passed after 0.412 seconds.
+◇ Test issue685NewStringsAreTranslated() started.
+✔ Test issue685NewStringsAreTranslated() passed after 0.180 seconds.
+◇ Test issue685ShortcutFieldNamesKeysWithoutTheirModifiers() started.
+✔ Test issue685ShortcutFieldNamesKeysWithoutTheirModifiers() passed after 0.001 seconds.
+◇ Test issue685LoginItemLeftAfterBarOffIsNamedAndRetried() started.
+✔ Test issue685LoginItemLeftAfterBarOffIsNamedAndRetried() passed after 0.388 seconds.
+◇ Test issue685OptionOnlyShortcutIsRefusedWithTheReason() started.
+✔ Test issue685OptionOnlyShortcutIsRefusedWithTheReason() passed after 0.633 seconds.
+◇ Test issue685ChangeFolderYieldsActivationToTheHelperFirst() started.
+✔ Test issue685ChangeFolderYieldsActivationToTheHelperFirst() passed after 0.445 seconds.
+◇ Test issue685LoginSwitchTurnsOnFromNotFoundAndNamesARefusal() started.
+✔ Test issue685LoginSwitchTurnsOnFromNotFoundAndNamesARefusal() passed after 0.380 seconds.
+◇ Test issue685RecordingEndsWhenTheFieldResignsFirstResponder() started.
+✔ Test issue685RecordingEndsWhenTheFieldResignsFirstResponder() passed after 0.462 seconds.
+◇ Test issue685RecordingEndsWhenTheSettingsWindowResignsKey() started.
+✔ Test issue685RecordingEndsWhenTheSettingsWindowResignsKey() passed after 0.532 seconds.
+◇ Test issue685RecordingEndsWhenMadoDeactivates() started.
+✔ Test issue685RecordingEndsWhenMadoDeactivates() passed after 0.395 seconds.
+◇ Test issue685RecordingEndsOnAClickOutsideTheField() started.
+✔ Test issue685RecordingEndsOnAClickOutsideTheField() passed after 0.512 seconds.
+◇ Test issue685ClickInsideTheRecordingFieldKeepsRecordingAndElsewhereEndsIt() started.
+✔ Test issue685ClickInsideTheRecordingFieldKeepsRecordingAndElsewhereEndsIt() passed after 0.608 seconds.
+◇ Test issue685OverlappingCollapsedCapturesShareTheSettleAndTakeTurns() started.
+✔ Test issue685OverlappingCollapsedCapturesShareTheSettleAndTakeTurns() passed after 0.095 seconds.
+◇ Test issue685ACaptureThatArrivesDuringAnotherWaitsItsTurn() started.
+✔ Test issue685ACaptureThatArrivesDuringAnotherWaitsItsTurn() passed after 0.047 seconds.
+◇ Test issue685OverlappingCapturesRestoreTheIconOnceWhenOneFails() started.
+✔ Test issue685OverlappingCapturesRestoreTheIconOnceWhenOneFails() passed after 0.006 seconds.
+◇ Test issue685ACollapsedCaptureAfterTheQueueDrainsHidesAndSettlesAgain() started.
+✔ Test issue685ACollapsedCaptureAfterTheQueueDrainsHidesAndSettlesAgain() passed after 0.004 seconds.
+◇ Test issue685ACancelledWaiterDoesNotBlockTheNextCapture() started.
+✔ Test issue685ACancelledWaiterDoesNotBlockTheNextCapture() passed after 0.035 seconds.
+◇ Test issue685AQueuedRegionCaptureLeavesOutTheThumbnailPresentedWhileItWaited() started.
+✔ Test issue685AQueuedRegionCaptureLeavesOutTheThumbnailPresentedWhileItWaited() passed after 0.070 seconds.
+◇ Test issue685SecondHelperExitsBeforeTheBarOrHotKeys() started.
+✔ Test issue685SecondHelperExitsBeforeTheBarOrHotKeys() passed after 0.021 seconds.
+◇ Test issue685RealHelperLockIsExclusiveAndReleasable() started.
+✔ Test issue685RealHelperLockIsExclusiveAndReleasable() passed after 0.002 seconds.
+◇ Test issue685MadoDoesNotOpenARunningHelper() started.
+✔ Test issue685MadoDoesNotOpenARunningHelper() passed after 0.001 seconds.
+◇ Test issue686CaptureOpensWithoutPromptAndPagingAsksWithCaptureWording() started.
+✔ Test issue686CaptureOpensWithoutPromptAndPagingAsksWithCaptureWording() passed after 0.718 seconds.
+◇ Test issue686DeclineKeepsTheCaptureAndIsNotAskedAgain() started.
+✔ Test issue686DeclineKeepsTheCaptureAndIsNotAskedAgain() passed after 0.639 seconds.
+◇ Test issue686GrantMakesAnOrdinaryAccessRootAndLaterCapturesPageAtOnce() started.
+✔ Test issue686GrantMakesAnOrdinaryAccessRootAndLaterCapturesPageAtOnce() passed after 0.854 seconds.
+◇ Test issue686OtherFoldersKeepTheGenericPromptAndAskAgain() started.
+✔ Test issue686OtherFoldersKeepTheGenericPromptAndAskAgain() passed after 0.358 seconds.
+◇ Test issue686PromptTextsUseCaptureWording() started.
+✔ Test issue686PromptTextsUseCaptureWording() passed after 0.035 seconds.
+◇ Test issue686ThumbnailShowsOpenInMadoInDesignOrder() started.
+✔ Test issue686ThumbnailShowsOpenInMadoInDesignOrder() passed after 0.035 seconds.
+◇ Test issue686ThumbnailOpenInMadoOpensTheFileAndCloses() started.
+✔ Test issue686ThumbnailOpenInMadoOpensTheFileAndCloses() passed after 0.036 seconds.
+◇ Test issue686ThumbnailSaveOffWritesOnceThenOpens() started.
+✔ Test issue686ThumbnailSaveOffWritesOnceThenOpens() passed after 0.040 seconds.
+◇ Test issue686ThumbnailSaveFailureShowsItAndDoesNotOpen() started.
+✔ Test issue686ThumbnailSaveFailureShowsItAndDoesNotOpen() passed after 0.100 seconds.
+◇ Test issue686ThumbnailOpenFailureShowsItAndStays() started.
+✔ Test issue686ThumbnailOpenFailureShowsItAndStays() passed after 0.108 seconds.
+◇ Test issue686LauncherUsesTheEnclosingMado() started.
+✔ Test issue686LauncherUsesTheEnclosingMado() passed after 0.004 seconds.
+◇ Test issue686BarOpenMadoIsEnabledAndCallsItsAction() started.
+✔ Test issue686BarOpenMadoIsEnabledAndCallsItsAction() passed after 0.016 seconds.
+◇ Test issue686OpenInMadoStringsAreLocalized() started.
+✔ Test issue686OpenInMadoStringsAreLocalized() passed after 0.006 seconds.
+◇ Test issue686MadoEntitlementsAreUnchanged() started.
+✔ Test issue686MadoEntitlementsAreUnchanged() passed after 0.001 seconds.
+◇ Test issue686FailedMadoOpenIsLoggedWithoutPaths() started.
+✔ Test issue686FailedMadoOpenIsLoggedWithoutPaths() passed after 0.001 seconds.
+◇ Test issue686QueuedCaptureSkipsThumbnailClosedBeforeEnumeration() started.
+✔ Test issue686QueuedCaptureSkipsThumbnailClosedBeforeEnumeration() passed after 0.002 seconds.
+◇ Test issue687Fix4SuccessNoticeJoinsKeyboardAndAXFocusLoop() started.
+✔ Test issue687Fix4SuccessNoticeJoinsKeyboardAndAXFocusLoop() passed after 0.601 seconds.
+◇ Test issue687Fix4WarningHasNoAXPress() started.
+✔ Test issue687Fix4WarningHasNoAXPress() passed after 0.433 seconds.
+◇ Test issue687Fix4ReturnOpensFocusedNotice() started.
+✔ Test issue687Fix4ReturnOpensFocusedNotice() passed after 0.441 seconds.
+◇ Test issue687Fix4PanelEditorAllowsAnnotateMenuAndShortcut() started.
+✔ Test issue687Fix4PanelEditorAllowsAnnotateMenuAndShortcut() passed after 0.694 seconds.
+◇ Test issue687Fix5EditorAllowsAnnotateMenuAndShortcutWithInspectorShownOrHidden() started.
+✔ Test issue687Fix5EditorAllowsAnnotateMenuAndShortcutWithInspectorShownOrHidden() passed after 0.967 seconds.
+◇ Test issue687Fix5FocusedNoticeDismissalReturnsFocusToCanvas() started.
+✔ Test issue687Fix5FocusedNoticeDismissalReturnsFocusToCanvas() passed after 0.627 seconds.
+◇ Test issue687Fix5FocusedPanelRemovalReturnsFocusToCanvas() started.
+✔ Test issue687Fix5FocusedPanelRemovalReturnsFocusToCanvas() passed after 1.177 seconds.
+◇ Test issue687Fix5NoticePressReturnsBeforeTheNoticeIsReplaced() started.
+✔ Test issue687Fix5NoticePressReturnsBeforeTheNoticeIsReplaced() passed after 0.445 seconds.
+◇ Test issue687Fix5ComposingEditorKeepsKeysAndPanel() started.
+✔ Test issue687Fix5ComposingEditorKeepsKeysAndPanel() passed after 0.541 seconds.
+◇ Test issue687Fix5PanelControlsJoinTheKeyLoop() started.
+✔ Test issue687Fix5PanelControlsJoinTheKeyLoop() passed after 0.640 seconds.
+◇ Test issue687Fix5EditorTypingUndoIsScopedToTheEditor() started.
+✔ Test issue687Fix5EditorTypingUndoIsScopedToTheEditor() passed after 0.502 seconds.
+◇ Test issue687Fix5FocusExitInputMatrix() started.
+✔ Test issue687Fix5FocusExitInputMatrix() passed after 4.352 seconds.
+◇ Test issue687Fix5ComposingOtherTextInputKeepsEscWithPanelOpen() started.
+✔ Test issue687Fix5ComposingOtherTextInputKeepsEscWithPanelOpen() passed after 0.478 seconds.
+◇ Test issue687Fix5PanelRemovalLeavesInspectorFocusAlone() started.
+✔ Test issue687Fix5PanelRemovalLeavesInspectorFocusAlone() passed after 0.850 seconds.
+◇ Test issue687Fix5EditorUndoMenuFollowsTheEditorStack() started.
+✔ Test issue687Fix5EditorUndoMenuFollowsTheEditorStack() passed after 0.473 seconds.
+◇ Test issue687Fix5bCopiedCountUsesTheEnglishSingular() started.
+✔ Test issue687Fix5bCopiedCountUsesTheEnglishSingular() passed after 0.037 seconds.
+◇ Test issue687Fix5bFailedCopyReportsWhetherTheClipboardSurvived() started.
+✔ Test issue687Fix5bFailedCopyReportsWhetherTheClipboardSurvived() passed after 0.004 seconds.
+◇ Test issue687Fix5bViewerNoticeSaysTheClipboardMayHaveChanged() started.
+✔ Test issue687Fix5bViewerNoticeSaysTheClipboardMayHaveChanged() passed after 0.588 seconds.
+◇ Test issue687Fix5bKeyboardFocusHoldsTheNotice() started.
+✔ Test issue687Fix5bKeyboardFocusHoldsTheNotice() passed after 0.482 seconds.
+◇ Test issue687Fix5bVoiceOverFocusHoldsTheNotice() started.
+✔ Test issue687Fix5bVoiceOverFocusHoldsTheNotice() passed after 0.495 seconds.
+◇ Test issue687Fix5bEachRecognitionIsAnnouncedOnce() started.
+✔ Test issue687Fix5bEachRecognitionIsAnnouncedOnce() passed after 0.503 seconds.
+◇ Test issue687Fix5bNoticeAndPanelStayLeftOfTheInspector() started.
+✔ Test issue687Fix5bNoticeAndPanelStayLeftOfTheInspector() passed after 0.683 seconds.
+◇ Test issue687Fix5bInspectorToggleMovesTheNoticeAndPanel() started.
+✔ Test issue687Fix5bInspectorToggleMovesTheNoticeAndPanel() passed after 0.598 seconds.
+◇ Test issue687Fix5bNoticeAndPanelSitAboveTheZoomGroup() started.
+✔ Test issue687Fix5bNoticeAndPanelSitAboveTheZoomGroup() passed after 0.732 seconds.
+◇ Test issue687Fix5bZoomClickWhileTheNoticeShowsZooms() started.
+✔ Test issue687Fix5bZoomClickWhileTheNoticeShowsZooms() passed after 0.486 seconds.
+◇ Test issue687Fix5bNoticeUnderARestingPointerIsHovered() started.
+✔ Test issue687Fix5bNoticeUnderARestingPointerIsHovered() passed after 0.446 seconds.
+◇ Test issue687Fix6PanelNarrowsLeftOfTheInspectorDownToTheFloor() started.
+✔ Test issue687Fix6PanelNarrowsLeftOfTheInspectorDownToTheFloor() passed after 0.616 seconds.
+◇ Test issue687Fix6UnderTheFloorKeepsTheWindowEdge() started.
+✔ Test issue687Fix6UnderTheFloorKeepsTheWindowEdge() passed after 0.882 seconds.
+◇ Suite Issue690AnnotateModeTests started.
+◇ Test issue690CommandEEntersAndEscapeExits() started.
+✔ Test issue690CommandEEntersAndEscapeExits() passed after 0.481 seconds.
+◇ Test issue690BrowsingMenuItemsDisabled() started.
+✔ Test issue690BrowsingMenuItemsDisabled() passed after 0.435 seconds.
+◇ Test issue690UndoRedoAndCopyFollowTheDocument() started.
+✔ Test issue690UndoRedoAndCopyFollowTheDocument() passed after 0.438 seconds.
+◇ Test issue690CopyPutsFlattenedImageOnPasteboard() started.
+✔ Test issue690CopyPutsFlattenedImageOnPasteboard() passed after 0.468 seconds.
+◇ Test issue690SaveTwiceWritesAnnotatedAndAnnotated2() started.
+✔ Test issue690SaveTwiceWritesAnnotatedAndAnnotated2() passed after 0.496 seconds.
+◇ Test issue690UnwritableFolderFallsBackToPanel() started.
+✔ Test issue690UnwritableFolderFallsBackToPanel() passed after 0.601 seconds.
+◇ Test issue690SourceDeletedReportsAndStays() started.
+✔ Test issue690SourceDeletedReportsAndStays() passed after 0.471 seconds.
+◇ Test issue690CloseAsksAndFollowsTheAnswer() started.
+✔ Test issue690CloseAsksAndFollowsTheAnswer() passed after 0.523 seconds.
+◇ Test issue690CloseDiscardCloses() started.
+✔ Test issue690CloseDiscardCloses() passed after 0.335 seconds.
+◇ Test issue690QuitAsksAndReplies() started.
+✔ Test issue690QuitAsksAndReplies() passed after 0.349 seconds.
+◇ Test issue690ExternalOpenAsksAndCancelKeeps() started.
+✔ Test issue690ExternalOpenAsksAndCancelKeeps() passed after 0.456 seconds.
+✔ Suite Issue690AnnotateModeTests passed after 5.061 seconds.
+◇ Suite Issue690AnnotateWindowTests started.
+◇ Test issue690WindowFitStripAndRoundTrip() started.
+✔ Test issue690WindowFitStripAndRoundTrip() passed after 0.515 seconds.
+◇ Test issue690WindowResizeKeepsReserve() started.
+✔ Test issue690WindowResizeKeepsReserve() passed after 0.488 seconds.
+◇ Test issue690LeaveAfterResizeRefits() started.
+✔ Test issue690LeaveAfterResizeRefits() passed after 0.394 seconds.
+◇ Test issue690DragOnOverlayAddsSelectedMark() started.
+✔ Test issue690DragOnOverlayAddsSelectedMark() passed after 0.445 seconds.
+◇ Test issue690VClickArrowNudgesWithoutChangingImage() started.
+✔ Test issue690VClickArrowNudgesWithoutChangingImage() passed after 0.878 seconds.
+◇ Test issue690ArrowWithoutSelectionChangesNothing() started.
+✔ Test issue690ArrowWithoutSelectionChangesNothing() passed after 1.087 seconds.
+◇ Test issue690KeysReleasedAfterLeaving() started.
+✔ Test issue690KeysReleasedAfterLeaving() passed after 0.395 seconds.
+◇ Test issue690StripButtonsDriveSession() started.
+✔ Test issue690StripButtonsDriveSession() passed after 0.730 seconds.
+◇ Test issue690StripFollowsKeys() started.
+✔ Test issue690StripFollowsKeys() passed after 0.412 seconds.
+◇ Test issue690SaveShowsConfirmationAndStays() started.
+✔ Test issue690SaveShowsConfirmationAndStays() passed after 0.658 seconds.
+◇ Test issue690SecondSaveReplacesConfirmation() started.
+✔ Test issue690SecondSaveReplacesConfirmation() passed after 0.800 seconds.
+◇ Test issue690RevealReceivesSavedURL() started.
+✔ Test issue690RevealReceivesSavedURL() passed after 0.825 seconds.
+◇ Test issue690ConfirmationDismissals() started.
+✔ Test issue690ConfirmationDismissals() passed after 1.296 seconds.
+◇ Test issue690EscShowsInWindowSheet() started.
+✔ Test issue690EscShowsInWindowSheet() passed after 0.425 seconds.
+◇ Test issue690SheetPlannedNameFromListing() started.
+✔ Test issue690SheetPlannedNameFromListing() passed after 0.535 seconds.
+◇ Test issue690SheetBlocksKeysAndMenus() started.
+✔ Test issue690SheetBlocksKeysAndMenus() passed after 1.358 seconds.
+◇ Test issue690SheetScrimIsTopmost() started.
+✔ Test issue690SheetScrimIsTopmost() passed after 0.570 seconds.
+◇ Test issue690SheetChoices() started.
+✔ Test issue690SheetChoices() passed after 0.858 seconds.
+◇ Test issue690EveryExitTearsDown() started.
+✔ Test issue690EveryExitTearsDown() passed after 0.836 seconds.
+◇ Test issue690CatalogZhHans() started.
+✔ Test issue690CatalogZhHans() passed after 0.058 seconds.
+✔ Suite Issue690AnnotateWindowTests passed after 13.577 seconds.
+◇ Suite Issue690FixRoundTests started.
+◇ Test issue690DeniedRootRegrantsAndWritesDirectly() started.
+✔ Test issue690DeniedRootRegrantsAndWritesDirectly() passed after 0.562 seconds.
+◇ Test issue690RegrantFallsBackToThePanel(_:) started.
+◇ Test case passing 1 argument answer → "cancel" to issue690RegrantFallsBackToThePanel(_:) started.
+◇ Test case passing 1 argument answer → "deniedAgain" to issue690RegrantFallsBackToThePanel(_:) started.
+◇ Test case passing 1 argument answer → "otherFolder" to issue690RegrantFallsBackToThePanel(_:) started.
+◇ Test case passing 1 argument answer → "notAFolder" to issue690RegrantFallsBackToThePanel(_:) started.
+✔ Test issue690RegrantFallsBackToThePanel(_:) with 4 test cases passed after 2.169 seconds.
+◇ Test issue690SheetNameIsTheWrittenName() started.
+✔ Test issue690SheetNameIsTheWrittenName() passed after 0.775 seconds.
+◇ Test issue690SheetNameTakenBeforeSaveReplans() started.
+✔ Test issue690SheetNameTakenBeforeSaveReplans() passed after 0.809 seconds.
+◇ Test issue690FileGrantSecondSaveProposesAnnotated2() started.
+✔ Test issue690FileGrantSecondSaveProposesAnnotated2() passed after 0.508 seconds.
+◇ Test issue690FlattenRunsOffTheMainActor() started.
+✔ Test issue690FlattenRunsOffTheMainActor() passed after 0.803 seconds.
+◇ Test issue690CopyJoinsTheGridAndLaterPreviewSets() started.
+✔ Test issue690CopyJoinsTheGridAndLaterPreviewSets() passed after 0.880 seconds.
+✔ Suite Issue690FixRoundTests passed after 6.511 seconds.
+◇ Suite Issue692AnnotateToolsTests started.
+◇ Test issue692LettersChooseToolsOnlyInAnnotateMode() started.
+✔ Test issue692LettersChooseToolsOnlyInAnnotateMode() passed after 1.140 seconds.
+◇ Test issue692TypingGoesToTheTextNotTheShortcuts() started.
+✔ Test issue692TypingGoesToTheTextNotTheShortcuts() passed after 0.597 seconds.
+◇ Test issue692EscapeDuringADragCancelsOnlyTheDrag() started.
+✔ Test issue692EscapeDuringADragCancelsOnlyTheDrag() passed after 0.546 seconds.
+◇ Test issue692DeleteUndoRedoAndRenumber() started.
+✔ Test issue692DeleteUndoRedoAndRenumber() passed after 0.978 seconds.
+◇ Test issue692ArrowKeysNudgeAndNeverChangeImages() started.
+✔ Test issue692ArrowKeysNudgeAndNeverChangeImages() passed after 1.713 seconds.
+◇ Test issue692SaveWhileTypingWritesTheText() started.
+✔ Test issue692SaveWhileTypingWritesTheText() passed after 1.247 seconds.
+◇ Test issue692AfterSavingAClickLeavesButAMoveAsks() started.
+✔ Test issue692AfterSavingAClickLeavesButAMoveAsks() passed after 1.249 seconds.
+◇ Test issue692LeavingAndReenteringStartsFresh() started.
+✔ Test issue692LeavingAndReenteringStartsFresh() passed after 0.877 seconds.
+◇ Test issue692StripToolChangeAndCloseCommitTheText() started.
+✔ Test issue692StripToolChangeAndCloseCommitTheText() passed after 1.115 seconds.
+◇ Test issue692ToolLabelsInChineseAndEnglish() started.
+✔ Test issue692ToolLabelsInChineseAndEnglish() passed after 0.954 seconds.
+✔ Suite Issue692AnnotateToolsTests passed after 10.425 seconds.
+◇ Suite Issue692DragKeysTests started.
+◇ Test issue692KeysDuringAHeldMoveChangeNothing() started.
+✔ Test issue692KeysDuringAHeldMoveChangeNothing() passed after 1.194 seconds.
+◇ Test issue692KeysDuringAHeldResizeChangeNothing() started.
+✔ Test issue692KeysDuringAHeldResizeChangeNothing() passed after 1.637 seconds.
+✔ Suite Issue692DragKeysTests passed after 2.833 seconds.
+◇ Suite Issue692MarkAccessibilityTests started.
+◇ Test issue692AccessibilitySelectAndDeleteAMark() started.
+✔ Test issue692AccessibilitySelectAndDeleteAMark() passed after 0.980 seconds.
+◇ Test issue692MarkAccessibilityStringsInChineseAndEnglish() started.
+✔ Test issue692MarkAccessibilityStringsInChineseAndEnglish() passed after 0.111 seconds.
+✔ Suite Issue692MarkAccessibilityTests passed after 1.092 seconds.
+◇ Suite Issue692MarkedTextEscapeTests started.
+◇ Test issue692EscapeWhileComposingKeepsTyping() started.
+✔ Test issue692EscapeWhileComposingKeepsTyping() passed after 0.715 seconds.
+✔ Suite Issue692MarkedTextEscapeTests passed after 0.716 seconds.
+◇ Suite Issue692MenuUndoRoutingTests started.
+◇ Test issue692EditMenuUndoRedoFollowTheMarksThroughTheResponderChain() started.
+✔ Test issue692EditMenuUndoRedoFollowTheMarksThroughTheResponderChain() passed after 0.745 seconds.
+◇ Test issue692OutsideAnnotateModeTheWindowKeepsUndoRedo() started.
+✔ Test issue692OutsideAnnotateModeTheWindowKeepsUndoRedo() passed after 0.805 seconds.
+✔ Suite Issue692MenuUndoRoutingTests passed after 1.551 seconds.
+◇ Suite Issue692TypingUndoTests started.
+◇ Test issue692TypingUndoActsOnTheTextNotTheMarks() started.
+✔ Test issue692TypingUndoActsOnTheTextNotTheMarks() passed after 0.898 seconds.
+✔ Suite Issue692TypingUndoTests passed after 0.899 seconds.
+◇ Suite Issue692StripSaveTests started.
+◇ Test issue692StripSaveFollowsPendingText() started.
+✔ Test issue692StripSaveFollowsPendingText() passed after 0.672 seconds.
+✔ Suite Issue692StripSaveTests passed after 0.672 seconds.
+◇ Suite Issue693FixRound1Tests started.
+◇ Test issue693LinkClickKeepsAnnotateKeys() started.
+✔ Test issue693LinkClickKeepsAnnotateKeys() passed after 0.621 seconds.
+◇ Test issue693StaleSourceReadDoesNotReachANewerSession() started.
+✔ Test issue693StaleSourceReadDoesNotReachANewerSession() passed after 1.278 seconds.
+◇ Test issue693FailedSourceReadRetriesOnTheNextRedaction() started.
+✔ Test issue693FailedSourceReadRetriesOnTheNextRedaction() passed after 1.911 seconds.
+◇ Test issue693ReturnDuringACropDragIsIgnored() started.
+✔ Test issue693ReturnDuringACropDragIsIgnored() passed after 0.651 seconds.
+✔ Suite Issue693FixRound1Tests passed after 4.463 seconds.
+◇ Suite Issue693HintFocusTests started.
+◇ Test issue693ClickOnTheHintKeepsAnnotateKeys() started.
+✔ Test issue693ClickOnTheHintKeepsAnnotateKeys() passed after 0.591 seconds.
+✔ Suite Issue693HintFocusTests passed after 0.592 seconds.
+◇ Suite Issue693RedactionCropTests started.
+◇ Test issue693MAndCChooseToolsOnlyInAnnotateMode() started.
+✔ Test issue693MAndCChooseToolsOnlyInAnnotateMode() passed after 1.080 seconds.
+◇ Test issue693RedactionDefaultHintAndSwitchToSolid() started.
+✔ Test issue693RedactionDefaultHintAndSwitchToSolid() passed after 1.031 seconds.
+◇ Test issue693StrengthChangeOnASelectedRedaction() started.
+✔ Test issue693StrengthChangeOnASelectedRedaction() passed after 0.662 seconds.
+◇ Test issue693CropApplyCancelClearAndUndo() started.
+✔ Test issue693CropApplyCancelClearAndUndo() passed after 0.733 seconds.
+◇ Test issue693SaveAndCopyUseTheCroppedSize() started.
+✔ Test issue693SaveAndCopyUseTheCroppedSize() passed after 2.257 seconds.
+◇ Test issue693RedactionStringsInChineseAndEnglish() started.
+✔ Test issue693RedactionStringsInChineseAndEnglish() passed after 0.743 seconds.
+✔ Suite Issue693RedactionCropTests passed after 6.511 seconds.
+◇ Test issue717FreshSettingsShowTheControlOptionDefaults() started.
+✔ Test issue717FreshSettingsShowTheControlOptionDefaults() passed after 0.453 seconds.
+◇ Test issue717RestoreDefaultsSetsAllFiveToControlOption() started.
+✔ Test issue717RestoreDefaultsSetsAllFiveToControlOption() passed after 0.494 seconds.
+◇ Test issue717BindingTheUserChangedIn685IsKeptAfterTheUpdate() started.
+✔ Test issue717BindingTheUserChangedIn685IsKeptAfterTheUpdate() passed after 0.413 seconds.
+◇ Test issue717ControlOptionDefaultHeldByAnotherAppIsNamedOnItsRow() started.
+✔ Test issue717ControlOptionDefaultHeldByAnotherAppIsNamedOnItsRow() passed after 0.404 seconds.
+◇ Test issue717CaptureBarTooltipsShowTheControlOptionDefaults() started.
+✔ Test issue717CaptureBarTooltipsShowTheControlOptionDefaults() passed after 0.084 seconds.
+◇ Test issue717DefaultsDoNotCollideWithMadoMenuShortcuts() started.
+✔ Test issue717DefaultsDoNotCollideWithMadoMenuShortcuts() passed after 0.005 seconds.
+◇ Test t229StaleReaderFailureCannotLoseExplicitReplacementGrant() started.
+✔ Test t229StaleReaderFailureCannotLoseExplicitReplacementGrant() passed after 0.015 seconds.
+◇ Test t229CancelledReaderRootCheckDoesNotRevokeReadableGrant() started.
+✔ Test t229CancelledReaderRootCheckDoesNotRevokeReadableGrant() passed after 0.005 seconds.
+◇ Test t229ExplicitGrantCompletionCannotMaskNewerUnmount() started.
+✔ Test t229ExplicitGrantCompletionCannotMaskNewerUnmount() passed after 0.016 seconds.
+◇ Test t229ReauthorizationCannotBindOldUUIDToNewlyVerifiedReplacementGrant() started.
+✔ Test t229ReauthorizationCannotBindOldUUIDToNewlyVerifiedReplacementGrant() passed after 0.028 seconds.
+◇ Test t229FinalMountAwaitCannotRecoverSupersededLostGrant() started.
+✔ Test t229FinalMountAwaitCannotRecoverSupersededLostGrant() passed after 0.050 seconds.
+◇ Test t229FinalMountAwaitCannotKeepSupersededReadableGrant() started.
+✔ Test t229FinalMountAwaitCannotKeepSupersededReadableGrant() passed after 0.020 seconds.
+◇ Test t229CancelledExplicitNoUUIDReauthorizationStillVerifiesUnreadableRoot() started.
+✔ Test t229CancelledExplicitNoUUIDReauthorizationStillVerifiesUnreadableRoot() passed after 0.007 seconds.
+◇ Test t229RecoveryRestoresTwoIndependentPositionsAfterRootMoves() started.
+✔ Test t229RecoveryRestoresTwoIndependentPositionsAfterRootMoves() passed after 1.639 seconds.
+◇ Test t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) started.
+◇ Test case passing 1 argument missing → .childGone to t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) started.
+◇ Test case passing 1 argument missing → .itemGone to t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) started.
+◇ Test case passing 1 argument missing → .childReplaced to t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) started.
+◇ Test case passing 1 argument missing → .itemReplaced to t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) started.
+✔ Test t229RecoveryFallsBackToRootGridWhenOriginalPositionIsGone(_:) with 4 test cases passed after 3.939 seconds.
+◇ Test t229RecoveryFailedRootVerificationStaysUnknownThenRetriesSavedBookmark() started.
+✔ Test t229RecoveryFailedRootVerificationStaysUnknownThenRetriesSavedBookmark() passed after 0.738 seconds.
+◇ Test t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) started.
+◇ Test case passing 1 argument trace → RecoveryInterleaving(duringScan: false, secondEject: false) to t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) started.
+◇ Test case passing 1 argument trace → RecoveryInterleaving(duringScan: false, secondEject: true) to t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) started.
+◇ Test case passing 1 argument trace → RecoveryInterleaving(duringScan: true, secondEject: false) to t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) started.
+◇ Test case passing 1 argument trace → RecoveryInterleaving(duringScan: true, secondEject: true) to t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) started.
+✔ Test t229RecoveryGeneratedNavigationAndSecondEjectInterleavings(_:) with 4 test cases passed after 5.366 seconds.
+◇ Test t229RecoveryCancelReadingAnotherRootRestoresWaitingPosition() started.
+✔ Test t229RecoveryCancelReadingAnotherRootRestoresWaitingPosition() passed after 0.629 seconds.
+◇ Test t229RecoveryAnnouncementBudgetRestartsAfterNavigationAway() started.
+✔ Test t229RecoveryAnnouncementBudgetRestartsAfterNavigationAway() passed after 1.137 seconds.
+◇ Test t229FixPerWindowRestoreFailureFallsBackToRootGridWithoutReannouncingLoss() started.
+✔ Test t229FixPerWindowRestoreFailureFallsBackToRootGridWithoutReannouncingLoss() passed after 1.538 seconds.
+◇ Test t229Fix2RecoveryFollowsRootMovedWhileReadable() started.
+✔ Test t229Fix2RecoveryFollowsRootMovedWhileReadable() passed after 0.909 seconds.
+◇ Test t229Fix2CancelReadingBackToReadableGridKeepsItsRecoveryIdentity() started.
+✔ Test t229Fix2CancelReadingBackToReadableGridKeepsItsRecoveryIdentity() passed after 0.886 seconds.
+◇ Test t229Fix2PanelLeftOpenDuringRecoveryAnnouncesLossAndRecoveryOnce() started.
+✔ Test t229Fix2PanelLeftOpenDuringRecoveryAnnouncesLossAndRecoveryOnce() passed after 2.818 seconds.
+◇ Test t229DiagnosticsAppRefusalThenRecoveryPublishesTruthfulState() started.
+✔ Test t229DiagnosticsAppRefusalThenRecoveryPublishesTruthfulState() passed after 0.276 seconds.
+◇ Test t229DiagnosticsSupersededRecoveryRefusesPublication() started.
+✔ Test t229DiagnosticsSupersededRecoveryRefusesPublication() passed after 0.294 seconds.
+◇ Test t229R2GridRestoresNonFirstCurrentItemAfterMountTokenChanges() started.
+✔ Test t229R2GridRestoresNonFirstCurrentItemAfterMountTokenChanges() passed after 0.718 seconds.
+◇ Test t230SameIdentityReselectRestoresOriginalPosition(_:) started.
+◇ Test case passing 1 argument renamed → false to t230SameIdentityReselectRestoresOriginalPosition(_:) started.
+◇ Test case passing 1 argument renamed → true to t230SameIdentityReselectRestoresOriginalPosition(_:) started.
+✔ Test t230SameIdentityReselectRestoresOriginalPosition(_:) with 2 test cases passed after 2.176 seconds.
+◇ Test t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_:) started.
+◇ Test case passing 1 argument kind → "other" to t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_:) started.
+◇ Test case passing 1 argument kind → "replacement" to t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_:) started.
+◇ Test case passing 1 argument kind → "missing-proof" to t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_:) started.
+✔ Test t230DifferentIdentitySelectionOpensNormallyPreservingLostRoot(_:) with 3 test cases passed after 3.344 seconds.
+◇ Test t230ExpiredPanelCancelPreservesStateAndButtons() started.
+✔ Test t230ExpiredPanelCancelPreservesStateAndButtons() passed after 2.689 seconds.
+◇ Test t230AccessExpiredCatalogHasPinnedChineseAndEnglishCopy() started.
+✔ Test t230AccessExpiredCatalogHasPinnedChineseAndEnglishCopy() passed after 0.168 seconds.
+◇ Test t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() started.
+✔ Test t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() passed after 1.200 seconds.
+◇ Test t231NotFoundCopyAndCancelLeaveRecoveryActions() started.
+✔ Test t231NotFoundCopyAndCancelLeaveRecoveryActions() passed after 0.851 seconds.
+◇ Test t231AppFreshRebindMergeAndUndoRestoreLostPosition(_:) started.
+◇ Test case passing 1 argument merge → false to t231AppFreshRebindMergeAndUndoRestoreLostPosition(_:) started.
+◇ Test case passing 1 argument merge → true to t231AppFreshRebindMergeAndUndoRestoreLostPosition(_:) started.
+✔ Test t231AppFreshRebindMergeAndUndoRestoreLostPosition(_:) with 2 test cases passed after 2.139 seconds.
+◇ Test t231OtherFolderOpensNormallyAndOriginalRemainsLost() started.
+✔ Test t231OtherFolderOpensNormallyAndOriginalRemainsLost() passed after 0.899 seconds.
+◇ Test t231StripPerWindowDismissAndUndoRetiresLaterGrantAuthority() started.
+✔ Test t231StripPerWindowDismissAndUndoRetiresLaterGrantAuthority() passed after 1.641 seconds.
+◇ Test t231RebindFailureAndUndoFailureRemainRecoverable() started.
+✔ Test t231RebindFailureAndUndoFailureRemainRecoverable() passed after 1.397 seconds.
+◇ Test t231StripSurvivesResizeAndCloseRetiresControls() started.
+✔ Test t231StripSurvivesResizeAndCloseRetiresControls() passed after 1.035 seconds.
+◇ Test t231StripStaysAboveGridAfterFooterStatusRelayout() started.
+✔ Test t231StripStaysAboveGridAfterFooterStatusRelayout() passed after 0.931 seconds.
+◇ Test issue314AppGridStaysUnderBottomBarThroughControllerLayout() started.
+✔ Test issue314AppGridStaysUnderBottomBarThroughControllerLayout() passed after 2.231 seconds.
+◇ Test t281Fix5LostAccessPageFooterIsNotReading() started.
+✔ Test t281Fix5LostAccessPageFooterIsNotReading() passed after 1.247 seconds.
+◇ Test t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect:) started.
+◇ Test case passing 1 argument reselect → false to t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect:) started.
+◇ Test case passing 1 argument reselect → true to t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect:) started.
+✔ Test t332CancelReadingRestoresLostAccessFooterAndSidebar(reselect:) with 2 test cases passed after 2.380 seconds.
+◇ Test t231NotFoundRealShellFramesAndLanguages() started.
+✔ Test t231NotFoundRealShellFramesAndLanguages() passed after 5.863 seconds.
+◇ Test t231StaleSelectionNavigationAndClosedWindowCannotCommit() started.
+✔ Test t231StaleSelectionNavigationAndClosedWindowCannotCommit() passed after 1.551 seconds.
+◇ Test t231MergeKeepsReadableDestinationWindowAuthority() started.
+✔ Test t231MergeKeepsReadableDestinationWindowAuthority() passed after 2.699 seconds.
+◇ Test t231ExplicitTrashGrantAdmitsButAutomaticCheckRejects() started.
+✔ Test t231ExplicitTrashGrantAdmitsButAutomaticCheckRejects() passed after 0.248 seconds.
+◇ Test t231CommittedDestinationReadFailureKeepsUndo() started.
+✔ Test t231CommittedDestinationReadFailureKeepsUndo() passed after 1.500 seconds.
+◇ Test t231ExplicitTrashRebindOpensGridThenForegroundLosesAndUndoRestores() started.
+✔ Test t231ExplicitTrashRebindOpensGridThenForegroundLosesAndUndoRestores() passed after 1.129 seconds.
+◇ Test t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() started.
+✔ Test t333ForegroundPhaseCancellationRemovesObserverBeforeHeldBReturns() passed after 0.591 seconds.
+◇ Test t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() started.
+✔ Test t231Fix2ProductionRecentRecordingSurvivesOverlappingInactiveMoves() passed after 1.142 seconds.
+◇ Test t231Fix2ServiceRecordingPathsPersistCurrentRootProvenance() started.
+✔ Test t231Fix2ServiceRecordingPathsPersistCurrentRootProvenance() passed after 0.088 seconds.
+◇ Test t231Fix2MatchingReselectRefreshesRecordedRootProvenance() started.
+✔ Test t231Fix2MatchingReselectRefreshesRecordedRootProvenance() passed after 0.016 seconds.
+◇ Test t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "reader", trash → false to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "reader", trash → true to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "foreground", trash → false to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "foreground", trash → true to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "wake", trash → false to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+◇ Test case passing 2 arguments event → "wake", trash → true to t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) started.
+✔ Test t231ReadForegroundWakeReportNotFoundAndInvalidateOldWork(_:_:) with 6 test cases passed after 0.084 seconds.
+◇ Test t231OfflineLaunchWithMountedMissingBookmarkRegistersNotFound() started.
+✔ Test t231OfflineLaunchWithMountedMissingBookmarkRegistersNotFound() passed after 0.004 seconds.
+◇ Test t229FixDecodeFailuresNeverStartRootChecks() started.
+✔ Test t229FixDecodeFailuresNeverStartRootChecks() passed after 0.004 seconds.
+◇ Test t229FixConcurrentAccessFailuresShareOneRootCheck() started.
+✔ Test t229FixConcurrentAccessFailuresShareOneRootCheck() passed after 0.335 seconds.
+◇ Test t229FixRepeatedActivationChecksEachRootOnce() started.
+✔ Test t229FixRepeatedActivationChecksEachRootOnce() passed after 0.422 seconds.
+◇ Test t229FixWakeRechecksSavedRootsOnce() started.
+✔ Test t229FixWakeRechecksSavedRootsOnce() passed after 0.260 seconds.
+◇ Test t229Fix2MissingSourceFailuresStartOneRootCheck() started.
+✔ Test t229Fix2MissingSourceFailuresStartOneRootCheck() passed after 0.025 seconds.
+◇ Test t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_:) started.
+◇ Test case passing 1 argument code → 1 to t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_:) started.
+◇ Test case passing 1 argument code → 13 to t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_:) started.
+◇ Test case passing 1 argument code → 5 to t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_:) started.
+✔ Test t229Fix3DeniedOrIndeterminateSourceIsNotMissing(_:) with 3 test cases passed after 0.021 seconds.
+◇ Test t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_:) started.
+◇ Test case passing 1 argument stale → false to t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_:) started.
+◇ Test case passing 1 argument stale → true to t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_:) started.
+✔ Test t229Fix3BlockedSourceProbeIsScopedResponsiveAndRejectsLateResult(_:) with 2 test cases passed after 0.067 seconds.
+◇ Test t229Fix3StaleAndCancelledReportsNeverProbe() started.
+✔ Test t229Fix3StaleAndCancelledReportsNeverProbe() passed after 0.006 seconds.
+◇ Test t229Fix3ConcurrentSourceReportsCoalesceAndCancellationIsPerCaller() started.
+✔ Test t229Fix3ConcurrentSourceReportsCoalesceAndCancellationIsPerCaller() passed after 0.230 seconds.
+◇ Test t229Fix3ContentProbeDoesNotSwallowOtherSourcesOrAccessEvidence() started.
+✔ Test t229Fix3ContentProbeDoesNotSwallowOtherSourcesOrAccessEvidence() passed after 0.036 seconds.
+◇ Test t230RealRootDenialOnForegroundAndWakeInvalidatesHeldPermit(_:) started.
+◇ Test case passing 1 argument event → "foreground" to t230RealRootDenialOnForegroundAndWakeInvalidatesHeldPermit(_:) started.
+◇ Test case passing 1 argument event → "wake" to t230RealRootDenialOnForegroundAndWakeInvalidatesHeldPermit(_:) started.
+◇ Test case passing 1 argument event → "reader" to t230RealRootDenialOnForegroundAndWakeInvalidatesHeldPermit(_:) started.
+✔ Test t230RealRootDenialOnForegroundAndWakeInvalidatesHeldPermit(_:) with 3 test cases passed after 0.058 seconds.
+◇ Test t230ReaderSourcesVerifyRootRatherThanUnreadableChild() started.
+✔ Test t230ReaderSourcesVerifyRootRatherThanUnreadableChild() passed after 0.020 seconds.
+◇ Test t230ConcurrentReaderForegroundWakeShareOneLossEpisode(_:) started.
+◇ Test case passing 1 argument supersede → false to t230ConcurrentReaderForegroundWakeShareOneLossEpisode(_:) started.
+◇ Test case passing 1 argument supersede → true to t230ConcurrentReaderForegroundWakeShareOneLossEpisode(_:) started.
+✔ Test t230ConcurrentReaderForegroundWakeShareOneLossEpisode(_:) with 2 test cases passed after 0.103 seconds.
+◇ Test t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) started.
+◇ Test case passing 1 argument cause → .diskNotConnected to t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) started.
+◇ Test case passing 1 argument cause → .notFound to t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) started.
+◇ Test case passing 1 argument cause → .accessExpired to t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) started.
+◇ Test case passing 1 argument cause → .unknown to t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) started.
+✔ Test t232LostAccessSidebarAcrossCausesAgreesWithoutReads(_:) with 4 test cases passed after 4.457 seconds.
+◇ Test t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) started.
+◇ Test case passing 1 argument cause → .diskNotConnected to t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) started.
+◇ Test case passing 1 argument cause → .notFound to t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) started.
+◇ Test case passing 1 argument cause → .accessExpired to t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) started.
+◇ Test case passing 1 argument cause → .unknown to t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) started.
+✔ Test t232RecoveryRestoresNormalTreesAndCountsAcrossCauses(_:) with 4 test cases passed after 4.950 seconds.
+◇ Test t232LostSidebarRefinementKeepsEveryWindowCauseCurrentWithoutReads() started.
+✔ Test t232LostSidebarRefinementKeepsEveryWindowCauseCurrentWithoutReads() passed after 0.978 seconds.
+◇ Test t229LossClearsBothWindowsAndKeepsUnrelatedRootReadable() started.
+✔ Test t229LossClearsBothWindowsAndKeepsUnrelatedRootReadable() passed after 0.714 seconds.
+◇ Test t229ReaderFailureChecksRootInsteadOfLosingReadableRootForMissingChild() started.
+✔ Test t229ReaderFailureChecksRootInsteadOfLosingReadableRootForMissingChild() passed after 0.070 seconds.
+◇ Test t229RootCoveredStandaloneViewerClearsPixelsAndPrivateIdentityOnUnmount() started.
+✔ Test t229RootCoveredStandaloneViewerClearsPixelsAndPrivateIdentityOnUnmount() passed after 0.318 seconds.
+◇ Test t229ClosedControllerCannotReopenDetachedPrivateGridWithoutRootAssociation() started.
+✔ Test t229ClosedControllerCannotReopenDetachedPrivateGridWithoutRootAssociation() passed after 0.322 seconds.
+◇ Test t229CancelReadingRestoresRootAssociationBeforeUnrelatedDiskLoss() started.
+✔ Test t229CancelReadingRestoresRootAssociationBeforeUnrelatedDiskLoss() passed after 0.355 seconds.
+◇ Test t229FormerReconnectRouteShowsUnknownPageAndPanelsCancelWithoutLeavingIt() started.
+✔ Test t229FormerReconnectRouteShowsUnknownPageAndPanelsCancelWithoutLeavingIt() passed after 1.024 seconds.
+◇ Test t229VolumePageFocusAndOneAnnouncementAcrossWindowsAndDuplicateLoss() started.
+✔ Test t229VolumePageFocusAndOneAnnouncementAcrossWindowsAndDuplicateLoss() passed after 0.932 seconds.
+◇ Test t229UnavailableChildPageCannotRevokeReadableRootOrOtherWindow() started.
+✔ Test t229UnavailableChildPageCannotRevokeReadableRootOrOtherWindow() passed after 0.998 seconds.
+◇ Test t229WaitingPulseFollowsLiveApplicationReduceMotionPolicy() started.
+✔ Test t229WaitingPulseFollowsLiveApplicationReduceMotionPolicy() passed after 0.449 seconds.
+◇ Test PinnedDesignRecogniseNoticeRendersCapsuleAndEngineAtWindowCorner() started.
+✔ Test PinnedDesignRecogniseNoticeRendersCapsuleAndEngineAtWindowCorner() passed after 0.033 seconds.
+◇ Test PinnedDesignRecognisePanelKeepsTextAreaFixedAndShrinksAtMinimumWidth() started.
+✔ Test PinnedDesignRecognisePanelKeepsTextAreaFixedAndShrinksAtMinimumWidth() passed after 0.012 seconds.
+◇ Test PinnedDesignWarningHasNoEngineAndNoticeUsesMutedInk() started.
+✔ Test PinnedDesignWarningHasNoEngineAndNoticeUsesMutedInk() passed after 0.002 seconds.
+◇ Test recogniseNoticeHoverHoldsThenDismissesFiveSecondsAfterExit() started.
+✔ Test recogniseNoticeHoverHoldsThenDismissesFiveSecondsAfterExit() passed after 0.001 seconds.
+◇ Test recognisePanelEditingCopyCloseAndCanvasHitPassThrough() started.
+✔ Test recognisePanelEditingCopyCloseAndCanvasHitPassThrough() passed after 0.003 seconds.
+◇ Test PinnedDesignMaterialTintTracksBothAppearancesAboveBlur() started.
+✔ Test PinnedDesignMaterialTintTracksBothAppearancesAboveBlur() passed after 0.004 seconds.
+◇ Test PinnedDesignFloatingControlsRefreshInnerColorsAcrossAppearanceChanges() started.
+✔ Test PinnedDesignFloatingControlsRefreshInnerColorsAcrossAppearanceChanges() passed after 0.005 seconds.
+◇ Test PinnedDesignLongTextScrollsWithinFixedEditorAndFiveDigitNoticeStaysOneLine() started.
+✔ Test PinnedDesignLongTextScrollsWithinFixedEditorAndFiveDigitNoticeStaysOneLine() passed after 0.019 seconds.
+◇ Test recogniseNoticeRealHitTargetOpensFromItsWholeCapsule() started.
+✔ Test recogniseNoticeRealHitTargetOpensFromItsWholeCapsule() passed after 0.003 seconds.
+◇ Test recogniseNoticeAccessibilityAndKeyboardActivateEditablePanel() started.
+✔ Test recogniseNoticeAccessibilityAndKeyboardActivateEditablePanel() passed after 0.015 seconds.
+◇ Test issue687bVisibleNoticeIsInAccessibilityChildrenAndPressOpensPanel() started.
+✔ Test issue687bVisibleNoticeIsInAccessibilityChildrenAndPressOpensPanel() passed after 0.016 seconds.
+◇ Test PinnedDesignNarrowPanelKeepsHeaderAndFooterControlsApart() started.
+✔ Test PinnedDesignNarrowPanelKeepsHeaderAndFooterControlsApart() passed after 0.004 seconds.
+◇ Test recogniseNoticeStaysInsideMinimumWindowForLongEnglishAndNoText() started.
+✔ Test recogniseNoticeStaysInsideMinimumWindowForLongEnglishAndNoText() passed after 0.002 seconds.
+◇ Test issue215HelpMenuMovesDiagnosticsAndReportsBugTemplate() started.
+✔ Test issue215HelpMenuMovesDiagnosticsAndReportsBugTemplate() passed after 0.002 seconds.
+◇ Test issue219HelpOpensOneShortcutWindowAndCommandWClosesIt() started.
+✔ Test issue219HelpOpensOneShortcutWindowAndCommandWClosesIt() passed after 0.030 seconds.
+◇ Test issue219RealMainMenuCatalogListsEverySourceExactlyOnce() started.
+✔ Test issue219RealMainMenuCatalogListsEverySourceExactlyOnce() passed after 0.015 seconds.
+◇ Test issue219AppDelegateShowShortcutsReusesItsCachedWindow() started.
+✔ Test issue219AppDelegateShowShortcutsReusesItsCachedWindow() passed after 0.027 seconds.
+◇ Test sidebarABARevisitRejectsStaleBlockedCount() started.
+✔ Test sidebarABARevisitRejectsStaleBlockedCount() passed after 0.607 seconds.
+◇ Test sidebarCloseCancelsBlockedCountAndTakesNoChildLease() started.
+✔ Test sidebarCloseCancelsBlockedCountAndTakesNoChildLease() passed after 0.500 seconds.
+◇ Test sidebarCancelRestoresPriorTreeAndWatchRefreshRemovesDeletedChild() started.
+✔ Test sidebarCancelRestoresPriorTreeAndWatchRefreshRemovesDeletedChild() passed after 1.586 seconds.
+◇ Test sidebarWatchHandoffDeliversChangeDuringCapturedRead() started.
+✔ Test sidebarWatchHandoffDeliversChangeDuringCapturedRead() passed after 1.049 seconds.
+◇ Test sidebarWatchHandoffDeliversPendingChangeAfterOldSubscriptionRetires() started.
+✔ Test sidebarWatchHandoffDeliversPendingChangeAfterOldSubscriptionRetires() passed after 0.889 seconds.
+◇ Test sidebarWatchCallbackDuringOwnedReadTriggersFollowUpRefresh() started.
+✔ Test sidebarWatchCallbackDuringOwnedReadTriggersFollowUpRefresh() passed after 0.913 seconds.
+◇ Test sidebar425DiagnosticStateSanitizesRowsAndScanAcrossPrivateRoots() started.
+✔ Test sidebar425DiagnosticStateSanitizesRowsAndScanAcrossPrivateRoots() passed after 0.472 seconds.
+◇ Test sidebar425TeardownIncludesAcquireBeforeAnyLeaseExists() started.
+✔ Test sidebar425TeardownIncludesAcquireBeforeAnyLeaseExists() passed after 0.098 seconds.
+◇ Test sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled:) started.
+◇ Test case passing 1 argument cancelled → false to sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled:) started.
+◇ Test case passing 1 argument cancelled → true to sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled:) started.
+✔ Test sidebar425TeardownJoinsDuplicateCancelEvenForCancelledCaller(cancelled:) with 2 test cases passed after 0.255 seconds.
+◇ Test sidebar425TeardownTimeoutRetainsRootAndOriginalErrorWithoutThrowing() started.
+✔ Test sidebar425TeardownTimeoutRetainsRootAndOriginalErrorWithoutThrowing() passed after 2.231 seconds.
+◇ Test fixtureLaunchArgumentIsIgnoredWithoutTestBuildFlag() started.
+✔ Test fixtureLaunchArgumentIsIgnoredWithoutTestBuildFlag() passed after 0.001 seconds.
+◇ Test viewerRecogniseTextDetailLimitedUsesDeliveredPixels() started.
+✔ Test viewerRecogniseTextDetailLimitedUsesDeliveredPixels() passed after 11.215 seconds.
+◇ Test viewerRecogniseTextReducedPreviewUsesHeldFullResolutionSource() started.
+✔ Test viewerRecogniseTextReducedPreviewUsesHeldFullResolutionSource() passed after 0.532 seconds.
+◇ Test viewerRecogniseTextRefineOfSamePresentedItemStillCopies() started.
+✔ Test viewerRecogniseTextRefineOfSamePresentedItemStillCopies() passed after 0.420 seconds.
+◇ Test viewerRecogniseTextMenuHasNoShortcutAndRequiresShownPixels() started.
+✔ Test viewerRecogniseTextMenuHasNoShortcutAndRequiresShownPixels() passed after 0.318 seconds.
+◇ Test issue687Fix3PanelClosesBeforeAnnotateConsumesKeys() started.
+✔ Test issue687Fix3PanelClosesBeforeAnnotateConsumesKeys() passed after 0.471 seconds.
+◇ Test issue687Fix3NoticeClosesOnAnnotateEntry() started.
+✔ Test issue687Fix3NoticeClosesOnAnnotateEntry() passed after 0.472 seconds.
+◇ Test issue687Fix3AnnotateEscapeAndUndoAfterOCRPanel() started.
+✔ Test issue687Fix3AnnotateEscapeAndUndoAfterOCRPanel() passed after 1.150 seconds.
+◇ Test viewerRecogniseTextDecodeErrorFallsBackAndNextActionDecodesAgain() started.
+✔ Test viewerRecogniseTextDecodeErrorFallsBackAndNextActionDecodesAgain() passed after 0.448 seconds.
+◇ Test viewerRecogniseTextMenuRunsExplicitServiceOnDecodedPixels() started.
+✔ Test viewerRecogniseTextMenuRunsExplicitServiceOnDecodedPixels() passed after 0.230 seconds.
+◇ Test viewerRecogniseTextDoesNotReadDifferentFileWhenShownPixelsAreReduced() started.
+✔ Test viewerRecogniseTextDoesNotReadDifferentFileWhenShownPixelsAreReduced() passed after 0.364 seconds.
+◇ Test viewerRecogniseTextBusyStaleImageAndCloseNeverCopyOldText() started.
+✔ Test viewerRecogniseTextBusyStaleImageAndCloseNeverCopyOldText() passed after 0.679 seconds.
+◇ Test viewerRecogniseTextNoticeOpensEditablePanelCopyAndEscape() started.
+status-channel: invalid supervisor exit
