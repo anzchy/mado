@@ -140,7 +140,7 @@ enum RSGenerator {
             entries.insert(Entry(rect: bridge, text: text(), row: nil), at: rng.int(0, entries.count))
         }
         let rows = Dictionary(grouping: entries.indices.filter { entries[$0].row != nil }) { entries[$0].row! }
-        return RSGenerated(layout: RS.Layout(rects: entries.map(\.rect), texts: entries.map(\.text)),
+        return RSGenerated(layout: RS.Layout(rects: entries.map(\.rect), texts: entries.map(\.text)).withUniformCells(),
                            truthRows: RS.normalized(Array(rows.values)),
                            bridges: Set(entries.indices.filter { entries[$0].row == nil }),
                            hasNested: hasNested, seed: seed, index: index)
@@ -330,8 +330,8 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
                             : outside.x > inside.x ? mates.filter { rects[$0].minX > outside.x }.min { rects[$0].minX < rects[$1].minX } : nil
                         if let across, abs(across - line) > 1 { continue }
                         for anchor in [lineAnchor] + anchors.prefix(1) {
-                            let before = g.layout.select(from: anchor, to: inside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
-                            let after = g.layout.select(from: anchor, to: outside).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
+                            let before = g.layout.select(from: anchor, to: inside, using: resolver).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
+                            let after = g.layout.select(from: anchor, to: outside, using: resolver).map { $0.replacingOccurrences(of: "\n", with: "") } ?? ""
                             checked += 1
                             if before != after {
                                 failures.add(g, "anchor=\(anchor) inside=\(inside) \(before.debugDescription) outside=\(outside) \(after.debugDescription)")
@@ -359,6 +359,7 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
                     var with = g.layout
                     with.rects.insert(tall, at: k)
                     with.texts.insert("T", at: k)
+                    with.cells?.insert(RS.uniformCells(tall, count: 1, axis: with.axis), at: k)
                     let base = g.layout.resolver, other = with.resolver
                     func remap(_ p: RS.Position?) -> RS.Position? {
                         p.map { RS.Position(line: $0.line < k ? $0.line : $0.line + 1, offset: $0.offset) }
@@ -399,6 +400,7 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
                 var with = g.layout
                 with.rects.insert(short, at: h + 1)
                 with.texts.insert("s", at: h + 1)
+                with.cells?.insert(RS.uniformCells(short, count: 1, axis: with.axis), at: h + 1)
                 let base = g.layout.resolver, other = with.resolver
                 for a in anchors {
                     for e in ends where RSGenerator.oracleHit(rects, e) == nil {
@@ -575,7 +577,7 @@ private func positions(_ layout: RS.Layout, _ resolver: TextRowResolver, anchor:
                 let resolver = g.layout.resolver
                 let inBox = (anchors + ends).filter { resolver.hitLine(at: $0) != nil }
                 for a in anchors {
-                    for b in inBox where g.layout.select(from: a, to: b) != g.layout.select(from: b, to: a) {
+                    for b in inBox where g.layout.select(from: a, to: b, using: resolver) != g.layout.select(from: b, to: a, using: resolver) {
                         failures.add(g, "a=\(a) b=\(b)")
                     }
                 }

@@ -44,7 +44,15 @@ enum RS {
         var cells: [[CGRect]]? = nil
 
         func cellsOf(_ line: Int) -> [CGRect] {
-            cells?[line] ?? uniformCells(rects[line], count: texts[line].count, axis: axis)
+            precondition(cells.map { $0.count == rects.count } ?? true, "cells table out of step with the lines")
+            return cells?[line] ?? uniformCells(rects[line], count: texts[line].count, axis: axis)
+        }
+        /// The same layout with its uniform cells computed once (#787: the property walks asked for them on every drag,
+        /// counting each line's characters again). A caller that inserts a line inserts its cells too.
+        func withUniformCells() -> Layout {
+            var layout = self
+            layout.cells = rects.indices.map { cellsOf($0) }
+            return layout
         }
         var resolver: TextRowResolver { TextRowResolver(rects: rects, axis: axis) }
 
@@ -70,7 +78,11 @@ enum RS {
         }
         /// begin(at: anchor) + drag(to: end) through the resolver; nil when nothing is selected.
         func select(from anchorPoint: CGPoint, to endPoint: CGPoint) -> String? {
-            let resolver = self.resolver
+            select(from: anchorPoint, to: endPoint, using: resolver)
+        }
+        /// The same drag through a resolver already built for this layout (#787: building one is O(n²) in the lines,
+        /// so the property walks build it once per layout instead of once per drag; it depends only on rects and axis).
+        func select(from anchorPoint: CGPoint, to endPoint: CGPoint, using resolver: TextRowResolver) -> String? {
             guard let a = anchor(anchorPoint, using: resolver),
                   let e = extent(endPoint, anchorLine: a.line, using: resolver) else { return nil }
             return text(a, e)
