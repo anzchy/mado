@@ -2,8 +2,9 @@
 """#733: deterministic three-way merge of allowlisted Markdown table rows by row key (the first cell).
 
 No union and no ours/theirs: each cell takes the side that changed it. It stops (Manual) when one cell changed on both
-sides, a row was deleted, a key appears twice, the same new key was added with different text, or lines outside the
-allowlisted tables changed on both sides. `ours` is main's side, `theirs` the branch's side.
+sides, a row was deleted, a key appears twice, the same new key was added with different text, both sides reordered
+existing rows differently, or lines outside the allowlisted tables changed on both sides. Lines outside the tables
+(the frame) changed on one side only take that side. Row order is main's unless only the branch reordered rows. `ours` is main's side, `theirs` the branch's side.
 
   doc_rows.py --paths    print the allowlisted paths, one per line
 """
@@ -12,6 +13,9 @@ import sys
 from pathlib import Path
 
 ALLOWLIST = Path(__file__).with_name("rebase-docs-allowlist.txt")
+# The allowlist's path in the repository; rebase-verify reads it from the new base (main), so a branch's own edit
+# cannot govern its own verification. The copy next to this script is used only when the base has none.
+ALLOWLIST_REPO_PATH = ".agents/skills/mado-delegator/scripts/rebase-docs-allowlist.txt"
 _SLOT = "\x00table\x00"
 _PIPE = re.compile(r"(?<!\\)\|")
 
@@ -20,9 +24,9 @@ class Manual(Exception):
     """The rows cannot be merged mechanically; a human resolves them."""
 
 
-def load_allowlist(path=ALLOWLIST):
+def load_allowlist(path=ALLOWLIST, text=None):
     entries = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in (path.read_text(encoding="utf-8") if text is None else text).splitlines():
         if not line.strip() or line.startswith("#"):
             continue
         name, tab, header = line.partition("\t")
@@ -106,13 +110,22 @@ def merge_rows(base, ours, theirs):
             raise Manual(f"row {key!r} added on both sides with different text")
         else:
             merged[key] = line
-    order, theirs_keys = list(o), list(t)
-    for index, key in enumerate(theirs_keys):
-        if key in merged:
+    for key, line in t.items():
+        merged.setdefault(key, line)
+    # Row order: main's, unless only the branch reordered the rows both sides share with base; both reordering
+    # differently stops. The other side's new rows go right before their next row in that side's order, or at the end.
+    base_order, main_order, branch_order = list(b), [k for k in o if k in b], [k for k in t if k in b]
+    if branch_order == base_order or branch_order == main_order:
+        primary, secondary = list(o), list(t)
+    elif main_order == base_order:
+        primary, secondary = list(t), list(o)
+    else:
+        raise Manual("row order changed differently on both sides")
+    order = primary
+    for index, key in enumerate(secondary):
+        if key in order:
             continue
-        merged[key] = t[key]
-        # A row only the branch added goes right before its next row in the branch's order, or at the end.
-        following = next((k for k in theirs_keys[index + 1:] if k in order), None)
+        following = next((k for k in secondary[index + 1:] if k in order), None)
         order.insert(order.index(following) if following else len(order), key)
     return [merged[key] for key in order]
 
