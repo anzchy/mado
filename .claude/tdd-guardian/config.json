@@ -319,6 +319,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 120000
+    },
+    {
+      "name": "rebase-docs-py",
+      "description": "Manual Python receipts for #733: rebase-verify's CODE same / DOCS differ / CODE differ results, the states README row merger and rebase-ledger.sh calling it.",
+      "command": "python3 .agents/skills/mado-delegator/scripts/test_rebase_docs.py",
+      "probeCommand": "python3 --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 300000
     }
   ],
   "coverageThresholds": {

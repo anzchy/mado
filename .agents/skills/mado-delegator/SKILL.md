@@ -110,7 +110,15 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    deletions, modes, binary content, tests, docs, design and dependencies remain in scope.
    `CODE same` means that clean replay exactly matches the candidate tree, including when nearby upstream
    context changed; it keeps audits and smoke. Patch hashes are diagnostics, not the equality decision.
-   `CODE differ` → quick combination check by both auditors before gates.
+   Every differing path prints as `DIFF <path>`. `CODE same, DOCS differ` (#733, owner 2026-11-16:
+   「3+5 文档冲突不再作废审计」) also keeps audits and smoke: every differing path is a table row listed in
+   `$SK/scripts/rebase-docs-allowlist.txt` (now the states README status table), the per-row-key three-way merge
+   keeps both sides' cells, no ledger acceptance text (怎么确认 before 「限制：」) changed, and upstream changed no
+   other path the branch changed. `rebase-ledger.sh` merges those rows with `$SK/scripts/resolve_doc_rows.py` and
+   stops on a same-cell edit, a deletion or a duplicate key. Changing the allowlist is an audit-rule change: quote the
+   owner in its header and in the PR body. `merge-gate.sh` still accepts only `CODE same ` (follow-up).
+   `CODE differ` (including `UPSTREAM OVERLAP <path>`) → quick combination check by both auditors before gates.
+   No result waives a known High: it stays open until fixed and confirmed.
    `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
