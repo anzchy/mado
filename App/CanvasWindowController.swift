@@ -113,6 +113,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     var sidebarBrowserOverride: SidebarFolderBrowser?
     /// Tests swap the folder lister; the controller still builds and observes its own coordinators.
     var folderScanningOverride: (any FolderScanning)?
+    /// #600: tests watch each folder-open task start, scan, finish or get rejected. Nil in production; never logged.
+    var folderOpenLifecycleObserver: (@MainActor (FolderOpenLifecycleEvent) -> Void)?
+    private var folderOpenTaskCount = 0
     /// Tests answer the folder grant prompt in place of the alert and system open panel.
     var folderGrantPromptOverride: ((_ folder: URL, _ selected: @escaping (URL) -> Void) -> Void)?
     /// Tests answer the prompt with its wording and its decline path (#686), in place of the alert and open panel.
@@ -1598,14 +1601,31 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         navigationTask?.cancel()
+        let lifecycle = folderOpenLifecycle("grant")
         navigationTask = Task { [self] in
+            lifecycle(.started, nil)
             do {
                 let services = try await operation.wait { try await accessServices.value }
                 let id = try await operation.wait { try await services.grant(folder) }
                 refreshRecents()
                 try operation.check()
                 openFolder(folder, rootID: id)
-            } catch { if operation.isCurrent { showAccessError(error) } }
+                lifecycle(.completed, nil)
+            } catch {
+                lifecycle(Task.isCancelled ? .rejected : .threw, Task.isCancelled ? .taskCancelled : nil)
+                if operation.isCurrent { showAccessError(error) }
+            }
+        }
+    }
+
+    /// #600: reports one folder-open task's events to the test observer; does nothing when it is nil (production).
+    private func folderOpenLifecycle(_ task: String)
+        -> @MainActor (FolderOpenLifecycleEvent.Kind, FolderOpenLifecycleEvent.Reason?) -> Void {
+        guard folderOpenLifecycleObserver != nil else { return { _, _ in } }
+        folderOpenTaskCount += 1
+        let number = folderOpenTaskCount
+        return { [weak self] kind, reason in
+            self?.folderOpenLifecycleObserver?(FolderOpenLifecycleEvent(task: task, number: number, kind: kind, reason: reason))
         }
     }
 
@@ -1637,7 +1657,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         gridFolderRoot = rootID
         gridFolderURL = folder
         applyCurrentAccessState()
-        if waitingAccessPosition != nil { return }
+        let lifecycle = folderOpenLifecycle("scan")
+        if waitingAccessPosition != nil { lifecycle(.rejected, .waitingAccess); return }
         setReadingFolderOwner(folder, awaitingStart: true)
         sidebarKnownCounts.removeAll()
         loadSidebarTree(folder, rootID: rootID, count: nil)
@@ -1654,6 +1675,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             var scanStarted = false
             do {
                 let authority = FolderScanPresentationAuthority(access: operation, input: inputIntent.current, originatingTask: navigationTask)
+                lifecycle(.started, nil)
                 let services = try await operation.wait { try await accessServices.value }
                 self.bindAccessMonitor(services.monitor)
                 self.applyCurrentAccessState()
@@ -1665,9 +1687,16 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 await self.captureRecoveryPosition(folder, rootID: rootID, services: services, context: context, operation: operation)
                 try operation.check()
                 scanStarted = true
-                try await folderScanner(services).begin(folder: folder, rootID: rootID,
-                    canPresent: { authority.isCurrent && context.permit.isCurrent }).value
+                lifecycle(.scanBegan, nil)
+                var refused = false
+                try await folderScanner(services).begin(folder: folder, rootID: rootID, canPresent: {
+                    let allowed = authority.isCurrent && context.permit.isCurrent
+                    if !allowed, !refused { refused = true; lifecycle(.rejected, .authorityRejected) }
+                    return allowed
+                }).value
+                lifecycle(.completed, nil)
             } catch {
+                lifecycle(Task.isCancelled ? .rejected : .threw, Task.isCancelled ? .taskCancelled : nil)
                 if operation.isCurrent, generation == current {
                     handleFolderOpenFailure(error, folder: folder, scanStarted: scanStarted)
                 }
