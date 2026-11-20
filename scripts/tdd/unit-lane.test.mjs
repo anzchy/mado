@@ -482,6 +482,25 @@ test('i632M1 interrupt cleans a verified detached helper after its leader exits'
   } finally { await m1Finally(f); }
 });
 
+// #759: macOS scans a newly written executable on its first exec (1.0 to 1.5 s measured on the mini, 3 ms after),
+// longer than the watchdog's 1 s interrupt process query. A fixture run inside that bound is exec'd once first with
+// `warm` arguments, so the bound measures the fixture and not the first-exec scan. The bound itself is unchanged.
+function m1Executable(file, source, warm) {
+  fs.writeFileSync(file, source, { mode: 0o755 });
+  assert.equal(spawnSync(file, warm, { stdio: 'ignore', timeout: 30_000 }).error, undefined, `first exec of ${file}`);
+}
+
+test('#759 a fixture executable is past its first-exec scan before a 1 s bounded run', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'i759-first-exec-'));
+  try {
+    const file = path.join(dir, 'fresh-adapter');
+    m1Executable(file, `#!/bin/sh\n# ${path.basename(dir)}\nexit 0\n`, []);
+    const run = spawnSync(file, [], { timeout: 1000 });
+    assert.equal(run.error, undefined, 'the bounded run reached the fixture');
+    assert.equal(run.status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('i632M1 fallback validates a known orphan when the full interrupt process query fails', async () => {
   const f = m1Fixture('orphan');
   try {
@@ -490,7 +509,8 @@ test('i632M1 fallback validates a known orphan when the full interrupt process q
     const processAdapter = path.join(f.bin, 'interrupt-process-adapter');
     // Only the interrupt collector's external /bin/ps invocation is redirected.
     // Real snapshots still establish ownership; per-PID queries use real ps.
-    fs.writeFileSync(processAdapter, '#!/bin/sh\nif [ "$1" = "-A" ]; then\n  printf "failed\\n" > "$M1_FAILED_QUERY"\n  echo "full process query unavailable" >&2\n  exit 1\nfi\nexec /bin/ps "$@"\n', { mode: 0o755 });
+    m1Executable(processAdapter, '#!/bin/sh\nif [ "$1" = "-A" ]; then\n  printf "failed\\n" > "$M1_FAILED_QUERY"\n  echo "full process query unavailable" >&2\n  exit 1\nfi\nexec /bin/ps "$@"\n',
+      ['-p', String(process.pid), '-o', 'pid=']);
     const watched = path.join(f.dir, 'actual-watch-with-process-adapter.mjs');
     fs.writeFileSync(watched, `
 import { watch, parseArgs, defaultRun } from ${JSON.stringify(m1Watchdog)};

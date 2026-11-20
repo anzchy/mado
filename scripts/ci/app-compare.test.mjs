@@ -9,6 +9,7 @@ import * as worker from './app-repeat-worker.mjs';
 import {spawnSync} from 'node:child_process';
 import {mkdirSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
+import {runnerCrashFixture} from './fixtures/runner-crash.mjs';
 
 function attestedResult(settings,status,details={}){
   const id=randomBytes(16).toString('hex');
@@ -44,6 +45,21 @@ test('CI Host ownership lane refuses cleared inherited supervision before tests 
   assert.match(noTop.stderr,/HELD needs one parent control FD or CI top-level input/);
   assert.equal(existsSync(marker),false);
 });
+// #759: the crash fixture must end a runner that handles SIGTERM itself. Node's test runner does, and on CI one
+// finished its in-flight file and reported a completed passing root (status 0 instead of 70, run 44756846987).
+test('#759 the crash fixture ends its runner even when the runner handles SIGTERM',()=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'i759-runner-crash-'));
+  try {
+    writeFileSync(path.join(dir,'fixture.mjs'),runnerCrashFixture);
+    const runner=`const {spawn}=require('node:child_process');process.on('SIGTERM',()=>{});
+spawn(process.execPath,[${JSON.stringify(path.join(dir,'fixture.mjs'))}],{stdio:'inherit'})
+  .on('exit',code=>{console.log('runner completed after fixture exit '+code);process.exit(0);});`;
+    const run=spawnSync(process.execPath,['-e',runner],{encoding:'utf8',timeout:10000});
+    assert.equal(run.error,undefined);
+    assert.doesNotMatch(run.stdout,/runner completed/,'an interrupted runner must not go on to complete');
+    assert.equal(run.signal,'SIGKILL',run.stdout+run.stderr);
+  } finally { rmSync(dir,{recursive:true,force:true}); }
+});
 // Owner-approved real-OS lane placement must execute the actual strict runner,
 // propagate its status and retain its report for every comparison mode.
 for(const mode of ['hosted'])for(const outcome of ['pass','fail','zero','crash'])
@@ -71,7 +87,7 @@ test(`ownership integration ${mode} step preserves ${outcome} runner outcome and
   writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
     `import test from 'node:test';import assert from 'node:assert/strict';test('external integration fixture',()=>assert.equal(1,${outcome==='fail'?2:1}));\n`);
   if(outcome==='crash')writeFileSync(path.join(dir,'scripts/ci/integration/fixture.test.mjs'),
-    'process.kill(process.ppid,"SIGTERM");process.exit(0);\n'); // Interrupt only this fixture's own test-runner parent.
+    runnerCrashFixture); // Interrupt only this fixture's own test-runner parent.
   const env={...process.env,APP_COMPARE_MODE:mode,GITHUB_ACTIONS:'true',
     MADO_HEAVY_LOCK_HELD:'1',MADO_HEAVY_CI_TOP_LEVEL:'1',MADO_MDPRO_LOCK:'off',
     MADO_HEAVY_STATUS_PATH:path.join(dir,'.build','cleanup.json')};delete env.NODE_OPTIONS;

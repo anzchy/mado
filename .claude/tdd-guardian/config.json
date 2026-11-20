@@ -98,6 +98,17 @@
       "timeoutMs": 120000
     },
     {
+      "name": "known-flakes-node",
+      "description": "Manual #759 receipts: known-flakes.json entries carry issue, owner and expiry; an invalid or expired entry fails the node lane.",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/known-flakes.test.mjs",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "probeCommand": "node --version",
+      "timeoutMs": 120000
+    },
+    {
       "name": "name-check-node",
       "command": "node scripts/tdd/node-lane.mjs scripts/name-checks/identity-transition.test.mjs",
       "probeCommand": "node --version",
