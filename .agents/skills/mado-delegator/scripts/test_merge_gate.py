@@ -61,6 +61,17 @@ esac
         self.assertIn('would-allow', result.stdout)
         self.assertFalse((self.root / 'merged').exists())
 
+    def test_linked_record_is_accepted_and_forged_head_is_refused(self):
+        record = self.repo / '.build/mado-verify' / f'{self.head}.json'
+        linked = json.loads(record.read_text())
+        linked.update({'base': self.head, 'link': {'oldBase': self.head, 'newBase': self.head,
+                                                 'oldHead': self.head, 'newHead': self.head}})
+        record.write_text(json.dumps(linked))
+        self.assertIn('would-allow', self.run_gate().stdout)
+        linked['link']['newHead'] = '0' * 40
+        record.write_text(json.dumps(linked))
+        self.assertIn('would-refuse condition-failed: invalid linked mado-verify head/base', self.run_gate().stdout)
+
     def test_red_main_blocks_merge(self):
         main = '[{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"failure"}]'
         result = self.run_gate(GH_MAIN=main)

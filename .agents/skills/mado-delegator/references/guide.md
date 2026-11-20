@@ -528,9 +528,9 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
   design, assets and dependency files. It preserves paths, renames, deletions, modes and binary content; only blob IDs
   and hunk line offsets are normalized. An audit or smoke verdict covers a patch, not a SHA:
   Every path that differs from the replay prints as `DIFF <path>`.
-  - `CODE same`: the verdicts carry over; rerun the gates.
+  - `CODE same`: the verdicts carry over; run the narrow #772 reuse check below or rerun the gates.
   - `CODE same, DOCS differ` (exit 0; #733, owner 2026-11-16: 「3+5 文档冲突不再作废审计」): the verdicts carry
-    over; rerun the gates. Only when all hold: every `DIFF` path is in `rebase-docs-allowlist.txt` as read from the
+    over; run the #772 reuse check below or rerun the gates. Only when all hold: every `DIFF` path is in `rebase-docs-allowlist.txt` as read from the
     new base (main's copy, so a branch cannot widen it for its own rebase; when main has none, there is no docs
     verdict: `CODE differ` naming the missing allowlist);
     the code replay without those files matches exactly; each such file's Git mode and type (100644, 100755, 120000)
@@ -549,7 +549,8 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
   - Empty comparison (exit 4): either range has no compared patch (including ledger-only ranges). There is no
     `CODE same` evidence to carry forward. Inspect both ranges, obtain fresh audit/smoke evidence where applicable,
     and rerun gates including the ledger check before pushing; document any lane that is N/A with its reason.
-- Then rerun all gates yourself: `scripts/owner-gates.sh <worktree> <sha> <prefix>` (run it in the background; the
+- To reuse only the old local Swift/lcov results, run `node .agents/skills/mado-verify/scripts/reuse-check.mjs <old-base> <new-base> <old-head> <new-head>`. `RERUN <first path/reason>` requires the full ladder. `REUSE` requires `CODE same`, an allowlisted main movement, unchanged tested-input tree, toolchain and gate policy fingerprints, a green direct old record, and an unchanged allow-list version. Execute the new head's xcodegen, Xcode build, retained App, Node, ledger, diffcheck and design lanes; ledger/design/diffcheck never reuse. Create a new-head linked record and issue comment as described in the mado-verify skill, with Swift/lcov marked `reused from <old head>`. `evidence.mjs check` validates the link. Required GitHub CI on the new head remains binding. Audit and device-smoke carry-over still follows `rebase-verify.sh`. #771/merge queue remains open.
+- Otherwise rerun all gates yourself: `scripts/owner-gates.sh <worktree> <sha> <prefix>` (run it in the background; the
   summary must end with `DONE`). The completed summary prints each lane’s exit code to stdout and the summary file;
   exit 1 means at least one lane failed. Inspect the failed lane logs, fix the failure and rerun before pushing;
   `DONE` alone does not mean PASS. Its `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the
