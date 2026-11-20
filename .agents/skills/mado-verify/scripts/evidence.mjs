@@ -79,7 +79,7 @@ try {
     if (d.head !== d.link.newHead || d.base !== d.link.newBase) throw new Error('linked record head/base mismatch');
     const decision = evaluateReuse(process.cwd(), d.link.oldBase, d.link.newBase, d.link.oldHead, d.link.newHead);
     if (!decision.reuse) throw new Error(`linked reuse refused: ${decision.reason}`);
-    linkedLanes(d.gates, d.link.oldHead);
+    linkedLanes(d.gates, d.link.oldHead, decision.original);
   } else if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
   const body = render(d), hits = privacyHits(body);
   if (hits.length) throw new Error(`privacy scan refused: ${hits.join(', ')}`);
@@ -106,12 +106,12 @@ try {
       if (!verdict.complete) throw new Error(`linked gates incomplete: ${verdict.problems.join(', ')}`);
       base = link.newBase;
       fingerprints = decision.fingerprints;
-      lanes = linkedLanes(d.gates, link.oldHead);
+      lanes = linkedLanes(d.gates, link.oldHead, decision.original);
     } else {
       if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
       base = spawnSync('git', ['merge-base', 'origin/main', d.head], { encoding: 'utf8' }).stdout.trim();
       fingerprints = directFingerprints(cwd, d.head);
-      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.scopeSkip ? 'scope-skip' : 'executed' }]));
+      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
     const record = { head: d.head, base, fingerprints, link, lanes,
       ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,

@@ -44,9 +44,10 @@ esac
 ''')
         stub.chmod(0o755)
         node = self.bin / 'node'
-        node.write_text('#!/bin/sh\ncase "$*" in *evidence.mjs*) [ "$NODE_FAIL" = evidence ] && exit 1;; *local-pr-lint.mjs*) [ "$NODE_FAIL" = lint ] && exit 1;; esac\nexit 0\n')
+        node.write_text('#!/bin/sh\nif [ "${NODE_REAL_EVIDENCE:-0}" = 1 ]; then case "$*" in *evidence.mjs*) exec "$REAL_NODE" "$@";; esac; fi\ncase "$*" in *evidence.mjs*) [ "$NODE_FAIL" = evidence ] && exit 1;; *local-pr-lint.mjs*) [ "$NODE_FAIL" = lint ] && exit 1;; esac\nexit 0\n')
         node.chmod(0o755)
         self.env = {**env, 'PATH': str(self.bin) + os.pathsep + os.environ['PATH'],
+                    'REAL_NODE': shutil.which('node'),
                     'GH_HEAD': self.head, 'GH_MERGE_LOG': str(self.root / 'merged'),
                     'GH_MAIN': '[{"databaseId":1,"headSha":"abc","status":"completed","conclusion":"success"}]',
                     'GH_PRS': '[]', 'GH_CHECKS': '[{"name":"CI","state":"SUCCESS"}]'}
@@ -71,6 +72,67 @@ esac
         linked['link']['newHead'] = '0' * 40
         record.write_text(json.dumps(linked))
         self.assertIn('would-refuse condition-failed: invalid linked mado-verify head/base', self.run_gate().stdout)
+
+    def test_linked_record_runs_real_evidence_verifier_and_refuses_forged_provenance(self):
+        env = self.env
+        verify_source = SCRIPT.parents[2] / 'mado-verify' / 'scripts'
+        verify_target = self.repo / '.agents/skills/mado-verify/scripts'
+        verify_target.mkdir(parents=True)
+        for name in ('gate-policy.mjs', 'evidence.mjs', 'reuse-policy.mjs', 'reuse-check.mjs', 'reuse-allowlist.json'):
+            shutil.copy2(verify_source / name, verify_target / name)
+        rebase_target = self.repo / '.agents/skills/mado-delegator/scripts'
+        rebase_target.mkdir(parents=True)
+        for name in ('rebase-verify.sh', 'rebase-verify-tree.py', 'scan-conflict-markers.py'):
+            shutil.copy2(SCRIPT.with_name(name), rebase_target / name)
+        subprocess.run(['git', 'add', '.agents'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'commit', '-qm', 'policy baseline'], cwd=self.repo, check=True, env=env)
+        old_base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        subprocess.run(['git', 'update-ref', 'refs/remotes/origin/main', old_base], cwd=self.repo, check=True)
+        subprocess.run(['git', 'switch', '-qc', 'topic'], cwd=self.repo, check=True, env=env)
+        (self.repo / 'feature').write_text('topic\n')
+        subprocess.run(['git', 'add', 'feature'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'commit', '-qm', 'topic'], cwd=self.repo, check=True, env=env)
+        old_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        names = ['diffcheck', 'swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests', 'node', 'ledger', 'design']
+        gates = [{'name': name, 'command': name, 'exitCode': 0} for name in names]
+        source = self.repo / 'evidence-input.json'
+        source.write_text(json.dumps({'issue': 766, 'task': 'fixture', 'branch': 'topic', 'head': old_head,
+                                      'gates': gates, 'integrity': 'none', 'byType': [], 'notVerified': [],
+                                      'commentUrl': 'https://github.com/anzchy/mado/issues/766#issuecomment-1'}))
+        for name in ('xcodebuild', 'swift'):
+            tool = self.bin / name
+            tool.write_text('#!/bin/sh\necho fixed-toolchain\n')
+            tool.chmod(0o755)
+        real_node = shutil.which('node')
+        self.assertEqual(subprocess.run([real_node, str(verify_target / 'evidence.mjs'), 'record', str(source)],
+                         cwd=self.repo, env=env, capture_output=True, text=True).returncode, 0)
+        subprocess.run(['git', 'switch', '-q', 'main'], cwd=self.repo, check=True, env=env)
+        (self.repo / 'docs').mkdir()
+        (self.repo / 'docs/note.md').write_text('main\n')
+        subprocess.run(['git', 'add', 'docs/note.md'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'commit', '-qm', 'main advance'], cwd=self.repo, check=True, env=env)
+        new_base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        subprocess.run(['git', 'update-ref', 'refs/remotes/origin/main', new_base], cwd=self.repo, check=True)
+        subprocess.run(['git', 'switch', '-q', 'topic'], cwd=self.repo, check=True, env=env)
+        subprocess.run(['git', 'rebase', 'main'], cwd=self.repo, check=True, env=env)
+        new_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo, text=True).strip()
+        linked = [{'name': name, 'command': name, 'exitCode': 0,
+                   **({'reusedFrom': old_head} if name in ('swift', 'lcov') else {})} for name in names]
+        source.write_text(json.dumps({'issue': 766, 'task': 'linked', 'branch': 'topic', 'head': new_head, 'base': new_base,
+                                      'link': {'oldBase': old_base, 'newBase': new_base, 'oldHead': old_head,
+                                               'newHead': new_head}, 'gates': linked, 'integrity': 'none',
+                                      'byType': [], 'notVerified': [],
+                                      'commentUrl': 'https://github.com/anzchy/mado/issues/766#issuecomment-2'}))
+        recorded = subprocess.run([real_node, str(verify_target / 'evidence.mjs'), 'record', str(source)],
+                                  cwd=self.repo, env=env, capture_output=True, text=True)
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        options = {'GH_HEAD': new_head, 'NODE_REAL_EVIDENCE': '1'}
+        self.assertIn('would-allow', self.run_gate(**options).stdout)
+        record = self.repo / '.build/mado-verify' / f'{new_head}.json'
+        forged = json.loads(record.read_text())
+        forged['fingerprints']['allowlistVersion'] = 'forged'
+        record.write_text(json.dumps(forged))
+        self.assertIn('would-refuse condition-failed: mado-verify evidence failed', self.run_gate(**options).stdout)
 
     def test_red_main_blocks_merge(self):
         main = '[{"databaseId":42,"headSha":"abc","status":"completed","conclusion":"failure"}]'

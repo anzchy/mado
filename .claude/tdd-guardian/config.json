@@ -328,6 +328,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 300000
+    },
+    {
+      "name": "reuse-check-node",
+      "description": "Manual #772 RED receipts for rebased-head reuse proof and linked record refusals.",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/reuse-check.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
     }
   ],
   "coverageThresholds": {
