@@ -6,6 +6,20 @@
     ".agents/skills/mado-delegator/SKILL.md",
     ".agents/skills/mado-delegator/references/guide.md",
     ".agents/skills/mado-delegator/scripts/merge-gate.sh",
-    "scripts/agents/local-pr-lint.mjs"
-  ]
+    "scripts/agents/local-pr-lint.mjs",
+    ".agents/skills/mado-verify/scripts/reuse-allowlist.json",
+    ".agents/skills/mado-verify/scripts/gate-policy.mjs",
+    ".agents/skills/mado-verify/scripts/reuse-policy.mjs"
+  ],
+  "inputExclusions": {
+    "prefixes": ["docs/", ".claude/skills/"],
+    "exact": [
+      ".agents/skills/mado-verify/SKILL.md",
+      ".agents/skills/mado-delegator/SKILL.md",
+      ".agents/skills/mado-delegator/references/guide.md",
+      ".agents/skills/mado-verify/scripts/reuse-allowlist.json",
+      ".agents/skills/mado-verify/scripts/gate-policy.mjs",
+      ".agents/skills/mado-verify/scripts/reuse-policy.mjs"
+    ]
+  }
 }

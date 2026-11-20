@@ -284,6 +284,15 @@ test('a Codex apptests NOT VERIFIED entry passes the check with a warning; other
   assert.match(check(f, f.head()).stderr, /failed swift: 1/);
 });
 
+test('direct NOT VERIFIED App lane is recorded as not-verified provenance', t => {
+  const f = fixture(t);
+  recordFor(f, { gates: gates().map(g => g.name === 'apptests'
+    ? { ...g, exitCode: 70, notVerified: 'no key window' } : g) });
+  const record = JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify', `${f.head()}.json`)));
+  assert.equal(record.lanes.apptests.status, 'not-verified');
+  assert.equal(check(f, f.head()).status, 0);
+});
+
 test('mark-target prefers an explicit task branch over the worktree current branch', t => {
   const f = fixture(t), target = `${f.dir}-target`;
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
