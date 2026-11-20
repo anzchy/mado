@@ -71,7 +71,8 @@ class RebaseVerifyDocsTests(unittest.TestCase):
         self.repo = Repo(Path(self.tmp.name))
         self.old_base = self.repo.commit("init", **{
             "App/a.swift": "a\n", "App/c.swift": "c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8\n", "notes.md": "n\n",
-            README: readme([ROW_A, ROW_B, ROW_C]), "docs/feature-ledger.md": ledger()})
+            README: readme([ROW_A, ROW_B, ROW_C]), "docs/feature-ledger.md": ledger(),
+            ALLOWLIST: (HERE / "rebase-docs-allowlist.txt").read_text()})
         # The audited branch: code plus a states README row (row a's 子情况).
         self.old_head = self.repo.commit("feat: topic\n\n#7 P1-01 VIEW-01", **{
             "App/a.swift": "a2\n", README: readme([ROW_A_BRANCH, ROW_B, ROW_C])})
@@ -480,6 +481,55 @@ class ResolveDocRowsOrderTests(unittest.TestCase):
     def test_both_sides_reordering_differently_stops(self):
         self.conflict([ROW_B, ROW_A, ROW_C], ROW_ORDER_BRANCH)
         self.assertManual(self.resolve(), "order")
+
+SCRIPT_FILES = ("rebase-verify.sh", "rebase-verify-tree.py", "doc_rows.py", "scan-conflict-markers.py")
+
+
+class RebaseVerifyMissingAllowlistTests(unittest.TestCase):
+    """i733-fix2 (gpt F1 / opus L6): without an allowlist on the new base the docs verdict is refused; the checkout's
+    copy (the branch's own, at the PR head) never governs."""
+
+    setUp = RebaseVerifyDocsTests.setUp
+    tearDown = RebaseVerifyDocsTests.tearDown
+    assertDiffer = RebaseVerifyDocsTests.assertDiffer
+    commit_on = RebaseVerifyModeOrderAllowlistTests.commit_on
+
+    def assertMissingAllowlist(self, result, *paths):
+        self.assertDiffer(result, *paths)
+        self.assertIn(ALLOWLIST, result.stdout)
+        self.assertIn("new-base", result.stdout)
+
+    def test_branch_copy_cannot_widen_the_allowlist_while_new_base_has_none(self):
+        # Before the feature lands: no allowlist on either base; the branch adds one listing notes.md too.
+        notes = "notes.md"
+        bare = self.repo.commit("bare base", **{ALLOWLIST: None, notes: readme([ROW_A, ROW_B, ROW_C])})
+        widened = f"# branch copy\n{README}\t{HEADER}\n{notes}\t{HEADER}\n"
+        self.old_base = bare
+        self.old_head = self.commit_on(bare, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", ALLOWLIST: widened, notes: readme([ROW_A_BRANCH, ROW_B, ROW_C])})
+        upstream = self.commit_on(bare, "docs: main moved", {notes: readme([ROW_A, ROW_B_MAIN, ROW_C])})
+        head = self.commit_on(upstream, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", ALLOWLIST: widened, notes: readme([ROW_A_BRANCH, ROW_B_MAIN, ROW_C])})
+        # The verifier runs from the PR head's checkout, whose allowlist is the widened branch copy.
+        checkout = Path(self.tmp.name) / "pr-head-scripts"
+        checkout.mkdir()
+        for name in SCRIPT_FILES:
+            (checkout / name).write_bytes((HERE / name).read_bytes())
+        (checkout / "rebase-docs-allowlist.txt").write_text(widened)
+        result = subprocess.run(["zsh", str(checkout / "rebase-verify.sh"), bare, self.old_head, upstream, head],
+                                cwd=self.repo.root, capture_output=True, text=True)
+        self.assertMissingAllowlist(result, notes)
+
+    def test_allowlist_deleted_on_the_new_base_refuses(self):
+        base = self.commit_on(self.old_base, "docs: main moved", {
+            "notes.md": "n2\n", README: readme([ROW_A, ROW_B_MAIN, ROW_C])})
+        self.repo.switch(base)
+        base = self.repo.commit("chore: drop the allowlist", **{ALLOWLIST: None})
+        head = self.commit_on(base, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", README: readme([ROW_A_BRANCH, ROW_B_MAIN, ROW_C])})
+        result = subprocess.run(["zsh", str(HERE / "rebase-verify.sh"), self.old_base, self.old_head, base, head],
+                                cwd=self.repo.root, capture_output=True, text=True)
+        self.assertMissingAllowlist(result, README)
 
 if __name__ == "__main__":
     # The rebase-docs-py receipt lane runs this file directly; the summary line is the count the receipt parses.

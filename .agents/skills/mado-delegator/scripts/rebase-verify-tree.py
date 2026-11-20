@@ -5,7 +5,7 @@ Exit 0: the replayed patch matches new-head exactly (CODE same). 5 (#733): only 
 rebase-docs-allowlist.txt differ, the per-row three-way merge keeps both sides, no ledger acceptance text changed and
 upstream did not touch any other path the branch touched (CODE same, DOCS differ). 1: anything else (CODE differ).
 Every differing path prints as `DIFF <path>`; a refused docs result prints why (`UPSTREAM OVERLAP <path>`, a mode or
-type change, ...). The allowlist is read from new-base (main); the copy next to this script only when main has none.
+type change, ...). The allowlist is read from new-base (main); without one there, no docs verdict (CODE differ).
 """
 import os
 from pathlib import Path
@@ -95,7 +95,14 @@ def main():
         from doc_rows import ALLOWLIST_REPO_PATH, Manual, load_allowlist, merge
         # The allowlist governing this verification is main's (new base), never the branch's own edit of it.
         listed = blob(new_base, ALLOWLIST_REPO_PATH)
-        allow = load_allowlist() if listed is None else load_allowlist(text=listed.decode("utf-8"))
+        if listed is None:
+            # Fail closed (gpt F1, opus L6): with no allowlist on new-base nothing is allowlisted, so no docs verdict.
+            # The running checkout's copy is never used: at the PR head it is the branch's own.
+            for path in sorted(set(failed) | set(names(expected, new_head, ledger_out))):
+                print(f"DIFF {path}")
+            print(f"CODE differ: no {ALLOWLIST_REPO_PATH} at new-base; no docs verdict without it")
+            return 1
+        allow = load_allowlist(text=listed.decode("utf-8"))
         docs_out = ledger_out + [f":(top,exclude){p}" for p in allow]
         # Name the differing paths: outside the allowlist from a replay without the allowlisted files, the
         # allowlisted files from a plain three-way replay of each.
