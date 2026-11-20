@@ -1673,6 +1673,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         let current = generation
         navigationTask = Task { [self] in
             var scanStarted = false
+            var ended = false // one terminal lifecycle event per task (#600)
             do {
                 let authority = FolderScanPresentationAuthority(access: operation, input: inputIntent.current, originatingTask: navigationTask)
                 lifecycle(.started, nil)
@@ -1688,15 +1689,14 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 try operation.check()
                 scanStarted = true
                 lifecycle(.scanBegan, nil)
-                var refused = false
                 try await folderScanner(services).begin(folder: folder, rootID: rootID, canPresent: {
                     let allowed = authority.isCurrent && context.permit.isCurrent
-                    if !allowed, !refused { refused = true; lifecycle(.rejected, .authorityRejected) }
+                    if !allowed, !ended { ended = true; lifecycle(.rejected, .authorityRejected) }
                     return allowed
                 }).value
-                lifecycle(.completed, nil)
+                if !ended { ended = true; lifecycle(.completed, nil) }
             } catch {
-                lifecycle(Task.isCancelled ? .rejected : .threw, Task.isCancelled ? .taskCancelled : nil)
+                if !ended { ended = true; lifecycle(Task.isCancelled ? .rejected : .threw, Task.isCancelled ? .taskCancelled : nil) }
                 if operation.isCurrent, generation == current {
                     handleFolderOpenFailure(error, folder: folder, scanStarted: scanStarted)
                 }

@@ -5,8 +5,10 @@ import Foundation
 /// Time between two looks is charged to the budget, except where an off-main heartbeat thread was silent too. A silence
 /// both threads share means the process was suspended (the runner, not the product), so that part is named in
 /// `stalls` and not charged. A gap only the main actor shows is the product's time: it is charged, and gaps over
-/// `stallThreshold` are listed in `charged`. `wallCap` bounds the whole wait and is checked before a success, so a
-/// condition that only holds after the cap still fails.
+/// `stallThreshold` are listed in `charged`. Only a gap longer than `stallThreshold` can be discounted: a short poll
+/// is always charged, even if the heartbeat thread alone was descheduled. `wallCap` and the charged budget are both
+/// checked before a success, so a condition that first holds after either has run out still fails; a condition that
+/// holds with the charged time at or under the budget passes.
 @MainActor struct ActiveTimeWait {
     struct Gap: CustomStringConvertible {
         /// When the gap ended, measured from the start of the wait.
@@ -59,7 +61,7 @@ import Foundation
         var last = start
         while true {
             report.wall = start.duration(to: last)
-            if report.wall >= wallCap || Task.isCancelled { return report }
+            if report.wall >= wallCap || report.active > budget || Task.isCancelled { return report }
             if condition() { report.held = true; return report }
             if report.active >= budget { return report }
             between()
@@ -67,7 +69,7 @@ import Foundation
             report.polls += 1
             let looked = now()
             let gap = last.duration(to: looked)
-            let silent = min(gap, silence(last, looked))
+            let silent = gap > stallThreshold ? min(gap, silence(last, looked)) : .zero
             last = looked
             report.active += gap - silent
             if silent > .zero { report.stalls.append(silent) }

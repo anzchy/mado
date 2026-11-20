@@ -81,7 +81,7 @@ func issue600RealHeartbeatChargesABlockedMainThread() async throws {
         if calls == 2 { Thread.sleep(forTimeInterval: 0.6) }
     }) { calls >= 4 }
     #expect(report.held, "\(report)")
-    #expect(report.stalls.isEmpty, "the heartbeat kept ticking: \(report)")
+    #expect(report.timeline.contains { $0.main >= .milliseconds(600) }, "the injected 600 ms block is in the timeline: \(report)")
     #expect(report.active >= .milliseconds(600), "\(report)")
     #expect(report.charged.count == 1 && report.charged[0] >= .milliseconds(600), "\(report)")
 }
