@@ -531,7 +531,8 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
   - `CODE same`: the verdicts carry over; rerun the gates.
   - `CODE same, DOCS differ` (exit 0; #733, owner 2026-11-16: 「3+5 文档冲突不再作废审计」): the verdicts carry
     over; rerun the gates. Only when all hold: every `DIFF` path is in `rebase-docs-allowlist.txt` as read from the
-    new base (main's copy, so a branch cannot widen it for its own rebase; the script's copy only when main has none);
+    new base (main's copy, so a branch cannot widen it for its own rebase; when main has none, there is no docs
+    verdict: `CODE differ` naming the missing allowlist);
     the code replay without those files matches exactly; each such file's Git mode and type (100644, 100755, 120000)
     replays unchanged; the per-row-key three-way merge (old base, new base, audited head) equals the new head, with
     the order and frame rules above (a frame line changed on one side keeps that side; changed on both sides or only

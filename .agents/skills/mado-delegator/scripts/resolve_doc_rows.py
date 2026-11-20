@@ -3,8 +3,8 @@
 rebase by merging its table rows per row key from index stages 1 (base), 2 (main) and 3 (the commit being replayed).
 
 Exit 0 resolved (file written; the caller stages it). 2 the path is not in rebase-docs-allowlist.txt. 3 manual: a cell
-changed on both sides, a deleted row, a duplicate key, the same new key with different text, a stage missing, or lines
-outside the table changed on both sides; the conflict markers stay for a human.
+changed on both sides, a deleted row, a duplicate key, the same new key with different text, rows reordered differently
+on both sides, a stage missing, or lines outside the table changed on both sides; the conflict markers stay for a human.
 """
 import subprocess
 import sys

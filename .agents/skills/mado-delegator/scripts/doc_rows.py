@@ -14,7 +14,7 @@ from pathlib import Path
 
 ALLOWLIST = Path(__file__).with_name("rebase-docs-allowlist.txt")
 # The allowlist's path in the repository; rebase-verify reads it from the new base (main), so a branch's own edit
-# cannot govern its own verification. The copy next to this script is used only when the base has none.
+# cannot govern its own verification; with none on the base the verdict is CODE differ.
 ALLOWLIST_REPO_PATH = ".agents/skills/mado-delegator/scripts/rebase-docs-allowlist.txt"
 _SLOT = "\x00table\x00"
 _PIPE = re.compile(r"(?<!\\)\|")
