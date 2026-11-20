@@ -179,6 +179,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private var standaloneReconcileTask: Task<Void, Never>?
     private var standaloneReconcilePending = false
     private var standaloneRecheckAfterOpen = false
+    /// #785 diagnostic seam: tests record which path asked for the reconnect sheet and why. Nil in production.
+    var fileReconnectionTrace: ((String) -> Void)?
     var onRecentsChanged: (([RecentFolder]) -> Void)?
     var canNavigate: Bool { fileURL != nil && window?.attachedSheet == nil }
     /// The grid surface; the shell also shows in the viewer as its sidebar (#444), which is not the grid.
@@ -1322,7 +1324,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     self.clearFolderImageForNoMatches()
                 } else if error is FileAccessError || AccessReadFailure.isPermissionDenied(error)
                     || !FileManager.default.fileExists(atPath: checkedURL.path) {
-                    self.requestFileReconnection(grant)
+                    self.requestFileReconnection(grant, reason: String(describing: error))
                 } else {
                     self.open(checkedURL, accessRequest: .fileGrant(grant), fromFolderScan: true)
                 }
@@ -1403,7 +1405,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                     self.clearFolderImageForNoMatches()
                 } else {
                     // These are actual scoped access/open/read failures (including EIO), never decoder errors.
-                    self.requestFileReconnection(original)
+                    self.requestFileReconnection(original, reason: String(describing: failure))
                 }
             }
         }
@@ -1411,7 +1413,9 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
         return task
     }
 
-    func requestFileReconnection(_ original: URL) {
+    func requestFileReconnection(_ original: URL, reason: @autoclosure () -> String = "",
+                                 caller: String = #function, line: Int = #line) {
+        fileReconnectionTrace?("\(caller):\(line) reason=\(reason()) sheetAttached=\(window?.attachedSheet != nil)")
         // An existing sheet owns its answer; a later failure must not revoke that continuation.
         if window?.attachedSheet != nil { return }
         // The presentation boundary is synchronous and precedes even an already-attached sheet.
@@ -2544,7 +2548,13 @@ extension CanvasWindowController: ViewerImageHost {
         }
         if let accessError = error as? FileAccessError,
            case .needsFileReconnection(let original) = accessError {
-            requestFileReconnection(original)
+            // A File Grant read can fail this way while its file is being moved to the Trash (#785). With the
+            // displayed path gone, the guarded read probe tells Trash (clear) from lost access (reconnect).
+            if standaloneGrantURL == original, let fileURL, !FileManager.default.fileExists(atPath: fileURL.path) {
+                reportFileGrantReadFailure(original)
+                return
+            }
+            requestFileReconnection(original, reason: String(describing: accessError))
             return
         }
         if let original = standaloneGrantURL, let fileURL,
