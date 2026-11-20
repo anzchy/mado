@@ -5,28 +5,78 @@ import MadoApplication
 import MadoInfrastructure
 import MadoMacUI
 
-/// A clock the test moves. Each `pause` adds its next step (a step over the threshold is a stall). With `realTime`, the clock
-/// is the real one plus the steps taken: a step jumps it and yields once, and later looks sleep 5 ms of real time.
+/// A clock the test moves. Each `pause` adds its next step, a process-wide suspension: the heartbeat is silent for the
+/// whole step (i600-fix1: only such a gap is discounted). With `realTime`, the clock is the real one plus the steps
+/// taken: a step jumps it, runs `onStep` and yields once, and later looks sleep 5 ms of real time.
 @MainActor private final class Steps600 {
     let base = ContinuousClock.now
     let realTime: Bool
     var offset = Duration.zero
     var steps: [Duration]
+    var silent: [(ContinuousClock.Instant, ContinuousClock.Instant)] = []
     var pauses = 0
+    var onStep: () -> Void = {}
     init(_ steps: [Duration], realTime: Bool = false) { self.steps = steps; self.realTime = realTime }
     func wait() -> ActiveTimeWait {
         var wait = ActiveTimeWait()
         wait.now = { [self] in (realTime ? ContinuousClock.now : base).advanced(by: offset) }
         wait.pause = { [self] in
             pauses += 1
+            let from = (realTime ? ContinuousClock.now : base).advanced(by: offset)
             if realTime {
-                if steps.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
-                else { offset += steps.removeFirst(); await Task.yield() }
+                if steps.isEmpty { try await Task.sleep(for: .milliseconds(5)); return }
+                offset += steps.removeFirst()
+                silent.append((from, ContinuousClock.now.advanced(by: offset)))
+                onStep()
+                await Task.yield()
+            } else if steps.isEmpty {
+                offset += .milliseconds(5)
             } else {
-                offset += steps.isEmpty ? .milliseconds(5) : steps.removeFirst()
+                offset += steps.removeFirst()
+                silent.append((from, base.advanced(by: offset)))
+            }
+        }
+        wait.heartbeatSilence = { [self] from, to in
+            silent.reduce(Duration.zero) { sum, gap in
+                let low = max(gap.0, from), high = min(gap.1, to)
+                return low < high ? sum + low.duration(to: high) : sum
             }
         }
         return wait
+    }
+}
+
+/// Holds the real scan until the synthetic stall has passed the deadline (gpt M1: the order is forced, not hoped for).
+private final class Gate600: @unchecked Sendable {
+    private let lock = NSLock()
+    private var opened = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func open() {
+        let resumed = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            opened = true; defer { waiters = [] }; return waiters
+        }
+        for waiter in resumed { waiter.resume() }
+    }
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let now = lock.withLock { () -> Bool in
+                if opened { return true }
+                waiters.append(continuation); return false
+            }
+            if now { continuation.resume() }
+        }
+    }
+}
+
+/// The real FolderBrowser behind the gate.
+private struct GatedBrowser600: FolderScanning {
+    let gate: Gate600
+    let entered = Gate600()
+    func scan(in folder: URL, root: ItemIdentityRoot, options: FolderScanOptions,
+              emit: @Sendable ([FolderEntry]) async throws -> Void) async throws {
+        entered.open()
+        await gate.wait()
+        try await FolderBrowser().scan(in: folder, root: root, options: options, emit: emit)
     }
 }
 
@@ -62,9 +112,11 @@ func issue600WallCapEndsAWaitThatOnlyStalls() async throws {
     #expect(report.stalls.count == 67, "\(report)")
 }
 
-/// Forced ordering of the CI signature with the real controller and the real (non-legacy) scanner: open the symlinked
-/// folder, then stall the clock past the deadline before the scan's main-actor hops run. The wait must still see the
-/// scan complete; with a wall-clock deadline it reads `scanExists=false` exactly as on CI.
+/// Forced ordering of the CI signature with the real controller and the real (non-legacy) FolderBrowser: open the
+/// symlinked folder, then stall the clock past the deadline while a gate holds the scan, and only then let it run. The
+/// wait must still see the scan complete. What this proves: a process-wide stall that passes a wall-clock deadline
+/// before the scan finishes fails a wall-clock wait (the scan is incomplete at the stall) and not this one. It does
+/// not prove that the CI stall was process-wide; the heartbeat in the report says that on CI.
 @Test(.timeLimit(.minutes(2))) @MainActor
 func issue600StalledDeadlineStillSeesTheSymlinkScanComplete() async throws {
     _ = NSApplication.shared
@@ -87,18 +139,27 @@ func issue600StalledDeadlineStillSeesTheSymlinkScanComplete() async throws {
         accessServices: Task { services }, motionPolicy: MotionPolicy(source: Motion600()))
     let window = try #require(controller.window)
     defer { window.close() }
+    let gate = Gate600()
+    controller.folderScanningOverride = GatedBrowser600(gate: gate)
     controller.openGrantedFolder(symlink)
     // The open has only queued its work: nothing scans before the first look.
     #expect(controller.session.folderScan == nil)
-    // The first look's pause is a 2.5 s stall that lets the main actor run only once (a yield): the deadline passes
-    // before the scan's remaining main-actor hops can run. Later looks sleep 5 ms of real time.
-    let report = try await Steps600([.milliseconds(2_500)], realTime: true).wait().until(between: { window.update() }) {
+    // The first look's pause is a 2.5 s process-wide stall; the gate opens only after it, so the scan cannot have
+    // completed before the deadline passed. Later looks sleep 5 ms of real time.
+    let steps = Steps600([.milliseconds(2_500)], realTime: true)
+    var completeAtStall: Bool?
+    steps.onStep = {
+        completeAtStall = controller.session.folderScan?.sourceSnapshot?.isComplete == true
+        gate.open()
+    }
+    let report = try await steps.wait().until(between: { window.update() }) {
         controller.session.folderScan?.sourceSnapshot?.isComplete == true &&
             controller.session.folderScan?.isScanning == false && controller.gridSearchAvailable
     }
+    #expect(completeAtStall == false, "the scan must still be held when the deadline passes: \(report)")
     let scan = controller.session.folderScan
     #expect(report.held, "scanExists=\(scan != nil), scanning=\(scan?.isScanning ?? false): \(report)")
-    #expect(report.stalls.count == 1 && report.stalls[0] >= .milliseconds(2_500), "\(report)")
+    #expect(report.stalls.count >= 1 && report.stalls.first.map { $0 >= .milliseconds(2_500) } == true, "\(report)")
     #expect(Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == ["0.png", "1.png", "2.png"])
 }
 

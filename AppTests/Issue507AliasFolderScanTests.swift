@@ -7,9 +7,11 @@ import MadoMacUI
 
 private final class Alias507Events: @unchecked Sendable {
     private let lock = NSLock()
-    private let start = ContinuousClock.now
+    private let start: ContinuousClock.Instant
     private var events: [String] = []
-    /// Each event carries its time since this log was made, just before the open (#600: the report shows where it stopped).
+    /// Logs that share a `start` (#600 L2: the access, scanner and lifecycle logs of one open) read on one time line.
+    init(start: ContinuousClock.Instant = .now) { self.start = start }
+    /// Each event carries its time since `start`, just before the open (#600: the report shows where it stopped).
     func append(_ event: String) {
         let ms = ActiveTimeWait.Report.ms(start.duration(to: .now))
         lock.withLock { events.append("+\(ms)ms \(event)") }
@@ -38,8 +40,8 @@ private struct Alias507SystemAccess: SecurityScope, BookmarkCoding {
 /// Observe the real scan boundary; the legacy mode recreates #506's one-batch test scanner.
 private actor Alias507Scanner: FolderScanning {
     let legacy: Bool
-    private let events = Alias507Events()
-    init(legacy: Bool) { self.legacy = legacy }
+    private let events: Alias507Events
+    init(legacy: Bool, start: ContinuousClock.Instant = .now) { self.legacy = legacy; events = Alias507Events(start: start) }
     nonisolated func report() -> String { events.report() }
     nonisolated var entered: Bool { events.report().contains("scan entered") }
     func scan(in folder: URL, root: ItemIdentityRoot, options: FolderScanOptions,
@@ -73,9 +75,10 @@ private actor Alias507Scanner: FolderScanning {
     var onChange: (@MainActor () -> Void)?
 }
 
-/// Each case has its own two-second bound, independent of ConditionWait's timed-test policy. #600: the bound counts the
-/// time the wait loop ran; a main-actor stall (CI runs 42369028897, 42728233488, 43163508262, 44714991399) is named in
-/// the diagnostic and not charged, because the open could not run during it either.
+/// Each case has its own two-second bound, independent of ConditionWait's timed-test policy. #600: the bound is 2 s of
+/// main-loop time within a wall cap. A stall the off-main heartbeat shares (a process-wide suspension; CI runs
+/// 42369028897, 42728233488, 43163508262, 44714991399 stalled for 5–16 s) is named and not charged; a stall only the
+/// main actor shows is charged to the product. The cap is this case's 3-minute limit shared by its paths plus setup.
 @Test(.timeLimit(.minutes(3)), arguments: [false, true]) @MainActor
 func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     _ = NSApplication.shared
@@ -105,8 +108,10 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
     } catch {
         print("[i507] Finder alias fixture unavailable: \(error)")
     }
+    let wallCap = Duration.seconds(180) / (paths.count + 1)
     for (index, path) in paths.enumerated() {
-        let events = Alias507Events()
+        let start = ContinuousClock.now
+        let events = Alias507Events(start: start)
         let adapter = Alias507SystemAccess(events: events)
         let access = try FileAccess(scope: adapter, bookmarks: adapter,
             store: BookmarkStore(url: base.appendingPathComponent("roots-\(index).json")), buildSHA: "issue507")
@@ -115,11 +120,15 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
             browser: FolderBrowser(), watch: WatchHub(access: access, source: FSEventSource(), scheduler: DispatchWatchScheduler()))
         let controller = CanvasWindowController(pipeline: ImageIOPipeline(), preferencesStore: InMemoryDisplayPreferencesStore(),
             accessServices: Task { services }, motionPolicy: MotionPolicy(source: Alias507Motion()))
-        let scanner = Alias507Scanner(legacy: legacyScanner)
+        let scanner = Alias507Scanner(legacy: legacyScanner, start: start)
         controller.folderScanningOverride = scanner
+        let lifecycle = Alias507Events(start: start)
+        controller.folderOpenLifecycleObserver = { lifecycle.append($0.description) }
         let window = try #require(controller.window)
         controller.openGrantedFolder(path.1)
-        let wait = try await ActiveTimeWait().until(between: { window.update() }) {
+        var wait = ActiveTimeWait()
+        wait.wallCap = wallCap
+        let report = try await wait.until(between: { window.update() }) {
             controller.session.folderScan?.sourceSnapshot?.isComplete == true &&
                 controller.session.folderScan?.isScanning == false && controller.gridSearchAvailable
         }
@@ -131,10 +140,10 @@ func issue507FolderPathsComplete(legacyScanner: Bool) async throws {
             else if scan != nil { "scan created, scanner not entered" }
             else if window.title == path.1.lastPathComponent { "folder opened, scan not created" }
             else { "grant not finished" }
-        let diagnostic = "\(path.0), legacy=\(legacyScanner): stage=\(stage); wait \(wait); \(scanner.report()); scanExists=\(scan != nil), scanning=\(scan?.isScanning ?? false), complete=\(scan?.sourceSnapshot?.isComplete ?? false), count=\(scan?.sourceSnapshot?.navigationEntries.count ?? -1), gridReady=\(controller.gridSearchAvailable), failure=\(String(describing: scan?.failure))"
+        let diagnostic = "\(path.0), legacy=\(legacyScanner): stage=\(stage); lifecycle [\(lifecycle.report())]; wait \(report); scanner [\(scanner.report())]; scanExists=\(scan != nil), scanning=\(scan?.isScanning ?? false), complete=\(scan?.sourceSnapshot?.isComplete ?? false), count=\(scan?.sourceSnapshot?.navigationEntries.count ?? -1), gridReady=\(controller.gridSearchAvailable), failure=\(String(describing: scan?.failure))"
         print("[i507] \(diagnostic)")
         print("[i507] access \(path.0): \(events.report()); sheet=\(window.attachedSheet != nil)")
-        #expect(scan?.sourceSnapshot?.isComplete == true, "Scan did not complete within 2 seconds: \(diagnostic)")
+        #expect(scan?.sourceSnapshot?.isComplete == true, "Scan did not complete in 2 s of loop time within the wall cap: \(diagnostic)")
         #expect(scan?.isScanning == false, "Scan remained active: \(diagnostic)")
         #expect(scan?.sourceSnapshot?.navigationEntries.count == 3, "Paths must return the same three images: \(diagnostic)")
         #expect(controller.gridSearchAvailable, "Completion did not reach the grid: \(diagnostic)")
@@ -251,10 +260,10 @@ private struct Unreadable507Access: SecurityScope, BookmarkCoding {
             prompts.folders.append(folder); prompts.answers.append(selected)
         }
     }
-    /// Polls with its own two-second bound of time the loop ran; main-actor stalls are printed, not charged (#600).
+    /// Polls for 2 s of loop time within the wall cap; process-wide stalls are printed, not charged (#600).
     func within2s(_ condition: () -> Bool) async throws -> Bool {
         let report = try await ActiveTimeWait().until(between: { window.update() }, condition)
-        if !report.stalls.isEmpty || !report.held { print("[i507] within2s \(report)") }
+        if !report.timeline.isEmpty || !report.held { print("[i507] within2s \(report)") }
         return report.held
     }
     func expectNothingGranted(_ label: String) async throws {
@@ -297,7 +306,7 @@ func issue507DeliveredFoldersTakeTheFolderPanel(legacyScanner: Bool) async throw
                 rig.controller.session.folderScan?.isScanning == false && rig.controller.gridSearchAvailable
         }
         let scan = rig.controller.session.folderScan
-        #expect(completed, "\(entry): the grid must complete within 2 seconds of the grant")
+        #expect(completed, "\(entry): the grid must complete in 2 s of loop time within the wall cap after the grant")
         #expect(Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) == Set(["0.png", "1.png", "2.png"]))
         #expect(rig.prompts.folders.count == 1, "\(entry): one prompt only")
         #expect(rig.window.attachedSheet == nil, "\(entry): no second sheet")
