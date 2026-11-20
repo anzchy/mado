@@ -13,9 +13,17 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
     /// 2: the stored bindings are on the ⌃⌥ defaults of #717 (none or 1: #685's ⌃⇧⌘).
     static let defaultsVersion = 2
     private let defaults: UserDefaults
+    private let afterBindingsRead: (@Sendable () async -> Void)?
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
+        self.afterBindingsRead = nil
+    }
+
+    /// Deterministic read interleaving for package tests; never used by the App or helper.
+    init(defaults: UserDefaults, afterBindingsRead: @escaping @Sendable () async -> Void) {
+        self.defaults = defaults
+        self.afterBindingsRead = afterBindingsRead
     }
 
     /// The shared suite; nil only when the App Group is unavailable.
@@ -25,9 +33,12 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
 
     public func bindings() async -> CaptureShortcutBindings {
         defaults.synchronize()
+        // A migration writes bindings before version. Reading version first cannot pair old bindings with version 2.
+        let version = defaults.integer(forKey: Self.defaultsVersionKey)
         guard let stored = defaults.dictionary(forKey: Self.bindingsKey) else { return .defaults }
         let bindings = CaptureShortcutBindings(Self.decode(stored))
-        guard defaults.integer(forKey: Self.defaultsVersionKey) < Self.defaultsVersion else { return bindings }
+        if let afterBindingsRead { await afterBindingsRead() }
+        guard version < Self.defaultsVersion else { return bindings }
         let moved = bindings.replacingLegacyDefaults()
         await setBindings(moved)
         return moved
