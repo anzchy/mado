@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate and merge two independent SwiftPM LCOV exports before evaluating exact coverage.
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coverageAtomicSwiftArgs, coverageAtomicScratchPath, ATOMIC_COVERAGE_FLAG_ID } from './coverage-atomic.mjs';
@@ -184,6 +184,56 @@ function functionExceptions(root, sources, toolchain) {
   }
   return result;
 }
+// #788: "Re-run failed jobs" keeps a successful shard job and its artifact from an earlier attempt of the same run. Such a
+// shard is accepted only when the run's job records (fetched by --fetch-attempt-jobs) prove that its job succeeded in that
+// attempt at this head SHA and was carried forward unchanged to every later attempt (same start, end and runner). Commit,
+// run, toolchain, instrumentation and source checks stay as they are, so both shards are still one commit's inputs.
+export const SHARD_JOBS = Object.freeze({ 'non-ui': 'Package tests (non-UI)', macui: 'Package tests (MacUI)' });
+const RERUN_ALL = 'rerun all jobs of this run';
+function attemptProvenance(shard, produced, expected) {
+  if (!Number.isInteger(produced) || produced < 1) fatal(`${shard} attempt provenance mismatch: artifact attempt ${JSON.stringify(produced)} is not a positive integer`);
+  if (produced === expected.attempt) return null;
+  const refuse = reason => fatal(`${shard} attempt provenance mismatch: artifact from attempt ${produced}, this is attempt ${expected.attempt}; ${reason}; ${RERUN_ALL}`);
+  if (produced > expected.attempt) fatal(`${shard} attempt provenance mismatch: artifact from attempt ${produced} is later than this attempt ${expected.attempt}; ${RERUN_ALL}`);
+  const proof = expected.attemptJobs;
+  if (!proof) refuse('no job records for the earlier attempts');
+  if (proof.runId !== expected.runId) refuse(`job records are for run ${proof.runId}`);
+  if (proof.attempt !== expected.attempt) refuse(`job records are for attempt ${proof.attempt}`);
+  const name = SHARD_JOBS[shard];
+  const records = [];
+  for (let attempt = produced; attempt <= expected.attempt; attempt++) {
+    const record = proof.attempts[String(attempt)];
+    if (!record) refuse(`no job records for attempt ${attempt}`);
+    if (record.headSha !== expected.sha) refuse(`attempt ${attempt} head SHA ${record.headSha} is not ${expected.sha}`);
+    const jobs = record.jobs.filter(job => job.name === name);
+    if (jobs.length !== 1) refuse(jobs.length ? `${jobs.length} jobs ${name} in attempt ${attempt}` : `no job ${name} in attempt ${attempt}`);
+    const [job] = jobs;
+    if (job.runAttempt !== attempt) refuse(`job record attempt ${job.runAttempt} listed under attempt ${attempt}`);
+    if (job.headSha !== expected.sha) refuse(`job ${name} head SHA ${job.headSha} in attempt ${attempt} is not ${expected.sha}`);
+    if (job.conclusion !== 'success') refuse(`job ${name} did not succeed in attempt ${attempt} (${job.conclusion})`);
+    // Other jobs may be skipped (no runner, no times); the shard's own job must carry all three to compare attempts.
+    if (![job.startedAt, job.completedAt, job.runnerName].every(value => typeof value === 'string' && value))
+      refuse(`job ${name} in attempt ${attempt} has no start, end or runner to compare`);
+    records.push(job);
+  }
+  const [first, ...later] = records;
+  for (const [index, job] of later.entries())
+    if (job.startedAt !== first.startedAt || job.completedAt !== first.completedAt || job.runnerName !== first.runnerName)
+      refuse(`job ${name} ran again in attempt ${produced + index + 1}, so its artifact must come from that attempt`);
+  return `${shard} shard from attempt ${produced} of run ${expected.runId} (job ${name} succeeded there and was not re-run; checked against the run's job records)`;
+}
+function readAttemptJobs(file) {
+  if (file === undefined || !existsSync(file)) return null;
+  let proof;
+  try { proof = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { fatal(`attempt job records malformed: ${error.message}`); }
+  const text = value => typeof value === 'string' && value.length > 0;
+  const valid = proof && proof.version === 1 && text(proof.runId) && Number.isInteger(proof.attempt) && proof.attempts && typeof proof.attempts === 'object' &&
+    Object.values(proof.attempts).every(record => record && text(record.headSha) && Array.isArray(record.jobs) &&
+      record.jobs.every(job => job && text(job.name)));
+  if (!valid) fatal('attempt job records malformed');
+  return proof;
+}
+
 function artifact(root, input, shard, expected, sources) {
   let raw, meta;
   try { raw = readFileSync(path.join(input, shard, 'coverage.lcov')); meta = JSON.parse(readFileSync(path.join(input, shard, 'metadata.json'), 'utf8')); }
@@ -192,7 +242,7 @@ function artifact(root, input, shard, expected, sources) {
   if (meta.version !== 1 || meta.shard !== shard) fatal(`${shard} shard/version mismatch`);
   if (meta.commit !== expected.sha) fatal(`${shard} commit provenance mismatch`);
   if (String(meta.runId) !== expected.runId) fatal(`${shard} run provenance mismatch`);
-  if (meta.runAttempt !== expected.attempt) fatal(`${shard} attempt provenance mismatch`);
+  const carried = attemptProvenance(shard, meta.runAttempt, expected);
   const tc = object(meta.toolchain, `${shard} toolchain`);
   for (const key of ['xcode', 'swift', 'llvmCov']) nonempty(tc[key], `${shard} toolchain.${key}`);
   const expectedInstrumentation = { swiftArgs: coverageAtomicSwiftArgs, scratchPath: coverageAtomicScratchPath, flagId: ATOMIC_COVERAGE_FLAG_ID };
@@ -205,7 +255,7 @@ function artifact(root, input, shard, expected, sources) {
   const listed = object(meta.sourceInventory, `${shard} source inventory`);
   if (JSON.stringify(Object.keys(listed).sort()) !== JSON.stringify(Object.keys(sources).sort())) fatal(`${shard} source inventory missing or unexpected file`);
   for (const [name, value] of Object.entries(sources)) if (listed[name] !== value) fatal(`${shard} source digest mismatch: ${name}`);
-  return { meta, files: parseLCOV(raw.toString('utf8'), root) };
+  return { meta, carried, files: parseLCOV(raw.toString('utf8'), root) };
 }
 function mapping(record) {
   return JSON.stringify({ lines: [...record.lines].map(([n, v]) => [n, v.checksum]).sort((a, b) => a[0] - b[0]),
@@ -238,7 +288,7 @@ function loopExit(root, merged) {
   return `ImageSourceHeader.swift:${n} loop-exit throw hit count ${hit.hits}`;
 }
 
-export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, attempt, formal, shards = ['non-ui', 'macui'] }) {
+export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, attempt, formal, shards = ['non-ui', 'macui'], attemptJobs }) {
   if (![root, input, out].every(x => typeof x === 'string' && path.isAbsolute(x))) fatal('root/input/out must be absolute');
   if (eligibleOut !== undefined && (typeof eligibleOut !== 'string' || !path.isAbsolute(eligibleOut))) fatal('eligibleOut must be absolute');
   if (existsSync(out)) unlinkSync(out);
@@ -248,7 +298,7 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   if (typeof formal !== 'boolean') fatal('formal must be boolean');
   if (JSON.stringify(shards) !== JSON.stringify(['non-ui', 'macui']) && JSON.stringify(shards) !== JSON.stringify(['non-ui'])) fatal('invalid shard selection');
   if (formal && shards.length !== 2) fatal('formal coverage requires two shards');
-  const expected = { sha, runId: String(runId), attempt: number(attempt, 'expected attempt', true) };
+  const expected = { sha, runId: String(runId), attempt: number(attempt, 'expected attempt', true), attemptJobs: readAttemptJobs(attemptJobs) };
   const sources = inventory(root), exempt = exceptions(root, sources);
   for (const name of exempt.keys()) if (!(name in sources)) fatal(`exception source missing: ${name}`);
   const [left, right] = shards.map(shard => artifact(root, input, shard, expected, sources));
@@ -301,7 +351,7 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; ${formal ? 'formal full-package evidence' : 'diagnostic, not formal full-package evidence'}`,
     `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, `Coverage instrumentation: ${JSON.stringify(left.meta.instrumentation)}`, 'Statements: statement proxy = LCOV executable lines; independent Swift statements unmeasured.',
     'LCOV LF/LH summaries may count regions; unique DA rows are the executable-line denominator.',
-    'branches unmeasured', 'App/ excluded', ''];
+    'branches unmeasured', 'App/ excluded', ...[left, right].filter(shard => shard?.carried).map(shard => shard.carried), ''];
   const total = { lines: 0, coveredLines: 0, functions: 0, coveredFunctions: 0, exceptions: 0 };
   const uncovered = [];
   for (const module of modules) {
@@ -349,16 +399,72 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
 function cli(args) {
   const values = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!/^--(root|input|out|eligible-out|sha|run-id|attempt|formal|shards)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
+    if (!/^--(root|input|out|eligible-out|sha|run-id|attempt|formal|shards|attempt-jobs)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
     values[args[i]] = args[i + 1];
   }
   for (const key of ['--root', '--input', '--out', '--sha', '--run-id', '--attempt', '--formal']) if (!(key in values)) fatal(`missing ${key}`);
   if (!['true', 'false'].includes(values['--formal'])) fatal('invalid --formal');
   return { root: path.resolve(values['--root']), input: path.resolve(values['--input']), out: path.resolve(values['--out']),
     eligibleOut: values['--eligible-out'] === undefined ? undefined : path.resolve(values['--eligible-out']), sha: values['--sha'], runId: values['--run-id'],
-    attempt: values['--attempt'], formal: values['--formal'] === 'true', shards: values['--shards'] === undefined ? ['non-ui', 'macui'] : values['--shards'].split(',') };
+    attempt: values['--attempt'], formal: values['--formal'] === 'true', shards: values['--shards'] === undefined ? ['non-ui', 'macui'] : values['--shards'].split(','),
+    attemptJobs: values['--attempt-jobs'] === undefined ? undefined : path.resolve(values['--attempt-jobs']) };
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+
+// --fetch-attempt-jobs <out> --repo <owner/name> --run-id <id> --attempt <n>: write the job records of attempts 1..n
+// (GITHUB_API_URL, GH_TOKEN or GITHUB_TOKEN). Any failed or incomplete read writes no file and only warns: the gate then
+// refuses a shard from an earlier attempt, so a missing record can never let one through.
+export async function fetchAttemptJobs({ api, repo, runId, attempt, token, fetchImpl = fetch }) {
+  const get = async route => {
+    const response = await fetchImpl(`${api}/repos/${repo}/actions/runs/${runId}${route}`,
+      { headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${token}`, 'x-github-api-version': '2022-11-28' } });
+    if (!response.ok) throw new Error(`GET ${route}: HTTP ${response.status}`);
+    return response.json();
+  };
+  const attempts = {};
+  for (let n = 1; n < attempt + 1; n++) {
+    const run = await get(`/attempts/${n}`);
+    if (run.run_attempt !== n || typeof run.head_sha !== 'string') throw new Error(`attempt ${n} record malformed`);
+    const jobs = [];
+    for (let page = 1; page <= 10; page++) {
+      const listed = await get(`/attempts/${n}/jobs?per_page=100&page=${page}`);
+      if (!Array.isArray(listed.jobs) || !Number.isInteger(listed.total_count)) throw new Error(`attempt ${n} job list malformed`);
+      jobs.push(...listed.jobs);
+      if (listed.jobs.length < 100 || jobs.length >= listed.total_count) {
+        if (jobs.length !== listed.total_count) throw new Error(`attempt ${n} job list incomplete: ${jobs.length} of ${listed.total_count}`);
+        break;
+      }
+      if (page === 10) throw new Error(`attempt ${n} job list incomplete after 10 pages`);
+    }
+    attempts[n] = { headSha: run.head_sha, jobs: jobs.map(job => ({ name: job.name, conclusion: job.conclusion, runAttempt: job.run_attempt, headSha: job.head_sha,
+      startedAt: job.started_at, completedAt: job.completed_at, runnerName: job.runner_name })) };
+  }
+  return { version: 1, runId: String(runId), attempt, attempts };
+}
+async function fetchCli(args) {
+  const values = {};
+  for (let i = 0; i < args.length; i += 2) {
+    if (!/^--(fetch-attempt-jobs|repo|run-id|attempt)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
+    values[args[i]] = args[i + 1];
+  }
+  for (const key of ['--fetch-attempt-jobs', '--repo', '--run-id', '--attempt']) if (!(key in values)) fatal(`missing ${key}`);
+  if (!/^[1-9][0-9]*$/.test(values['--run-id']) || !/^[1-9][0-9]*$/.test(values['--attempt']) || !/^[\w.-]+\/[\w.-]+$/.test(values['--repo'])) fatal('invalid fetch arguments');
+  const out = path.resolve(values['--fetch-attempt-jobs']), attempt = Number(values['--attempt']);
+  if (existsSync(out)) unlinkSync(out);
+  if (attempt === 1) { process.stdout.write('package-coverage: attempt 1 has no earlier attempt; no job records needed\n'); return; }
+  try {
+    const proof = await fetchAttemptJobs({ api: process.env.GITHUB_API_URL || 'https://api.github.com', repo: values['--repo'], runId: values['--run-id'],
+      attempt, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '' });
+    writeFileSync(`${out}.tmp`, JSON.stringify(proof, null, 1) + '\n');
+    renameSync(`${out}.tmp`, out);
+    process.stdout.write(`package-coverage: job records of attempts 1..${attempt} written to ${out}\n`);
+  } catch (error) {
+    process.stderr.write(`package-coverage: cannot read the job records of earlier attempts (${error.message}); a shard from an earlier attempt will be refused\n`);
+  }
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv[2] === '--fetch-attempt-jobs') {
+  try { await fetchCli(process.argv.slice(2)); }
+  catch (error) { process.stderr.write(`package-coverage: ${error.message}\n`); process.exitCode = 1; }
+} else if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const result = evaluateCoverage(cli(process.argv.slice(2)));
     process.stdout.write(result.report);

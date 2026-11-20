@@ -551,7 +551,8 @@ test('CI design-check job uses pinned actions and runs the design gate', async (
   assert.match(job, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\.4\.0/);
   assert.match(job, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\.4\.0/);
   assert.match(job, /run: npm ci --ignore-scripts/);
-  assert.match(job, /run: npx playwright install --with-deps chromium/);
+  // #788: the same install command, now inside the bounded install retry.
+  assert.match(job, /^          scripts\/ci\/retry\.sh 3 \d+ npx playwright install --with-deps chromium$/m);
   assert.match(job, /run: npm run design:check/);
 });
 

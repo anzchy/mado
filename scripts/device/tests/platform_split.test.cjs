@@ -126,8 +126,9 @@ test('Ubuntu tooling explicitly installs device dependencies and preserves exist
   assert.match(body, /uses: actions\/setup-node@/);
   assert.match(body, /node-version: 22/);
   const install = runBlock(step(body, 'Install portable device test tools'));
-  assert.match(install, /sudo apt-get update/);
-  assert.match(install, /sudo apt-get install[^\n]*\bpython3\b[^\n]*\bgit\b[^\n]*\bzsh\b/);
+  // #788: apt runs with -o Acquire::Retries=3 under scripts/ci/retry.sh (pinned line by line in scripts/ci/retry.test.mjs).
+  assert.match(install, /sudo apt-get (?:-o Acquire::Retries=3 )?update/);
+  assert.match(install, /sudo apt-get (?:-o Acquire::Retries=3 )?install[^\n]*\bpython3\b[^\n]*\bgit\b[^\n]*\bzsh\b/);
   assert.match(portableStep(), /^        working-directory: pr-head$/m);
   assert.equal(runBlock(step(body, 'Test agent tooling')),
     'node --test scripts/agents/*.test.mjs scripts/perf/*.test.mjs scripts/ledger/*.test.mjs scripts/tdd/*.test.mjs scripts/hooks/*.test.mjs');
