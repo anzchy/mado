@@ -272,7 +272,8 @@ jobs:
       - name: Merge and gate Package coverage
         run: >-
           node scripts/ci/package-coverage.mjs --root . --input ci-coverage --out ci-coverage/report.md
-          --sha "${{ github.sha }}" --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
+          --sha "${{ github.sha }}" --head-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+          --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
           --attempt-jobs ci-coverage/attempt-jobs.json
           --formal "${{ github.event_name != 'workflow_dispatch' || inputs.swift_filter == '' }}"
       - name: Upload Package coverage report

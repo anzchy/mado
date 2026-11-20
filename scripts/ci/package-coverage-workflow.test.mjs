@@ -112,3 +112,10 @@ test('788 the aggregation reads earlier attempts\' job records on a rerun and gi
   assert.match(step(body, 'Merge and gate Package coverage'), /--attempt-jobs ci-coverage\/attempt-jobs\.json/);
   assert.match(step(body, 'Merge and gate Package coverage'), /--attempt "\$\{\{ github\.run_attempt \}\}"/);
 });
+
+test('788 fix1 the gate compares the job records with the PR head and the artifacts with github.sha', () => {
+  const gate = step(job('package-coverage'), 'Merge and gate Package coverage');
+  assert.match(gate, /--sha "\$\{\{ github\.sha \}\}" --head-sha "\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}"/);
+  for (const shard of ['package-tests', 'package-macui-tests'])
+    assert.match(job(shard), /--commit "\$\{\{ github\.sha \}\}" --run-id "\$\{\{ github\.run_id \}\}" --attempt "\$\{\{ github\.run_attempt \}\}"/, shard);
+});

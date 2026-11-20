@@ -94,3 +94,48 @@ test('788 no workflow retries a test or assertion step: retry.sh appears only in
   }
   assert.equal(installs, 2, 'the two install steps');
 });
+
+// i788a-fix1 (opus M1, gpt M2): every step of every workflow (split on `      - `, named or not) that uses retry.sh or
+// Acquire::Retries must be one of the allowlisted install steps, and its whole text must equal the pinned text, so a
+// retry wrapped around any other command fails here.
+import { RETRY_STEPS, retryStepViolations, workflowSteps } from './retry-steps.mjs';
+const allWorkflows = () => Object.fromEntries(readdirSync(workflows).filter(name => /\.ya?ml$/.test(name)).map(name => [name, read(name)]));
+
+test('788 fix1 the retry allowlist is exactly the two install steps and the workflows match it', () => {
+  assert.deepEqual(Object.keys(RETRY_STEPS).sort(), ['ci.yml\u0000Install Playwright Chromium', 'pr-body.yml\u0000Install portable device test tools']);
+  assert.deepEqual(retryStepViolations(allWorkflows()), []);
+  const found = Object.entries(allWorkflows()).flatMap(([file, text]) => workflowSteps(text).filter(s => /retry\.sh|Acquire::Retries/.test(s.text)).map(s => `${file}\u0000${s.name}`));
+  assert.deepEqual(found.sort(), Object.keys(RETRY_STEPS).sort());
+});
+
+test('788 fix1 workflow steps are split on every list item, named or not, and comments are not step text', () => {
+  const text = 'jobs:\n  a:\n    steps:\n      - name: One\n        run: echo 1\n      # a comment about retry.sh\n      - run: echo 2\n      - uses: actions/x@v1\n        with:\n          name: not-a-step-name\n';
+  assert.deepEqual(workflowSteps(text).map(s => s.name), ['One', null, null]);
+  assert.equal(workflowSteps(text)[0].text, '      - name: One\n        run: echo 1\n');
+});
+
+test('788 fix1 a retry around anything other than the pinned install commands is refused', () => {
+  const base = allWorkflows();
+  const pin = 'scripts/ci/retry.sh 3 20 npx playwright install --with-deps chromium\n';
+  const mutations = [
+    ['unnamed run step after an install step', 'ci.yml', text => text.replace(pin, pin + '      - run: scripts/ci/retry.sh 3 1 npm run design:check\n')],
+    ['uses-first step', 'ci.yml', text => text.replace(pin, pin + '      - uses: ./.github/actions/x\n        env:\n          RUN: scripts/ci/retry.sh 3 1 npm test\n')],
+    ['extra wrapped command inside an install step', 'ci.yml', text => text.replace(pin, pin + '          scripts/ci/retry.sh 3 20 npm run design:check\n')],
+    ['a test step named Install', 'pr-body.yml', text => text.replace('      - name: Test portable device tools\n', '      - name: Install and test device tools\n        run: scripts/ci/retry.sh 3 1 node --test scripts/device/tests\n      - name: Test portable device tools\n')],
+    ['Acquire::Retries in another step', 'ci.yml', text => text.replace(pin, pin + '      - name: Check design\n        run: sudo apt-get -o Acquire::Retries=3 install x && npm test\n')],
+  ];
+  for (const [label, file, mutate] of mutations) {
+    const changed = mutate(base[file]);
+    assert.notEqual(changed, base[file], `${label}: mutation applies`);
+    assert.notDeepEqual(retryStepViolations({ ...base, [file]: changed }), [], label);
+  }
+});
+
+test('788 fix1 retry messages name the command and its first argument (opus L1)', t => {
+  const f = flaky(t, 99, 5);
+  const r = run('2', '0', f.cmd, 'install', '--with-deps', 'chromium');
+  assert.equal(r.status, 5);
+  assert.match(r.stderr, /^retry: try 1\/2 of .*flaky\.sh install failed with exit 5; next try in 0 s$/m);
+  assert.match(r.stderr, /^retry: .*flaky\.sh install failed 2 times; last exit 5$/m);
+  assert.doesNotMatch(r.stderr, /--with-deps/);
+});

@@ -188,6 +188,8 @@ function functionExceptions(root, sources, toolchain) {
 // shard is accepted only when the run's job records (fetched by --fetch-attempt-jobs) prove that its job succeeded in that
 // attempt at this head SHA and was carried forward unchanged to every later attempt (same start, end and runner). Commit,
 // run, toolchain, instrumentation and source checks stay as they are, so both shards are still one commit's inputs.
+// The records carry the run's head_sha: on pull_request that is the PR head, while --sha (github.sha, kept by every
+// re-run of the run) is the refs/pull/N/merge commit the artifacts record, so the head is passed as --head-sha (i788a-fix1).
 export const SHARD_JOBS = Object.freeze({ 'non-ui': 'Package tests (non-UI)', macui: 'Package tests (MacUI)' });
 const RERUN_ALL = 'rerun all jobs of this run';
 function attemptProvenance(shard, produced, expected) {
@@ -204,12 +206,12 @@ function attemptProvenance(shard, produced, expected) {
   for (let attempt = produced; attempt <= expected.attempt; attempt++) {
     const record = proof.attempts[String(attempt)];
     if (!record) refuse(`no job records for attempt ${attempt}`);
-    if (record.headSha !== expected.sha) refuse(`attempt ${attempt} head SHA ${record.headSha} is not ${expected.sha}`);
+    if (record.headSha !== expected.headSha) refuse(`attempt ${attempt} head SHA ${record.headSha} is not ${expected.headSha}`);
     const jobs = record.jobs.filter(job => job.name === name);
     if (jobs.length !== 1) refuse(jobs.length ? `${jobs.length} jobs ${name} in attempt ${attempt}` : `no job ${name} in attempt ${attempt}`);
     const [job] = jobs;
     if (job.runAttempt !== attempt) refuse(`job record attempt ${job.runAttempt} listed under attempt ${attempt}`);
-    if (job.headSha !== expected.sha) refuse(`job ${name} head SHA ${job.headSha} in attempt ${attempt} is not ${expected.sha}`);
+    if (job.headSha !== expected.headSha) refuse(`job ${name} head SHA ${job.headSha} in attempt ${attempt} is not ${expected.headSha}`);
     if (job.conclusion !== 'success') refuse(`job ${name} did not succeed in attempt ${attempt} (${job.conclusion})`);
     // Other jobs may be skipped (no runner, no times); the shard's own job must carry all three to compare attempts.
     if (![job.startedAt, job.completedAt, job.runnerName].every(value => typeof value === 'string' && value))
@@ -225,12 +227,12 @@ function attemptProvenance(shard, produced, expected) {
 function readAttemptJobs(file) {
   if (file === undefined || !existsSync(file)) return null;
   let proof;
-  try { proof = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { fatal(`attempt job records malformed: ${error.message}`); }
+  try { proof = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { fatal(`attempt job records malformed: ${error.message}; ${RERUN_ALL}`); }
   const text = value => typeof value === 'string' && value.length > 0;
   const valid = proof && proof.version === 1 && text(proof.runId) && Number.isInteger(proof.attempt) && proof.attempts && typeof proof.attempts === 'object' &&
     Object.values(proof.attempts).every(record => record && text(record.headSha) && Array.isArray(record.jobs) &&
       record.jobs.every(job => job && text(job.name)));
-  if (!valid) fatal('attempt job records malformed');
+  if (!valid) fatal(`attempt job records malformed; ${RERUN_ALL}`);
   return proof;
 }
 
@@ -288,17 +290,18 @@ function loopExit(root, merged) {
   return `ImageSourceHeader.swift:${n} loop-exit throw hit count ${hit.hits}`;
 }
 
-export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, attempt, formal, shards = ['non-ui', 'macui'], attemptJobs }) {
+export function evaluateCoverage({ root, input, out, eligibleOut, sha, headSha = sha, runId, attempt, formal, shards = ['non-ui', 'macui'], attemptJobs }) {
   if (![root, input, out].every(x => typeof x === 'string' && path.isAbsolute(x))) fatal('root/input/out must be absolute');
   if (eligibleOut !== undefined && (typeof eligibleOut !== 'string' || !path.isAbsolute(eligibleOut))) fatal('eligibleOut must be absolute');
   if (existsSync(out)) unlinkSync(out);
   if (eligibleOut !== undefined && existsSync(eligibleOut)) unlinkSync(eligibleOut);
   if (!/^[0-9a-f]{40}$/.test(sha ?? '')) fatal('expected commit SHA malformed');
+  if (!/^[0-9a-f]{40}$/.test(headSha ?? '')) fatal('expected head SHA malformed');
   if (!/^[1-9][0-9]*$/.test(String(runId))) fatal('expected run ID malformed');
   if (typeof formal !== 'boolean') fatal('formal must be boolean');
   if (JSON.stringify(shards) !== JSON.stringify(['non-ui', 'macui']) && JSON.stringify(shards) !== JSON.stringify(['non-ui'])) fatal('invalid shard selection');
   if (formal && shards.length !== 2) fatal('formal coverage requires two shards');
-  const expected = { sha, runId: String(runId), attempt: number(attempt, 'expected attempt', true), attemptJobs: readAttemptJobs(attemptJobs) };
+  const expected = { sha, headSha, runId: String(runId), attempt: number(attempt, 'expected attempt', true), attemptJobs: readAttemptJobs(attemptJobs) };
   const sources = inventory(root), exempt = exceptions(root, sources);
   for (const name of exempt.keys()) if (!(name in sources)) fatal(`exception source missing: ${name}`);
   const [left, right] = shards.map(shard => artifact(root, input, shard, expected, sources));
@@ -307,7 +310,8 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
   const invalid = [left, right].filter(Boolean).flatMap(invalidCounters);
   if (invalid.length) {
     const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; invalid evidence`,
-      `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, `Coverage instrumentation: ${JSON.stringify(left.meta.instrumentation)}`, 'Invalid coverage evidence:', ...invalid,
+      `Toolchain: ${JSON.stringify(left.meta.toolchain)}`, `Coverage instrumentation: ${JSON.stringify(left.meta.instrumentation)}`,
+      ...[left, right].filter(shard => shard?.carried).map(shard => shard.carried), 'Invalid coverage evidence:', ...invalid,
       'Uncovered locations: not evaluated because evidence is invalid',
       'Coverage gate: FAIL (invalid counter evidence; no eligible artifact)'].join('\n') + '\n';
     writeFileSync(out, report);
@@ -399,13 +403,14 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, runId, at
 function cli(args) {
   const values = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!/^--(root|input|out|eligible-out|sha|run-id|attempt|formal|shards|attempt-jobs)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
+    if (!/^--(root|input|out|eligible-out|sha|head-sha|run-id|attempt|formal|shards|attempt-jobs)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
     values[args[i]] = args[i + 1];
   }
   for (const key of ['--root', '--input', '--out', '--sha', '--run-id', '--attempt', '--formal']) if (!(key in values)) fatal(`missing ${key}`);
   if (!['true', 'false'].includes(values['--formal'])) fatal('invalid --formal');
   return { root: path.resolve(values['--root']), input: path.resolve(values['--input']), out: path.resolve(values['--out']),
-    eligibleOut: values['--eligible-out'] === undefined ? undefined : path.resolve(values['--eligible-out']), sha: values['--sha'], runId: values['--run-id'],
+    eligibleOut: values['--eligible-out'] === undefined ? undefined : path.resolve(values['--eligible-out']), sha: values['--sha'],
+    headSha: values['--head-sha'] ?? values['--sha'], runId: values['--run-id'],
     attempt: values['--attempt'], formal: values['--formal'] === 'true', shards: values['--shards'] === undefined ? ['non-ui', 'macui'] : values['--shards'].split(','),
     attemptJobs: values['--attempt-jobs'] === undefined ? undefined : path.resolve(values['--attempt-jobs']) };
 }

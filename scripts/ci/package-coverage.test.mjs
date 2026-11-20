@@ -636,3 +636,82 @@ test('788 skipped jobs without runner or times in the records do not matter; the
   const refused = rerunRun(bare, { proof: rerunProof(p => { for (const n of [1, 2]) p.attempts[n].jobs[0].runnerName = null; return p; }) });
   assert.match(refused.stderr, /job Package tests \(non-UI\) in attempt 1 has no start, end or runner to compare.*rerun all jobs of this run/);
 });
+
+// i788a-fix1 (audit F1): on a pull_request run github.sha is the refs/pull/N/merge commit (the artifacts' commit), while
+// the run's and jobs' head_sha is the PR head (real run 44446895039: merge a3de15f3…, head d8804d5f…). The gate takes the
+// head as --head-sha (default: --sha, as on push) and compares the job records with it; the artifacts stay tied to --sha.
+const mergeSha = 'a'.repeat(40), prHead = 'c'.repeat(40);
+const prProof = () => rerunProof(p => {
+  for (const record of Object.values(p.attempts)) { record.headSha = prHead; for (const job of record.jobs) job.headSha = prHead; }
+  return p;
+});
+function rerunRunHead(f, { proof = prProof(), headSha, sha = mergeSha } = {}) {
+  const file = join(f.root, 'attempt-jobs.json');
+  writeFileSync(file, JSON.stringify(proof));
+  const args = [script, '--root', f.root, '--input', f.input, '--out', f.out, '--sha', sha, '--run-id', '1234', '--attempt', '2',
+    '--formal', 'true', '--attempt-jobs', file];
+  if (headSha !== undefined) args.push('--head-sha', headSha);
+  return spawnSync(process.execPath, args, { encoding: 'utf8' });
+}
+
+test('788 fix1 a PR rerun: records at the PR head, artifacts at the merge commit, --head-sha accepts the carried shard', t => {
+  const f = rerunFixture(t);
+  const run = rerunRunHead(f, { headSha: prHead });
+  assert.equal(run.status, 0, run.stderr + run.stdout);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /^Commit a{40}; run 1234; attempt 2; formal full-package evidence$/m);
+  assert.match(report, /^non-ui shard from attempt 1 of run 1234 \(job Package tests \(non-UI\) succeeded there and was not re-run; checked against the run's job records\)$/m);
+});
+
+test('788 fix1 a push rerun: head and merge SHA are one commit, with or without --head-sha', t => {
+  const plain = rerunFixture(t);
+  assert.equal(rerunRunHead(plain, { proof: rerunProof() }).status, 0);
+  const same = rerunFixture(t);
+  assert.equal(rerunRunHead(same, { proof: rerunProof(), headSha: mergeSha }).status, 0);
+});
+
+test('788 fix1 the PR head is still checked: a wrong or missing head refuses, and the artifacts stay tied to --sha', t => {
+  const cases = [
+    ['PR records, no --head-sha', { headSha: undefined }, /attempt 1 head SHA c{40} is not a{40}/],
+    ['other head', { headSha: 'd'.repeat(40) }, /attempt 1 head SHA c{40} is not d{40}/],
+    ['job at another head', { headSha: prHead, proof: rerunProof(p => {
+      for (const record of Object.values(p.attempts)) record.headSha = prHead;
+      p.attempts[2].jobs[0].headSha = prHead;
+      return p;
+    }) }, /job Package tests \(non-UI\) head SHA a{40} in attempt 1 is not c{40}/],
+  ];
+  for (const [label, options, reason] of cases) {
+    const f = rerunFixture(t);
+    const run = rerunRunHead(f, options);
+    assert.equal(run.status, 1, `${label}: ${run.stdout}`);
+    assert.match(run.stderr, reason, label);
+    assert.match(run.stderr, /rerun all jobs of this run/, label);
+  }
+  const headAsCommit = rerunFixture(t);
+  const tied = rerunRunHead(headAsCommit, { headSha: prHead, sha: prHead });
+  assert.match(tied.stderr, /commit provenance mismatch/, 'artifacts at the merge commit are not the PR head commit');
+  const malformed = rerunFixture(t);
+  assert.match(rerunRunHead(malformed, { headSha: 'xyz' }).stderr, /expected head SHA malformed/);
+});
+
+test('788 fix1 malformed or truncated job records refuse with the rerun-all instruction (gpt M1)', t => {
+  for (const [label, body] of [['truncated', '{"version":1,"runId":"12'], ['wrong version', '{"version":2}'], ['not an object', 'null']]) {
+    const f = rerunFixture(t);
+    const file = join(f.root, 'attempt-jobs.json');
+    writeFileSync(file, body);
+    const run = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out, '--sha', mergeSha, '--run-id', '1234',
+      '--attempt', '2', '--formal', 'true', '--attempt-jobs', file], { encoding: 'utf8' });
+    assert.equal(run.status, 1, label);
+    assert.match(run.stderr, /attempt job records malformed.*rerun all jobs of this run/, label);
+  }
+});
+
+test('788 fix1 the invalid-counter report also names a carried shard (opus L1)', t => {
+  const f = rerunFixture(t);
+  f.edit('macui', ({ metadata, lcov }) => ({ metadata, lcov: lcov.replace('DA:1,1', 'DA:1,9223372036854775808') }));
+  const run = rerunRun(f);
+  assert.equal(run.status, 1, run.stderr);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /Invalid coverage evidence/);
+  assert.match(report, /^non-ui shard from attempt 1 of run 1234 \(job Package tests \(non-UI\) succeeded there and was not re-run; checked against the run's job records\)$/m);
+});
