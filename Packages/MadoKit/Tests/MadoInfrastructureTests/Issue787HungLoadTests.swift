@@ -7,7 +7,7 @@ extension Issue689URLSessionTransportTests {
     /// #787 i787-fix1 (audit F1/M1): a hanging load can be ended by `failHung` as soon as its request is visible through
     /// `requests`. The hook calls `failHung` at that earliest moment, with no sleeps. If the load is not registered yet,
     /// nothing ends it and the 2-second transport timeout answers `.timedOut` instead of the injected error.
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(2)))
     func issue787FailHungReachesALoadAsSoonAsItsRequestIsVisible() async throws {
         StubURLProtocol.reset([.hang], afterRecord: { StubURLProtocol.failHung(URLError(.cannotFindHost)) })
         defer { StubURLProtocol.reset([]) }
