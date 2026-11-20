@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { gateVerdict, notVerifiedGates } from './gate-policy.mjs';
+import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
 function privacyHits(body) {
@@ -13,10 +14,13 @@ function privacyHits(body) {
 }
 function render(d) {
   const sha7 = d.head.slice(0, 7);
-  const gates = d.gates.map(g => `- \`${g.command}\` → exit ${g.exitCode}; ${g.keyLine || 'no decisive line recorded'}`).join('\n');
+  const gates = d.gates.map(g => g.reusedFrom
+    ? `- \`${g.name}\` → reused from ${g.reusedFrom}; ${g.keyLine || 'prior green result'}`
+    : g.scopeSkip ? `- \`${g.name}\` → n/a: ${g.scopeSkip}`
+    : `- \`${g.command}\` → exit ${g.exitCode}; ${g.keyLine || 'no decisive line recorded'}`).join('\n');
   const rows = d.byType.map(x => `| ${x.behavior} | ${x.expected} | ${x.actual} | ${x.result} |`).join('\n');
   const shots = d.screenshots?.length ? `\n\n#### 截图（仅 UI 修改）\n| 状态 | 修复前（base \`${d.base?.slice(0, 7)}\`） | 修复后（head \`${sha7}\`） | 机器 |\n|---|---|---|---|\n${d.screenshots.map(s => `| ${s.state} | ${s.before} | ${s.after} | ${s.machine} |`).join('\n')}` : '';
-  return `<!-- mado-verify issue=${d.issue} task=${d.task} head=${d.head} -->\n### mado-verify：#${d.issue} · \`${d.task}\` · \`${d.branch}\` @ \`${sha7}\`\n\n工具链：${d.toolchain || 'NOT VERIFIED'}；机器：${d.machine || 'NOT VERIFIED'}；沙盒模式（Codex）：${d.sandbox || 'n/a'}\n\n#### 门禁\n${gates}\n\n#### 测试完整性\n${d.integrity}\n\n#### 按类型加跑\n| 行为（brief / 账簿行） | 预期 | 实际 | 结果 |\n|---|---|---|---|\n${rows}${shots}\n\n#### NOT VERIFIED\n${d.notVerified.map(x => `- ${x}`).join('\n')}\n`;
+  return `<!-- mado-verify issue=${d.issue} task=${d.task} head=${d.head} -->\n### mado-verify：#${d.issue} · \`${d.task}\` · \`${d.branch}\` @ \`${sha7}\`\n\n工具链：${d.toolchain || 'NOT VERIFIED'}；机器：${d.machine || 'NOT VERIFIED'}；沙盒模式（Codex）：${d.sandbox || 'n/a'}${d.link ? '\nGitHub CI remains binding on the new head; the reused local lanes were not executed there.' : ''}\n\n#### 门禁\n${gates}\n\n#### 测试完整性\n${d.integrity}\n\n#### 按类型加跑\n| 行为（brief / 账簿行） | 预期 | 实际 | 结果 |\n|---|---|---|---|\n${rows}${shots}\n\n#### NOT VERIFIED\n${d.notVerified.map(x => `- ${x}`).join('\n')}\n`;
 }
 function head() { const r = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }); if (r.status) throw new Error('not a git repo'); return r.stdout.trim(); }
 // Pinned to the canonical repository name (renamed from anzchy/picsee; GitHub redirects the old name). No network lookup:
@@ -56,6 +60,10 @@ function check(args) {
   if (!Number.isSafeInteger(record.issue) || record.issue < 1) throw new Error('record has no valid issue');
   if (record.issue !== Number(issue)) throw new Error(`record is for issue #${record.issue}, not #${issue}`);
   if (typeof record.commentUrl !== 'string' || !commentPattern(record.issue).test(record.commentUrl)) throw new Error(`record commentUrl is missing or not an evidence comment on ${COMMENT_REPO} issue #${record.issue}`);
+  if (record.link) verifyLinkedRecord(top, record);
+  else if (record.gates?.some(g => g.reusedFrom !== undefined) ||
+           Object.values(record.lanes || {}).some(lane => lane.status === 'reused') || record.ciBinding)
+    throw new Error('reused lanes require a verified linked record');
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
@@ -67,6 +75,12 @@ try {
   const d = JSON.parse(fs.readFileSync(input, 'utf8'));
   if (!/^[0-9a-f]{40}$/.test(d.head) || !Number.isSafeInteger(d.issue) || d.issue < 1 || !Array.isArray(d.gates) || !Array.isArray(d.byType) || !Array.isArray(d.notVerified)) throw new Error('invalid evidence fields');
   if (d.head !== head()) throw new Error('evidence head does not match current HEAD');
+  if (d.link) {
+    if (d.head !== d.link.newHead || d.base !== d.link.newBase) throw new Error('linked record head/base mismatch');
+    const decision = evaluateReuse(process.cwd(), d.link.oldBase, d.link.newBase, d.link.oldHead, d.link.newHead);
+    if (!decision.reuse) throw new Error(`linked reuse refused: ${decision.reason}`);
+    linkedLanes(d.gates, d.link.oldHead);
+  } else if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
   const body = render(d), hits = privacyHits(body);
   if (hits.length) throw new Error(`privacy scan refused: ${hits.join(', ')}`);
   if (mode === 'render') process.stdout.write(body);
@@ -82,7 +96,28 @@ try {
     const verdict = gateVerdict(d.gates);
     const target = path.join(process.cwd(), '.build/mado-verify', `${d.head}.json`);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, JSON.stringify({ head: d.head, gates: d.gates, complete: verdict.complete, problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() }, null, 2) + '\n');
+    const cwd = process.cwd();
+    let base, fingerprints, link, lanes;
+    if (d.link) {
+      link = d.link;
+      if (d.head !== link.newHead || d.base !== link.newBase) throw new Error('linked record head/base mismatch');
+      const decision = evaluateReuse(cwd, link.oldBase, link.newBase, link.oldHead, link.newHead);
+      if (!decision.reuse) throw new Error(`linked reuse refused: ${decision.reason}`);
+      if (!verdict.complete) throw new Error(`linked gates incomplete: ${verdict.problems.join(', ')}`);
+      base = link.newBase;
+      fingerprints = decision.fingerprints;
+      lanes = linkedLanes(d.gates, link.oldHead);
+    } else {
+      if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
+      base = spawnSync('git', ['merge-base', 'origin/main', d.head], { encoding: 'utf8' }).stdout.trim();
+      fingerprints = directFingerprints(cwd, d.head);
+      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.scopeSkip ? 'scope-skip' : 'executed' }]));
+    }
+    const record = { head: d.head, base, fingerprints, link, lanes,
+      ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,
+      problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() };
+    if (link) verifyLinkedRecord(cwd, record);
+    fs.writeFileSync(target, JSON.stringify(record, null, 2) + '\n');
     console.log(target);
   }
 } catch (error) { console.error(error.message); process.exitCode = 1; }

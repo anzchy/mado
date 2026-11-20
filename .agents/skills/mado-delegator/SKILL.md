@@ -120,7 +120,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    owner in its header and in the PR body. `merge-gate.sh` still accepts only `CODE same ` (follow-up).
    `CODE differ` (including `UPSTREAM OVERLAP <path>`) → quick combination check by both auditors before gates.
    No result waives a known High: it stays open until fixed and confirmed.
-   `MESSAGES differ` → fix before pushing. Exit 4 means either compared patch is empty,
+   `MESSAGES differ` → fix before pushing. For `CODE same`, #772 permits a separate narrow `reuse-check.mjs <old-base> <new-base> <old-head> <new-head>` decision: only `REUSE` carries local Swift/lcov results into a verified new-head linked record. All other local lanes rerun; new-head CI remains binding. `RERUN` uses the full ladder. See guide §5.6 and the mado-verify skill. Audit and smoke rules are unchanged. Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
 7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」).

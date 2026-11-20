@@ -69,9 +69,16 @@ try:
         raise ConditionFailed(f'no mado-verify record for audited head {audited}')
     record = record_worktree / '.build/mado-verify' / f'{audited}.json'
     try:
-        issue = json.loads(record.read_text())['issue']
+        record_data = json.loads(record.read_text())
+        issue = record_data['issue']
     except (ValueError, KeyError):
         raise ConditionFailed('invalid mado-verify record')
+    if record_data.get('link'):
+        link = record_data['link']
+        if not isinstance(link, dict) or record_data.get('head') != audited or link.get('newHead') != audited or \
+                record_data.get('base') != link.get('newBase'):
+            raise ConditionFailed('invalid linked mado-verify head/base')
+        # evidence.mjs check recomputes CODE, allow-list, fingerprints, old record and lane provenance.
     evidence = subprocess.run(['node', str(record_worktree / '.agents/skills/mado-verify/scripts/evidence.mjs'), 'check',
                                '--head', audited, '--issue', str(issue), '--worktree', str(record_worktree)], cwd=record_worktree,
                               text=True, capture_output=True)

@@ -255,6 +255,14 @@ test('manual check requires the apptests gate; a recorded skip is exit 0 with th
   assert.equal(check(f, f.head()).status, 0);
 });
 
+test('direct scope skips are recorded as scope skips, not executed lanes', t => {
+  const f = fixture(t);
+  recordFor(f, { gates: gates().map(g => g.name === 'swift' ? { ...g, scopeSkip: 'no native inputs' } : g) });
+  const record = JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify', `${f.head()}.json`)));
+  assert.equal(record.lanes.swift.status, 'scope-skip');
+  assert.equal(check(f, f.head()).status, 0);
+});
+
 test('a Codex apptests NOT VERIFIED entry passes the check with a warning; other gates cannot use it', t => {
   const f = fixture(t);
   const reason = 'Codex sandbox: NSApp.isActive=false keyWindow=nil';
