@@ -96,3 +96,19 @@ test('each shard records whether the restored validation actually hit a cache', 
     assert.ok(body.indexOf('Report SwiftPM cache restore') < body.indexOf('Clear stale coverage profile'));
   }
 });
+
+test('788 the aggregation reads earlier attempts\' job records on a rerun and gives them to the gate', () => {
+  const body = job('package-coverage');
+  assert.match(body, /^    permissions:\n      contents: read\n      actions: read\n/m);
+  const read = step(body, "Read earlier attempts' job records");
+  assert.ok(read, 'job-records step');
+  assert.match(read, /^        if: github\.run_attempt != '1'$/m);
+  assert.match(read, /^          GH_TOKEN: \$\{\{ github\.token \}\}$/m);
+  assert.match(read, /node scripts\/ci\/package-coverage\.mjs --fetch-attempt-jobs ci-coverage\/attempt-jobs\.json --repo "\$\{\{ github\.repository \}\}"/);
+  assert.match(read, /--run-id "\$\{\{ github\.run_id \}\}" --attempt "\$\{\{ github\.run_attempt \}\}"/);
+  assert.doesNotMatch(read, /continue-on-error/);
+  const order = ['Download non-UI Package coverage', 'Download MacUI Package coverage', "Read earlier attempts' job records", 'Merge and gate Package coverage'].map(name => body.indexOf(`- name: ${name}\n`));
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `step order ${order}`);
+  assert.match(step(body, 'Merge and gate Package coverage'), /--attempt-jobs ci-coverage\/attempt-jobs\.json/);
+  assert.match(step(body, 'Merge and gate Package coverage'), /--attempt "\$\{\{ github\.run_attempt \}\}"/);
+});

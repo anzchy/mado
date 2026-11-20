@@ -310,6 +310,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 300000
+    },
+    {
+      "name": "ci-apt-retry-node",
+      "description": "Manual Node receipts for #788 item 3: bounded install retries (scripts/ci/retry.sh) in the Agent tooling and Design check install steps, never around a test step.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/retry.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {

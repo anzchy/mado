@@ -457,3 +457,182 @@ test('missing or changed coverage instrumentation provenance fails before aggreg
     assert.match(run.stderr, /coverage instrumentation mismatch/);
   }
 });
+
+// #788 item 1: "Re-run failed jobs" keeps a successful shard's artifact from an earlier attempt of the same run. The gate
+// accepts it only when the run's job records prove that shard's job succeeded in that attempt at the same head SHA and was
+// carried forward unchanged; anything else refuses and says to rerun all jobs. Job names come from ci.yml.
+const ciWorkflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+const jobName = id => ciWorkflow.match(new RegExp(`^  ${id}:\\n    name: (.+)$`, 'm'))?.[1];
+const shardJob = { 'non-ui': jobName('package-tests'), macui: jobName('package-macui-tests') };
+function jobRecord(name, attempt, overrides = {}) {
+  return { name, conclusion: 'success', runAttempt: attempt, headSha: 'a'.repeat(40), startedAt: '2026-11-19T02:48:04Z',
+    completedAt: '2026-11-19T02:52:44Z', runnerName: 'GitHub Actions 1000009885', ...overrides };
+}
+// Attempt 1: non-UI passed, MacUI failed. Attempt 2 re-ran MacUI only; non-UI is listed again with the same times and runner.
+function rerunProof(mutate = proof => proof) {
+  const proof = { version: 1, runId: '1234', attempt: 2, attempts: {
+    1: { headSha: 'a'.repeat(40), jobs: [jobRecord(shardJob['non-ui'], 1), jobRecord(shardJob.macui, 1, { conclusion: 'failure', startedAt: '2026-11-19T02:51:09Z' })] },
+    2: { headSha: 'a'.repeat(40), jobs: [jobRecord(shardJob['non-ui'], 2), jobRecord(shardJob.macui, 2, { startedAt: '2026-11-19T04:05:11Z', completedAt: '2026-11-19T04:11:48Z', runnerName: 'GitHub Actions 1000009890' })] },
+  } };
+  return mutate(proof);
+}
+function rerunRun(f, { proof = rerunProof(), attempt = '2' } = {}) {
+  const args = [script, '--root', f.root, '--input', f.input, '--out', f.out, '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', attempt, '--formal', 'true'];
+  if (proof !== null) {
+    const file = join(f.root, 'attempt-jobs.json');
+    writeFileSync(file, JSON.stringify(proof));
+    args.push('--attempt-jobs', file);
+  }
+  return spawnSync(process.execPath, args, { encoding: 'utf8' });
+}
+const rerunFixture = t => {
+  const f = fixture(t);
+  f.edit('macui', ({ metadata }) => ({ metadata: { ...metadata, runAttempt: 2 } }));
+  return f;
+};
+
+test('788 job names for the shards are the ci.yml job names', () => {
+  assert.equal(shardJob['non-ui'], 'Package tests (non-UI)');
+  assert.equal(shardJob.macui, 'Package tests (MacUI)');
+});
+
+test('788 a shard carried forward from a successful earlier attempt of the same run and head is accepted and named', t => {
+  const f = rerunFixture(t);
+  const run = rerunRun(f);
+  assert.equal(run.status, 0, run.stderr + run.stdout);
+  const report = readFileSync(f.out, 'utf8');
+  assert.match(report, /^non-ui shard from attempt 1 of run 1234 \(job Package tests \(non-UI\) succeeded there and was not re-run; checked against the run's job records\)$/m);
+  assert.doesNotMatch(report, /^macui shard from attempt/m);
+  assert.match(report, /Package.*lines 5\/5.*functions 4\/4/);
+});
+
+test('788 an earlier-attempt shard is refused, with a rerun-all instruction, unless every proof holds', t => {
+  const cases = [
+    ['no job records', null, /non-ui attempt provenance mismatch: artifact from attempt 1, this is attempt 2; no job records for the earlier attempts/],
+    ['job failed there', rerunProof(p => { p.attempts[1].jobs[0].conclusion = 'failure'; return p; }), /did not succeed in attempt 1/],
+    ['job re-ran later', rerunProof(p => { p.attempts[2].jobs[0].startedAt = '2026-11-19T04:05:20Z'; return p; }), /ran again in attempt 2/],
+    ['other runner later', rerunProof(p => { p.attempts[2].jobs[0].runnerName = 'GitHub Actions 2'; return p; }), /ran again in attempt 2/],
+    ['attempt head differs', rerunProof(p => { p.attempts[1].headSha = 'b'.repeat(40); return p; }), /head SHA/],
+    ['job head differs', rerunProof(p => { p.attempts[1].jobs[0].headSha = 'b'.repeat(40); return p; }), /head SHA/],
+    ['job missing', rerunProof(p => { p.attempts[1].jobs = p.attempts[1].jobs.slice(1); return p; }), /no job Package tests \(non-UI\) in attempt 1/],
+    ['job listed twice', rerunProof(p => { p.attempts[1].jobs.push(jobRecord(shardJob['non-ui'], 1)); return p; }), /2 jobs Package tests \(non-UI\) in attempt 1/],
+    ['attempt missing', rerunProof(p => { delete p.attempts[2]; return p; }), /no job records for attempt 2/],
+    ['records of another run', rerunProof(p => { p.runId = '999'; return p; }), /job records are for run 999/],
+    ['records of another attempt', rerunProof(p => { p.attempt = 3; return p; }), /job records are for attempt 3/],
+    ['attempt field mismatch', rerunProof(p => { p.attempts[1].jobs[0].runAttempt = 2; return p; }), /job record attempt/],
+  ];
+  for (const [label, proof, reason] of cases) {
+    const f = rerunFixture(t);
+    const run = rerunRun(f, { proof });
+    assert.equal(run.status, 1, `${label}: ${run.stdout}`);
+    assert.match(run.stderr, reason, label);
+    assert.match(run.stderr, /rerun all jobs of this run/, label);
+    assert.equal(existsSync(f.out), false, `${label}: no report`);
+  }
+});
+
+test('788 the gate stays strict: later attempt, mixed head SHA, other run and missing shard still fail with job records present', t => {
+  const later = rerunFixture(t);
+  later.edit('non-ui', ({ metadata }) => ({ metadata: { ...metadata, runAttempt: 3 } }));
+  assert.match(rerunRun(later).stderr, /non-ui attempt provenance mismatch: artifact from attempt 3 is later than this attempt 2/);
+  const mixed = rerunFixture(t);
+  mixed.edit('non-ui', ({ metadata }) => ({ metadata: { ...metadata, commit: 'b'.repeat(40) } }));
+  assert.match(rerunRun(mixed).stderr, /non-ui commit provenance mismatch/);
+  const otherRun = rerunFixture(t);
+  otherRun.edit('non-ui', ({ metadata }) => ({ metadata: { ...metadata, runId: '999' } }));
+  assert.match(rerunRun(otherRun).stderr, /non-ui run provenance mismatch/);
+  const missing = rerunFixture(t);
+  rmSync(join(missing.input, 'non-ui'), { recursive: true });
+  assert.match(rerunRun(missing).stderr, /non-ui artifact missing/);
+  const malformed = rerunFixture(t);
+  assert.match(rerunRun(malformed, { proof: { version: 2 } }).stderr, /attempt job records malformed/);
+  const same = fixture(t);
+  assert.equal(rerunRun(same, { proof: null, attempt: '1' }).status, 0, 'one attempt needs no job records');
+});
+
+test('788 a missing job-records file only matters when a shard comes from an earlier attempt', t => {
+  const f = fixture(t);
+  for (const shard of ['non-ui', 'macui']) f.edit(shard, ({ metadata }) => ({ metadata: { ...metadata, runAttempt: 2 } }));
+  const run = spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out, '--sha', 'a'.repeat(40), '--run-id', '1234',
+    '--attempt', '2', '--formal', 'true', '--attempt-jobs', join(f.root, 'absent.json')], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const earlier = rerunFixture(t);
+  const refused = spawnSync(process.execPath, [script, '--root', earlier.root, '--input', earlier.input, '--out', earlier.out, '--sha', 'a'.repeat(40), '--run-id', '1234',
+    '--attempt', '2', '--formal', 'true', '--attempt-jobs', join(earlier.root, 'absent.json')], { encoding: 'utf8' });
+  assert.match(refused.stderr, /no job records for the earlier attempts.*rerun all jobs of this run/);
+});
+
+// The fetch mode reads /actions/runs/{run}/attempts/{n} and its jobs for every attempt; a partial or failed read writes no file.
+async function fakeApi(t, routes) {
+  const { createServer } = await import('node:http');
+  const seen = [];
+  const server = createServer((req, res) => {
+    seen.push({ url: req.url, auth: req.headers.authorization });
+    const body = routes(req.url);
+    if (body === undefined) { res.statusCode = 500; res.end('{}'); return; }
+    res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  return { url: `http://127.0.0.1:${server.address().port}`, seen };
+}
+async function fetchMode(api, out, attempt = '2') {
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, [script, '--fetch-attempt-jobs', out, '--repo', 'owner/repo', '--run-id', '1234', '--attempt', attempt],
+    { env: { ...process.env, GITHUB_API_URL: api.url, GH_TOKEN: 'token-for-test' } });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', d => { stdout += d; }); child.stderr.on('data', d => { stderr += d; });
+  const status = await new Promise(resolve => child.on('close', resolve));
+  return { status, stdout, stderr };
+}
+const apiJob = (name, attempt, extra = {}) => ({ name, conclusion: 'success', run_attempt: attempt, head_sha: 'a'.repeat(40),
+  started_at: '2026-11-19T02:48:04Z', completed_at: '2026-11-19T02:52:44Z', runner_name: 'GitHub Actions 1000009885', status: 'completed', ...extra });
+
+test('788 fetch mode writes the job records of every attempt of this run', async t => {
+  const api = await fakeApi(t, url => {
+    const m = /^\/repos\/owner\/repo\/actions\/runs\/1234\/attempts\/([12])(\/jobs\?per_page=100&page=1)?$/.exec(url);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    return m[2] ? { total_count: 1, jobs: [apiJob('Package tests (non-UI)', n)] } : { head_sha: 'a'.repeat(40), run_attempt: n };
+  });
+  const dir = mkdtempSync(join(tmpdir(), 'attempt-jobs-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const out = join(dir, 'attempt-jobs.json');
+  const result = await fetchMode(api, out);
+  assert.equal(result.status, 0, result.stderr);
+  const proof = JSON.parse(readFileSync(out, 'utf8'));
+  assert.deepEqual(proof, { version: 1, runId: '1234', attempt: 2, attempts: {
+    1: { headSha: 'a'.repeat(40), jobs: [jobRecord('Package tests (non-UI)', 1)] },
+    2: { headSha: 'a'.repeat(40), jobs: [jobRecord('Package tests (non-UI)', 2)] } } });
+  assert.ok(api.seen.every(call => call.auth === 'Bearer token-for-test'), 'token sent');
+});
+
+test('788 fetch mode writes no file when a read fails or a job list is incomplete, and never fails the step', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'attempt-jobs-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const failing = await fakeApi(t, url => url.endsWith('/attempts/1') ? { head_sha: 'a'.repeat(40), run_attempt: 1 } : undefined);
+  const out = join(dir, 'a.json');
+  const failed = await fetchMode(failing, out);
+  assert.equal(failed.status, 0);
+  assert.match(failed.stderr, /cannot read the job records of earlier attempts.*a shard from an earlier attempt will be refused/);
+  assert.equal(existsSync(out), false);
+  const partial = await fakeApi(t, url => url.includes('/jobs') ? { total_count: 150, jobs: [apiJob('x', 1)] } : { head_sha: 'a'.repeat(40), run_attempt: 1 });
+  const out2 = join(dir, 'b.json');
+  const truncated = await fetchMode(partial, out2);
+  assert.equal(truncated.status, 0);
+  assert.match(truncated.stderr, /incomplete/);
+  assert.equal(existsSync(out2), false);
+  const first = await fakeApi(t, () => undefined);
+  const out3 = join(dir, 'c.json');
+  assert.equal((await fetchMode(first, out3, '1')).status, 0);
+  assert.equal(existsSync(out3), false, 'attempt 1 has no earlier attempt to read');
+  assert.equal(first.seen.length, 0, 'attempt 1 makes no API call');
+});
+
+test('788 skipped jobs without runner or times in the records do not matter; the shard job without them is refused', t => {
+  const skipped = { name: 'App host comparison', conclusion: 'skipped', runAttempt: 1, headSha: 'a'.repeat(40), startedAt: '2026-11-19T02:48:01Z', completedAt: '2026-11-19T02:48:01Z', runnerName: null };
+  const ok = rerunFixture(t);
+  const accepted = rerunRun(ok, { proof: rerunProof(p => { p.attempts[1].jobs.push(skipped); p.attempts[2].jobs.push({ ...skipped, runAttempt: 2 }); return p; }) });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  const bare = rerunFixture(t);
+  const refused = rerunRun(bare, { proof: rerunProof(p => { for (const n of [1, 2]) p.attempts[n].jobs[0].runnerName = null; return p; }) });
+  assert.match(refused.stderr, /job Package tests \(non-UI\) in attempt 1 has no start, end or runner to compare.*rerun all jobs of this run/);
+});

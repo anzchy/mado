@@ -72,6 +72,15 @@ export function parseWorkflow(source, job = 'agent-tests') {
   return { job, steps, workflowSha256 };
 }
 
+// The Agent tooling install step is never run here (the host has no sudo); only these exact forms map to provision-checked.
+// PROVISION_RETRY is the #788 form: skip when the tools exist, else apt with bounded retries.
+const PROVISION_V1 = ['sudo apt-get update', 'sudo apt-get install --no-install-recommends -y python3 git zsh'];
+const PROVISION_RETRY = [
+  "if command -v python3 >/dev/null && command -v git >/dev/null && command -v zsh >/dev/null; then echo 'install: python3, git and zsh already present'; exit 0; fi",
+  'pr-head/scripts/ci/retry.sh 3 15 sudo apt-get -o Acquire::Retries=3 update',
+  'pr-head/scripts/ci/retry.sh 3 15 sudo apt-get -o Acquire::Retries=3 install --no-install-recommends -y python3 git zsh',
+];
+
 function finalize(step) {
   if (!step.name || /[\r\n=:]/.test(step.name)) throw new WorkflowError('invalid step name');
   if (step.uses && step.run) throw new WorkflowError(`step ${step.name} has uses and run`);
@@ -92,7 +101,7 @@ function finalize(step) {
   if (step.cwd?.includes('${{')) throw new WorkflowError(`unsupported working-directory expression in step ${step.name}`);
   if (step.name === 'Install portable device test tools' && !step.cwd) {
     const commands = step.run.trim().split('\n').map(line => line.trim()).filter(Boolean);
-    if (commands.length !== 2 || commands[0] !== 'sudo apt-get update' || commands[1] !== 'sudo apt-get install --no-install-recommends -y python3 git zsh') throw new WorkflowError('unsupported provision mapping');
+    if (JSON.stringify(commands) !== JSON.stringify(PROVISION_V1) && JSON.stringify(commands) !== JSON.stringify(PROVISION_RETRY)) throw new WorkflowError('unsupported provision mapping');
     step.kind = 'provision';
   }
   else if (step.cwd === 'pr-head') step.kind = 'run';

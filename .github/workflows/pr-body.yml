@@ -26,10 +26,13 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      # #788: skip apt when the image already has the tools; otherwise apt retries its downloads and each command is
+      # tried up to 3 times (15 s, then 30 s). Only install steps retry, never a test step.
       - name: Install portable device test tools
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y python3 git zsh
+          if command -v python3 >/dev/null && command -v git >/dev/null && command -v zsh >/dev/null; then echo 'install: python3, git and zsh already present'; exit 0; fi
+          pr-head/scripts/ci/retry.sh 3 15 sudo apt-get -o Acquire::Retries=3 update
+          pr-head/scripts/ci/retry.sh 3 15 sudo apt-get -o Acquire::Retries=3 install --no-install-recommends -y python3 git zsh
       - name: Test portable device tools
         working-directory: pr-head
         run: |
