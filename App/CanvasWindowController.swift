@@ -2558,7 +2558,9 @@ extension CanvasWindowController: ViewerImageHost {
             // displayed path gone, the guarded read probe tells Trash (clear) from lost access (reconnect).
             if standaloneGrantURL == original, let fileURL, !FileManager.default.fileExists(atPath: fileURL.path) {
                 filesystemLogger.notice("File grant read failure deferred to the read probe outcome=deferred")
-                fileGrantReadFailureDeferred?(reportFileGrantReadFailure(original, reopenWhenReadable: true))
+                // Start the probe before the optional seam: `seam?(probe())` would skip the probe when the seam is nil.
+                let probe = reportFileGrantReadFailure(original, reopenWhenReadable: true)
+                fileGrantReadFailureDeferred?(probe)
                 return
             }
             requestFileReconnection(original, reason: String(describing: accessError))
