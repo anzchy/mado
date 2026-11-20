@@ -134,3 +134,18 @@ func issue600LifecycleNamesAnOpenWhoseRootIsLost() async throws {
     rig.controller.browseRecoveredFolder(rig.folder, rootID: root)
     #expect(rig.events.last == "scan#2 rejected waiting-access", "events: \(rig.events)")
 }
+
+/// i600-fix2 (gpt M1 / opus L2): a refused scan has one terminal event, the rejection; it does not also report
+/// `completed`. The scan task ends shortly after the refusal, so 2 s of wall time is ample to see a stray `completed`.
+@Test(.timeLimit(.minutes(2))) @MainActor
+func issue600LifecycleRefusedScanEndsWithItsRejectionOnly() async throws {
+    let rig = try Lifecycle600Rig()
+    defer { rig.remove() }
+    rig.onEvent = { event in if event == "scan#2 scan-began" { rig.controller.openInput([]) } }
+    rig.controller.openGrantedFolder(rig.folder)
+    #expect(try await rig.until { rig.events.contains("scan#2 rejected authority-rejected") }, "events: \(rig.events)")
+    let end = ContinuousClock.now.advanced(by: .seconds(2))
+    while ContinuousClock.now < end, !rig.events.contains("scan#2 completed") { try await Task.sleep(for: .milliseconds(10)) }
+    let terminal = rig.events.filter { $0.hasPrefix("scan#2 ") && !$0.hasSuffix(" started") && !$0.hasSuffix(" scan-began") }
+    #expect(terminal == ["scan#2 rejected authority-rejected"], "events: \(rig.events)")
+}

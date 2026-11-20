@@ -7,9 +7,10 @@ struct FolderOpenLifecycleEvent: Equatable, Sendable, CustomStringConvertible {
         case started
         /// The folder scan was handed to the scanner.
         case scanBegan = "scan-began"
-        /// The task ran to its end without throwing.
+        /// The task ran to its end without throwing and was not rejected.
         case completed
-        /// The task did not present its result; `reason` says why.
+        /// The task did not present its result; `reason` says why. A task reports exactly one of `completed`,
+        /// `rejected` or `threw`, last.
         case rejected
         /// The task threw for a reason other than a rejection (the open's own failure path).
         case threw
