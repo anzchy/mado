@@ -1,7 +1,8 @@
 #!/bin/zsh
 # rebase-ledger.sh [upstream=origin/main] — run inside a PR worktree. Rebases and resolves only generated/ledger
 # conflicts: docs/feature-ledger.html is regenerated; docs/feature-ledger.md rows go through resolve_rows.py.
-# Any other conflict (or a row that needs a manual merge) stops with the rebase left in progress for you.
+# #733: conflicts in rebase-docs-allowlist.txt paths (the states README status table) merge per row key through
+# resolve_doc_rows.py. Any other conflict (or a row that needs a manual merge) stops with the rebase left in progress.
 # Never pipe this script's rebase; it checks exit codes itself. core.commentChar=';' keeps commit body lines that
 # start with '#' (issue IDs such as "#123 P2-05"), which the default message cleanup on --continue would delete.
 set -u
@@ -29,6 +30,7 @@ if [[ $ci == RED\ * && $allow_red == 0 ]]; then
 fi
 git fetch -q origin || exit 1
 gd=$(git rev-parse --git-dir)
+doc_paths=("${(@f)$(python3 "$here/doc_rows.py" --paths)}") || exit 1
 git -c core.commentChar=";" rebase "$up" > "$gd/rb.log" 2>&1 && {
   echo "DONE clean"
   python3 "$here/scan-conflict-markers.py" "$up..HEAD" || exit 8
@@ -37,8 +39,13 @@ git -c core.commentChar=";" rebase "$up" > "$gd/rb.log" 2>&1 && {
 for i in $(seq 1 50); do
   c=$(git diff --name-only --diff-filter=U)
   for f in ${=c}; do
-    case $f in docs/feature-ledger.md|docs/feature-ledger.html) ;;
-      *) echo "STOP other conflict: $f (rebase left in progress)"; exit 2;; esac
+    case $f in docs/feature-ledger.md|docs/feature-ledger.html) continue;; esac
+    (( ${doc_paths[(Ie)$f]} )) || { echo "STOP other conflict: $f (rebase left in progress)"; exit 2; }
+  done
+  for f in ${=c}; do
+    (( ${doc_paths[(Ie)$f]} )) || continue
+    python3 "$here/resolve_doc_rows.py" "$f" || { echo "STOP manual doc row $f (rebase left in progress)"; exit 3; }
+    git add -- "$f"
   done
   if [[ $c == *feature-ledger.md* ]]; then python3 "$here/resolve_rows.py" || { echo "STOP manual ledger row (rebase left in progress)"; exit 3; }; fi
   node scripts/ledger/build.mjs >/dev/null || exit 4

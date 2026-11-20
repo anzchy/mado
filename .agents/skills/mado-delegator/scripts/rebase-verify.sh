@@ -6,6 +6,10 @@
 # then rerun gates and smoke). 2: messages differ (fix them before pushing; wins over 1, both lines still print).
 # A clean replay whose resulting tree matches is CODE same, including nearby upstream context edits.
 # 3: usage or invalid ref. 4: empty comparison (no evidence to carry forward).
+# #733: every differing path prints as "DIFF <path>". When only rows of the tables in rebase-docs-allowlist.txt differ,
+# their per-row three-way merge keeps both sides, no ledger acceptance text changed and upstream touched no other path
+# the branch touched, the result is "CODE same, DOCS differ" (exit 0, or 2 for messages): verdicts carry over.
+# A known High is never waived by it; "UPSTREAM OVERLAP <path>" stays CODE differ for the combination check.
 set -eu
 script_dir=${0:A:h}
 set -o pipefail
@@ -34,8 +38,12 @@ if [[ -z $old || -z $new ]]; then
 fi
 a=$(print -r -- "$old" | shasum | cut -d' ' -f1)
 b=$(print -r -- "$new" | shasum | cut -d' ' -f1)
-if python3 "$script_dir/rebase-verify-tree.py" "$repo_root" "$1" "$2" "$3" "$4"; then
+tree_rc=0
+python3 "$script_dir/rebase-verify-tree.py" "$repo_root" "$1" "$2" "$3" "$4" || tree_rc=$?
+if (( tree_rc == 0 )); then
   echo "CODE same $a (exact replayed tree match; candidate patch $b)"
+elif (( tree_rc == 5 )); then
+  echo "CODE same, DOCS differ $a (only allowlisted doc rows differ; per-row merge keeps both sides; candidate patch $b)"
 else
   if [[ $a == $b ]]; then
     echo "CODE differ $a (replayed tree differs or replay failed)"

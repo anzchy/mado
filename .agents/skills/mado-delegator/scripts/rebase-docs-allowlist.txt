@@ -1,0 +1,12 @@
+# Rebase docs allowlist (#733). rebase-verify.sh keeps audit and smoke verdicts ("CODE same, DOCS differ") when the
+# only difference between the replayed tree and the rebased head is table rows listed here, merged per row key with
+# both sides' contributions kept (doc_rows.py). rebase-ledger.sh resolves these rows with resolve_doc_rows.py.
+#
+# Owner 2026-11-16 (#733): 「1+2 落地时段 + CI 崩溃证据（推荐先做）, 3+5 文档冲突不再作废审计, 4 smoke 跟 App 输入走,
+# 6+本地 gates 整顿」 — item 3+5: 「3+5 文档冲突不再作废审计」.
+#
+# Changing this file is an audit-rule change: quote the owner's words for the change here and in the PR body.
+# The ledger (docs/feature-ledger.md/.html) is not listed: rebase-verify already excludes it.
+#
+# Format: one entry per line, <repo path><TAB><the table's header line, exactly as in the file>.
+design/prototypes/picsee-browser/states/README.md	| 页面 | 不带参数 | 子情况 |
