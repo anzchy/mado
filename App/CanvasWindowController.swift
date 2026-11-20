@@ -181,6 +181,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     private var standaloneRecheckAfterOpen = false
     /// #785 diagnostic seam: tests record which path asked for the reconnect sheet and why. Nil in production.
     var fileReconnectionTrace: ((String) -> Void)?
+    /// #785 test seams, unchanged in production: the read probe a loader failure was deferred to, and the File
+    /// Grant watch opener (a test that returns -1 runs the existing foreground-only mode without a vnode watch).
+    var fileGrantReadFailureDeferred: ((Task<Void, Never>) -> Void)?
+    var fileGrantWatchOpener: @Sendable (URL) -> Int32 = { Darwin.open($0.path, O_EVTONLY) }
     var onRecentsChanged: (([RecentFolder]) -> Void)?
     var canNavigate: Bool { fileURL != nil && window?.attachedSheet == nil }
     /// The grid surface; the shell also shows in the viewer as its sidebar (#444), which is not the grid.
@@ -1228,9 +1232,8 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
             guard let self, let services = try? await accessServices.value else { return }
             let descriptor: Int32
             do {
-                descriptor = try await FileGrantWatchDescriptor.open(grant: grant, access: services.files) {
-                    Darwin.open($0.path, O_EVTONLY)
-                }
+                descriptor = try await FileGrantWatchDescriptor.open(grant: grant, access: services.files,
+                    opener: self.fileGrantWatchOpener)
             } catch {
                 self.reportStandaloneWatchFailure(grant)
                 return
@@ -1344,7 +1347,10 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
 
     /// Reader failure is only a hint: prove file access without decoding or retrying a readable image.
     /// The returned Task is the real operation's completion, also owned by the File Grant lifecycle.
-    @discardableResult func reportFileGrantReadFailure(_ original: URL, input originatingInput: AccessOperation? = nil) -> Task<Void, Never> {
+    /// `reopenWhenReadable`: the loader failed as if access were lost (#785); a readable granted path, even the same
+    /// one (a same-path replacement), is reconciled again instead of leaving the viewer failed.
+    @discardableResult func reportFileGrantReadFailure(_ original: URL, input originatingInput: AccessOperation? = nil,
+                                                       reopenWhenReadable: Bool = false) -> Task<Void, Never> {
         guard presentationRootID == nil, gridFolderRoot == nil,
               standaloneGrantURL == original, let fileURL,
               let input = originatingInput ?? standaloneReadInput, input.isCurrent else { return Task {} }
@@ -1364,7 +1370,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
                 }
                 guard operation.isCurrent, input.isCurrent, self.standaloneGrantURL == original,
                       self.session.imageLoader.generation == generation else { return }
-                if resolved.standardizedFileURL.resolvingSymlinksInPath()
+                if reopenWhenReadable || resolved.standardizedFileURL.resolvingSymlinksInPath()
                     != fileURL.standardizedFileURL.resolvingSymlinksInPath() {
                     self.reconcileStandaloneImage()
                 }
@@ -2551,7 +2557,8 @@ extension CanvasWindowController: ViewerImageHost {
             // A File Grant read can fail this way while its file is being moved to the Trash (#785). With the
             // displayed path gone, the guarded read probe tells Trash (clear) from lost access (reconnect).
             if standaloneGrantURL == original, let fileURL, !FileManager.default.fileExists(atPath: fileURL.path) {
-                reportFileGrantReadFailure(original)
+                filesystemLogger.notice("File grant read failure deferred to the read probe outcome=deferred")
+                fileGrantReadFailureDeferred?(reportFileGrantReadFailure(original, reopenWhenReadable: true))
                 return
             }
             requestFileReconnection(original, reason: String(describing: accessError))
