@@ -13,13 +13,21 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var outcomes: [Outcome] = []
     nonisolated(unsafe) private static var seen: [(request: URLRequest, body: Data)] = []
     nonisolated(unsafe) private static var stopped = 0
+    nonisolated(unsafe) private static var hung: [StubURLProtocol] = []
 
     static func reset(_ outcomes: [Outcome]) {
         lock.lock(); defer { lock.unlock() }
         self.outcomes = outcomes; seen = []; stopped = 0
+        hung = []
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
+    /// Ends every hanging load with `error`, as the network or the transport's timeout would later (#787: no test waits
+    /// for the real 20-second timeout).
+    static func failHung(_ error: URLError) {
+        lock.lock(); let loads = hung; hung = []; lock.unlock()
+        for load in loads { load.client?.urlProtocol(load, didFailWithError: error) }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -69,6 +77,7 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         case .fail(let error):
             client?.urlProtocol(self, didFailWithError: error)
         case .hang:
+            Self.lock.lock(); Self.hung.append(self); Self.lock.unlock()
             break
         }
     }
@@ -225,9 +234,13 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
             if !StubURLProtocol.requests.isEmpty { break }
             try await Task.sleep(for: .milliseconds(5))
         }
+        let recognitionCancelledAt = Date()
         recognition.cancel()
+        StubURLProtocol.failHung(URLError(.timedOut))
         let recognised = await recognition.result
         #expect(recognised.failureValue as? TextRecognitionError == .cancelled)
+        // #787: the test ends the hung token load itself instead of waiting for the transport's 20-second timeout.
+        #expect(Date().timeIntervalSince(recognitionCancelledAt) < 15)
 
         // Cancelled during the OCR upload: the request stops at once, and the result is cancelled, not on-device.
         // (A cancelled token exchange still waits for the shared token task; slice A Still open N3.)
