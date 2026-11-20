@@ -289,47 +289,30 @@ func issue689FixExpiryMargin() async throws {
     #expect(await http.count == 5)
 }
 
-private func tiffImage(width: Int, height: Int, transparent: Bool = false, alphaValue: UInt8? = nil) throws -> Data {
-    let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-    let buffer = try #require(context.data)
-    let pixels = buffer.bindMemory(to: UInt8.self, capacity: context.bytesPerRow * height)
-    var state: UInt32 = 0x12345678
-    for y in 0..<height {
-        for x in 0..<width {
-            let index = y * context.bytesPerRow + x * 4
-            for channel in 0..<3 { state = 1664525 &* state &+ 1013904223; pixels[index + channel] = UInt8(truncatingIfNeeded: state >> 16) }
-            pixels[index + 3] = alphaValue ?? (transparent && x < width / 2 ? 0 : 255)
-        }
-    }
-    let image = try #require(context.makeImage())
-    let data = NSMutableData()
-    let destination = try #require(CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 1, nil))
-    CGImageDestinationAddImage(destination, image, nil)
-    #expect(CGImageDestinationFinalize(destination))
-    return data as Data
-}
-
 @Test(.timeLimit(.minutes(2)))
 func issue689FixEncodedImageLimitChecksUploadBytes() async throws {
-    let image = try tiffImage(width: 1700, height: 1100)
-    let encoded = image.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!
-    #expect(image.base64EncodedString().utf8.count < 10 * 1024 * 1024)
-    #expect(encoded.utf8.count > 10 * 1024 * 1024)
-    let http = StubHTTP([tokenJSON, wordsJSON])
-    let provider = BaiduTextRecognitionProvider(transport: http)
-    do {
-        _ = try await provider.recognise(image, credentials: baiduKeys)
-        let upload = try #require(await http.requests.last?.httpBody)
-        #expect(upload.count <= 10 * 1024 * 1024 + "image=".utf8.count)
-    } catch {
-        #expect(error as? TextRecognitionError == .cloudImageTooLarge)
-        #expect(await http.count == 0)
+    // #798: off the cooperative pool, one at a time; the provider re-encodes these large images synchronously.
+    try await onSharedSerialQueue { () async throws -> Void in
+        let image = try noiseTIFF(width: 1700, height: 1100)
+        let encoded = image.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!
+        #expect(image.base64EncodedString().utf8.count < 10 * 1024 * 1024)
+        #expect(encoded.utf8.count > 10 * 1024 * 1024)
+        let http = StubHTTP([tokenJSON, wordsJSON])
+        let provider = BaiduTextRecognitionProvider(transport: http)
+        do {
+            _ = try await provider.recognise(image, credentials: baiduKeys)
+            let upload = try #require(await http.requests.last?.httpBody)
+            #expect(upload.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+        } catch {
+            #expect(error as? TextRecognitionError == .cloudImageTooLarge)
+            #expect(await http.count == 0)
+        }
     }
 }
 
 @Test(.timeLimit(.minutes(2)), arguments: [false, true])
 func issue689FixTiffIsReencodedBeforeUpload(transparent: Bool) async throws {
-    let image = try tiffImage(width: 20, height: 20, transparent: transparent)
+    let image = try noiseTIFF(width: 20, height: 20, transparent: transparent)
     let http = StubHTTP([tokenJSON, wordsJSON])
     let provider = BaiduTextRecognitionProvider(transport: http)
     _ = try await provider.recognise(image, credentials: baiduKeys)
@@ -352,22 +335,25 @@ private func waitForTokenWaiter(_ provider: BaiduTextRecognitionProvider) async 
 
 @Test(.timeLimit(.minutes(2)))
 func issue689FixSupportedFormatByteOnlyReencode() async throws {
-    let tiff = try tiffImage(width: 1700, height: 1100)
-    let source = try #require(CGImageSourceCreateWithData(tiff as CFData, nil))
-    let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
-    let bitmap = NSMutableData()
-    let destination = try #require(CGImageDestinationCreateWithData(bitmap, UTType.bmp.identifier as CFString, 1, nil))
-    CGImageDestinationAddImage(destination, image, nil)
-    #expect(CGImageDestinationFinalize(destination))
-    let original = bitmap as Data
-    #expect(original.base64EncodedString().utf8.count < 10 * 1024 * 1024)
-    #expect(original.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!.utf8.count > 10 * 1024 * 1024)
-    let http = StubHTTP([tokenJSON, wordsJSON])
-    let provider = BaiduTextRecognitionProvider(transport: http)
-    _ = try await provider.recognise(original, credentials: baiduKeys)
-    let body = try #require(await http.requests.last?.httpBody)
-    #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
-    #expect(body != Data("image=\(original.base64EncodedString())".utf8))
+    // #798: off the cooperative pool, one at a time; the provider re-encodes these large images synchronously.
+    try await onSharedSerialQueue { () async throws -> Void in
+        let tiff = try noiseTIFF(width: 1700, height: 1100)
+        let source = try #require(CGImageSourceCreateWithData(tiff as CFData, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let bitmap = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(bitmap, UTType.bmp.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        let original = bitmap as Data
+        #expect(original.base64EncodedString().utf8.count < 10 * 1024 * 1024)
+        #expect(original.base64EncodedString().addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))!.utf8.count > 10 * 1024 * 1024)
+        let http = StubHTTP([tokenJSON, wordsJSON])
+        let provider = BaiduTextRecognitionProvider(transport: http)
+        _ = try await provider.recognise(original, credentials: baiduKeys)
+        let body = try #require(await http.requests.last?.httpBody)
+        #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+        #expect(body != Data("image=\(original.base64EncodedString())".utf8))
+    }
 }
 
 @Test(.timeLimit(.minutes(2)))
@@ -417,18 +403,21 @@ func issue689FixUnexpectedTransportErrorIsCloudFailure(atRecognition: Bool) asyn
 
 @Test(.timeLimit(.minutes(2)))
 func issue689FixAlphaUploadRetriesAtSmallerThumbnail() async throws {
-    let image = try tiffImage(width: 1800, height: 1300, alphaValue: 254)
-    let http = StubHTTP([tokenJSON, wordsJSON])
-    let provider = BaiduTextRecognitionProvider(transport: http)
-    _ = try await provider.recognise(image, credentials: baiduKeys)
-    let body = try #require(await http.requests.last?.httpBody)
-    #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
-    let text = try #require(String(data: body, encoding: .utf8))
-    let base64 = try #require(String(text.dropFirst("image=".count)).removingPercentEncoding)
-    let upload = try #require(Data(base64Encoded: base64))
-    let source = try #require(CGImageSourceCreateWithData(upload as CFData, nil))
-    let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
-    let width = try #require(props[kCGImagePropertyPixelWidth] as? Int)
-    #expect(width < 1800)
-    #expect((CGImageSourceGetType(source) as String?) == UTType.png.identifier)
+    // #798: off the cooperative pool, one at a time; the provider re-encodes these large images synchronously.
+    try await onSharedSerialQueue { () async throws -> Void in
+        let image = try noiseTIFF(width: 1800, height: 1300, alphaValue: 254)
+        let http = StubHTTP([tokenJSON, wordsJSON])
+        let provider = BaiduTextRecognitionProvider(transport: http)
+        _ = try await provider.recognise(image, credentials: baiduKeys)
+        let body = try #require(await http.requests.last?.httpBody)
+        #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+        let text = try #require(String(data: body, encoding: .utf8))
+        let base64 = try #require(String(text.dropFirst("image=".count)).removingPercentEncoding)
+        let upload = try #require(Data(base64Encoded: base64))
+        let source = try #require(CGImageSourceCreateWithData(upload as CFData, nil))
+        let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let width = try #require(props[kCGImagePropertyPixelWidth] as? Int)
+        #expect(width < 1800)
+        #expect((CGImageSourceGetType(source) as String?) == UTType.png.identifier)
+    }
 }
