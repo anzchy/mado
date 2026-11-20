@@ -7,18 +7,23 @@ import MadoApplication
 @testable import MadoInfrastructure
 
 /// Answers every request made through a session that lists it; no request reaches the network.
-private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
+/// Internal (not private) so the #787 extension in Issue787HungLoadTests.swift can drive it.
+final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     enum Outcome { case respond(Int, Data), bare(Data), redirect(Int, String), fail(URLError), hang }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var outcomes: [Outcome] = []
     nonisolated(unsafe) private static var seen: [(request: URLRequest, body: Data)] = []
     nonisolated(unsafe) private static var stopped = 0
     nonisolated(unsafe) private static var hung: [StubURLProtocol] = []
+    nonisolated(unsafe) private static var afterRecord: (@Sendable () -> Void)?
 
-    static func reset(_ outcomes: [Outcome]) {
+    /// `afterRecord` runs in `startLoading` right after the request becomes visible through `requests`, outside the lock
+    /// (#787: it lets a test act at the earliest moment it could observe the load).
+    static func reset(_ outcomes: [Outcome], afterRecord: (@Sendable () -> Void)? = nil) {
         lock.lock(); defer { lock.unlock() }
         self.outcomes = outcomes; seen = []; stopped = 0
         hung = []
+        self.afterRecord = afterRecord
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
@@ -47,7 +52,12 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         Self.lock.lock()
         Self.seen.append((request, body))
         let outcome = Self.outcomes.isEmpty ? Outcome.fail(URLError(.unknown)) : Self.outcomes.removeFirst()
+        // #787 i787-fix1: a hanging load is registered in the same critical section that makes its request visible, so
+        // a test that has seen the request can always end the load with `failHung`.
+        if case .hang = outcome { Self.hung.append(self) }
+        let afterRecord = Self.afterRecord
         Self.lock.unlock()
+        afterRecord?()
         switch outcome {
         case .respond(let status, let data):
             let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
@@ -77,7 +87,6 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         case .fail(let error):
             client?.urlProtocol(self, didFailWithError: error)
         case .hang:
-            Self.lock.lock(); Self.hung.append(self); Self.lock.unlock()
             break
         }
     }
@@ -211,7 +220,8 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
             request.httpMethod = "POST"
             return try await transport.send(request)
         }
-        for _ in 0..<200 {
+        // Up to 10 s for the load to start (it ends early); the count check below must not race a slow runner.
+        for _ in 0..<2000 {
             if !StubURLProtocol.requests.isEmpty { break }
             try await Task.sleep(for: .milliseconds(5))
         }
@@ -230,10 +240,12 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
                                              cloud: BaiduTextRecognitionProvider(transport: stubbedTransport()))
         let image = try pngImage()
         let recognition = Task { try await service.recognise(image, intent: .explicit) }
-        for _ in 0..<200 {
+        for _ in 0..<2000 {
             if !StubURLProtocol.requests.isEmpty { break }
             try await Task.sleep(for: .milliseconds(5))
         }
+        // The token load is registered with the request, so failHung below always reaches it (#787 i787-fix1).
+        try #require(StubURLProtocol.requests.count == 1)
         let recognitionCancelledAt = Date()
         recognition.cancel()
         StubURLProtocol.failHung(URLError(.timedOut))
