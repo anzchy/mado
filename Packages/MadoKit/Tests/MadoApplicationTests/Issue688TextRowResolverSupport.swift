@@ -1,5 +1,6 @@
 import CoreGraphics
 import MadoApplication
+import Testing
 
 /// Test-side mirror of `ImageTextSelection` (App) for #688 resolver tests: a position is
 /// (line, character offset), the offset comes from character centres along the text axis,
@@ -44,8 +45,11 @@ enum RS {
         var cells: [[CGRect]]? = nil
 
         func cellsOf(_ line: Int) -> [CGRect] {
-            precondition(cells.map { $0.count == rects.count } ?? true, "cells table out of step with the lines")
-            return cells?[line] ?? uniformCells(rects[line], count: texts[line].count, axis: axis)
+            // A walk that inserts a line without its cells fails its own test (not the whole process, #787 L1); the
+            // uniform cells it would have carried are computed instead.
+            if let cells, cells.count == rects.count { return cells[line] }
+            if cells != nil { Issue.record("cells table out of step with the lines") }
+            return uniformCells(rects[line], count: texts[line].count, axis: axis)
         }
         /// The same layout with its uniform cells computed once (#787: the property walks asked for them on every drag,
         /// counting each line's characters again). A caller that inserts a line inserts its cells too.
