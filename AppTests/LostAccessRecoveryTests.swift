@@ -125,6 +125,69 @@ private final class RecoveryReadGate: FileIdentityResourceReading, @unchecked Se
     }
 }
 
+/// Holds the real scan host's recent write after the source snapshot is complete.
+@MainActor private final class RecoveryRememberGateHost: FolderScanHost {
+    private enum Signal: Sendable { case entered, completed, failed(String), timeout(String) }
+    private let target: CanvasWindowController
+    private let events: AsyncStream<Signal>
+    private let send: AsyncStream<Signal>.Continuation
+    private var held: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    init(_ target: CanvasWindowController) {
+        self.target = target
+        (events, send) = AsyncStream.makeStream()
+    }
+    func openFolderImage(_ url: URL, rootID: AccessRootID) { target.openFolderImage(url, rootID: rootID) }
+    func clearFolderImageForNoMatches() { target.clearFolderImageForNoMatches() }
+    func folderScanDidComplete(count: Int) { target.folderScanDidComplete(count: count) }
+    func folderScanDidStart() { target.folderScanDidStart() }
+    func folderScanDidEnd() { target.folderScanDidEnd() }
+    func rememberFolder(_ folder: URL, rootID: AccessRootID) async throws {
+        send.yield(.entered)
+        if !released { await withCheckedContinuation { held = $0 } }
+        do {
+            try await target.rememberFolder(folder, rootID: rootID)
+            send.yield(.completed)
+        } catch {
+            send.yield(.failed(String(describing: error)))
+            throw error
+        }
+    }
+    func release() {
+        released = true
+        held?.resume()
+        held = nil
+    }
+    private func next(_ stage: String) async throws -> Signal {
+        // This timer bounds a missing signal; it does not schedule or release the write.
+        let timeout = Task { [send] in
+            do { try await Task.sleep(for: .seconds(3)); send.yield(.timeout(stage)) } catch { }
+        }
+        defer { timeout.cancel() }
+        var iterator = events.makeAsyncIterator()
+        guard let signal = await iterator.next() else { throw NSError(domain: "RecentWriteGate", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "\(stage): event stream ended"]) }
+        if case .failed(let reason) = signal { throw NSError(domain: "RecentWriteGate", code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "\(stage): rememberFolder failed: \(reason)"]) }
+        if case .timeout(let reason) = signal { throw NSError(domain: "RecentWriteGate", code: 3,
+            userInfo: [NSLocalizedDescriptionKey: "\(reason): no rememberFolder event"]) }
+        return signal
+    }
+    func waitUntilEntered() async throws {
+        guard case .entered = try await next("after complete snapshot") else {
+            throw NSError(domain: "RecentWriteGate", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "after complete snapshot: expected rememberFolder entry"])
+        }
+    }
+    func waitUntilWritten() async throws {
+        guard case .completed = try await next("after rememberFolder release") else {
+            throw NSError(domain: "RecentWriteGate", code: 5,
+                userInfo: [NSLocalizedDescriptionKey: "after rememberFolder release: expected recent write completion"])
+        }
+    }
+}
+
 private final class RecoveryWatchSource: FolderEventSource, @unchecked Sendable {
     private let lock = NSLock()
     private var live: [UUID: URL] = [:]
@@ -859,9 +922,18 @@ func t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() asy
         let committed = try await f.services.recent.load()
         #expect(committed.allSatisfy { $0.rootID != f.rootA })
         #expect(committed.contains { $0.rootID == destination.id && $0.url.path == replacement.appendingPathComponent("One").path })
-        f.gate.release()
         await f.mounts.release()
+        try await recoveryWait {
+            f.gate.isBlocked && c.session.folderScan?.sourceSnapshot?.version.folder == replacement
+        }
+        let remember = RecoveryRememberGateHost(c)
+        defer { remember.release() }
+        c.session.folderScan?.host = remember
+        f.gate.release()
         try await f.ready(c, folder: replacement)
+        try await remember.waitUntilEntered()
+        remember.release()
+        try await remember.waitUntilWritten()
         let recent = try await f.services.recent.load()
         #expect(recent.allSatisfy { $0.rootID != f.rootA })
         #expect(recent.filter { $0.rootID == destination.id && $0.url.path == replacement.path }.count == 1)
