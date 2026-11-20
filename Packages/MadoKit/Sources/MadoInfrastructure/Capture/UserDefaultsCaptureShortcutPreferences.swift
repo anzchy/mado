@@ -13,17 +13,17 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
     /// 2: the stored bindings are on the ⌃⌥ defaults of #717 (none or 1: #685's ⌃⇧⌘).
     static let defaultsVersion = 2
     private let defaults: UserDefaults
-    private let afterBindingsRead: (@Sendable () async -> Void)?
+    private let afterEachRead: (@Sendable () async -> Void)?
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
-        self.afterBindingsRead = nil
+        self.afterEachRead = nil
     }
 
-    /// Deterministic read interleaving for package tests; never used by the App or helper.
-    init(defaults: UserDefaults, afterBindingsRead: @escaping @Sendable () async -> Void) {
+    /// Package tests run another process's write after any one read of the suite; never used by the App or helper.
+    init(defaults: UserDefaults, afterEachRead: @escaping @Sendable () async -> Void) {
         self.defaults = defaults
-        self.afterBindingsRead = afterBindingsRead
+        self.afterEachRead = afterEachRead
     }
 
     /// The shared suite; nil only when the App Group is unavailable.
@@ -34,14 +34,37 @@ public final class UserDefaultsCaptureShortcutPreferences: CaptureShortcutPrefer
     public func bindings() async -> CaptureShortcutBindings {
         defaults.synchronize()
         // A migration writes bindings before version. Reading version first cannot pair old bindings with version 2.
-        let version = defaults.integer(forKey: Self.defaultsVersionKey)
-        guard let stored = defaults.dictionary(forKey: Self.bindingsKey) else { return .defaults }
+        let version = await read { $0.integer(forKey: Self.defaultsVersionKey) }
+        guard let stored = await read({ $0.dictionary(forKey: Self.bindingsKey) }) else { return .defaults }
         let bindings = CaptureShortcutBindings(Self.decode(stored))
-        if let afterBindingsRead { await afterBindingsRead() }
         guard version < Self.defaultsVersion else { return bindings }
-        let moved = bindings.replacingLegacyDefaults()
+        return await migrateStoredSet()
+    }
+
+    /// Moves #685's stored set to the #717 defaults without overwriting a save that landed after the first reads.
+    /// Settings and the Capture Helper are separate processes on one suite, and UserDefaults has no compare-and-set,
+    /// so the stored state is read again just before the write. Version 2 there means another process saved or
+    /// migrated: its set wins and nothing is written. Otherwise the set now stored is moved, not the one read first, so an
+    /// action changed since keeps its value (`replacingLegacyDefaults()` moves only combos still on the old defaults).
+    /// Not atomic: a write landing between this re-read and the write below is still overwritten; no suspension point
+    /// separates them in the App or the helper.
+    private func migrateStoredSet() async -> CaptureShortcutBindings {
+        defaults.synchronize()
+        let version = await read { $0.integer(forKey: Self.defaultsVersionKey) }
+        // Nothing stored means the defaults: another process cleared the suite, and the first read is not written back.
+        guard let stored = await read({ $0.dictionary(forKey: Self.bindingsKey) }) else { return .defaults }
+        let current = CaptureShortcutBindings(Self.decode(stored))
+        guard version < Self.defaultsVersion else { return current }
+        let moved = current.replacingLegacyDefaults()
         await setBindings(moved)
         return moved
+    }
+
+    /// Every read of the shared suite in `bindings()` goes through here, so the test seam follows the reads, not a line.
+    private func read<Value>(_ body: (UserDefaults) -> Value) async -> Value {
+        let value = body(defaults)
+        if let afterEachRead { await afterEachRead() }
+        return value
     }
 
     public func setBindings(_ bindings: CaptureShortcutBindings) async {
