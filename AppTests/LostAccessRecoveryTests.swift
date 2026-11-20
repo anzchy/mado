@@ -125,18 +125,30 @@ private final class RecoveryReadGate: FileIdentityResourceReading, @unchecked Se
     }
 }
 
-/// Holds the real scan host's recent write after the source snapshot is complete.
+/// Observes the real scan host's recent write after the source snapshot is complete.
 @MainActor private final class RecoveryRememberGateHost: FolderScanHost {
-    private enum Signal: Sendable { case entered, completed, failed(String), timeout(String) }
+    private enum Signal: Sendable { case entered, completed, failed(String), ended }
     private let target: CanvasWindowController
-    private let events: AsyncStream<Signal>
     private let send: AsyncStream<Signal>.Continuation
-    private var held: CheckedContinuation<Void, Never>?
-    private var released = false
+    private var pending: [Signal] = []
+    private var waiter: CheckedContinuation<Signal, Never>?
 
     init(_ target: CanvasWindowController) {
         self.target = target
-        (events, send) = AsyncStream.makeStream()
+        let (events, continuation) = AsyncStream<Signal>.makeStream()
+        send = continuation
+        // This task is the stream's sole iterator; staged waits consume its delivered signals.
+        Task { @MainActor [weak self] in
+            for await signal in events { self?.receive(signal) }
+            self?.receive(.ended)
+        }
+    }
+    deinit { send.finish() }
+    private func receive(_ signal: Signal) {
+        if let waiter {
+            self.waiter = nil
+            waiter.resume(returning: signal)
+        } else { pending.append(signal) }
     }
     func openFolderImage(_ url: URL, rootID: AccessRootID) { target.openFolderImage(url, rootID: rootID) }
     func clearFolderImageForNoMatches() { target.clearFolderImageForNoMatches() }
@@ -145,7 +157,6 @@ private final class RecoveryReadGate: FileIdentityResourceReading, @unchecked Se
     func folderScanDidEnd() { target.folderScanDidEnd() }
     func rememberFolder(_ folder: URL, rootID: AccessRootID) async throws {
         send.yield(.entered)
-        if !released { await withCheckedContinuation { held = $0 } }
         do {
             try await target.rememberFolder(folder, rootID: rootID)
             send.yield(.completed)
@@ -154,24 +165,17 @@ private final class RecoveryReadGate: FileIdentityResourceReading, @unchecked Se
             throw error
         }
     }
-    func release() {
-        released = true
-        held?.resume()
-        held = nil
-    }
     private func next(_ stage: String) async throws -> Signal {
-        // This timer bounds a missing signal; it does not schedule or release the write.
-        let timeout = Task { [send] in
-            do { try await Task.sleep(for: .seconds(3)); send.yield(.timeout(stage)) } catch { }
-        }
-        defer { timeout.cancel() }
-        var iterator = events.makeAsyncIterator()
-        guard let signal = await iterator.next() else { throw NSError(domain: "RecentWriteGate", code: 1,
+        guard waiter == nil else { throw NSError(domain: "RecentWriteGate", code: 6,
+            userInfo: [NSLocalizedDescriptionKey: "\(stage): concurrent event wait"]) }
+        // The test's three-minute limit bounds a missing event.
+        let signal: Signal
+        if !pending.isEmpty { signal = pending.removeFirst() }
+        else { signal = await withCheckedContinuation { waiter = $0 } }
+        if case .ended = signal { throw NSError(domain: "RecentWriteGate", code: 1,
             userInfo: [NSLocalizedDescriptionKey: "\(stage): event stream ended"]) }
         if case .failed(let reason) = signal { throw NSError(domain: "RecentWriteGate", code: 2,
             userInfo: [NSLocalizedDescriptionKey: "\(stage): rememberFolder failed: \(reason)"]) }
-        if case .timeout(let reason) = signal { throw NSError(domain: "RecentWriteGate", code: 3,
-            userInfo: [NSLocalizedDescriptionKey: "\(reason): no rememberFolder event"]) }
         return signal
     }
     func waitUntilEntered() async throws {
@@ -927,12 +931,10 @@ func t231Fix1ForegroundFollowsInactiveRootThenRebindRemapsHistoricalRecent() asy
             f.gate.isBlocked && c.session.folderScan?.sourceSnapshot?.version.folder == replacement
         }
         let remember = RecoveryRememberGateHost(c)
-        defer { remember.release() }
         c.session.folderScan?.host = remember
         f.gate.release()
         try await f.ready(c, folder: replacement)
         try await remember.waitUntilEntered()
-        remember.release()
         try await remember.waitUntilWritten()
         let recent = try await f.services.recent.load()
         #expect(recent.allSatisfy { $0.rootID != f.rootA })
