@@ -597,6 +597,20 @@ async function until(check, message) {
   for (let i = 0; i < 200 && !check(); i++) await new Promise(r => setTimeout(r, 20));
   assert.ok(check(), message);
 }
+// #759: a job's pid file exists before its pid is written.
+async function readPid(file, message) {
+  await until(()=>existsSync(file)&&Number(readFileSync(file,'utf8'))>0, message);
+  await until(()=>existsSync(file), message);
+  return Number(readFileSync(file,'utf8'));
+}
+test('#759 readPid never reads a created but still empty pid file as pid 0', async () => {
+  const dir=mkdtempSync(path.join(os.tmpdir(),'heavy-pid-')), file=path.join(dir,'pid');
+  writeFileSync(file,'');
+  const write=setTimeout(()=>writeFileSync(file,'4321\n'),100);
+  try {
+    assert.equal(await readPid(file,'pid written'),4321);
+  } finally { clearTimeout(write); rmSync(dir,{recursive:true,force:true}); }
+});
 function start(args, env) {
   const child = spawn(lock, args, { env, cwd: root });
   let output = '';
@@ -717,8 +731,7 @@ test('AC-4 INT and TERM keep shared lock through group kill grace', async () => 
     const env={...environment(),MADO_HEAVY_LOCK_KILL_GRACE_SECS:'0.5'};
     const ready=path.join(env.HOME,'ready');
     const job=start(['python3','-c','import signal,time,pathlib,sys; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(__import__("os").getpid())); time.sleep(3)',ready],env);
-    await until(()=>existsSync(ready),'ignoring child started');
-    const pid=Number(readFileSync(ready,'utf8'));
+    const pid=await readPid(ready,'ignoring child started');
     try {
       job.child.kill(sig); await pause(150);
       process.kill(pid,0);
