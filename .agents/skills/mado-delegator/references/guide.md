@@ -507,10 +507,12 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
   `.agents/skills/mado-delegator/scripts/rebase-docs-allowlist.txt` (now only
   `design/prototypes/picsee-browser/states/README.md`, table `| 页面 | 不带参数 | 子情况 |`) to
   `.agents/skills/mado-delegator/scripts/resolve_doc_rows.py <path>`. It merges stage 1/2/3 by row key (the first
-  cell) and cell: no union, no ours/theirs. Rows added on one side keep main's order, with a branch row placed before
-  its next row. It stops with exit 3 (`STOP manual doc row <path>`, markers left) on one cell changed on both sides,
-  a deleted row, a duplicate key, the same new key with different text, or lines outside the table changed on both
-  sides. Other tables in that file are not allowlisted.
+  cell) and cell: no union, no ours/theirs. Row order is main's, unless only the branch reordered the existing rows;
+  then the branch's order is kept. Rows added on the other side go right before their next row in that side's order,
+  or at the end. Lines outside the table (the frame) changed on one side only take that side's text. It stops with
+  exit 3 (`STOP manual doc row <path>`, markers left) on one cell changed on both sides, a deleted row, a duplicate
+  key, the same new key with different text, existing rows reordered differently on both sides, or frame lines
+  changed on both sides. Other tables in that file are not allowlisted.
 - **Part 3 area-review conflicts.** Use `.agents/skills/mado-delegator/scripts/resolve_part3.py <file>`. It keeps main's row and, reading the merge base
   (`git show :1:docs/feature-ledger.md`), appends the branch's suffix over the base note verbatim, keeping the newer
   review date with its reviewer. A branch that edited base text, a row with no base or mismatched cells stays
@@ -528,9 +530,12 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
   Every path that differs from the replay prints as `DIFF <path>`.
   - `CODE same`: the verdicts carry over; rerun the gates.
   - `CODE same, DOCS differ` (exit 0; #733, owner 2026-11-16: 「3+5 文档冲突不再作废审计」): the verdicts carry
-    over; rerun the gates. Only when all hold: every `DIFF` path is in `rebase-docs-allowlist.txt` and differs only in
-    its allowlisted table rows; the code replay without those files matches exactly; the per-row-key three-way merge
-    (old base, new base, audited head) keeps both sides and equals the new head; no ledger acceptance text (怎么确认
+    over; rerun the gates. Only when all hold: every `DIFF` path is in `rebase-docs-allowlist.txt` as read from the
+    new base (main's copy, so a branch cannot widen it for its own rebase; the script's copy only when main has none);
+    the code replay without those files matches exactly; each such file's Git mode and type (100644, 100755, 120000)
+    replays unchanged; the per-row-key three-way merge (old base, new base, audited head) equals the new head, with
+    the order and frame rules above (a frame line changed on one side keeps that side; changed on both sides or only
+    in the rebase, it refuses); no ledger acceptance text (怎么确认
     before 「限制：」) changed (`限制：` text may); and upstream changed no other path the branch changed. Otherwise
     the result is `CODE differ` with the reason; upstream code/module overlap prints `UPSTREAM OVERLAP <path>` and
     goes to the two-auditor combination check. Classification never waives a known High: it stays open until fixed

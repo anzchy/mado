@@ -363,6 +363,124 @@ class AllowlistAndStepSixTests(unittest.TestCase):
                 self.assertIn("High", text)
 
 
+ALLOWLIST = ".agents/skills/mado-delegator/scripts/rebase-docs-allowlist.txt"
+ROW_ORDER_BRANCH = [ROW_C, ROW_A_BRANCH, ROW_B]
+
+
+class RebaseVerifyModeOrderAllowlistTests(unittest.TestCase):
+    """i733-fix1: the docs verdict checks tree modes/types, keeps a branch-only row reorder, and reads the allowlist
+    from the new base, not from the checkout running the script."""
+
+    setUp = RebaseVerifyDocsTests.setUp
+    tearDown = RebaseVerifyDocsTests.tearDown
+    verify = RebaseVerifyDocsTests.verify
+    assertDiffer = RebaseVerifyDocsTests.assertDiffer
+
+    def commit_on(self, base, message, files, executable=(), symlinks=None):
+        """Commit on `base`; `executable` paths get mode 100755, `symlinks` {path: text} become 120000 entries."""
+        root = self.repo.root
+        self.repo.switch(base)
+        for path, text in files.items():
+            (root / path).parent.mkdir(parents=True, exist_ok=True)
+            (root / path).write_text(text)
+            os.chmod(root / path, 0o755 if path in executable else 0o644)
+            git(root, "add", path)
+        for path, text in (symlinks or {}).items():
+            sha = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root, input=text, capture_output=True,
+                                 text=True, check=True, env=ENV).stdout.strip()
+            git(root, "update-index", "--add", "--cacheinfo", f"120000,{sha},{path}")
+        git(root, "commit", "-qm", message)
+        git(root, "reset", "-q", "--hard")
+        return self.repo.head()
+
+    def head_on_new_base(self, rows, executable=(), symlink=False, base=None):
+        text = readme(rows)
+        files = {"App/a.swift": "a2\n"} if symlink else {"App/a.swift": "a2\n", README: text}
+        return self.commit_on(base or self.new_base, "feat: topic\n\n#7 P1-01 VIEW-01", files, executable,
+                              {README: text} if symlink else None)
+
+    def executable_branch(self):
+        self.old_head = self.commit_on(self.old_base, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", README: readme([ROW_A_BRANCH, ROW_B, ROW_C])}, executable=(README,))
+
+    def test_mode_kept_in_the_rebase_keeps_the_verdict(self):
+        self.executable_branch()
+        head = self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C], executable=(README,))
+        result = self.verify(new_head=head)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CODE same, DOCS differ", result.stdout)
+
+    def test_mode_lost_in_the_rebase_differs(self):
+        self.executable_branch()
+        result = self.verify(new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C]))
+        self.assertDiffer(result, README)
+        self.assertIn("100755", result.stdout)
+        self.assertIn("100644", result.stdout)
+
+    def test_mode_gained_in_the_rebase_differs(self):
+        result = self.verify(new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C], executable=(README,)))
+        self.assertDiffer(result, README)
+        self.assertIn("mode", result.stdout)
+
+    def test_file_turned_into_a_symlink_with_the_merged_text_differs(self):
+        result = self.verify(new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C], symlink=True))
+        self.assertDiffer(result, README)
+        self.assertIn("120000", result.stdout)
+
+    def test_branch_only_row_reorder_is_kept(self):
+        self.old_head = self.commit_on(self.old_base, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", README: readme(ROW_ORDER_BRANCH)})
+        result = self.verify(new_head=self.head_on_new_base([ROW_C, ROW_A_BRANCH, ROW_B_MAIN]))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CODE same, DOCS differ", result.stdout)
+
+    def test_lost_branch_row_reorder_differs(self):
+        self.old_head = self.commit_on(self.old_base, "feat: topic\n\n#7 P1-01 VIEW-01", {
+            "App/a.swift": "a2\n", README: readme(ROW_ORDER_BRANCH)})
+        self.assertDiffer(self.verify(new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C])), README)
+
+    def test_allowlist_comes_from_the_new_base(self):
+        # Main's allowlist lists nothing: the script's own copy must not govern this verification.
+        base = self.commit_on(self.old_base, "docs: main moved", {
+            "notes.md": "n2\n", README: readme([ROW_A, ROW_B_MAIN, ROW_C]),
+            ALLOWLIST: "# empty allowlist on main\n"})
+        result = self.verify(new_base=base, new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C], base=base))
+        self.assertDiffer(result, README)
+
+    def test_allowlist_on_the_new_base_is_honoured(self):
+        base = self.commit_on(self.old_base, "docs: main moved", {
+            "notes.md": "n2\n", README: readme([ROW_A, ROW_B_MAIN, ROW_C]), ALLOWLIST: f"# main\n{README}\t{HEADER}\n"})
+        result = self.verify(new_base=base, new_head=self.head_on_new_base([ROW_A_BRANCH, ROW_B_MAIN, ROW_C], base=base))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CODE same, DOCS differ", result.stdout)
+
+
+class ResolveDocRowsOrderTests(unittest.TestCase):
+    """i733-fix1: a reorder of existing rows survives when only one side reordered; both reordering differently stops."""
+
+    setUp = ResolveDocRowsTests.setUp
+    tearDown = ResolveDocRowsTests.tearDown
+    conflict = ResolveDocRowsTests.conflict
+    resolve = ResolveDocRowsTests.resolve
+    content = ResolveDocRowsTests.content
+    assertManual = ResolveDocRowsTests.assertManual
+
+    def test_branch_only_reorder_with_an_adjacent_upstream_edit_is_kept(self):
+        self.conflict([ROW_A, ROW_B_MAIN, ROW_C], ROW_ORDER_BRANCH)
+        result = self.resolve()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.content(), readme([ROW_C, ROW_A_BRANCH, ROW_B_MAIN]))
+
+    def test_main_only_reorder_with_a_branch_edit_is_kept(self):
+        self.conflict([ROW_C, ROW_A, ROW_B], [ROW_A_BRANCH, ROW_B_MAIN, ROW_C])
+        result = self.resolve()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.content(), readme([ROW_C, ROW_A_BRANCH, ROW_B_MAIN]))
+
+    def test_both_sides_reordering_differently_stops(self):
+        self.conflict([ROW_B, ROW_A, ROW_C], ROW_ORDER_BRANCH)
+        self.assertManual(self.resolve(), "order")
+
 if __name__ == "__main__":
     # The rebase-docs-py receipt lane runs this file directly; the summary line is the count the receipt parses.
     import sys
