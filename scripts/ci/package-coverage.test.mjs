@@ -715,3 +715,98 @@ test('788 fix1 the invalid-counter report also names a carried shard (opus L1)',
   assert.match(report, /Invalid coverage evidence/);
   assert.match(report, /^non-ui shard from attempt 1 of run 1234 \(job Package tests \(non-UI\) succeeded there and was not re-run; checked against the run's job records\)$/m);
 });
+
+// #788 item 2: while COVERAGE_ENFORCE is off, the shard upload may fail without failing its job, so the gate can find a
+// shard artifact absent. Absent (no directory, or an empty one) is reported as unavailable and passes only with enforcement
+// off; a shard that is present but wrong still fails either way.
+const enforceRun = (f, enforce, { summary } = {}) => spawnSync(process.execPath, [script, '--root', f.root, '--input', f.input, '--out', f.out,
+  '--sha', 'a'.repeat(40), '--run-id', '1234', '--attempt', '1', '--formal', 'true', ...(enforce === undefined ? [] : ['--enforce', enforce])],
+{ encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: summary ?? '' } });
+
+test('788 item 2 verdict: enforcement off/on x shard present/missing', t => {
+  for (const enforce of ['false', 'true']) {
+    const present = fixture(t);
+    const ok = enforceRun(present, enforce);
+    assert.equal(ok.status, 0, `${enforce} present: ${ok.stderr}`);
+    assert.match(readFileSync(present.out, 'utf8'), /^Coverage gate: PASS /m);
+    assert.doesNotMatch(readFileSync(present.out, 'utf8'), /unavailable/i);
+  }
+  const off = fixture(t);
+  rmSync(join(off.input, 'macui'), { recursive: true });
+  const summary = join(off.root, 'summary.md');
+  const pending = enforceRun(off, 'false', { summary });
+  assert.equal(pending.status, 0, pending.stderr + pending.stdout);
+  const report = readFileSync(off.out, 'utf8');
+  assert.match(report, /^- macui: unavailable \(artifact package-coverage-macui absent; its upload failed or did not run\)$/m);
+  assert.match(report, /^- non-ui: present and valid; not evaluated alone$/m);
+  assert.match(report, /^Coverage gate: UNAVAILABLE \(COVERAGE_ENFORCE=false: a missing shard is reported, not failed; coverage not evaluated\)$/m);
+  assert.doesNotMatch(report, /Coverage gate: (PASS|FAIL)/);
+  assert.equal(pending.stdout, report);
+  assert.match(readFileSync(summary, 'utf8'), /macui: unavailable/);
+  for (const enforce of ['true', undefined]) {
+    const on = fixture(t);
+    rmSync(join(on.input, 'macui'), { recursive: true });
+    const blocked = enforceRun(on, enforce);
+    assert.equal(blocked.status, 1, `${enforce}: ${blocked.stdout}`);
+    assert.match(blocked.stderr, /macui artifact missing or malformed/);
+    assert.ok(!existsSync(on.out), 'no report claims a verdict');
+  }
+});
+
+test('788 item 2 an empty download directory or both shards absent are unavailable only with enforcement off', t => {
+  const empty = fixture(t);
+  rmSync(join(empty.input, 'non-ui'), { recursive: true });
+  mkdirSync(join(empty.input, 'non-ui'));
+  const run = enforceRun(empty, 'false');
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(readFileSync(empty.out, 'utf8'), /^- non-ui: unavailable /m);
+  assert.equal(enforceRun(empty, 'true').status, 1);
+  const both = fixture(t);
+  rmSync(join(both.input, 'non-ui'), { recursive: true });
+  rmSync(join(both.input, 'macui'), { recursive: true });
+  const none = enforceRun(both, 'false');
+  assert.equal(none.status, 0, none.stderr);
+  const report = readFileSync(both.out, 'utf8');
+  assert.match(report, /^- non-ui: unavailable /m);
+  assert.match(report, /^- macui: unavailable /m);
+  assert.match(report, /^Coverage gate: UNAVAILABLE /m);
+});
+
+test('788 item 2 a present but wrong or partial shard still fails with enforcement off', t => {
+  const wrong = fixture(t);
+  rmSync(join(wrong.input, 'macui'), { recursive: true });
+  wrong.edit('non-ui', ({ metadata }) => ({ metadata: { ...metadata, commit: 'b'.repeat(40) } }));
+  const mixed = enforceRun(wrong, 'false');
+  assert.equal(mixed.status, 1, mixed.stdout);
+  assert.match(mixed.stderr, /non-ui commit provenance mismatch/);
+  const later = fixture(t);
+  rmSync(join(later.input, 'non-ui'), { recursive: true });
+  later.edit('macui', ({ metadata }) => ({ metadata: { ...metadata, runAttempt: 2 } }));
+  assert.match(enforceRun(later, 'false').stderr, /macui attempt provenance mismatch/);
+  const partial = fixture(t);
+  rmSync(join(partial.input, 'macui', 'coverage.lcov'));
+  const half = enforceRun(partial, 'false');
+  assert.equal(half.status, 1, half.stdout);
+  assert.match(half.stderr, /macui artifact missing or malformed/);
+  const uncovered = fixture(t);
+  for (const shard of ['non-ui', 'macui']) uncovered.edit(shard, ({ metadata, lcov }) => ({ metadata, lcov: lcov.replace('DA:4,1', 'DA:4,0').replace('LH:2', 'LH:1') }));
+  assert.equal(enforceRun(uncovered, 'false').status, 1, 'a real coverage FAIL is not softened by enforcement off');
+});
+
+test('788 item 2 --enforce accepts only true or false', t => {
+  const f = fixture(t);
+  for (const value of ['yes', 'TRUE', '1']) {
+    const run = enforceRun(f, value);
+    assert.equal(run.status, 1, value);
+    assert.match(run.stderr, /invalid --enforce/);
+  }
+});
+
+test('788 item 2 a present shard with wrapped counters still fails while the other shard is absent', t => {
+  const f = fixture(t);
+  rmSync(join(f.input, 'non-ui'), { recursive: true });
+  f.edit('macui', ({ metadata, lcov }) => ({ metadata, lcov: lcov.replace('DA:1,1', 'DA:1,9223372036854775808') }));
+  const run = enforceRun(f, 'false');
+  assert.equal(run.status, 1, run.stdout);
+  assert.match(run.stderr, /invalid counter evidence in a present shard:\n- shard=macui /);
+});
