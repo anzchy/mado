@@ -1023,8 +1023,13 @@ test('F4 drain bound stops worker before real mdpro waiter enters and preserves 
 });
 
 // F5: exercise the real process listing with an unreaped zombie.
-test('F5 real-kernel unreaped zombie group drains without exception', {skip: process.platform !== 'darwin'}, () => {
+test('F5 real-kernel unreaped zombie group drains without exception', () => {
   const r = spawnSync('python3', ['scripts/tdd/fixtures/heavy-lock-faults.py', 'scripts/tdd/heavy-lock.py', 'zombie-group'], {env: environment(), timeout: 5000});
+  assert.equal(r.status, 0, r.stderr.toString());
+  assert.doesNotMatch(r.stderr.toString(), /Traceback/);
+});
+redTest('fix1ProcOwnershipProofRejectsPgrpZeroZombieStraddleAndReadErrors', () => {
+  const r = spawnSync('python3', ['scripts/tdd/fixtures/heavy-lock-faults.py', 'scripts/tdd/heavy-lock.py', 'proc-ownership'], {env: environment(), timeout: 5000});
   assert.equal(r.status, 0, r.stderr.toString());
   assert.doesNotMatch(r.stderr.toString(), /Traceback/);
 });

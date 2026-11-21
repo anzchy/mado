@@ -599,40 +599,43 @@ def owned_state(root, groups, hosts, excluded=0, query=process_rows):
     if rows is None:
         return None
     live = [(pid, pgid) for pid, pgid in rows
-            if pid != excluded and (pgid == root or pgid in groups or pid in hosts)]
-    if not live:
-        # An empty ps snapshot can straddle a rapid fork/exit on Linux. The
-        # original job no longer inherits our flock, so one such snapshot
-        # must not release the supervisor's lock while its group still exists.
-        active_group = False
-        # A nested supervisor shares root with its ancestor. Its own PID is
-        # excluded, but the ancestor can legitimately outlive this invocation.
-        # Only independently registered groups need kernel corroboration there.
-        for pgid in ({root, *groups} if not excluded else set(groups)):
-            if pgid <= 0:
-                continue
-            try:
-                os.killpg(pgid, 0)
-            except ProcessLookupError:
-                continue
-            except PermissionError:
-                # macOS can return EPERM for a zombie-only group. Resolve its
-                # members below before treating this as unknown cleanup.
-                active_group = True
-                continue
-            active_group = True
-        if active_group:
-            if sys.platform.startswith('linux'):
-                alternate = proc_group_rows(root if not excluded else 0, groups, hosts, excluded)
-            else:
-                alternate = ps_group_rows(root if not excluded else 0, groups, hosts, excluded)
+            if pid != excluded and pgid > 0 and (pgid == root or pgid in groups or pid in hosts)]
+    # A ps snapshot can straddle a fork. Probe every owned group missing from
+    # that snapshot, including a nested invocation's own root group (the
+    # supervisor itself is excluded from member scans).
+    active = set()
+    for pgid in {root, *groups}:
+        if pgid <= 0 or any(group == pgid for _, group in live):
+            continue
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            continue
+        except PermissionError:
+            # macOS can report EPERM for an unreaped zombie group.
+            pass
+        active.add(pgid)
+    if active:
+        scanner = proc_group_rows if sys.platform.startswith('linux') else ps_group_rows
+        alternate = scanner(root, groups, hosts, excluded)
+        if alternate is None:
+            return None
+        found, zombies = alternate
+        live.extend(row for row in found if row not in live)
+        if not found:
+            # /proc enumerates names and reads stat files separately. A child
+            # born after that enumeration can be missed while its parent is Z.
+            # Require a second complete scan before accepting absence.
+            alternate = scanner(root, groups, hosts, excluded)
             if alternate is None:
                 return None
-            live, zombies = alternate
-            if not live and not zombies:
+            found, more_zombies = alternate
+            live.extend(row for row in found if row not in live)
+            zombies = zombies or more_zombies
+            if not live and not (sys.platform.startswith('linux') or zombies or excluded):
                 return None
     for pgid in tuple(groups):
-        if not any(group == pgid for _, group in live):
+        if pgid not in active and not any(group == pgid for _, group in live):
             groups.discard(pgid)
     for pid in tuple(hosts):
         if not any(member == pid for member, _ in live):
@@ -668,7 +671,7 @@ def proc_group_rows(root, groups, hosts, excluded=0):
                 if len(fields) < 3:
                     return None
                 state, pgid = fields[0], int(fields[2])
-                if pgid == root or pgid in groups or pid in hosts:
+                if pgid > 0 and (pgid == root or pgid in groups or pid in hosts):
                     if state == b'Z':
                         zombies = True
                     else:
@@ -700,7 +703,7 @@ def ps_group_rows(root, groups, hosts, excluded=0):
             pid, pgid, state = int(fields[0]), int(fields[1]), fields[2]
             if pid == excluded or pid == query.pid:
                 continue
-            if pgid == root or pgid in groups or pid in hosts:
+            if pgid > 0 and (pgid == root or pgid in groups or pid in hosts):
                 if state.startswith('Z'):
                     zombies = True
                 else:
