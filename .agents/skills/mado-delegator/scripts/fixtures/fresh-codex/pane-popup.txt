@@ -1,0 +1,5 @@
+› /new  start a new chat during a conversation
+
+› /new
+
+  GPT-6-Sol medium · Context 38% used · ~/fixture-worktree

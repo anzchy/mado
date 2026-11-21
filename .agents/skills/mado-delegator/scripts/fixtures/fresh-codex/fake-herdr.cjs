@@ -12,21 +12,33 @@ const action = args.slice(0, 2).join(' ');
 const save = () => fs.writeFileSync(statePath, JSON.stringify(state));
 const event = value => state.events.push(value);
 const show = name => process.stdout.write(fs.readFileSync(path.join(fixtureDir, `pane-${name}.txt`), 'utf8')
-  .replaceAll('~/fixture-worktree', state.cwd.replace(os.homedir(), '~')));
+  .replaceAll('~/fixture-worktree', state.cwd.replace(os.homedir(), '~'))
+  .replaceAll('~/Documents/mac-app/picsee-wt/gpt-imple-1', state.cwd.replace(os.homedir(), '~')));
 state.cwd ??= path.join(os.homedir(), 'fixture-worktree');
 
 switch (action) {
   case 'pane send-text':
     if (args[3] !== '/new') process.exit(91);
     event('send-new');
-    state.phase = 'starting';
+    state.phase = scenario.popup ? 'popup' : 'starting';
     state.reads = 0;
+    state.enters = 0;
     if (scenario.lostName) state.name = 'codex';
     break;
   case 'pane send-keys':
+    const wasStarting = state.phase === 'starting';
     event(`key-${args[3]}`);
+    if (args[3]?.toLowerCase() === 'enter' && state.phase === 'starting') {
+      state.enters++;
+      if ((scenario.delayReads ?? 1) <= 1) state.phase = scenario.dialog ? 'dialog' : 'empty';
+    }
+    if (args[3] === 'ctrl+u' && state.phase === 'popup') state.phase = 'cleared';
+    if (args[3]?.toLowerCase() === 'enter' && state.phase === 'popup') {
+      state.enters++;
+      if (!scenario.stuckPopup && state.enters >= (scenario.swallowNewEnter ? 2 : 1)) state.phase = scenario.dialog ? 'dialog' : 'empty';
+    }
     if (args[3] === '1' && state.phase === 'dialog' && !scenario.ignoreOne) state.selectedOne = true;
-    if (args[3]?.toLowerCase() === 'enter' && state.phase === 'dialog') {
+    if (args[3]?.toLowerCase() === 'enter' && state.phase === 'dialog' && !wasStarting) {
       if (!state.selectedOne) state.cwd = path.join(os.homedir(), 'wrong-worktree');
       state.phase = 'empty';
     }
@@ -34,10 +46,10 @@ switch (action) {
   case 'pane read':
     if (state.phase === 'starting') {
       state.reads++;
-      if (state.reads >= (scenario.delayReads ?? 1)) state.phase = scenario.dialog ? 'dialog' : 'empty';
+      if (state.enters && state.reads >= (scenario.delayReads ?? 1)) state.phase = scenario.dialog ? 'dialog' : 'empty';
     }
     if (scenario.invalidUtf8) { process.stdout.write(Buffer.from([0xff])); break; }
-    show(state.phase === 'old' ? 'old' : state.phase === 'starting' ? 'starting' : state.phase);
+    show(state.phase === 'old' ? (scenario.realIdle ? 'real-idle' : 'old') : state.phase === 'starting' ? 'starting' : state.phase === 'cleared' ? 'old' : state.phase === 'empty' && scenario.realIdle ? 'real-idle' : state.phase);
     break;
   case 'agent rename':
     event('agent-rename');
