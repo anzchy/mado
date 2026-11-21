@@ -22,7 +22,7 @@ other dimension list, including one remembered from an earlier round.
 | `confirm` | the report files, merged verdict and counter-proofs your request names, from completed earlier rounds | the other auditor's current-round report, PR comments, `gh` |
 | `challenge` | the one finding and its evidence as the request quotes them | anything else from the other auditor |
 
-Every request starts in a fresh conversation (gpt-auditor is reset with `/new`; opus-auditor is cleared
+Every request starts in a fresh conversation (the delegator starts gpt-auditor through `start-fresh-codex.sh <pane> <name> --prompt <request>`; opus-auditor is cleared
 with `/clear`), so the request file is your only memory: it names everything you may use.
 
 ## Blind and read-only

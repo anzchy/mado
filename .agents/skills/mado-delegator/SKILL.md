@@ -67,8 +67,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `SHARED` code file with an in-flight branch means sequence the two items, or base the new branch on the other one
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
    Before dispatch, run `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when it differs from the worktree's current branch) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. Codex uses `$tdd-guardian-workflow`;
-   Kimi needs the hand-written test-first steps. Dispatch: `herdr agent prompt <impl> 'New task: … Read and follow <brief>…'`.
-3. **Watch** — mandatory after every dispatch and rearm for every fix/audit round: attach
+   Kimi needs the hand-written test-first steps. For a fresh Codex implementer or gpt-auditor session, dispatch only through
+   `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --prompt 'New task: … Read and follow <brief>…'`.
+   The helper chooses current worktree in the directory dialog, restores both names, and requires `working` before success.
+   For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> '<task prompt>'`.
+3. **Watch** — after the fresh Codex helper confirms `working`, and after every dispatch and rearm for every fix/audit round, attach
    `$SK/scripts/listen-notify.py start` with a fresh event/round ID, agent, expected handoff/report path, and an
    **explicit delegator route**. A Codex delegator uses `--route codex-thread --thread <current UUID>`;
    a Claude/Opus delegator uses `--route claude-pane --pane <ID> --terminal-id <ID> --cwd <absolute repo path>`

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { MANDATORY_GATES } from '../../mado-verify/scripts/gate-policy.mjs';
 
 // #758: mado-verify SKILL.md must describe the lanes owner-gates.sh really runs, in its order.
@@ -79,4 +81,83 @@ test('evidence.mjs warning does not call the local run binding for the hosted gr
   const evidence = read('.agents/skills/mado-verify/scripts/evidence.mjs');
   lacks(evidence, /owner-gates run is the binding result/, 'evidence.mjs');
   has(evidence, /hosted CI binding/, 'evidence.mjs');
+});
+
+// #804: the fake CLI returns saved pane screens and a live-shaped agent-list envelope.
+const freshDir = path.join(root, '.agents/skills/mado-delegator/scripts/fixtures/fresh-codex');
+const freshHelper = path.join(root, '.agents/skills/mado-delegator/scripts/start-fresh-codex.sh');
+function freshScenario(scenario) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-fresh-codex-'));
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin);
+  fs.copyFileSync(path.join(freshDir, 'fake-herdr.cjs'), path.join(bin, 'herdr'));
+  fs.chmodSync(path.join(bin, 'herdr'), 0o755);
+  const stateFile = path.join(dir, 'state.json');
+  fs.writeFileSync(stateFile, JSON.stringify({ phase: 'old', name: 'gpt-auditor', status: 'idle', reads: 0, prompts: 0, events: [] }));
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MADO_FIXTURE_SCENARIO: JSON.stringify(scenario),
+    MADO_FIXTURE_STATE: stateFile, MADO_FIXTURE_DIR: freshDir, MADO_FRESH_START_SECS: '0.8',
+    MADO_FRESH_CONFIRM_SECS: '0.25', MADO_FRESH_POLL_SECS: '0.02' };
+  const run = (...args) => spawnSync('/bin/bash', [freshHelper, ...args], { env, encoding: 'utf8', timeout: 10000 });
+  const state = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  return { run, state };
+}
+const startWithPrompt = f => f.run('w1:p5', 'gpt-auditor', '--prompt', 'Audit #804');
+
+test('#804 dialog shown chooses option 1 and delivers one prompt in one invocation', () => {
+  const f = freshScenario({ dialog: true });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const { events, prompts, status } = f.state();
+  assert.equal(prompts, 1);
+  assert.equal(status, 'working');
+  assert.ok(events.indexOf('key-1') >= 0);
+  assert.ok(events.indexOf('key-1') < events.indexOf('agent-prompt'));
+  assert.ok(events.indexOf('agent-rename') < events.indexOf('agent-prompt'));
+});
+
+test('#804 dialog absent reaches empty Codex prompt and starts once', () => {
+  const f = freshScenario({ dialog: false });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(f.state().prompts, 1);
+  assert.ok(!f.state().events.includes('key-1'));
+});
+
+test('#804 dialog appearing late is selected before the one retry', () => {
+  const f = freshScenario({ dialog: false, lateDialog: true });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const { events, prompts, status } = f.state();
+  assert.equal(prompts, 2);
+  assert.equal(status, 'working');
+  assert.ok(events.indexOf('agent-prompt') < events.indexOf('key-1'));
+  assert.ok(events.indexOf('key-1') < events.lastIndexOf('agent-prompt'));
+});
+
+test('#804 lost herdr name is restored and checked before prompting', () => {
+  const f = freshScenario({ dialog: true, lostName: true });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const { events, name, prompts } = f.state();
+  assert.equal(name, 'gpt-auditor');
+  assert.equal(prompts, 1);
+  const beforePrompt = events.slice(0, events.indexOf('agent-prompt'));
+  assert.ok(beforePrompt.indexOf('agent-rename') < beforePrompt.lastIndexOf('agent-list'));
+});
+
+test('#804 swallowed first prompt is retried once and confirmed working', () => {
+  const f = freshScenario({ dialog: true, swallowFirst: true });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(f.state().prompts, 2);
+  assert.equal(f.state().status, 'working');
+});
+
+test('#804 never working exits nonzero with one-line reason after one retry', () => {
+  const f = freshScenario({ dialog: true, neverStarts: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().prompts, 2);
+  assert.match(result.stderr + result.stdout, /never reached working/);
+  assert.equal((result.stderr + result.stdout).trim().split('\n').length, 1);
 });
