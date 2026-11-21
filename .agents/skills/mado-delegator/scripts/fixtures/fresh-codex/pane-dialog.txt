@@ -1,0 +1,3 @@
+Where should the new conversation run?
+1. Use current Git worktree
+2. Create new Git worktree

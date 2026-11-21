@@ -1,0 +1,4 @@
+>_ OpenAI Codex (v0.166.0)
+~/fixture-worktree
+› Ask Codex to do anything
+GPT-6-Sol medium · Context 0% used · ~/fixture-worktree
