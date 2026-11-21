@@ -44,7 +44,7 @@ esac
 ''')
         stub.chmod(0o755)
         node = self.bin / 'node'
-        node.write_text('#!/bin/sh\nif [ "${NODE_REAL_EVIDENCE:-0}" = 1 ]; then case "$*" in *evidence.mjs*) exec "$REAL_NODE" "$@";; esac; fi\ncase "$*" in *evidence.mjs*) [ "$NODE_FAIL" = evidence ] && exit 1;; *local-pr-lint.mjs*) [ "$NODE_FAIL" = lint ] && exit 1;; esac\nexit 0\n')
+        node.write_text('#!/bin/sh\nif [ "${NODE_REAL_EVIDENCE:-0}" = 1 ]; then case "$*" in *evidence.mjs*) exec "$REAL_NODE" "$@";; esac; fi\nif [ "${NODE_REAL_LINT:-0}" = 1 ]; then case "$*" in *local-pr-lint.mjs*) exec "$REAL_NODE" "$@";; esac; fi\ncase "$*" in *evidence.mjs*) [ "$NODE_FAIL" = evidence ] && exit 1;; *local-pr-lint.mjs*) [ "$NODE_FAIL" = lint ] && exit 1;; esac\nexit 0\n')
         node.chmod(0o755)
         self.env = {**env, 'PATH': str(self.bin) + os.pathsep + os.environ['PATH'],
                     'REAL_NODE': shutil.which('node'),
@@ -267,12 +267,31 @@ sys.path.insert(0, str(Path(__file__).parent))
 from test_rebase_docs import (ALLOWLIST, README, ROW_A, ROW_A_BRANCH, ROW_B, ROW_B_MAIN, ROW_C, Repo, ledger,
                               readme)
 
+import re
+
+REPO_ROOT = SCRIPT.parents[4]
 GOOD_AUDIT = '| audit | PASS | {sha} | two rounds, no Critical/High open; the Mediums are listed in Still open |'
+GOOD_STILL_OPEN = '- Medium: a tooling note (not fixed here).'
+LANES = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-build', 'node-tooling', 'ledger', 'diff-check',
+         'design-check', 'audit', 'device-smoke']
+PLAIN = re.compile(r'^CODE same ([0-9a-f]{40}) \(exact replayed tree match; candidate patch ([0-9a-f]{40})\)$')
+DOCS = re.compile(r'^CODE same, DOCS differ ([0-9a-f]{40}) \(only allowlisted doc rows differ; per-row merge keeps '
+                  r'both sides; candidate patch ([0-9a-f]{40})\)$')
 
 
-def body(audit=GOOD_AUDIT, still_open='- Medium: a tooling note (not fixed here).'):
+def body(audit=GOOD_AUDIT, still_open=GOOD_STILL_OPEN, heading='### Still open', extra=''):
     return '\n'.join(['## Summary', '', 'x', '', '## Gates', '', '| Lane | Status | SHA | Source |',
-                      '| --- | --- | --- | --- |', audit, '', '### Still open', still_open, ''])
+                      '| --- | --- | --- | --- |', audit, '', heading, still_open, '', extra])
+
+
+def lint_body(audit_source, sha):
+    """A body the real trusted PR-body lint passes: every lane, UI-Parity table and Device-Smoke line."""
+    rows = [f'| audit | PASS | {sha} | {audit_source} |' if lane == 'audit' else f'| {lane} | N/A | — | fixture lane |'
+            for lane in LANES]
+    return '\n'.join(['## Summary', '', 'x', '', '## UI-Parity', '', '| Page | Status |', '| --- | --- |',
+                      '| viewer | AUTO-PASS |', '', 'Device-Smoke: n/a — fixture, no device path', '', '## Gates', '',
+                      '| Lane | Status | SHA | Source |', '| --- | --- | --- | --- |', *rows, '', '### Still open',
+                      GOOD_STILL_OPEN, ''])
 
 
 class MergeGateDocsDifferTests(unittest.TestCase):
@@ -286,19 +305,20 @@ class MergeGateDocsDifferTests(unittest.TestCase):
         self.repo = Repo(self.root / 'repo')
         scripts = {f'.agents/skills/mado-delegator/scripts/{name}': SCRIPT.with_name(name).read_text()
                    for name in ('rebase-verify.sh', 'rebase-verify-tree.py', 'scan-conflict-markers.py', 'doc_rows.py')}
-        self.old_base = self.repo.commit('init', **scripts, **{
+        lint = {f'scripts/agents/{name}': (REPO_ROOT / 'scripts/agents' / name).read_text()
+                for name in ('local-pr-lint.mjs', 'ui-parity-pr-body-lint.mjs')}
+        self.old_base = self.repo.commit('init', **scripts, **lint, **{
             'App/a.swift': 'a\n', 'App/c.swift': 'c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8\n', 'notes.md': 'n\n',
             README: readme([ROW_A, ROW_B, ROW_C]), 'docs/feature-ledger.md': ledger(),
             ALLOWLIST: SCRIPT.with_name('rebase-docs-allowlist.txt').read_text()})
         self.old_head = self.repo.commit(self.MESSAGE, **{'App/a.swift': 'a2\n', README: readme([ROW_A_BRANCH, ROW_B, ROW_C])})
         self.repo.switch(self.old_base)
         self.new_base = self.repo.commit('docs: main moved', **{'notes.md': 'n2\n', README: readme([ROW_A, ROW_B_MAIN, ROW_C])})
-        self.bin = self.root / 'bin'
-        self.bin.mkdir()
         # The gh/node stubs and environment of MergeGateTests, written into that test's own temporary directory.
         helper = MergeGateTests('test_green_ready_pr_reports_would_allow_without_merging')
         helper.setUp()
         self.addCleanup(helper.doCleanups)
+        self.helper_root = helper.root
         self.env = {**helper.env}
 
     def rebased(self, rows=None, message=None, **extra):
@@ -312,20 +332,37 @@ class MergeGateDocsDifferTests(unittest.TestCase):
         path.write_text(json.dumps({'issue': 789, 'head': head,
                                     'commentUrl': 'https://github.com/anzchy/mado/issues/789#issuecomment-1'}))
 
-    def gate(self, new_head, text=None, base=None):
+    def gate(self, new_head, text=None, base=None, script=SCRIPT, **extra):
         self.repo.switch(new_head)  # merge-gate finds the PR head through the worktree that has it checked out
         subprocess.run(['git', 'update-ref', 'refs/remotes/origin/main', base or self.new_base], cwd=self.repo.root,
                        check=True)
         self.record(self.old_head)
         view = json.dumps({'headRefOid': new_head, 'isDraft': False, 'createdAt': '2026-01-02T00:00:00Z',
                            'body': body().replace('{sha}', self.old_head[:7]) if text is None else text})
-        return subprocess.run(['sh', str(SCRIPT), '12', '--audited', self.old_head], cwd=self.repo.root,
-                              env={**self.env, 'GH_HEAD': new_head, 'GH_VIEW': view}, capture_output=True, text=True)
+        return subprocess.run(['sh', str(script), '12', '--audited', self.old_head], cwd=self.repo.root,
+                              env={**self.env, 'GH_HEAD': new_head, 'GH_VIEW': view, **extra},
+                              capture_output=True, text=True)
 
     def proof(self, new_head, base=None):
         return subprocess.run(['zsh', str(self.repo.root / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'),
                                self.old_base, self.old_head, base or self.new_base, new_head],
                               cwd=self.repo.root, capture_output=True, text=True)
+
+    def trusted(self, output, doc_rows=True):
+        """A delegator scripts directory whose own rebase-verify.sh prints `output` (merge-gate trusts its directory)."""
+        directory = Path(tempfile.mkdtemp(dir=self.root))
+        for name in ('merge-gate.sh', 'main-ci-status.sh') + (('doc_rows.py',) if doc_rows else ()):
+            shutil.copy2(SCRIPT.with_name(name), directory / name)
+        (directory / 'rebase-verify.sh').write_text("#!/bin/zsh\ncat <<'OUT'\n" + output + "\nOUT\nexit 0\n")
+        return directory / 'merge-gate.sh'
+
+    def genuine(self, head):
+        proof = self.proof(head)
+        self.assertEqual(proof.returncode, 0, proof.stdout + proof.stderr)
+        lines = proof.stdout.splitlines()
+        verdict = DOCS.match(lines[-1])
+        self.assertIsNotNone(verdict, proof.stdout)
+        return lines, verdict.group(1), verdict.group(2)
 
     def assertRefused(self, result, reason):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -375,31 +412,122 @@ class MergeGateDocsDifferTests(unittest.TestCase):
     def test_docs_differ_is_refused_while_a_known_high_is_open(self):
         head = self.rebased()
         sha = self.old_head[:7]
+        good = GOOD_AUDIT.replace('{sha}', sha)
         cases = {
             'audit row names an open High': body(audit=f'| audit | PASS | {sha} | one round, 1 High open |'),
+            'audit Source names a High besides the phrase': body(
+                audit=f'| audit | PASS | {sha} | 1 High open; no Critical/High claimed |'),
+            'audit Source names a High in prose': body(
+                audit=f'| audit | PASS | {sha} | round 1 F1 High still open; otherwise no Critical/High |'),
+            'audit Source counts lowercase highs': body(audit=f'| audit | PASS | {sha} | no Critical/High; 2 highs deferred |'),
+            'audit Source counts zero Critical': body(audit=f'| audit | PASS | {sha} | 0 Critical, no Critical/High |'),
             'Still open names a High': body(still_open='- High: the replay loses a row (owner decision pending).'),
             'Still open names a Critical': body(still_open='- Critical: data loss on rebase.'),
+            'Still open mixed case': body(still_open='- hIgH: unresolved'),
+            'Still open lowercase count': body(still_open='- 1 high open'),
+            'Still open upper case': body(still_open='- HIGH: replay loses a row'),
+            'Still open plural': body(still_open='- 2 Highs deferred'),
+            'Still open as a label': body(heading='Still open:', still_open='- High: replay loses a row'),
+            'Still open in bold': body(heading='**Still open**', still_open='- High: replay loses a row'),
+            'Still open missing': body(heading='### Notes'),
+            'Still open as an h1': body(heading='# Still open'),
+            'Still open as an h4': body(heading='#### Still open'),
+            'a second Still open section': body(extra='## Still open (2)\n- Medium: another note\n'),
+            'a subheading inside Still open hides a High': body(
+                still_open='- Medium: note\n#### Details\n- High: replay loses a row'),
+            'a fenced heading inside Still open hides a High': body(
+                still_open='- Medium: note\n```\n## not a heading\n```\n- High: replay loses a row'),
+            'two audit rows': body(audit=good + f'\n| audit | FAIL | {sha} | round 2 found 1 High |'),
+            'a second Gates section': body(extra=f'## Gates\n\n| Lane | Status | SHA | Source |\n| --- | --- | --- | --- |\n'
+                                                f'| audit | FAIL | {sha} | 1 High |\n'),
+            'a Still open label under another heading': body(extra='## Notes\nStill open:\n- High: replay loses a row\n'),
+            'a second Gates heading without an audit row': body(extra='## Gates (round 2)\n- see the audit report\n'),
+            'a word that only contains High fails closed': body(still_open='- Medium: High-DPI icons blur'),
             'audit row not PASS': body(audit=f'| audit | NOT VERIFIED | {sha} | auditor paused; no Critical/High known |'),
             'no audit row': body(audit=f'| node-tooling | PASS | {sha} | node 10/10 |'),
             'no Gates table': '## Summary\n\nx\n',
         }
         for name, text in cases.items():
             with self.subTest(name):
-                self.assertRefused(self.gate(head, text=text), 'known High')
+                self.assertRefused(self.gate(head, text=text.replace('{sha}', sha)), 'known High')
 
-    def test_a_forged_docs_verdict_is_checked_against_mains_allowlist(self):
+    def test_docs_differ_accepts_the_canonical_still_open_forms(self):
         head = self.rebased()
-        verifier = self.repo.root / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'
-        for name, lines in {
-            'path outside the allowlist': ['DIFF App/a.swift', 'CODE same, DOCS differ abc (forged)'],
-            'no differing path': ['CODE same, DOCS differ abc (forged)'],
-            'a refusal line': [f'DIFF {README}', 'UPSTREAM OVERLAP App/a.swift (forged)', 'CODE same, DOCS differ abc'],
-            'two verdicts': [f'DIFF {README}', 'CODE same abc', 'CODE same, DOCS differ abc'],
+        sha = self.old_head[:7]
+        for name, text in {
+            'h2 Still open': body(heading='## Still open'),
+            'lowercase heading': body(heading='### still open'),
+            'nothing open': body(still_open='- none'),
+            'bare phrase': body(audit=f'| audit | PASS | {sha} | no Critical/High |'),
         }.items():
             with self.subTest(name):
-                verifier.write_text('#!/bin/zsh\nprint -r -- "MESSAGES same"\n' +
-                                    ''.join(f"print -r -- '{line}'\n" for line in lines) + 'exit 0\n')
-                self.assertRefused(self.gate(head), 'rebase-verify')
+                self.assertIn('would-allow', self.gate(head, text=text.replace('{sha}', sha)).stdout)
+
+    def test_a_pr_head_copy_of_rebase_verify_is_never_run(self):
+        head = self.rebased(**{'notes.md': 'n2 branch\n'})  # genuinely CODE differ (notes.md is outside the allowlist)
+        forged = self.repo.root / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'
+        forged.write_text("#!/bin/zsh\nprint -r -- 'MESSAGES same'\nprint -r -- 'CODE same "
+                          + '1' * 40 + " (exact replayed tree match; candidate patch " + '2' * 40 + ")'\nexit 0\n")
+        self.assertRefused(self.gate(head), 'rebase-verify CODE same')
+
+    def test_the_verdict_line_must_match_its_grammar_and_bind_to_both_patches(self):
+        head = self.rebased()
+        lines, old, new = self.genuine(head)
+        before = '\n'.join(lines[:-1])
+        unrelated = '1' * 40
+        self.assertIn('would-allow', self.gate(head, script=self.trusted('\n'.join(lines))).stdout)
+        for name, verdict in {
+            'plain CODE same with an unrelated hash and trailing text': f'CODE same {unrelated} extra',
+            'plain CODE same with trailing text': f'CODE same {old} (exact replayed tree match; candidate patch {new}) extra',
+            'plain CODE same with an unrelated audited hash':
+                f'CODE same {unrelated} (exact replayed tree match; candidate patch {new})',
+            'plain CODE same with an unrelated candidate hash':
+                f'CODE same {old} (exact replayed tree match; candidate patch {unrelated})',
+            'DOCS differ with an unrelated hash and trailing text': f'CODE same, DOCS differ {unrelated} extra',
+            'DOCS differ with trailing text': lines[-1] + ' extra',
+            'DOCS differ with an unrelated audited hash': lines[-1].replace(old, unrelated),
+            'DOCS differ with an unrelated candidate hash': lines[-1].replace(new, unrelated),
+            'a short hash': lines[-1].replace(old, old[:7]),
+        }.items():
+            with self.subTest(name):
+                self.assertRefused(self.gate(head, script=self.trusted(before + '\n' + verdict)), 'rebase-verify')
+
+    def test_a_docs_verdict_is_checked_against_mains_allowlist(self):
+        head = self.rebased()
+        lines, old, new = self.genuine(head)
+        verdict = lines[-1]
+        kept = [line for line in lines[:-1] if not line.startswith('DIFF ')]
+        for name, output in {
+            'path outside the allowlist': kept + ['DIFF App/a.swift', verdict],
+            'no differing path': kept + [verdict],
+            'a refusal line': lines[:-1] + ['UPSTREAM OVERLAP App/a.swift', verdict],
+            'two verdicts': lines[:-1] + [f'CODE same {old} (exact replayed tree match; candidate patch {new})', verdict],
+        }.items():
+            with self.subTest(name):
+                self.assertRefused(self.gate(head, script=self.trusted('\n'.join(output))), 'rebase-verify')
+
+    def test_a_failed_allowlist_lookup_is_lookup_failed_and_keeps_the_override(self):
+        head = self.rebased()
+        lines, _, _ = self.genuine(head)
+        result = self.gate(head, script=self.trusted('\n'.join(lines), doc_rows=False),
+                           MADO_MERGE_GATE_OVERRIDE='owner accepted the docs rebase', HOME=str(self.root))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('would-refuse lookup-failed: ', result.stdout)
+        self.assertIn('doc_rows', result.stdout)
+        self.assertIn('override recorded', result.stdout)
+        self.assertIn('owner accepted the docs rebase',
+                      (self.root / '.mado/handoff/merge-gate-overrides.log').read_text())
+
+    def test_the_real_pr_body_lint_accepts_the_documented_audit_row(self):
+        head = self.rebased()
+        sha = self.old_head[:7]
+        ok = self.gate(head, text=lint_body(f'CODE same {self.old_head}; two rounds, no Critical/High open', sha),
+                       NODE_REAL_LINT='1')
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+        self.assertIn(f'merge-gate: would-allow PR #12 @ {head}', ok.stdout)
+        quoted = self.gate(head, text=lint_body(f'CODE same, DOCS differ {self.old_head}; no Critical/High', sha),
+                           NODE_REAL_LINT='1')
+        self.assertRefused(quoted, 'PR body lint failed: audit PASS has a stale head without CODE same evidence')
 
 
 if __name__ == '__main__':
