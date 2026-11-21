@@ -3,6 +3,19 @@
 One command route for menus, buttons and keys; fields and menus consume their keys first. This recipe
 covers P0-09's Inspector placeholder, not the real information Inspector or folder browser.
 
+> **Current UI (corrected in run p-device-20261121, build bb3490de).** The P0-era steps below are superseded
+> where they conflict with this block. The folder grid, Space/←/→/Return/⌘F and the real Inspector exist:
+> - Grid: ⌘O on a folder opens the grid. Tab order: `grid.search.button` → `grid.sort.button` →
+>   `grid.display.button` → `grid.collection` → `grid.sidebar.toggle` → `grid.sidebar.resize` →
+>   `grid.sidebar.folder.<name>`. Arrows move the selection ring; Return / View › Open Selected Image opens it;
+>   Space / View › Preview Selected Image previews; Esc / View › Focus Canvas / `chrome.returnToGrid.button`
+>   return to the grid. In the grid ⌘+/⌘−/⌘0 resize thumbnails and Fit (⌘9) is disabled.
+> - Viewer buttons are the bottom tools: `command.previous/next.button`, `command.zoomOut/zoomIn.button`,
+>   `command.actualPixels.button` (zoom-mode popup), `chrome.returnToGrid.button`, `chrome.more.button`.
+> - CMD-02 field: use `grid.search.field` (⌘F, View › Search current folder or `grid.search.button`), not
+>   `inspector.focus-test`. Space and ← edit the field only; with the View menu open, Esc once closes only the menu.
+> - Inspector: ⌘I / View › Show Inspector opens Image Information; `inspector.close` closes it.
+
 ## Sub-features
 
 - `CMD-01`: fit (`0`), actualPixels (`1`), zoomIn (`+`/`=`), zoomOut (`-`/`−`), open (⌘O),

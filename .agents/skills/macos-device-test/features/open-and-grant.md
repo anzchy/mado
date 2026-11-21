@@ -32,10 +32,13 @@ non-containing fixture folder in the powerbox and verify the mismatch sheet and 
    mismatch after the system panel ends. Capture the sheet and unchanged image; cancel it. Record
    `AccessGrant kind=panelFolder scopeStarted=true|false` from `access` logs for this NSOpenPanel path,
    rather than inferring scope success from a Finder `open -a` File Grant.
-4. Use View → Previous Image / Next Image and the Inspector buttons. Ends stop, without wrapping. Text input
-   keeps arrow keys. ⌘O → folder opens its first image; cancelling either panel changes nothing.
+4. Use View → Previous Image / Next Image and the viewer's bottom tool buttons (`command.previous.button`,
+   `command.next.button`). With View → Loop Through Images off (default) the ends stop; with it on they wrap.
+   Text input keeps arrow keys. ⌘O → folder opens the folder grid (`grid.folder-count`), not its first image;
+   Return opens the selected image. Cancelling either panel changes nothing. (Corrected in run p-device-20261121.)
 5. Quit (⌘Q), relaunch the same absolute bundle, doctor, choose File → Open Recent → fixture folder.
-   The first image appears without another grant. Capture `ACCESS-02-relaunch-browsing.png`.
+   The folder grid appears without another grant (since P3-01 recents reopen into the grid, not the first image).
+   Capture `ACCESS-02-relaunch-browsing.png`.
 6. Close the window. Save the `access` category lines from app.log. The public line is
    `AccessLease root=<UUID> remaining=0 outcome=released`; its signpost spans first start to last stop.
    A window closure alone proves nothing. Include the matching root ID and log timestamps in the record.
