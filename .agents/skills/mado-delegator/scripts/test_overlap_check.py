@@ -226,6 +226,17 @@ class OverlapCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("HOTSPOT", result.stdout)
 
+    def test_claim_pending_hotspot_rename_new_path_has_one_hotspot_label(self):
+        git(self.repo, "branch", "p/pending", self.base)
+        wt = Path(self.tmp.name) / "pending-new-worktree"
+        git(self.repo, "worktree", "add", "-q", str(wt), "p/pending")
+        git(wt, "mv", "App/CanvasWindowController.swift", "App/RenamedCanvas.swift")
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--", "App/RenamedCanvas.swift"],
+                                cwd=self.repo, capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HOTSPOT", result.stdout)
+        self.assertNotIn("SHARED", result.stdout)
+
     def test_claim_hotspot_reports_both_other_branches(self):
         self.branch("p/first", **{"App/CanvasWindowController.swift": "first\n"})
         self.branch("p/second", **{"App/CanvasWindowController.swift": "second\n"})
