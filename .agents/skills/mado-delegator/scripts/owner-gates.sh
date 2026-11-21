@@ -9,8 +9,10 @@
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
 # The Swift, xcodegen, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
-# Preflight checks npm and Playwright prerequisites, then load and memory (load=… mem_free=… pressure=… line, #760),
-# before any lane, and refuses with exit 2.
+# Preflight checks npm and Playwright prerequisites, then load, memory and competing heavy process names/PIDs
+# before any lane. On this four-performance-core mini defaults are load>6, free memory<25%, or VM pressure>1;
+# OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE, OWNER_GATES_MAX_PRESSURE tune them. MADO_GATES_PREFLIGHT=off
+# records a bypass while still printing facts and competitors. A threshold refusal exits 2 with no evidence.
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -55,7 +57,7 @@ fi
 load_facts=$(node "$here/owner-gates-tools.mjs" load-preflight)
 if (( $? != 0 )); then
   load_reason=${${(M)${(f)load_facts}:#refuse: *}#refuse: }
-  { echo "refused: preflight: ${load_reason:-load preflight failed}"; print -r -- "$load_facts" | grep -v '^refuse: '; } > "$s" || summary_error
+  { echo "refused: preflight: ${load_reason:-load preflight failed}"; echo 'result=no evidence'; print -r -- "$load_facts" | grep -v '^refuse: '; } > "$s" || summary_error
   echo "owner-gates: refused: preflight: ${load_reason:-load preflight failed}" >&2
   exit 2
 fi
