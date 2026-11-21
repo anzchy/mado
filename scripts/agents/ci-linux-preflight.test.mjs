@@ -1,6 +1,6 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, readdirSync, readlinkSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, readdirSync, readlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -52,9 +52,9 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
     ps: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'ps from procps-ng 3.3.17'; else exec /bin/ps "$@"; fi\n`,
     sudo: `#!/bin/sh\nexit 1\n`,
     flock: `#!/bin/sh\nif [ "${'$'}FAKE_BUSY" = 1 ]; then exit 1; fi\nexit 0\n`,
-    timeout: `#!/usr/bin/env node\nconst {spawnSync}=require('node:child_process');const a=process.argv.slice(2);a.shift();const seconds=Number(a.shift());const cmd=a.shift();const r=spawnSync(cmd,a,{stdio:'inherit',timeout:seconds*1000});process.exit(r.error?.code==='ETIMEDOUT'?124:r.status??75);\n`,
+    timeout: `#!/usr/bin/env node\nconst {spawnSync}=require('node:child_process');const fs=require('node:fs');const a=process.argv.slice(2);if(process.env.FAKE_TIMEOUT_CALLS)fs.appendFileSync(process.env.FAKE_TIMEOUT_CALLS,a.join(' ')+'\\n');if(process.env.FAKE_SETUP_TIMEOUT==='1'&&a.includes('clone'))process.exit(124);if(a.includes('/usr/bin/env')&&process.env.FAKE_STEP_RESULT){if(process.env.FAKE_STEP_RESULT==='signal')process.kill(process.pid,'SIGTERM');process.exit(Number(process.env.FAKE_STEP_RESULT));}a.shift();const seconds=Number(a.shift());const cmd=a.shift();const r=spawnSync(cmd,a,{stdio:'inherit',timeout:seconds*1000});process.exit(r.error?.code==='ETIMEDOUT'?124:r.status??75);\n`,
     rsync: `#!/bin/sh\nif [ "$FAKE_RSYNC_FAIL" = 1 ]; then echo 'transfer failed' >&2; exit 1; fi\ncp "$3" "\${4#*:}"\n`,
-    ssh: `#!/bin/bash\nset -o pipefail\nprintf '%s\\n' "$*" >> "$FAKE_CALLS"\ntmp=$(mktemp)\ncat > "$tmp"\ncat "$tmp" >> "$FAKE_INPUTS"\nif [ "$FAKE_SSH_FAIL" = 1 ]; then echo unreachable >&2; exit 1; fi\nif [ "$FAKE_NO_BIN_ZSH" = 1 ]; then sed 's#/bin/zsh#/missing-zsh#g' "$tmp" > "$tmp.nozsh"; mv "$tmp.nozsh" "$tmp"; fi\nfor item in "$@"; do last=$item; done\nsed "s#export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin#export PATH=$FAKE_BIN:/usr/local/bin:/usr/bin:/bin#g" "$tmp" | HOME="$FAKE_HOST_HOME" PATH="$FAKE_BIN:$PATH" /bin/bash -c "$last"\nstatus=$?\nrm -f "$tmp"\nexit $status\n`,
+    ssh: `#!/bin/bash\nset -o pipefail\nprintf '%s\\n' "$*" >> "$FAKE_CALLS"\ntmp=$(mktemp)\ncat > "$tmp"\ncat "$tmp" >> "$FAKE_INPUTS"\nif [ "$FAKE_SSH_FAIL" = 1 ]; then echo unreachable >&2; exit 1; fi\nif [ "$FAKE_CLEANUP_FAIL" = 1 ] && grep -Fq 'rm -rf -- "$1"' "$tmp"; then echo 'cleanup unreachable' >&2; exit 1; fi\nif [ "$FAKE_NO_BIN_ZSH" = 1 ]; then sed 's#/bin/zsh#/missing-zsh#g' "$tmp" > "$tmp.nozsh"; mv "$tmp.nozsh" "$tmp"; fi\nfor item in "$@"; do last=$item; done\nsed "s#export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin#export PATH=$FAKE_BIN:/usr/local/bin:/usr/bin:/bin#g" "$tmp" | HOME="$FAKE_HOST_HOME" PATH="$FAKE_BIN:$PATH" /bin/bash -c "$last"\nstatus=$?\nrm -f "$tmp"\nexit $status\n`,
   })) writeFileSync(join(bin, name), body, { mode: 0o755 });
   for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'], ['add', '.github/workflows/pr-body.yml', '.agents/skills/ci-linux-preflight/scripts', 'sample_test.py'], ['commit', '-qm', 'fixture']]) {
     const result = exec(realGit, args, { cwd: repo });
@@ -63,8 +63,9 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
   const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
   const calls = join(base, 'calls.jsonl');
   const inputs = join(base, 'inputs.txt');
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, REAL_PYTHON: realPython, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, MADO_LINUX_HOST: '' };
-  return { base, repo, hostHome, bin, calls, inputs, sha, env };
+  const timeoutCalls = join(base, 'timeout-calls.txt');
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: base, REAL_NODE: process.execPath, REAL_GIT: realGit, REAL_PYTHON: realPython, FAKE_HOST_HOME: hostHome, FAKE_BIN: bin, FAKE_CALLS: calls, FAKE_INPUTS: inputs, FAKE_TIMEOUT_CALLS: timeoutCalls, MADO_LINUX_HOST: '' };
+  return { base, repo, hostHome, bin, calls, inputs, timeoutCalls, sha, env };
 }
 function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }
 function runFixture(f, args = [], env = {}) { return run(['run', f.sha, '--repo', f.repo, ...args], { env: { ...f.env, ...env } }); }
@@ -110,6 +111,60 @@ test('repro busy lock and unreachable host are NOT VERIFIED', async () => {
     assert.equal(result.status, 75, result.stderr + result.stdout);
     assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=NOT VERIFIED/);
   }
+});
+
+test('fix1 repro rejects option arguments, directories and network-capable scripts before SSH', () => {
+  const f = fixture();
+  const rejected = [
+    'node sample_test.py --import=x', 'node sample_test.py --require=x',
+    'node sample_test.py --eval=x', 'node sample_test.py -e', 'node sample_test.py -p',
+    'node sample_test.py ../outside', 'node --test .', 'node --test ./',
+    'node --test .agents/skills/ci-linux-preflight/scripts/',
+    'node .agents/skills/ci-linux-preflight/scripts/preflight.mjs run',
+    'python3 -m unittest sample_test.py -k', 'python3 -m unittest -k sample_test.py',
+    'python3 -m unittest .',
+  ];
+  for (const cmd of rejected) {
+    const result = run(['repro', f.sha, '--cmd', cmd, '--repo', f.repo], { env: { ...f.env, FAKE_SSH_FAIL: '1' } });
+    assert.equal(result.status, 2, `${cmd}: ${result.stderr}${result.stdout}`);
+    assert.equal(existsSync(f.calls), false, `SSH was called for ${cmd}`);
+  }
+});
+
+test('fix1 repro launcher failures and signal death never match expected fail', async () => {
+  for (const value of ['126', '127', 'signal']) {
+    const f = fixture();
+    const result = await runAsync(['repro', f.sha, '--cmd', 'node sample_test.py', '--expect', 'fail', '--repo', f.repo],
+      { env: { ...f.env, FAKE_STEP_RESULT: value } });
+    assert.equal(result.status, 75, `${value}: ${result.stderr}${result.stdout}`);
+    assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=NOT VERIFIED/);
+    assert.match(result.stdout, /NOT VERIFIED overall=NOT VERIFIED/);
+    assert.doesNotMatch(result.stdout, /overall=MATCH/);
+  }
+});
+
+test('fix1 repro isolates HOME and TMPDIR and disables system Git config', async () => {
+  const f = fixture();
+  writeFileSync(join(f.repo, 'env-check.mjs'), `if (!process.env.HOME.includes('/ci/run.') || process.env.HOME.endsWith('/pr-head') || !process.env.TMPDIR.includes('/ci/run.') || process.env.GIT_CONFIG_NOSYSTEM !== '1') process.exit(9);\n`);
+  exec(realGit, ['add', 'env-check.mjs'], { cwd: f.repo });
+  exec(realGit, ['commit', '-qm', 'environment check'], { cwd: f.repo });
+  const sha = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
+  const result = await runAsync(['repro', sha, '--cmd', 'node env-check.mjs', '--expect', 'pass', '--repo', f.repo], { env: f.env });
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=MATCH/);
+});
+
+test('fix1 repro bounds setup and reports failed cleanup as NOT VERIFIED', async () => {
+  const f = fixture();
+  const args = ['repro', f.sha, '--cmd', 'node sample_test.py', '--expect', 'fail', '--repo', f.repo];
+  const timeout = await runAsync(args, { env: { ...f.env, FAKE_SETUP_TIMEOUT: '1' } });
+  assert.equal(timeout.status, 75, timeout.stderr + timeout.stdout);
+  assert.match(readFileSync(f.timeoutCalls, 'utf8'), /git clone/);
+  assert.match(readFileSync(summaryPath(timeout), 'utf8'), /outcome=NOT VERIFIED/);
+  const cleanup = await runAsync(args, { env: { ...f.env, FAKE_CLEANUP_FAIL: '1' } });
+  assert.equal(cleanup.status, 75, cleanup.stderr + cleanup.stdout);
+  assert.match(cleanup.stdout, /NOT VERIFIED overall=NOT VERIFIED/);
+  assert.match(readFileSync(summaryPath(cleanup), 'utf8'), /reason=remote cleanup unconfirmed/);
 });
 
 describe('ci-linux-preflight', { concurrency: true }, () => {

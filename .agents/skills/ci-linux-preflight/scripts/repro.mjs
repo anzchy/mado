@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, renameSync, symlinkSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, renameSync, symlinkSync, rmSync, statSync } from 'node:fs';
 import { tmpdir, homedir, release } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -46,11 +46,20 @@ export function parseCommand(command) {
   if (argv.some(v => !safeToken.test(v))) throw fail('unsafe command token');
   const [program, first, ...rest] = argv;
   if (program === 'node' && first === '--test' && rest.length && rest.every(isPath)) return argv;
-  if (program === 'node' && isPath(first) && rest.every(v => safeToken.test(v) && !v.startsWith('/'))) return argv;
+  if (program === 'node' && isPath(first) && rest.every(isPlainArgument)) return argv;
   if (program === 'python3' && first === '-m' && rest[0] === 'unittest' && rest.length > 1 && rest.slice(1).every(isPath)) return argv;
   throw fail('command is outside repro allow-list');
 }
-function isPath(value) { return !!value && !value.startsWith('-') && !value.startsWith('/') && !value.split('/').includes('..') && !value.includes('//') && /^[A-Za-z0-9_./-]+$/.test(value); }
+function isPath(value) {
+  return !!value && value !== '.' && !value.startsWith('./') && !value.endsWith('/') &&
+    !value.startsWith('-') && !value.startsWith('/') &&
+    !value.split('/').some(part => part === '.' || part === '..' || !part) &&
+    !value.startsWith('.agents/skills/ci-linux-preflight/') && /^[A-Za-z0-9_./-]+$/.test(value);
+}
+function isPlainArgument(value) {
+  return safeToken.test(value) && !value.startsWith('-') && !value.startsWith('/') &&
+    !value.split('/').includes('..') && !value.includes('//');
+}
 function sourcePaths(argv) { return argv[0] === 'python3' ? argv.slice(3) : argv[1] === '--test' ? argv.slice(2) : [argv[1]]; }
 function resolveHeads(repo, values, argv) {
   return values.map(value => {
@@ -59,7 +68,9 @@ function resolveHeads(repo, values, argv) {
     if (result.status !== 0 || !hex.test(sha)) throw fail(`invalid commit ${value}`);
     for (const path of sourcePaths(argv)) {
       const found = run('git', ['ls-tree', sha, '--', path], { cwd: repo });
-      if (found.status !== 0 || !/^100(?:644|755) blob /m.test(found.stdout ?? '')) throw fail(`command path missing or not a regular file at ${sha.slice(0, 7)}: ${path}`);
+      const lines = (found.stdout ?? '').trimEnd().split('\n');
+      const entry = lines.length === 1 ? lines[0].match(/^100(?:644|755) blob [a-f0-9]{40}\t(.+)$/) : null;
+      if (found.status !== 0 || entry?.[1] !== path) throw fail(`command path missing or not a regular file at ${sha.slice(0, 7)}: ${path}`);
     }
     return sha;
   });
@@ -109,6 +120,7 @@ export function checkReproSummary(raw, expectedHead) {
     const status = get(`${prefix}:outcome`);
     if (!/^(?:\d+|not-run)$/.test(exit) || !/^\d+(?:\.\d+)?$/.test(secs) || !['PASS', 'FAIL', 'TIMEOUT', 'NOT VERIFIED', 'not-run'].includes(status)) throw Error('invalid result');
     if ((exit === '0') !== (status === 'PASS') && status !== 'not-run') throw Error('result exit mismatch');
+    if (status === 'FAIL' && ['75', '124', '125', '126', '127', '137'].includes(exit)) throw Error('infrastructure exit cannot be FAIL');
     observed.push(status);
   }
   if (['MATCH', 'MISMATCH', 'COMPLETE'].includes(outcome)) {
@@ -116,7 +128,7 @@ export function checkReproSummary(raw, expectedHead) {
     const matches = expect?.every((v, i) => (v === 'pass') === (observed[i] === 'PASS'));
     if ((outcome === 'MATCH') !== (matches === true) || (outcome === 'COMPLETE') !== !expect) throw Error('expectation mismatch');
   }
-  return heads.map((head, i) => `Linux-Repro (supplementary): ${head.slice(0, 7)} ${get('command')} ${observed[i]}`).join('\n');
+  return heads.map((head, i) => `Linux-Repro (supplementary): ${head.slice(0, 7)} ${get('command')} ${['MATCH', 'MISMATCH', 'COMPLETE'].includes(outcome) && ['PASS', 'FAIL'].includes(observed[i]) ? observed[i] : 'NOT VERIFIED'} overall=${outcome}`).join('\n');
 }
 
 function writeAttempt(head, body, raw) {
@@ -145,6 +157,9 @@ export function reproLocal(args) {
   const bundle = join(temp, 'head.bundle');
   let remoteDir;
   let raw = '';
+  let body;
+  let status = 75;
+  let cleanupNote = '';
   try {
     for (let i = 0; i < heads.length; i++) {
       if (run('git', ['update-ref', refs[i], heads[i]], { cwd: repo }).status !== 0) throw fail('temporary ref failed', 75);
@@ -171,25 +186,36 @@ export function reproLocal(args) {
       try {
         const line = checkReproSummary(result.stdout, heads[0]);
         const outcome = result.stdout.match(/^outcome=(.+)$/m)?.[1];
-        const status = outcome === 'MATCH' || outcome === 'COMPLETE' ? 0 : outcome === 'MISMATCH' ? 1 : 75;
+        status = outcome === 'MATCH' || outcome === 'COMPLETE' ? 0 : outcome === 'MISMATCH' ? 1 : 75;
         if (result.status !== status) throw Error('remote exit disagrees with summary');
-        const path = writeAttempt(heads[0], result.stdout, raw);
-        process.stdout.write(`${line}\nSummary: ${path}\n`);
-        return status;
+        if (!line) throw Error('empty repro summary line');
+        body = result.stdout;
       } catch (error) { raw += `\ninvalid remote summary: ${error.message}`; }
     }
-    throw fail(result.status === 75 && /(?:^|\n)busy\s*$/m.test(raw) ? 'busy' : `remote run: ${raw.trim() || result.error?.message || result.status}`, 75);
+    if (!body) throw fail(result.status === 75 && /(?:^|\n)busy\s*$/m.test(raw) ? 'busy' : `remote run: ${raw.trim() || result.error?.message || result.status}`, 75);
   } catch (error) {
-    const body = summary({ heads, command: opts.command, expect: opts.expect, outcome: 'NOT VERIFIED', reason: error.message,
+    status = 75;
+    body = summary({ heads, command: opts.command, expect: opts.expect, outcome: 'NOT VERIFIED', reason: error.message,
       results: heads.map(head => ({ head, exit: 'not-run', secs: '0.0', outcome: 'not-run', failed: [] })) });
-    const path = writeAttempt(heads[0], body, raw || error.message);
-    process.stdout.write(`${checkReproSummary(body, heads[0])}\nSummary: ${path}\n`);
-    return 75;
+    raw ||= error.message;
   } finally {
-    if (remoteDir) ssh(host, `/bin/bash -s -- ${quote(remoteDir)}`, 'rm -rf -- "$1"\n');
+    if (remoteDir) {
+      const cleanup = ssh(host, `/bin/bash -s -- ${quote(remoteDir)}`, 'rm -rf -- "$1"\n');
+      if (cleanup.error || cleanup.status !== 0) {
+        cleanupNote = `remote cleanup unconfirmed: ${cleanup.stderr?.trim() || cleanup.error?.message || cleanup.status}`;
+        raw += `\n${cleanupNote}`;
+        status = 75;
+        body = body.replace(/^outcome=.*$/m, 'outcome=NOT VERIFIED')
+          .replace(/^reason=.*\n/m, '')
+          .replace(/^kernel=/m, `reason=${cleanupNote.replace(/[\r\n]/g, ' ').slice(0, 300)}\nkernel=`);
+      }
+    }
     for (const ref of refs) run('git', ['update-ref', '-d', ref], { cwd: repo });
     rmSync(temp, { recursive: true, force: true });
   }
+  const path = writeAttempt(heads[0], body, raw);
+  process.stdout.write(`${checkReproSummary(body, heads[0])}\n${cleanupNote ? `Cleanup: NOT VERIFIED ${cleanupNote}\n` : ''}Summary: ${path}\n`);
+  return status;
 }
 
 export function reproRemote(repo, payload) {
@@ -199,22 +225,31 @@ export function reproRemote(repo, payload) {
   const data = { heads: opts.heads, command: opts.command, expect: opts.expect, outcome: 'COMPLETE', kernel: release(),
     node: run('node', ['--version']).stdout?.trim() || 'unknown', results: [] };
   const started = Date.now();
+  const runDir = resolve(repo, '..');
   for (const head of opts.heads) {
     const checkout = run('git', ['checkout', '-q', '--detach', head], { cwd: repo });
     const actual = run('git', ['rev-parse', 'HEAD'], { cwd: repo }).stdout?.trim();
     if (checkout.status !== 0 || actual !== head) { data.outcome = 'NOT VERIFIED'; data.reason = `checkout head mismatch ${head}`; break; }
-    if (sourcePaths(opts.argv).some(path => !existsSync(join(repo, path)))) { data.outcome = 'NOT VERIFIED'; data.reason = `command path missing ${head}`; break; }
+    if (sourcePaths(opts.argv).some(path => {
+      try { return !statSync(join(repo, path)).isFile(); } catch { return true; }
+    })) { data.outcome = 'NOT VERIFIED'; data.reason = `command path missing ${head}`; break; }
     const remaining = Math.ceil(opts.deadline - (Date.now() - started) / 1000);
-    if (remaining < 1) { data.outcome = 'TIMEOUT'; data.reason = 'whole run deadline reached'; break; }
+    if (remaining < 1) { data.outcome = 'NOT VERIFIED'; data.reason = 'whole run deadline reached'; break; }
     const begin = Date.now();
-    const result = run('timeout', ['--kill-after=10', String(Math.min(opts.stepTimeout, remaining)), '/usr/bin/env', '-i', `HOME=${repo}`, `PATH=${process.env.PATH || commandPath}`, 'CI=true', 'LANG=C.UTF-8', ...opts.argv], { cwd: repo });
+    const home = mkdtempSync(join(runDir, 'home-'));
+    const result = run('timeout', ['--kill-after=10', String(Math.min(opts.stepTimeout, remaining)), '/usr/bin/env', '-i', `HOME=${home}`, `PATH=${process.env.PATH || commandPath}`, `TMPDIR=${runDir}`, 'GIT_CONFIG_NOSYSTEM=1', 'CI=true', 'LANG=C.UTF-8', ...opts.argv], { cwd: repo });
     const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
     const exit = result.status ?? 75;
-    const outcome = result.error ? 'NOT VERIFIED' : [124, 137].includes(exit) ? 'TIMEOUT' : exit === 0 ? 'PASS' : 'FAIL';
+    const outcome = result.error || result.signal || result.status === null || [75, 125, 126, 127].includes(exit) ? 'NOT VERIFIED' :
+      [124, 137].includes(exit) ? 'TIMEOUT' : exit === 0 ? 'PASS' : 'FAIL';
     const failed = [...output.matchAll(/^(?:not ok \d+ - |FAIL: |ERROR: ).+$/gm)].map(m => m[0].trim()).slice(0, 5);
     data.results.push({ head, exit: String(exit), secs: ((Date.now() - begin) / 1000).toFixed(1), outcome, failed });
     process.stderr.write(`head ${head}:\n${output.slice(0, 100000)}\n`);
-    if (outcome === 'NOT VERIFIED' || outcome === 'TIMEOUT') { data.outcome = outcome; data.reason = result.error?.message ?? 'step timeout'; break; }
+    if (outcome === 'NOT VERIFIED' || outcome === 'TIMEOUT') {
+      data.outcome = 'NOT VERIFIED';
+      data.reason = result.error?.message ?? (result.signal ? `signal ${result.signal}` : outcome === 'TIMEOUT' ? 'step timeout' : `launcher exit ${exit}`);
+      break;
+    }
   }
   for (const head of opts.heads.slice(data.results.length)) data.results.push({ head, exit: 'not-run', secs: '0.0', outcome: 'not-run', failed: [] });
   if (data.outcome === 'COMPLETE' && opts.expect) {
