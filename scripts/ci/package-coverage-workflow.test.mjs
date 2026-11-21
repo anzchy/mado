@@ -55,7 +55,8 @@ test('Walking skeleton has one disabled rollout switch and enforces coverage bef
   const body = job('walking-skeleton');
   assert.match(body, /needs: \[changes, ledger-check, package-tests, package-macui-tests, package-coverage, app-tests\]/);
   assert.match(body, /^          COVERAGE: \$\{\{ needs\.package-coverage\.result \}\}$/m);
-  assert.match(body, /^          COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs$/m);
+  // #788 item 2 moved the one switch to the workflow env so the shard jobs read it too; the verdict inherits it.
+  assert.match(workflow, /^  COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs$/m);
   const verdict = script(step(body, 'Require the ledger check, package tests and App tests'));
   assert.match(verdict, /COVERAGE_ENFORCE/);
   const dir = mkdtempSync(join(tmpdir(), 'coverage-rollout-'));
@@ -118,4 +119,39 @@ test('788 fix1 the gate compares the job records with the PR head and the artifa
   assert.match(gate, /--sha "\$\{\{ github\.sha \}\}" --head-sha "\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}"/);
   for (const shard of ['package-tests', 'package-macui-tests'])
     assert.match(job(shard), /--commit "\$\{\{ github\.sha \}\}" --run-id "\$\{\{ github\.run_id \}\}" --attempt "\$\{\{ github\.run_attempt \}\}"/, shard);
+});
+
+// #788 item 2: an artifact upload blip must not fail a required shard job while coverage enforcement is off.
+const SOFT = "continue-on-error: ${{ env.COVERAGE_ENFORCE != 'true' }}";
+const stepNames = body => [...body.matchAll(/^      - name: (.*)$/gm)].map(m => m[1]);
+
+test('788 item 2 one workflow-level COVERAGE_ENFORCE switch, still off', () => {
+  assert.match(workflow, /^env:\n  COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs\n\njobs:\n/m);
+  assert.equal([...workflow.matchAll(/^\s*COVERAGE_ENFORCE:/gm)].length, 1, 'exactly one definition of the switch');
+  assert.doesNotMatch(job('walking-skeleton'), /COVERAGE_ENFORCE:/);
+  assert.match(script(step(job('walking-skeleton'), 'Require the ledger check, package tests and App tests')), /"\$COVERAGE_ENFORCE" = true/);
+});
+
+test('788 item 2 only the coverage uploads of the two shard jobs are soft while enforcement is off', () => {
+  for (const id of ['package-tests', 'package-macui-tests']) {
+    const body = job(id);
+    const upload = step(body, 'Upload Package coverage');
+    assert.ok(upload, id);
+    assert.ok(upload.includes(`\n        ${SOFT}\n`), `${id} upload soft: ${upload}`);
+    assert.match(upload, /if-no-files-found: error/);
+    assert.doesNotMatch(upload, /retry/i);
+    for (const name of stepNames(body).filter(name => name !== 'Upload Package coverage'))
+      assert.doesNotMatch(step(body, name), /continue-on-error/, `${id} / ${name} keeps its behaviour`);
+  }
+});
+
+test('788 item 2 the aggregator downloads softly and the gate decides with the switch', () => {
+  const body = job('package-coverage');
+  for (const name of ['Download non-UI Package coverage', 'Download MacUI Package coverage'])
+    assert.ok(step(body, name).includes(`\n        ${SOFT}\n`), name);
+  const gate = step(body, 'Merge and gate Package coverage');
+  assert.match(gate, /--enforce "\$COVERAGE_ENFORCE"/);
+  for (const name of stepNames(body).filter(name => !name.startsWith('Download ')))
+    assert.doesNotMatch(step(body, name), /continue-on-error/, name);
+  assert.doesNotMatch(body, /COVERAGE_ENFORCE:/, 'the job reads the workflow switch, it does not redefine it');
 });

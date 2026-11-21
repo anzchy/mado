@@ -48,6 +48,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The one coverage rollout switch. While it is off, an upload or download blip of a coverage shard artifact does not fail
+# a job: the gate reports that shard unavailable (#788 item 2). Walking skeleton reads it for the coverage minimum.
+env:
+  COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs
+
 jobs:
   # Decides whether the native (macOS) jobs run. Only a pull request whose complete changed-file list is inside the
   # reviewed documentation/agent allowlist in scripts/ci/native-inputs.mjs skips them; any doubt, and every push or
@@ -146,6 +151,7 @@ jobs:
           --not-before "$COVERAGE_TEST_STARTED"
       - name: Upload Package coverage
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: ${{ env.COVERAGE_ENFORCE != 'true' }}
         with:
           name: package-coverage-non-ui
           path: |
@@ -218,6 +224,7 @@ jobs:
           --not-before "$COVERAGE_TEST_STARTED"
       - name: Upload Package coverage
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: ${{ env.COVERAGE_ENFORCE != 'true' }}
         with:
           name: package-coverage-macui
           path: |
@@ -252,11 +259,13 @@ jobs:
           node-version: 22
       - name: Download non-UI Package coverage
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: ${{ env.COVERAGE_ENFORCE != 'true' }}
         with:
           name: package-coverage-non-ui
           path: ci-coverage/non-ui
       - name: Download MacUI Package coverage
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: ${{ env.COVERAGE_ENFORCE != 'true' }}
         with:
           name: package-coverage-macui
           path: ci-coverage/macui
@@ -274,7 +283,7 @@ jobs:
           node scripts/ci/package-coverage.mjs --root . --input ci-coverage --out ci-coverage/report.md
           --sha "${{ github.sha }}" --head-sha "${{ github.event.pull_request.head.sha || github.sha }}"
           --run-id "${{ github.run_id }}" --attempt "${{ github.run_attempt }}"
-          --attempt-jobs ci-coverage/attempt-jobs.json
+          --attempt-jobs ci-coverage/attempt-jobs.json --enforce "$COVERAGE_ENFORCE"
           --formal "${{ github.event_name != 'workflow_dispatch' || inputs.swift_filter == '' }}"
       - name: Upload Package coverage report
         if: always()
@@ -483,7 +492,6 @@ jobs:
           PACKAGE: ${{ needs.package-tests.result }}
           MACUI: ${{ needs.package-macui-tests.result }}
           COVERAGE: ${{ needs.package-coverage.result }}
-          COVERAGE_ENFORCE: 'false' # #631: switch to true only after ten accepted cold runs
           SWIFT_FILTER: ${{ inputs.swift_filter }}
           APP_JOB: ${{ needs.app-tests.result }}
           UNSIGNED_BUILD: ${{ needs.app-tests.outputs.unsigned_build }}

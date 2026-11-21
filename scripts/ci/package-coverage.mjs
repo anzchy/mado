@@ -259,6 +259,19 @@ function artifact(root, input, shard, expected, sources) {
   for (const [name, value] of Object.entries(sources)) if (listed[name] !== value) fatal(`${shard} source digest mismatch: ${name}`);
   return { meta, carried, files: parseLCOV(raw.toString('utf8'), root) };
 }
+function unavailableReport({ input, out, sha, runId, shards, absent, expected, sources, root }) {
+  const present = shards.filter(shard => !absent.includes(shard)).map(shard => artifact(root, input, shard, expected, sources));
+  const invalid = present.flatMap(invalidCounters);
+  if (invalid.length) fatal(`invalid counter evidence in a present shard:\n${invalid.join('\n')}`);
+  const report = ['# MadoKit Package coverage', '', `Commit ${sha}; run ${runId}; attempt ${expected.attempt}; coverage unavailable`, 'Shards:',
+    ...shards.map(shard => absent.includes(shard)
+      ? `- ${shard}: unavailable (artifact package-coverage-${shard} absent; its upload failed or did not run)`
+      : `- ${shard}: present and valid; not evaluated alone`),
+    ...present.filter(shard => shard.carried).map(shard => shard.carried),
+    'Coverage gate: UNAVAILABLE (COVERAGE_ENFORCE=false: a missing shard is reported, not failed; coverage not evaluated)'].join('\n') + '\n';
+  writeFileSync(out, report);
+  return { pass: true, report, total: null, unavailable: absent };
+}
 function mapping(record) {
   return JSON.stringify({ lines: [...record.lines].map(([n, v]) => [n, v.checksum]).sort((a, b) => a[0] - b[0]),
     functions: [...record.functions].sort(([a], [b]) => a.localeCompare(b)) });
@@ -290,7 +303,7 @@ function loopExit(root, merged) {
   return `ImageSourceHeader.swift:${n} loop-exit throw hit count ${hit.hits}`;
 }
 
-export function evaluateCoverage({ root, input, out, eligibleOut, sha, headSha = sha, runId, attempt, formal, shards = ['non-ui', 'macui'], attemptJobs }) {
+export function evaluateCoverage({ root, input, out, eligibleOut, sha, headSha = sha, runId, attempt, formal, shards = ['non-ui', 'macui'], attemptJobs, enforce = true }) {
   if (![root, input, out].every(x => typeof x === 'string' && path.isAbsolute(x))) fatal('root/input/out must be absolute');
   if (eligibleOut !== undefined && (typeof eligibleOut !== 'string' || !path.isAbsolute(eligibleOut))) fatal('eligibleOut must be absolute');
   if (existsSync(out)) unlinkSync(out);
@@ -301,9 +314,15 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, headSha =
   if (typeof formal !== 'boolean') fatal('formal must be boolean');
   if (JSON.stringify(shards) !== JSON.stringify(['non-ui', 'macui']) && JSON.stringify(shards) !== JSON.stringify(['non-ui'])) fatal('invalid shard selection');
   if (formal && shards.length !== 2) fatal('formal coverage requires two shards');
+  if (typeof enforce !== 'boolean') fatal('enforce must be boolean');
   const expected = { sha, headSha, runId: String(runId), attempt: number(attempt, 'expected attempt', true), attemptJobs: readAttemptJobs(attemptJobs) };
   const sources = inventory(root), exempt = exceptions(root, sources);
   for (const name of exempt.keys()) if (!(name in sources)) fatal(`exception source missing: ${name}`);
+  // #788 item 2: with enforcement off a shard upload may fail without failing its job. An absent shard (no directory, or
+  // an empty one) is then reported unavailable, after every present shard passed the same checks; enforcement on keeps
+  // the "artifact missing" failure below. A present but partial or wrong shard is never treated as absent.
+  const absent = shards.filter(shard => { const dir = path.join(input, shard); return !existsSync(dir) || !readdirSync(dir).length; });
+  if (absent.length && !enforce) return unavailableReport({ input, out, sha, runId, shards, absent, expected, sources, root });
   const [left, right] = shards.map(shard => artifact(root, input, shard, expected, sources));
   if (right && JSON.stringify(left.meta.toolchain) !== JSON.stringify(right.meta.toolchain)) fatal('toolchain mismatch');
   for (const [name, entry] of exempt) if (JSON.stringify(entry.toolchain) !== JSON.stringify(left.meta.toolchain)) fatal(`${name}: file exception toolchain drift`);
@@ -403,16 +422,18 @@ export function evaluateCoverage({ root, input, out, eligibleOut, sha, headSha =
 function cli(args) {
   const values = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!/^--(root|input|out|eligible-out|sha|head-sha|run-id|attempt|formal|shards|attempt-jobs)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
+    if (!/^--(root|input|out|eligible-out|sha|head-sha|run-id|attempt|formal|shards|attempt-jobs|enforce)$/.test(args[i] ?? '') || !args[i + 1] || args[i] in values) fatal(`invalid argument ${args[i]}`);
     values[args[i]] = args[i + 1];
   }
   for (const key of ['--root', '--input', '--out', '--sha', '--run-id', '--attempt', '--formal']) if (!(key in values)) fatal(`missing ${key}`);
   if (!['true', 'false'].includes(values['--formal'])) fatal('invalid --formal');
+  if (values['--enforce'] !== undefined && !['true', 'false'].includes(values['--enforce'])) fatal('invalid --enforce');
   return { root: path.resolve(values['--root']), input: path.resolve(values['--input']), out: path.resolve(values['--out']),
     eligibleOut: values['--eligible-out'] === undefined ? undefined : path.resolve(values['--eligible-out']), sha: values['--sha'],
     headSha: values['--head-sha'] ?? values['--sha'], runId: values['--run-id'],
     attempt: values['--attempt'], formal: values['--formal'] === 'true', shards: values['--shards'] === undefined ? ['non-ui', 'macui'] : values['--shards'].split(','),
-    attemptJobs: values['--attempt-jobs'] === undefined ? undefined : path.resolve(values['--attempt-jobs']) };
+    attemptJobs: values['--attempt-jobs'] === undefined ? undefined : path.resolve(values['--attempt-jobs']),
+    enforce: values['--enforce'] !== 'false' };
 }
 
 // --fetch-attempt-jobs <out> --repo <owner/name> --run-id <id> --attempt <n>: write the job records of attempts 1..n
