@@ -29,6 +29,7 @@ class OverlapCheckTests(unittest.TestCase):
         self.files(self.origin, **{
             "App/Coordinator.swift": "".join(f"line {i}\n" for i in range(1, 21)),
             "App/Grid.swift": "grid\n", "App/Viewer.swift": "viewer\n", "App/Other.swift": "other\n",
+            "App/CanvasWindowController.swift": "canvas\n",
             "docs/feature-ledger.md": "rows\n", "docs/feature-ledger.html": "<p>rows</p>\n"})
         git(self.origin, "commit", "-qm", "init")
         git(root, "clone", "-q", str(self.origin), str(self.repo))
@@ -203,6 +204,36 @@ class OverlapCheckTests(unittest.TestCase):
                                 cwd=self.repo, capture_output=True, text=True, env=ENV)
         self.assertEqual(result.returncode, 1)
         self.assertIn("HOTSPOT", result.stdout)
+
+    def test_claim_committed_hotspot_rename_refuses_old_and_new_paths(self):
+        git(self.repo, "switch", "-qc", "p/rename", self.base)
+        git(self.repo, "mv", "App/CanvasWindowController.swift", "App/RenamedCanvas.swift")
+        git(self.repo, "commit", "-qm", "rename canvas")
+        git(self.repo, "switch", "-q", "--detach", self.base)
+        for path in ("App/CanvasWindowController.swift", "App/RenamedCanvas.swift"):
+            result = subprocess.run(["python3", str(SCRIPT), "claim", "--branches", "p/rename", "--", path],
+                                    cwd=self.repo, capture_output=True, text=True, env=ENV)
+            self.assertEqual(result.returncode, 1, path)
+            self.assertIn("HOTSPOT", result.stdout, path)
+
+    def test_claim_pending_hotspot_rename_refuses_old_path(self):
+        git(self.repo, "branch", "p/pending", self.base)
+        wt = Path(self.tmp.name) / "pending-worktree"
+        git(self.repo, "worktree", "add", "-q", str(wt), "p/pending")
+        git(wt, "mv", "App/CanvasWindowController.swift", "App/RenamedCanvas.swift")
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--", "App/CanvasWindowController.swift"],
+                                cwd=self.repo, capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HOTSPOT", result.stdout)
+
+    def test_claim_hotspot_reports_both_other_branches(self):
+        self.branch("p/first", **{"App/CanvasWindowController.swift": "first\n"})
+        self.branch("p/second", **{"App/CanvasWindowController.swift": "second\n"})
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--branches", "p/first", "p/second", "--",
+                                 "App/CanvasWindowController.swift"], cwd=self.repo,
+                                capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.count("HOTSPOT"), 2)
 
     def test_unknown_branch_is_a_usage_error(self):
         rc, _, result = self.run_check("trial", "p/nope")

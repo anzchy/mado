@@ -68,7 +68,18 @@ def merged(upstream, branch):
 
 
 def changed(a, b):
-    return set(git("diff", "--name-only", a, b).stdout.split())
+    # Treat a rename as a deletion plus an addition: dispatch may claim either path.
+    return set(git("diff", "--no-renames", "--name-only", a, b).stdout.splitlines())
+
+
+def renamed_hotspots(*args):
+    """A renamed hotspot protects both its old and new path from a concurrent claim."""
+    result = set()
+    for line in git(*args).stdout.splitlines():
+        fields = line.split("\t")
+        if len(fields) == 3 and fields[0].startswith("R") and (fields[1] in HOTSPOTS or fields[2] in HOTSPOTS):
+            result.update(fields[1:])
+    return result
 
 
 def trial(upstream, branch, path=None):
@@ -103,16 +114,19 @@ def claim(upstream, branches, paths):
         resolve(branch)
         worktree = worktrees.get(branch)
         pending = set()
+        pending_renames = set()
         if worktree:
-            pending = set(git("-C", worktree, "diff", "--name-only", "HEAD").stdout.splitlines())
+            pending = set(git("-C", worktree, "diff", "--no-renames", "--name-only", "HEAD").stdout.splitlines())
+            pending_renames = renamed_hotspots("-C", worktree, "diff", "--name-status", "-M", "HEAD")
             pending.update(git("-C", worktree, "ls-files", "--others", "--exclude-standard").stdout.splitlines())
         if merged(upstream, branch) and not pending:
             continue
         base = git("merge-base", upstream, branch).stdout.strip()
+        committed_renames = renamed_hotspots("diff", "--name-status", "-M", base, branch)
         shared = sorted(f for f in changed(base, branch) | pending if wanted(f))
         if shared:
             report = {"branch": branch, "shared": shared}
-            hotspots = sorted(set(shared) & (HOTSPOTS - LEDGER))
+            hotspots = sorted(set(shared) & ((HOTSPOTS - LEDGER) | committed_renames | pending_renames))
             ledger = sorted(set(shared) & LEDGER)
             if hotspots:
                 report["hotspots"] = hotspots
