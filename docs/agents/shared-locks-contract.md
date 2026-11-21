@@ -2,7 +2,7 @@
 
 One page for every project that shares this Mac's locks (#738 WI-1; RClick's design: anzchy/RClick#21).
 
-- **Sources**, checked 2026-11-21 at main `d91ae3c2`:
+- **Sources**, checked 2026-11-21 at main `152610f5` (the lock scripts are unchanged since `76c399d4`):
   - `scripts/heavy-lock.sh`
   - `scripts/tdd/heavy-lock.py`
   - `.agents/skills/mado-delegator/scripts/gui-lock.sh`
@@ -38,11 +38,11 @@ Design background: [heavy-lock-contract.md](heavy-lock-contract.md).
 - **GUI owner record**: exactly eight lines, `project session batch start pid expected_minutes purpose acquisition_id` (uuid4), mode 0600, created with `O_EXCL|O_NOFOLLOW`.
   - Mado still writes `project=picsee`; RClick writes `project=rclick`.
   - A release is refused unless `project`, `batch` and `acquisition_id` all match.
-- **Heavy status**: `/Users/jack/Documents/mac-app/picsee/scripts/heavy-lock.sh status` (or `--status`) prints JSON `{lock, holders[], processQuery}` and exits 0. It reads the guardian records and does not queue, lock or signal.
+- **Heavy status**: `<Mado main checkout>/scripts/heavy-lock.sh status` (or `--status`); on the dev machine `<Mado main checkout>` is `/Users/jack/Documents/mac-app/picsee`, so the call is `/Users/jack/Documents/mac-app/picsee/scripts/heavy-lock.sh status`. It prints JSON `{lock, holders[], processQuery}` and exits 0, and reads the guardian records and does not queue, lock or signal.
   - Each holder has `holderPid`, `wrapperPid`, `wrapperAlive`, `childPids`, `ageSeconds`, `budgetSeconds` and `orphanOverBudget`.
   - Use the absolute path: from another repo, `scripts/heavy-lock.sh` names that repo's file or nothing.
   - An argv of exactly `status` or `--status` always runs this diagnostic, never a command. To run your own program called `status`, give its path (`./status`).
-  - With any extra argument it is **not** the diagnostic: `heavy-lock.sh status --json` queues and runs a command named `status` and fails (probed at `d91ae3c2`: exit 70, `No such file or directory: 'status'`). Call it with that one argument only.
+  - With any extra argument it is **not** the diagnostic: `heavy-lock.sh status --json` queues and runs a command named `status` and fails (probed: exit 70, `No such file or directory: 'status'`). That failed run leaves its guardian `.owner` and `.log` behind; the guardian has exited, and a later `status` lists no holder. Such leftovers are reported, not deleted (see Who may unlink). Call it with that one argument only.
   - An empty `holders` list does not prove the kernel lock is free, and it is not permission to start work beside the lock.
 - **GUI status**: `gui-lock.sh status` prints `FREE`, or `HELD:` followed by the owner lines.
 - **Optional diagnostics.** A consumer may ignore both:
@@ -86,7 +86,7 @@ A command that passes through can itself exit 64, 70, 75 or 124. Those codes pro
 
 Probed with temporary lock paths:
 - 2026-11-21 at `888a28cd`: heavy-lock 64, 7 → 7, 124, 70 (`HELD=1`, reverse nesting, `WAIT_SECS=inf`), and 75 (busy flock, also through `PICSEE_HEAVY_LOCK_WAIT_SECS`); gui-lock `status` 0, usage 1, bad id 1.
-- At `d91ae3c2`: `status` and `--status` both exit 0 and print JSON; nesting as below.
+- At `d91ae3c2` and again at `76c399d4`: `status` and `--status` both exit 0 and print JSON; nesting as below.
 
 ## Nesting rule
 
@@ -102,17 +102,26 @@ Probed with temporary lock paths:
 
 ## Holder loss (known limit)
 
-The guardian ignores INT, TERM and HUP, so those signals alone do not release the heavy lock. If the supervisor **and** the guardian are both SIGKILLed (`pkill -9`, jetsam), a job that is still running loses flock protection, and another job can enter beside it. Exclusion is therefore not guaranteed after both holders die. Neither an empty `status` list nor a missing record is permission to start a job while the old job's processes are alive. Source: `docs/agents/heavy-lock.md`, line 7.
+The guardian ignores INT, TERM and HUP, so those signals alone do not release the heavy lock. If the supervisor **and** the guardian are both SIGKILLed (`pkill -9`, jetsam), a job that is still running loses flock protection, and another job can enter beside it. Exclusion is therefore not guaranteed after both holders die. Neither an empty `status` list nor a missing record is permission to start a job while the old job's processes are alive. Source: `docs/agents/heavy-lock.md`, line 9.
 
 ## Owner recovery
 
-Another project only reports a stuck heavy lock; it never recovers it. The owning project identifies its own guardian from the record's `cmd` line, which names the guardian's `heavy-lock.py` path and so its worktree. It may SIGKILL that one guardian PID, and only after `status` shows all three of these for that holder:
+**Report, wait, ask the owner.** Nobody kills a heavy-lock guardian as routine recovery. Another project only reports a stuck lock to the owning project and to the user.
 
-- `wrapperAlive=false`;
-- no `childPids`;
-- `ageSeconds` over `budgetSeconds`.
+The guardian exits by itself whenever the code can prove it safe (`guardian_main`, `owned_state` in `heavy-lock.py`). When its supervisor disappears, it sends TERM and then KILL to every owned process it can see: the root group, registered nested groups and registered App hosts. It exits 0 as soon as a successful process query finds none. A guardian that outlives a dead wrapper is therefore still protecting something, or cannot prove it is not. Two cases:
 
-It never touches the lock file.
+- **The query cannot prove absence.** `/bin/ps` failed or timed out, or on macOS an owned group still answers `killpg` but shows no members. `status` then reports `processQuery: "unknown"`, and `childPids` is empty by construction.
+- **Owned work survives.** A process outlives SIGKILL, or a registered App host is still alive. Hosts are not written to the guardian record and `status` does not list them, so `childPids` can be empty while a host runs.
+
+In both cases, killing the guardian releases the flock while work may still run. `wrapperAlive=false` with empty `childPids` is not enough.
+
+**The one exception**, for the owning project only. The owner identifies its own guardian from the record's `cmd` line, which names the guardian's `heavy-lock.py` path and so its worktree. It may SIGKILL that one guardian PID only when all of these hold:
+
+1. `status` for that holder shows `processQuery: "ok"`, `wrapperAlive=false`, and `ageSeconds` over `budgetSeconds`.
+2. The owner's own `ps -axo pid=,pgid=,stat=` shows no process in the record's `child=` or `group=` process groups.
+3. No App host or other process the run launched is alive, checked by PID from the owner's own logs, because neither the record nor `status` lists hosts.
+
+Otherwise it reports and waits. No one ever touches the lock file. `UNVERIFIED`: that this case (a guardian that is alive with all three conditions true) ever occurs; the code was read, not exercised.
 
 ## Who may unlink or rename what
 
@@ -133,13 +142,13 @@ It never touches the lock file.
 
 There is one source: Mado's repo copy, `scripts/heavy-lock.sh` plus `scripts/tdd/heavy-lock.py`. `gui-lock.sh` follows mdpro's reference protocol. Another project calls it or installs a pinned snapshot (#738 WI-2); it does not edit a copy.
 
-- **heavy-lock:** rclick-delegator's message of 2026-11-21 says RClick calls `/Users/jack/Documents/mac-app/picsee/scripts/heavy-lock.sh`. No such path appears in RClick main's tree (`git grep`), so this rests on the message alone.
+- **heavy-lock:** rclick-delegator's message of 2026-11-21 says RClick calls Mado's script at `<Mado main checkout>/scripts/heavy-lock.sh`. No such path appears in RClick main's tree (`git grep`), so this rests on the message alone.
 - **gui-lock:** checked 2026-11-21: RClick main `435790d` `.agents/skills/macos-device-test/scripts/gui-lock.sh` diffed against Mado's has no code differences. Only `project`, the default session, the test variable names and comments differ. mdpro's copy was not compared.
 - **Open:** nothing keeps the GUI copies in agreement automatically (#738 WI-3).
 
 ## RClick's constraints (reviewed by the RClick delegator on 2026-11-21)
 
-These are the interface points rclick-delegator listed on 2026-11-21; it also gave an OK on the #768 diff. It reviewed this page at `b47fd1ed` on 2026-11-21 (verdict: OK to merge with six edits, all applied here).
+These are the interface points rclick-delegator listed on 2026-11-21; it also gave an OK on the #768 diff. Its review message of 2026-11-21 covered the round-1 version of this page and returned it OK to merge with six edits, all applied here.
 
 - **No first-come order among waiters.** Whoever polls first after a release wins; a long waiter can lose to a newcomer.
 - **Waiting** is bounded by `MADO_HEAVY_LOCK_WAIT_SECS` (default 1800 s), then exit 75. Waiters poll: `LOCK_NB` every 50 ms on the flock, every 5 s on the mdpro directory.
@@ -161,5 +170,5 @@ These are the interface points rclick-delegator listed on 2026-11-21; it also ga
 - DISCREPANCY: `heavy-lock.sh` (line 31) calls it "the `~/.picsee` symlink". On the dev machine the symlink is `~/.mado → .picsee`; the state directory is still named `.picsee`.
 - DISCREPANCY: the resource-broker skill says the locks give mutual exclusion "in arrival order". The code polls, so order among waiters is not guaranteed.
 - DISCREPANCY: a nested call that is the job's exec'd process exits 70 (`nested admission refused: Operation not permitted`). This covers both the direct `heavy-lock.sh heavy-lock.sh <cmd>` and a single-command `bash -c "heavy-lock.sh …"`. Nesting from a child of a running shell works. No other doc mentions this.
-- DISCREPANCY: "on incomplete cleanup the mdpro directory is retained" does not hold after `--mark-host-unknown`. `heavy-lock.py` (~999–1002) sets `retain_shared` from the known cleanup before the unknown-host mark turns `cleanup` into `incomplete`, so `finally` (~1066) releases the directory while the run exits 70 incomplete. Known limitation; no code change here.
+- DISCREPANCY: "on incomplete cleanup the mdpro directory is retained" does not hold after `--mark-host-unknown`. `heavy-lock.py` (~1103–1106) sets `retain_shared` from the known cleanup before the unknown-host mark turns `cleanup` into `incomplete`, so `finally` (~1170) releases the directory while the run exits 70 incomplete. Known limitation; no code change here.
 - Checked 2026-11-21: `git grep` for `MADO_HEAVY_FLOCK_FD` and `MADO_HEAVY` in RClick main `435790d` tracked files finds nothing, so no tracked RClick caller relies on the inherited flock FD that #768 removed. Untracked RClick briefs are not covered.
