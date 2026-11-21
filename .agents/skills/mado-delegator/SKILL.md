@@ -154,7 +154,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    for the **audited** head in the implementer's worktree (it prints `case=head-moved` once a rebase moved that worktree).
    The PR head after a rebase is covered by step 6's `rebase-verify.sh` `CODE same`; a `CODE differ` rebase needs a new
    mado-verify run on the new head, and the check for that head, before merge.
-   Also run `node scripts/ci/attempt-history.mjs --pr <n>` (advisory, #788): each `needs-ticket:` failing test from a failed or rerun attempt gets a `#<issue>` on its PR body line or a known-flakes/quarantine entry before merge.
+   Also run `node scripts/ci/attempt-history.mjs --pr <n>` (advisory, #788): each `needs-ticket:` failing test from a failed or rerun attempt gets a `#<issue>` on its PR body line or a known-flakes/quarantine entry before merge; open each `needs-ticket-unknown:` job log by hand.
    Push with `python3 scripts/codex-rules/push-guard.py` (exact lease OID after rebasing an owned PR branch). Wait for checks
    to register, `gh pr checks --watch`, then run `$SK/scripts/merge-gate.sh <pr> [--audited <sha>]` in shadow mode (pass the audited head after a rebase) and compare its `would-allow`/`would-refuse` verdict with the actual conditions. It never blocks or merges; keep merging manually for three matching shadow merges before a later PR adds a bare-merge deny rule. `MADO_MERGE_GATE_OVERRIDE="<reason>"` logs an override and posts a PR comment. A human can merge in the web UI. Merge is authorised when no blocking C/H,
    CI green, and `Device-Smoke:` is PASS or n/a. Merge as soon as an item is ready; don't hold a green branch for

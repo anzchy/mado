@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -15,9 +15,13 @@ const sha796 = JSON.parse(readFileSync(`${FIX}/sha-39eda32e.json`, 'utf8'));
 const SCRIPT = 'scripts/ci/attempt-history.mjs';
 const run = (args, opts = {}) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', ...opts });
 
+// opus L2: remove every temporary root when the file finishes.
+const made = [];
+process.on('exit', () => { for (const dir of made) rmSync(dir, { recursive: true, force: true }); });
 // An empty ticket-list root, so the repo's own lists never decide a test's outcome by accident.
 function emptyLists() {
   const root = mkdtempSync(join(tmpdir(), 'attempt-history-'));
+  made.push(root);
   mkdirSync(join(root, 'scripts/tdd'), { recursive: true });
   mkdirSync(join(root, '.agents/skills/mado-verify'), { recursive: true });
   mkdirSync(join(root, 'scripts/ci'), { recursive: true });
@@ -252,4 +256,223 @@ test('CLI --record writes a fixture that replays to the same output', () => {
   assert.equal(replay.status, 0, replay.stderr);
   assert.equal(replay.stdout, first.stdout);
   assert.match(replay.stdout, /needs-ticket: issue507FolderPathsComplete\(legacyScanner:\)/);
+});
+
+// ---- i788d-fix1 ----
+// gpt F1 (High): in --require-tickets mode every ticket source must exist and load; a missing or broken one refuses.
+const TICKETED_BODY = '- `ownership integration hosted step preserves crash runner outcome and report` flaked, #788\n- AC-4 INT and TERM keep shared lock through group kill grace: #788\n';
+function ticketedRun(mutate, extra = []) {
+  const root = emptyLists();
+  mutate(root);
+  const fixture = join(root, 'pr799.json');
+  writeFileSync(fixture, JSON.stringify(pr799));
+  const body = join(root, 'body.md');
+  writeFileSync(body, TICKETED_BODY);
+  return run(['--pr', '799', '--fixture', fixture, '--lists-root', root, '--body-file', body, ...extra]);
+}
+
+for (const rel of ['scripts/tdd/app-quarantine.json', '.agents/skills/mado-verify/known-flakes.json', 'scripts/ci/known-flaky.mjs']) {
+  test(`--require-tickets refuses when ${rel} is missing, even with every test ticketed in the body`, () => {
+    const r = ticketedRun(root => rmSync(join(root, rel)), ['--require-tickets']);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, new RegExp(`^attempt-history: refused: ticket source ${rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} `, 'm'));
+  });
+}
+
+test('--require-tickets refuses a ticket source that does not load (bad JSON, wrong shape, throwing module)', () => {
+  const cases = [
+    root => writeFileSync(join(root, 'scripts/tdd/app-quarantine.json'), '{not json'),
+    root => writeFileSync(join(root, 'scripts/tdd/app-quarantine.json'), '{"id":"x"}'),
+    root => writeFileSync(join(root, '.agents/skills/mado-verify/known-flakes.json'), '[]'),
+    root => writeFileSync(join(root, 'scripts/ci/known-flaky.mjs'), "throw new Error('boom');\n"),
+    root => writeFileSync(join(root, 'scripts/ci/known-flaky.mjs'), 'export const other = 1;\n'),
+  ];
+  for (const mutate of cases) {
+    const r = ticketedRun(mutate, ['--require-tickets']);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /^attempt-history: refused: ticket source /m);
+  }
+});
+
+test('--require-tickets refuses a --lists-root that is not a repo checkout', () => {
+  const root = emptyLists();
+  const fixture = join(root, 'pr799.json');
+  writeFileSync(fixture, JSON.stringify(pr799));
+  const body = join(root, 'body.md');
+  writeFileSync(body, TICKETED_BODY);
+  const r = run(['--pr', '799', '--fixture', fixture, '--lists-root', join(root, 'nowhere'), '--body-file', body, '--require-tickets']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /^attempt-history: refused: ticket source scripts\/tdd\/app-quarantine\.json /m);
+});
+
+test('advisory mode names a missing ticket source and still exits 0', () => {
+  const r = ticketedRun(root => rmSync(join(root, 'scripts/ci/known-flaky.mjs')));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^ticket-source-missing: scripts\/ci\/known-flaky\.mjs /m);
+});
+
+// opus F1 (High): app-quarantine.json entries use the documented schema {id, issue, reason, owner, expires}
+// (docs/agents/test-lanes.md; scripts/tdd/app-lane.mjs loadQuarantine). The entry below is the real one from 67d524656.
+const REAL_QUARANTINE_ENTRY = {
+  id: 'MadoAppTests.issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()',
+  issue: 597,
+  reason: 'Issue454ReadOwnerLifecycleTests.swift:118:9 sees window.isVisible true; 8 failing versus 5 passing main executions since 2026-11-05, with recovery on main run 42439831377 attempt 2 and PR reruns. Reproduce under the desktop lock before fixing.',
+  owner: 'delegator',
+  expires: '2026-11-22',
+};
+
+test('a quarantined App test (real id schema) is ticketed by its issue, matched on the id\'s last component', async () => {
+  const root = emptyLists();
+  writeFileSync(join(root, 'scripts/tdd/app-quarantine.json'), JSON.stringify([
+    REAL_QUARANTINE_ENTRY,
+    { id: 'MadoAppTests.Issue507Suite/issue507FolderPathsComplete(legacyScanner:)', issue: 600, reason: 'r', owner: 'o', expires: '2026-11-30' },
+    { id: 'ViewerUITests/testZoomAnchors', issue: 601, reason: 'r', owner: 'o', expires: '2026-11-30' },
+  ]));
+  const lists = await loadTicketLists(root);
+  const h = { runs: [{ id: 1, name: 'CI', failed: [{ attempt: 1, job: 'App tests', steps: [], hidden: true, log: 'ok', tests: [
+    'issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()',
+    'issue507FolderPathsComplete(legacyScanner:)',
+    'ViewerUITests.testZoomAnchors',
+    'issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolderTwo()',
+  ] }] }] };
+  const c = classify(h, { body: '', lists });
+  assert.deepEqual(c.ticketed.map(t => [t.test, t.issue, t.source]), [
+    ['issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolder()', 597, 'scripts/tdd/app-quarantine.json'],
+    ['issue507FolderPathsComplete(legacyScanner:)', 600, 'scripts/tdd/app-quarantine.json'],
+    ['ViewerUITests.testZoomAnchors', 601, 'scripts/tdd/app-quarantine.json'],
+  ]);
+  assert.deepEqual(c.needsTicket.map(t => t.test), ['issue454ReadOwnerFailureRetryCancelAndCompletionUseActualFolderTwo()']);
+});
+
+test('a list entry with arguments tickets only the same arguments (opus L2)', async () => {
+  const root = emptyLists();
+  writeFileSync(join(root, 'scripts/tdd/app-quarantine.json'), JSON.stringify([{ ...REAL_QUARANTINE_ENTRY, id: 'MadoAppTests.foo(a:)' }]));
+  const lists = await loadTicketLists(root);
+  const h = { runs: [{ id: 1, name: 'CI', failed: [{ attempt: 1, job: 'A', steps: [], hidden: true, log: 'ok', tests: ['foo(a:)', 'foo(b:)'] }] }] };
+  const c = classify(h, { body: '', lists });
+  assert.deepEqual(c.ticketed.map(t => t.test), ['foo(a:)']);
+  assert.deepEqual(c.needsTicket.map(t => t.test), ['foo(b:)']);
+});
+
+test('every entry of the repo\'s own app-quarantine.json becomes a ticket entry with its issue', async () => {
+  const repo = JSON.parse(readFileSync('scripts/tdd/app-quarantine.json', 'utf8'));
+  const lists = (await loadTicketLists(process.cwd())).filter(l => l.source === 'scripts/tdd/app-quarantine.json');
+  assert.deepEqual(lists.map(l => [l.id, l.issue]), repo.map(e => [e.id, e.issue]));
+});
+
+test('CLI: the real quarantine entry tickets its failing test, so --require-tickets passes', () => {
+  const root = emptyLists();
+  writeFileSync(join(root, 'scripts/tdd/app-quarantine.json'), JSON.stringify([
+    { ...REAL_QUARANTINE_ENTRY, id: 'MadoAppTests.issue507FolderPathsComplete(legacyScanner:)', issue: 600 },
+  ]));
+  const src = join(root, 'sha.json');
+  writeFileSync(src, JSON.stringify(sha796));
+  const r = run(['--sha', '39eda32e23a862b98dadd919dce716dbebd277b6', '--fixture', src, '--lists-root', root, '--require-tickets']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^ticketed: issue507FolderPathsComplete\(legacyScanner:\) -> #600 \(scripts\/tdd\/app-quarantine\.json\)$/m);
+});
+
+// opus M1: a failed job whose test names cannot be read (expired log, crash, timeout) is an unknown, not a pass.
+function shaFixture(jobs, logs, runExtra = {}) {
+  const R = 'repos/anzchy/mado';
+  const sha = 'a'.repeat(40);
+  const responses = {
+    [`${R}/actions/runs?head_sha=${sha}&per_page=100&page=1`]: { total_count: 1, workflow_runs: [{ id: 5, name: 'CI', head_sha: sha, run_attempt: 2, conclusion: 'success', ...runExtra }] },
+    [`${R}/actions/runs/5/attempts/1/jobs?per_page=100&page=1`]: { total_count: jobs.length, jobs },
+    [`${R}/actions/runs/5/attempts/2/jobs?per_page=100&page=1`]: { total_count: 0, jobs: [] },
+  };
+  for (const [id, text] of Object.entries(logs)) responses[`${R}/actions/jobs/${id}/logs`] = text;
+  return { sha, responses };
+}
+const job = (id, name, conclusion = 'failure', step = 'Run tests') => ({ id, name, run_attempt: 1, conclusion, steps: [{ name: step, conclusion }] });
+
+test('--require-tickets counts unreadable failures: expired log, crash without test lines, timed-out job', () => {
+  const fx = shaFixture(
+    [job(1, 'App tests'), job(2, 'Package tests (non-UI)'), job(3, 'Design check', 'timed_out'), job(4, 'Walking skeleton', 'failure', 'Require the ledger check')],
+    {
+      2: "*** Terminating app due to uncaught exception 'NSInvalidArgumentException'\nerror: Exited with unexpected signal code 6\n",
+      3: 'still running\n',
+      4: 'formal App evidence: false\n##[error]Process completed with exit code 1.\n',
+    });
+  const root = emptyLists();
+  const fixture = join(root, 'f.json');
+  writeFileSync(fixture, JSON.stringify({ responses: fx.responses }));
+  const args = ['--sha', fx.sha, '--fixture', fixture, '--lists-root', root];
+  const advisory = run(args);
+  assert.equal(advisory.status, 0, advisory.stderr);
+  assert.match(advisory.stdout, /^needs-ticket-unknown: run 5 attempt 1, job App tests \(log unavailable\)$/m);
+  assert.match(advisory.stdout, /^needs-ticket-unknown: run 5 attempt 1, job Package tests \(non-UI\) \(crash or signal without failing-test lines\)$/m);
+  assert.match(advisory.stdout, /^needs-ticket-unknown: run 5 attempt 1, job Design check \(timed out\)$/m);
+  assert.match(advisory.stdout, /^no-test-names: run 5 attempt 1, job Walking skeleton, step Require the ledger check$/m);
+  assert.doesNotMatch(advisory.stdout, /needs-ticket-unknown: .*Walking skeleton/);
+  const strict = run([...args, '--require-tickets']);
+  assert.equal(strict.status, 1, strict.stdout + strict.stderr);
+});
+
+test('--require-tickets passes when the only no-name failures are aggregates', () => {
+  const fx = shaFixture([job(4, 'Walking skeleton', 'failure', 'Require the ledger check')], { 4: '##[error]Process completed with exit code 1.\n' });
+  const root = emptyLists();
+  const fixture = join(root, 'f.json');
+  writeFileSync(fixture, JSON.stringify({ responses: fx.responses }));
+  const r = run(['--sha', fx.sha, '--fixture', fixture, '--lists-root', root, '--require-tickets']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+// opus M2 / gpt M1: a full SHA only; no runs is an error when opted in; PR mode keeps only the PR's own runs.
+test('--sha must be a full 40-hex commit SHA', () => {
+  const r = run(['--sha', 'baf1eae5']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--sha must be a full 40-character commit SHA/);
+});
+
+test('no workflow runs: advisory says so, --require-tickets refuses', () => {
+  const sha = 'b'.repeat(40);
+  const root = emptyLists();
+  const fixture = join(root, 'f.json');
+  writeFileSync(fixture, JSON.stringify({ responses: { [`repos/anzchy/mado/actions/runs?head_sha=${sha}&per_page=100&page=1`]: { total_count: 0, workflow_runs: [] } } }));
+  const args = ['--sha', sha, '--fixture', fixture, '--lists-root', root];
+  const advisory = run(args);
+  assert.equal(advisory.status, 0, advisory.stderr);
+  assert.match(advisory.stdout, /^no-runs: no workflow runs found/m);
+  const strict = run([...args, '--require-tickets']);
+  assert.equal(strict.status, 2);
+  assert.match(strict.stderr, /^attempt-history: refused: no workflow runs found/m);
+});
+
+test('PR mode drops runs whose metadata shows another PR (fork head repo, created before the PR, other PR number)', async () => {
+  const fx = structuredClone(pr799);
+  const key = Object.keys(fx.responses).find(k => k.includes('/actions/runs?branch='));
+  const base = fx.responses[key].workflow_runs[0];
+  const other = (id, patch) => ({ ...base, id, run_attempt: 1, ...patch });
+  fx.responses[key].workflow_runs.push(
+    other(1, { head_repository: { full_name: 'someone/mado' } }),
+    other(2, { created_at: '2026-01-01T00:00:00Z' }),
+    other(3, { pull_requests: [{ number: 12 }] }),
+    other(4, { head_repository: undefined, created_at: undefined, pull_requests: undefined }),
+  );
+  fx.responses[key].total_count += 4;
+  fx.responses['repos/anzchy/mado/actions/runs/4/attempts/1/jobs?per_page=100&page=1'] = { total_count: 0, jobs: [] };
+  const h = await collectHistory({ get: fixtureGetter(fx), repo: 'anzchy/mado', pr: 799 });
+  assert.deepEqual(h.runs.map(r => r.id), [4, 44756846149, 44756846987]);
+  assert.deepEqual(h.excluded.map(e => [e.id, e.reason]), [
+    [1, 'head repository someone/mado, not anzchy/mado'],
+    [2, 'created 2026-01-01T00:00:00Z, before PR #799 (2026-11-20T14:47:25Z)'],
+    [3, 'belongs to PR #12'],
+  ]);
+  const text = render(h, classify(h, { body: '', lists: [] }));
+  assert.match(text, /^excluded: run 1 \(head repository someone\/mado, not anzchy\/mado\)$/m);
+});
+
+test('pages are followed without total_count until a short page (opus L2)', async () => {
+  const R = 'repos/anzchy/mado';
+  const sha = 'c'.repeat(40);
+  const mk = (id, c) => ({ id, name: `j${id}`, run_attempt: 1, conclusion: c, steps: [] });
+  const get = fixtureGetter({ responses: {
+    [`${R}/actions/runs?head_sha=${sha}&per_page=100&page=1`]: { workflow_runs: [{ id: 8, name: 'CI', head_sha: sha, run_attempt: 1, conclusion: 'failure' }] },
+    [`${R}/actions/runs/8/attempts/1/jobs?per_page=100&page=1`]: { jobs: Array.from({ length: 100 }, (_, i) => mk(i + 1, 'success')) },
+    [`${R}/actions/runs/8/attempts/1/jobs?per_page=100&page=2`]: { jobs: [mk(101, 'failure')] },
+    [`${R}/actions/jobs/101/logs`]: 'not ok 1 - page two\n',
+  } });
+  const h = await collectHistory({ get, repo: 'anzchy/mado', sha });
+  assert.deepEqual(h.runs[0].failed.map(f => f.tests[0]), ['page two']);
 });
