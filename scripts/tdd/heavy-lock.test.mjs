@@ -365,6 +365,53 @@ redTest('statusReportsOverBudgetOrphanWithoutKillingIt', async () => {
   }
 }, {timeout:3000});
 
+redTest('statusReportsOnlyLiveNestedGroupAfterWrapperDies', async () => {
+  const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_EXEC_SECS:'5'};
+  const nestedPidFile=path.join(env.HOME,'nested-pid');
+  const holder=start(['bash','-c',
+    '"$1" python3 -c "import os,pathlib,signal,sys,time; signal.signal(signal.SIGHUP,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(8)" "$2"; :',
+    '_',lock,nestedPidFile],env);
+  let guardianPid=0, rootPid=0, nestedPid=0, nestedGroup=0;
+  try {
+    try {nestedPid=await readPid(nestedPidFile,'nested job started');}
+    catch(error) {throw new Error(`${error.message}: ${holder.output()}`);}
+    const owner=path.join(path.dirname(env.MADO_HEAVY_LOCK),
+      readdirSync(path.dirname(env.MADO_HEAVY_LOCK)).find(name=>name.endsWith('.owner')));
+    const fields=Object.fromEntries(readFileSync(owner,'utf8').split('\n').filter(line=>line.includes('=')).map(line=>line.split(/=(.*)/s).slice(0,2)));
+    guardianPid=Number(fields.pid);rootPid=Number(fields.child);
+    nestedGroup=Number(spawnSync('/bin/ps',['-o','pgid=','-p',String(nestedPid)],{encoding:'utf8'}).stdout.trim());
+    assert.ok(nestedGroup>0 && nestedGroup!==rootPid,'real nested job has a separate group');
+    assert.ok(JSON.parse(spawnSync(lock,['status'],{env,encoding:'utf8'}).stdout).holders[0].childPids.includes(nestedPid),'nested job visible before wrapper loss');
+    process.kill(guardianPid,'SIGSTOP');
+    process.kill(holder.child.pid,'SIGSTOP');
+    await until(()=>{
+      const pids=[guardianPid,holder.child.pid];
+      return pids.every(pid=>spawnSync('/bin/ps',['-o','stat=','-p',String(pid)],{encoding:'utf8'}).stdout.trim().startsWith('T'));
+    },'all owners stopped before wrapper loss');
+    process.kill(nestedGroup,'SIGKILL');
+    await until(()=>{
+      const stat=spawnSync('/bin/ps',['-o','stat=','-p',String(rootPid)],{encoding:'utf8'}).stdout.trim();
+      return !stat || stat.startsWith('Z');
+    },'root group exited naturally');
+    process.kill(holder.child.pid,'SIGKILL');
+    await new Promise(resolve=>setTimeout(resolve,100));
+    writeFileSync(owner,readFileSync(owner,'utf8').replace(/startedEpoch=[^\n]+/,`startedEpoch=${Date.now()/1000-6}`));
+    const result=spawnSync(lock,['status'],{env,encoding:'utf8',timeout:1000});
+    assert.ifError(result.error);assert.equal(result.status,0,result.stderr);
+    const [status]=JSON.parse(result.stdout).holders;
+    assert.equal(status.wrapperAlive,false);
+    assert.ok(status.childPids.includes(nestedPid),`registered nested group must appear: ${JSON.stringify({status,nestedPid,nestedGroup,owner:readFileSync(owner,'utf8'),ps:spawnSync('/bin/ps',['-o','pid=,pgid=,stat=','-p',[nestedPid,nestedGroup,guardianPid,rootPid].join(',')],{encoding:'utf8'}).stdout,output:holder.output()})}`);
+    assert.equal(status.childPids.includes(rootPid),false,'root group has exited');
+    assert.equal(status.orphanOverBudget,true);
+    process.kill(nestedPid,0);
+  } finally {
+    if(nestedGroup>0 && nestedGroup!==process.pid) try {process.kill(-nestedGroup,'SIGKILL');} catch(error) {if(error.code!=='ESRCH')throw error;}
+    if(guardianPid) try {process.kill(guardianPid,'SIGCONT');} catch(error) {if(error.code!=='ESRCH')throw error;}
+    holder.child.kill('SIGCONT');holder.child.kill('SIGTERM');
+    await holder.done;
+  }
+}, {timeout:12000});
+
 redTest('statusIsReadOnlyAndMissingCommandStillExits64', () => {
   const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_WAIT_SECS:'0'};
   const missing=spawnSync(lock,[],{env,encoding:'utf8',timeout:1000});
