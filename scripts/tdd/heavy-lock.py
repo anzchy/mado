@@ -265,6 +265,9 @@ def guardian_main(read_fd, ready_fd):
                             owner.write(f'child={pid}\n')
                     root = pid
                 elif kind == 'group' and pid > 0:
+                    if pid not in groups and owner_path:
+                        with open(owner_path, 'a') as owner:
+                            owner.write(f'group={pid}\n')
                     groups.add(pid)
                 elif kind == 'host' and pid > 0:
                     hosts.add(pid)
@@ -510,17 +513,20 @@ def lock_status(lock):
     rows = process_rows()
     for record in sorted(lock.parent.glob('heavy.lock.guardian-*.owner')):
         try:
-            fields = dict(line.split('=', 1) for line in record.read_text().splitlines() if '=' in line)
+            lines = record.read_text().splitlines()
+            fields = dict(line.split('=', 1) for line in lines if '=' in line)
             holder = int(fields['pid'])
             wrapper = int(fields['supervisor'])
             if holder <= 0 or not pid_alive(holder):
                 continue
             root = int(fields.get('child', '0'))
+            groups = {int(line[6:]) for line in lines if line.startswith('group=')}
+            owned_groups = ({root} if root > 0 else set()) | {group for group in groups if group > 0}
             started = float(fields['startedEpoch'])
             budget = float(fields['budgetSeconds'])
             age = max(0, time.time() - started)
             children = sorted(pid for pid, pgid in (rows or [])
-                              if root > 0 and (pid == root or pgid == root))
+                              if pid in owned_groups or pgid in owned_groups)
             wrapper_live = pid_alive(wrapper)
             holders.append({'holderPid': holder, 'wrapperPid': wrapper,
                             'wrapperAlive': wrapper_live, 'childPids': children,
