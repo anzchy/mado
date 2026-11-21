@@ -1,0 +1,1327 @@
+{
+  "$comment": "Recorded 2026-11-20 from the GitHub API for head SHA 39eda32e23a862b98dadd919dce716dbebd277b6 (run 44714991399, PR #796) (#788 item 4). Job and run objects keep only the fields attempt-history.mjs reads; logs keep only failure lines with one line of context.",
+  "responses": {
+    "repos/anzchy/mado/actions/runs?head_sha=39eda32e23a862b98dadd919dce716dbebd277b6&per_page=100&page=1": {
+      "total_count": 2,
+      "workflow_runs": [
+        {
+          "id": 44714991429,
+          "name": "PR body",
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "head_branch": "test/787-pool-occupants-pr",
+          "event": "pull_request",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/anzchy/mado/actions/runs/44714991429"
+        },
+        {
+          "id": 44714991399,
+          "name": "CI",
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "head_branch": "test/787-pool-occupants-pr",
+          "event": "pull_request",
+          "run_attempt": 2,
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/anzchy/mado/actions/runs/44714991399"
+        }
+      ]
+    },
+    "repos/anzchy/mado/actions/runs/44714991429/attempts/1/jobs?per_page=100&page=1": {
+      "total_count": 2,
+      "jobs": [
+        {
+          "id": 136216071826,
+          "name": "PR body Gates",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout trusted base",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout PR head",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Check PR body gates",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout PR head",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout trusted base",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 11,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136216072126,
+          "name": "Agent tooling",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout PR head",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Install portable device test tools",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test portable device tools",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test agent tooling",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout PR head",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 13,
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "repos/anzchy/mado/actions/runs/44714991399/attempts/1/jobs?per_page=100&page=1": {
+      "total_count": 9,
+      "jobs": [
+        {
+          "id": 136215974605,
+          "name": "Native inputs",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout trusted base",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Classify changed files",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout trusted base",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 9,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136215974958,
+          "name": "Ledger HTML check",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity checks",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test release regressions",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Check tracked code identity",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Check generated feature ledger HTML",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 15,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136215975151,
+          "name": "Design check",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned npm dev dependencies",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Playwright version",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore Playwright browsers",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Playwright Chromium",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save Playwright browsers",
+              "number": 8,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Check design catalog and journeys",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 17,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 18,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 19,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136215976741,
+          "name": "App host comparison",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 136216043371,
+          "name": "Package tests (non-UI)",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record job start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Watchdog script tests",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test macOS device tools",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify coverage atomic instrumentation",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "SwiftPM cache key",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore SwiftPM build",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Report SwiftPM cache restore",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Clear stale coverage profile",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record coverage test start",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Swift Testing (Core, Application, Infrastructure)",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Export Package coverage",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test logs",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save SwiftPM build",
+              "number": 17,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 34,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 35,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136216043376,
+          "name": "Package tests (MacUI)",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record job start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify coverage atomic instrumentation",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "SwiftPM cache key",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore SwiftPM build",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Report SwiftPM cache restore",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Clear stale coverage profile",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record coverage test start",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Swift Testing (MacUI, serial)",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Export Package coverage",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test logs",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 28,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 29,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136216043398,
+          "name": "App tests",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "failure",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record repeat job start",
+              "number": 2,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Record App crash window start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate App repeat input",
+              "number": 5,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "DerivedData cache key",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore DerivedData",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Build unsigned app",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Build App tests",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Run App tests",
+              "number": 11,
+              "conclusion": "failure"
+            },
+            {
+              "name": "Report App test evidence",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload first App attempt",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload App repeat logs",
+              "number": 14,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Summarize App crash evidence",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload App crash evidence",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save DerivedData",
+              "number": 17,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 34,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 35,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136223074893,
+          "name": "Package coverage",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Download non-UI Package coverage",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Download MacUI Package coverage",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Read earlier attempts' job records",
+              "number": 6,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Merge and gate Package coverage",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage report",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 17,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136223161195,
+          "name": "Walking skeleton",
+          "run_attempt": 1,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "failure",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout trusted base",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Require the ledger check, package tests and App tests",
+              "number": 3,
+              "conclusion": "failure"
+            },
+            {
+              "name": "Post Checkout trusted base",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 7,
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "repos/anzchy/mado/actions/jobs/136216043398/logs": "2026-11-20T10:07:11.6839340Z ◇ Test case passing 1 argument legacyScanner → false to issue507FolderPathsComplete(legacyScanner:) started.\n2026-11-20T10:07:11.6840380Z ✘ Test issue507FolderPathsComplete(legacyScanner:) recorded an issue with 1 argument legacyScanner → false at Issue507AliasFolderScanTests.swift:125:9: Expectation failed: (scan?.sourceSnapshot?.isComplete → nil) == true\n2026-11-20T10:07:11.6842130Z ↳ Scan did not complete within 2 seconds: symlink, legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil\n2026-11-20T10:07:11.6843260Z ✘ Test issue507FolderPathsComplete(legacyScanner:) recorded an issue with 1 argument legacyScanner → false at Issue507AliasFolderScanTests.swift:126:9: Expectation failed: (scan?.isScanning → nil) == false\n2026-11-20T10:07:11.6844260Z ↳ Scan remained active: symlink, legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil\n2026-11-20T10:07:11.6845520Z ✘ Test issue507FolderPathsComplete(legacyScanner:) recorded an issue with 1 argument legacyScanner → false at Issue507AliasFolderScanTests.swift:127:9: Expectation failed: (scan?.sourceSnapshot?.navigationEntries.count → nil) == 3\n2026-11-20T10:07:11.6846770Z ↳ Paths must return the same three images: symlink, legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil\n2026-11-20T10:07:11.6848290Z ✘ Test issue507FolderPathsComplete(legacyScanner:) recorded an issue with 1 argument legacyScanner → false at Issue507AliasFolderScanTests.swift:128:9: Expectation failed: (controller → <MadoAppTests.CanvasWindowController: 0x922cc7200>).gridSearchAvailable → false\n2026-11-20T10:07:11.6849630Z ↳ Completion did not reach the grid: symlink, legacy=false: ; scanExists=false, scanning=false, complete=false, count=-1, gridReady=false, failure=nil\n2026-11-20T10:07:11.6851410Z ✘ Test issue507FolderPathsComplete(legacyScanner:) recorded an issue with 1 argument legacyScanner → false at Issue507AliasFolderScanTests.swift:133:9: Expectation failed: (Set(scan?.sourceSnapshot?.navigationEntries.map { $0.url.lastPathComponent } ?? []) → []) == (Set([\"0.png\", \"1.png\", \"2.png\"]) → [\"0.png\", \"1.png\", \"2.png\"])\n2026-11-20T10:07:11.6852820Z ◇ Test case passing 1 argument legacyScanner → true to issue507FolderPathsComplete(legacyScanner:) started.\n2026-11-20T10:07:11.6853500Z ✘ Test issue507FolderPathsComplete(legacyScanner:) with 2 test cases failed after 12.069 seconds with 5 issues.\n2026-11-20T10:07:11.6854150Z ↳ /// Each case has its own two-second wall-clock bound, independent of ConditionWait's timed-test policy.\n2026-11-20T10:07:59.5204880Z ✔ Test viewerRecogniseTextRealProviderUsesPrivateNamedPasteboard() passed after 0.922 seconds.\n2026-11-20T10:07:59.5205090Z ✘ Test run with 692 tests in 21 suites failed after 451.202 seconds with 5 issues.\n2026-11-20T10:07:59.5205930Z hosted-owner: query {\"at\":1795169235800,\"child\":{\"pid\":24105,\"exited\":false,\"code\":null,\"signal\":null},\"drainDeadline\":null,\"stopping\":false,\"snapshot\":{\"complete\":true,\"unknown\":[],\"transport\":{\"stage\":\"complete\",\"status\":0,\"signal\":null,\"errorCode\":null,\"elapsedMilliseconds\":3764,\"timeoutMilliseconds\":5000}},\"candidateCount\":0,\"matching\":[]}\n2026-11-20T10:07:59.5357390Z hosted-owner: decision {\"at\":1795169277189,\"result\":\"complete\",\"observed\":true,\"registeredPids\":[24616],\"lastSnapshot\":{\"complete\":true,\"unknown\":[],\"transport\":{\"stage\":\"complete\",\"status\":0,\"signal\":null,\"errorCode\":null,\"elapsedMilliseconds\":98,\"timeoutMilliseconds\":5000}},\"hostAlive\":false,\"child\":{\"pid\":24105,\"exited\":true,\"code\":0,\"signal\":null},\"stopping\":false,\"refusedBy\":[]}\n2026-11-20T10:07:59.5391980Z ##[error]Process completed with exit code 1.\n2026-11-20T10:07:59.5640640Z ##[group]Run node scripts/ci/app-evidence.mjs\n",
+    "repos/anzchy/mado/actions/jobs/136223161195/logs": "2026-11-20T10:11:34.8037907Z walking-skeleton: FAIL (App minimum: job=failure run-step=failure; both must succeed)\n2026-11-20T10:11:34.8047850Z ##[error]Process completed with exit code 1.\n2026-11-20T10:11:34.8227400Z Post job cleanup.\n",
+    "repos/anzchy/mado/actions/runs/44714991399/attempts/2/jobs?per_page=100&page=1": {
+      "total_count": 9,
+      "jobs": [
+        {
+          "id": 136232444418,
+          "name": "App tests",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record repeat job start",
+              "number": 2,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Record App crash window start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate App repeat input",
+              "number": 5,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "DerivedData cache key",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore DerivedData",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Build unsigned app",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Build App tests",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Run App tests",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Report App test evidence",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload first App attempt",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload App repeat logs",
+              "number": 14,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Summarize App crash evidence",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload App crash evidence",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save DerivedData",
+              "number": 17,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 34,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 35,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232445449,
+          "name": "Ledger HTML check",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity checks",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test release regressions",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Check tracked code identity",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Check generated feature ledger HTML",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 15,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232446300,
+          "name": "App host comparison",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 136232446449,
+          "name": "Native inputs",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout trusted base",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Classify changed files",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout trusted base",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 9,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232446456,
+          "name": "Package tests (MacUI)",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record job start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify coverage atomic instrumentation",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "SwiftPM cache key",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore SwiftPM build",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Report SwiftPM cache restore",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Clear stale coverage profile",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record coverage test start",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Swift Testing (MacUI, serial)",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Export Package coverage",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test logs",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 28,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 29,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232446543,
+          "name": "Package tests (non-UI)",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record job start",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Watchdog script tests",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Test macOS device tools",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Xcode",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify coverage atomic instrumentation",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "SwiftPM cache key",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore SwiftPM build",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Report SwiftPM cache restore",
+              "number": 10,
+              "conclusion": "success"
+            },
+            {
+              "name": "Clear stale coverage profile",
+              "number": 11,
+              "conclusion": "success"
+            },
+            {
+              "name": "Record coverage test start",
+              "number": 12,
+              "conclusion": "success"
+            },
+            {
+              "name": "Swift Testing (Core, Application, Infrastructure)",
+              "number": 13,
+              "conclusion": "success"
+            },
+            {
+              "name": "Export Package coverage",
+              "number": 14,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test logs",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save SwiftPM build",
+              "number": 17,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 34,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 35,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232447655,
+          "name": "Package coverage",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Download non-UI Package coverage",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Download MacUI Package coverage",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Read earlier attempts' job records",
+              "number": 6,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Merge and gate Package coverage",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Package coverage report",
+              "number": 8,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 15,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 16,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 17,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136232504270,
+          "name": "Design check",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned npm dev dependencies",
+              "number": 4,
+              "conclusion": "success"
+            },
+            {
+              "name": "Playwright version",
+              "number": 5,
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore Playwright browsers",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Playwright Chromium",
+              "number": 7,
+              "conclusion": "success"
+            },
+            {
+              "name": "Save Playwright browsers",
+              "number": 8,
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Check design catalog and journeys",
+              "number": 9,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "number": 17,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "number": 18,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 19,
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 136237760217,
+          "name": "Walking skeleton",
+          "run_attempt": 2,
+          "head_sha": "39eda32e23a862b98dadd919dce716dbebd277b6",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "number": 1,
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout trusted base",
+              "number": 2,
+              "conclusion": "success"
+            },
+            {
+              "name": "Require the ledger check, package tests and App tests",
+              "number": 3,
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout trusted base",
+              "number": 6,
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "number": 7,
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
