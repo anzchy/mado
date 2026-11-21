@@ -541,11 +541,26 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
     the result is `CODE differ` with the reason; upstream code/module overlap prints `UPSTREAM OVERLAP <path>` and
     goes to the two-auditor combination check. Classification never waives a known High: it stays open until fixed
     and confirmed. The allowlist is a repo file; changing it is an audit-rule change, so quote the owner in its header
-    and in the PR body. `merge-gate.sh --audited` accepts this result (#789) only when rebase-verify exits 0 with
-    exactly one `CODE` line, prints no refusal line (`UPSTREAM OVERLAP`, `DOCS …`, acceptance text, `CODE differ`), and
-    names at least one `DIFF` path, every one of them in the allowlist read from main. The PR body must also carry one
-    `audit` row in `## Gates` with `PASS` and `no Critical/High`, and its `Still open` section must name no Critical or
-    High. Anything else is `would-refuse`. Plain `CODE same` is checked as before.
+    and in the PR body. `merge-gate.sh --audited` (#789) runs `rebase-verify.sh` from its own scripts directory (the
+    delegator's main checkout), never the PR head's copy, so run merge-gate from main. Both verdicts must be
+    rebase-verify's exact `CODE` line: exit 0, exactly one `CODE` line, no trailing text, and the two 40-hex hashes
+    equal to merge-gate's own recomputation of the audited patch (old base..audited head) and the candidate patch
+    (new base..PR head). For `CODE same, DOCS differ` it also requires:
+    - no refusal line (`UPSTREAM OVERLAP`, `DOCS …`, acceptance text, `CODE differ`);
+    - at least one `DIFF` path, every one in the allowlist read from main;
+    - in the PR body, exactly one `## Gates` section with exactly one `audit` row: status `PASS`, a Source that
+      contains `no Critical/High` and names Critical or High nowhere else (any case, with or without a count);
+    - exactly one `## Still open` or `### Still open` heading. A label (`Still open:`, `**Still open**`), another
+      heading level, a missing or a second Still open refuses. Nothing up to the next heading of the same or a
+      higher level, fenced lines included, may name Critical or High as a whole word in any case. This fails
+      closed: `High-DPI` or `(no Critical/High)` in Still open also refuses, so write such notes without those words.
+
+    The trusted PR-body lint still needs the literal `CODE same <40-hex>` in the Source of the stale `audit` PASS row.
+    For a DOCS-differ carry-forward, keep the row on the audited SHA and write
+    `CODE same <audited-40-hex>; …, no Critical/High open`. Quote the actual `CODE same, DOCS differ …` verdict
+    elsewhere in the PR text, not in the row. A row that quotes `CODE same, DOCS differ <sha>` fails the lint.
+    Anything else is `would-refuse`. A failed lookup (git, the `doc_rows` import, the verifier itself) is
+    `would-refuse lookup-failed`, and the override record is still written.
   - `CODE differ` (exit 1): the compared patch changed, so the combination is new. Send both auditors a quick
     combination check of the resolved hunks, then gates and a new device smoke. (2026-10-26: #134 × #108 and P3-10 ×
     #134 combination bugs were caught exactly this way.)

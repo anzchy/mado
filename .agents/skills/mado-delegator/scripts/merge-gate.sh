@@ -5,6 +5,7 @@ case "${1:-}" in ''|*[!0-9]*) echo 'usage: merge-gate.sh <pr-number> [--audited 
 case "$#" in 1) audited='' ;; 3) [ "$2" = --audited ] || { echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2; }; audited=$3 ;; *) echo 'usage: merge-gate.sh <pr-number> [--audited <sha>]' >&2; exit 2;; esac
 exec python3 - "$1" "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" "$audited" <<'PY'
 import datetime
+import hashlib
 import json
 import os
 import pathlib
@@ -31,10 +32,47 @@ def run(args, cwd=None):
 
 
 
-# #789: "CODE same, DOCS differ" (#733) carries the audited verdicts over only under rebase-verify's own conditions. They
-# are checked again here from its output and main's allowlist, so a PR's own copy of rebase-verify cannot widen them,
-# and the PR body must show that no known Critical/High is open (the classification never waives one).
+# #789: "CODE same, DOCS differ" (#733) carries the audited verdicts over only under rebase-verify's own conditions.
+# merge-gate runs rebase-verify.sh from its own (delegator main checkout) directory, never the PR head's copy, parses
+# its CODE line exactly, binds both patch hashes to its own recomputation, re-checks the DIFF paths against main's
+# allowlist, and requires a PR body that shows no known Critical/High open (the classification never waives one).
 REFUSALS = ('UPSTREAM OVERLAP ', 'DOCS ', 'acceptance text ', 'CODE differ')
+VERDICTS = {
+    'same': re.compile(r'CODE same ([0-9a-f]{40}) \(exact replayed tree match; candidate patch ([0-9a-f]{40})\)'),
+    'docs': re.compile(r'CODE same, DOCS differ ([0-9a-f]{40}) \(only allowlisted doc rows differ; per-row merge keeps '
+                       r'both sides; candidate patch ([0-9a-f]{40})\)'),
+}
+SEVERITY = re.compile(r'\b(critical|high)s?\b', re.I)  # whole words; "High-DPI" still matches (fails closed)
+
+
+def patch_hash(worktree, base, tip):
+    """rebase-verify.sh's code() digest: the canonical patch, blob IDs and hunk offsets normalized, shasum'd."""
+    args = ['git', 'diff', '--binary', '--full-index', '--no-ext-diff', '--no-textconv', '--no-color', '-M', '-U3',
+            '--src-prefix=a/', '--dst-prefix=b/', base, tip, '--', '.', ':(top,exclude)docs/feature-ledger.md',
+            ':(top,exclude)docs/feature-ledger.html']
+    try:
+        result = subprocess.run(args, cwd=worktree, capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise LookupFailed(f'git diff {base} {tip}: {error}') from error
+    if result.returncode:
+        raise LookupFailed(f'git diff {base} {tip} failed: {result.stderr.decode(errors="replace").strip()}')
+    patch = re.sub(rb'(?m)^index [^\n]*(\n|$)', b'', result.stdout)
+    patch = re.sub(rb'(?m)^@@ -[0-9]+(,[0-9]+)? \+[0-9]+(,[0-9]+)? @@', rb'@@ -OLD\1 +NEW\2 @@', patch)
+    return hashlib.sha1(patch.rstrip(b'\n') + b'\n').hexdigest()
+
+
+def rebase_verdict(verify, hashes):
+    """'same' or 'docs' for exactly one CODE line in rebase-verify's grammar whose hashes are `hashes`; else refuse."""
+    lines = [line for line in verify.stdout.splitlines() if line.startswith('CODE ')]
+    matched = {kind: pattern.fullmatch(lines[0]) for kind, pattern in VERDICTS.items()} if len(lines) == 1 else {}
+    kind = next((kind for kind, match in matched.items() if match), None)
+    if verify.returncode or kind is None:
+        raise ConditionFailed('rebase-verify CODE same required for audited head to PR head: ' +
+                              (verify.stdout.strip() or verify.stderr.strip()))
+    if matched[kind].groups() != hashes:
+        raise ConditionFailed(f'rebase-verify CODE line does not name the audited and PR-head patches {hashes}: '
+                              + lines[0])
+    return kind
 
 
 def docs_differ(output, new_base, worktree, body):
@@ -43,9 +81,15 @@ def docs_differ(output, new_base, worktree, body):
     if bad:
         raise ConditionFailed('rebase-verify DOCS differ with a refusal: ' + '; '.join(bad))
     sys.path.insert(0, str(scripts))
-    from doc_rows import ALLOWLIST_REPO_PATH, load_allowlist
-    shown = subprocess.run(['git', 'show', f'{new_base}:{ALLOWLIST_REPO_PATH}'], cwd=worktree, text=True,
-                           capture_output=True)
+    try:
+        from doc_rows import ALLOWLIST_REPO_PATH, load_allowlist
+    except ImportError as error:
+        raise LookupFailed(f'doc_rows import from {scripts}: {error}') from error
+    try:
+        shown = subprocess.run(['git', 'show', f'{new_base}:{ALLOWLIST_REPO_PATH}'], cwd=worktree, text=True,
+                               capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise LookupFailed(f'git show {new_base}:{ALLOWLIST_REPO_PATH}: {error}') from error
     if shown.returncode:
         raise ConditionFailed(f'rebase-verify DOCS differ but main has no {ALLOWLIST_REPO_PATH}')
     allowed = load_allowlist(text=shown.stdout)
@@ -57,30 +101,52 @@ def docs_differ(output, new_base, worktree, body):
     known_high(body)
 
 
-def section(body, heading):
-    """The lines under the first Markdown heading named `heading`, up to the next heading."""
-    found, out = False, []
-    for line in body.splitlines():
-        if re.match(r'^#{1,6}\s', line):
-            if found:
-                break
-            found = re.match(rf'^#{{1,6}}\s+{heading}\s*$', line.strip(), re.I) is not None
-        elif found:
-            out.append(line)
-    return out if found else None
+def headings(body):
+    """(index, level, title) of every ATX heading outside fenced code; fenced lines stay in their section."""
+    out, fence = [], None
+    for index, line in enumerate(body.splitlines()):
+        marker = re.match(r'^ {0,3}(`{3,}|~{3,})', line)
+        if fence:
+            if marker and marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence) and \
+                    not line.strip()[len(marker.group(1)):]:
+                fence = None
+        elif marker:
+            fence = marker.group(1)
+        elif (heading := re.match(r'^(#{1,6})\s+(.*?)\s*#*\s*$', line)):
+            out.append((index, len(heading.group(1)), heading.group(2)))
+    return out
+
+
+def section(body, at, level):
+    """The lines after heading line `at` up to the next heading of the same or a higher level."""
+    lines = body.splitlines()
+    end = next((index for index, depth, _ in headings(body) if index > at and depth <= level), len(lines))
+    return lines[at + 1:end]
 
 
 def known_high(body):
-    gates = section(body, 'Gates') or []
-    audit = [[cell.strip() for cell in line.strip().strip('|').split('|')] for line in gates
-             if re.match(r'^\|\s*audit\s*\|', line.strip(), re.I)]
-    if len(audit) != 1 or len(audit[0]) != 4 or audit[0][1] != 'PASS' or \
-            not re.search(r'\bno Critical/High\b', audit[0][3], re.I):
-        raise ConditionFailed('DOCS differ never waives a known High: the PR body needs one audit gate row with PASS '
-                              'and "no Critical/High"')
-    named = [line.strip() for line in section(body, 'Still open') or [] if re.search(r'\b(Critical|High)\b', line)]
+    def refuse(why):
+        raise ConditionFailed('DOCS differ never waives a known High: ' + why)
+
+    gates = [(index, level) for index, level, title in headings(body) if re.fullmatch(r'gates\b.*', title, re.I)]
+    rows = [index for index, line in enumerate(body.splitlines()) if re.match(r'^\s*\|\s*audit\s*\|', line, re.I)]
+    if len(gates) != 1 or len(rows) != 1:
+        refuse(f'the PR body needs one Gates section with one audit row ({len(gates)} Gates, {len(rows)} audit rows)')
+    if rows[0] - gates[0][0] - 1 not in range(len(section(body, *gates[0]))):
+        refuse('the audit row is outside the Gates section')
+    audit = [cell.strip() for cell in body.splitlines()[rows[0]].strip().strip('|').split('|')]
+    phrase = re.compile(r'\bno Critical/High\b', re.I)
+    if len(audit) != 4 or audit[1] != 'PASS' or not phrase.search(audit[3]) or SEVERITY.search(phrase.sub('', audit[3])):
+        refuse('the audit row needs PASS and a Source naming Critical/High only as "no Critical/High": ' +
+               ' | '.join(audit))
+    labels = [index for index, line in enumerate(body.splitlines())
+              if re.match(r'^\s*(?:#+\s*|[-*_>]+\s*)?still open\b', line, re.I)]
+    still = [(index, level) for index, level, title in headings(body) if re.match(r'still open\b', title, re.I)]
+    if len(labels) != 1 or len(still) != 1 or still[0][0] != labels[0] or still[0][1] not in (2, 3):
+        refuse('the PR body needs exactly one "## Still open" or "### Still open" heading')
+    named = [line.strip() for line in section(body, *still[0]) if SEVERITY.search(line)]
     if named:
-        raise ConditionFailed('DOCS differ never waives a known High: Still open names ' + '; '.join(named))
+        refuse('Still open names ' + '; '.join(named))
 
 
 head = 'unknown'
@@ -142,14 +208,13 @@ try:
     if audited != head:
         old_base = run(['git', 'merge-base', 'origin/main', audited], cwd=head_worktree).strip()
         new_base = run(['git', 'merge-base', 'origin/main', head], cwd=head_worktree).strip()
-        verify = subprocess.run(['zsh', str(head_worktree / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'),
-                                 old_base, audited, new_base, head], cwd=head_worktree,
-                                text=True, capture_output=True)
-        verdicts = [line for line in verify.stdout.splitlines() if line.startswith('CODE ')]
-        if verify.returncode or len(verdicts) != 1 or not verdicts[0].startswith(('CODE same ', 'CODE same, DOCS differ ')):
-            raise ConditionFailed('rebase-verify CODE same required for audited head to PR head: ' +
-                                  (verify.stdout.strip() or verify.stderr.strip()))
-        if verdicts[0].startswith('CODE same, DOCS differ '):
+        try:
+            verify = subprocess.run(['zsh', str(scripts / 'rebase-verify.sh'), old_base, audited, new_base, head],
+                                    cwd=head_worktree, text=True, capture_output=True, timeout=600)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise LookupFailed(f'rebase-verify.sh: {error}') from error
+        hashes = (patch_hash(head_worktree, old_base, audited), patch_hash(head_worktree, new_base, head))
+        if rebase_verdict(verify, hashes) == 'docs':
             docs_differ(verify.stdout, new_base, head_worktree, candidate['body'] or '')
     with tempfile.TemporaryDirectory(prefix='mado-merge-body-') as temporary:
         body = pathlib.Path(temporary) / 'body.md'
@@ -161,7 +226,7 @@ try:
     verdict = 'would-allow'
 except ConditionFailed as error:
     verdict = 'would-refuse condition-failed: ' + str(error)
-except (LookupFailed, ValueError, KeyError, TypeError) as error:
+except (LookupFailed, ValueError, KeyError, TypeError, OSError, ImportError) as error:
     verdict = 'would-refuse lookup-failed: ' + str(error) + '; retry or use the override'
 print(f'merge-gate: {verdict} PR #{pr} @ {head} (SHADOW; no merge performed)')
 reason = os.environ.get('MADO_MERGE_GATE_OVERRIDE')
