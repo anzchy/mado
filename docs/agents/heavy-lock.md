@@ -4,6 +4,8 @@
 
 #768 起，普通 job 不再继承 flock FD；acquiring supervisor 与 guardian 持有它。嵌套 heavy-lock supervisor 向仍活着的父 supervisor 注册后，通过控制 socket 收到 FD 副本；孤儿普通 child 因而不能靠继承 FD 延长锁寿命。原有等待、超时和命令退出码保持不变。
 
+#768 Linux 回归修正：leader 退出后，单次 `ps` 空结果不足以证明 reforking 进程组已消失。supervisor 先用内核进程组存在性检查复核；Linux 上再读取 `/proc` 的 live 成员。查询仍不确定时继续有界重试，不提前释放 flock。普通 job 仍不继承 flock FD。
+
 已知限制：若 supervisor 和 guardian **都**被 SIGKILL（例如 `pkill -9` 或 jetsam），仍在运行的组内 job 会失去 flock 保护，另一任务可能同时进入。guardian 忽略 INT、TERM、HUP；单独的这些信号不会造成这一双重失效。
 
 从 AGENTS.md 原样挪来（2026-11-15）。卡锁、超时（退出 75/124/70）、要手动恢复锁目录或检查 owner 文件之前读这里。#657 的设计契约见 [heavy-lock-contract.md](heavy-lock-contract.md)。

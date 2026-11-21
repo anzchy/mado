@@ -279,6 +279,37 @@ open(marker, 'w').write(f"{time.monotonic()} {time.time()*1000}")`, marker, ende
   assert.equal(existsSync(env.MADO_MDPRO_LOCK), false);
 });
 
+// A successful but empty ps snapshot is not proof that a reforking process
+// group has vanished. The kernel still knows the group while a child runs.
+test('emptyExitQueryCannotReleaseLiveReforkingGroup', { timeout: 25000 }, async () => {
+  const env = environment(), log = withPlan(env, ['empty', 'real']);
+  const marker = path.join(env.HOME, 'empty-exit');
+  const ended = path.join(env.HOME, 'empty-worker-ended');
+  const admitted = path.join(env.HOME, 'empty-admitted');
+  const job = ['python3', '-c', `import os,sys,time
+marker, ended = sys.argv[1], sys.argv[2]
+if os.fork() == 0:
+    for fd in (0, 1, 2): os.close(fd)
+    began = time.monotonic()
+    while time.monotonic() - began < 1.5:
+        time.sleep(0.1)
+        if os.fork() != 0: os._exit(0)
+    open(ended, 'w').write(str(time.time() * 1000)); os._exit(0)
+open(marker, 'w').write(str(time.time() * 1000))`, marker, ended];
+  const run = start(job, env);
+  await waitFor(() => existsSync(marker), 15000, 'leader exited');
+  const competitorEnv = { ...env };
+  delete competitorEnv.MADO_HEAVY_FAULT_EXIT_QUERY_PLAN;
+  const competitor = start(['python3', '-c', 'import sys,time; open(sys.argv[1],"w").write(str(time.time()*1000))', admitted], competitorEnv);
+  const [r, c] = await Promise.all([run.done, competitor.done]);
+  assert.equal(r.code, 0, r.output);
+  assert.equal(c.code, 0, c.output);
+  assert.ok(existsSync(ended), 'the reforking group completed before release');
+  assert.deepEqual(log().slice(0, 2).map(t => t.token), ['empty', 'real']);
+  assert.ok(Number(readFileSync(admitted, 'utf8')) >= Number(readFileSync(ended, 'utf8')),
+    'the competitor entered after the last worker');
+});
+
 test('exitQueryRetryNeverResetsTheDrainDeadline', { timeout: 25000 }, async () => {
   const env = environment({ MADO_HEAVY_LOCK_DRAIN_SECS: '2', MADO_HEAVY_LOCK_KILL_GRACE_SECS: '0.2' });
   const log = withPlan(env, Array(20).fill(['real', 'error']).flat()), marker = path.join(env.HOME, 'exit');

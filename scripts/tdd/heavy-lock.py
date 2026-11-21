@@ -146,7 +146,7 @@ class QueryRetry:
 # "<token> <monotonic>" to <plan>.log and runs a real substitute. An unknown
 # token is a failing query; an exhausted plan runs the real query. The variable
 # is removed from the guardian's and the job's environment.
-EXIT_QUERY_SUBSTITUTES = {'error': ['/usr/bin/false'], 'timeout': ['/bin/sleep', '5'],
+EXIT_QUERY_SUBSTITUTES = {'error': ['/usr/bin/false'], 'empty': ['/usr/bin/true'], 'timeout': ['/bin/sleep', '5'],
                           'malformed': ['/bin/echo', 'garbage']}
 exit_query_plan = {'tokens': None, 'next': 0}
 
@@ -600,6 +600,31 @@ def owned_state(root, groups, hosts, excluded=0, query=process_rows):
         return None
     live = [(pid, pgid) for pid, pgid in rows
             if pid != excluded and (pgid == root or pgid in groups or pid in hosts)]
+    if not live:
+        # An empty ps snapshot can straddle a rapid fork/exit on Linux. The
+        # original job no longer inherits our flock, so one such snapshot
+        # must not release the supervisor's lock while its group still exists.
+        active_group = False
+        for pgid in {root, *groups}:
+            if pgid <= 0:
+                continue
+            try:
+                os.killpg(pgid, 0)
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                return None
+            active_group = True
+        if active_group:
+            if sys.platform.startswith('linux'):
+                alternate = proc_group_rows(root, groups, hosts, excluded)
+                if alternate is None:
+                    return None
+                live, zombies = alternate
+                if not live and not zombies:
+                    return None
+            else:
+                return None
     for pgid in tuple(groups):
         if not any(group == pgid for _, group in live):
             groups.discard(pgid)
@@ -607,6 +632,44 @@ def owned_state(root, groups, hosts, excluded=0, query=process_rows):
         if not any(member == pid for member, _ in live):
             hosts.discard(pid)
     return live
+
+
+def proc_group_rows(root, groups, hosts, excluded=0):
+    """Independently check owned Linux members when ps reported none.
+
+    Return (live rows, saw owned zombies), or None if /proc is unavailable.
+    A vanished PID during enumeration is an ordinary fork/exit race.
+    """
+    live = []
+    zombies = False
+    try:
+        entries = os.scandir('/proc')
+        with entries:
+            for entry in entries:
+                if not entry.name.isdigit():
+                    continue
+                pid = int(entry.name)
+                if pid == excluded:
+                    continue
+                try:
+                    stat_line = Path(entry.path, 'stat').read_bytes()
+                except FileNotFoundError:
+                    continue
+                end = stat_line.rfind(b')')
+                if end < 0:
+                    return None
+                fields = stat_line[end + 1:].split()
+                if len(fields) < 3:
+                    return None
+                state, pgid = fields[0], int(fields[2])
+                if pgid == root or pgid in groups or pid in hosts:
+                    if state == b'Z':
+                        zombies = True
+                    else:
+                        live.append((pid, pgid))
+        return live, zombies
+    except (OSError, ValueError):
+        return None
 
 
 def signal_owned(rows, sig):
