@@ -274,7 +274,7 @@ test('remote checkout refuses a mismatched SHA before executing steps', () => {
   exec(realGit, ['update-ref', '-d', ref], { cwd: f.repo });
   const script = readFileSync(join(root, '.agents/skills/ci-linux-preflight/scripts/remote-run.sh'), 'utf8')
     .replace('export PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin', `export PATH=${f.bin}:/usr/local/bin:/usr/bin:/bin`);
-  const result = exec('/bin/bash', ['-s', '--', runDir, f.sha, 'agent-tests', workflowAt(f.repo, f.sha).workflowSha256, '2', '30'],
+  const result = exec('/bin/bash', ['-s', '--', runDir, f.sha, 'agent-tests', workflowAt(f.repo, f.sha).workflowSha256, '2', '180'],
     { input: script, env: { ...f.env, HOME: f.hostHome, FAKE_REMOTE_WRONG_HEAD: '1' } });
   assert.equal(result.status, 75, result.stderr + result.stdout);
   assert.match(result.stderr, /checkout head mismatch/);
