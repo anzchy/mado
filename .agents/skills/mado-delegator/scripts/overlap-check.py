@@ -167,7 +167,7 @@ def main(argv):
                     lines.append(f"HOTSPOT  {r['branch']}  {','.join(r['hotspots'])}; sequence the items")
                 if r.get("ledger"):
                     lines.append(f"HOTSPOT-LEDGER  {r['branch']}  {','.join(r['ledger'])}; row-level merge applies")
-                ordinary = sorted(set(r["shared"]) - HOTSPOTS)
+                ordinary = sorted(set(r["shared"]) - HOTSPOTS - set(r.get("hotspots", [])))
                 if ordinary:
                     lines.append(f"SHARED   {r['branch']}  {','.join(ordinary)}")
             lines = lines or ["NONE SHARED"]
