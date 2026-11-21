@@ -45,7 +45,7 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
     .replace('sudo apt-get update', 'sudo apt-get update\n          sudo apt-get install --no-install-recommends -y python3 git zsh'));
   writeFileSync(join(repo, 'sample_test.py'), `import unittest\nclass Sample(unittest.TestCase):\n def test_case(self):\n  ${failingPython ? "self.fail('broken')" : 'self.assertTrue(True)'}\n`);
   for (const [name, body] of Object.entries({
-    node: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo v22.23.5; else exec "$REAL_NODE" "$@"; fi\n`,
+    node: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo v22.23.5; else exec "${process.execPath}" "$@"; fi\n`,
     git: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "git version \${FAKE_GIT_VERSION:-2.56.1}"; exit; fi\nif [ "$FAKE_REMOTE_WRONG_HEAD" = 1 ]; then case "$*" in *'rev-parse HEAD'*) printf '%040d\\n' 0; exit;; esac; fi\nexec "$REAL_GIT" "$@"\n`,
     python3: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'Python 3.11.0'; else exec "$REAL_PYTHON" "$@"; fi\n`,
     zsh: `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'zsh 5.8'; else exec /bin/zsh "$@"; fi\n`,
@@ -69,6 +69,48 @@ function fixture(first = `python3 -m unittest sample_test.py && ${tapStep(footer
 function summaryPath(result) { return result.stdout.match(/^Summary: (.+)$/m)?.[1]; }
 function runFixture(f, args = [], env = {}) { return run(['run', f.sha, '--repo', f.repo, ...args], { env: { ...f.env, ...env } }); }
 function runFixtureAsync(f, args = [], env = {}) { return runAsync(['run', f.sha, '--repo', f.repo, ...args], { env: { ...f.env, ...env } }); }
+
+test('repro rejects unsafe commands before SSH and captures each commit outcome', async () => {
+  const f = fixture();
+  writeFileSync(join(f.repo, 'check.mjs'), "console.log('not ok 1 - deliberate failure'); process.exit(1)\n");
+  exec(realGit, ['add', 'check.mjs'], { cwd: f.repo });
+  exec(realGit, ['commit', '-qm', 'failing check'], { cwd: f.repo });
+  const bad = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
+  writeFileSync(join(f.repo, 'check.mjs'), 'process.exit(0)\n');
+  exec(realGit, ['commit', '-qam', 'fixed check'], { cwd: f.repo });
+  const good = exec(realGit, ['rev-parse', 'HEAD'], { cwd: f.repo }).stdout.trim();
+  for (const cmd of ['curl example.com', 'node check.mjs; id', 'node --test ../check.mjs', 'node --test missing.mjs', 'node -e process.exit(0)']) {
+    const rejected = run(['repro', bad, '--cmd', cmd, '--repo', f.repo], { env: f.env });
+    assert.equal(rejected.status, 2, `${cmd}: ${rejected.stderr}`);
+  }
+  const matched = await runAsync(['repro', bad, good, '--cmd', 'node check.mjs', '--expect', 'fail,pass', '--repo', f.repo], { env: f.env });
+  assert.equal(matched.status, 0, matched.stderr + matched.stdout);
+  const path = summaryPath(matched);
+  const body = readFileSync(path, 'utf8');
+  assert.match(body, new RegExp(`result:${bad}:exit=1`));
+  assert.match(body, new RegExp(`result:${good}:exit=0`));
+  assert.match(body, new RegExp(`result:${bad}:failed=not ok 1 - deliberate failure`));
+  assert.match(body, /outcome=MATCH/);
+  assert.equal(run(['summary-check', path, '--expect-head', bad, '--repo', f.repo]).status, 0);
+  writeFileSync(join(f.base, 'bad-summary'), body.replace('DONE\n', ''));
+  assert.equal(run(['summary-check', join(f.base, 'bad-summary'), '--expect-head', bad, '--repo', f.repo]).status, 75);
+  writeFileSync(join(f.base, 'bad-summary'), body.replace(`result:${bad}:exit=1`, `result:${bad}:exit=0`));
+  assert.equal(run(['summary-check', join(f.base, 'bad-summary'), '--expect-head', bad, '--repo', f.repo]).status, 75);
+  const mismatch = await runAsync(['repro', bad, good, '--cmd', 'node check.mjs', '--expect', 'pass,fail', '--repo', f.repo], { env: f.env });
+  assert.equal(mismatch.status, 1, mismatch.stderr + mismatch.stdout);
+  assert.match(readFileSync(summaryPath(mismatch), 'utf8'), /outcome=MISMATCH/);
+  assert.deepEqual(readdirSync(join(f.hostHome, 'ci')).filter(name => name.startsWith('run.')), []);
+});
+
+test('repro busy lock and unreachable host are NOT VERIFIED', async () => {
+  const f = fixture();
+  const args = ['repro', f.sha, '--cmd', 'python3 -m unittest sample_test.py', '--repo', f.repo];
+  for (const env of [{ FAKE_BUSY: '1' }, { FAKE_SSH_FAIL: '1' }]) {
+    const result = await runAsync(args, { env: { ...f.env, ...env } });
+    assert.equal(result.status, 75, result.stderr + result.stdout);
+    assert.match(readFileSync(summaryPath(result), 'utf8'), /outcome=NOT VERIFIED/);
+  }
+});
 
 describe('ci-linux-preflight', { concurrency: true }, () => {
 test('real Agent tooling workflow has two runnable steps and rejects unsupported YAML', () => {
