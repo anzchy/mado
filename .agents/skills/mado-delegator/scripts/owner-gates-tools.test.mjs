@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import './owner-gates-hostile.test.mjs';
 import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -237,12 +236,18 @@ test('735 competing heavy processes list only names and PIDs', () => {
 
 test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline', {timeout:40000}, t => {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gate-probe-'));
-  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const probePids=path.join(dir,'probe-pids');
+  t.after(()=>{
+    if(fs.existsSync(probePids)) for(const pid of fs.readFileSync(probePids,'utf8').trim().split('\n').map(Number)){
+      if(Number.isSafeInteger(pid) && pid>0) { try { process.kill(pid,'SIGKILL'); } catch(error) { if(error.code!=='ESRCH') throw error; } }
+    }
+    fs.rmSync(dir,{recursive:true,force:true});
+  });
   const sysctl=path.join(dir,'sysctl'), ps=path.join(dir,'ps');
   const healthySysctl=path.join(dir,'healthy-sysctl'), healthyPs=path.join(dir,'healthy-ps');
   const healthyMarker=path.join(dir,'healthy-sysctl-hit');
-  fs.writeFileSync(sysctl,`#!${process.execPath}\nif(process.argv[3]==='vm.loadavg'){process.on('SIGTERM',()=>{});setTimeout(()=>console.log('{ 1.00 1.00 1.00 }'),7000);}else console.log(process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
-  fs.writeFileSync(ps,`#!${process.execPath}\nprocess.on('SIGTERM',()=>{});setTimeout(()=>console.log('101 /usr/bin/swift-frontend swift-frontend'),7000);\n`,{mode:0o755});
+  fs.writeFileSync(sysctl,`#!${process.execPath}\nif(process.argv[3]==='vm.loadavg'){require('node:fs').appendFileSync(${JSON.stringify(probePids)},process.pid+'\\n');process.on('SIGTERM',()=>{});setInterval(()=>{},1000);}else console.log(process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
+  fs.writeFileSync(ps,`#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(probePids)},process.pid+'\\n');process.on('SIGTERM',()=>{});setInterval(()=>{},1000);\n`,{mode:0o755});
   fs.writeFileSync(healthySysctl,`#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(healthyMarker)},'hit\\n');console.log(process.argv[3]==='vm.loadavg'?'{ 1.00 1.00 1.00 }':process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
   fs.writeFileSync(healthyPs,`#!${process.execPath}\nconsole.log('102 /bin/sleep sleep 20');\n`,{mode:0o755});
   const tool=new URL('./owner-gates-tools.mjs',import.meta.url).pathname;
@@ -255,5 +260,8 @@ test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline'
     assert.equal(run.status,0,run.stderr);
     assert.match(run.stdout,new RegExp(expected));
     if(expected.includes('competing heavy')) assert.ok(fs.existsSync(healthyMarker),'case 2 must use the fake sysctl');
+  }
+  for(const pid of fs.readFileSync(probePids,'utf8').trim().split('\n').map(Number)) {
+    assert.throws(()=>process.kill(pid,0), {code:'ESRCH'}, `probe ${pid} must be gone`);
   }
 });

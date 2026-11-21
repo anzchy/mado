@@ -74,7 +74,8 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
     MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
     MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
-    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '' };
+    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
+    OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' };
   // The fake tools must win over the real xcodegen/Homebrew directories owner-gates.sh puts in front of PATH.
   env.OWNER_GATES_TOOL_PATH = bin;
   env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
