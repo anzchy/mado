@@ -325,7 +325,7 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 
 | Agent | Reset | Notes |
 |---|---|---|
-| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/start-fresh-codex.sh <pane> <name> --prompt '<task prompt>'` | The helper sends `/new`, waits for the directory dialog or a fresh empty Codex prompt, explicitly chooses option 1 (current Git worktree) if shown, restores and checks the agent and pane names, then sends the prompt. It succeeds only after `herdr agent list` reports `working`; an idle agent gets one retry and then a one-line failure. Use `prompt-and-confirm <pane> <name> '<task prompt>'` for an already fresh idle session. For fresh gpt-auditor and Codex implementer dispatch, use this helper instead of `reset.sh` plus a separate `herdr agent prompt`. |
+| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<task prompt>'` | The helper sends `/new`, waits for the directory dialog or a fresh empty Codex prompt, explicitly chooses option 1 (current Git worktree) if shown, restores and checks the agent and pane names, then sends the prompt. It succeeds only after `herdr agent list` reports `working`; an idle agent with a still-empty prompt gets one retry, while a submitted prompt fails without duplication. Use `prompt-and-confirm <pane> <name> --cwd <worktree> '<task prompt>'` for an already fresh idle session. For fresh gpt-auditor and Codex implementer dispatch, use this helper instead of `reset.sh` plus a separate `herdr agent prompt`. |
 | opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent mado-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
 | kimi-imple-1 (p7), **retired 2026-11-01, do not dispatch** | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
@@ -423,7 +423,7 @@ signed-device comparison and independent review **before merging the UI PR**. Un
     stop and report".
 
 Dispatch a fresh Codex session with a one-line prompt that points at the file, for example
-`$SK/scripts/start-fresh-codex.sh w1:p3 gpt-imple-2 --prompt 'New task: … Read and follow ~/.mado/herdr/gpt-imple-2/<brief>.md … Do not push.'`.
+`$SK/scripts/start-fresh-codex.sh w1:p3 gpt-imple-2 --cwd ~/Documents/mac-app/picsee-wt/gpt-imple-2 --prompt 'New task: … Read and follow ~/.mado/herdr/gpt-imple-2/<brief>.md … Do not push.'`.
 After it confirms `working`, start a fresh listener event as described
 in [Durable listener notification](#durable-listener-notification).
 
@@ -445,7 +445,7 @@ in [Durable listener notification](#durable-listener-notification).
 Put each request at `~/.mado/herdr/delegator/opus-<item>-audit-r<round>.md` and its report at
 `~/.mado/herdr/opus-auditor/opus-<item>-audit-r<round>.md` (exactly one `Report-Task:` line), ending with the VERDICT
 block; gpt-auditor's go to `~/.mado/herdr/gpt-auditor/gpt-<item>-…` the same way. Since 2026-10-25 every tier gets
-both auditors, blind and in parallel (SKILL.md step 4): `/clear` opus-auditor and `reset.sh` gpt-auditor before every
+both auditors, blind and in parallel (SKILL.md step 4): `/clear` opus-auditor and start gpt-auditor through `start-fresh-codex.sh <pane> <name> --cwd <auditor-worktree> --prompt <request>` before every
 audit and confirm.
 
 **opus-auditor runs no builds or tests unless the request asks for a lane re-run** (its agent file). Tell it which owner
@@ -837,9 +837,9 @@ run=<run-id>`, garden it, open a `docs/validation` PR and merge.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Missed that an implementer had finished (twice) | A screen-based poller ended with only a local log | Attach `listen-notify.py start` to a report/handoff poller; pin the exact delegator route and inspect queue receipt vs ACK |
-| `reset.sh` prints `FAIL … no new-session boundary seen within 30s; check the pane` (or the configured timeout) | Neither a changed session ID nor a valid last Codex title over an empty transcript was established in a post-submit poll. The title may be missing from the captured history, a nonleading title may lack cwd metadata, or transcript/duplicate placeholder content may invalidate it; a markerless 0% footer is insufficient | Inspect `herdr pane read <pane> --source recent-unwrapped --lines 2000`; check for the title and cwd above the logo and for dirty content below the last title. Zoom if needed, then repeat the reset before dispatching work |
-| `reset.sh` prints `FAIL … no context line after 30s` (or the configured timeout) | A boundary was seen, but no footer below a session-start boundary appeared in the same read; the chooser may still be open or startup incomplete | `herdr pane zoom`, read again; check startup before dispatching: require the `reset <name> old_session=… Context 0% used (verify the session id changes after the next turn)` success line and a new-session footer showing `Context 0% used` |
-| Prompt sent right after a reset "didn't land" | chooser still open or the pane redrawing | wait, check for "esc to interrupt" after ~20 s, resend |
+| `start-fresh-codex.sh` reports no fresh prompt before its deadline | The chooser or fresh Codex title did not become visible in time | Inspect `herdr pane read <pane> --source recent-unwrapped --lines 2000`; zoom if the pane is tiny, then rerun the complete helper with the expected `--cwd` and task prompt |
+| `start-fresh-codex.sh` refuses a nonempty prompt or mismatched cwd | The pane still shows startup or transcript content, or option 2 changed the worktree | Inspect the pane and the briefed worktree; rerun the complete helper only after resolving the mismatch |
+| Fresh Codex prompt did not reach `working` | chooser, wrong worktree, submitted prompt or slow startup | Read the helper's one-line failure and inspect the pane; do not blindly resend a submitted prompt |
 | A mid-rebase commit swallowed the implementer's message | `git rebase … | tail` hid the conflict | never pipe a rebase; check its exit code |
 | Rebase loop broke on `for f in $c` | zsh doesn't word-split unquoted variables | use `${=c}`, or compare the whole string |
 | Python heredoc with Chinese text failed with "Non-UTF-8 code" | shell mangled bytes on stdin | write the script to a file (Write tool) with `# -*- coding: utf-8 -*-` |
@@ -903,7 +903,7 @@ Codex delegator doesn't see it, which is one reason this guide and the handoff l
 - **Implementers:** Codex implementers run with `-s danger-full-access` and use `$tdd-guardian-workflow` (from P1
   wave 3). Kimi is admitted; it always runs K3.1 Pro at effort high (2026-10-24).
 - **Auditors:** every tier gets gpt-auditor and opus-auditor, blind and in parallel, at most 2 rounds per item;
-  `/clear` opus-auditor and `reset.sh` gpt-auditor before every audit and C/H confirm. History: the 2026-10-25 morning
+  `/clear` opus-auditor and start gpt-auditor through `start-fresh-codex.sh <pane> <name> --cwd <auditor-worktree> --prompt <request>` before every audit and C/H confirm. History: the 2026-10-25 morning
   decision 「Opus单审，gpt暂停」 (replacing the 2026-10-24 GPT-only override) was lifted the same afternoon ("audit now
   has gpt-auditor + opus-auditor at the same time, audit cap is two").
 - **Ledger:** feature-ledger md and html are committed together.

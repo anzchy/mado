@@ -39,9 +39,9 @@ a successful guarded dry-run before a remote write (see `scripts/codex-rules/REA
 
 | Pane | Name | Agent | Reset before a new item |
 |---|---|---|---|
-| w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
-| w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/reset.sh <name> <pane>` |
-| w1:p5 | gpt-auditor | Codex `gpt-6-sol`, effort `medium`; for a device run only, restart it with `-s danger-full-access` (its sandbox cannot run `pgrep`) and restart without it afterwards | `$SK/scripts/reset.sh` |
+| w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<task>'` |
+| w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<task>'` |
+| w1:p5 | gpt-auditor | Codex `gpt-6-sol`, effort `medium`; for a device run only, restart it with `-s danger-full-access` (its sandbox cannot run `pgrep`) and restart without it afterwards | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<audit request>'` |
 | w1:p6 | opus-auditor | Claude `--agent mado-opus-auditor --model opus` | send `/clear` + Enter, confirm `Context 0%` |
 | w1:p9 | opus-imple-1 | Claude Opus implementer (added 2026-10-25) | `/clear` + Enter |
 
@@ -68,9 +68,9 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
    Before dispatch, run `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when it differs from the worktree's current branch) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. Codex uses `$tdd-guardian-workflow`;
    Kimi needs the hand-written test-first steps. For a fresh Codex implementer or gpt-auditor session, dispatch only through
-   `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --prompt 'New task: … Read and follow <brief>…'`.
-   The helper chooses current worktree in the directory dialog, restores both names, and requires `working` before success.
-   For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> '<task prompt>'`.
+   `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --cwd <briefed-worktree> --prompt 'New task: … Read and follow <brief>…'`.
+   The helper checks the expected worktree against the pane and fresh screen, chooses current worktree in the directory dialog, restores both names, and requires `working` before success.
+   For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> --cwd <briefed-worktree> '<task prompt>'`.
 3. **Watch** — after the fresh Codex helper confirms `working`, and after every dispatch and rearm for every fix/audit round, attach
    `$SK/scripts/listen-notify.py start` with a fresh event/round ID, agent, expected handoff/report path, and an
    **explicit delegator route**. A Codex delegator uses `--route codex-thread --thread <current UUID>`;
@@ -94,7 +94,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    script does not fetch the comment, so open the comment by hand and check it names that head. A failure returns the item to
    the implementer. A `WARNING apptests NOT VERIFIED` line (Codex panes have no key window) means your own owner-gates
    `apptests=` result below is the binding App test evidence. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
-   `gpt-auditor` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
+   `gpt-auditor` through `start-fresh-codex.sh <pane> gpt-auditor --cwd <auditor-worktree> --prompt '<audit request>'` and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it
    fails closed (`design≠0`). A summary without `DONE` is no evidence. Exit 1 means a lane failed even with `DONE`;

@@ -26,7 +26,7 @@ def timer(name, default):
 def herdr(*args):
     try:
         result = subprocess.run(["herdr", *args], text=True, capture_output=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as exc:
         raise Refused(f"herdr {' '.join(args[:2])} unavailable: {type(exc).__name__}") from exc
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip().replace("\n", " ")[:120]
@@ -34,20 +34,37 @@ def herdr(*args):
     return result.stdout
 
 
-def agent_for(pane):
+def agent_for(pane, name=None):
     try:
         envelope = json.loads(herdr("agent", "list"))
         if envelope["result"]["type"] != "agent_list":
             raise ValueError("wrong response type")
-        matches = [agent for agent in envelope["result"]["agents"] if agent.get("pane_id") == pane]
+        agents = envelope["result"]["agents"]
+        matches = [agent for agent in agents if agent.get("pane_id") == pane]
         if len(matches) != 1 or matches[0].get("agent") != "codex":
             raise ValueError("expected one Codex agent for pane")
+        if name is not None and sum(agent.get("name") == name for agent in agents) > 1:
+            raise Refused(f"duplicate or ambiguous agent name {name}")
         return matches[0]
     except (KeyError, TypeError, ValueError) as exc:
         raise Refused(f"agent list has no unambiguous Codex entry for {pane}") from exc
 
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def normalized_cwd(value):
+    if not isinstance(value, str) or not value.strip():
+        raise Refused("missing pane cwd")
+    path = os.path.expanduser(value.strip())
+    if not os.path.isabs(path):
+        raise Refused("pane cwd is not absolute")
+    return os.path.realpath(path)
+
+
+def check_cwd(value):
+    if normalized_cwd(value) != EXPECTED_CWD:
+        raise Refused("pane cwd differs from expected worktree")
 
 
 def pane_screen(pane):
@@ -61,10 +78,33 @@ def screen_state(screen):
         if "1. Use current Git worktree" not in screen[dialog:]:
             raise Refused("directory dialog has no current-worktree option 1")
         return "dialog"
-    placeholder = screen.rfind("› Ask Codex to do anything")
-    context = screen.rfind("Context 0% used")
     new_echo = screen.rfind("/new")
-    if title >= 0 and title > new_echo and placeholder > title and context > placeholder:
+    if title >= 0 and title > new_echo:
+        lines = screen[title:].splitlines()
+        if len(lines) < 4:
+            return "waiting"
+        cwd = lines[1].strip()
+        footer = next((i for i in range(len(lines) - 1, 1, -1) if "Context 0% used" in lines[i]), -1)
+        if footer < 0:
+            return "waiting"
+        placeholder = "› Ask Codex to do anything"
+        body = [line.strip() for line in lines[2:footer] if line.strip()]
+        hints = {"? for shortcuts", "? for help", "? for commands", "← for agents · ? for shortcuts"}
+        welcome = hints | {"Tip: Use /help to see available commands."}
+        def logo(line):
+            return bool(line) and all(ch.isspace() or "\u2500" <= ch <= "\u259f" or "\u2800" <= ch <= "\u28ff" for ch in line)
+        if body.count(placeholder) != 1:
+            return "waiting"
+        index = body.index(placeholder)
+        if any(line not in welcome and not logo(line) for line in body[:index]):
+            return "submitted"
+        if any(line not in hints for line in body[index + 1:]):
+            return "submitted"
+        if any(line.strip() and line.strip() not in hints for line in lines[footer + 1:]):
+            return "submitted"
+        footer_cwd = lines[footer].rsplit("·", 1)[-1].strip()
+        check_cwd(cwd)
+        check_cwd(footer_cwd)
         return "empty"
     return "waiting"
 
@@ -87,9 +127,10 @@ def wait_empty(pane, deadline, previous=""):
 def restore_name(pane, name):
     herdr("agent", "rename", pane, name)
     herdr("pane", "rename", pane, name)
-    entry = agent_for(pane)
+    entry = agent_for(pane, name)
     if entry.get("name") != name:
         raise Refused(f"agent name was not restored for {pane}")
+    check_cwd(entry.get("cwd"))
     return entry
 
 
@@ -97,12 +138,12 @@ def start(pane, name):
     prior = agent_for(pane)
     if prior.get("agent_status") not in ("idle", "done"):
         raise Refused(f"agent is {prior.get('agent_status')}, not idle")
+    check_cwd(prior.get("cwd"))
     before = pane_screen(pane)
     herdr("pane", "send-text", pane, "/new")
     herdr("pane", "send-keys", pane, "enter")
     started = time.monotonic()
     deadline = started + START
-    submitted_again = False
     while time.monotonic() < deadline:
         screen = pane_screen(pane)
         state = screen_state(screen)
@@ -112,9 +153,6 @@ def start(pane, name):
             break
         if state == "empty" and screen != before:
             break
-        if not submitted_again and time.monotonic() - started >= min(2.0, START / 2):
-            herdr("pane", "send-keys", pane, "enter")
-            submitted_again = True
         time.sleep(POLL)
     else:
         raise Refused("fresh directory dialog or empty Codex prompt never appeared")
@@ -124,9 +162,10 @@ def start(pane, name):
 def wait_working(pane, name):
     deadline = time.monotonic() + CONFIRM
     while time.monotonic() < deadline:
-        entry = agent_for(pane)
+        entry = agent_for(pane, name)
         if entry.get("name") != name:
             raise Refused("agent name was lost after prompting")
+        check_cwd(entry.get("cwd"))
         if entry.get("agent_status") == "working":
             return True
         time.sleep(POLL)
@@ -136,16 +175,20 @@ def wait_working(pane, name):
 def prompt_and_confirm(pane, name, prompt):
     if not prompt.strip():
         raise Refused("empty task prompt")
+    check_cwd(agent_for(pane).get("cwd"))
     entry = restore_name(pane, name)
     if entry.get("agent_status") not in ("idle", "done"):
         raise Refused(f"agent is {entry.get('agent_status')}, not idle")
     screen = pane_screen(pane)
-    if screen_state(screen) == "dialog":
+    state = screen_state(screen)
+    if state == "dialog":
         choose_current_worktree(pane)
         wait_empty(pane, time.monotonic() + START, screen)
         restore_name(pane, name)
+    elif state != "empty":
+        raise Refused("fresh Codex prompt is not empty")
     for attempt in (1, 2):
-        herdr("agent", "prompt", name, prompt)
+        herdr("agent", "prompt", "--", name, prompt)
         if wait_working(pane, name):
             return
         if attempt == 2:
@@ -157,7 +200,7 @@ def prompt_and_confirm(pane, name, prompt):
             wait_empty(pane, time.monotonic() + START, screen)
             restore_name(pane, name)
         elif state != "empty":
-            raise Refused("prompt did not start; pane is neither dialog nor empty prompt")
+            raise Refused("prompt was submitted but agent did not reach working")
     raise Refused("agent never reached working after two prompt attempts")
 
 
@@ -166,20 +209,21 @@ try:
     CONFIRM = timer("MADO_FRESH_CONFIRM_SECS", "20")
     POLL = timer("MADO_FRESH_POLL_SECS", "0.25")
     args = sys.argv[1:]
-    if len(args) == 4 and args[0] == "prompt-and-confirm":
-        _, pane, name, prompt = args
+    if len(args) == 6 and args[0] == "prompt-and-confirm" and args[3] == "--cwd":
+        _, pane, name, _, expected, prompt = args
         start_mode = False
-    elif len(args) == 2:
-        pane, name = args
+    elif len(args) == 4 and args[2] == "--cwd":
+        pane, name, _, expected = args
         prompt = None
         start_mode = True
-    elif len(args) == 4 and args[2] == "--prompt":
-        pane, name, _, prompt = args
+    elif len(args) == 6 and args[2] == "--cwd" and args[4] == "--prompt":
+        pane, name, _, expected, _, prompt = args
         start_mode = True
     else:
-        raise Refused("usage: start-fresh-codex.sh <pane> <agent-name> [--prompt <text>] | prompt-and-confirm <pane> <agent-name> <text>")
+        raise Refused("usage: start-fresh-codex.sh <pane> <agent-name> --cwd <worktree> [--prompt <text>] | prompt-and-confirm <pane> <agent-name> --cwd <worktree> <text>")
     if not re.fullmatch(r"w[0-9]+:p[A-Za-z0-9]+", pane) or not re.fullmatch(r"[a-z][a-z0-9-]+", name):
         raise Refused("invalid pane or agent name")
+    EXPECTED_CWD = normalized_cwd(expected)
     if start_mode:
         start(pane, name)
     if prompt is not None:

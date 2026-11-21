@@ -93,15 +93,17 @@ function freshScenario(scenario) {
   fs.copyFileSync(path.join(freshDir, 'fake-herdr.cjs'), path.join(bin, 'herdr'));
   fs.chmodSync(path.join(bin, 'herdr'), 0o755);
   const stateFile = path.join(dir, 'state.json');
-  fs.writeFileSync(stateFile, JSON.stringify({ phase: 'old', name: 'gpt-auditor', status: 'idle', reads: 0, prompts: 0, events: [] }));
+  fs.writeFileSync(stateFile, JSON.stringify({ phase: 'old', name: 'gpt-auditor', status: scenario.nonIdle ? 'working' : 'idle',
+    cwd: scenario.wrongCwd ? path.join(os.homedir(), 'wrong-worktree') : path.join(os.homedir(), 'fixture-worktree'),
+    reads: 0, prompts: 0, events: [] }));
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MADO_FIXTURE_SCENARIO: JSON.stringify(scenario),
     MADO_FIXTURE_STATE: stateFile, MADO_FIXTURE_DIR: freshDir, MADO_FRESH_START_SECS: '0.8',
     MADO_FRESH_CONFIRM_SECS: '0.25', MADO_FRESH_POLL_SECS: '0.02' };
   const run = (...args) => spawnSync('/bin/bash', [freshHelper, ...args], { env, encoding: 'utf8', timeout: 10000 });
   const state = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  return { run, state };
+  return { run, state, env };
 }
-const startWithPrompt = f => f.run('w1:p5', 'gpt-auditor', '--prompt', 'Audit #804');
+const startWithPrompt = f => f.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--prompt', 'Audit #804');
 
 test('#804 dialog shown chooses option 1 and delivers one prompt in one invocation', () => {
   const f = freshScenario({ dialog: true });
@@ -159,5 +161,79 @@ test('#804 never working exits nonzero with one-line reason after one retry', ()
   assert.notEqual(result.status, 0);
   assert.equal(f.state().prompts, 2);
   assert.match(result.stderr + result.stdout, /never reached working/);
+  assert.equal((result.stderr + result.stdout).trim().split('\n').length, 1);
+});
+
+test('#804 fix1 delayed chooser never receives a blind Enter', () => {
+  const f = freshScenario({ dialog: true, delayReads: 100 });
+  f.env.MADO_FRESH_START_SECS = '0.35';
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(f.state().events.filter(e => e === 'key-enter'), ['key-enter']);
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix1 wrong pane cwd refuses before prompting', () => {
+  const f = freshScenario({ dialog: false, wrongCwd: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /cwd|worktree/i);
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix1 chooser accepting option 2 refuses wrong fresh cwd', () => {
+  const f = freshScenario({ dialog: true, ignoreOne: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /cwd|worktree/i);
+  assert.ok(f.state().events.includes('key-1'));
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix1 non-Codex and non-idle agents refuse before mutation', () => {
+  for (const scenario of [{ nonCodex: true }, { nonIdle: true }]) {
+    const f = freshScenario(scenario);
+    const result = startWithPrompt(f);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, scenario.nonCodex ? /Codex/ : /not idle/);
+    assert.equal(f.state().prompts, 0);
+    assert.ok(!f.state().events.includes('send-new'));
+  }
+});
+
+test('#804 fix1 failed rename refuses before prompting', () => {
+  const f = freshScenario({ dialog: true, lostName: true, renameFails: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /name was not restored/);
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix1 duplicate agent name refuses before prompting', () => {
+  const f = freshScenario({ dialog: true, duplicateName: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /duplicate|ambiguous/i);
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix1 accepted slow prompt is not sent twice', () => {
+  const f = freshScenario({ dialog: false, acceptedSlow: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().prompts, 1);
+});
+
+test('#804 fix1 option-like prompt is passed after separator', () => {
+  const f = freshScenario({ dialog: false });
+  const result = f.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--prompt', '-audit #804');
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+});
+
+test('#804 fix1 invalid pane bytes fail on one line', () => {
+  const f = freshScenario({ invalidUtf8: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /UnicodeDecodeError/);
   assert.equal((result.stderr + result.stdout).trim().split('\n').length, 1);
 });
