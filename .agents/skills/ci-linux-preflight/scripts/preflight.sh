@@ -6,4 +6,7 @@ if (( $# < 1 )); then
   exit 2
 fi
 script_dir=${0:A:h}
+if [[ $1 == repro ]]; then
+  exec node "$script_dir/preflight.mjs" "$@"
+fi
 exec node "$script_dir/preflight.mjs" run "$@"

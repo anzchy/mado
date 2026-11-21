@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { workflowAt, WorkflowError } from './workflow.mjs';
 import { blankSummary, serializeSummary, checkSummary } from './summary.mjs';
+import { reproLocal, checkReproSummary } from './repro.mjs';
 
 const root = resolve(import.meta.dirname, '../../../..');
 const sshOptions = ['-a', '-x', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4'];
@@ -224,6 +225,8 @@ try {
     const [head, ...rest] = args;
     if (!head) throw Object.assign(new Error('usage: run <sha> [options]'), { exitCode: 2 });
     status = local(head, parseFlags(rest));
+  } else if (mode === 'repro') {
+    status = reproLocal(args);
   } else if (mode === 'remote') {
     const [repo, head, job, hash, stepTimeout, deadline, ...rest] = args;
     status = remote(resolve(repo), head, job, hash, positive(stepTimeout, 'step timeout'), positive(deadline, 'deadline'), parseFlags(rest).timeBin);
@@ -232,7 +235,8 @@ try {
     const opts = parseFlags(rest);
     if (!file || !opts.expectHead) throw Object.assign(new Error('summary-check needs file and --expect-head'), { exitCode: 2 });
     const repo = resolve(opts.repo ?? root);
-    process.stdout.write(`${checkSummary(readFileSync(file, 'utf8'), opts.expectHead, workflowAt(repo, opts.expectHead, opts.job))}\n`);
+    const raw = readFileSync(file, 'utf8');
+    process.stdout.write(`${raw.startsWith('mode=repro\n') ? checkReproSummary(raw, opts.expectHead) : checkSummary(raw, opts.expectHead, workflowAt(repo, opts.expectHead, opts.job))}\n`);
     status = 0;
   } else if (mode === 'extract') {
     const [head, ...rest] = args;

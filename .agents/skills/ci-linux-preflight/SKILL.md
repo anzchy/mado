@@ -24,6 +24,19 @@ Use this before pushing changes matching `scripts/**/*.{mjs,cjs,js,py,sh,zsh}`, 
 
 The host is Ubuntu 22.04; GitHub `ubuntu-latest` is Ubuntu 24.04. The server's 274-second test run is diagnostic and does not claim CI timing parity; GitHub's Agent tooling job timeout is five minutes. An unreachable host produces `NOT VERIFIED` and never blocks a merge.
 
+## Reproduce a failed commit
+
+Run `.agents/skills/ci-linux-preflight/scripts/preflight.sh repro <sha> [<sha>…] --cmd "node --test scripts/ci/example.test.mjs" [--expect fail,pass] [--step-timeout seconds] [--deadline seconds]`. The command may be `node --test <repo paths>…`, `node <repo script> [plain arguments]`, or `python3 -m unittest <repo paths>…`. It rejects shell syntax, network commands, absolute paths, parent traversal, and missing paths at any selected commit before SSH. Review every commit first. `--expect` has one `fail` or `pass` value per commit. A mismatch exits 1, a match exits 0, and a busy lock or unreachable host exits 75 with `NOT VERIFIED`.
+
+The repro uses a full-history bundle, detached checkout with a HEAD check for each commit, `env-check.sh`, isolated command environment, bounded steps, and the same `~/ci/.lock`. It writes an immutable `*-repro-summary.txt` under `~/.mado/ci-linux/<first-sha>/` with each exit, duration and up to five failing test names, host kernel and Node version, and `DONE`. Validate with `node .agents/skills/ci-linux-preflight/scripts/preflight.mjs summary-check <summary-file> --expect-head <first-full-sha>`. The printed PR body lines have this form: `Linux-Repro (supplementary): <sha7> <command> FAIL|PASS|NOT VERIFIED`. A Linux pass is never binding.
+
+| CI failure | Linux reproducible? | Reason |
+|---|---|---|
+| Agent tooling portable Node/Python checks, including heavy-lock AC-4 | yes | Run the exact repo check at each commit; host and GitHub Ubuntu versions can differ. |
+| Design check portable Node/Python checks, including the app-compare crash fixture | yes, one command at a time | Repro runs a named check, not the whole job or browser appearance. |
+| PR body Gates, Native inputs, Package coverage, Walking skeleton | only a portable repo command | Workflow aggregation and trusted-base inputs need CI context. |
+| Swift, AppKit, Vision, Package tests, App tests, App host comparison, ledger HTML check on macOS | no | They require macOS frameworks, Xcode, or the app host. |
+
 ## Never
 
 - Treat the server pass as binding, skip a required GitHub check, or use `--admin` because it passed.
