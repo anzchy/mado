@@ -26,6 +26,7 @@ PR 描述写 `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily swee
 | UI、颜色、间距、组件 | [`design/DESIGN.md`](design/DESIGN.md)、[原生映射](design/picsee-ui-system/native/README.md)、[状态稿](design/prototypes/picsee-browser/states/README.md)、[UI 对照契约](docs/agents/ui-parity-contract.md)（20 页 mockup，开发计划 §1.3 有页面到工作包的映射） |
 | 参考 Picview 的某个功能 | 功能清单 `docs/PICVIEW_FEATURES.md`、技术分析 `docs/PICVIEW_ANALYSIS.md`（本地研究资料，不在公开仓库）。这些只是静态证据，不是已测行为 |
 | 多 agent 协作、brief、审计 | [迁移计划](docs/plans/20261021-herdr-roster-migration-plan.md)、[多模型 roster 使用指南](docs/agents/claude-driven-ai-providers.md)；接手 delegator 先用 skill [`mado-delegator`](.agents/skills/mado-delegator/SKILL.md)（`.claude/skills/` 下为指向它的软链接） |
+| 与 RClick、mdpro 共用的锁（路径、环境变量、退出码、嵌套、谁能删什么） | [`docs/agents/shared-locks-contract.md`](docs/agents/shared-locks-contract.md) |
 | Linux CI 预检、Linux-only 失败复现 | [`ci-linux-preflight`](.agents/skills/ci-linux-preflight/SKILL.md)；仅补充证据，GitHub CI 仍是唯一约束结果 |
 | 功能做完后在真机验收、更新账簿、跑 gardener | [功能验收指南](docs/guide/feature-verification-guide.md) |
 | 性能与验证记录 | `docs/validation/P*.md`；指标定义见开发计划 §10 |
