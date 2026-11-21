@@ -67,6 +67,63 @@ elif mode == 'zombie-group':
     finally:
         child.wait()
         child.stdout.close()
+elif mode == 'proc-ownership':
+    class Entry:
+        def __init__(self, pid):
+            self.name = str(pid)
+            self.path = f'/proc/{pid}'
+    class Scan:
+        def __init__(self, rows):
+            self.rows = rows
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def __iter__(self): return iter(Entry(pid) for pid in self.rows)
+    snapshots = []
+    current = {}
+    scans = [0]
+    def scandir(path):
+        assert path == '/proc'
+        scans[0] += 1
+        current.clear()
+        current.update(snapshots[min(scans[0] - 1, len(snapshots) - 1)])
+        return Scan(current)
+    def stat_bytes(path):
+        row = current[int(path.parent.name)]
+        if isinstance(row, Exception): raise row
+        state, group = row
+        return f'{path.parent.name} (fixture) {state} 1 {group} 0 0 0'.encode()
+    with patch.object(launcher.sys, 'platform', 'linux'), \
+         patch.object(launcher.os, 'scandir', side_effect=scandir), \
+         patch.object(Path, 'read_bytes', stat_bytes), \
+         patch.object(launcher.os, 'killpg', return_value=None):
+        # Nested corroboration must see its own job group and a registered
+        # deeper group, but must never claim kernel process group zero.
+        snapshots = [{2: ('S', 0), 7001: ('S', 7000), 7101: ('S', 7100)}]
+        scans[0] = 0
+        groups = {7100}
+        rows = launcher.owned_state(7000, groups, set(), excluded=7000, query=lambda: [])
+        assert sorted(rows) == [(7001, 7000), (7101, 7100)], rows
+        signalled = []
+        with patch.object(launcher.os, 'kill', side_effect=lambda pid, sig: signalled.append(pid)):
+            launcher.signal_owned(rows, signal.SIGTERM)
+        assert sorted(signalled) == [7001, 7101], signalled
+        # A live root row does not justify dropping a registered group that
+        # the first process listing missed.
+        snapshots = [{7101: ('S', 7100)}]
+        scans[0] = 0
+        groups = {7100}
+        assert launcher.owned_state(7000, groups, set(), query=lambda: [(7001, 7000)]) == [(7001, 7000), (7101, 7100)]
+        assert groups == {7100}
+        # An enumeration batch can see the zombie parent before a newly
+        # reforked live child appears in the next scan.
+        snapshots = [{7000: ('Z', 7000)}, {7000: ('Z', 7000), 7002: ('S', 7000)}]
+        scans[0] = 0
+        assert launcher.owned_state(7000, set(), set(), query=lambda: []) == [(7002, 7000)]
+        assert scans[0] >= 2
+        # A failed stat read cannot be mistaken for proof of absence.
+        snapshots = [{7002: PermissionError(13, 'unreadable stat')}]
+        scans[0] = 0
+        assert launcher.owned_state(7000, set(), set(), query=lambda: []) is None
 elif mode == 'eperm-signal':
     with patch.object(launcher.os, 'kill', side_effect=PermissionError(1, 'no permission')):
         launcher.signal_owned([(123456789, 123456789)], signal.SIGTERM)
