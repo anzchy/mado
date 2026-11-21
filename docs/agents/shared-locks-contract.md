@@ -42,6 +42,7 @@ Design background: [heavy-lock-contract.md](heavy-lock-contract.md).
   - Each holder has `holderPid`, `wrapperPid`, `wrapperAlive`, `childPids`, `ageSeconds`, `budgetSeconds` and `orphanOverBudget`.
   - Use the absolute path: from another repo, `scripts/heavy-lock.sh` names that repo's file or nothing.
   - An argv of exactly `status` or `--status` always runs this diagnostic, never a command. To run your own program called `status`, give its path (`./status`).
+  - With any extra argument it is **not** the diagnostic: `heavy-lock.sh status --json` queues and runs a command named `status` and fails (probed at `d91ae3c2`: exit 70, `No such file or directory: 'status'`). Call it with that one argument only.
   - An empty `holders` list does not prove the kernel lock is free, and it is not permission to start work beside the lock.
 - **GUI status**: `gui-lock.sh status` prints `FREE`, or `HELD:` followed by the owner lines.
 - **Optional diagnostics.** A consumer may ignore both:
@@ -103,6 +104,16 @@ Probed with temporary lock paths:
 
 The guardian ignores INT, TERM and HUP, so those signals alone do not release the heavy lock. If the supervisor **and** the guardian are both SIGKILLed (`pkill -9`, jetsam), a job that is still running loses flock protection, and another job can enter beside it. Exclusion is therefore not guaranteed after both holders die. Neither an empty `status` list nor a missing record is permission to start a job while the old job's processes are alive. Source: `docs/agents/heavy-lock.md`, line 7.
 
+## Owner recovery
+
+Another project only reports a stuck heavy lock; it never recovers it. The owning project identifies its own guardian from the record's `cmd` line, which names the guardian's `heavy-lock.py` path and so its worktree. It may SIGKILL that one guardian PID, and only after `status` shows all three of these for that holder:
+
+- `wrapperAlive=false`;
+- no `childPids`;
+- `ageSeconds` over `budgetSeconds`.
+
+It never touches the lock file.
+
 ## Who may unlink or rename what
 
 - **Nobody** unlinks or renames the persistent files `heavy.lock` and `desktop-gui.mutex`.
@@ -123,19 +134,20 @@ The guardian ignores INT, TERM and HUP, so those signals alone do not release th
 There is one source: Mado's repo copy, `scripts/heavy-lock.sh` plus `scripts/tdd/heavy-lock.py`. `gui-lock.sh` follows mdpro's reference protocol. Another project calls it or installs a pinned snapshot (#738 WI-2); it does not edit a copy.
 
 - **heavy-lock:** rclick-delegator's message of 2026-11-21 says RClick calls `/Users/jack/Documents/mac-app/picsee/scripts/heavy-lock.sh`. No such path appears in RClick main's tree (`git grep`), so this rests on the message alone.
-- **gui-lock:** RClick's `gui-lock.sh` is a port with the same protocol. Only `project`, the default session and the test variable names differ.
-- **Open:** nothing yet proves the GUI copies agree (#738 WI-3).
+- **gui-lock:** checked 2026-11-21: RClick main `435790d` `.agents/skills/macos-device-test/scripts/gui-lock.sh` diffed against Mado's has no code differences. Only `project`, the default session, the test variable names and comments differ. mdpro's copy was not compared.
+- **Open:** nothing keeps the GUI copies in agreement automatically (#738 WI-3).
 
-## RClick's constraints (review pending)
+## RClick's constraints (reviewed by the RClick delegator on 2026-11-21)
 
-These are the interface points rclick-delegator listed on 2026-11-21. It also gave an OK on the #768 diff. RClick is reviewing this page now; none of it is a confirmed agreement yet.
+These are the interface points rclick-delegator listed on 2026-11-21; it also gave an OK on the #768 diff. It reviewed this page at `b47fd1ed` on 2026-11-21 (verdict: OK to merge with six edits, all applied here).
 
-- **Waiting** is bounded by `MADO_HEAVY_LOCK_WAIT_SECS` (default 1800 s), then exit 75. Waiters poll: `LOCK_NB` every 50 ms on the flock, every 5 s on the mdpro directory. There is **no first-come order** among waiters.
+- **No first-come order among waiters.** Whoever polls first after a release wins; a long waiter can lose to a newcomer.
+- **Waiting** is bounded by `MADO_HEAVY_LOCK_WAIT_SECS` (default 1800 s), then exit 75. Waiters poll: `LOCK_NB` every 50 ms on the flock, every 5 s on the mdpro directory.
 - **Exit codes:** 64 for usage and 75 for a wait timeout. Otherwise the command's own exit code passes through, with three exceptions:
   - 124 (run cap);
   - 70 (unsafe);
   - the argv `status` / `--status`, which is never run as a command.
-- **Run cap:** 1800 s for any command not recognised as `swift test` or `xcodebuild -list`. Override it with `MADO_HEAVY_LOCK_EXEC_SECS` before launch.
+- **Run cap:** 1800 s for any command not recognised as `swift test` or `xcodebuild -list`. Override it with `MADO_HEAVY_LOCK_EXEC_SECS` before launch. A ladder that runs longer than the cap exits 124, which looks like a test failure, so set `MADO_HEAVY_LOCK_EXEC_SECS` explicitly for such a command.
 - **Lock paths:** `~/.mado/locks/heavy.lock` and `~/.picsee/locks/heavy.lock` name the same lock. No lock state path moves unless all three projects agree, in a quiet window.
 - **Exclusion** holds while either the supervisor or the guardian is alive (see Holder loss).
 - **Optional for consumers:** `status`, alerts and status records.
@@ -150,4 +162,4 @@ These are the interface points rclick-delegator listed on 2026-11-21. It also ga
 - DISCREPANCY: the resource-broker skill says the locks give mutual exclusion "in arrival order". The code polls, so order among waiters is not guaranteed.
 - DISCREPANCY: a nested call that is the job's exec'd process exits 70 (`nested admission refused: Operation not permitted`). This covers both the direct `heavy-lock.sh heavy-lock.sh <cmd>` and a single-command `bash -c "heavy-lock.sh …"`. Nesting from a child of a running shell works. No other doc mentions this.
 - DISCREPANCY: "on incomplete cleanup the mdpro directory is retained" does not hold after `--mark-host-unknown`. `heavy-lock.py` (~999–1002) sets `retain_shared` from the known cleanup before the unknown-host mark turns `cleanup` into `incomplete`, so `finally` (~1066) releases the directory while the run exits 70 incomplete. Known limitation; no code change here.
-- `UNVERIFIED`: that RClick has no remaining caller relying on the inherited flock FD (`MADO_HEAVY_FLOCK_FD`), which #768 removed.
+- Checked 2026-11-21: `git grep` for `MADO_HEAVY_FLOCK_FD` and `MADO_HEAVY` in RClick main `435790d` tracked files finds nothing, so no tracked RClick caller relies on the inherited flock FD that #768 removed. Untracked RClick briefs are not covered.
