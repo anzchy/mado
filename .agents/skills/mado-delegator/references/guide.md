@@ -541,7 +541,11 @@ Never pipe `git rebase`; check its exit status. Write logs to `$(git rev-parse -
     the result is `CODE differ` with the reason; upstream code/module overlap prints `UPSTREAM OVERLAP <path>` and
     goes to the two-auditor combination check. Classification never waives a known High: it stays open until fixed
     and confirmed. The allowlist is a repo file; changing it is an audit-rule change, so quote the owner in its header
-    and in the PR body. `merge-gate.sh` still requires `CODE same ` and refuses this result (follow-up).
+    and in the PR body. `merge-gate.sh --audited` accepts this result (#789) only when rebase-verify exits 0 with
+    exactly one `CODE` line, prints no refusal line (`UPSTREAM OVERLAP`, `DOCS …`, acceptance text, `CODE differ`), and
+    names at least one `DIFF` path, every one of them in the allowlist read from main. The PR body must also carry one
+    `audit` row in `## Gates` with `PASS` and `no Critical/High`, and its `Still open` section must name no Critical or
+    High. Anything else is `would-refuse`. Plain `CODE same` is checked as before.
   - `CODE differ` (exit 1): the compared patch changed, so the combination is new. Send both auditors a quick
     combination check of the resolved hunks, then gates and a new device smoke. (2026-10-26: #134 × #108 and P3-10 ×
     #134 combination bugs were caught exactly this way.)

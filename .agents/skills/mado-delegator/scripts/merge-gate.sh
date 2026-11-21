@@ -8,6 +8,7 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,60 @@ def run(args, cwd=None):
     if result.returncode:
         raise LookupFailed(f'{" ".join(map(str, args))} failed: {result.stderr.strip() or result.stdout.strip()}')
     return result.stdout
+
+
+
+# #789: "CODE same, DOCS differ" (#733) carries the audited verdicts over only under rebase-verify's own conditions. They
+# are checked again here from its output and main's allowlist, so a PR's own copy of rebase-verify cannot widen them,
+# and the PR body must show that no known Critical/High is open (the classification never waives one).
+REFUSALS = ('UPSTREAM OVERLAP ', 'DOCS ', 'acceptance text ', 'CODE differ')
+
+
+def docs_differ(output, new_base, worktree, body):
+    lines = output.splitlines()
+    bad = [line for line in lines if line.startswith(REFUSALS)]
+    if bad:
+        raise ConditionFailed('rebase-verify DOCS differ with a refusal: ' + '; '.join(bad))
+    sys.path.insert(0, str(scripts))
+    from doc_rows import ALLOWLIST_REPO_PATH, load_allowlist
+    shown = subprocess.run(['git', 'show', f'{new_base}:{ALLOWLIST_REPO_PATH}'], cwd=worktree, text=True,
+                           capture_output=True)
+    if shown.returncode:
+        raise ConditionFailed(f'rebase-verify DOCS differ but main has no {ALLOWLIST_REPO_PATH}')
+    allowed = load_allowlist(text=shown.stdout)
+    paths = [line[5:] for line in lines if line.startswith('DIFF ')]
+    outside = [path for path in paths if path not in allowed]
+    if not paths or outside:
+        raise ConditionFailed('rebase-verify DOCS differ needs every DIFF path in main\'s allowlist: ' +
+                              (', '.join(outside) if outside else 'no DIFF path'))
+    known_high(body)
+
+
+def section(body, heading):
+    """The lines under the first Markdown heading named `heading`, up to the next heading."""
+    found, out = False, []
+    for line in body.splitlines():
+        if re.match(r'^#{1,6}\s', line):
+            if found:
+                break
+            found = re.match(rf'^#{{1,6}}\s+{heading}\s*$', line.strip(), re.I) is not None
+        elif found:
+            out.append(line)
+    return out if found else None
+
+
+def known_high(body):
+    gates = section(body, 'Gates') or []
+    audit = [[cell.strip() for cell in line.strip().strip('|').split('|')] for line in gates
+             if re.match(r'^\|\s*audit\s*\|', line.strip(), re.I)]
+    if len(audit) != 1 or len(audit[0]) != 4 or audit[0][1] != 'PASS' or \
+            not re.search(r'\bno Critical/High\b', audit[0][3], re.I):
+        raise ConditionFailed('DOCS differ never waives a known High: the PR body needs one audit gate row with PASS '
+                              'and "no Critical/High"')
+    named = [line.strip() for line in section(body, 'Still open') or [] if re.search(r'\b(Critical|High)\b', line)]
+    if named:
+        raise ConditionFailed('DOCS differ never waives a known High: Still open names ' + '; '.join(named))
+
 
 head = 'unknown'
 try:
@@ -90,9 +145,12 @@ try:
         verify = subprocess.run(['zsh', str(head_worktree / '.agents/skills/mado-delegator/scripts/rebase-verify.sh'),
                                  old_base, audited, new_base, head], cwd=head_worktree,
                                 text=True, capture_output=True)
-        if verify.returncode or 'CODE same ' not in verify.stdout:
+        verdicts = [line for line in verify.stdout.splitlines() if line.startswith('CODE ')]
+        if verify.returncode or len(verdicts) != 1 or not verdicts[0].startswith(('CODE same ', 'CODE same, DOCS differ ')):
             raise ConditionFailed('rebase-verify CODE same required for audited head to PR head: ' +
                                   (verify.stdout.strip() or verify.stderr.strip()))
+        if verdicts[0].startswith('CODE same, DOCS differ '):
+            docs_differ(verify.stdout, new_base, head_worktree, candidate['body'] or '')
     with tempfile.TemporaryDirectory(prefix='mado-merge-body-') as temporary:
         body = pathlib.Path(temporary) / 'body.md'
         body.write_text(candidate['body'] or '')
