@@ -226,6 +226,7 @@ test('760 load preflight writes the facts, refuses over a threshold before any l
     const over = fixture(t, 'pass', 2, true, {env, diff: 'App/MadoApp.swift'});
     assert.equal(over.result.status, 2, `${JSON.stringify(env)} ${over.result.stderr}`);
     assert.match(over.summary, /^refused: preflight: /m);
+    assert.match(over.summary, /^result=no evidence$/m);
     assert.match(over.summary, reason);
     assert.match(over.summary, /^load=\S+ mem_free=\S+ pressure=\S+$/m);
     assert.doesNotMatch(over.summary, /^DONE$/m);

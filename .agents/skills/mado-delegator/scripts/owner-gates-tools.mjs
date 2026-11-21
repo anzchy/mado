@@ -254,7 +254,7 @@ export function loadVerdict(facts, thresholds) {
   return {line, notes, refuse: over.length ? over.join('; ') : null};
 }
 export function readFacts(sysctl = process.env.OWNER_GATES_SYSCTL || '/usr/sbin/sysctl') {
-  const read = name => { const r = spawnSync(sysctl, ['-n', name], {encoding: 'utf8', timeout: 5000}); return r.status === 0 ? r.stdout.trim() : null; };
+  const read = name => { const r = spawnSync(sysctl, ['-n', name], {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'}); return r.status === 0 ? r.stdout.trim() : null; };
   return parseFacts({loadavg: read('vm.loadavg'), level: read('kern.memorystatus_level'), pressure: read('kern.memorystatus_vm_pressure_level')});
 }
 
@@ -275,7 +275,7 @@ export function competingHeavyProcesses(output, selfPid = process.pid) {
   return found;
 }
 export function readCompetingHeavyProcesses(ps = process.env.OWNER_GATES_PS || '/bin/ps') {
-  const result = spawnSync(ps, ['-axo', 'pid=,comm=,args='], {encoding:'utf8', timeout:5000, maxBuffer:16*1024*1024});
+  const result = spawnSync(ps, ['-axo', 'pid=,comm=,args='], {encoding:'utf8', timeout:5000, killSignal:'SIGKILL', maxBuffer:16*1024*1024});
   return result.status === 0 ? competingHeavyProcesses(result.stdout) : null;
 }
 

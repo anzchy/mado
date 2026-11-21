@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
@@ -232,4 +232,22 @@ test('735 competing heavy processes list only names and PIDs', () => {
   const rows='101 /usr/bin/swift-frontend swift-frontend -frontend -primary-file secret.swift\n102 /bin/sleep sleep 20\n103 /usr/bin/python3 python3 scripts/tdd/heavy-lock.py --guardian 5 8\n104 /usr/bin/node node scripts/tdd/unit-lane.mjs\n';
   assert.deepEqual(competingHeavyProcesses(rows, 999), ['101:swift-frontend', '103:python3', '104:node']);
   assert.equal(competingHeavyProcesses('bad process output', 999), null);
+});
+
+test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline', {timeout:20000}, t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gate-probe-'));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const sysctl=path.join(dir,'sysctl'), ps=path.join(dir,'ps');
+  fs.writeFileSync(sysctl,`#!${process.execPath}\nif(process.argv[3]==='vm.loadavg'){process.on('SIGTERM',()=>{});setTimeout(()=>console.log('{ 1.00 1.00 1.00 }'),7000);}else console.log(process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
+  fs.writeFileSync(ps,`#!${process.execPath}\nprocess.on('SIGTERM',()=>{});setTimeout(()=>console.log('101 /usr/bin/swift-frontend swift-frontend'),7000);\n`,{mode:0o755});
+  const tool=new URL('./owner-gates-tools.mjs',import.meta.url).pathname;
+  for(const [env,expected] of [[{OWNER_GATES_SYSCTL:sysctl,OWNER_GATES_PS:'/bin/ps'},'preflight-note: load average unreadable'],
+    [{OWNER_GATES_SYSCTL:'/usr/sbin/sysctl',OWNER_GATES_PS:ps},'preflight-note: competing heavy process query unreadable']]){
+    const started=Date.now();
+    const run=spawnSync(process.execPath,[tool,'load-preflight'],{env:{...process.env,...env},encoding:'utf8',timeout:12000,killSignal:'SIGKILL'});
+    assert.ifError(run.error);
+    assert.equal(run.status,0,run.stderr);
+    assert.ok(Date.now()-started<6500,`probe exceeded hard deadline: ${Date.now()-started}ms`);
+    assert.match(run.stdout,new RegExp(expected));
+  }
 });
