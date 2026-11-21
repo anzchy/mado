@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Kernel-owned flock lifetime, inherited by the heavy job and its descendants.
+"""Kernel-owned flock lifetime, held by the supervisor and its guardian.
 
-Python's standard fcntl + pass_fds make descriptor inheritance explicit on macOS.
-We only close our descriptor, never LOCK_UN: unlocking the shared open-file
-description would also release a surviving descendant's lock after owner death.
+Jobs receive a registration socket, not the flock descriptor. A nested heavy-lock
+supervisor receives a duplicate descriptor only after registration. Never LOCK_UN:
+unlocking the shared open-file description would release another owner's guard.
 """
 import errno
 import fcntl
@@ -176,8 +176,8 @@ def exit_query():
     return process_rows(EXIT_QUERY_SUBSTITUTES.get(token, ['/usr/bin/false']))
 
 
-def send_control(fd, message):
-    """Register over an inherited socket and receive a private ACK endpoint."""
+def send_control(fd, message, expect_fd=False):
+    """Register over an inherited socket and receive a private ACK and optional FD."""
     try:
         control = socket.socket(fileno=os.dup(fd))
         local, reply = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -185,13 +185,22 @@ def send_control(fd, message):
             control.sendmsg([json.dumps(message).encode()],
                             [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array('i', [reply.fileno()]))])
             local.settimeout(2)
-            return local.recv(256)
+            if not expect_fd:
+                return local.recv(256)
+            data, ancillary, _, _ = local.recvmsg(256, socket.CMSG_SPACE(array('i').itemsize))
+            received = array('i')
+            for level, kind, payload in ancillary:
+                if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                    received.frombytes(payload[:len(payload) - len(payload) % received.itemsize])
+            for extra in received[1:]:
+                os.close(extra)
+            return data, (received[0] if received else None)
         finally:
             local.close()
             reply.close()
             control.close()
     except (OSError, ValueError, json.JSONDecodeError):
-        return b''
+        return (b'', None) if expect_fd else b''
 
 
 def guardian_send(fd, kind, pid=0):
@@ -283,7 +292,7 @@ def guardian_main(read_fd, ready_fd):
 
 def receive_control(control, groups, hosts, session, guardian_fd=None, flock_required=False,
                     deadline=None, accept_groups=True, ancestor_control_fd=None,
-                    shared_owned=False, unknown=None):
+                    shared_owned=False, unknown=None, flock_fd=None):
     """Confirm registration before a nested supervisor launches its child."""
     if control is None:
         return
@@ -301,6 +310,7 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
             if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
                 fds.frombytes(payload[:len(payload) - len(payload) % fds.itemsize])
         answer = b'NO'
+        grant_flock = False
         try:
             request = json.loads(data)
             kind = request.get('kind')
@@ -310,11 +320,15 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
                     os.getpgid(pid) == pid and os.getsid(pid) == session:
                 forwarded = True
                 if ancestor_control_fd is not None:
-                    forwarded = json.loads(send_control(ancestor_control_fd, request)).get('status') == 'OK'
+                    upstream, duplicate = send_control(ancestor_control_fd, request, expect_fd=True)
+                    if duplicate is not None:
+                        os.close(duplicate)
+                    forwarded = json.loads(upstream).get('status') == 'OK'
                 if forwarded and guardian_send(guardian_fd, 'group', pid):
                     groups.add(pid)
                     answer = json.dumps({'status': 'OK', 'parent': os.getpid(),
                                          'deadline': deadline, 'shared': shared_owned}).encode()
+                    grant_flock = flock_required
             elif kind == 'host' and pid > 0:
                 os.kill(pid, 0)
                 forwarded = ancestor_control_fd is None or send_control(ancestor_control_fd, request) == b'OK'
@@ -331,7 +345,15 @@ def receive_control(control, groups, hosts, session, guardian_fd=None, flock_req
             pass
         for fd in fds:
             try:
-                os.write(fd, answer)
+                if grant_flock and flock_fd is not None:
+                    endpoint = socket.socket(fileno=os.dup(fd))
+                    try:
+                        endpoint.sendmsg([answer], [(socket.SOL_SOCKET, socket.SCM_RIGHTS,
+                                                      array('i', [flock_fd]))])
+                    finally:
+                        endpoint.close()
+                else:
+                    os.write(fd, answer)
             except OSError:
                 pass
             finally:
@@ -644,6 +666,8 @@ def supervised_main():
         print('[heavy-lock] CI mode refused outside workflow', file=sys.stderr, flush=True)
         return 70
     inherited_flock = os.environ.get('MADO_HEAVY_FLOCK_FD')
+    expected_flock = os.environ.get('MADO_HEAVY_FLOCK_EXPECTED') == '1'
+    received_flock = None
     parent_deadline = None
     parent_shared = False
     ancestor_control_fd = None
@@ -655,8 +679,8 @@ def supervised_main():
             if inherited_flock:
                 os.fstat(int(inherited_flock))
             os.setpgid(0, 0)
-            reply = send_control(control_fd, {'kind': 'group', 'pid': os.getpid(),
-                                              'flock': bool(inherited_flock)})
+            reply, received_flock = send_control(control_fd, {'kind': 'group', 'pid': os.getpid(),
+                'flock': bool(inherited_flock) or expected_flock}, expect_fd=True)
             try:
                 handoff = json.loads(reply)
             except (ValueError, TypeError) as error:
@@ -665,8 +689,19 @@ def supervised_main():
             if handoff['status'] != 'OK' or not math.isfinite(parent_deadline) or \
                     parent_deadline <= time.monotonic() or int(handoff['parent']) <= 0:
                 raise ValueError('parent registration unavailable')
+            if expected_flock and received_flock is None:
+                raise ValueError('parent did not transfer the required flock descriptor')
+            if received_flock is not None:
+                if inherited_flock:
+                    os.close(received_flock)
+                    received_flock = None
+                else:
+                    inherited_flock = str(received_flock)
+                    os.fstat(received_flock)
             parent_shared = handoff.get('shared') is True
         except (OSError, ValueError) as error:
+            if received_flock is not None:
+                os.close(received_flock)
             print(f'[heavy-lock] nested admission refused: {error}', file=sys.stderr, flush=True)
             return 70
     status_path = os.environ.get('MADO_HEAVY_STATUS_PATH')
@@ -701,7 +736,7 @@ def supervised_main():
     if not held:
         lock.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
-        os.set_inheritable(fd, True)
+        os.set_inheritable(fd, False)
     received = []
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda number, frame: received.append(number))
@@ -798,19 +833,11 @@ def supervised_main():
         child_env.pop('MADO_HEAVY_FAULT_EXIT_QUERY_PLAN', None)
         if acquired:
             child_env['MDPRO_HEAVY_LOCK_HELD'] = '1'
-        if fd is not None:
-            child_env['MADO_HEAVY_FLOCK_FD'] = str(fd)
-        elif inherited_flock:
-            child_env['MADO_HEAVY_FLOCK_FD'] = inherited_flock
-        else:
-            child_env.pop('MADO_HEAVY_FLOCK_FD', None)
+        child_env.pop('MADO_HEAVY_FLOCK_FD', None)
+        child_env['MADO_HEAVY_FLOCK_EXPECTED'] = '1' if flock_required else '0'
         passed = [worker_control.fileno()]
         if guardian_write is not None:
             passed.append(guardian_write)
-        if fd is not None:
-            passed.append(fd)
-        elif inherited_flock:
-            passed.append(int(inherited_flock))
         launched = time.monotonic()
         launched_wall = time.time()
         execution_deadline = min(launched + budget, parent_deadline) if nested else launched + budget
@@ -845,7 +872,8 @@ def supervised_main():
             result = child.poll()
             receive_control(parent_control, groups, hosts, session, guardian_write, flock_required,
                             execution_deadline, ancestor_control_fd=ancestor_control_fd,
-                            shared_owned=acquired or parent_shared, unknown=unknown)
+                            shared_owned=acquired or parent_shared, unknown=unknown,
+                            flock_fd=fd if fd is not None else int(inherited_flock) if inherited_flock else None)
             if guardian is not None and guardian.poll() is not None:
                 guardian_lost = True
                 print('[heavy-lock] guardian disappeared before cleanup', file=sys.stderr, flush=True)
@@ -996,6 +1024,8 @@ def supervised_main():
             release_shared(shared)
         if fd is not None:
             os.close(fd)
+        if received_flock is not None:
+            os.close(received_flock)
     if cleanup != 'complete':
         return 70
     if guardian_lost:

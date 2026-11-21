@@ -298,6 +298,27 @@ redTest('nestedFlockCredentialSurvivesThreeLevels', async () => {
   assert.ok(existsSync(marker),'third level receives inherited flock authority');
 }, {timeout:7000});
 
+redTest('detachedChildCannotKeepFlockAfterWrapperExits', async () => {
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
+  const pidFile=path.join(env.HOME,'detached-pid');
+  const code=`import os,pathlib,subprocess,sys
+child=subprocess.Popen(['sleep','8'],start_new_session=True,close_fds=False,
+    stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+pathlib.Path(sys.argv[1]).write_text(str(child.pid))`;
+  let pid;
+  try {
+    const first=await run(['python3','-c',code,pidFile],env);
+    assert.equal(first.code,0,first.output);
+    pid=Number(readFileSync(pidFile,'utf8'));
+    process.kill(pid,0);
+    const next=await run(['true'],{...env,MADO_HEAVY_LOCK_WAIT_SECS:'0.4'});
+    assert.equal(next.code,0,`detached child ${pid} retained flock: ${next.output}`);
+    process.kill(pid,0);
+  } finally {
+    if(pid) try {process.kill(pid,'SIGKILL');} catch(error) {if(error.code!=='ESRCH') throw error;}
+  }
+}, {timeout:7000});
+
 redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
   const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const status=path.join(env.HOME,'nested-status.json'), sibling=path.join(env.HOME,'sibling');
