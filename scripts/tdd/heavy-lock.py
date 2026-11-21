@@ -605,7 +605,10 @@ def owned_state(root, groups, hosts, excluded=0, query=process_rows):
         # original job no longer inherits our flock, so one such snapshot
         # must not release the supervisor's lock while its group still exists.
         active_group = False
-        for pgid in {root, *groups}:
+        # A nested supervisor shares root with its ancestor. Its own PID is
+        # excluded, but the ancestor can legitimately outlive this invocation.
+        # Only independently registered groups need kernel corroboration there.
+        for pgid in ({root, *groups} if not excluded else set(groups)):
             if pgid <= 0:
                 continue
             try:
@@ -613,17 +616,20 @@ def owned_state(root, groups, hosts, excluded=0, query=process_rows):
             except ProcessLookupError:
                 continue
             except PermissionError:
-                return None
+                # macOS can return EPERM for a zombie-only group. Resolve its
+                # members below before treating this as unknown cleanup.
+                active_group = True
+                continue
             active_group = True
         if active_group:
             if sys.platform.startswith('linux'):
-                alternate = proc_group_rows(root, groups, hosts, excluded)
-                if alternate is None:
-                    return None
-                live, zombies = alternate
-                if not live and not zombies:
-                    return None
+                alternate = proc_group_rows(root if not excluded else 0, groups, hosts, excluded)
             else:
+                alternate = ps_group_rows(root if not excluded else 0, groups, hosts, excluded)
+            if alternate is None:
+                return None
+            live, zombies = alternate
+            if not live and not zombies:
                 return None
     for pgid in tuple(groups):
         if not any(group == pgid for _, group in live):
@@ -669,6 +675,38 @@ def proc_group_rows(root, groups, hosts, excluded=0):
                         live.append((pid, pgid))
         return live, zombies
     except (OSError, ValueError):
+        return None
+
+
+def ps_group_rows(root, groups, hosts, excluded=0):
+    """Resolve a non-Linux empty snapshot without treating zombies as workers."""
+    try:
+        query = subprocess.Popen(['/bin/ps', '-axo', 'pid=,pgid=,stat='],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            output, _ = query.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            query.kill()
+            query.communicate()
+            return None
+        if query.returncode != 0:
+            return None
+        live = []
+        zombies = False
+        for line in output.splitlines():
+            fields = line.split()
+            if len(fields) != 3 or not fields[0].isdigit() or not fields[1].isdigit():
+                return None
+            pid, pgid, state = int(fields[0]), int(fields[1]), fields[2]
+            if pid == excluded or pid == query.pid:
+                continue
+            if pgid == root or pgid in groups or pid in hosts:
+                if state.startswith('Z'):
+                    zombies = True
+                else:
+                    live.append((pid, pgid))
+        return live, zombies
+    except OSError:
         return None
 
 
