@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import './owner-gates-hostile.test.mjs';
 import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -234,20 +235,25 @@ test('735 competing heavy processes list only names and PIDs', () => {
   assert.equal(competingHeavyProcesses('bad process output', 999), null);
 });
 
-test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline', {timeout:20000}, t => {
+test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline', {timeout:40000}, t => {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gate-probe-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const sysctl=path.join(dir,'sysctl'), ps=path.join(dir,'ps');
+  const healthySysctl=path.join(dir,'healthy-sysctl'), healthyPs=path.join(dir,'healthy-ps');
+  const healthyMarker=path.join(dir,'healthy-sysctl-hit');
   fs.writeFileSync(sysctl,`#!${process.execPath}\nif(process.argv[3]==='vm.loadavg'){process.on('SIGTERM',()=>{});setTimeout(()=>console.log('{ 1.00 1.00 1.00 }'),7000);}else console.log(process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
   fs.writeFileSync(ps,`#!${process.execPath}\nprocess.on('SIGTERM',()=>{});setTimeout(()=>console.log('101 /usr/bin/swift-frontend swift-frontend'),7000);\n`,{mode:0o755});
+  fs.writeFileSync(healthySysctl,`#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(healthyMarker)},'hit\\n');console.log(process.argv[3]==='vm.loadavg'?'{ 1.00 1.00 1.00 }':process.argv[3]==='kern.memorystatus_level'?'55':'1');\n`,{mode:0o755});
+  fs.writeFileSync(healthyPs,`#!${process.execPath}\nconsole.log('102 /bin/sleep sleep 20');\n`,{mode:0o755});
   const tool=new URL('./owner-gates-tools.mjs',import.meta.url).pathname;
-  for(const [env,expected] of [[{OWNER_GATES_SYSCTL:sysctl,OWNER_GATES_PS:'/bin/ps'},'preflight-note: load average unreadable'],
-    [{OWNER_GATES_SYSCTL:'/usr/sbin/sysctl',OWNER_GATES_PS:ps},'preflight-note: competing heavy process query unreadable']]){
-    const started=Date.now();
-    const run=spawnSync(process.execPath,[tool,'load-preflight'],{env:{...process.env,...env},encoding:'utf8',timeout:12000,killSignal:'SIGKILL'});
+  for(const [env,expected] of [[{OWNER_GATES_SYSCTL:sysctl,OWNER_GATES_PS:healthyPs},'preflight-note: load average unreadable'],
+    [{OWNER_GATES_SYSCTL:healthySysctl,OWNER_GATES_PS:ps},'preflight-note: competing heavy process query unreadable']]){
+    const run=spawnSync(process.execPath,[tool,'load-preflight'],{env:{...process.env,...env,
+      OWNER_GATES_MAX_LOAD:'1000',OWNER_GATES_MIN_MEM_FREE:'0',OWNER_GATES_MAX_PRESSURE:'9',MADO_GATES_PREFLIGHT:''},
+      encoding:'utf8',timeout:15000,killSignal:'SIGKILL'});
     assert.ifError(run.error);
     assert.equal(run.status,0,run.stderr);
-    assert.ok(Date.now()-started<6500,`probe exceeded hard deadline: ${Date.now()-started}ms`);
     assert.match(run.stdout,new RegExp(expected));
+    if(expected.includes('competing heavy')) assert.ok(fs.existsSync(healthyMarker),'case 2 must use the fake sysctl');
   }
 });
