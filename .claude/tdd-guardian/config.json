@@ -332,6 +332,15 @@
       "timeoutMs": 120000
     },
     {
+      "name": "ci-attempt-history-node",
+      "description": "Manual Node receipts for #788 item 4: failed job attempts hidden by reruns (scripts/ci/attempt-history.mjs) and the failing tests without a ticket, replayed from recorded API fixtures.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/attempt-history.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
       "name": "rebase-docs-py",
       "description": "Manual Python receipts for #733: rebase-verify's CODE same / DOCS differ / CODE differ results, the states README row merger and rebase-ledger.sh calling it.",
       "command": "python3 .agents/skills/mado-delegator/scripts/test_rebase_docs.py",

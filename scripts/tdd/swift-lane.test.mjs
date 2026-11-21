@@ -231,7 +231,7 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   const manualCI=['ci-app-compare-node','ci-code-name-node','ci-crash-evidence-node','ci-host-ownership-node','ci-host-owner-log-node','ci-host-register-node','ci-host-timeout-node','ci-642-removal-node','ci-642-hosted-build-node'];
   const manual631=['ci-package-coverage-clear-node','ci-package-coverage-export-node','ci-package-coverage-node','ci-package-coverage-workflow-node'];
   const manual758=['gates-alignment-node'];
-  const manual788=['ci-apt-retry-node'];
+  const manual788=['ci-apt-retry-node','ci-attempt-history-node'];
   const manual759=['known-flakes-node'];
   const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node','rebase-docs-py','reuse-check-node',...manualCI,...manual631,...manual758,...manual788,...manual759].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);

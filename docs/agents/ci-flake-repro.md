@@ -19,3 +19,14 @@ Only repeat dispatches raise the job timeout from 45 to 120 minutes. The loop's 
 A wait failure on the main thread prints a read-only AppKit snapshot synchronously with `appkit:` prefixes. A background failure returns its error immediately and schedules the snapshot on the main queue with `appkit(async):` prefixes; that later snapshot may describe a changed state. The snapshot includes activation, key/main windows, and one line per window with visibility, level, sheet and alert text. AppKit has no public window-to-NSAlert association, so only the first two noneditable labels are collected, with at most 256 views visited. Capture is limited to 20 windows (then `+N more windows`); each printed line, including its prefix, is under 1024 characters. Long text is truncated with `…`. Paths in titles/text are reduced to their last component; a home directory alone becomes `[home]`. The error description stays unchanged so existing exact failure signatures still match. This does not change AppKit classes or window state.
 
 Each run consumes macOS runner minutes. Use a focused filter before repeating the whole bundle.
+
+## Failed attempts hidden by reruns (#788)
+
+A rerun that ends green hides the failed first attempt. Before merging, list every failed job attempt of a PR:
+
+```sh
+node scripts/ci/attempt-history.mjs --pr <n>                     # or --sha <head-sha>; --body-file <draft body>
+node scripts/ci/attempt-history.mjs --pr <n> --require-tickets   # exit 1 while a needs-ticket line remains
+```
+
+It prints one table row per failed job attempt (attempt, failed step, failing tests from the job log, whether a later attempt or a green/cancelled run hid it) and one line per failing test. A test is `ticketed` when a PR body line names it together with `#<issue>`, or when `scripts/tdd/app-quarantine.json`, `.agents/skills/mado-verify/known-flakes.json` or `scripts/ci/known-flaky.mjs` lists it with an issue. Otherwise it is `needs-ticket`. Failed jobs whose log names no test (Walking skeleton, upload steps, timeouts, expired logs) are `no-test-names` and need no ticket. It is advisory by default (exit 0); `--require-tickets` makes it exit 1 for a needs-ticket line. Usage or API errors exit 2. `--fixture <json>` replays recorded responses without network and `--record <json>` writes new ones (`scripts/ci/fixtures/attempt-history/`).
