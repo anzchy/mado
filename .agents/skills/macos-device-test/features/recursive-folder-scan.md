@@ -11,7 +11,7 @@ The View menu can include nested folders in browsing. While Mado searches, it sh
 
 ## How to get to it (user POV)
 
-Use File → Open… to choose a folder. In View, switch **Include Subfolders** on or off while an image is displayed, then use Previous Image and Next Image to inspect the resulting set. While the folder is being read, use **Cancel Reading** (`取消读取`, AX `state.cancel-folder`); after a recoverable failure, use Retry.
+Use File → Open… to choose a folder. In View, switch **Include Subfolders** on or off from the folder grid, then open an image and use Previous Image and Next Image to inspect the resulting set. In a viewer opened from the grid, Include Subfolders and every View › Extensions item are disabled (and show no checkmark), so toggle from the grid (observed in run p-device-20261121). While the folder is being read, use **Cancel Reading** (`取消读取`, AX `state.cancel-folder`); after a recoverable failure, use Retry.
 
 ## Driving it with computer use
 
