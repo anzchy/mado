@@ -225,6 +225,8 @@ def guardian_main(read_fd, ready_fd):
             owner.write(f'pid={os.getpid()}\n'
                         f'cmd={sys.executable} {Path(__file__).resolve()} --guardian {read_fd} {ready_fd}\n'
                         f'started={time.strftime("%Y-%m-%dT%H:%M:%S%z")}\n'
+                        f'startedEpoch={time.time():.6f}\n'
+                        f'budgetSeconds={os.environ.get("MADO_HEAVY_GUARDIAN_BUDGET", "unknown")}\n'
                         f'supervisor={os.environ.get("MADO_HEAVY_GUARDIAN_SUPERVISOR", "unknown")}\n'
                         f'job={job}\n')
     os.write(ready_fd, b'R')
@@ -258,6 +260,9 @@ def guardian_main(read_fd, ready_fd):
                 message = json.loads(line)
                 kind, pid = message['kind'], int(message['pid'])
                 if kind == 'root' and pid > 0:
+                    if root != pid and owner_path:
+                        with open(owner_path, 'a') as owner:
+                            owner.write(f'child={pid}\n')
                     root = pid
                 elif kind == 'group' and pid > 0:
                     groups.add(pid)
@@ -499,6 +504,33 @@ def pid_alive(pid):
         return True
 
 
+def lock_status(lock):
+    """Report live guardian records without waiting for or acquiring either lock."""
+    holders = []
+    rows = process_rows()
+    for record in sorted(lock.parent.glob('heavy.lock.guardian-*.owner')):
+        try:
+            fields = dict(line.split('=', 1) for line in record.read_text().splitlines() if '=' in line)
+            holder = int(fields['pid'])
+            wrapper = int(fields['supervisor'])
+            if holder <= 0 or not pid_alive(holder):
+                continue
+            root = int(fields.get('child', '0'))
+            started = float(fields['startedEpoch'])
+            budget = float(fields['budgetSeconds'])
+            age = max(0, time.time() - started)
+            children = sorted(pid for pid, pgid in (rows or [])
+                              if root > 0 and (pid == root or pgid == root))
+            wrapper_live = pid_alive(wrapper)
+            holders.append({'holderPid': holder, 'wrapperPid': wrapper,
+                            'wrapperAlive': wrapper_live, 'childPids': children,
+                            'ageSeconds': round(age, 3), 'budgetSeconds': budget,
+                            'orphanOverBudget': not wrapper_live and bool(children) and age > budget})
+        except (OSError, ValueError, KeyError, OverflowError):
+            continue
+    return {'lock': str(lock), 'holders': holders, 'processQuery': 'ok' if rows is not None else 'unknown'}
+
+
 def acquire_shared(lock, deadline, received, command):
     lock.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
@@ -622,6 +654,10 @@ def supervised_main():
     command = sys.argv[1:]
     if command[:1] == ['--guardian']:
         return guardian_main(int(command[1]), int(command[2])) if len(command) == 3 else 70
+    if command in (['status'], ['--status']):
+        lock = Path(os.environ.get('MADO_HEAVY_LOCK', str(Path.home() / '.mado/locks/heavy.lock')))
+        print(json.dumps(lock_status(lock), sort_keys=True))
+        return 0
     inherited_control = os.environ.get('MADO_HEAVY_CONTROL_FD')
     if command[:1] == ['--register-host']:
         if len(command) != 2 or not inherited_control or not command[1].isdigit():
@@ -797,6 +833,7 @@ def supervised_main():
             guardian_env['MADO_HEAVY_GUARDIAN_OWNER'] = str(guardian_owner)
             guardian_env['MADO_HEAVY_GUARDIAN_SUPERVISOR'] = str(os.getpid())
             guardian_env['MADO_HEAVY_GUARDIAN_ARGC'] = str(len(command))
+            guardian_env['MADO_HEAVY_GUARDIAN_BUDGET'] = str(budget)
             lock.parent.mkdir(parents=True, exist_ok=True)
             with os.fdopen(os.open(guardian_log, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600),
                            'wb', buffering=0) as guardian_error:

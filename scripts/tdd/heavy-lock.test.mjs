@@ -319,6 +319,63 @@ pathlib.Path(sys.argv[1]).write_text(str(child.pid))`;
   }
 }, {timeout:7000});
 
+redTest('statusReportsLiveHolderWrapperChildrenAndAgeWithoutWaiting', async () => {
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
+  const ready=path.join(env.HOME,'status-ready');
+  const holder=start(['bash','-c','sleep 5 & echo $! > "$1"; wait','_',ready],env);
+  try {
+    await until(()=>existsSync(ready),'holder child started');
+    const childPid=Number(readFileSync(ready,'utf8'));
+    const result=spawnSync(lock,['--status'],{env,encoding:'utf8',timeout:1000});
+    assert.ifError(result.error);
+    assert.equal(result.status,0,result.stderr);
+    const status=JSON.parse(result.stdout);
+    assert.equal(status.lock,env.MADO_HEAVY_LOCK);
+    assert.equal(status.holders.length,1);
+    assert.ok(status.holders[0].holderPid>0);
+    assert.equal(status.holders[0].wrapperPid,holder.child.pid);
+    assert.ok(status.holders[0].childPids.includes(childPid));
+    assert.ok(status.holders[0].ageSeconds>=0);
+    assert.equal(status.holders[0].orphanOverBudget,false);
+    process.kill(childPid,0);
+  } finally {
+    holder.child.kill('SIGTERM');
+    await holder.done;
+  }
+}, {timeout:7000});
+
+redTest('statusReportsOverBudgetOrphanWithoutKillingIt', async () => {
+  const env={...environment(),MADO_MDPRO_LOCK:'off'};
+  const child=spawn('sleep',['5'],{detached:true,stdio:'ignore'});
+  try {
+    const owner=path.join(path.dirname(env.MADO_HEAVY_LOCK),'heavy.lock.guardian-fake.owner');
+    mkdirSync(path.dirname(owner),{recursive:true});
+    writeFileSync(owner,`pid=${process.pid}\nsupervisor=99999999\nchild=${child.pid}\nstartedEpoch=${Date.now()/1000-3}\nbudgetSeconds=1\n`);
+    const result=spawnSync(lock,['status'],{env,encoding:'utf8',timeout:1000});
+    assert.ifError(result.error);
+    assert.equal(result.status,0,result.stderr);
+    const [holder]=JSON.parse(result.stdout).holders;
+    assert.equal(holder.wrapperAlive,false);
+    assert.ok(holder.childPids.includes(child.pid));
+    assert.ok(holder.ageSeconds>holder.budgetSeconds);
+    assert.equal(holder.orphanOverBudget,true);
+    process.kill(child.pid,0);
+  } finally {
+    child.kill('SIGKILL');
+  }
+}, {timeout:3000});
+
+redTest('statusIsReadOnlyAndMissingCommandStillExits64', () => {
+  const env={...environment(),MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_WAIT_SECS:'0'};
+  const missing=spawnSync(lock,[],{env,encoding:'utf8',timeout:1000});
+  assert.equal(missing.status,64,missing.stderr);
+  assert.equal(existsSync(env.MADO_HEAVY_LOCK),false);
+  const status=spawnSync(lock,['--status'],{env,encoding:'utf8',timeout:1000});
+  assert.equal(status.status,0,status.stderr);
+  assert.deepEqual(JSON.parse(status.stdout).holders,[]);
+  assert.equal(existsSync(env.MADO_HEAVY_LOCK),false);
+});
+
 redTest('nestedCompletePublishesWhileAncestorAlive', async () => {
   const env={...environment(),MADO_MDPRO_LOCK:'off'};
   const status=path.join(env.HOME,'nested-status.json'), sibling=path.join(env.HOME,'sibling');

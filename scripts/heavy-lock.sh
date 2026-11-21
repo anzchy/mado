@@ -18,8 +18,10 @@
 # status reports it until the file is moved to lock-alerts/acked/.
 # The private status record carries drainExpired; consumers that opt in (Trash lane,
 # swift-red receipts) reject a run whose leader exited with surviving descendants.
-# The inherited descriptor owns the lock until its last close, including after
-# this launcher is SIGKILLed. Never unlink/rename the persistent lock file.
+# The supervisor and guardian hold the descriptor; jobs inherit a registration
+# socket but not the flock FD. A registered nested supervisor receives a duplicate.
+# `status` / `--status` reports holders without entering the lock queue.
+# Never unlink/rename the persistent lock file.
 set -euo pipefail
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 <command...>" >&2
