@@ -15,8 +15,9 @@
 
   overlap-check.py [--json] [--upstream origin/main] claim [--branches <b>…] -- <path>…
       Before dispatch: which in-flight branches already change the files a new brief's "You own" line names
-      (a path ending in / matches a directory). A shared file means sequence the items or branch from the other.
-      Exit 0 none shared, 1 shared, 3 usage.
+      (a path ending in / matches a directory). A shared hotspot prints HOTSPOT and refuses: sequence the items.
+      Ledger paths print HOTSPOT-LEDGER as a warning and do not refuse, because the row-level ledger merge
+      handles them. Other shared paths retain the SHARED refusal. Exit 0 clear or ledger-only, 1 refused, 3 usage.
 
 Without branch names it checks every branch checked out in a worktree, except main.
 """
@@ -24,8 +25,11 @@ import argparse
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 LEDGER = {"docs/feature-ledger.md", "docs/feature-ledger.html"}
+HOTSPOTS = frozenset(line.strip() for line in Path(__file__).with_name("hotspots.txt").read_text().splitlines()
+                     if line.strip() and not line.startswith("#"))
 
 
 class UsageError(Exception):
@@ -94,14 +98,27 @@ def claim(upstream, branches, paths):
         return any(f == p or (p.endswith("/") and f.startswith(p)) for p in paths)
 
     found = []
+    worktrees = worktree_branches()
     for branch in branches:
         resolve(branch)
-        if merged(upstream, branch):
+        worktree = worktrees.get(branch)
+        pending = set()
+        if worktree:
+            pending = set(git("-C", worktree, "diff", "--name-only", "HEAD").stdout.splitlines())
+            pending.update(git("-C", worktree, "ls-files", "--others", "--exclude-standard").stdout.splitlines())
+        if merged(upstream, branch) and not pending:
             continue
         base = git("merge-base", upstream, branch).stdout.strip()
-        shared = sorted(f for f in changed(base, branch) if wanted(f))
+        shared = sorted(f for f in changed(base, branch) | pending if wanted(f))
         if shared:
-            found.append({"branch": branch, "shared": shared})
+            report = {"branch": branch, "shared": shared}
+            hotspots = sorted(set(shared) & (HOTSPOTS - LEDGER))
+            ledger = sorted(set(shared) & LEDGER)
+            if hotspots:
+                report["hotspots"] = hotspots
+            if ledger:
+                report["ledger"] = ledger
+            found.append(report)
     return found
 
 
@@ -127,10 +144,19 @@ def main(argv):
                      + (f"  overlap={','.join(r['overlap'])}" if r["overlap"] else "")
                      + ("  UNCOMMITTED work not checked" if r.get("uncommitted") else "") for r in report]
         else:
-            report = claim(args.upstream, args.branches if args.branches is not None else list(worktree_branches()),
+            report = claim(args.upstream, args.branches or list(worktree_branches()),
                            args.paths)
-            rc = 1 if report else 0
-            lines = [f"SHARED   {r['branch']}  {','.join(r['shared'])}" for r in report] or ["NONE SHARED"]
+            rc = 1 if any(set(r["shared"]) - LEDGER for r in report) else 0
+            lines = []
+            for r in report:
+                if r.get("hotspots"):
+                    lines.append(f"HOTSPOT  {r['branch']}  {','.join(r['hotspots'])}; sequence the items")
+                if r.get("ledger"):
+                    lines.append(f"HOTSPOT-LEDGER  {r['branch']}  {','.join(r['ledger'])}; row-level merge applies")
+                ordinary = sorted(set(r["shared"]) - HOTSPOTS)
+                if ordinary:
+                    lines.append(f"SHARED   {r['branch']}  {','.join(ordinary)}")
+            lines = lines or ["NONE SHARED"]
     except UsageError as e:
         print(e, file=sys.stderr)
         return 3
