@@ -62,9 +62,10 @@ def normalized_cwd(value):
     return os.path.realpath(path)
 
 
-def check_cwd(value):
-    if normalized_cwd(value) != EXPECTED_CWD:
-        raise Refused("pane cwd differs from expected worktree")
+def check_cwd(value, source="pane"):
+    actual = normalized_cwd(value)
+    if actual != EXPECTED_CWD:
+        raise Refused(f"{source} cwd {actual} != expected {EXPECTED_CWD}")
 
 
 def pane_screen(pane):
@@ -91,20 +92,21 @@ def screen_state(screen):
         body = [line.strip() for line in lines[2:footer] if line.strip()]
         hints = {"? for shortcuts", "? for help", "? for commands", "← for agents · ? for shortcuts"}
         welcome = hints | {"Tip: Use /help to see available commands."}
+        header = re.compile(r"(?:permissions: .+|model: .+)")
         def logo(line):
             return bool(line) and all(ch.isspace() or "\u2500" <= ch <= "\u259f" or "\u2800" <= ch <= "\u28ff" for ch in line)
         if body.count(placeholder) != 1:
             return "waiting"
         index = body.index(placeholder)
-        if any(line not in welcome and not logo(line) for line in body[:index]):
+        if any(line not in welcome and not header.fullmatch(line) and not logo(line) for line in body[:index]):
             return "submitted"
         if any(line not in hints for line in body[index + 1:]):
             return "submitted"
         if any(line.strip() and line.strip() not in hints for line in lines[footer + 1:]):
             return "submitted"
         footer_cwd = lines[footer].rsplit("·", 1)[-1].strip()
-        check_cwd(cwd)
-        check_cwd(footer_cwd)
+        check_cwd(cwd, "screen")
+        check_cwd(footer_cwd, "screen")
         return "empty"
     return "waiting"
 
@@ -134,6 +136,11 @@ def restore_name(pane, name):
     return entry
 
 
+def composer_has_new(screen):
+    # Only a standalone /new in the last composer counts; transcript mentions do not.
+    return bool(re.search(r"(?m)^\s*› /new\s*$", screen))
+
+
 def start(pane, name):
     prior = agent_for(pane)
     if prior.get("agent_status") not in ("idle", "done"):
@@ -141,21 +148,32 @@ def start(pane, name):
     check_cwd(prior.get("cwd"))
     before = pane_screen(pane)
     herdr("pane", "send-text", pane, "/new")
-    herdr("pane", "send-keys", pane, "enter")
-    started = time.monotonic()
-    deadline = started + START
-    while time.monotonic() < deadline:
-        screen = pane_screen(pane)
-        state = screen_state(screen)
-        if state == "dialog":
-            choose_current_worktree(pane)
-            wait_empty(pane, deadline, screen)
-            break
-        if state == "empty" and screen != before:
-            break
-        time.sleep(POLL)
-    else:
-        raise Refused("fresh directory dialog or empty Codex prompt never appeared")
+    deadline = time.monotonic() + START
+    entered = False
+    entered_at = None
+    try:
+        while time.monotonic() < deadline:
+            screen = pane_screen(pane)
+            state = screen_state(screen)
+            if state == "dialog":
+                choose_current_worktree(pane)
+                wait_empty(pane, deadline, screen)
+                break
+            if state == "empty" and screen != before:
+                break
+            if composer_has_new(screen):
+                if not entered or ("start a new chat during a conversation" in screen and entered_at is not None and time.monotonic() - entered_at >= min(0.5, START / 3)):
+                    herdr("pane", "send-keys", pane, "enter")
+                    entered = True
+                    entered_at = time.monotonic() if entered_at is None else None
+            time.sleep(POLL)
+        else:
+            raise Refused("fresh directory dialog or empty Codex prompt never appeared")
+    except Refused:
+        # A failed dispatch must not leave /new in the editable composer.
+        if composer_has_new(pane_screen(pane)):
+            herdr("pane", "send-keys", pane, "ctrl+u")
+        raise
     restore_name(pane, name)
 
 

@@ -237,3 +237,34 @@ test('#804 fix1 invalid pane bytes fail on one line', () => {
   assert.match(result.stderr, /UnicodeDecodeError/);
   assert.equal((result.stderr + result.stdout).trim().split('\n').length, 1);
 });
+
+
+test('#804 fix2 real fresh idle screen accepts known Codex header', () => {
+  const f = freshScenario({ realIdle: true });
+  const result = f.run('prompt-and-confirm', 'w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), 'Audit #804');
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(f.state().prompts, 1);
+});
+
+test('#804 fix2 popup needs visible /new and a second Enter', () => {
+  const f = freshScenario({ popup: true, swallowNewEnter: true });
+  const result = startWithPrompt(f);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(f.state().events.filter(e => e === 'key-enter').length, 2);
+  assert.equal(f.state().prompts, 1);
+});
+
+test('#804 fix2 stuck /new is cleared on refusal', () => {
+  const f = freshScenario({ popup: true, stuckPopup: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.ok(f.state().events.includes('key-ctrl+u'));
+  assert.equal(f.state().prompts, 0);
+});
+
+test('#804 fix2 cwd refusal names screen and expected paths', () => {
+  const f = freshScenario({ dialog: true, ignoreOne: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /screen cwd .*wrong-worktree.* != expected .*fixture-worktree/);
+});
