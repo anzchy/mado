@@ -47,6 +47,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
     steps:
       - name: Checkout trusted base
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -68,6 +71,7 @@ jobs:
         working-directory: pr-head
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if ! grep -q '^export function checkGates' ../trusted/scripts/agents/ui-parity-pr-body-lint.mjs; then
             echo 'trusted PR-body lint lacks checkGates; refusing to use a pre-Gates validator' >&2
