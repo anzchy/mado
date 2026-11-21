@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict } from './owner-gates-tools.mjs';
+import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 test('WI-1 skips both optional suites only for reviewed native-only paths', () => {
@@ -209,13 +209,13 @@ test('750 every exception names a reason and a ticket, matches a CI test, and is
 // #760: load and memory preflight. Injected facts: under, over (each threshold, and a configured one), unreadable.
 test('760 preflight verdict: under, over each threshold, configured threshold, unreadable', () => {
   const defaults = loadThresholds({});
-  assert.deepEqual([defaults.maxLoad.value, defaults.minMemFree.value, defaults.maxPressure.value], [20, 15, 2]);
+  assert.deepEqual([defaults.maxLoad.value, defaults.minMemFree.value, defaults.maxPressure.value], [6, 25, 1]);
   const under = loadVerdict({load: 4.2, memFree: 55, pressure: 1}, defaults);
   assert.deepEqual(under, {line: 'load=4.2 mem_free=55% pressure=1', notes: [], refuse: null});
-  assert.match(loadVerdict({load: 23, memFree: 55, pressure: 1}, defaults).refuse, /^load 23 over OWNER_GATES_MAX_LOAD=20$/);
-  assert.match(loadVerdict({load: 4.2, memFree: 9, pressure: 1}, defaults).refuse, /^mem_free 9% under OWNER_GATES_MIN_MEM_FREE=15$/);
-  assert.match(loadVerdict({load: 4.2, memFree: 55, pressure: 4}, defaults).refuse, /^pressure 4 over OWNER_GATES_MAX_PRESSURE=2$/);
-  assert.equal(loadVerdict({load: 20, memFree: 15, pressure: 2}, defaults).refuse, null, 'the thresholds themselves pass');
+  assert.match(loadVerdict({load: 7, memFree: 55, pressure: 1}, defaults).refuse, /^load 7 over OWNER_GATES_MAX_LOAD=6$/);
+  assert.match(loadVerdict({load: 4.2, memFree: 24, pressure: 1}, defaults).refuse, /^mem_free 24% under OWNER_GATES_MIN_MEM_FREE=25$/);
+  assert.match(loadVerdict({load: 4.2, memFree: 55, pressure: 2}, defaults).refuse, /^pressure 2 over OWNER_GATES_MAX_PRESSURE=1$/);
+  assert.equal(loadVerdict({load: 6, memFree: 25, pressure: 1}, defaults).refuse, null, 'the thresholds themselves pass');
   const configured = loadThresholds({OWNER_GATES_MAX_LOAD: '4', OWNER_GATES_MIN_MEM_FREE: '60'});
   assert.equal(loadVerdict({load: 4.2, memFree: 55, pressure: 1}, configured).refuse,
     'load 4.2 over OWNER_GATES_MAX_LOAD=4; mem_free 55% under OWNER_GATES_MIN_MEM_FREE=60');
@@ -226,4 +226,10 @@ test('760 preflight verdict: under, over each threshold, configured threshold, u
   assert.equal(unreadable.notes.length, 3);
   for (const note of unreadable.notes) assert.match(note, /^preflight-note: .+ unreadable; no refusal on it$/);
   assert.deepEqual(parseFacts({loadavg: '{ 5.30 3.88 3.81 }', level: '56\n', pressure: '1'}), {load: 5.3, memFree: 56, pressure: 1});
+});
+
+test('735 competing heavy processes list only names and PIDs', () => {
+  const rows='101 /usr/bin/swift-frontend swift-frontend -frontend -primary-file secret.swift\n102 /bin/sleep sleep 20\n103 /usr/bin/python3 python3 scripts/tdd/heavy-lock.py --guardian 5 8\n104 /usr/bin/node node scripts/tdd/unit-lane.mjs\n';
+  assert.deepEqual(competingHeavyProcesses(rows, 999), ['101:swift-frontend', '103:python3', '104:node']);
+  assert.equal(competingHeavyProcesses('bad process output', 999), null);
 });

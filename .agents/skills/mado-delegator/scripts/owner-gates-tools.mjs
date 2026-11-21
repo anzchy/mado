@@ -216,13 +216,13 @@ export function uncoveredWorkflowTests(root, texts, exceptions, selection = {age
 }
 
 // #760: machine facts before any lane. A loaded machine gives "no evidence" (exit 2), never a red lane.
-// Defaults come from the 11-08..11-18 RAM samples taken during heavy jobs on the 10-core mini (3,859 samples: memory free
-// never below 33 %, daily means 51-62 %, pressure 1 or 2, never 4) and #735 (false failures at load 22). They refuse only a
-// clearly overloaded machine; the owner sets the real values with the environment variables below.
+// Defaults for this four-performance-core mini: load 6 is 1.5x performance cores. During Mado builds free memory
+// was 44-55%; 25% leaves margin below that observed range. VM pressure 1 is normal; 2 or higher defers evidence.
+// The owner can tune each limit. This preflight only reports/refuses; it never kills a competing process.
 export const LOAD_THRESHOLDS = Object.freeze({
-  maxLoad: {env: 'OWNER_GATES_MAX_LOAD', value: 20},
-  minMemFree: {env: 'OWNER_GATES_MIN_MEM_FREE', value: 15},
-  maxPressure: {env: 'OWNER_GATES_MAX_PRESSURE', value: 2},
+  maxLoad: {env: 'OWNER_GATES_MAX_LOAD', value: 6},
+  minMemFree: {env: 'OWNER_GATES_MIN_MEM_FREE', value: 25},
+  maxPressure: {env: 'OWNER_GATES_MAX_PRESSURE', value: 1},
 });
 export function loadThresholds(env = process.env) {
   const out = {};
@@ -256,6 +256,27 @@ export function loadVerdict(facts, thresholds) {
 export function readFacts(sysctl = process.env.OWNER_GATES_SYSCTL || '/usr/sbin/sysctl') {
   const read = name => { const r = spawnSync(sysctl, ['-n', name], {encoding: 'utf8', timeout: 5000}); return r.status === 0 ? r.stdout.trim() : null; };
   return parseFacts({loadavg: read('vm.loadavg'), level: read('kern.memorystatus_level'), pressure: read('kern.memorystatus_vm_pressure_level')});
+}
+
+// Read one bounded process snapshot. Only a command name and PID are ever returned;
+// arguments are used for classification and never written into the gate summary.
+export function competingHeavyProcesses(output, selfPid = process.pid) {
+  const found = [];
+  for (const line of output.trim().split('\n')) {
+    const match = /^\s*(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    if (!match) return null;
+    const pid = Number(match[1]), name = path.basename(match[2]), args = match[3];
+    if (pid === selfPid) continue;
+    const nativeHeavy = /^(?:swift|swift-frontend|xcodebuild|xcodegen|clang|clang\+\+|ld|metal|actool|ibtoold)$/.test(name);
+    const wrapper = /(?:^|\s)(?:scripts\/heavy-lock\.sh|scripts\/tdd\/heavy-lock\.py)(?:\s|$)/.test(args);
+    const nodeHeavy = name === 'node' && /(?:scripts\/tdd\/(?:unit-lane|app-lane|trash-lane)\.mjs|node --test)/.test(args);
+    if (nativeHeavy || wrapper || nodeHeavy) found.push(`${pid}:${name}`);
+  }
+  return found;
+}
+export function readCompetingHeavyProcesses(ps = process.env.OWNER_GATES_PS || '/bin/ps') {
+  const result = spawnSync(ps, ['-axo', 'pid=,comm=,args='], {encoding:'utf8', timeout:5000, maxBuffer:16*1024*1024});
+  return result.status === 0 ? competingHeavyProcesses(result.stdout) : null;
 }
 
 async function main() {
@@ -304,8 +325,12 @@ async function main() {
       const t = loadThresholds();
       console.log(`limits=${t.maxLoad.value}/${t.minMemFree.value}%/${t.maxPressure.value}`);
     }
+    const competing = readCompetingHeavyProcesses();
+    console.log(`competing-heavy=${competing === null ? 'unknown' : competing.join(',') || 'none'}`);
+    if (competing === null) console.log('preflight-note: competing heavy process query unreadable');
+    if (process.env.MADO_GATES_PREFLIGHT === 'off') console.log('preflight-guard=off');
     for (const note of verdict.notes) console.log(note);
-    if (verdict.refuse) { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
+    if (verdict.refuse && process.env.MADO_GATES_PREFLIGHT !== 'off') { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
   } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites|load-preflight'); process.exitCode = 2; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
