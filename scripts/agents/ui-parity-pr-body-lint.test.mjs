@@ -1,17 +1,106 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, unlinkSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkGates, checkUIParity } from './ui-parity-pr-body-lint.mjs';
+import { checkGates, checkUIParity, checkMadoVerifyEvidence } from './ui-parity-pr-body-lint.mjs';
 
 const uiFiles = ['App/UI/InspectorPlaceholder.swift', 'App/Commands/CommandMenu.swift', 'Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateHost.swift'];
 const table = '## UI-Parity\n\n| State | Design | Assertion | Status |\n|---|---|---|---|\n| Empty | abc | test | AUTO-PASS |\n';
 const head = '3de39c6012345678901234567890123456789012';
 const oldHead = 'a'.repeat(40);
 const codeSame = 'b'.repeat(40);
+const evidenceLink = id => `https://github.com/anzchy/mado/issues/766#issuecomment-${id}`;
+const evidenceMarker = sha => `<!-- mado-verify issue=766 task=i766h2 head=${sha} -->`;
+const evidenceCheck = (body, files, comments, expected = head) =>
+  checkMadoVerifyEvidence(body, files, expected, url => {
+    const value = comments[url];
+    if (value instanceof Error) throw value;
+    return value;
+  });
+
+test('i766h2 matching mado-verify issue comment covers the PR head', () => {
+  const link = evidenceLink(123);
+  assert.deepEqual(evidenceCheck(`Evidence: ${link}`, uiFiles, {[link]: evidenceMarker(head)}), {ok:true});
+});
+
+test('i766h2 stale mado-verify comment fails', () => {
+  const link = evidenceLink(123);
+  assert.match(evidenceCheck(link, uiFiles, {[link]: evidenceMarker(oldHead)}).reason, /head.*match|stale/i);
+});
+
+test('i766h2 missing or non-comment link fails', () => {
+  assert.match(evidenceCheck('', uiFiles, {}).reason, /issue comment link/i);
+  assert.match(evidenceCheck('https://github.com/anzchy/mado/issues/766', uiFiles, {}).reason, /issue comment link/i);
+});
+
+test('i766h2 tooling-only diff needs no evidence link', () => {
+  assert.deepEqual(evidenceCheck('', ['scripts/agents/ui-parity-pr-body-lint.mjs'], {}), {ok:true});
+});
+
+test('i766h2 failed comment lookup fails closed', () => {
+  const link = evidenceLink(123);
+  assert.match(evidenceCheck(link, uiFiles, {[link]: new Error('rate limited')}).reason, /lookup failed, retry/i);
+});
+
+test('i766h2 one matching link among several passes', () => {
+  const stale = evidenceLink(123), fresh = evidenceLink(124);
+  assert.deepEqual(evidenceCheck(`${stale}\n${fresh}`, uiFiles,
+    {[stale]: evidenceMarker(oldHead), [fresh]: evidenceMarker(head)}), {ok:true});
+});
+
+test('i766h2 linked comment without the mado-verify head marker fails', () => {
+  const link = evidenceLink(125);
+  assert.match(evidenceCheck(link, uiFiles, {[link]:'Verified tests on this branch.'}).reason,
+    /head marker/i);
+});
+
+test('i766h2 PR-body workflow gives the trusted lint a read-only issue token', () => {
+  const workflow=readFileSync(new URL('../../.github/workflows/pr-body.yml', import.meta.url),'utf8');
+  const job=workflow.split('  pr-body-gates:')[1];
+  assert.match(job,/permissions:\n\s+contents: read\n\s+issues: read/);
+  assert.match(job,/GH_TOKEN: \$\{\{ github\.token \}\}/);
+});
+
+test('i766h2 CLI fetches the comment for --expect and fails closed on lookup errors', t => {
+  const repo = mkdtempSync(join(tmpdir(), 'mado-verify-pr-lint-'));
+  t.after(() => rmSync(repo, {recursive:true, force:true}));
+  const git = (...args) => execFileSync('git', args, {cwd:repo, encoding:'utf8'}).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  writeFileSync(join(repo, 'README.md'), 'base\n');
+  git('add', 'README.md');
+  git('commit', '-qm', 'base');
+  git('branch', 'base');
+  mkdirSync(join(repo, 'App'));
+  writeFileSync(join(repo, 'App/Canvas.swift'), 'struct Canvas {}\n');
+  git('add', 'App/Canvas.swift');
+  git('commit', '-qm', 'App change');
+  const currentHead=git('rev-parse', 'HEAD');
+  const bin=join(repo,'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin,'gh'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(process.env.GH_CALLED,'yes');if(process.env.GH_FAIL==='1')process.exit(1);console.log(JSON.stringify({body:process.env.GH_BODY}));\n`, {mode:0o755});
+  const link=evidenceLink(321);
+  const body=join(repo,'body.md');
+  writeFileSync(body, `${table}\nDevice-Smoke: n/a — test fixture\n${completeGates(currentHead)}\n${link}\n`);
+  const called=join(repo,'gh-called');
+  const script=fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
+  const run=(extra={})=>spawnSync(process.execPath,[script,'--base','base','--body-file',body,'--expect',currentHead],
+    {cwd:repo,encoding:'utf8',env:{...process.env,PATH:`${bin}:${process.env.PATH}`,GH_CALLED:called,GH_BODY:evidenceMarker(currentHead),...extra}});
+  const good=run();
+  assert.equal(good.status,0,good.stdout+good.stderr);
+  assert.equal(existsSync(called),true,'CLI must fetch the linked comment');
+  const failed=run({GH_FAIL:'1'});
+  assert.equal(failed.status,1,failed.stdout+failed.stderr);
+  assert.match(failed.stderr,/lookup failed, retry/i);
+  const stale=spawnSync(process.execPath,[script,'--base','base','--body-file',body,'--expect',oldHead],
+    {cwd:repo,encoding:'utf8',env:{...process.env,PATH:`${bin}:${process.env.PATH}`,GH_CALLED:called,GH_BODY:evidenceMarker(currentHead)}});
+  assert.equal(stale.status,1,stale.stdout+stale.stderr);
+  assert.match(stale.stderr,/--expect does not match current PR head/);
+});
 const gatesTable = rows => `## Gates\n\n| Lane | Status | SHA | Source |\n|---|---|---|---|\n${rows.join('\n')}\n`;
 const completeGates = (currentHead = head) => {
   const sha = currentHead.slice(0, 8);
@@ -305,36 +394,36 @@ test('deletion-only UI diff requires a table through the CLI', t => {
   writeFileSync(body, '## Summary\n\nDeleted old view.\n');
   const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
   const currentGates = () => completeGates(git('rev-parse', 'HEAD').trim());
-  const result = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  const bin=join(repo,'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin,'gh'), `#!${process.execPath}\nconsole.log(JSON.stringify({body:process.env.GH_BODY}));\n`,{mode:0o755});
+  const runLint=(base='base')=>spawnSync(process.execPath,[script,'--base',base,'--body-file',body],
+    {cwd:repo,encoding:'utf8',env:{...process.env,PATH:`${bin}:${process.env.PATH}`,GH_BODY:evidenceMarker(git('rev-parse','HEAD').trim())}});
+  const link=evidenceLink(321);
+  const result = runLint();
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /UI-Parity/);
   writeFileSync(body, table);
-  const withoutSmoke = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  const withoutSmoke = runLint();
   assert.equal(withoutSmoke.status, 1, withoutSmoke.stdout + withoutSmoke.stderr);
   assert.match(withoutSmoke.stderr, /Device-Smoke/);
-  writeFileSync(body, table + '\n' + currentGates() + '\nDevice-Smoke: n/a — test only\n');
-  const validExemption = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  writeFileSync(body, table + '\n' + currentGates() + '\nDevice-Smoke: n/a — test only\n'+link+'\n');
+  const validExemption = runLint();
   assert.equal(validExemption.status, 0, validExemption.stdout + validExemption.stderr);
   for (const smoke of ['Device-Smoke: n/a —   ', 'Device-Smoke: FAIL abc1234 run=offline — broken path',
     'Device-Smoke: PASS abc1234 run=offline — path\nDevice-Smoke: FAIL abc1234 run=offline — broken path',
     'Device-Smoke: PASS abc1234 run=offline — path\nDevice-Smoke: n/a —   ']) {
     writeFileSync(body, table + '\n' + currentGates() + '\n' + smoke + '\n');
-    const rejected = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-      { cwd: repo, encoding: 'utf8' });
+    const rejected = runLint();
     assert.equal(rejected.status, 1, smoke + rejected.stdout + rejected.stderr);
   }
-  writeFileSync(body, table + '\n' + currentGates() + '\nDevice-Smoke: n/a — no user-visible behavior changed\n');
-  const exempt = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  writeFileSync(body, table + '\n' + currentGates() + '\nDevice-Smoke: n/a — no user-visible behavior changed\n'+link+'\n');
+  const exempt = runLint();
   assert.equal(exempt.status, 0, exempt.stdout + exempt.stderr);
   const notVerifiedGates = currentGates().replace('| device-smoke | N/A | — | no user-visible change |',
     '| device-smoke | NOT VERIFIED | abc1234 | delegated device run pending |');
-  writeFileSync(body, table + '\n' + notVerifiedGates + '\nDevice-Smoke: NOT VERIFIED abc1234 run=offline — delegated device run pending\n');
-  const valid = spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  writeFileSync(body, table + '\n' + notVerifiedGates + '\nDevice-Smoke: NOT VERIFIED abc1234 run=offline — delegated device run pending\n'+link+'\n');
+  const valid = runLint();
   assert.equal(valid.status, 0, valid.stdout + valid.stderr);
   git('branch', 'after-ui');
   mkdirSync(join(repo, 'scripts'), { recursive: true });
@@ -342,12 +431,10 @@ test('deletion-only UI diff requires a table through the CLI', t => {
   git('add', 'scripts/check.py');
   git('commit', '-qm', 'add non-App script');
   writeFileSync(body, currentGates() + '\nDevice-Smoke: n/a — non-App script only\n');
-  const nonApp = spawnSync(process.execPath, [script, '--base', 'after-ui', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  const nonApp = runLint('after-ui');
   assert.equal(nonApp.status, 0, nonApp.stdout + nonApp.stderr);
   writeFileSync(body, currentGates() + '\nDevice-Smoke: n/a —   \n');
-  const nonAppMissingReason = spawnSync(process.execPath, [script, '--base', 'after-ui', '--body-file', body],
-    { cwd: repo, encoding: 'utf8' });
+  const nonAppMissingReason = runLint('after-ui');
   assert.equal(nonAppMissingReason.status, 1, nonAppMissingReason.stdout + nonAppMissingReason.stderr);
 });
 

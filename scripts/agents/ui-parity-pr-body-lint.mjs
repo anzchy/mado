@@ -40,6 +40,31 @@ export function checkUIParity(body, files) {
   return { ok: false, reason: 'UI files changed; PR body needs a populated ## UI-Parity table' };
 }
 
+export function checkMadoVerifyEvidence(body, files, head, readComment) {
+  if (!files.some(isUIFile)) return { ok: true };
+  const links = [...stripFencedCodeBlocks(body).matchAll(/https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9]\d*)#issuecomment-([1-9]\d*)(?![A-Za-z0-9-])/g)];
+  if (!links.length) return { ok: false, reason: 'App-facing change needs a mado-verify issue comment link' };
+  let lookupFailed = false, sawMarker = false;
+  for (const link of links) {
+    try {
+      const comment = readComment(link[0]);
+      const text = typeof comment === 'string' ? comment : comment?.body;
+      if (typeof text !== 'string') throw Error('missing comment body');
+      const marker = /^<!-- mado-verify issue=([1-9]\d*) task=[A-Za-z0-9-]+ head=([0-9a-f]{40}) -->$/gm;
+      for (const found of text.matchAll(marker)) {
+        if (found[1] !== link[3]) continue;
+        sawMarker = true;
+        if (found[2].toLowerCase() === head.toLowerCase()) return { ok: true };
+      }
+    } catch {
+      lookupFailed = true;
+    }
+  }
+  if (lookupFailed) return { ok: false, reason: 'mado-verify issue comment lookup failed, retry' };
+  return { ok: false, reason: sawMarker ? 'mado-verify evidence head does not match PR head' :
+    'mado-verify issue comment lacks the head marker' };
+}
+
 const gateLanes = ['package-tests', 'package-coverage', 'app-tests', 'unsigned-build', 'node-tooling', 'ledger', 'diff-check', 'design-check', 'audit', 'device-smoke'];
 const gateStatuses = new Set(['PASS', 'FAIL', 'NOT RUN', 'N/A', 'NOT VERIFIED']);
 
@@ -253,13 +278,23 @@ function gitAdapter() {
   };
 }
 
+function commentAdapter(url) {
+  const link = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9]\d*)#issuecomment-([1-9]\d*)$/.exec(url);
+  if (!link) throw Error('invalid issue comment link');
+  const output = execFileSync('gh', ['api', `repos/${link[1]}/${link[2]}/issues/comments/${link[4]}`],
+    {encoding:'utf8', stdio:['ignore','pipe','pipe'], timeout:10000});
+  return JSON.parse(output);
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const args = process.argv.slice(2);
   const bodyAt = args.indexOf('--body-file');
   const baseAt = args.indexOf('--base');
+  const expectAt = args.indexOf('--expect');
   if (bodyAt < 0 || !args[bodyAt + 1] || baseAt < 0 || !args[baseAt + 1] ||
-      !/^[A-Za-z0-9._/-]+$/.test(args[baseAt + 1]) || args[baseAt + 1].includes('..')) {
-    console.error('usage: node scripts/agents/ui-parity-pr-body-lint.mjs --base main --body-file /path/to/body.md');
+      !/^[A-Za-z0-9._/-]+$/.test(args[baseAt + 1]) || args[baseAt + 1].includes('..') ||
+      (expectAt >= 0 && !/^[0-9a-f]{40}$/i.test(args[expectAt + 1] ?? ''))) {
+    console.error('usage: node scripts/agents/ui-parity-pr-body-lint.mjs --base main --body-file /path/to/body.md [--expect <40-hex head>]');
     process.exitCode = 2;
   } else {
     try {
@@ -273,8 +308,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       }
       if (result.ok) {
         const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-        result = checkGates(body, head, gitAdapter());
-        if (result.ok) result = checkCheckerChange(body, files, head);
+        if (expectAt >= 0 && args[expectAt + 1].toLowerCase() !== head.toLowerCase()) {
+          result = {ok:false, reason:'--expect does not match current PR head'};
+        } else {
+          result = checkGates(body, head, gitAdapter());
+          if (result.ok) result = checkCheckerChange(body, files, head);
+          if (result.ok) result = checkMadoVerifyEvidence(body, files, head, commentAdapter);
+        }
       }
       if (!result.ok) { console.error(result.reason); process.exitCode = 1; }
       else console.log('UI-Parity PR body: PASS');
