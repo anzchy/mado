@@ -168,6 +168,42 @@ class OverlapCheckTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(report, [])
 
+    def test_claim_hotspot_refuses_and_says_to_sequence(self):
+        self.branch("p/canvas", **{"App/CanvasWindowController.swift": "new canvas\n"})
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--branches", "p/canvas", "--",
+                                 "App/CanvasWindowController.swift"], cwd=self.repo,
+                                capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HOTSPOT", result.stdout)
+        self.assertIn("sequence", result.stdout.lower())
+
+    def test_claim_ledger_hotspot_warns_without_refusal(self):
+        self.branch("p/ledger", **{"docs/feature-ledger.md": "other row\n"})
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--branches", "p/ledger", "--",
+                                 "docs/feature-ledger.md"], cwd=self.repo,
+                                capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("HOTSPOT-LEDGER", result.stdout)
+
+    def test_claim_without_explicit_branches_checks_worktree_branch(self):
+        self.branch("p/canvas", **{"App/CanvasWindowController.swift": "new canvas\n"})
+        wt = Path(self.tmp.name) / "canvas-worktree"
+        git(self.repo, "worktree", "add", "-q", str(wt), "p/canvas")
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--", "App/CanvasWindowController.swift"],
+                                cwd=self.repo, capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HOTSPOT", result.stdout)
+
+    def test_claim_sees_uncommitted_hotspot_in_other_worktree(self):
+        self.branch("p/wip", **{"App/Grid.swift": "grid changed\n"})
+        wt = Path(self.tmp.name) / "wip-worktree"
+        git(self.repo, "worktree", "add", "-q", str(wt), "p/wip")
+        (wt / "App/CanvasWindowController.swift").write_text("uncommitted canvas\n")
+        result = subprocess.run(["python3", str(SCRIPT), "claim", "--", "App/CanvasWindowController.swift"],
+                                cwd=self.repo, capture_output=True, text=True, env=ENV)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HOTSPOT", result.stdout)
+
     def test_unknown_branch_is_a_usage_error(self):
         rc, _, result = self.run_check("trial", "p/nope")
 

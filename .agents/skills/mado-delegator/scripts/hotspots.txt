@@ -1,0 +1,5 @@
+App/CanvasWindowController.swift
+App/Resources/Localizable.xcstrings
+design/prototypes/picsee-browser/states/README.md
+docs/feature-ledger.md
+docs/feature-ledger.html
