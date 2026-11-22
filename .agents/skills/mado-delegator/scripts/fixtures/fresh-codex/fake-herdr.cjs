@@ -17,8 +17,8 @@ const positional = (count, options = false) => {
 const save = () => fs.writeFileSync(statePath, JSON.stringify(state));
 const event = value => state.events.push(value);
 const show = name => process.stdout.write(fs.readFileSync(path.join(fixtureDir, `pane-${name}.txt`), 'utf8')
-  .replaceAll('~/fixture-worktree', state.cwd.replace(os.homedir(), '~'))
-  .replaceAll('~/Documents/mac-app/picsee-wt/gpt-imple-1', state.cwd.replace(os.homedir(), '~')));
+  .replaceAll('~/fixture-worktree', (scenario.screenCwd ?? state.cwd).replace(os.homedir(), '~'))
+  .replaceAll('~/Documents/mac-app/picsee-wt/gpt-imple-1', (scenario.screenCwd ?? state.cwd).replace(os.homedir(), '~')));
 state.cwd ??= path.join(os.homedir(), 'fixture-worktree');
 
 switch (action) {
@@ -56,7 +56,12 @@ switch (action) {
       if (state.enters && state.reads >= (scenario.delayReads ?? 1)) state.phase = scenario.dialog ? 'dialog' : 'empty';
     }
     if (scenario.invalidUtf8) { process.stdout.write(Buffer.from([0xff])); break; }
-    show(state.phase === 'old' ? (scenario.realIdle ? 'real-idle' : 'old') : state.phase === 'starting' ? 'starting' : state.phase === 'cleared' ? 'old' : state.phase === 'empty' && scenario.realIdle ? 'real-idle' : state.phase);
+    if (scenario.staleNew && state.phase === 'popup') {
+      process.stdout.write('› /new\n\n  GPT-6-Sol medium · Context 38% used · ~/fixture-worktree\n\n› unrelated input\n\n  GPT-6-Sol medium · Context 38% used · ~/fixture-worktree\n');
+    } else {
+      const name = state.phase === 'old' ? (scenario.realIdle ? 'real-idle' : 'old') : state.phase === 'starting' ? 'starting' : state.phase === 'cleared' ? 'old' : state.phase === 'empty' && scenario.warningHint ? 'real-warning-idle' : state.phase === 'empty' && scenario.startupTip ? 'tip' : state.phase === 'empty' && scenario.realIdle ? 'real-idle' : state.phase;
+      show(name);
+    }
     break;
   case 'agent rename':
     positional(4);

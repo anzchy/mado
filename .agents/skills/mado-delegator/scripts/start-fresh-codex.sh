@@ -64,8 +64,9 @@ def normalized_cwd(value):
 
 def check_cwd(value, source="pane"):
     actual = normalized_cwd(value)
-    if actual != EXPECTED_CWD:
-        raise Refused(f"{source} cwd {actual} != expected {EXPECTED_CWD}")
+    expected = EXPECTED_SCREEN_CWD if source == "screen" else EXPECTED_CWD
+    if actual != expected:
+        raise Refused(f"{source} cwd {actual} != expected {expected}")
 
 
 def pane_screen(pane):
@@ -91,18 +92,22 @@ def screen_state(screen):
         placeholder = "› Ask Codex to do anything"
         body = [line.strip() for line in lines[2:footer] if line.strip()]
         hints = {"? for shortcuts", "? for help", "? for commands", "← for agents · ? for shortcuts"}
-        welcome = hints | {"Tip: Use /help to see available commands."}
+        def is_hint(line):
+            return line in hints or bool(re.fullmatch(r"(?:← for agents · )?\? for (?:shortcuts|help|commands)\s+⚠\s+\d+ warnings?(?:\s+·\s+f\d+ to view)?", line))
         header = re.compile(r"(?:permissions: .+|model: .+)")
         def logo(line):
             return bool(line) and all(ch.isspace() or "\u2500" <= ch <= "\u259f" or "\u2800" <= ch <= "\u28ff" for ch in line)
         if body.count(placeholder) != 1:
             return "waiting"
         index = body.index(placeholder)
-        if any(line not in welcome and not header.fullmatch(line) and not logo(line) for line in body[:index]):
+        before = body[:index]
+        if sum(line.startswith("Tip:") for line in before) > 1:
             return "submitted"
-        if any(line not in hints for line in body[index + 1:]):
+        if any(not is_hint(line) and not line.startswith("Tip:") and not header.fullmatch(line) and not logo(line) for line in before):
             return "submitted"
-        if any(line.strip() and line.strip() not in hints for line in lines[footer + 1:]):
+        if any(not is_hint(line) for line in body[index + 1:]):
+            return "submitted"
+        if any(line.strip() and not is_hint(line.strip()) for line in lines[footer + 1:]):
             return "submitted"
         footer_cwd = lines[footer].rsplit("·", 1)[-1].strip()
         check_cwd(cwd, "screen")
@@ -137,8 +142,13 @@ def restore_name(pane, name):
 
 
 def composer_has_new(screen):
-    # Only a standalone /new in the last composer counts; transcript mentions do not.
-    return bool(re.search(r"(?m)^\s*› /new\s*$", screen))
+    # The editable composer is the last prompt line immediately before the current status footer.
+    lines = screen.splitlines()
+    footer = next((i for i in range(len(lines) - 1, -1, -1) if re.search(r"Context \d+% used", lines[i])), -1)
+    if footer < 0:
+        return False
+    prompt = next((line.strip() for line in reversed(lines[:footer]) if line.strip()), "")
+    return prompt == "› /new"
 
 
 def start(pane, name):
@@ -149,7 +159,7 @@ def start(pane, name):
     before = pane_screen(pane)
     herdr("pane", "send-text", pane, "/new")
     deadline = time.monotonic() + START
-    entered = False
+    enters = 0
     entered_at = None
     try:
         while time.monotonic() < deadline:
@@ -162,10 +172,10 @@ def start(pane, name):
             if state == "empty" and screen != before:
                 break
             if composer_has_new(screen):
-                if not entered or ("start a new chat during a conversation" in screen and entered_at is not None and time.monotonic() - entered_at >= min(0.5, START / 3)):
+                if enters == 0 or (enters == 1 and "start a new chat during a conversation" in screen and entered_at is not None and time.monotonic() - entered_at >= min(0.5, START / 3)):
                     herdr("pane", "send-keys", pane, "enter")
-                    entered = True
-                    entered_at = time.monotonic() if entered_at is None else None
+                    enters += 1
+                    entered_at = time.monotonic()
             time.sleep(POLL)
         else:
             raise Refused("fresh directory dialog or empty Codex prompt never appeared")
@@ -227,21 +237,34 @@ try:
     CONFIRM = timer("MADO_FRESH_CONFIRM_SECS", "20")
     POLL = timer("MADO_FRESH_POLL_SECS", "0.25")
     args = sys.argv[1:]
-    if len(args) == 6 and args[0] == "prompt-and-confirm" and args[3] == "--cwd":
-        _, pane, name, _, expected, prompt = args
+    if args and args[0] == "prompt-and-confirm":
+        if len(args) == 6 and args[3] == "--cwd":
+            _, pane, name, _, expected, prompt = args
+            screen_expected = expected
+        elif len(args) == 8 and args[3] == "--cwd" and args[5] == "--screen-cwd":
+            _, pane, name, _, expected, _, screen_expected, prompt = args
+        else:
+            raise Refused("invalid prompt-and-confirm arguments")
         start_mode = False
     elif len(args) == 4 and args[2] == "--cwd":
         pane, name, _, expected = args
+        screen_expected = expected
         prompt = None
         start_mode = True
     elif len(args) == 6 and args[2] == "--cwd" and args[4] == "--prompt":
         pane, name, _, expected, _, prompt = args
+        screen_expected = expected
+        start_mode = True
+    elif len(args) in (6, 8) and args[2] == "--cwd" and args[4] == "--screen-cwd" and (len(args) == 6 or args[6] == "--prompt"):
+        pane, name, _, expected, _, screen_expected = args[:6]
+        prompt = args[7] if len(args) == 8 else None
         start_mode = True
     else:
         raise Refused("usage: start-fresh-codex.sh <pane> <agent-name> --cwd <worktree> [--prompt <text>] | prompt-and-confirm <pane> <agent-name> --cwd <worktree> <text>")
     if not re.fullmatch(r"w[0-9]+:p[A-Za-z0-9]+", pane) or not re.fullmatch(r"[a-z][a-z0-9-]+", name):
         raise Refused("invalid pane or agent name")
     EXPECTED_CWD = normalized_cwd(expected)
+    EXPECTED_SCREEN_CWD = normalized_cwd(screen_expected)
     if prompt is not None and prompt.startswith("-"):
         raise Refused("task prompt starts with -; herdr agent prompt has no safe option-like text argument")
     if start_mode:
