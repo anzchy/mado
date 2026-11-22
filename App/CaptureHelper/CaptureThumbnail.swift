@@ -503,8 +503,7 @@ private final class ThumbnailButton: NSButton {
          localize: @escaping (String) -> String = { String(localized: String.LocalizationValue($0)) },
          startsTimer: Bool = true, decodeImage: @escaping (Data) -> CGImage? = CaptureThumbnailController.decode,
          opener: any CaptureOpenPort = CaptureMadoLauncher(),
-         handoff: any CaptureAnnotateHandoffPort = UserDefaultsCaptureAnnotateHandoff.shared()
-            ?? UserDefaultsCaptureAnnotateHandoff(defaults: .standard)) {
+         handoff: any CaptureAnnotateHandoffPort = CaptureAnnotateHandoffStores.shared()) {
         image = decodeImage(model.state.png)
         self.opener = opener
         self.handoff = handoff
