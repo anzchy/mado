@@ -357,6 +357,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 180000
+    },
+    {
+      "name": "smoke-inputs-node",
+      "description": "Manual Node receipts for #734: one hash over the App build inputs (scripts/ci/app-inputs-hash.mjs) and the PR-body lint's Device-Smoke inputs=<hash> rule.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-inputs-hash.test.mjs scripts/agents/ui-parity-pr-body-lint.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
     }
   ],
   "coverageThresholds": {

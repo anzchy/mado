@@ -112,18 +112,19 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `docs/feature-ledger.html` are excluded (regenerated and checked by the ledger gate); paths, renames,
    deletions, modes, binary content, tests, docs, design and dependencies remain in scope.
    `CODE same` means that clean replay exactly matches the candidate tree, including when nearby upstream
-   context changed; it keeps audits and smoke. Patch hashes are diagnostics, not the equality decision.
+   context changed; it keeps audits (the device smoke follows the App-inputs hash, step 8). Patch hashes are diagnostics, not the equality decision.
    Every differing path prints as `DIFF <path>`. `CODE same, DOCS differ` (#733, owner 2026-11-16:
-   「3+5 文档冲突不再作废审计」) also keeps audits and smoke: every differing path is a table row listed in
+   「3+5 文档冲突不再作废审计」) also keeps audits: every differing path is a table row listed in
    `$SK/scripts/rebase-docs-allowlist.txt` as on main (now the states README status table), its mode/type replays
    unchanged, the per-row-key three-way merge keeps both sides' cells (main's row order unless only the branch
    reordered), no ledger acceptance text (怎么确认 before 「限制：」) changed, and upstream changed no
    other path the branch changed. `rebase-ledger.sh` merges those rows with `$SK/scripts/resolve_doc_rows.py` and
    stops on a same-cell edit, a deletion, a duplicate key or rows reordered differently on both sides. Changing the allowlist is an audit-rule change: quote the
-   owner in its header and in the PR body. `merge-gate.sh` still accepts only `CODE same ` (follow-up).
+   owner in its header and in the PR body. `merge-gate.sh --audited` accepts `CODE same` and, since #789, the
+   constrained `CODE same, DOCS differ` verdict (allowlisted `DIFF` paths, the audit row and Still open checks; guide §5.6).
    `CODE differ` (including `UPSTREAM OVERLAP <path>`) → quick combination check by both auditors before gates.
    No result waives a known High: it stays open until fixed and confirmed.
-   `MESSAGES differ` → fix before pushing. For `CODE same`, #772 permits a separate narrow `reuse-check.mjs <old-base> <new-base> <old-head> <new-head>` decision: only `REUSE` carries local Swift/lcov results into a verified new-head linked record. All other local lanes rerun; new-head CI remains binding. `RERUN` uses the full ladder. See guide §5.6 and the mado-verify skill. Audit and smoke rules are unchanged. Exit 4 means either compared patch is empty,
+   `MESSAGES differ` → fix before pushing. For `CODE same`, #772 permits a separate narrow `reuse-check.mjs <old-base> <new-base> <old-head> <new-head>` decision: only `REUSE` carries local Swift/lcov results into a verified new-head linked record. All other local lanes rerun; new-head CI remains binding. `RERUN` uses the full ladder. See guide §5.6 and the mado-verify skill. Audit rules are unchanged; the smoke follows the App-inputs hash (step 8). Exit 4 means either compared patch is empty,
    including ledger-only ranges: inspect both ranges, obtain fresh applicable audit/smoke evidence, and document
    any N/A lane with a reason; there is no carry-forward evidence. Rerun all gates yourself (guide §5.6).
 7. **Gardener — daily, not per PR** (user 2026-11-04: 「之后mado-doc-gardener 每天跑一次，当前跑得太频繁了」).
@@ -151,8 +152,16 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    audits. A known device `FAIL` blocks merge unless the user decides otherwise; `PENDING` is only for genuinely
    unreachable future-work states. **Every PR that changes user-visible behaviour also needs a `Device-Smoke:` line
    before merge** (user 2026-10-27, #175): you, not the implementer, drive one flow through the changed path in a
-   signed build of the PR head under the GUI lock; `FAIL` blocks, `NOT VERIFIED` needs a named blocker and the user's
-   OK, App code changed since → redo. The smoke promotes no ledger row; full parity stays batched (step 9).
+   signed build of the candidate head under the GUI lock; `FAIL` blocks, `NOT VERIFIED` needs a named blocker and the
+   user's OK. **The verdict follows the App build inputs, not the head SHA** (#734, owner 2026-11-16: 「4 smoke 跟 App
+   输入走」). Final-stage order: landing window → rebase → `rebase-verify` → combination check if needed → gates →
+   smoke last, on the candidate you will merge. In the clean smoked worktree at that head run
+   `node scripts/ci/app-inputs-hash.mjs --verify-host` (refuses uncommitted App inputs or a host Xcode other than the
+   pin) and write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke` row keeps that SHA.
+   The PR-body lint recomputes the hash for the PR head: equal → the verdict stays; different or not computable →
+   refused, redo a smoke covering the changed paths. On a PR that changes App inputs a PASS without `inputs=` is
+   refused; the head-SHA-only form stays only for tooling-only PRs (n/a and NOT VERIFIED unchanged). The smoke
+   promotes no ledger row; full parity stays batched (step 9).
    Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <audited-sha> --issue <n> --worktree <wt>`
    for the **audited** head in the implementer's worktree (it prints `case=head-moved` once a rebase moved that worktree).
    The PR head after a rebase is covered by step 6's `rebase-verify.sh` `CODE same`; a `CODE differ` rebase needs a new
