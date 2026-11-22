@@ -271,3 +271,57 @@ test('#804 fix2 cwd refusal names screen and expected paths', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /screen cwd .*wrong-worktree.* != expected .*fixture-worktree/);
 });
+
+test('#804 followup startup tip and warning suffix allow an empty prompt', () => {
+  for (const scenario of [{ startupTip: true }, { warningHint: true }]) {
+    const f = freshScenario(scenario);
+    const result = startWithPrompt(f);
+    assert.equal(result.status, 0, JSON.stringify(scenario) + ': ' + result.stderr + result.stdout);
+    assert.equal(f.state().prompts, 1);
+  }
+});
+
+test('#804 followup stale transcript /new never enters or clears unrelated composer', () => {
+  const f = freshScenario({ popup: true, staleNew: true, stuckPopup: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().prompts, 0);
+  assert.ok(!f.state().events.includes('key-enter'));
+  assert.ok(!f.state().events.includes('key-ctrl+u'));
+});
+
+test('#804 followup repeated /new Enter is capped at two', () => {
+  const f = freshScenario({ popup: true, stuckPopup: true });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.ok(f.state().events.filter(e => e === 'key-enter').length <= 2);
+});
+
+test('#804 followup screen cwd is independent of agent cwd', () => {
+  const f = freshScenario({ screenCwd: path.join(os.homedir(), 'other-screen') });
+  const result = startWithPrompt(f);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /screen cwd/);
+  assert.equal(f.state().cwd, path.join(os.homedir(), 'fixture-worktree'));
+});
+
+test('#804 followup explicit screen cwd validates both paths', () => {
+  const screen = path.join(os.homedir(), 'other-screen');
+  const f = freshScenario({ screenCwd: screen });
+  const result = f.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--screen-cwd', screen, '--prompt', 'Audit #804');
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(f.state().prompts, 1);
+  const wrong = freshScenario({ screenCwd: screen, wrongCwd: true });
+  const rejected = wrong.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--screen-cwd', screen, '--prompt', 'Audit #804');
+  assert.notEqual(rejected.status, 0);
+  assert.equal(wrong.state().prompts, 0);
+  const mismatchedScreen = freshScenario({ screenCwd: screen });
+  const mismatch = mismatchedScreen.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--screen-cwd', path.join(os.homedir(), 'somewhere-else'), '--prompt', 'Audit #804');
+  assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stderr, /screen cwd/);
+  assert.equal(mismatchedScreen.state().prompts, 0);
+  const idle = freshScenario({ realIdle: true, screenCwd: screen });
+  const prompted = idle.run('prompt-and-confirm', 'w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--screen-cwd', screen, 'Audit #804');
+  assert.equal(prompted.status, 0, prompted.stderr + prompted.stdout);
+  assert.equal(idle.state().prompts, 1);
+});

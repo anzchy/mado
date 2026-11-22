@@ -1,2 +1,5 @@
-› /new
 Starting MCP servers (3/4)
+
+› /new
+
+  GPT-6-Sol medium · Context 38% used · ~/fixture-worktree
