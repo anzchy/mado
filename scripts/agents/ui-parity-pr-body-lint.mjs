@@ -289,6 +289,23 @@ export function checkGates(body, head, git) {
       if (current !== claimed[0]) {
         return { ok: false, reason: `Device-Smoke inputs=${claimed[0]} differs from the PR head App inputs ${current}; redo the smoke for the changed paths` };
       }
+      // Audit F1: the claim is bound to the smoked commit. A smoke at the head is already covered by the check above;
+      // any other SHA must resolve in this clone and hash to the claim, so an old smoke cannot borrow the head's hash.
+      const smokedSha = smoke[2];
+      if (!head.toLowerCase().startsWith(smokedSha.toLowerCase())) {
+        let smoked, smokedDetail = '';
+        try {
+          smoked = git?.appInputsHash?.(smokedSha);
+        } catch (error) {
+          smokedDetail = `: ${error?.message ?? error}`;
+        }
+        if (typeof smoked !== 'string' || !/^[0-9a-f]{64}$/.test(smoked)) {
+          return { ok: false, reason: `Device-Smoke ${smokedSha}: App-inputs hash of the smoked commit not computed; fetch that commit or deepen the clone (fetch-depth: 0) and retry${smokedDetail}` };
+        }
+        if (smoked !== claimed[0]) {
+          return { ok: false, reason: `Device-Smoke inputs=${claimed[0]} is not the App-inputs hash of the smoked commit ${smokedSha} (${smoked}); redo the smoke` };
+        }
+      }
     }
   }
   return { ok: true };
@@ -329,8 +346,9 @@ function gitAdapter() {
   return {
     isAncestor: (sha, head) => quiet(['merge-base', '--is-ancestor', resolve(sha), resolve(head)]) === 0,
     inputsChanged: (sha, head, inputs) => quiet(['diff', '--quiet', resolve(sha), resolve(head), '--', ...inputs]) === 1,
-    // Issue 734 boundary: the committed App-inputs hash of the PR head (throws when it cannot be computed).
-    appInputsHash: rev => inputsApi('appInputsHash')({ cwd, rev }).hash,
+    // Issue 734 boundary: the committed App-inputs hash of a commit (the PR head or the smoked SHA), resolved as a
+    // unique commit object like the other evidence SHAs; throws when it cannot be computed.
+    appInputsHash: rev => inputsApi('appInputsHash')({ cwd, rev: resolve(rev) }).hash,
   };
 }
 

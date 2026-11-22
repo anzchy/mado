@@ -156,10 +156,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    user's OK. **The verdict follows the App build inputs, not the head SHA** (#734, owner 2026-11-16: 「4 smoke 跟 App
    输入走」). Final-stage order: landing window → rebase → `rebase-verify` → combination check if needed → gates →
    smoke last, on the candidate you will merge. In the clean smoked worktree at that head run
-   `node scripts/ci/app-inputs-hash.mjs --verify-host` (refuses uncommitted App inputs or a host Xcode other than the
-   pin) and write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke` row keeps that SHA.
-   The PR-body lint recomputes the hash for the PR head: equal → the verdict stays; different or not computable →
-   refused, redo a smoke covering the changed paths. On a PR that changes App inputs a PASS without `inputs=` is
+   `node scripts/ci/app-inputs-hash.mjs --verify-host` (refuses uncommitted App inputs, or a host Xcode or XcodeGen
+   other than the pin) and write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke` row
+   keeps that SHA. The PR-body lint hashes both the smoked SHA and the PR head: the claim must equal both, else
+   refused (redo a smoke covering the changed paths); a smoked SHA the lint's clone lacks (e.g. pre-rebase) or a hash
+   it cannot compute fails closed. On a PR that changes App inputs a PASS without `inputs=` is
    refused; the head-SHA-only form stays only for tooling-only PRs (n/a and NOT VERIFIED unchanged). The smoke
    promotes no ledger row; full parity stays batched (step 9).
    Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <audited-sha> --issue <n> --worktree <wt>`

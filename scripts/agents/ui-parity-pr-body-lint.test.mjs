@@ -937,7 +937,7 @@ const hashAdapter = (value, calls = []) => ({
 test('issue 734 Device-Smoke PASS inputs= equal to the head App-inputs hash carries over a stale smoke SHA', () => {
   const calls = [];
   assert.deepEqual(checkGates(smokeGates() + smokeLine(), head, hashAdapter(inputsHash, calls)), { ok: true });
-  assert.deepEqual(calls, [head], 'the hash must be computed for the PR head');
+  assert.deepEqual(calls, [head, smokeSha], 'the hash must be computed for the PR head and the smoked commit');
   assert.deepEqual(checkGates(smokeGates(head.slice(0, 8)) + smokeLine(head.slice(0, 8)), head, hashAdapter(inputsHash)), { ok: true });
 });
 
@@ -1056,4 +1056,86 @@ test('issue 734 inputs= counts only before the reason separator, and a lowercase
   assert.match(checkSmokeInputs(inReason(smokeSha), ['App/UI/Canvas.swift']).reason, /needs inputs=<hash>/);
   assert.match(checkSmokeInputs(`Device-Smoke: pass ${smokeSha} run=i734d1 — changed path\n`, ['App/UI/Canvas.swift']).reason,
     /needs inputs=<hash>/);
+});
+
+// Issue 734 fix round 1 (audit F1): inputs= is bound to the smoked commit. The lint hashes the SHA on the Device-Smoke
+// line too; the claim must equal that hash and the head's.
+const keyedAdapter = hashes => ({
+  appInputsHash: rev => {
+    if (!Object.hasOwn(hashes, rev)) throw Error(`SHA must uniquely name a commit object: ${rev}`);
+    if (hashes[rev] instanceof Error) throw hashes[rev];
+    return hashes[rev];
+  },
+});
+
+test('issue 734 fix1 a forged inputs= (the head hash next to an older smoke SHA) is refused', () => {
+  const result = checkGates(smokeGates() + smokeLine(smokeSha, `inputs=${inputsHash}`), head,
+    keyedAdapter({ [head]: inputsHash, [smokeSha]: otherHash }));
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, `Device-Smoke inputs=${inputsHash} is not the App-inputs hash of the smoked commit ${smokeSha} (${otherHash}); redo the smoke`);
+});
+
+test('issue 734 fix1 an unknown or unavailable smoke SHA fails closed and says to fetch or deepen', () => {
+  for (const hashes of [{ [head]: inputsHash }, { [head]: inputsHash, [smokeSha]: new Error('not a commit') },
+    { [head]: inputsHash, [smokeSha]: 'not-a-hash' }]) {
+    const result = checkGates(smokeGates() + smokeLine(), head, keyedAdapter(hashes));
+    assert.equal(result.ok, false);
+    assert.match(result.reason, new RegExp(`^Device-Smoke ${smokeSha}: App-inputs hash of the smoked commit not computed; fetch that commit or deepen the clone \\(fetch-depth: 0\\) and retry`));
+  }
+});
+
+test('issue 734 fix1 the claim must equal both hashes; a smoke at the head is hashed once', () => {
+  assert.deepEqual(checkGates(smokeGates() + smokeLine(), head, keyedAdapter({ [head]: inputsHash, [smokeSha]: inputsHash })), { ok: true });
+  assert.match(checkGates(smokeGates() + smokeLine(), head, keyedAdapter({ [head]: otherHash, [smokeSha]: inputsHash })).reason,
+    /differs from the PR head App inputs/);
+  const calls = [];
+  const atHead = head.slice(0, 8);
+  assert.deepEqual(checkGates(smokeGates(atHead) + smokeLine(atHead), head, hashAdapter(inputsHash, calls)), { ok: true });
+  assert.deepEqual(calls, [head]);
+});
+
+test('issue 734 fix1 CLI refuses the forged body and a bogus smoke SHA against real hashes', t => {
+  const repo = mkdtempSync(join(tmpdir(), 'mado-smoke-forged-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  mkdirSync(join(repo, '.github/actions/xcode-setup'), { recursive: true });
+  writeFileSync(join(repo, '.github/actions/xcode-setup/action.yml'),
+    "run: |\n  grep -Fx 'Xcode 26.6' v.txt\n  grep -Fx 'Build version 17F113' v.txt\n  grep -Fx 'Version: 2.44.1' g.txt\n");
+  writeFileSync(join(repo, 'README.md'), 'base\n');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+  git('branch', 'base');
+  mkdirSync(join(repo, 'App'));
+  writeFileSync(join(repo, 'App/Canvas.swift'), 'struct Canvas {}\n');
+  git('add', 'App/Canvas.swift');
+  git('commit', '-qm', 'smoked App');
+  const smoked = git('rev-parse', 'HEAD');
+  writeFileSync(join(repo, 'App/Canvas.swift'), 'struct Canvas { let id = 1 }\n');
+  git('commit', '-qam', 'App change after the smoke');
+  const current = git('rev-parse', 'HEAD');
+  const hashScript = fileURLToPath(new URL('../ci/app-inputs-hash.mjs', import.meta.url));
+  const headHash = execFileSync(process.execPath, [hashScript, '--rev', current], { cwd: repo, encoding: 'utf8' }).trim();
+  const bin = join(repo, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'gh'), `#!${process.execPath}\nconsole.log(JSON.stringify({body:process.env.GH_BODY}));\n`, { mode: 0o755 });
+  const body = join(repo, 'body.md');
+  const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
+  const lint = sha => {
+    const gates = completeGates(current).replace('| device-smoke | N/A | — | no user-visible change |',
+      `| device-smoke | PASS | ${sha} | device run i734d1 |`);
+    writeFileSync(body, `${table}\n${gates}\nDevice-Smoke: PASS ${sha} run=i734d1 inputs=${headHash} — changed path\n${evidenceLink(734)}\n`);
+    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
+      { cwd: repo, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_BODY: evidenceMarker(current) } });
+  };
+  const forged = lint(smoked.slice(0, 8));
+  assert.equal(forged.status, 1, forged.stdout + forged.stderr);
+  assert.match(forged.stderr, /is not the App-inputs hash of the smoked commit/);
+  const bogus = lint('deadbee');
+  assert.equal(bogus.status, 1, bogus.stdout + bogus.stderr);
+  assert.match(bogus.stderr, /fetch that commit or deepen the clone/);
+  const honest = lint(current.slice(0, 8));
+  assert.equal(honest.status, 0, honest.stdout + honest.stderr);
 });

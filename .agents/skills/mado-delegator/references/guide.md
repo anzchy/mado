@@ -679,19 +679,25 @@ The verdict follows the App build inputs, not the head SHA (#734, owner 2026-11-
 - **Order.** Final stage: landing window → rebase (`rebase-ledger.sh`) → `rebase-verify.sh` → combination check if
   it says `CODE differ` → gates → smoke last, on the candidate head you will merge. Smoking earlier only costs a redo.
 - **Record.** In the clean worktree you smoked, at that head, run `node scripts/ci/app-inputs-hash.mjs --verify-host`.
-  It hashes the committed tree's App inputs (App/, Packages/, project.yml, the Xcode/XcodeGen pin in
-  `.github/actions/xcode-setup/action.yml`, and any xcconfig, entitlements, xcstrings, xcprivacy, Info.plist or
-  `.lproj` file) plus the pinned toolchain, refuses uncommitted App inputs, and with `--verify-host` refuses a host
-  Xcode other than the pin. Write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke`
+  It hashes the committed tree's App inputs plus the pinned toolchain: device.py's own build inventory (App/,
+  Packages/, project.yml, UITests/, TestAssets/, root Info.plist, Resources/, resources/; one list, a test keeps them
+  equal), the device build driver (`scripts/device/build.sh`, `scripts/device/device.py`: Xcode selection, scheme,
+  configuration, re-signing), the Xcode/XcodeGen pin in `.github/actions/xcode-setup/action.yml`, and any xcconfig,
+  entitlements, xcstrings, xcprivacy, Info.plist or `.lproj` file. It refuses uncommitted App inputs, and with
+  `--verify-host` refuses a host `xcodebuild -version` or `xcodegen --version` other than the pin (device.py itself
+  builds only with its `LOCKED_XCODE_BUILD`, which a test keeps equal to the pinned build). Write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke`
   Gates row keeps the smoked SHA and needs no `CODE same`.
-- **Carry-over.** The PR-body lint recomputes the hash for the PR head (Git tree only). Equal → the verdict stays,
-  whatever else moved (docs, tests, tooling, a rebase). Different, or not computable (missing or partial pin, unknown
-  commit, git failure) → refused with one reason; redo a smoke covering the changed paths.
+- **Carry-over.** The PR-body lint hashes the smoked SHA from the Device-Smoke line and the PR head (Git trees
+  only). The claimed `inputs=` must equal both: then the verdict stays, whatever else moved (docs, AppTests, CI
+  tooling). Either different → refused with one reason; redo a smoke covering the changed paths. Not computable
+  (missing or partial pin, git failure, or a smoked SHA this clone does not have, such as a pre-rebase commit) →
+  refused with a reason that says to fetch the commit or deepen the clone. Smoking last on the candidate avoids that.
 - **Transition.** On a PR that changes any App input, a PASS without `inputs=` is refused. The head-SHA-only form
   `Device-Smoke: PASS <head7> run=<id> — <flow>` stays accepted only for tooling-only PRs. `n/a` and `NOT VERIFIED`
   lines are unchanged; `inputs=` belongs on PASS lines only.
-- **Not covered.** Local machine state outside the pin (keychain, signing certificates, SwiftPM caches) and the test
-  targets (AppTests/, UITests/, TestAssets/), which are not in the app bundle.
+- **Not covered.** Local machine state outside the pin (keychain, signing certificates, SwiftPM caches), AppTests/
+  (not in device.py's inventory), the other device helpers (launch, input, screenshots) and CI/release tooling.
+  MadoKit's own tests, UITests/ and TestAssets/ are inputs, so a change there costs a new smoke (conservative).
 
 The smoke writes no validation record and promotes no ledger row.
 
