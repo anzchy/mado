@@ -72,13 +72,14 @@ def verify_existing(directory, commit, sources, expected):
 
 def publish_link(link, target):
     if link.is_symlink() and os.readlink(link) == target:
-        return
+        return None
     if link.exists() or link.is_symlink():
         raise ValueError(f"refusing to replace unmanaged path: {link}")
     temporary = link.with_name(f".{link.name}.{os.getpid()}.tmp")
     try:
         os.symlink(target, temporary)
         os.replace(temporary, link)
+        return link.lstat().st_ino
     finally:
         if temporary.is_symlink():
             temporary.unlink()
@@ -95,6 +96,16 @@ def install(repo, commit, home):
     bin_dir = home / ".local/bin"
     share.mkdir(parents=True, exist_ok=True)
     bin_dir.mkdir(parents=True, exist_ok=True)
+    current = share / "current"
+    if ((current.exists() and not current.is_symlink()) or
+            (current.is_symlink() and not re.fullmatch(r"[0-9a-f]{40}", os.readlink(current)))):
+        raise ValueError(f"refusing to replace unmanaged version pointer: {current}")
+    public_target = "../share/shared-locks/current/{name}"
+    for name in ("heavy-lock", "gui-lock"):
+        link = bin_dir / name
+        if link.exists() or link.is_symlink():
+            if not link.is_symlink() or os.readlink(link) != public_target.format(name=name):
+                raise ValueError(f"refusing to replace unmanaged path: {link}")
     version_dir = share / commit
     if version_dir.exists() or version_dir.is_symlink():
         if not version_dir.is_dir() or version_dir.is_symlink():
@@ -118,19 +129,25 @@ def install(repo, commit, home):
         finally:
             if stage.exists():
                 shutil.rmtree(stage)
-    # These stable public links are installed before the one-pointer version switch.
-    for name in ("heavy-lock", "gui-lock"):
-        publish_link(bin_dir / name, f"../share/shared-locks/current/{name}")
-    current = share / "current"
-    if current.exists() and not current.is_symlink() or current.is_symlink() and not re.fullmatch(r"[0-9a-f]{40}", os.readlink(current)):
-        raise ValueError(f"refusing to replace unmanaged version pointer: {current}")
-    next_link = share / f".current.{os.getpid()}.tmp"
+    created = []
     try:
-        os.symlink(commit, next_link)
-        os.replace(next_link, current)
-    finally:
-        if next_link.is_symlink():
-            next_link.unlink()
+        for name in ("heavy-lock", "gui-lock"):
+            link = bin_dir / name
+            inode = publish_link(link, public_target.format(name=name))
+            if inode is not None:
+                created.append((link, inode))
+        next_link = share / f".current.{os.getpid()}.tmp"
+        try:
+            os.symlink(commit, next_link)
+            os.replace(next_link, current)
+        finally:
+            if next_link.is_symlink():
+                next_link.unlink()
+    except Exception:
+        for link, inode in reversed(created):
+            if link.is_symlink() and link.lstat().st_ino == inode:
+                link.unlink()
+        raise
     print(f"installed shared-locks {commit} sha256={expected}")
 
 
