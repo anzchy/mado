@@ -169,8 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         // #694: a Capture opened by the thumbnail's 标注 left a one-shot record naming it in the App Group.
-        let annotate = CaptureAnnotateHandoff.consume(annotateHandoff, opened: urls, now: Date())
-        viewer().openInput(urls, annotate: annotate)
+        // i694-fix1: one notice per open; the outcome and a coarse age only, never a path.
+        let handoff = CaptureAnnotateHandoff.resolve(annotateHandoff, opened: urls, now: Date())
+        logger.notice("capture annotate handoff outcome=\(handoff.outcome.rawValue, privacy: .public) age=\(handoff.ageBucket, privacy: .public)")
+        viewer().openInput(urls, annotate: handoff.url)
         application.activate(ignoringOtherApps: true)
     }
 

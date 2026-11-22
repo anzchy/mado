@@ -25,6 +25,28 @@ public protocol CaptureAnnotateHandoffPort: Sendable {
     func take() -> CaptureAnnotateHandoffRecord?
 }
 
+/// i694-fix1: what an open found in the hand-off store, for the lifecycle notice (no path).
+public enum CaptureAnnotateHandoffOutcome: String, Sendable {
+    /// A fresh record for the one opened file: Annotate Mode.
+    case matched
+    /// No record.
+    case none
+    /// A record outside the freshness window (or from the future); removed.
+    case stale
+    /// A fresh record for another file; put back for its own open.
+    case other
+    /// More than one file opened; the record is put back.
+    case multi
+}
+
+public struct CaptureAnnotateHandoffResult: Equatable, Sendable {
+    /// The opened file to annotate, or nil.
+    public let url: URL?
+    public let outcome: CaptureAnnotateHandoffOutcome
+    /// The record's age, coarse: none, <0s, 0-5s, 5-15s, 15-60s, >60s.
+    public let ageBucket: String
+}
+
 public enum CaptureAnnotateHandoff {
     /// How long after the helper wrote the record Mado still honours it. Launch Services normally delivers the open
     /// within seconds, including a cold launch (not measured; see the #694 handoff); a minute leaves a wide margin and
@@ -36,14 +58,32 @@ public enum CaptureAnnotateHandoff {
     /// unreadable record is removed. A fresh record for another file is put back for its own open, which Launch
     /// Services delivers next.
     public static func consume(_ store: any CaptureAnnotateHandoffPort, opened urls: [URL], now: Date) -> URL? {
-        guard let record = store.take() else { return nil }
+        resolve(store, opened: urls, now: now).url
+    }
+
+    /// `consume`, with the outcome and age bucket for the lifecycle notice. Zero files count as `multi`: not one.
+    public static func resolve(_ store: any CaptureAnnotateHandoffPort, opened urls: [URL], now: Date)
+        -> CaptureAnnotateHandoffResult {
+        guard let record = store.take() else { return CaptureAnnotateHandoffResult(url: nil, outcome: .none, ageBucket: "none") }
         let age = now.timeIntervalSince(record.createdAt)
-        guard age >= 0, age <= freshness else { return nil }
-        guard urls.count == 1, let url = urls.first, resolvedPath(url) == record.path else {
+        let bucket = ageBucket(age)
+        guard age >= 0, age <= freshness else { return CaptureAnnotateHandoffResult(url: nil, outcome: .stale, ageBucket: bucket) }
+        guard urls.count == 1, let url = urls.first else {
             store.write(record)
-            return nil
+            return CaptureAnnotateHandoffResult(url: nil, outcome: .multi, ageBucket: bucket)
         }
-        return url
+        guard resolvedPath(url) == record.path else {
+            store.write(record)
+            return CaptureAnnotateHandoffResult(url: nil, outcome: .other, ageBucket: bucket)
+        }
+        return CaptureAnnotateHandoffResult(url: url, outcome: .matched, ageBucket: bucket)
+    }
+
+    static func ageBucket(_ age: TimeInterval) -> String {
+        if age < 0 { return "<0s" }
+        if age < 5 { return "0-5s" }
+        if age < 15 { return "5-15s" }
+        return age <= freshness ? "15-60s" : ">60s"
     }
 
     public static func resolvedPath(_ url: URL) -> String {

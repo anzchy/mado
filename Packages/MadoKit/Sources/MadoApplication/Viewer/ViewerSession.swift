@@ -50,6 +50,8 @@ public enum ViewerMode: Sendable { case browsing, viewing }
     public internal(set) var annotateMode: AnnotateModeState?
     /// #694: enter Annotate Mode once this file shows (a Capture opened from the thumbnail's 标注); nil otherwise.
     public internal(set) var annotateOnShow: AnnotateOnShowIntent?
+    /// i694-fix1: told why an annotate-on-show intent ended without entering Annotate Mode (the host logs it).
+    @ObservationIgnored public var onAnnotateOnShowDrop: ((AnnotateOnShowDropReason) -> Void)?
     private var orderedItemIDs: [ItemID] = []
     var folderEntryRestore: FolderEntryRestorePoint?
     private var sourceVersion = PreviewSourceVersion(0)
