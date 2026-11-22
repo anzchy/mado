@@ -15,6 +15,7 @@
 // - --verify-host also requires the host `xcodebuild -version` to match the pinned Xcode and build version.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,7 +94,10 @@ export function pinnedToolchain(root, commit) {
   const xcode = one(/grep -Fx 'Xcode ([^']+)'/g, "'Xcode <version>' line");
   const build = one(/grep -Fx 'Build version ([^']+)'/g, "'Build version <build>' line");
   const xcodegen = one(/grep -Fx 'Version: ([^']+)'/g, "XcodeGen 'Version: <version>' line");
-  return { xcode, build, xcodegen, text: `Xcode ${xcode} (${build}); XcodeGen ${xcodegen}` };
+  // How CI installs that XcodeGen (not hashed beyond the pin file itself; used only to explain a host mismatch).
+  const url = text.match(/https:\/\/github\.com\/yonaskolb\/XcodeGen\/releases\/download\/[^\s'"]+\/xcodegen\.zip/)?.[0];
+  const sha256 = /echo '([0-9a-f]{64})\s+\.build\/ci-tools\/xcodegen\.zip'/.exec(text)?.[1];
+  return { xcode, build, xcodegen, url, sha256, text: `Xcode ${xcode} (${build}); XcodeGen ${xcodegen}` };
 }
 
 function hostTool(command, args) {
@@ -115,8 +119,36 @@ function verifyHost(pin) {
   }
   const xcodegen = /^Version: (\S+)$/m.exec(hostTool('xcodegen', ['--version']))?.[1];
   if (xcodegen !== pin.xcodegen) {
-    throw new InputsError(`host XcodeGen ${xcodegen ?? '?'} differs from the pin ${pin.text}`);
+    throw new InputsError(`host XcodeGen ${xcodegen ?? '?'} differs from the pin ${pin.text}; host binary ` +
+      `(${onPath('xcodegen') ?? 'not found on PATH'}). ` +
+      xcodegenFix(pin));
   }
+}
+
+function onPath(command) {
+  for (const directory of (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(directory, command);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // not here
+    }
+  }
+  return undefined;
+}
+
+// Issue 734 fix round 2: CI installs the pinned XcodeGen into .build/ci-tools (the pin file's Install XcodeGen step);
+// device.py runs the first xcodegen on PATH. The fix is to put the pinned one first for the build and the record.
+function xcodegenFix(pin) {
+  const tools = '.build/ci-tools';
+  const install = pin.url && pin.sha256
+    ? `mkdir -p ${tools} && curl --fail --location ${pin.url} --output ${tools}/xcodegen.zip && ` +
+      `echo '${pin.sha256}  ${tools}/xcodegen.zip' | shasum -a 256 --check && unzip -q -o ${tools}/xcodegen.zip -d ${tools}`
+    : `install XcodeGen ${pin.xcodegen} as ${PIN_FILE} does into ${tools}`;
+  const prefix = `PATH="$PWD/${tools}/xcodegen/bin:$PATH"`;
+  return `device.py runs the first xcodegen on PATH, so build and record with the pinned one: ${install}; then ` +
+    `${prefix} scripts/device/build.sh <run-dir> and ${prefix} node scripts/ci/app-inputs-hash.mjs --verify-host`;
 }
 
 /**

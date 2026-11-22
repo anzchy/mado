@@ -319,3 +319,33 @@ test('issue 734 fix1 --verify-host also requires the host xcodegen to match the 
   rmSync(path.join(bin, 'xcodegen'));
   refused(run(root, ['--verify-host'], env), /xcodegen --version failed/);
 });
+
+// Issue 734 fix round 2: CI installs the pinned XcodeGen into .build/ci-tools; the device build runs the xcodegen on
+// PATH. A mismatch refuses (never loosened) and says exactly how to fix it.
+test('issue 734 fix2 an XcodeGen mismatch names the host binary and how to put the pinned one on PATH', t => {
+  const pin = PIN + [
+    '    - run: |',
+    '        curl --fail --location https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip --output .build/ci-tools/xcodegen.zip',
+    "        echo 'a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  .build/ci-tools/xcodegen.zip' | shasum -a 256 --check", ''].join('\n');
+  const root = repo(t, { ...FILES, '.github/actions/xcode-setup/action.yml': pin });
+  const bin = mkdtempSync(path.join(tmpdir(), 'app-inputs-bin-'));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  const tool = (name, text) => { writeFileSync(path.join(bin, name), text); chmodSync(path.join(bin, name), 0o755); };
+  symlinkSync(spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim(), path.join(bin, 'git'));
+  tool('xcodebuild', "#!/bin/sh\nprintf 'Xcode 26.6\\nBuild version 17F113\\n'\n");
+  tool('xcodegen', "#!/bin/sh\nprintf 'Version: 2.46.0\\n'\n");
+  const result = run(root, ['--verify-host'], { PATH: bin });
+  refused(result, /host XcodeGen 2\.46\.0 differs from the pin/);
+  const message = result.stderr;
+  assert.ok(message.includes(`(${path.join(bin, 'xcodegen')})`), message);
+  assert.ok(message.includes('https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip'), message);
+  assert.ok(message.includes('a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73'), message);
+  assert.ok(message.includes('PATH="$PWD/.build/ci-tools/xcodegen/bin:$PATH"'), message);
+  assert.match(message, /scripts\/device\/build\.sh/);
+  assert.match(message, /app-inputs-hash\.mjs --verify-host/);
+  // Without an install step in the pin, the message still points at the pin file instead of inventing a URL.
+  const bare = repo(t);
+  const plain = run(bare, ['--verify-host'], { PATH: bin }).stderr;
+  assert.match(plain, /install XcodeGen 2\.44\.1 as \.github\/actions\/xcode-setup\/action\.yml does/);
+  assert.doesNotMatch(plain, /https:/);
+});

@@ -160,7 +160,10 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    other than the pin) and write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke` row
    keeps that SHA. The PR-body lint hashes both the smoked SHA and the PR head: the claim must equal both, else
    refused (redo a smoke covering the changed paths); a smoked SHA the lint's clone lacks (e.g. pre-rebase) or a hash
-   it cannot compute fails closed. On a PR that changes App inputs a PASS without `inputs=` is
+   it cannot compute fails closed. The lint does not check `run=` against the run record (follow-up ticket): before
+   merging an App PR, open the run's `build.json` and check by hand that its `fullSHA` (or `sha`) is the Device-Smoke
+   SHA, else redo the smoke. Build and record with the pinned XcodeGen first on PATH (`--verify-host`'s refusal
+   prints the install command). On a PR that changes App inputs a PASS without `inputs=` is
    refused; the head-SHA-only form stays only for tooling-only PRs (n/a and NOT VERIFIED unchanged). The smoke
    promotes no ledger row; full parity stays batched (step 9).
    Before merge, rerun `node .agents/skills/mado-verify/scripts/evidence.mjs check --head <audited-sha> --issue <n> --worktree <wt>`
