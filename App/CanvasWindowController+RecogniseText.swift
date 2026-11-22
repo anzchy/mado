@@ -74,8 +74,13 @@ import MadoInfrastructure
     }
     deinit { if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) } }
 
+    /// Closing invalidates the adapter; issue 728: the controller and its window are reused, so the window being
+    /// shown again (application(_:open:) → showWindow) reopens it. A run from before the close keeps failing
+    /// `isCurrent`, because closing replaced `activeRun`.
+    private var isClosed: Bool { closed && controller?.window?.isVisible != true }
+
     var canStart: Bool {
-        guard let controller, !closed, controller.window != nil,
+        guard let controller, !isClosed, controller.window != nil,
               !controller.session.isAnnotating, !controller.canvas.isHidden,
               controller.canvas.backdropFrame.image != nil else { return false }
         return model?.isRunning != true
@@ -83,6 +88,7 @@ import MadoInfrastructure
 
     func start() {
         guard canStart, let controller, let image = controller.canvas.backdropFrame.image else { return }
+        closed = false
         let generation = controller.session.imageLoader.generation
         let presentedKey = controller.session.imageLoader.presented?.key
         let sourceSize = controller.canvas.backdropFrame.sourceSize
