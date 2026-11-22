@@ -72,8 +72,9 @@ main{grid-area:main;overflow:auto;padding:16px 24px 48px}.content{max-width:1180
 <p>在 <code>ledger:check</code> 实现之前，合入审查时按上面五条人工核对。</p>
 <p><code>docs/feature-ledger.html</code> 是本文件的渲染视图，可按状态、阶段筛选和搜索，<strong>由本文件生成，不要手改</strong>。 每次提交改动本文件时，都在同一个提交里运行 <code>npm run ledger:build</code> 并提交生成的 HTML；CI 运行 <code>npm run ledger:html-check</code>，拒绝过时的 HTML。<code>ledger:check</code> 仍是迁移计划 A12 的后续工作。</p>
 <h2 id="发布门槛怎么读">发布门槛怎么读</h2>
-<p>不单独维护一份发布清单，直接按「计划」一列筛选：</p>
-<ul><li><strong>Mado 0.0.1（tag <code>mado-v0.0.1</code>；J1+J2 对外版，计划 §5 v0.5）</strong>：计划 §1.6 中 J1、J2 两行列出的账簿行，加 DIST-01/02/03，全部是 <code>Shipped</code>，或 <code>Partial</code> 且限制已被用户接受（引用原话）；</li><li><strong>v0.0.2</strong>：计划为 P0–P3 的行，同样要求（原 v0.0.1 门槛，2026-10-28 移来）；</li><li><strong>首发 v1</strong>：计划为 P0–P6 的行，同样要求；格式类的行未达标时，从对外支持声明里删掉，而不是保留一个 <code>Partial</code>。</li></ul>
+<p>每一版的范围看 GitHub milestone，门槛清单和发布许可看该版的父 issue（owner 2026-11-22；计划文档不再写门槛）。账簿只回答「这一行现在是什么状态、怎么确认」，不单独维护发布清单：</p>
+<ul><li><strong>Mado 0.0.1（tag <code>mado-v0.0.1</code>；J1+J2 对外版，已发布）</strong>：milestone <code>v0.0.1</code>（已关闭），父 spec #130、发布准备 #212。当时的规则：计划 §1.6 中 J1、J2 两行列出的账簿行，加 DIST-01/02/03，全部是 <code>Shipped</code>，或 <code>Partial</code> 且限制已被用户接受（引用原话）；</li><li><strong>v0.0.2（截图、OCR、批注基本可用）</strong>：milestone <code>v0.0.2</code>，门槛清单是父 issue #825，规格是 #680；涉及的行是 CAP-01/02、EDIT-07/08、EXT-01/04/05，状态晋升只来自独立的真机验证记录（验收票 #824）；</li><li><strong>v0.0.3（viewer/grid/sidebar 对照、Filmstrip、多选、右键、Inspector 与显示偏好闭环）</strong>：milestone <code>v0.0.3</code>，验收总票 #147（原计划 §5 门槛的全文存档在它的评论里）；计划为 P0–P3 的行同样要求 <code>Shipped</code>，或 <code>Partial</code> 且限制已被用户接受；</li><li><strong>首发 v1</strong>：计划为 P0–P6 的行，同样要求；格式类的行未达标时，从对外支持声明里删掉，而不是保留一个 <code>Partial</code>。</li></ul>
+<p>不论哪一版，没有用户的明确许可不发布；父 issue 里的每一项要有证据链接。</p>
 <hr>
 <h2 id="part-1-mado-现在有什么">Part 1 — Mado 现在有什么</h2>
 <p>2026-11-08 之前的真机记录都取自改名前的 Picsee 构建（旧 bundle ID，ADR-0017）。行里引用这些记录时，证明的是 Picsee 构建上的行为；Mado 构建上的复验以新记录为准。</p>
@@ -359,7 +360,7 @@ main{grid-area:main;overflow:auto;padding:16px 24px 48px}.content{max-width:1180
 <footer class="statusbar">
 <span>115 项能力</span><span>·</span><span>Shipped 0 · Partial 72 · Stub 2 · Absent 41 · Unknown 0</span>
 <span class="spacer"></span>
-<span>由 docs/feature-ledger.md 生成 · sha256 45889cd23711 · 请勿手改</span>
+<span>由 docs/feature-ledger.md 生成 · sha256 5cf6df8eee7c · 请勿手改</span>
 <label for="theme" class="result">外观</label>
 <select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select>
 </footer>
