@@ -93,7 +93,7 @@ def gui_contract(executable, base):
     wrong_batch = run(executable, ["release", "other-batch", "--acquisition-id", matched.group(1)], env)
     require(wrong_batch.returncode == 1 and owner.read_text() == owner_before,
             "GUI wrong-batch release was not refused")
-    foreign_project = "rclick" if fields["project"] == "picsee" else "picsee"
+    foreign_project = "mado" if fields["project"] == "rclick" else "rclick"
     foreign_owner = owner_before.replace(f"project={fields['project']}", f"project={foreign_project}", 1)
     require(foreign_owner != owner_before, "GUI owner project was unexpected")
     owner.write_text(foreign_owner)

@@ -133,7 +133,7 @@ test('i738w23-fix1 conformance rejects reentry, unsafe release, and a disabled h
   const mutations=[
     ['reentry',original.replace('except FileExistsError:\n            return None','except FileExistsError:\n            if batch == "conformance-batch": return str(uuid.uuid4())\n            return None')],
     ['wrong-batch',original.replace(' or values["batch"] != batch','')],
-    ['foreign-project',original.replace('values["project"] != "picsee" or ','')],
+    ['foreign-project',original.replace(/values\["project"\] != "[^"]+" or /,'')],
   ];
   for(const [name,body] of mutations){
     assert.notEqual(body,original,`${name}: mutant did not change source`);
