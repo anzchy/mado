@@ -23,7 +23,7 @@ private func tempDirectory694F() -> URL {
     let mado = FileCaptureAnnotateHandoff(directory: directory)
     #expect(mado.take() == record694F)
     #expect(mado.take() == nil, "one record serves one open")
-    #expect(!FileManager.default.fileExists(atPath: helper.fileURL.path))
+    #expect((try? Data(contentsOf: helper.fileURL))?.isEmpty == true, "emptied in place, never deleted (#684)")
     helper.write(record694F)
     helper.clear()
     #expect(mado.take() == nil)
@@ -40,7 +40,7 @@ private func tempDirectory694F() -> URL {
     let store = FileCaptureAnnotateHandoff(directory: directory)
     try Data("{\"path\":1}".utf8).write(to: store.fileURL)
     #expect(store.take() == nil)
-    #expect(!FileManager.default.fileExists(atPath: store.fileURL.path), "removed")
+    #expect((try? Data(contentsOf: store.fileURL))?.isEmpty == true, "emptied in place, never deleted (#684)")
     // An unwritable directory: the write fails quietly and nothing is read back.
     let blocked = FileCaptureAnnotateHandoff(directory: store.fileURL.appendingPathComponent("not-a-directory"))
     try Data().write(to: store.fileURL)

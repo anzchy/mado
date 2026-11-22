@@ -24,11 +24,15 @@ public final class FileCaptureAnnotateHandoff: CaptureAnnotateHandoffPort, @unch
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    public func clear() { try? FileManager.default.removeItem(at: fileURL) }
+    /// Empties the file in place: Capture modules never delete files (#684), and an empty file holds no record.
+    public func clear() {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        try? Data().write(to: fileURL, options: .atomic)
+    }
 
-    /// Reads and removes the record; a file that does not decode as one is removed and ignored.
+    /// Reads and empties the record; a file that does not decode as one is emptied and ignored.
     public func take() -> CaptureAnnotateHandoffRecord? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        guard let data = try? Data(contentsOf: fileURL), !data.isEmpty else { return nil }
         clear()
         return try? JSONDecoder().decode(CaptureAnnotateHandoffRecord.self, from: data)
     }
