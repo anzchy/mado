@@ -30,7 +30,11 @@ extension ViewerSession {
     }
 
     /// #694: another open, a refused leave, a failed input or a closed window ends the intent.
-    public func dropAnnotateOnShow() { annotateOnShow = nil }
+    public func dropAnnotateOnShow(_ reason: AnnotateOnShowDropReason = .newOpen) {
+        guard annotateOnShow != nil else { return }
+        annotateOnShow = nil
+        onAnnotateOnShowDrop?(reason)
+    }
 
     /// #694: judges the intent against the loaded file now; `.enter` and `.drop` end it. The host enters Annotate Mode
     /// on `.enter` through its own ⌘E path, with `canEnter` its ⌘E admission.
@@ -39,6 +43,7 @@ extension ViewerSession {
         let decision = intent.decide(shown: imageLoader.fileURL.map(CaptureAnnotateHandoff.resolvedPath),
                                      status: imageStatus, canEnter: canEnter)
         annotateOnShow = decision == .wait ? intent : nil
+        if decision == .drop, let reason = intent.dropReason { onAnnotateOnShowDrop?(reason) }
         return decision
     }
 

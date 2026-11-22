@@ -35,6 +35,8 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
     /// i694-fix1: the intent's file showed while ⌘E admission was refused (a sheet, another text field, OCR typing).
     /// The host watches admission; it enters once admitted, and any later change of the file or its load drops it.
     public internal(set) var refused = false
+    /// i694-fix1: why `decide` dropped the intent, for the lifecycle notice.
+    public internal(set) var dropReason: AnnotateOnShowDropReason?
 
     public init(path: String, baseline: String?, id: UUID = UUID()) {
         self.id = id
@@ -48,8 +50,9 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
     /// Any other file drops it, except the baseline (or nothing) before the intent's file reached the loader.
     public mutating func decide(shown: String?, status: ViewerImageStatus, canEnter: Bool) -> AnnotateOnShowDecision {
         guard let shown, shown == path else {
-            if seen { return .drop }
-            return shown == nil || shown == baseline ? .wait : .drop
+            if !seen, shown == nil || shown == baseline { return .wait }
+            dropReason = seen && shown == nil ? .cancelled : .otherImage
+            return .drop
         }
         seen = true
         switch status {
@@ -57,10 +60,33 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
             if canEnter { return .enter }
             refused = true
             return .wait
-        case .loading, .readingFolder: return refused ? .drop : .wait
-        default: return .drop
+        case .loading, .readingFolder:
+            guard refused else { return .wait }
+            dropReason = .reloaded
+            return .drop
+        default:
+            dropReason = status == .empty ? .cancelled : .loadFailed
+            return .drop
         }
     }
+}
+
+/// i694-fix1: why an annotate-on-show intent ended without entering Annotate Mode.
+public enum AnnotateOnShowDropReason: String, Sendable {
+    /// Another image showed, or was loading, in its place.
+    case otherImage
+    /// Its file failed to load.
+    case loadFailed
+    /// Its load was cancelled (nothing shows).
+    case cancelled
+    /// It was refused by ⌘E admission, then its file loaded again.
+    case reloaded
+    /// Another open, folder or recent folder was asked for.
+    case newOpen
+    /// Its file never reached the loader (unsupported, a notice, an access failure).
+    case notLoaded
+    /// The window closed.
+    case windowClosed
 }
 
 public enum AnnotateOnShowDecision: Equatable, Sendable {

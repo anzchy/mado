@@ -263,3 +263,81 @@ private let capture694 = URL(fileURLWithPath: "/Users/u/Downloads/mado-202611131
     #expect(AnnotatedCopyPlan.name(for: "mado-20261113140532-2.png", existing: [], writableTypes: writable).name
             == "mado-20261113140532-2-annotated.png")
 }
+
+// MARK: - i694-fix1 (audit opus M5): the lifecycle notice's outcome, age bucket and drop reason
+
+@Test func issue694Fix1HandoffOutcomes() {
+    func resolve(_ record: CaptureAnnotateHandoffRecord?, _ urls: [URL], age: TimeInterval = 2)
+        -> (CaptureAnnotateHandoffResult, CaptureAnnotateHandoffRecord?) {
+        let store = Store694(record)
+        let result = CaptureAnnotateHandoff.resolve(store, opened: urls, now: written694.addingTimeInterval(age))
+        return (result, store.record)
+    }
+    let record = CaptureAnnotateHandoffRecord(fileURL: capture694, createdAt: written694)
+    let other = URL(fileURLWithPath: "/Users/u/Pictures/trip.png")
+    #expect(resolve(record, [capture694]).0 == CaptureAnnotateHandoffResult(url: capture694, outcome: .matched, ageBucket: "0-5s"))
+    #expect(resolve(record, [capture694]).1 == nil, "used up")
+    #expect(resolve(nil, [capture694]).0 == CaptureAnnotateHandoffResult(url: nil, outcome: .none, ageBucket: "none"))
+    #expect(resolve(record, [capture694], age: 61).0 == CaptureAnnotateHandoffResult(url: nil, outcome: .stale, ageBucket: ">60s"))
+    #expect(resolve(record, [capture694], age: 61).1 == nil, "a stale record is removed")
+    #expect(resolve(record, [capture694], age: -1).0 == CaptureAnnotateHandoffResult(url: nil, outcome: .stale, ageBucket: "<0s"))
+    #expect(resolve(record, [other], age: 7).0 == CaptureAnnotateHandoffResult(url: nil, outcome: .other, ageBucket: "5-15s"))
+    #expect(resolve(record, [other], age: 7).1 == record, "put back for its own open")
+    #expect(resolve(record, [capture694, other], age: 20).0
+        == CaptureAnnotateHandoffResult(url: nil, outcome: .multi, ageBucket: "15-60s"))
+    #expect(resolve(record, [capture694, other], age: 20).1 == record)
+    // Bucket edges.
+    #expect(resolve(record, [capture694], age: 0).0.ageBucket == "0-5s")
+    #expect(resolve(record, [capture694], age: 5).0.ageBucket == "5-15s")
+    #expect(resolve(record, [capture694], age: 15).0.ageBucket == "15-60s")
+    #expect(resolve(record, [capture694], age: 60).0 == CaptureAnnotateHandoffResult(url: capture694, outcome: .matched, ageBucket: "15-60s"))
+    // consume stays the URL of resolve.
+    #expect(CaptureAnnotateHandoff.consume(Store694(record), opened: [capture694], now: written694) == capture694)
+}
+
+@Test func issue694Fix1DecideNamesTheDropReason() {
+    let a = "/c/a.png", b = "/c/b.png", c = "/c/c.png"
+    func reason(_ shown: String?, _ status: ViewerImageStatus, seen: Bool = false, refused: Bool = false)
+        -> AnnotateOnShowDropReason? {
+        var intent = AnnotateOnShowIntent(path: a, baseline: b)
+        if seen { intent.seen = true }
+        if refused { intent.seen = true; intent.refused = true }
+        #expect(intent.decide(shown: shown, status: status, canEnter: true) == .drop)
+        return intent.dropReason
+    }
+    #expect(reason(c, .loading("c.png")) == .otherImage)
+    #expect(reason(b, .showing, seen: true) == .otherImage)
+    #expect(reason(nil, .empty, seen: true) == .cancelled)
+    #expect(reason(a, .failed(.corruptImage, "a.png")) == .loadFailed)
+    #expect(reason(a, .empty) == .cancelled)
+    #expect(reason(a, .loading("a.png"), refused: true) == .reloaded)
+    var waiting = AnnotateOnShowIntent(path: a, baseline: b)
+    #expect(waiting.decide(shown: b, status: .showing, canEnter: true) == .wait)
+    #expect(waiting.dropReason == nil)
+}
+
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694Fix1SessionReportsEachDropOnce() async {
+    let viewer = Viewer694()
+    var reasons: [AnnotateOnShowDropReason] = []
+    viewer.session.onAnnotateOnShowDrop = { reasons.append($0) }
+    viewer.session.dropAnnotateOnShow()
+    #expect(reasons.isEmpty, "no intent, nothing to report")
+    viewer.session.requestAnnotateOnShow(capture694)
+    viewer.session.dropAnnotateOnShow(.windowClosed)
+    viewer.session.dropAnnotateOnShow(.newOpen)
+    #expect(reasons == [.windowClosed])
+    viewer.session.requestAnnotateOnShow(capture694)
+    viewer.session.dropAnnotateOnShow()
+    #expect(reasons == [.windowClosed, .newOpen], "the default is another open")
+    viewer.session.requestAnnotateOnShow(capture694)
+    viewer.open(capture694, failing: true)
+    await viewer.settle()
+    #expect(viewer.session.annotateOnShowDecision(canEnter: true) == .drop)
+    #expect(viewer.session.annotateOnShowDecision(canEnter: true) == .drop)
+    #expect(reasons == [.windowClosed, .newOpen, .loadFailed])
+    viewer.session.requestAnnotateOnShow(capture694)
+    viewer.open(capture694)
+    await viewer.settle()
+    #expect(viewer.session.applyAnnotateOnShow())
+    #expect(reasons == [.windowClosed, .newOpen, .loadFailed], "entering is not a drop")
+}

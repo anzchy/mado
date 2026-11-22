@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import os
 import UniformTypeIdentifiers
 import MadoCore
 import MadoApplication
@@ -126,6 +127,9 @@ struct AnnotatePendingLeave {
     }
 }
 
+/// i694-fix1: the #694 intent-drop notice, in the lifecycle category with the hand-off outcome.
+private let annotateLifecycleLogger = Logger(subsystem: "io.github.anzchy.mado", category: "lifecycle")
+
 /// #690 (P7-11): Annotate Mode in the viewer window. The Session owns the state; this wires keys, menus, the
 /// unsaved-marks prompt, close and quit, and performs the save (decode, flatten, plan, write or save panel).
 extension CanvasWindowController {
@@ -193,6 +197,9 @@ extension CanvasWindowController {
     /// #694: a Capture opened by the thumbnail's 标注 enters Annotate Mode once it shows. Watches the loaded file and
     /// its status until the intent is used up or dropped; each intent has its own watch.
     func requestAnnotateOnShow(_ url: URL) {
+        session.onAnnotateOnShowDrop = { reason in
+            annotateLifecycleLogger.notice("capture annotate intent dropped reason=\(reason.rawValue, privacy: .public)")
+        }
         session.requestAnnotateOnShow(url)
         guard let id = session.annotateOnShow?.id else { return }
         observeAnnotateOnShow(id)
@@ -253,7 +260,7 @@ extension CanvasWindowController {
     func annotateOnShowInputEnded() {
         guard let intent = session.annotateOnShow else { return }
         guard session.imageLoader.fileURL.map(CaptureAnnotateHandoff.resolvedPath) == intent.path else {
-            session.dropAnnotateOnShow()
+            session.dropAnnotateOnShow(.notLoaded)
             return
         }
         applyAnnotateOnShow()
@@ -375,7 +382,7 @@ extension CanvasWindowController {
 
     /// The close button and ⌘W: asks while marks are unsaved; 存储 closes the window once the copy is written.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        session.dropAnnotateOnShow()
+        session.dropAnnotateOnShow(.windowClosed)
         guard session.isAnnotating else { return true }
         let answer = AnnotateSyncAnswer()
         leaveAnnotateMode(.closeWindow, proceed: { [weak self] in
