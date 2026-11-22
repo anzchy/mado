@@ -16,11 +16,18 @@ import MadoInfrastructure
         CloudRecognitionAppServices.recognitionService(onDevice: OnDeviceTextRecognitionProvider())
     }
     private(set) var model: RecogniseTextModel?
+    /// The last run's task, so tests can await its end; nil before the first run.
+    private(set) var recognitionTask: Task<Void, Never>?
     private var overlay: RecogniseTextOverlay?
     nonisolated(unsafe) private var closeObserver: (any NSObjectProtocol)?
     private var activeGeneration: UUID?
     private var activeRun = UUID()
+    /// Set when the window closes, cleared only by the next `start()`: "closed since the last run". Run-level checks
+    /// (`isCurrent`, the focus hand-off) read this raw flag. Admission reads `isClosed` instead.
     private var closed = false
+    /// Issue 728 fix1: true from willClose until the close has returned. AppKit still reports the window visible
+    /// while it posts willClose, so visibility alone cannot keep admission closed during that transition.
+    private var closing = false
     private var priorMinimum: NSSize?
     private var expandedFrom: NSSize?
     private var panelHeight: CGFloat = 340
@@ -74,10 +81,11 @@ import MadoInfrastructure
     }
     deinit { if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) } }
 
-    /// Closing invalidates the adapter; issue 728: the controller and its window are reused, so the window being
-    /// shown again (application(_:open:) → showWindow) reopens it. A run from before the close keeps failing
-    /// `isCurrent`, because closing replaced `activeRun`.
-    private var isClosed: Bool { closed && controller?.window?.isVisible != true }
+    /// Admission's view of `closed`. Closing invalidates the adapter; issue 728: the controller and its window are
+    /// reused, so once the close has finished, the window being shown again (application(_:open:) → showWindow)
+    /// reopens admission. A run from before the close keeps failing `isCurrent`, because closing replaced
+    /// `activeRun` and `closed` stays set until a new `start()`.
+    private var isClosed: Bool { closed && (closing || controller?.window?.isVisible != true) }
 
     var canStart: Bool {
         guard let controller, !isClosed, controller.window != nil,
@@ -118,7 +126,7 @@ import MadoInfrastructure
         model?.close()
         model = newModel
         ensureOverlay()
-        newModel.start(Data(), identity: run)
+        recognitionTask = newModel.start(Data(), identity: run)
     }
 
     nonisolated static func sourceData(image: CGImage) async throws -> Data {
@@ -287,6 +295,9 @@ import MadoInfrastructure
     private func windowClosed() {
         restorePanelKeyRouting()
         closed = true
+        // NSWindow.close posts willClose synchronously on the main actor; this hop runs after close has returned.
+        closing = true
+        Task { @MainActor [weak self] in self?.closing = false }
         activeRun = UUID()
         model?.close()
         overlay?.clear()
