@@ -98,3 +98,53 @@ test('i738w23 installed real snapshot runs outside the checkout with temporary H
     assert.equal(probe.status,0,`${kind}: ${probe.stdout}${probe.stderr}`);
   }
 });
+
+test('i738w23-fix1 installer refuses bad publication states without new public links',t=>{
+  for(const scenario of ['unmanaged-gui','unmanaged-current','short-commit','bad-commit','tampered-snapshot']){
+    const f=fixture(t);
+    const bin=path.join(f.home,'.local/bin');
+    const share=path.join(f.home,'.local/share/shared-locks');
+    fs.mkdirSync(bin,{recursive:true});fs.mkdirSync(share,{recursive:true});
+    const install=commit=>run('python3',[installer,'--repo',f.repo,'--commit',commit],{env:{...process.env,HOME:f.home}});
+    let commit=f.first;
+    if(scenario==='unmanaged-gui')fs.writeFileSync(path.join(bin,'gui-lock'),'unmanaged');
+    if(scenario==='unmanaged-current')fs.mkdirSync(path.join(share,'current'));
+    if(scenario==='short-commit')commit=f.first.slice(0,7);
+    if(scenario==='bad-commit')commit='0'.repeat(40);
+    if(scenario==='tampered-snapshot'){
+      assert.equal(install(commit).status,0);
+      fs.unlinkSync(path.join(bin,'heavy-lock'));fs.unlinkSync(path.join(bin,'gui-lock'));
+      fs.writeFileSync(path.join(share,commit,'scripts/heavy-lock.sh'),'tampered');
+    }
+    const result=install(commit);
+    assert.equal(result.status,1,`${scenario}: ${result.stdout}${result.stderr}`);
+    assert.equal(fs.readdirSync(bin).includes('heavy-lock'),false,`${scenario}: new heavy link remained`);
+    if(scenario!=='unmanaged-gui')assert.equal(fs.readdirSync(bin).includes('gui-lock'),false,`${scenario}: new GUI link remained`);
+    assert.equal(fs.readdirSync(share).some(name=>name.startsWith('.stage-')||name.startsWith('.current.')),false,`${scenario}: stage remained`);
+  }
+});
+
+test('i738w23-fix1 conformance rejects reentry, unsafe release, and a disabled heavy cap',t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lock-conformance-mutants-'));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const check=(kind,executable)=>run('python3',[conformance,'--kind',kind,'--executable',executable],
+    {env:{...process.env,HOME:path.join(dir,`home-${kind}`)},timeout:90000});
+  const original=fs.readFileSync(gui,'utf8');
+  const mutations=[
+    ['reentry',original.replace('except FileExistsError:\n            return None','except FileExistsError:\n            if batch == "conformance-batch": return str(uuid.uuid4())\n            return None')],
+    ['wrong-batch',original.replace(' or values["batch"] != batch','')],
+    ['foreign-project',original.replace('values["project"] != "picsee" or ','')],
+  ];
+  for(const [name,body] of mutations){
+    assert.notEqual(body,original,`${name}: mutant did not change source`);
+    const executable=path.join(dir,`${name}.sh`);
+    fs.writeFileSync(executable,body,{mode:0o755});
+    const result=check('gui',executable);
+    assert.equal(result.status,1,`${name}: ${result.stdout}${result.stderr}`);
+  }
+  const brokenHeavy=path.join(dir,'no-cap.sh');
+  fs.writeFileSync(brokenHeavy,`#!/bin/sh\nif [ "$MADO_HEAVY_LOCK_EXEC_SECS" = 1 ]; then export MADO_HEAVY_LOCK_EXEC_SECS=60; fi\nexec '${heavy}' "$@"\n`,{mode:0o755});
+  const result=check('heavy',brokenHeavy);
+  assert.equal(result.status,1,`no-cap: ${result.stdout}${result.stderr}`);
+  assert.match(result.stderr,/124|cap|timeout/i);
+});

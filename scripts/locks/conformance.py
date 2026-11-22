@@ -58,9 +58,10 @@ def keys(path):
 def gui_contract(executable, base):
     home = base / "home"
     home.mkdir()
-    env = {**os.environ, "HOME": str(home), "MADO_GUI_LOCK_TEST": "1",
-           "MADO_GUI_LOCK_WAIT_SECONDS": "0", "RCLICK_GUI_LOCK_TEST": "1",
-           "RCLICK_GUI_LOCK_WAIT_SECONDS": "0"}
+    env = {name: value for name, value in os.environ.items()
+           if not name.startswith(("MADO_GUI_LOCK_", "RCLICK_GUI_LOCK_"))}
+    env.update(HOME=str(home), MADO_GUI_LOCK_TEST="1", MADO_GUI_LOCK_WAIT_SECONDS="0",
+               RCLICK_GUI_LOCK_TEST="1", RCLICK_GUI_LOCK_WAIT_SECONDS="0")
     batch = "conformance-batch"
     status = run(executable, ["status"], env)
     require(status.returncode == 0 and status.stdout.strip() == "FREE", "GUI status must start FREE")
@@ -70,6 +71,7 @@ def gui_contract(executable, base):
     require(matched is not None, "GUI acquire omitted acquisition_id")
     owner = home / ".cache/desktop-gui.lock/owner"
     require(owner.is_file(), "GUI owner record absent")
+    owner_before = owner.read_text()
     fields = keys(owner)
     require(set(fields) == {"project", "session", "batch", "start", "pid",
                             "expected_minutes", "purpose", "acquisition_id"}, "GUI owner field set differs")
@@ -81,12 +83,28 @@ def gui_contract(executable, base):
     require(busy.returncode == 75, f"GUI busy acquire must exit 75, got {busy.returncode}")
     waited = run(executable, ["wait", "other-batch", "1", "conformance", "conformance", "1"], env)
     require(waited.returncode == 75, f"GUI wait timeout must exit 75, got {waited.returncode}")
+    for command, args in (("acquire", [batch, "1", "conformance"]),
+                          ("wait", [batch, "1", "conformance", "conformance", "1"])):
+        result = run(executable, [command, *args], env)
+        require(result.returncode == 75 and owner.read_text() == owner_before,
+                f"GUI same-batch {command} must exit 75 without changing owner")
     wrong = run(executable, ["release", batch, "--acquisition-id", str(uuid.uuid4())], env)
     require(wrong.returncode == 1 and owner.exists(), "GUI wrong-id release was not refused")
+    wrong_batch = run(executable, ["release", "other-batch", "--acquisition-id", matched.group(1)], env)
+    require(wrong_batch.returncode == 1 and owner.read_text() == owner_before,
+            "GUI wrong-batch release was not refused")
+    foreign_project = "rclick" if fields["project"] == "picsee" else "picsee"
+    foreign_owner = owner_before.replace(f"project={fields['project']}", f"project={foreign_project}", 1)
+    require(foreign_owner != owner_before, "GUI owner project was unexpected")
+    owner.write_text(foreign_owner)
+    foreign = run(executable, ["release", batch, "--acquisition-id", matched.group(1)], env)
+    require(foreign.returncode == 1 and owner.read_text() == foreign_owner,
+            "GUI foreign-project release was not refused")
+    owner.write_text(owner_before)
     released = run(executable, ["release", batch, "--acquisition-id", matched.group(1)], env)
     require(released.returncode == 0 and not owner.exists(), "GUI matching release failed")
     require(run(executable, ["status"], env).stdout.strip() == "FREE", "GUI status not FREE after release")
-    return "acquire,busy,wait-timeout,wrong-id,nesting-refused,owner,release"
+    return "acquire,busy,wait-timeout,wrong-id,wrong-batch,foreign-project,nesting-refused,owner,release"
 
 
 def heavy_env(base):
@@ -176,7 +194,19 @@ def heavy_contract(executable, base):
     require(drainer.returncode == 0, f"heavy drain did not finish cleanly: {drainer.returncode}")
     require(run(executable, [sys.executable, "-c", "pass"], env).returncode == 0,
             "heavy lock did not admit after descendant drained")
-    return "usage,acquire,busy,wait-timeout,nesting,drain,owner,release"
+    cap_env = {**env, "MADO_HEAVY_LOCK_EXEC_SECS": "1"}
+    capped = run(executable, [sys.executable, "-c", "import time; time.sleep(2)"], cap_env, timeout=12)
+    require(capped.returncode == 124 and "[heavy-lock]" in capped.stderr,
+            f"heavy run cap must exit 124 with tool diagnostic, got {capped.returncode}")
+    unsafe_marker = base / "unsafe-ran"
+    unsafe_env = {**env, "MADO_HEAVY_LOCK_HELD": "1"}
+    unsafe = run(executable, [sys.executable, "-c",
+                              f"from pathlib import Path; Path({str(unsafe_marker)!r}).touch()"], unsafe_env)
+    require(unsafe.returncode == 70 and "[heavy-lock]" in unsafe.stderr and not unsafe_marker.exists(),
+            f"heavy copied nesting hint must exit 70 before launch, got {unsafe.returncode}")
+    require((base / "heavy.lock").is_file(), "heavy persistent lock file was removed")
+    require(not list(base.glob("heavy.lock.guardian-*.owner")), "heavy guardian owner record remained after release")
+    return "usage,acquire,busy,wait-timeout,nesting,drain,owner,release,cap-124,unsafe-70,persistent-file"
 
 
 def main():
