@@ -50,3 +50,25 @@ public enum CaptureAnnotateHandoff {
         url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
     }
 }
+
+/// i694-fix1: every store the hand-off can go through, in order: the App Group defaults, then a file in the App Group
+/// container. A write goes to each store, because a suite the system does not actually share fails silently, so
+/// nothing can choose one store over the other. `take` takes from each, so all are cleared, and returns the newest
+/// record. With no store at all the hand-off is an explicit no-op: nothing is written, nothing is read, and 标注
+/// opens the Capture plainly. Cross-process visibility of either store is not verified (device only).
+public final class CaptureAnnotateHandoffStores: CaptureAnnotateHandoffPort, @unchecked Sendable {
+    public let stores: [any CaptureAnnotateHandoffPort]
+
+    public init(defaults: (any CaptureAnnotateHandoffPort)?, file: (any CaptureAnnotateHandoffPort)?) {
+        stores = [defaults, file].compactMap { $0 }
+    }
+
+    /// False: the explicit no-op.
+    public var isAvailable: Bool { !stores.isEmpty }
+
+    public func write(_ record: CaptureAnnotateHandoffRecord) { stores.forEach { $0.write(record) } }
+    public func clear() { stores.forEach { $0.clear() } }
+    public func take() -> CaptureAnnotateHandoffRecord? {
+        stores.compactMap { $0.take() }.max { $0.createdAt < $1.createdAt }
+    }
+}
