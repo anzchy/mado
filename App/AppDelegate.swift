@@ -56,14 +56,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private let logger = Logger(subsystem: "io.github.anzchy.mado", category: "lifecycle")
 
+    /// The #694 Capture hand-off store read on each Launch Services open (injectable for tests).
+    private let annotateHandoff: (any CaptureAnnotateHandoffPort)?
     #if DEBUG
     private let probeHooks: AppDelegateProbeHooks?
-    init(probeHooks: AppDelegateProbeHooks? = nil) {
+    init(probeHooks: AppDelegateProbeHooks? = nil,
+         annotateHandoff: (any CaptureAnnotateHandoffPort)? = UserDefaultsCaptureAnnotateHandoff.shared()) {
         self.probeHooks = probeHooks
+        self.annotateHandoff = annotateHandoff
         super.init()
     }
     #else
-    override init() {
+    init(annotateHandoff: (any CaptureAnnotateHandoffPort)? = UserDefaultsCaptureAnnotateHandoff.shared()) {
+        self.annotateHandoff = annotateHandoff
         super.init()
     }
     #endif
@@ -164,8 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         // #694: a Capture opened by the thumbnail's 标注 left a one-shot record naming it in the App Group.
-        let annotate = UserDefaultsCaptureAnnotateHandoff.shared()
-            .flatMap { CaptureAnnotateHandoff.consume($0, opened: urls, now: Date()) }
+        let annotate = annotateHandoff.flatMap { CaptureAnnotateHandoff.consume($0, opened: urls, now: Date()) }
         viewer().openInput(urls, annotate: annotate)
         application.activate(ignoringOtherApps: true)
     }
