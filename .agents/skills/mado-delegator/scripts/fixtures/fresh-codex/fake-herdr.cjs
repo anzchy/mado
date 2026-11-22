@@ -9,6 +9,11 @@ const fixtureDir = process.env.MADO_FIXTURE_DIR;
 const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 const args = process.argv.slice(2);
 const action = args.slice(0, 2).join(' ');
+// Reject malformed invocations before mutating the simulated pane, as the CLI does.
+const invalid = () => { process.stderr.write(`herdr: invalid option-like positional ${args.find(a => a.startsWith('-')) ?? 'arguments'}\n`); process.exit(2); };
+const positional = (count, options = false) => {
+  if (args.length !== count || args.slice(2).some(a => a === '--' || (a.startsWith('-') && !options))) invalid();
+};
 const save = () => fs.writeFileSync(statePath, JSON.stringify(state));
 const event = value => state.events.push(value);
 const show = name => process.stdout.write(fs.readFileSync(path.join(fixtureDir, `pane-${name}.txt`), 'utf8')
@@ -18,6 +23,7 @@ state.cwd ??= path.join(os.homedir(), 'fixture-worktree');
 
 switch (action) {
   case 'pane send-text':
+    positional(4);
     if (args[3] !== '/new') process.exit(91);
     event('send-new');
     state.phase = scenario.popup ? 'popup' : 'starting';
@@ -26,6 +32,7 @@ switch (action) {
     if (scenario.lostName) state.name = 'codex';
     break;
   case 'pane send-keys':
+    positional(4);
     const wasStarting = state.phase === 'starting';
     event(`key-${args[3]}`);
     if (args[3]?.toLowerCase() === 'enter' && state.phase === 'starting') {
@@ -52,13 +59,16 @@ switch (action) {
     show(state.phase === 'old' ? (scenario.realIdle ? 'real-idle' : 'old') : state.phase === 'starting' ? 'starting' : state.phase === 'cleared' ? 'old' : state.phase === 'empty' && scenario.realIdle ? 'real-idle' : state.phase);
     break;
   case 'agent rename':
+    positional(4);
     event('agent-rename');
     if (!scenario.renameFails) state.name = args[3];
     break;
   case 'pane rename':
+    positional(4);
     event('pane-rename');
     break;
   case 'agent list':
+    positional(2);
     event('agent-list');
     process.stdout.write(JSON.stringify({ id: 'cli:agent:list', result: { type: 'agent_list', agents: [
       { agent: scenario.nonCodex ? 'claude' : 'codex', name: state.name, pane_id: 'w1:p5', agent_status: state.status, cwd: state.cwd },
@@ -66,10 +76,9 @@ switch (action) {
     ] } }) + '\n');
     break;
   case 'agent prompt':
+    positional(4);
     event('agent-prompt');
-    const promptOffset = args[2] === '--' ? 1 : 0;
-    if (args[2 + promptOffset] !== state.name) { process.stdout.write('not_found\n'); save(); process.exit(1); }
-    if (args[3 + promptOffset]?.startsWith('-') && !promptOffset) { process.stderr.write('option-like prompt\n'); save(); process.exit(2); }
+    if (args[2] !== state.name) { process.stdout.write('not_found\n'); save(); process.exit(1); }
     state.prompts++;
     if (scenario.lateDialog && state.prompts === 1) state.phase = 'dialog';
     else if (scenario.acceptedSlow) state.phase = 'submitted';

@@ -224,10 +224,13 @@ test('#804 fix1 accepted slow prompt is not sent twice', () => {
   assert.equal(f.state().prompts, 1);
 });
 
-test('#804 fix1 option-like prompt is passed after separator', () => {
+test('#804 fix3 option-like prompt is refused before herdr prompt', () => {
   const f = freshScenario({ dialog: false });
   const result = f.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--prompt', '-audit #804');
-  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /prompt.*starts with -/i);
+  assert.equal(f.state().prompts, 0);
+  assert.ok(!f.state().events.includes('send-new'));
 });
 
 test('#804 fix1 invalid pane bytes fail on one line', () => {
