@@ -204,18 +204,48 @@ extension CanvasWindowController {
             _ = session.imageStatus
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, self.session.annotateOnShow?.id == id else { return }
+                guard let self else { return }
+                guard self.session.annotateOnShow?.id == id else {
+                    if self.annotateViews.admissionWatch?.id == id { self.endAnnotateAdmissionWatch() }
+                    return
+                }
                 self.applyAnnotateOnShow()
                 if self.session.annotateOnShow?.id == id { self.observeAnnotateOnShow(id) }
             }
         }
     }
 
-    /// Enters through ⌘E's path, with its admission (no sheet, no other text field).
+    /// Enters through ⌘E's path, with its admission (no sheet, no other text field). i694-fix1: shown but refused, the
+    /// intent waits for admission; a watch re-judges it until it enters or ends.
     func applyAnnotateOnShow() {
-        guard session.annotateOnShow != nil,
-              session.annotateOnShowDecision(canEnter: canEnterAnnotateFromMenu) == .enter else { return }
-        enterAnnotateMode()
+        guard session.annotateOnShow != nil else { return endAnnotateAdmissionWatch() }
+        if session.annotateOnShowDecision(canEnter: canEnterAnnotateFromMenu) == .enter { enterAnnotateMode() }
+        if let intent = session.annotateOnShow, intent.refused { watchAnnotateAdmission(intent.id) }
+        else { endAnnotateAdmissionWatch() }
+    }
+
+    private func watchAnnotateAdmission(_ id: UUID) {
+        guard annotateViews.admissionWatch?.id != id, let window else { return }
+        endAnnotateAdmissionWatch()
+        let watch = AnnotateAdmissionWatch(id: id)
+        // Judged on the next turn: a sheet is still attached while its end is being posted.
+        let recheck: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.annotateViews.admissionWatch === watch else { return }
+                guard self.session.annotateOnShow?.id == id else { return self.endAnnotateAdmissionWatch() }
+                if self.canEnterAnnotateFromMenu { self.applyAnnotateOnShow() }
+            }
+        }
+        watch.observers = [NSWindow.didEndSheetNotification, NSWindow.didUpdateNotification].map {
+            NotificationCenter.default.addObserver(forName: $0, object: window, queue: .main) { _ in recheck() }
+        }
+        watch.responder = window.observe(\.firstResponder, options: [.new]) { _, _ in recheck() }
+        annotateViews.admissionWatch = watch
+    }
+
+    private func endAnnotateAdmissionWatch() {
+        annotateViews.admissionWatch?.end()
+        annotateViews.admissionWatch = nil
     }
 
     /// The input was admitted or refused. If its file never reached the loader (unsupported, a notice, an access

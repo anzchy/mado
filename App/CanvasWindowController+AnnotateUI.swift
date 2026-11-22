@@ -7,7 +7,24 @@ import MadoMacUI
 
 /// Page 39's views while Annotate Mode is on (#690 WI-6). The strip and the overlay live for the whole mode; the
 /// confirmation and the sheet come and go.
+/// i694-fix1: re-judges an annotate-on-show intent refused by ⌘E admission when a sheet ends, the first responder
+/// changes or the window updates, until the intent enters or ends.
+@MainActor final class AnnotateAdmissionWatch {
+    let id: UUID
+    var observers: [NSObjectProtocol] = []
+    var responder: NSKeyValueObservation?
+    init(id: UUID) { self.id = id }
+    func end() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+        responder?.invalidate()
+        responder = nil
+    }
+}
+
 struct AnnotateWindowViews {
+    /// i694-fix1: the admission watch of a refused annotate-on-show intent.
+    var admissionWatch: AnnotateAdmissionWatch?
     var strip: AnnotateStripView?
     var overlay: AnnotationOverlayView?
     /// #693: 遮挡's options beside the strip, shown while the redaction tool is chosen.

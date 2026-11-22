@@ -137,6 +137,29 @@ private let capture694 = URL(fileURLWithPath: "/Users/u/Downloads/mado-202611131
     #expect(decide(nil, .empty, seen: true).0 == .drop)
 }
 
+/// i694-fix1 (audit opus M3): shown while admission is refused, the intent waits for admission only. Admission
+/// returning enters; a later reload of the same file, or any other file, drops it, so it never fires on a later open.
+@Test func issue694Fix1RefusedAdmissionSettles() {
+    let a = "/c/a.png", b = "/c/b.png"
+    var refused = AnnotateOnShowIntent(path: a, baseline: b)
+    #expect(refused.decide(shown: a, status: .showing, canEnter: false) == .wait)
+    #expect(refused.refused && refused.seen)
+    var admitted = refused
+    #expect(admitted.decide(shown: a, status: .showing, canEnter: true) == .enter, "admission came back")
+    var reloaded = refused
+    #expect(reloaded.decide(shown: a, status: .loading("a.png"), canEnter: true) == .drop, "a later reload")
+    var folder = refused
+    #expect(folder.decide(shown: a, status: .readingFolder, canEnter: true) == .drop)
+    var other = refused
+    #expect(other.decide(shown: b, status: .showing, canEnter: true) == .drop)
+    var stillRefused = refused
+    #expect(stillRefused.decide(shown: a, status: .detailLimited, canEnter: false) == .wait)
+    var first = AnnotateOnShowIntent(path: a, baseline: b)
+    #expect(first.decide(shown: a, status: .loading("a.png"), canEnter: false) == .wait)
+    #expect(!first.refused, "still loading is not a refusal")
+    #expect(first.decide(shown: a, status: .showing, canEnter: true) == .enter)
+}
+
 // MARK: - The session
 
 @MainActor @Test(.timeLimit(.minutes(2))) func issue694ViewerSessionEntersAnnotateWhenIntentImageShows() async {

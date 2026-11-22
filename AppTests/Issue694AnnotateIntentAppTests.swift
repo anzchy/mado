@@ -135,3 +135,78 @@ import MadoMacUI
         #expect(!controller.session.isAnnotating)
     }
 }
+
+/// i694-fix1 (audit opus M3): the Capture shows while ⌘E admission is refused (a sheet is attached). The intent waits
+/// for admission only: the sheet ending enters Annotate Mode; with another text field focused it keeps waiting until
+/// focus returns to the canvas; another open first drops it for good.
+@MainActor @Suite(.serialized, .timeLimit(.minutes(3))) struct Issue694Fix1AdmissionAppTests {
+    /// Opens a.png, attaches a sheet, then opens b.png with the annotate intent and waits until it shows, refused.
+    private func refused(_ context: Issue690Context) async throws -> (CanvasWindowController, NSWindow, NSWindow) {
+        let controller = try await context.open()
+        let window = try #require(controller.window)
+        window.orderFront(nil)
+        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled],
+                             backing: .buffered, defer: false)
+        window.beginSheet(sheet, completionHandler: nil)
+        try await waitUntil("sheet attached", timeout: .seconds(30)) { window.attachedSheet != nil }
+        controller.openInput([context.second], annotate: context.second)
+        try await waitUntil("b.png shown, refused", timeout: .seconds(60)) {
+            controller.session.imageStatus == .showing && controller.session.imageLoader.fileURL == context.second
+                && controller.session.annotateOnShow?.refused == true
+        }
+        #expect(!controller.session.isAnnotating)
+        return (controller, window, sheet)
+    }
+
+    private func focusField(_ window: NSWindow) throws -> NSTextView {
+        let field = NSTextView(frame: NSRect(x: 0, y: 0, width: 80, height: 22))
+        window.contentView?.addSubview(field)
+        #expect(window.makeFirstResponder(field))
+        #expect(window.firstResponder === field)
+        return field
+    }
+
+    @Test func issue694Fix1SheetEndEntersAnnotateMode() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let (controller, window, sheet) = try await refused(context)
+        window.endSheet(sheet)
+        try await waitUntil("admitted after the sheet ends", timeout: .seconds(30)) { controller.session.isAnnotating }
+        #expect(controller.session.annotateMode?.fileURL == context.second)
+        #expect(controller.session.annotateOnShow == nil)
+    }
+
+    @Test func issue694Fix1FocusReturnEntersAnnotateMode() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let (controller, window, sheet) = try await refused(context)
+        let field = try focusField(window)
+        defer { field.removeFromSuperview() }
+        window.endSheet(sheet)
+        try await waitUntil("sheet ended", timeout: .seconds(30)) { window.attachedSheet == nil }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!controller.session.isAnnotating, "another text field still has focus")
+        #expect(controller.session.annotateOnShow?.refused == true)
+        #expect(window.makeFirstResponder(controller.canvas))
+        try await waitUntil("admitted after focus returns", timeout: .seconds(30)) { controller.session.isAnnotating }
+        #expect(controller.session.annotateMode?.fileURL == context.second)
+    }
+
+    @Test func issue694Fix1RefusedThenOtherOpenNeverAnnotates() async throws {
+        let context = try await Issue690Context()
+        defer { context.close() }
+        let (controller, window, sheet) = try await refused(context)
+        let field = try focusField(window)
+        defer { field.removeFromSuperview() }
+        window.endSheet(sheet)
+        try await waitUntil("sheet ended", timeout: .seconds(30)) { window.attachedSheet == nil }
+        controller.openInput([context.first])
+        try await waitUntil("a.png shown", timeout: .seconds(60)) {
+            controller.session.imageStatus == .showing && controller.session.imageLoader.fileURL == context.first
+        }
+        #expect(controller.session.annotateOnShow == nil)
+        _ = window.makeFirstResponder(controller.canvas)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!controller.session.isAnnotating, "a later open never fires the dropped intent")
+    }
+}
