@@ -206,7 +206,7 @@ def prompt_and_confirm(pane, name, prompt):
     elif state != "empty":
         raise Refused("fresh Codex prompt is not empty")
     for attempt in (1, 2):
-        herdr("agent", "prompt", "--", name, prompt)
+        herdr("agent", "prompt", name, prompt)
         if wait_working(pane, name):
             return
         if attempt == 2:
@@ -242,6 +242,8 @@ try:
     if not re.fullmatch(r"w[0-9]+:p[A-Za-z0-9]+", pane) or not re.fullmatch(r"[a-z][a-z0-9-]+", name):
         raise Refused("invalid pane or agent name")
     EXPECTED_CWD = normalized_cwd(expected)
+    if prompt is not None and prompt.startswith("-"):
+        raise Refused("task prompt starts with -; herdr agent prompt has no safe option-like text argument")
     if start_mode:
         start(pane, name)
     if prompt is not None:
