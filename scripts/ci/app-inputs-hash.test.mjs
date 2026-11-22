@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isAppInput } from './app-inputs-hash.mjs';
+import { readFileSync } from 'node:fs';
+import { DEVICE_BUILD_DRIVER, DEVICE_INPUT_ROOTS, INPUT_SUFFIXES, isAppInput, pinnedToolchain } from './app-inputs-hash.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./app-inputs-hash.mjs', import.meta.url));
 const PIN = ['name: Xcode setup', 'runs:', '  steps:', '    - run: |',
@@ -203,6 +204,8 @@ test('--verify-host compares the pin with the host xcodebuild and fails closed',
     chmodSync(path.join(bin, 'xcodebuild'), 0o755);
   };
   const env = { PATH: `${bin}${path.delimiter}${process.env.PATH}` };
+  writeFileSync(path.join(bin, 'xcodegen'), "#!/bin/sh\nprintf 'Version: 2.44.1\\n'\n");
+  chmodSync(path.join(bin, 'xcodegen'), 0o755);
   fake("#!/bin/sh\nprintf 'Xcode 26.6\\nBuild version 17F113\\n'\n");
   assert.equal(hash(root, ['--verify-host'], env), hash(root));
   fake("#!/bin/sh\nprintf 'Xcode 26.6\\nBuild version 17F999\\n'\n");
@@ -237,10 +240,82 @@ test('--list prints the hashed paths in byte order, App inputs only', t => {
 test('isAppInput keeps the lists explicit and treats a malformed path as an input', () => {
   for (const file of ['App/x', 'Packages/MadoKit/Tests/T.swift', 'project.yml', '.github/actions/xcode-setup/action.yml',
     'a/b.xcconfig', 'x.entitlements', 'y/z.xcstrings', 'p/PrivacyInfo.xcprivacy', 'q/Info.plist', 'r/fr.lproj/a.strings',
-    '', '/abs/App', 'App/../x', 'a\\b'])
+    '', '/abs/App', 'App/../x', 'a\\b', 'UITests/T.swift', 'TestAssets/a.png', 'Resources/r.png', 'resources/r.png',
+    'Info.plist', 'scripts/device/device.py', 'scripts/device/build.sh'])
     assert.equal(isAppInput(file), true, JSON.stringify(file));
-  for (const file of ['docs/x.md', 'README.md', 'AppTests/T.swift', 'UITests/T.swift', 'TestAssets/a.png',
+  for (const file of ['docs/x.md', 'README.md', 'AppTests/T.swift', 'scripts/device/launch.sh', 'scripts/device/tests/t.py',
     'scripts/ci/x.mjs', 'scripts/release/notarize.sh', 'design/x.html', 'Application/x', 'project.yml.bak',
     '.github/workflows/ci.yml', 'THIRD_PARTY_NOTICES.md'])
     assert.equal(isAppInput(file), false, file);
+});
+
+// Issue 734 fix round 1 (audit F2, M1, M2): the device build driver decides scheme, configuration and Xcode, so it is an
+// App build input; device.py's own input inventory and the hash share one list.
+const DEVICE_FILES = { ...FILES,
+  'scripts/device/device.py': "INPUT_ROOTS = ('App',)\nargv = ['/usr/bin/xcodebuild', 'build', '-scheme', 'Mado', '-configuration', 'Debug']\n",
+  'scripts/device/build.sh': '#!/bin/zsh\nexec "${0:A:h}/../heavy-lock.sh" python3 "${0:A:h}/device.py" build "$@"\n',
+  'scripts/device/launch.sh': '#!/bin/zsh\nexec python3 device.py launch "$@"\n',
+  'scripts/device/tests/build_test.py': 'pass\n',
+};
+
+test('issue 734 fix1 a device build configuration change changes the hash; launch helpers and CI scripts do not', t => {
+  for (const [name, files] of Object.entries({
+    'device.py builds Release instead of Debug': { 'scripts/device/device.py': DEVICE_FILES['scripts/device/device.py'].replace("'Debug'", "'Release'") },
+    'device.py builds another scheme': { 'scripts/device/device.py': DEVICE_FILES['scripts/device/device.py'].replace("'Mado'", "'MadoDev'") },
+    'build.sh runs another device.py command': { 'scripts/device/build.sh': DEVICE_FILES['scripts/device/build.sh'].replace(' build ', ' build --release ') },
+    'a UI test target file (device.py inventory)': { 'UITests/ViewerUITests.swift': 'func testOpen() {}\n' },
+    'a test asset (device.py inventory)': { 'TestAssets/one.png': 'png\n' },
+    'a root Resources file (device.py inventory)': { 'Resources/extra.json': '{}\n' },
+    'a root lowercase resources file (device.py inventory)': { 'resources/extra.json': '{}\n' },
+    'a root Info.plist': { 'Info.plist': '<plist/>\n' },
+  })) {
+    const root = repo(t, DEVICE_FILES);
+    const before = hash(root);
+    commit(root, files);
+    assert.notEqual(hash(root), before, name);
+  }
+  for (const [name, files] of Object.entries({
+    'CI-only script': { 'scripts/ci/tool.mjs': 'export const y = 2;\n' },
+    'device launch helper': { 'scripts/device/launch.sh': '#!/bin/zsh\nexec python3 device.py launch --lang en "$@"\n' },
+    'device tool test': { 'scripts/device/tests/build_test.py': 'assert True\n' },
+  })) {
+    const root = repo(t, DEVICE_FILES);
+    const before = hash(root);
+    commit(root, files);
+    assert.equal(hash(root), before, name);
+  }
+});
+
+test('issue 734 fix1 device.py and the hash share one input list and one locked Xcode build', () => {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).stdout.trim();
+  const device = readFileSync(path.join(top, 'scripts/device/device.py'), 'utf8');
+  const roots = /^INPUT_ROOTS = \(([^)]*)\)$/m.exec(device)?.[1];
+  assert.ok(roots, 'device.py INPUT_ROOTS tuple not found');
+  assert.deepEqual([...roots.matchAll(/'([^']+)'/g)].map(match => match[1]), DEVICE_INPUT_ROOTS);
+  assert.match(device, /path\.suffix == '\.entitlements'/);
+  assert.ok(INPUT_SUFFIXES.includes('.entitlements'));
+  for (const name of DEVICE_INPUT_ROOTS) assert.equal(isAppInput(`${name}/x`) || isAppInput(name), true, name);
+  assert.deepEqual(DEVICE_BUILD_DRIVER, ['scripts/device/build.sh', 'scripts/device/device.py']);
+  assert.match(readFileSync(path.join(top, 'scripts/device/build.sh'), 'utf8'), /device\.py" build/);
+  const locked = /^LOCKED_XCODE_BUILD = 'Build version ([^']+)'$/m.exec(device)?.[1];
+  assert.equal(locked, pinnedToolchain(top, 'HEAD').build, 'device.py builds only with the pinned Xcode build');
+});
+
+test('issue 734 fix1 --verify-host also requires the host xcodegen to match the pin', t => {
+  const root = repo(t);
+  const bin = mkdtempSync(path.join(tmpdir(), 'app-inputs-bin-'));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  const tool = (name, text) => { writeFileSync(path.join(bin, name), text); chmodSync(path.join(bin, name), 0o755); };
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  symlinkSync(realGit, path.join(bin, 'git'));
+  const env = { PATH: bin };
+  tool('xcodebuild', "#!/bin/sh\nprintf 'Xcode 26.6\\nBuild version 17F113\\n'\n");
+  tool('xcodegen', "#!/bin/sh\nprintf 'Version: 2.44.1\\n'\n");
+  assert.equal(hash(root, ['--verify-host'], env), hash(root));
+  tool('xcodegen', "#!/bin/sh\nprintf 'Version: 2.46.0\\n'\n");
+  refused(run(root, ['--verify-host'], env), /host XcodeGen 2\.46\.0 differs from the pin/);
+  tool('xcodegen', '#!/bin/sh\nexit 4\n');
+  refused(run(root, ['--verify-host'], env), /xcodegen --version failed/);
+  rmSync(path.join(bin, 'xcodegen'));
+  refused(run(root, ['--verify-host'], env), /xcodegen --version failed/);
 });

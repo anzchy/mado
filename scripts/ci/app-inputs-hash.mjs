@@ -19,15 +19,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // The App build inputs. Keep these explicit; any doubt belongs here (a false "changed" only costs a smoke).
-// - App/ is globbed whole by project.yml's targets; Packages/ holds MadoKit (sources, resources, Package.swift/resolved).
-// - project.yml carries the targets, signing settings (style, identity, team), Sparkle pin and the build-phase script.
+// - DEVICE_INPUT_ROOTS mirrors INPUT_ROOTS in scripts/device/device.py, the device build's own input inventory (one
+//   list; a test fails when they disagree): App/ (globbed whole by project.yml), Packages/ (MadoKit), project.yml
+//   (targets, signing, Sparkle pin, build-phase script), the UI test target and its assets, and root resources.
+// - DEVICE_BUILD_DRIVER is the device build invocation: build.sh runs device.py build, which selects the Xcode
+//   (LOCKED_XCODE_BUILD, DEVELOPER_DIR), runs xcodegen and picks scheme, configuration and re-signing (issue 734 audit F2).
 // - The pin file selects Xcode and XcodeGen for every build (also parsed into the toolchain string below).
 // - Localization, entitlements, build configuration, privacy manifests and Info.plist count wherever they live.
-// Not inputs (not in the app bundle or not read by its build): docs, design, agent files, test targets
-// (AppTests/, UITests/, TestAssets/), CI and release tooling (scripts/, .github/workflows/), THIRD_PARTY_NOTICES.md.
-export const INPUT_PREFIXES = ['App/', 'Packages/'];
+// Not inputs: docs, design, agent files, AppTests/ (not in device.py's inventory), the other device helpers
+// (launch, input, screenshots, their tests), CI and release tooling (scripts/ci, scripts/release, .github/workflows/),
+// THIRD_PARTY_NOTICES.md.
+export const DEVICE_INPUT_ROOTS = ['App', 'Packages', 'project.yml', 'UITests', 'TestAssets', 'Info.plist', 'Resources', 'resources'];
+export const DEVICE_BUILD_DRIVER = ['scripts/device/build.sh', 'scripts/device/device.py'];
 export const PIN_FILE = '.github/actions/xcode-setup/action.yml';
-export const INPUT_FILES = ['project.yml', PIN_FILE];
+export const INPUT_FILES = [PIN_FILE, ...DEVICE_BUILD_DRIVER];
 export const INPUT_SUFFIXES = ['.xcconfig', '.entitlements', '.xcstrings', '.xcprivacy'];
 export const INPUT_BASENAMES = ['Info.plist'];
 const FORMAT = 'mado-app-inputs v1';
@@ -40,7 +45,7 @@ export function isAppInput(file) {
       file.split('/').some(part => part === '' || part === '.' || part === '..')) return true;
   const parts = file.split('/');
   const base = parts.at(-1);
-  return INPUT_FILES.includes(file) || INPUT_PREFIXES.some(prefix => file.startsWith(prefix)) ||
+  return INPUT_FILES.includes(file) || DEVICE_INPUT_ROOTS.includes(parts[0]) ||
     INPUT_SUFFIXES.some(suffix => base.endsWith(suffix)) || INPUT_BASENAMES.includes(base) ||
     parts.slice(0, -1).some(part => part.endsWith('.lproj'));
 }
@@ -91,15 +96,26 @@ export function pinnedToolchain(root, commit) {
   return { xcode, build, xcodegen, text: `Xcode ${xcode} (${build}); XcodeGen ${xcodegen}` };
 }
 
-function verifyHost(pin) {
-  const result = spawnSync('xcodebuild', ['-version'], { encoding: 'utf8', timeout: 30000 });
+function hostTool(command, args) {
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 30000 });
   if (result.error || result.status !== 0) {
-    throw new InputsError(`xcodebuild -version failed: ${result.error?.message ?? (result.stderr.trim() || `exit ${result.status}`)}`);
+    throw new InputsError(`${command} ${args.join(' ')} failed: ${result.error?.message ?? (result.stderr.trim() || `exit ${result.status}`)}`);
   }
-  const xcode = /^Xcode (\S+)$/m.exec(result.stdout)?.[1];
-  const build = /^Build version (\S+)$/m.exec(result.stdout)?.[1];
+  return result.stdout;
+}
+
+// The Xcode on PATH (device.py itself builds only with LOCKED_XCODE_BUILD, which a test keeps equal to the pin) and
+// the xcodegen on PATH, which device.py runs as `xcodegen generate`.
+function verifyHost(pin) {
+  const version = hostTool('xcodebuild', ['-version']);
+  const xcode = /^Xcode (\S+)$/m.exec(version)?.[1];
+  const build = /^Build version (\S+)$/m.exec(version)?.[1];
   if (xcode !== pin.xcode || build !== pin.build) {
     throw new InputsError(`host toolchain Xcode ${xcode ?? '?'} (${build ?? '?'}) differs from the pin ${pin.text}`);
+  }
+  const xcodegen = /^Version: (\S+)$/m.exec(hostTool('xcodegen', ['--version']))?.[1];
+  if (xcodegen !== pin.xcodegen) {
+    throw new InputsError(`host XcodeGen ${xcodegen ?? '?'} differs from the pin ${pin.text}`);
   }
 }
 
