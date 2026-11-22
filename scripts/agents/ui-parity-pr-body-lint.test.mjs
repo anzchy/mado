@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkGates, checkUIParity, checkMadoVerifyEvidence } from './ui-parity-pr-body-lint.mjs';
+import { checkGates, checkUIParity, checkMadoVerifyEvidence, checkSmokeInputs } from './ui-parity-pr-body-lint.mjs';
 
 const uiFiles = ['App/UI/InspectorPlaceholder.swift', 'App/Commands/CommandMenu.swift', 'Packages/MadoKit/Sources/MadoMacUI/States/ViewerStateHost.swift'];
 const table = '## UI-Parity\n\n| State | Design | Assertion | Status |\n|---|---|---|---|\n| Empty | abc | test | AUTO-PASS |\n';
@@ -918,4 +918,142 @@ test('checker-change CLI detects file-to-symlink type changes', t => {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /Checker-Change.*required/);
   assertCLIPass(f.run(checkerAck(f.git('rev-parse', 'HEAD'), 'ledger')));
+});
+
+// Issue 734: the device smoke verdict follows the App build inputs. `inputs=<hash>` on a PASS line is compared with the
+// App-inputs hash of the PR head through the adapter's appInputsHash boundary (stubbed here; the real one in the CLI
+// test below).
+const inputsHash = 'c'.repeat(64);
+const otherHash = 'd'.repeat(64);
+const smokeSha = oldHead.slice(0, 8);
+const smokeGates = (sha = smokeSha, source = 'device run i734') => completeGates()
+  .replace('| device-smoke | N/A | — | no user-visible change |', `| device-smoke | PASS | ${sha} | ${source} |`);
+const smokeLine = (sha = smokeSha, inputs = `inputs=${inputsHash}`) =>
+  `\nDevice-Smoke: PASS ${sha} run=i734d1 ${inputs} — changed path\n`;
+const hashAdapter = (value, calls = []) => ({
+  appInputsHash: rev => { calls.push(rev); if (value instanceof Error) throw value; return value; },
+});
+
+test('issue 734 Device-Smoke PASS inputs= equal to the head App-inputs hash carries over a stale smoke SHA', () => {
+  const calls = [];
+  assert.deepEqual(checkGates(smokeGates() + smokeLine(), head, hashAdapter(inputsHash, calls)), { ok: true });
+  assert.deepEqual(calls, [head], 'the hash must be computed for the PR head');
+  assert.deepEqual(checkGates(smokeGates(head.slice(0, 8)) + smokeLine(head.slice(0, 8)), head, hashAdapter(inputsHash)), { ok: true });
+});
+
+test('issue 734 Device-Smoke inputs= different from the head hash refuses with one reason, also at the head SHA', () => {
+  for (const sha of [smokeSha, head.slice(0, 8)]) {
+    const result = checkGates(smokeGates(sha) + smokeLine(sha), head, hashAdapter(otherHash));
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, `Device-Smoke inputs=${inputsHash} differs from the PR head App inputs ${otherHash}; redo the smoke for the changed paths`);
+  }
+});
+
+test('issue 734 Device-Smoke inputs= fails closed when the head hash cannot be computed', () => {
+  for (const git of [hashAdapter(new Error('unknown commit')), hashAdapter(undefined), hashAdapter('not-a-hash'), {}, undefined]) {
+    const result = checkGates(smokeGates() + smokeLine(), head, git);
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /^Device-Smoke inputs= could not be compared: App-inputs hash of the PR head not computed/);
+  }
+});
+
+test('issue 734 Device-Smoke inputs= must be one 64-hex hash on a PASS line', () => {
+  for (const inputs of ['inputs=abc123', `inputs=${inputsHash.toUpperCase()}`, `inputs=${inputsHash}0`, `inputs=${inputsHash} inputs=${inputsHash}`, 'inputs=']) {
+    const result = checkGates(smokeGates() + smokeLine(smokeSha, inputs), head, hashAdapter(inputsHash));
+    assert.equal(result.ok, false, inputs);
+    assert.match(result.reason, /Device-Smoke inputs= needs one 64-hex App-inputs hash/, inputs);
+  }
+  const notVerified = completeGates().replace('| device-smoke | N/A | — | no user-visible change |', `| device-smoke | NOT VERIFIED | ${smokeSha} | pending |`) +
+    `\nDevice-Smoke: NOT VERIFIED ${smokeSha} run=i734d1 inputs=${inputsHash} — pending\n`;
+  assert.match(checkGates(notVerified, head, hashAdapter(inputsHash)).reason, /inputs= belongs on a Device-Smoke PASS line/);
+});
+
+test('issue 734 a stale Device-Smoke PASS without inputs= keeps the CODE same rule', () => {
+  assert.match(checkGates(smokeGates() + smokeLine(smokeSha, ''), head, hashAdapter(inputsHash)).reason,
+    /device-smoke PASS has a stale head without CODE same evidence/);
+  assert.deepEqual(checkGates(smokeGates(smokeSha, `rebase-verify CODE same ${codeSame}`) + smokeLine(smokeSha, ''), head), { ok: true });
+});
+
+test('issue 734 App-touching PR refuses a Device-Smoke PASS without inputs=; tooling-only keeps the head-SHA form', () => {
+  const oldForm = `Device-Smoke: PASS ${smokeSha} run=i734d1 — changed path\n`;
+  for (const file of ['App/UI/Canvas.swift', 'Packages/MadoKit/Sources/MadoCore/Item.swift', 'project.yml',
+    'App/Resources/Localizable.xcstrings', 'App/Mado.entitlements', '.github/actions/xcode-setup/action.yml']) {
+    const result = checkSmokeInputs(oldForm, ['docs/notes.md', file]);
+    assert.equal(result.ok, false, file);
+    assert.equal(result.reason, 'App inputs changed; Device-Smoke PASS needs inputs=<hash> from scripts/ci/app-inputs-hash.mjs (the head-SHA form is only for tooling-only PRs)', file);
+  }
+  for (const files of [['scripts/agents/x.mjs'], ['docs/a.md', '.agents/skills/mado-delegator/SKILL.md'], []]) {
+    assert.deepEqual(checkSmokeInputs(oldForm, files), { ok: true }, files.join(','));
+  }
+  const appFiles = ['App/UI/Canvas.swift'];
+  assert.deepEqual(checkSmokeInputs(`Device-Smoke: PASS ${smokeSha} run=i734d1 inputs=${inputsHash} — changed path\n`, appFiles), { ok: true });
+  assert.deepEqual(checkSmokeInputs('Device-Smoke: n/a — no user-visible change\n', appFiles), { ok: true });
+  assert.deepEqual(checkSmokeInputs(`Device-Smoke: NOT VERIFIED ${smokeSha} run=i734d1 — pending\n`, appFiles), { ok: true });
+  assert.deepEqual(checkSmokeInputs('## Summary\n', appFiles), { ok: true });
+  assert.deepEqual(checkSmokeInputs('```\n' + oldForm + '```\n', appFiles), { ok: true }, 'a fenced example is not the smoke line');
+});
+
+test('issue 734 CLI compares inputs= with the real App-inputs hash of the PR head', t => {
+  const repo = mkdtempSync(join(tmpdir(), 'mado-smoke-inputs-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  mkdirSync(join(repo, '.github/actions/xcode-setup'), { recursive: true });
+  writeFileSync(join(repo, '.github/actions/xcode-setup/action.yml'),
+    "run: |\n  grep -Fx 'Xcode 26.6' v.txt\n  grep -Fx 'Build version 17F113' v.txt\n  grep -Fx 'Version: 2.44.1' g.txt\n");
+  writeFileSync(join(repo, 'README.md'), 'base\n');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+  git('branch', 'base');
+  mkdirSync(join(repo, 'App'));
+  writeFileSync(join(repo, 'App/Canvas.swift'), 'struct Canvas {}\n');
+  git('add', 'App/Canvas.swift');
+  git('commit', '-qm', 'App change');
+  const smokeHead = git('rev-parse', 'HEAD');
+  const hashScript = fileURLToPath(new URL('../ci/app-inputs-hash.mjs', import.meta.url));
+  const smokeHash = execFileSync(process.execPath, [hashScript, '--rev', smokeHead], { cwd: repo, encoding: 'utf8' }).trim();
+  writeFileSync(join(repo, 'README.md'), 'docs after the smoke\n');
+  git('commit', '-qam', 'docs only');
+  const bin = join(repo, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'gh'), `#!${process.execPath}\nconsole.log(JSON.stringify({body:process.env.GH_BODY}));\n`, { mode: 0o755 });
+  const body = join(repo, 'body.md');
+  const script = fileURLToPath(new URL('./ui-parity-pr-body-lint.mjs', import.meta.url));
+  const lint = smoke => {
+    const currentHead = git('rev-parse', 'HEAD');
+    const gates = completeGates(currentHead).replace('| device-smoke | N/A | — | no user-visible change |',
+      `| device-smoke | PASS | ${smokeHead.slice(0, 8)} | device run i734d1 |`);
+    writeFileSync(body, `${table}\n${gates}\n${smoke}\n${evidenceLink(734)}\n`);
+    return spawnSync(process.execPath, [script, '--base', 'base', '--body-file', body],
+      { cwd: repo, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_BODY: evidenceMarker(currentHead) } });
+  };
+  const line = inputs => `Device-Smoke: PASS ${smokeHead.slice(0, 8)} run=i734d1${inputs} — changed path`;
+  const carried = lint(line(` inputs=${smokeHash}`));
+  assert.equal(carried.status, 0, carried.stdout + carried.stderr);
+  const different = lint(line(` inputs=${'e'.repeat(64)}`));
+  assert.equal(different.status, 1, different.stdout + different.stderr);
+  assert.match(different.stderr, /differs from the PR head App inputs/);
+  const oldForm = lint(line(''));
+  assert.equal(oldForm.status, 1, oldForm.stdout + oldForm.stderr);
+  assert.match(oldForm.stderr, /Device-Smoke PASS needs inputs=<hash>/);
+  writeFileSync(join(repo, 'App/Canvas.swift'), 'struct Canvas { let id = 1 }\n');
+  git('commit', '-qam', 'App change after the smoke');
+  const stale = lint(line(` inputs=${smokeHash}`));
+  assert.equal(stale.status, 1, stale.stdout + stale.stderr);
+  assert.match(stale.stderr, /differs from the PR head App inputs/);
+  git('rm', '-q', '.github/actions/xcode-setup/action.yml');
+  git('commit', '-qm', 'drop the pin');
+  const noPin = lint(line(` inputs=${smokeHash}`));
+  assert.equal(noPin.status, 1, noPin.stdout + noPin.stderr);
+  assert.match(noPin.stderr, /could not be compared: App-inputs hash of the PR head not computed/);
+});
+
+test('issue 734 inputs= counts only before the reason separator, and a lowercase pass is still a PASS', () => {
+  const inReason = sha => `\nDevice-Smoke: PASS ${sha} run=i734d1 — reason mentions inputs=abc\n`;
+  assert.deepEqual(checkGates(smokeGates(head.slice(0, 8)) + inReason(head.slice(0, 8)), head), { ok: true });
+  assert.match(checkSmokeInputs(inReason(smokeSha), ['App/UI/Canvas.swift']).reason, /needs inputs=<hash>/);
+  assert.match(checkSmokeInputs(`Device-Smoke: pass ${smokeSha} run=i734d1 — changed path\n`, ['App/UI/Canvas.swift']).reason,
+    /needs inputs=<hash>/);
 });

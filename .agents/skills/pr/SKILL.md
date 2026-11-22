@@ -36,7 +36,7 @@ Use this template for writing the PR body:
 | audit | N/A | — | <reason> |
 | device-smoke | N/A | — | <reason> |
 
-Device-Smoke: n/a — <reason; for a device run use PASS|NOT VERIFIED <head7> run=<id> — <path>
+Device-Smoke: n/a — <reason; for a device run use PASS <head7> run=<id> inputs=<app-inputs-hash> — <path>, or NOT VERIFIED <head7> run=<id> — <blocker>
 
 Ledger-Gardener: <the line from the gardener or from scripts/ledger/garden-gate.mjs, verbatim>
 

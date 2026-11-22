@@ -3,6 +3,22 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { posix } from 'node:path';
+// Issue 734: the App-inputs hash module is loaded only where the Device-Smoke rule needs it. Callers that copy this file
+// without scripts/ci (test fixtures of local-pr-lint and merge-gate) keep working; where the rule applies, a missing
+// module fails closed (no hash comparison, no App-input decision).
+let inputsModule;
+try {
+  inputsModule = await import('../ci/app-inputs-hash.mjs');
+} catch (error) {
+  inputsModule = { error };
+}
+const inputsApi = name => {
+  if (typeof inputsModule[name] !== 'function') {
+    throw Error(`scripts/ci/app-inputs-hash.mjs unavailable: ${inputsModule.error?.message ?? `no ${name}`}`);
+  }
+  return inputsModule[name];
+};
+const isAppInput = file => inputsApi('isAppInput')(file);
 
 const isUIFile = file => file.startsWith('App/') ||
   file.startsWith('Packages/MadoKit/Sources/MadoMacUI/');
@@ -14,8 +30,13 @@ function validSmoke(body) {
   const lines = body.split(/\r?\n/).filter(line => /^Device-Smoke:/.test(line));
   if (lines.length !== 1) return false;
   return /^Device-Smoke:\s*n\/a\s+—\s*\S.*$/i.test(lines[0]) ||
-    /^Device-Smoke:\s*(?:PASS|NOT VERIFIED)\s+[0-9a-f]{7,40}\s+run=\S+\s+—\s+\S.*$/.test(lines[0]);
+    /^Device-Smoke:\s*PASS\s+[0-9a-f]{7,40}\s+run=\S+(?:\s+inputs=[0-9a-f]{64})?\s+—\s+\S.*$/.test(lines[0]) ||
+    /^Device-Smoke:\s*NOT VERIFIED\s+[0-9a-f]{7,40}\s+run=\S+\s+—\s+\S.*$/.test(lines[0]);
 }
+
+// Issue 734: the fields of a Device-Smoke line before its first " — " reason separator (the reason may say anything).
+const smokeFields = line => line.split(/\s—\s/)[0];
+const smokeInputs = line => [...smokeFields(line).matchAll(/(?:^|\s)inputs=(\S*)/g)].map(match => match[1]);
 
 export function checkUIParity(body, files) {
   if (!files.some(isUIFile)) return { ok: true };
@@ -213,6 +234,10 @@ export function checkGates(body, head, git) {
     if (!seen.has(lane)) return { ok: false, reason: `missing ${lane} lane` };
   }
 
+  const smokeLines = unfencedBody.split(/\r?\n/).filter(line => /^Device-Smoke:/.test(line));
+  // A PASS line with inputs= is current when its App-inputs hash equals the PR head's (checked below, fail closed), not
+  // when its SHA is the head: the smoke verdict follows the App build inputs (issue 734).
+  const smokeFollowsInputs = smokeLines.length === 1 && smokeInputs(smokeLines[0]).length > 0;
   for (const [printedLane, status, sha, source] of rows) {
     const lane = printedLane.toLowerCase();
     if (!gateStatuses.has(status)) return { ok: false, reason: `${lane} has invalid status ${status}` };
@@ -224,7 +249,8 @@ export function checkGates(body, head, git) {
       if (!source || source === '-' || source === '—') return { ok: false, reason: `${lane} ${status} needs a Source reason` };
     }
     if (status === 'FAIL') return { ok: false, reason: `${lane} is a FAIL row` };
-    if (status === 'PASS' && !head.toLowerCase().startsWith(sha.toLowerCase())) {
+    if (status === 'PASS' && !head.toLowerCase().startsWith(sha.toLowerCase()) &&
+        !(lane === 'device-smoke' && smokeFollowsInputs)) {
       const changed = ancestorInputsChanged(git, lane, sha, head);
       if (changed === true && /\bCODE same [0-9a-f]{40}\b/.test(source)) {
         return { ok: false, reason: `${lane} PASS has a stale head: inputs changed since ${sha}` };
@@ -235,7 +261,6 @@ export function checkGates(body, head, git) {
     }
   }
 
-  const smokeLines = unfencedBody.split(/\r?\n/).filter(line => /^Device-Smoke:/.test(line));
   if (smokeLines.length > 0) {
     if (smokeLines.length !== 1) return { ok: false, reason: 'Device-Smoke lines must be unique and agree with the device-smoke row' };
     const smoke = smokeLines[0].match(/^Device-Smoke:\s*(PASS|NOT VERIFIED|n\/a)(?:\s+([0-9a-f]{7,40}))?\b/i);
@@ -246,8 +271,37 @@ export function checkGates(body, head, git) {
     if (smokeStatus !== 'N/A' && (!smoke[2] || smoke[2].toLowerCase() !== deviceRow[2].toLowerCase())) {
       return { ok: false, reason: 'Device-Smoke SHA does not equal the device-smoke row SHA' };
     }
+    const claimed = smokeInputs(smokeLines[0]);
+    if (claimed.length) {
+      if (smokeStatus !== 'PASS') return { ok: false, reason: 'inputs= belongs on a Device-Smoke PASS line' };
+      if (claimed.length !== 1 || !/^[0-9a-f]{64}$/.test(claimed[0])) {
+        return { ok: false, reason: 'Device-Smoke inputs= needs one 64-hex App-inputs hash (scripts/ci/app-inputs-hash.mjs)' };
+      }
+      let current, detail = '';
+      try {
+        current = git?.appInputsHash?.(head);
+      } catch (error) {
+        detail = `: ${error?.message ?? error}`;
+      }
+      if (typeof current !== 'string' || !/^[0-9a-f]{64}$/.test(current)) {
+        return { ok: false, reason: `Device-Smoke inputs= could not be compared: App-inputs hash of the PR head not computed${detail}` };
+      }
+      if (current !== claimed[0]) {
+        return { ok: false, reason: `Device-Smoke inputs=${claimed[0]} differs from the PR head App inputs ${current}; redo the smoke for the changed paths` };
+      }
+    }
   }
   return { ok: true };
+}
+
+// Issue 734 transition rule: on a PR that changes an App build input (isAppInput, the same lists the hash covers), a
+// Device-Smoke PASS must carry inputs=<hash>; the head-SHA-only PASS form stays accepted only for tooling-only PRs. n/a and
+// NOT VERIFIED lines are unchanged. Format and agreement with the Gates row are checked by validSmoke and checkGates.
+export function checkSmokeInputs(body, files) {
+  const lines = stripFencedCodeBlocks(body).split(/\r?\n/).filter(line => /^Device-Smoke:/.test(line));
+  if (lines.length !== 1 || !/^Device-Smoke:\s*PASS\b/i.test(lines[0]) || smokeInputs(lines[0]).length) return { ok: true };
+  if (!files.some(isAppInput)) return { ok: true };
+  return { ok: false, reason: 'App inputs changed; Device-Smoke PASS needs inputs=<hash> from scripts/ci/app-inputs-hash.mjs (the head-SHA form is only for tooling-only PRs)' };
 }
 
 // Only the CLI touches git; checkGates receives evidence through this boundary.
@@ -275,6 +329,8 @@ function gitAdapter() {
   return {
     isAncestor: (sha, head) => quiet(['merge-base', '--is-ancestor', resolve(sha), resolve(head)]) === 0,
     inputsChanged: (sha, head, inputs) => quiet(['diff', '--quiet', resolve(sha), resolve(head), '--', ...inputs]) === 1,
+    // Issue 734 boundary: the committed App-inputs hash of the PR head (throws when it cannot be computed).
+    appInputsHash: rev => inputsApi('appInputsHash')({ cwd, rev }).hash,
   };
 }
 
@@ -306,6 +362,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         result.ok = false;
         result.reason = 'UI files changed; PR body needs a Device-Smoke: line for the changed path';
       }
+      if (result.ok) result = checkSmokeInputs(body, files);
       if (result.ok) {
         const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
         if (expectAt >= 0 && args[expectAt + 1].toLowerCase() !== head.toLowerCase()) {
