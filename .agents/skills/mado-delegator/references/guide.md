@@ -685,7 +685,10 @@ The verdict follows the App build inputs, not the head SHA (#734, owner 2026-11-
   configuration, re-signing), the Xcode/XcodeGen pin in `.github/actions/xcode-setup/action.yml`, and any xcconfig,
   entitlements, xcstrings, xcprivacy, Info.plist or `.lproj` file. It refuses uncommitted App inputs, and with
   `--verify-host` refuses a host `xcodebuild -version` or `xcodegen --version` other than the pin (device.py itself
-  builds only with its `LOCKED_XCODE_BUILD`, which a test keeps equal to the pinned build). Write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke`
+  builds only with its `LOCKED_XCODE_BUILD`, which a test keeps equal to the pinned build). device.py runs the first
+  `xcodegen` on PATH, and this Mac's Homebrew one (2.46.0) is not the pinned 2.44.1 that CI downloads; the refusal
+  prints the exact install command. Install the pinned release into `.build/ci-tools` as the pin does, then put
+  `.build/ci-tools/xcodegen/bin` first on PATH for both `scripts/device/build.sh` and `--verify-host`. Write `Device-Smoke: PASS <head7> run=<id> inputs=<hash> — <flow>`; the `device-smoke`
   Gates row keeps the smoked SHA and needs no `CODE same`.
 - **Carry-over.** The PR-body lint hashes the smoked SHA from the Device-Smoke line and the PR head (Git trees
   only). The claimed `inputs=` must equal both: then the verdict stays, whatever else moved (docs, AppTests, CI
@@ -698,6 +701,11 @@ The verdict follows the App build inputs, not the head SHA (#734, owner 2026-11-
 - **Not covered.** Local machine state outside the pin (keychain, signing certificates, SwiftPM caches), AppTests/
   (not in device.py's inventory), the other device helpers (launch, input, screenshots) and CI/release tooling.
   MadoKit's own tests, UITests/ and TestAssets/ are inputs, so a change there costs a new smoke (conservative).
+  **`run=` is not checked against the run record**: nothing ties the run ID to the smoked SHA or to `inputs=`, so a
+  line with a fresh SHA and hash but an old run still passes the lint (owner 2026-11-21: recorded Medium; a follow-up
+  ticket has device.py write the hash into `build.json`). Until that lands, before merging an App PR the delegator
+  opens the run's `build.json` and checks by hand that its `fullSHA` (or `sha`) is the Device-Smoke SHA; if not, the
+  smoke is redone.
 
 The smoke writes no validation record and promotes no ledger row.
 
