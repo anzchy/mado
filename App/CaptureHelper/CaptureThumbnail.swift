@@ -26,6 +26,21 @@ enum CaptureThumbnailLayout {
         return min(maxImageHeight, max(minImageHeight, fitted))
     }
 
+    /// The action overlay grid (design .overlay): 3 per row inside 6 pt padding, 40 pt rows, 4 pt row gap.
+    static let actionColumns = 3
+    static let actionPadding: CGFloat = 6
+    static let actionRowGap: CGFloat = 4
+    static let actionRowHeight: CGFloat = 40
+
+    /// The image area's height: the fitted image height, raised so every action row fits whole inside the thumb.
+    /// A wide, short Capture keeps its fitted size and is letterboxed in the taller area.
+    static func areaHeight(imageHeight: CGFloat, actionCount: Int) -> CGFloat {
+        let rows = (actionCount + actionColumns - 1) / actionColumns
+        guard rows > 0 else { return imageHeight }
+        let grid = CGFloat(rows) * actionRowHeight + CGFloat(rows - 1) * actionRowGap + 2 * actionPadding
+        return max(imageHeight, grid - 2 * border)
+    }
+
     static func cornerFrame(visibleFrame: NSRect, imageHeight: CGFloat) -> NSRect {
         let height = imageHeight + 2 * border + gap + statusHeight
         return NSRect(x: visibleFrame.maxX - margin - width, y: visibleFrame.minY + margin, width: width, height: height)
@@ -264,6 +279,7 @@ private final class ThumbnailButton: NSButton {
     private let statusText = NSTextField(labelWithString: "")
     private var buttons: [ThumbnailButton] = []
     private var shownActions: [CaptureThumbnailAction]?
+    private var shownButtonBounds: NSRect?
     private var shownImage: CGImage?
     private var trackingArea: NSTrackingArea?
     private var mouseDownEvent: NSEvent?
@@ -378,9 +394,10 @@ private final class ThumbnailButton: NSButton {
         }
         overlay.frame = thumb.bounds
         closeButton.frame = NSRect(x: 4, y: thumbHeight - 24, width: 20, height: 20)
-        if actions != shownActions {
+        if actions != shownActions || thumb.bounds != shownButtonBounds {
             layoutButtons(actions, in: thumb.bounds)
             shownActions = actions
+            shownButtonBounds = thumb.bounds
         }
         installTrackingArea(thumbFrame.union(status.frame))
         applyColors()
@@ -407,7 +424,8 @@ private final class ThumbnailButton: NSButton {
             overlay.addSubview(button)
             return button
         }
-        let columns = 3, padding: CGFloat = 6, rowGap: CGFloat = 4, rowHeight: CGFloat = 40
+        let columns = CaptureThumbnailLayout.actionColumns, padding = CaptureThumbnailLayout.actionPadding
+        let rowGap = CaptureThumbnailLayout.actionRowGap, rowHeight = CaptureThumbnailLayout.actionRowHeight
         let columnWidth = (bounds.width - 2 * padding) / CGFloat(columns)
         let rows = (buttons.count + columns - 1) / columns
         let total = CGFloat(rows) * rowHeight + CGFloat(max(0, rows - 1)) * rowGap
@@ -584,8 +602,8 @@ private final class ThumbnailButton: NSButton {
 
     private func render() {
         let state = model.state
-        let imageHeight = CaptureThumbnailLayout.imageHeight(forPixelWidth: image?.width ?? 0,
-                                                             pixelHeight: image?.height ?? 0)
+        let fitted = CaptureThumbnailLayout.imageHeight(forPixelWidth: image?.width ?? 0, pixelHeight: image?.height ?? 0)
+        let imageHeight = CaptureThumbnailLayout.areaHeight(imageHeight: fitted, actionCount: state.actions.count)
         cornerFrame = CaptureThumbnailLayout.cornerFrame(visibleFrame: visibleFrame, imageHeight: imageHeight)
         let inset = CaptureThumbnailLayout.shadowInset
         panel.setFrame(cornerFrame.insetBy(dx: -inset, dy: -inset), display: false)

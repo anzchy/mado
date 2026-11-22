@@ -67,8 +67,8 @@ private final class Clock694: @unchecked Sendable {
     var now = Date(timeIntervalSinceReferenceDate: 20_000)
 }
 
-private func png694() -> Data {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 234, pixelsHigh: 150, bitsPerSample: 8,
+private func png694(width: Int = 234, height: Int = 150) -> Data {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                bytesPerRow: 0, bitsPerPixel: 0)!
     return rep.representation(using: .png, properties: [:])!
@@ -78,9 +78,9 @@ private let saved694 = URL(fileURLWithPath: "/tmp/issue694/mado-20261119093012.p
 
 @MainActor private func thumbnail694(saved: Bool, files: Files694App = Files694App(), handoff: Handoff694App = Handoff694App(),
                                      opener: Opener694App? = nil, clock: Clock694 = Clock694(),
-                                     localize: @escaping (String) -> String = { $0 })
+                                     localize: @escaping (String) -> String = { $0 }, png: Data = png694())
     -> (CaptureThumbnailController, CaptureThumbnailModel) {
-    let state = CaptureThumbnailState(png: png694(), savedURL: saved ? saved694 : nil, clipboard: .copied,
+    let state = CaptureThumbnailState(png: png, savedURL: saved ? saved694 : nil, clipboard: .copied,
                                       folderDisplay: "~/Downloads")
     let session = CaptureSession(screen: Screen694App(), files: files)
     let model = CaptureThumbnailModel(state: state, session: session, clipboard: Clipboard694App(), trash: Trash694App())
@@ -148,6 +148,30 @@ private let saved694 = URL(fileURLWithPath: "/tmp/issue694/mado-20261119093012.p
         #expect(abs(frames[0].minY - frames[3].maxY - 4) < 0.5, "row gap 4")
         #expect(frames[3].height == frames[0].height)
         #expect(abs((frames[0].maxY + frames[3].minY) / 2 - thumb.bounds.midY) < 0.5, "the rows are centred")
+    }
+}
+
+/// i694-fix1 (audit M2/M1): a wide, short Capture (down to the 24 pt minimum image height) still shows every action
+/// whole and clickable inside the clipped thumb, and the corner panel holds the whole thumb.
+@MainActor @Test(.timeLimit(.minutes(2))) func issue694WideCaptureKeepsEveryActionInsideTheThumb() throws {
+    for (width, height) in [(2000, 10), (1200, 300)] {
+        for saved in [true, false] {
+            let (controller, _) = thumbnail694(saved: saved, png: png694(width: width, height: height))
+            defer { controller.close() }
+            controller.show()
+            controller.pointerEntered()
+            let thumb = try #require(views694(controller.view).first { $0.accessibilityIdentifier() == "capture.thumbnail.thumb" })
+            let order = saved ? ["copy", "annotate", "openInMado", "moveToTrash"] : ["save", "copy", "annotate", "openInMado"]
+            for id in order {
+                let button = try button694(id, in: controller.view)
+                let frame = thumb.convert(button.frame, from: button.superview)
+                #expect(thumb.bounds.contains(frame), "\(width)×\(height) saved=\(saved): \(id) at \(frame) outside \(thumb.bounds)")
+            }
+            let frames = try order.map { try button694($0, in: controller.view).frame }
+            #expect(frames.prefix(3).allSatisfy { $0.minY == frames[0].minY }, "three per row")
+            #expect(abs(frames[0].minY - frames[3].maxY - 4) < 0.5, "row gap 4")
+            #expect(controller.view.bounds.contains(thumb.frame), "the panel holds the whole thumb")
+        }
     }
 }
 
