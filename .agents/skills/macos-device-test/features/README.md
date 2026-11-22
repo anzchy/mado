@@ -80,3 +80,8 @@ Record here what a real run found out about the tools, so the next run doesn't r
   edge and Tab recall, lock states, responsive layout, and window closing.
 - [Recursive folder scan and honest progress](./recursive-folder-scan.md) covers P2-04 nested browsing,
   cycle boundaries, indeterminate reading, completed counts, and page 24 Prototype comparison.
+- [Capture Bar and Capture Thumbnail](./capture.md) covers the helper, capture modes, shortcuts, thumbnail
+  actions and the Annotate hand-off.
+- [Recognise text and Cloud Recognition](./recognise-text.md) covers explicit and direct recognition and the
+  keyless parts of Cloud Recognition.
+- [Annotate Mode and Annotated Copy](./annotate.md) covers marks, prompts, saving and copying.
