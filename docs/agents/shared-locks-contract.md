@@ -2,7 +2,7 @@
 
 One page for every project that shares this Mac's locks (#738 WI-1; RClick's design: anzchy/RClick#21).
 
-- **Sources**, checked 2026-11-21 at main `152610f5` (the lock scripts are unchanged since `76c399d4`):
+- **Sources**, checked 2026-11-21 at main `91e9a8b9` (the lock scripts are unchanged since `76c399d4`):
   - `scripts/heavy-lock.sh`
   - `scripts/tdd/heavy-lock.py`
   - `.agents/skills/mado-delegator/scripts/gui-lock.sh`
@@ -106,22 +106,14 @@ The guardian ignores INT, TERM and HUP, so those signals alone do not release th
 
 ## Owner recovery
 
-**Report, wait, ask the owner.** Nobody kills a heavy-lock guardian as routine recovery. Another project only reports a stuck lock to the owning project and to the user.
+**Report, wait, ask the project that holds the lock.** Nobody SIGKILLs a heavy-lock guardian, neither another project nor the owning project, and no reading of `status` makes it safe. A stuck lock is reported to the project that holds it and to the user, and everyone waits. No one touches the lock file.
 
-The guardian exits by itself whenever the code can prove it safe (`guardian_main`, `owned_state` in `heavy-lock.py`). When its supervisor disappears, it sends TERM and then KILL to every owned process it can see: the root group, registered nested groups and registered App hosts. It exits 0 as soon as a successful process query finds none. A guardian that outlives a dead wrapper is therefore still protecting something, or cannot prove it is not. Two cases:
+When its supervisor disappears, the guardian (`guardian_main`, `owned_state` in `heavy-lock.py`) sends TERM and then KILL to every owned process it can see: the root group, registered nested groups and registered App hosts. It exits 0 as soon as its own `owned_state` check returns no rows. A guardian that outlives a dead wrapper is therefore still protecting something, or cannot prove it is not:
 
-- **The query cannot prove absence.** `/bin/ps` failed or timed out, or on macOS an owned group still answers `killpg` but shows no members. `status` then reports `processQuery: "unknown"`, and `childPids` is empty by construction.
+- **Its check cannot prove absence.** Either `/bin/ps` failed or timed out, or on macOS an owned group still answers `killpg(pgid, 0)` (success or EPERM) while two `ps` scans show no member. In that macOS case the guardian stays alive on purpose. `status` does not see this: it runs only one plain `ps` read and never probes groups, so it can report `processQuery: "ok"` with empty `childPids`. `processQuery: "ok"` is not the guardian's proof of absence.
 - **Owned work survives.** A process outlives SIGKILL, or a registered App host is still alive. Hosts are not written to the guardian record and `status` does not list them, so `childPids` can be empty while a host runs.
 
-In both cases, killing the guardian releases the flock while work may still run. `wrapperAlive=false` with empty `childPids` is not enough.
-
-**The one exception**, for the owning project only. The owner identifies its own guardian from the record's `cmd` line, which names the guardian's `heavy-lock.py` path and so its worktree. It may SIGKILL that one guardian PID only when all of these hold:
-
-1. `status` for that holder shows `processQuery: "ok"`, `wrapperAlive=false`, and `ageSeconds` over `budgetSeconds`.
-2. The owner's own `ps -axo pid=,pgid=,stat=` shows no process in the record's `child=` or `group=` process groups.
-3. No App host or other process the run launched is alive, checked by PID from the owner's own logs, because neither the record nor `status` lists hosts.
-
-Otherwise it reports and waits. No one ever touches the lock file. `UNVERIFIED`: that this case (a guardian that is alive with all three conditions true) ever occurs; the code was read, not exercised.
+The reverse does not hold either: a guardian that has exited does not prove its job ended safely. The guardian records a `host-unknown` mark but does not act on it, so it can exit 0 while an unregistered host still runs (see Holder loss: a missing record is not permission).
 
 ## Who may unlink or rename what
 
@@ -148,7 +140,7 @@ There is one source: Mado's repo copy, `scripts/heavy-lock.sh` plus `scripts/tdd
 
 ## RClick's constraints (reviewed by the RClick delegator on 2026-11-21)
 
-These are the interface points rclick-delegator listed on 2026-11-21; it also gave an OK on the #768 diff. Its review message of 2026-11-21 covered the round-1 version of this page and returned it OK to merge with six edits, all applied here.
+These are the interface points rclick-delegator listed on 2026-11-21; it also gave an OK on the #768 diff. Its review message of 2026-11-21 covered the round-1 version of this page and returned it OK to merge with six edits. Five are applied as asked. The sixth asked for an owner-recovery recipe that lets the owner SIGKILL its own guardian; after two audit rounds the Mado owner removed that exception on 2026-11-21 (see Owner recovery and Still open).
 
 - **No first-come order among waiters.** Whoever polls first after a release wins; a long waiter can lose to a newcomer.
 - **Waiting** is bounded by `MADO_HEAVY_LOCK_WAIT_SECS` (default 1800 s), then exit 75. Waiters poll: `LOCK_NB` every 50 ms on the flock, every 5 s on the mdpro directory.
@@ -160,6 +152,10 @@ These are the interface points rclick-delegator listed on 2026-11-21; it also ga
 - **Lock paths:** `~/.mado/locks/heavy.lock` and `~/.picsee/locks/heavy.lock` name the same lock. No lock state path moves unless all three projects agree, in a quiet window.
 - **Exclusion** holds while either the supervisor or the guardian is alive (see Holder loss).
 - **Optional for consumers:** `status`, alerts and status records.
+
+## Still open
+
+- A safe recovery recipe for a stuck guardian needs an authoritative check from heavy-lock itself (for example a `status` that reports the guardian's `owned_state`). It is not defined here.
 
 ## Discrepancies
 
