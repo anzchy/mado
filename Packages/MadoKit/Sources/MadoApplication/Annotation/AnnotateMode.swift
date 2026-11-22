@@ -32,6 +32,9 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
     public let baseline: String?
     /// The loader has had the intent's file.
     public internal(set) var seen = false
+    /// i694-fix1: the intent's file showed while ⌘E admission was refused (a sheet, another text field, OCR typing).
+    /// The host watches admission; it enters once admitted, and any later change of the file or its load drops it.
+    public internal(set) var refused = false
 
     public init(path: String, baseline: String?, id: UUID = UUID()) {
         self.id = id
@@ -40,7 +43,8 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
     }
 
     /// Judged on every change of the loaded file or its status. `shown` is the loader's file as a resolved path.
-    /// The intent's file: shown and admitted (the ⌘E rule) enters; still loading waits; failed or cancelled drops.
+    /// The intent's file: shown and admitted (the ⌘E rule) enters; shown but refused waits for admission (`refused`);
+    /// still loading waits, unless it was refused (a later reload); failed or cancelled drops.
     /// Any other file drops it, except the baseline (or nothing) before the intent's file reached the loader.
     public mutating func decide(shown: String?, status: ViewerImageStatus, canEnter: Bool) -> AnnotateOnShowDecision {
         guard let shown, shown == path else {
@@ -49,8 +53,11 @@ public struct AnnotateOnShowIntent: Equatable, Sendable {
         }
         seen = true
         switch status {
-        case .showing, .detailLimited: return canEnter ? .enter : .wait
-        case .loading, .readingFolder: return .wait
+        case .showing, .detailLimited:
+            if canEnter { return .enter }
+            refused = true
+            return .wait
+        case .loading, .readingFolder: return refused ? .drop : .wait
         default: return .drop
         }
     }
