@@ -30,5 +30,14 @@ date: 2026-11-13
 ## Consequences
 
 - The Baidu account requires real-name verification. The documentation lists only mainland ID cards. Image retention terms, and whether the service is reachable from outside the mainland, are unconfirmed ([technical research](../research/20261113-capture-ocr-tech.md) §D). These have to be stated in the Settings description and the consent text.
-- The free quota is about 1000 calls per month (500 for the accurate endpoint with locations). Quota errors go to the fallback; they do not fail silently.
+- The free quota is about 1000 calls per month for the standard and the accurate endpoints (500 for the accurate endpoint with locations). Quota errors go to the fallback; they do not fail silently.
 - The entitlement does not change: `network.client` already exists for Sparkle.
+
+## Amendment 2026-11-22: the standard endpoint
+
+The first provider calls Baidu's standard general-text endpoint (`general_basic`), not the accurate one (`accurate_basic`). The device acceptance run found that a Baidu application with only 通用文字识别 enabled is refused on the accurate endpoint (`error_code=6`), and the owner decided to use the standard endpoint only ([grilling record](../plans/20261122-baidu-standard-ocr-grilling.md)).
+
+- Both endpoints take the same token and request and return the same response shape, and both have about 1000 free calls per month.
+- The standard endpoint accepts images up to 8 MB encoded and 4096 px on the longest side (the accurate one: 10 MB, 8192 px). Mado shrinks a larger image before upload, as before, and uses On-device Recognition when it cannot fit.
+- Settings tells the user to enable 通用文字识别 for the application in the Baidu console.
+- Nothing else in this decision changes: key, consent, global switch, fallback and the rule that selecting text on an image never uploads.
