@@ -70,9 +70,9 @@ Mado 现在实际有什么，以 [功能账簿](docs/feature-ledger.md) 为准�
 
 ## 隐私
 
-- Mado 不收集任何数据，不上传图片或元数据。
+- Mado 不收集任何数据，图片和元数据留在本机；唯一例外是云识别：需你主动开启、使用自己的百度密钥并同意，才会把你要识别的那张图片发送给百度（见 [ADR-0019](docs/adr/0019-cloud-text-recognition-with-user-key-and-consent.md)）。
 - 沙盒保持开启。Mado 只读取你通过系统面板选的文件夹和文件，不修改它们。
-- 唯一的联网是检查更新：内置的 Sparkle 访问 GitHub 上的更新信息和更新包，不发送系统信息。
+- 除云识别外，唯一的联网是检查更新：内置的 Sparkle 访问 GitHub 上的更新信息和更新包，不发送系统信息。
 - 第二次启动时，Mado 会问你是否自动检查更新；之后可以在“设置 → 更新”里修改。
 - 为了检查更新，App 只多申请了一项网络客户端权限，见 [ADR-0015](docs/adr/0015-sparkle-updates-over-a-network-client-entitlement.md)。
 

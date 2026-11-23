@@ -982,9 +982,14 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         version.textColor = DesignColor.textSecondary.nsColor
         version.frame = NSRect(x: 108, y: 383, width: 390, height: 20)
         pane.addSubview(version)
-        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."), role: "uiSmall", muted: true)
+        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."), role: "uiSmall", muted: true)
         privacy.textColor = DesignColor.textSecondary.nsColor
-        privacy.frame = NSRect(x: 108, y: 319, width: 446, height: 54)
+        // #849: the text names the Cloud Recognition exception, so it can take more than three lines; the box grows
+        // down to fit it and the links and licences move down with it.
+        let privacyHeight = max(54, privacy.attributedStringValue.boundingRect(
+            with: NSSize(width: 446, height: 1000), options: [.usesLineFragmentOrigin, .usesFontLeading]).height.rounded(.up) + 2)
+        let shift = privacyHeight - 54
+        privacy.frame = NSRect(x: 108, y: 319 - shift, width: 446, height: privacyHeight)
         pane.addSubview(privacy)
         let links: [(title: String, entry: EntryPoint)] = [
             (aboutLocalizedString("Report a Problem…"), .reportIssue),
@@ -1002,14 +1007,14 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
                 .foregroundColor: DesignColor.selectionText.nsColor,
             ])
             let width = button.intrinsicContentSize.width
-            button.frame = NSRect(x: linkX, y: 283, width: width, height: 26)
+            button.frame = NSRect(x: linkX, y: 283 - shift, width: width, height: 26)
             configure(button, entry: link.entry, id: "settings.about.link.\(index)", title: link.title)
             pane.addSubview(button)
             linkX += width + 14
         }
         let licences = label(aboutLocalizedString("Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."), role: "uiSmall", muted: true)
         licences.textColor = DesignColor.textSecondary.nsColor
-        licences.frame = NSRect(x: 108, y: 219, width: 446, height: 52)
+        licences.frame = NSRect(x: 108, y: 219 - shift, width: 446, height: 52)
         pane.addSubview(licences)
     }
 
