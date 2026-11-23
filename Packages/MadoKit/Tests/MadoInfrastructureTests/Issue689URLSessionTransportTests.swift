@@ -165,7 +165,7 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         #expect(text == "雲")
         let seen = StubURLProtocol.requests
         #expect(seen.count == 2)
-        #expect(seen.map { $0.request.url?.path } == ["/oauth/2.0/token", "/rest/2.0/ocr/v1/accurate_basic"])
+        #expect(seen.map { $0.request.url?.path } == ["/oauth/2.0/token", "/rest/2.0/ocr/v1/general_basic"])
         #expect(seen[1].request.url?.query == "access_token=TOKEN")
         #expect(String(data: seen[1].body, encoding: .utf8)?.hasPrefix("image=") == true)
 
@@ -301,7 +301,7 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         #expect(StubURLProtocol.requests.allSatisfy { $0.request.url?.host == "aip.baidubce.com" })
 
         // A same-host redirect is refused too; Baidu's documented endpoints never redirect.
-        StubURLProtocol.reset([.redirect(status, "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"),
+        StubURLProtocol.reset([.redirect(status, "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"),
                                .respond(200, wordsBody)])
         await #expect(throws: URLSessionHTTPTransport.Refusal.redirected) {
             try await stubbedTransport().send(request)
