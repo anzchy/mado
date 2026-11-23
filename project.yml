@@ -46,7 +46,7 @@ targets:
       base:
         PRODUCT_NAME: Mado
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado
-        MARKETING_VERSION: 0.0.1
+        MARKETING_VERSION: 0.0.2
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: App/Info.plist
@@ -146,7 +146,7 @@ targets:
       base:
         PRODUCT_NAME: MadoCaptureHelper
         PRODUCT_BUNDLE_IDENTIFIER: io.github.anzchy.mado.capture-helper
-        MARKETING_VERSION: 0.0.1
+        MARKETING_VERSION: 0.0.2
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: App/CaptureHelper/Info.plist
