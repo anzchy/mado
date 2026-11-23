@@ -137,3 +137,24 @@ func issue831ImageThatCannotFitFallsBackOnDevice() async throws {
     #expect(await local.calls == 1)
     #expect(await http.requests.isEmpty)
 }
+
+/// The token request keeps its current shape (#831 doc review): a form body, not URL parameters. Baidu's token guide
+/// puts the parameters in the URL; this body form works in existing live evidence, so this pins it rather than the
+/// guide. The key and secret are percent-encoded with only ASCII letters and digits left as they are.
+@Test(.timeLimit(.minutes(2)))
+func issue831TokenRequestKeepsItsFormBody() async throws {
+    let http = Stub831([token831, words831])
+    let provider = BaiduTextRecognitionProvider(transport: http)
+    let keys = CloudCredentials(apiKey: "api key+/=", secretKey: "sécret&x")
+    #expect(try await provider.recognise(png831(width: 20, height: 20), credentials: keys) == "标准")
+    let requests = await http.requests
+    #expect(requests.count == 2)
+    let token = try #require(requests.first)
+    #expect(token.url?.absoluteString == "https://aip.baidubce.com/oauth/2.0/token")
+    #expect(token.url?.query == nil)
+    #expect(token.httpMethod == "POST")
+    #expect(token.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
+    let body = try #require(token.httpBody.flatMap { String(data: $0, encoding: .utf8) })
+    #expect(body == "grant_type=client_credentials&client_id=api%20key%2B%2F%3D&client_secret=s%C3%A9cret%26x")
+    #expect(requests.last?.url?.path == "/rest/2.0/ocr/v1/general_basic")
+}
