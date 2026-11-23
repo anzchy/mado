@@ -15,6 +15,16 @@ public protocol HTTPTransport: Sendable {
 }
 
 public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
+    /// Baidu's endpoints and upload limits, defined once (ADR-0019; the transport allows only these two paths).
+    static let tokenEndpoint = "https://aip.baidubce.com/oauth/2.0/token"
+    static let recognitionEndpoint = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"
+    /// The URL-encoded `image` value's limit.
+    static let maxEncodedImageBytes = 10 * 1024 * 1024
+    /// The longest side's limit, in pixels.
+    static let maxLongSide = 8192
+    /// The shortest side's minimum, in pixels.
+    static let minShortSide = 15
+
     private let transport: any HTTPTransport
     private let now: @Sendable () -> Date
     private var token: (value: String, expires: Date, credentials: CloudCredentials)?
@@ -54,7 +64,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     private func recognise(upload: Data, credentials: CloudCredentials) async throws(Failure) -> String {
         let accessToken = try await accessToken(for: credentials)
         if Task.isCancelled { throw Failure(.cancelled) }
-        var parts = URLComponents(string: "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic")!
+        var parts = URLComponents(string: Self.recognitionEndpoint)!
         parts.queryItems = [URLQueryItem(name: "access_token", value: accessToken)]
         var request = URLRequest(url: parts.url!)
         request.httpMethod = "POST"
@@ -101,7 +111,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         let transport = self.transport
         let now = self.now
         let task = Task<(String, Date), Error> {
-            var request = URLRequest(url: URL(string: "https://aip.baidubce.com/oauth/2.0/token")!)
+            var request = URLRequest(url: URL(string: Self.tokenEndpoint)!)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.httpBody = Data("grant_type=client_credentials&client_id=\(Self.form(credentials.apiKey))&client_secret=\(Self.form(credentials.secretKey))".utf8)
@@ -205,13 +215,13 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              min(width, height) >= 15 else { throw .invalidImage }
-        let maxBytes = 10 * 1024 * 1024
+              min(width, height) >= minShortSide else { throw .invalidImage }
+        let maxBytes = maxEncodedImageBytes
         let sourceType = CGImageSourceGetType(source) as String?
         let supported = sourceType == UTType.jpeg.identifier || sourceType == UTType.png.identifier || sourceType == UTType.bmp.identifier
-        if supported, max(width, height) <= 8192, encodedImageSize(data) <= maxBytes { return data }
+        if supported, max(width, height) <= maxLongSide, encodedImageSize(data) <= maxBytes { return data }
 
-        return try reencodedThumbnail(source, maxPixel: min(8192, max(width, height)), maxBytes: maxBytes)
+        return try reencodedThumbnail(source, maxPixel: min(maxLongSide, max(width, height)), maxBytes: maxBytes)
     }
 
     private static func reencodedThumbnail(_ source: CGImageSource, maxPixel: Int, maxBytes: Int) throws(TextRecognitionError) -> Data {
@@ -221,7 +231,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             kCGImageSourceThumbnailMaxPixelSize: maxPixel
         ]
         guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .invalidImage }
-        guard min(thumbnail.width, thumbnail.height) >= 15 else { throw .cloudImageTooLarge }
+        guard min(thumbnail.width, thumbnail.height) >= minShortSide else { throw .cloudImageTooLarge }
         let alpha = hasAlphaChannel(thumbnail)
         let output = NSMutableData()
         let type = alpha ? UTType.png : UTType.jpeg
@@ -230,8 +240,8 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
         guard CGImageDestinationFinalize(destination) else { throw .cloudImageTooLarge }
         let prepared = output as Data
         if encodedImageSize(prepared) <= maxBytes { return prepared }
-        // At 15 pixels the encoder cannot produce a 10 MB image; the short-side guard handles narrow inputs.
-        return try reencodedThumbnail(source, maxPixel: max(15, Int(Double(maxPixel) * 0.75)), maxBytes: maxBytes)
+        // At the minimum side the encoder cannot exceed the byte limit; the short-side guard handles narrow inputs.
+        return try reencodedThumbnail(source, maxPixel: max(minShortSide, Int(Double(maxPixel) * 0.75)), maxBytes: maxBytes)
     }
 
     private static func encodedImageSize(_ data: Data) -> Int {
