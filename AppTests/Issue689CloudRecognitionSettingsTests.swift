@@ -279,3 +279,63 @@ func issue689SettingsReadsSavedStateOnOpen() async throws {
     #expect(try f.view("settings.capture.ocr-saved-keys", as: NSTextField.self).stringValue == "API Key ••••••••7890 · Secret Key ••••••••")
     #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden)
 }
+
+// #832 EXT-04 (spec #830, grilling 20261122 decision 7): the group names the Baidu product to enable, one static
+// sentence in the UI language, shown whatever the switch and key state, as plain text (no link, no new control).
+private let zhProduct = "需在百度智能云控制台为该应用开通「通用文字识别」。"
+private let enProduct = "Enable “General Text Recognition” for this application in the Baidu AI Cloud console."
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"], [false, true])
+func issue832SettingsNamesTheBaiduProductToEnable(_ locale: String, keyedAndOn: Bool) async throws {
+    let catalog = try captureCatalog(locale)
+    let secrets = Secrets()
+    let preferences = Preferences()
+    let model = CloudRecognitionSettingsModel(preferences: preferences, keys: BaiduCloudCredentialStore(secrets: secrets))
+    if keyedAndOn {
+        try await model.saveKeys(apiKey: "AKAKAKAKWWMW", secretKey: "SK")
+        _ = await model.answerConsent(granted: true)
+    }
+    let display = InMemoryDisplayPreferencesStore()
+    let panel = SettingsPanelWindow(
+        cache: ThumbnailDiskCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+        appearanceAdapter: WindowAppearanceAdapter(preferencesStore: display), preferencesStore: display,
+        defaults: UserDefaults(suiteName: "issue832-\(UUID().uuidString)")!, capturePreferences: OffBar(),
+        captureLocalize: { catalog[$0] ?? $0 },
+        cloudRecognition: CloudRecognitionSettingsEnvironment(model: model, presentConsent: { _, _, _ in }),
+        openURL: { _ in })
+    defer { panel.window.close() }
+    panel.select(.capture)
+    let f = Fixture(panel: panel, secrets: secrets, preferences: preferences, consent: ConsentRecorder())
+    let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
+    if keyedAndOn {
+        try await waitUntil { toggle.state == .on }
+    } else {
+        try await waitUntil { try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden == false }
+        #expect(toggle.state == .off)
+    }
+    let sentence = try f.view("settings.capture.ocr-product-hint", as: NSTextField.self)
+    #expect(sentence.stringValue == (locale == "zh-Hans" ? zhProduct : enProduct))
+    #expect(!sentence.isHidden && sentence.alphaValue == 1)
+    // Plain, static text: not editable, not selectable, no link attribute, nothing to press or focus.
+    #expect(!sentence.isEditable && !sentence.isSelectable && !sentence.acceptsFirstResponder)
+    #expect(!sentence.attributedStringValue.string.contains("http"))
+    var linked = false
+    sentence.attributedStringValue.enumerateAttribute(.link, in: NSRange(location: 0, length: sentence.attributedStringValue.length)) { value, _, _ in
+        if value != nil { linked = true }
+    }
+    #expect(!linked)
+    // Whole, inside the group, under the 服务 row and above the 密钥 row, overlapping nothing.
+    #expect(sentence.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: sentence.frame.width, height: .greatestFiniteMagnitude)).height
+            <= sentence.frame.height + 0.5)
+    let group = try f.view("settings.capture.ocr")
+    #expect(sentence.superview === group)
+    #expect(sentence.frame.minX >= 0 && sentence.frame.maxX <= group.frame.width + 0.5)
+    let service = try f.view("settings.capture.ocr-service", as: NSPopUpButton.self)
+    // The 密钥 row starts at the API Key field's top in both states (the masked line sits on the same row).
+    let keysRowTop = try f.view("settings.capture.ocr-api-key").frame.minY
+    #expect(sentence.frame.minY >= service.frame.maxY && sentence.frame.maxY <= keysRowTop)
+    for other in group.subviews where other !== sentence && !other.isHidden && !(other is NSBox) {
+        #expect(!sentence.frame.intersects(other.frame), "overlaps \(other.accessibilityIdentifier())")
+    }
+    #expect(try f.view("settings.capture.ocr-fallback-hint").frame.maxY <= group.frame.height)
+}
