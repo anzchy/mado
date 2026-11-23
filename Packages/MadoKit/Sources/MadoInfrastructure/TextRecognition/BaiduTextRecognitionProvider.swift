@@ -15,13 +15,14 @@ public protocol HTTPTransport: Sendable {
 }
 
 public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
-    /// Baidu's endpoints and upload limits, defined once (ADR-0019; the transport allows only these two paths).
+    /// Baidu's endpoints and upload limits, defined once (ADR-0019 amendment, #831: the standard general-text product,
+    /// so an application with only 通用文字识别 enabled works). The transport allows only these two paths.
     static let tokenEndpoint = "https://aip.baidubce.com/oauth/2.0/token"
-    static let recognitionEndpoint = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"
+    static let recognitionEndpoint = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
     /// The URL-encoded `image` value's limit.
-    static let maxEncodedImageBytes = 10 * 1024 * 1024
+    static let maxEncodedImageBytes = 8 * 1024 * 1024
     /// The longest side's limit, in pixels.
-    static let maxLongSide = 8192
+    static let maxLongSide = 4096
     /// The shortest side's minimum, in pixels.
     static let minShortSide = 15
 

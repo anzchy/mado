@@ -108,7 +108,7 @@ func issue689bTokenErrorCodeAndMissingTokenAreReported() async throws {
 @Test(.timeLimit(.minutes(2)))
 func issue689bTransportFailuresReportOnlyTheirCode() async throws {
     let timedOut = URLError(.timedOut, userInfo: [NSURLErrorFailingURLStringErrorKey:
-        "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic?access_token=TOKEN-abc-123"])
+        "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic?access_token=TOKEN-abc-123"])
     let (tokenThrown, tokenDetails) = try await run([.failure(URLError(.notConnectedToInternet))])
     #expect(tokenThrown == .cloudOffline)
     #expect(tokenDetails == [CloudFailureDetail(stage: .token, transportError: "URLError -1009")])

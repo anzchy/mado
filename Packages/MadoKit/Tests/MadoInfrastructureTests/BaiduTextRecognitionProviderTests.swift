@@ -58,7 +58,7 @@ func issue689BaiduRequestAndTokenCache() async throws {
     #expect(tokenBody.contains("grant_type=client_credentials"))
     #expect(tokenBody.contains("client_id=api%2Bkey"))
     #expect(tokenBody.contains("client_secret=secret%20key"))
-    #expect(requests[1].url?.absoluteString == "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic?access_token=TOKEN")
+    #expect(requests[1].url?.absoluteString == "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic?access_token=TOKEN")
     #expect(requests[1].httpMethod == "POST")
     let form = try #require(requests[1].httpBody.flatMap { String(data: $0, encoding: .utf8) })
     #expect(form.hasPrefix("image="))
@@ -98,7 +98,7 @@ func issue689BaiduTokenAndOfflineErrors() async throws {
 func issue689BaiduDownscalesBeforeUpload() async throws {
     let http = StubHTTP([tokenJSON, wordsJSON])
     let provider = BaiduTextRecognitionProvider(transport: http)
-    let image = try testImage(width: 9000, height: 20)
+    let image = try testImage(width: 9000, height: 40)
     #expect(try await provider.recognise(image, credentials: baiduKeys) == "first\n第二行")
     let request = try #require(await http.requests.last)
     let body = try #require(request.httpBody.flatMap { String(data: $0, encoding: .utf8) })
@@ -108,7 +108,7 @@ func issue689BaiduDownscalesBeforeUpload() async throws {
     #expect(uploaded != image)
     let source = try #require(CGImageSourceCreateWithData(uploaded as CFData, nil))
     let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
-    #expect((properties[kCGImagePropertyPixelWidth] as? Int) == 8192)
+    #expect((properties[kCGImagePropertyPixelWidth] as? Int) == 4096)
 }
 
 private actor PausingHTTP: HTTPTransport {
@@ -302,7 +302,7 @@ func issue689FixEncodedImageLimitChecksUploadBytes() async throws {
         do {
             _ = try await provider.recognise(image, credentials: baiduKeys)
             let upload = try #require(await http.requests.last?.httpBody)
-            #expect(upload.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+            #expect(upload.count <= 8 * 1024 * 1024 + "image=".utf8.count)
         } catch {
             #expect(error as? TextRecognitionError == .cloudImageTooLarge)
             #expect(await http.count == 0)
@@ -351,7 +351,7 @@ func issue689FixSupportedFormatByteOnlyReencode() async throws {
         let provider = BaiduTextRecognitionProvider(transport: http)
         _ = try await provider.recognise(original, credentials: baiduKeys)
         let body = try #require(await http.requests.last?.httpBody)
-        #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+        #expect(body.count <= 8 * 1024 * 1024 + "image=".utf8.count)
         #expect(body != Data("image=\(original.base64EncodedString())".utf8))
     }
 }
@@ -410,7 +410,7 @@ func issue689FixAlphaUploadRetriesAtSmallerThumbnail() async throws {
         let provider = BaiduTextRecognitionProvider(transport: http)
         _ = try await provider.recognise(image, credentials: baiduKeys)
         let body = try #require(await http.requests.last?.httpBody)
-        #expect(body.count <= 10 * 1024 * 1024 + "image=".utf8.count)
+        #expect(body.count <= 8 * 1024 * 1024 + "image=".utf8.count)
         let text = try #require(String(data: body, encoding: .utf8))
         let base64 = try #require(String(text.dropFirst("image=".count)).removingPercentEncoding)
         let upload = try #require(Data(base64Encoded: base64))
