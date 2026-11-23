@@ -156,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Issue 841: reopening a running Mado (a Dock-icon click, or the Capture Bar's 打开 Mado through Launch Services)
     /// with no window visible shows the viewer window again. With a window visible, AppKit only brings Mado forward.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        logger.notice("reopen visible=\(flag, privacy: .public)")
         if flag { return true }
         viewer().showWindow(nil)
         return false
