@@ -985,9 +985,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."), role: "uiSmall", muted: true)
         privacy.textColor = DesignColor.textSecondary.nsColor
         // #849: the text names the Cloud Recognition exception, so it can take more than three lines; the box grows
-        // down to fit it and the links and licences move down with it.
-        let privacyHeight = max(54, privacy.attributedStringValue.boundingRect(
-            with: NSSize(width: 446, height: 1000), options: [.usesLineFragmentOrigin, .usesFontLeading]).height.rounded(.up) + 2)
+        // down to fit it and the links and licences move down with it. Measured by the field's own cell, which wraps
+        // inside its horizontal inset (fix1, audit M1).
+        let privacyHeight = max(54, privacy.cell!.cellSize(
+            forBounds: NSRect(x: 0, y: 0, width: 446, height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up))
         let shift = privacyHeight - 54
         privacy.frame = NSRect(x: 108, y: 319 - shift, width: 446, height: privacyHeight)
         pane.addSubview(privacy)
