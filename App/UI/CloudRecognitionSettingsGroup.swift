@@ -55,6 +55,7 @@ struct CloudRecognitionSettingsEnvironment {
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
 
     static let cloudHint = "Cloud Recognition uploads the image being recognized to Baidu. It uploads only when you click Recognize Text, have agreed once, and this switch is on; selecting text directly on an image always uses on-device recognition only. Baidu text recognition needs a Baidu account with real-name verification, and Baidu's documentation lists only mainland Chinese ID documents. How long Baidu keeps uploaded images, and whether the service works outside mainland China, are not confirmed."
+    static let productHint = "Enable “General Text Recognition” for this application in the Baidu AI Cloud console."
     static let fallbackHint = "Without a key, offline, or when the quota is used up, Mado uses on-device recognition, and the result names the engine it used."
 
     /// No pinned design for the dialog itself: a standard informational NSAlert with the terms link as its
@@ -197,7 +198,10 @@ struct CloudRecognitionSettingsEnvironment {
         service.setAccessibilityLabel(localize("Recognition Service"))
         service.setAccessibilityIdentifier("settings.capture.ocr-service")
         addSubview(service)
-        top += 38
+        // #832 (grilling 20261122 decision 7): which Baidu product the application needs, static plain text.
+        let product = Self.text(localize(Self.productHint), muted: true)
+        product.setAccessibilityIdentifier("settings.capture.ocr-product-hint")
+        top = measured(product, top: top + 30) + 14
 
         // 密钥: two fields and 保存到钥匙串, or the masked keys and 移除密钥.
         rowLabel("Keys", top: top)
