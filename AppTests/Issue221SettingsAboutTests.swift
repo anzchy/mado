@@ -261,3 +261,31 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
     let views = try issue221AboutViews(in: panel, localized: { key in (try? issue221CatalogValue(key, "en")) ?? key })
     #expect(views.privacy.stringValue == key)
 }
+
+// #849 fix1 (audit M1): the privacy box must hold its text as the text field itself lays it out, measured by the field's
+// cell (which wraps inside its own horizontal inset), not by the formula that sizes the box. The decided English text
+// needs more than the old fixed 54 pt, so a box left at 54 pt fails here.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue849PrivacyBoxHoldsItsTextAsTheCellLaysItOut() throws {
+    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."
+    for language in ["en", "zh-Hans"] {
+        let localized: (String) -> String = { key in (try? issue221CatalogValue(key, language)) ?? key }
+        let panel = issue221Panel(localized: localized)
+        defer { panel.window.close() }
+        let views = try issue221AboutViews(in: panel, localized: localized)
+        #expect(views.privacy.stringValue == localized(privacyKey), "\(language) privacy")
+        for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+            panel.window.appearance = NSAppearance(named: appearance)
+            views.pane.layoutSubtreeIfNeeded()
+            let cell = try #require(views.privacy.cell)
+            let needed = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: views.privacy.frame.width,
+                                                          height: .greatestFiniteMagnitude)).height
+            // The English text is the longer one; the Chinese text fits in three lines (45 pt measured).
+            if language == "en" {
+                #expect(needed > 54, "en: the decided text needs more than the old 54 pt box (\(needed))")
+            }
+            #expect(needed <= views.privacy.frame.height,
+                    "\(language) \(appearance.rawValue): cell needs \(needed) pt, box is \(views.privacy.frame.height) pt")
+            #expect(views.privacy.frame.minY >= views.links[0].frame.maxY, "\(language): links stay below the text")
+        }
+    }
+}
