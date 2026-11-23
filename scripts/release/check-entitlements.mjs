@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Check a signed Mado.app's entitlements against ADR-015's decided set.
+ * Check a signed Mado.app's entitlements against the decided set (ADR-0006 sandbox, ADR-0015 Sparkle, ADR-0020
+ * read-write, ADR-0022 App Group).
  *
  *   node scripts/release/check-entitlements.mjs <Mado.app> --configuration release|debug [--expect-bundle-id ID]
  *
- * Release: exactly sandbox, user-selected read-write (ADR-020), app-scope bookmarks, network.client (all true) and
- * Sparkle's mach-lookup exception with exactly `<bundle id>-spks` and `<bundle id>-spki`.
+ * Release: exactly sandbox, user-selected read-write (ADR-0020), app-scope bookmarks, network.client (all true),
+ * Sparkle's mach-lookup exception with exactly `<bundle id>-spks` and `<bundle id>-spki` (ADR-0015), and the App Group
+ * shared with the Capture helper as exactly `["GRT84NAK4T.io.github.anzchy.mado.capture"]` (ADR-0022).
  * Debug: the same, plus Xcode's development-signing `get-task-allow = true` if present.
  */
 import { execFileSync } from "node:child_process";
@@ -20,6 +22,8 @@ const FLAGS = [
 ];
 const MACH = "com.apple.security.temporary-exception.mach-lookup.global-name";
 const GET_TASK_ALLOW = "com.apple.security.get-task-allow";
+const APP_GROUPS = "com.apple.security.application-groups";
+const CAPTURE_GROUP = "GRT84NAK4T.io.github.anzchy.mado.capture";
 
 /** Minimal XML property-list reader: dict, array, key, string, integer, real, true, false. */
 export function parsePlistXml(xml) {
@@ -84,7 +88,7 @@ export function checkEntitlements(entitlements, { bundleId, configuration, expec
   if (!bundleId) throw new Error("bundle identifier is required");
   const problems = [];
   if (expectedBundleId && bundleId !== expectedBundleId) problems.push(`bundle identifier must be ${expectedBundleId}, found ${bundleId}`);
-  const allowed = new Set([...FLAGS, MACH]);
+  const allowed = new Set([...FLAGS, MACH, APP_GROUPS]);
   if (configuration === "debug" && GET_TASK_ALLOW in entitlements) {
     allowed.add(GET_TASK_ALLOW);
     if (entitlements[GET_TASK_ALLOW] !== true) problems.push(`${GET_TASK_ALLOW} must be true when present in debug`);
@@ -103,6 +107,13 @@ export function checkEntitlements(entitlements, { bundleId, configuration, expec
     const expected = [`${bundleId}-spks`, `${bundleId}-spki`];
     const ok = Array.isArray(names) && names.length === 2 && expected.every((name) => names.includes(name));
     if (!ok) problems.push(`${MACH} must be exactly ${JSON.stringify(expected)}, found ${JSON.stringify(names)}`);
+  }
+  if (!(APP_GROUPS in entitlements)) {
+    problems.push(`missing entitlement ${APP_GROUPS}`);
+  } else {
+    const groups = entitlements[APP_GROUPS];
+    const ok = Array.isArray(groups) && groups.length === 1 && groups[0] === CAPTURE_GROUP;
+    if (!ok) problems.push(`${APP_GROUPS} must be exactly ${JSON.stringify([CAPTURE_GROUP])}, found ${JSON.stringify(groups)}`);
   }
   return problems;
 }

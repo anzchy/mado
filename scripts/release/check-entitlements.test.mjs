@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { checkEntitlements, parsePlistXml } from "./check-entitlements.mjs";
 
 const bundleId = "io.github.anzchy.mado";
 
 const readWrite = "com.apple.security.files.user-selected.read-write";
 const readOnly = "com.apple.security.files.user-selected.read-only";
+// ADR-0022: the app and the Capture helper share one App Group.
+const appGroups = "com.apple.security.application-groups";
+const captureGroup = "GRT84NAK4T.io.github.anzchy.mado.capture";
 
 function entitlementsXml({ extra = "", sandbox = "<true/>", omit = [], readOnlyKey = false,
-  mach = [`${bundleId}-spks`, `${bundleId}-spki`] } = {}) {
+  mach = [`${bundleId}-spks`, `${bundleId}-spki`], groups = [captureGroup], groupsXml } = {}) {
   // ADR-020: the user-selected key is read-write; `readOnlyKey` adds the retired read-only key.
   const flags = {
     "com.apple.security.app-sandbox": sandbox,
@@ -25,12 +29,15 @@ function entitlementsXml({ extra = "", sandbox = "<true/>", omit = [], readOnlyK
   const machEntry = omit.includes("mach") ? "" :
     `\t<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>\n\t<array>\n` +
     mach.map((name) => `\t\t<string>${name}</string>`).join("\n") + `\n\t</array>`;
+  const groupValue = groupsXml ?? `<array>\n` + groups.map((name) => `\t\t<string>${name}</string>`).join("\n") + `\n\t</array>`;
+  const groupEntry = omit.includes("group") ? "" : `\t<key>${appGroups}</key>\n\t${groupValue}`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 ${body}
 ${machEntry}
+${groupEntry}
 ${extra}
 </dict>
 </plist>
@@ -54,7 +61,7 @@ test("parsePlistXml decodes dict, booleans, strings and arrays", () => {
   assert.throws(() => parsePlistXml("<plist><array></array></plist>"), /dict/);
 });
 
-test("exactly the five decided keys pass in release and debug", () => {
+test("exactly the six decided keys pass in release and debug", () => {
   for (const configuration of ["release", "debug"]) {
     assert.deepEqual(check(entitlementsXml(), configuration), [], configuration);
   }
@@ -95,6 +102,11 @@ test("each missing key fails and is named", () => {
   const problems = check(entitlementsXml({ omit: ["mach"] }), "release");
   assert.equal(problems.length, 1);
   assert.match(problems[0], /mach-lookup/);
+  for (const configuration of ["release", "debug"]) {
+    const missingGroup = check(entitlementsXml({ omit: ["group"] }), configuration);
+    assert.equal(missingGroup.length, 1, configuration);
+    assert.match(missingGroup[0], /missing entitlement com\.apple\.security\.application-groups/);
+  }
 });
 
 test("the retired read-only key fails and read-write is missing", () => {
@@ -112,7 +124,7 @@ test("read-only and read-write together fail", () => {
 
 test("only the exact decided set passes over every subset", () => {
   const keys = ["com.apple.security.app-sandbox", "com.apple.security.files.bookmarks.app-scope", readWrite,
-    "com.apple.security.network.client", "mach", readOnly];
+    "com.apple.security.network.client", "mach", "group", readOnly];
   const decided = new Set(keys.filter((key) => key !== readOnly));
   for (let mask = 0; mask < 1 << keys.length; mask++) {
     const present = keys.filter((_, bit) => mask & (1 << bit));
@@ -143,6 +155,32 @@ test("mach-lookup names must be exactly the two resolved names", () => {
     assert.equal(problems.length, 1, JSON.stringify(mach));
     assert.match(problems[0], /mach-lookup/);
   }
+});
+
+test("the app group must be exactly the Capture group", () => {
+  const cases = [
+    { groups: ["GRT84NAK4T.io.github.anzchy.mado.other"] },
+    { groups: ["group.io.github.anzchy.mado.capture"] },
+    { groups: [captureGroup, "GRT84NAK4T.io.github.anzchy.mado.extra"] },
+    { groups: [captureGroup, captureGroup] },
+    { groups: [] },
+    { groups: [captureGroup.toUpperCase()] },
+    { groupsXml: `<string>${captureGroup}</string>` },
+    { groupsXml: "<true/>" },
+  ];
+  for (const configuration of ["release", "debug"]) {
+    for (const value of cases) {
+      const problems = check(entitlementsXml(value), configuration);
+      assert.equal(problems.length, 1, `${configuration} ${JSON.stringify(value)}: ${problems.join("; ")}`);
+      assert.match(problems[0], /application-groups must be exactly \["GRT84NAK4T\.io\.github\.anzchy\.mado\.capture"\]/);
+    }
+  }
+});
+
+test("the committed app entitlements pass once Xcode resolves the bundle identifier", () => {
+  const source = readFileSync(new URL("../../App/Resources/Mado.entitlements", import.meta.url), "utf8")
+    .replaceAll("$(PRODUCT_BUNDLE_IDENTIFIER)", bundleId);
+  for (const configuration of ["release", "debug"]) assert.deepEqual(check(source, configuration), [], configuration);
 });
 
 test("an unknown configuration is rejected", () => {
