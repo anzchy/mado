@@ -1,5 +1,5 @@
 import Testing
-import MadoApplication
+@testable import MadoApplication
 
 private actor CaptureBarMemoryPreferences: CaptureBarPreferencePort {
     private var enabled = false
@@ -44,11 +44,25 @@ private actor DelayedRestoreProcess: CaptureBarProcessPort {
     let restoring = Task { try await control.restoreOnMadoLaunch() }
     while !(await process.hasStarted()) { await Task.yield() }
     let toggling = Task { try await control.setEnabled(false) }
+    // Issue 850: release the restore only once the toggle is parked behind it, so the contended path always runs.
+    await waitForQueuedCall(control)
+    #expect(await control.pendingWaiters() == 1, "the toggle waits behind the restore")
+    #expect(await preferences.isCaptureBarEnabled(), "the queued toggle has not run yet")
     await process.finishStart()
     try await restoring.value
     try await toggling.value
+    #expect(await control.pendingWaiters() == 0)
     #expect(await preferences.isCaptureBarEnabled() == false)
     #expect(await process.isRunning() == false)
+}
+
+/// Yields until a second call is parked in `CaptureBarControl.acquire()`; records an issue if it never parks.
+private func waitForQueuedCall(_ control: CaptureBarControl) async {
+    for _ in 0..<10_000 {
+        if await control.pendingWaiters() > 0 { return }
+        await Task.yield()
+    }
+    Issue.record("the second call never queued behind the one in progress")
 }
 
 @Test(.timeLimit(.minutes(2))) func captureBarSwitchOffOnOffOnAndRestoreAfterRelaunch() async throws {
