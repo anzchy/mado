@@ -73,6 +73,9 @@ public actor CaptureBarControl {
         }
     }
 
+    /// Test seam (Issue 850): calls parked in `acquire()` behind the one in progress.
+    func pendingWaiters() -> Int { waiters.count }
+
     private func release() {
         if waiters.isEmpty { busy = false }
         else { waiters.removeFirst().resume() }
