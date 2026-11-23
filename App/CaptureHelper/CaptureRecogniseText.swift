@@ -14,10 +14,19 @@ final class CaptureRecogniseTextPanel: NSPanel {
     override var canBecomeKey: Bool { showsEditablePanel() }
     override var canBecomeMain: Bool { false }
     /// The notice opens on click only. AppKit hands a window's first key view the focus when it comes on screen; a
-    /// focused notice holds off its own 5 s dismissal, which here would never run.
+    /// focused notice holds off its own 5 s dismissal, which here would never run. Issue 839: a mouse-down is the
+    /// exception. `sendEvent` first makes the clicked view first responder and drops the click when that is refused,
+    /// so the notice must accept focus for its own click, which then opens the panel.
     override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
-        if responder is RecogniseTextNoticeView { return false }
+        if responder is RecogniseTextNoticeView, !deliveringMouseDown { return false }
         return super.makeFirstResponder(responder)
+    }
+    private var deliveringMouseDown = false
+    override func sendEvent(_ event: NSEvent) {
+        guard event.type == .leftMouseDown else { super.sendEvent(event); return }
+        deliveringMouseDown = true
+        defer { deliveringMouseDown = false }
+        super.sendEvent(event)
     }
 
     /// The Edit command a key equivalent stands for: the helper is an accessory app with no Edit menu, so the panel
