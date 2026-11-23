@@ -22,10 +22,12 @@ final class CaptureRecogniseTextPanel: NSPanel {
         return super.makeFirstResponder(responder)
     }
     private var deliveringMouseDown = false
+    /// A nested left mouse-down (a tracking loop calling `sendEvent`) restores the outer delivery's state on return.
     override func sendEvent(_ event: NSEvent) {
         guard event.type == .leftMouseDown else { super.sendEvent(event); return }
+        let outer = deliveringMouseDown
         deliveringMouseDown = true
-        defer { deliveringMouseDown = false }
+        defer { deliveringMouseDown = outer }
         super.sendEvent(event)
     }
 
