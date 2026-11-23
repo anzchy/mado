@@ -1,0 +1,18 @@
+# The Capture helper inside Mado.app 0.0.2 (Issue 854): stripped Release of 7baa515e, locally signed with Apple Development
+# (hardened runtime, CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO, the Release build flags of release.yml). The unsigned build has the
+# same files minus Contents/_CodeSignature/CodeResources. The Release helper embeds no frameworks (the Debug build does) and its
+# resource bundle carries no detached signature. Stapling adds Contents/CodeResources to the outer app only.
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Info.plist
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/MacOS/MadoCaptureHelper
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/PkgInfo
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Info.plist
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/alley.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/gate.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/hillside.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/lakehouse.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/lakeside.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/temple.jpg
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/en.lproj/Localizable.strings
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/en.lproj/Localizable.stringsdict
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Resources/zh-Hans.lproj/Localizable.strings
+Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/_CodeSignature/CodeResources
