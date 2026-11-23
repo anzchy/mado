@@ -20,4 +20,4 @@ Entry points marked 「即将推出」 / "Coming Soon" in the app are planned fo
 
 ## Privacy
 
-picsee collects no data and uploads no images. The sandbox is on; it reads only the folders you choose. It contacts GitHub only to check for updates, and sends no system information. On its second launch it asks whether to check for updates automatically; you can change this in Settings → 更新 / Updates.
+Mado collects no data. Images stay on your Mac. The only exception is Cloud Recognition, which is off until you turn it on, use your own Baidu keys and agree on first use: then the image you asked to recognise is sent to Baidu for that request. The sandbox is on; it reads only the folders you choose. Mado contacts GitHub to check for updates and sends no system information. On its second launch it asks whether to check for updates automatically; you can change this in Settings → 更新 / Updates.

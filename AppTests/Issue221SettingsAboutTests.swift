@@ -51,7 +51,7 @@ private struct Issue221AboutViews {
     let icon = try #require(pane.subviews.compactMap { $0 as? NSImageView }.first)
     let name = try #require(fields.first { $0.stringValue == "Mado" })
     let version = try #require(fields.first { $0.stringValue.hasPrefix(localized("Version") + " ") })
-    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."
+    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."
     let privacy = try #require(fields.first { $0.stringValue == localized(privacyKey) })
     let licenceKey = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
     let licences = try #require(fields.first { $0.stringValue == localized(licenceKey) })
@@ -177,7 +177,7 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue221LocalizedAboutControlsFitPaneInEnglishChineseLightAndDark() throws {
-    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data and uploads no images; the sandbox reads only folders you authorize."
+    let privacyKey = "A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."
     let licenceKey = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
     for language in ["en", "zh-Hans"] {
         let localized: (String) -> String = { key in
@@ -242,4 +242,22 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
         #expect(entry.accessibilityLabel(for: .english).isEmpty)
         #expect(entry.accessibilityLabel(for: .simplifiedChinese).isEmpty)
     }
+}
+
+// #849 (owner 2026-11-23, 「图片留在本机，云识别是例外」; ADR-019): the About privacy text names Cloud Recognition as the one
+// exception. The catalog holds the decided wording verbatim, and the old "uploads no images" key is gone.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue849AboutPrivacyTextNamesTheCloudRecognitionException() throws {
+    let key = "A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac; the only exception is Cloud Recognition, which is off until you turn it on with your own Baidu keys and agree, and then sends the image you asked to recognise to Baidu. The sandbox reads only folders you authorize."
+    #expect(try issue221CatalogValue(key, "en") == key)
+    #expect(try issue221CatalogValue(key, "zh-Hans")
+            == "一个直接浏览磁盘上图片的 macOS 看图应用。Mado 不收集数据，图片留在本机；唯一例外是云识别：需你主动开启、使用自己的百度密钥并同意，才会把你要识别的那张图片发送给百度。沙盒开启，只读取你授权的文件夹。")
+    let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("App/Resources/Localizable.xcstrings")
+    let catalog = try String(contentsOf: file, encoding: .utf8)
+    #expect(!catalog.contains("uploads no images"))
+    #expect(!catalog.contains("不上传图片"))
+    let panel = issue221Panel()
+    defer { panel.window.close() }
+    let views = try issue221AboutViews(in: panel, localized: { key in (try? issue221CatalogValue(key, "en")) ?? key })
+    #expect(views.privacy.stringValue == key)
 }
