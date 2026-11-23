@@ -8,7 +8,9 @@ public final class URLSessionHTTPTransport: HTTPTransport {
     public enum Refusal: Error, Equatable { case notBaiduOCR, redirected }
 
     static let host = "aip.baidubce.com"
-    static let paths: Set<String> = ["/oauth/2.0/token", "/rest/2.0/ocr/v1/accurate_basic"]
+    /// The provider's two endpoints (defined once there).
+    static let paths = Set([BaiduTextRecognitionProvider.tokenEndpoint, BaiduTextRecognitionProvider.recognitionEndpoint]
+        .map { URL(string: $0)!.path })
 
     private let session: URLSession
     private let timeout: TimeInterval
