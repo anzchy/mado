@@ -232,6 +232,46 @@ test("every entry of the real 0.0.1 release layout is allowed", () => {
   for (const path of layout) assert.equal(classifyPath(path), null, path);
 });
 
+// Issue 854: the 0.0.2 app embeds the Capture helper as a login item (ADR-0018).
+const helper = "Contents/Library/LoginItems/MadoCaptureHelper.app";
+const helperLayout = readFileSync(new URL("./fixtures/release-layout-0.0.2-capture-helper.txt", import.meta.url), "utf8")
+  .split("\n").filter((line) => line && !line.startsWith("#"));
+
+test("every entry of the real 0.0.2 Capture helper Release layout is allowed", () => {
+  assert.equal(helperLayout.length, 14);
+  for (const path of helperLayout) assert.ok(path.startsWith(`${helper}/Contents/`), path);
+  for (const path of helperLayout) assert.equal(classifyPath(path), null, path);
+});
+
+test("a clean release bundle with the Capture helper passes", () => {
+  const tree = cleanTree();
+  for (const path of helperLayout) tree[path] = path.endsWith(".jpg") ? "jpeg" : "<plist/>";
+  withTree(tree, (root) => assert.deepEqual(checkPackage(root, { requireSparkleLicence: true }), []));
+});
+
+test("the Capture helper allow-list stays strict", () => {
+  for (const path of [
+    `${helper}/Contents/MacOS/Mado`, `${helper}/Contents/MacOS/MadoCaptureHelper.bak`,
+    `${helper}/Contents/Frameworks/MadoApplication.framework/Versions/A/MadoApplication`,
+    `${helper}/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle`,
+    `${helper}/Contents/Resources/AppIcon.icns`, `${helper}/Contents/Resources/Unknown.bin`,
+    `${helper}/Contents/Resources/fr.lproj/Localizable.strings`, `${helper}/Contents/Resources/en.lproj/Secrets.strings`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/PROVENANCE.md`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/other.jpg`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature/CodeDirectory`,
+    `${helper}/Contents/_CodeSignature/CodeDirectory`, `${helper}/Contents/CodeResources`,
+    `${helper}/Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Info.plist`,
+    "Contents/Library/LoginItems/Other.app/Contents/Info.plist",
+    "Contents/Library/LoginItems/MadoCaptureHelper.app/Info.plist",
+    "Contents/Library/MadoCaptureHelper.app/Contents/Info.plist",
+    "Contents/Library/LaunchAgents/io.github.anzchy.mado.plist",
+  ]) assert.notEqual(classifyPath(path), null, path);
+});
+
+test("an unlisted file is named as outside the release layout", () => {
+  assert.equal(classifyPath(`${helper}/Contents/Resources/Unknown.bin`), "not part of the release layout");
+});
+
 test("anything outside the release layout fails, including look-alikes of allowed files", () => {
   for (const path of [
     "Contents/Resources/Unknown.bin", "Contents/MacOS/helper", "Contents/Frameworks/Other.framework/Other",

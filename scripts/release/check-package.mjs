@@ -6,7 +6,7 @@ import { checkFeed } from '../name-checks/identity.mjs';
  *   node scripts/release/check-package.mjs <Mado.app> [--require-sparkle-licence]
  *        [--expect-version 0.0.1] [--expect-build 312]
  *
- * Fails closed: every file and symlink must belong to the enumerated 0.0.1 release layout, and each
+ * Fails closed: every file and symlink must belong to the enumerated release layout (0.0.1 plus the 0.0.2 Capture helper), and each
  * offending path is listed (research or prototype material, credentials, photos, scripts, documents, or
  * anything unknown). Allowed files must not contain a private key or a build path; symlinks must point at
  * exactly the target Sparkle ships and resolve, as the OS resolves them, inside the bundle. Also checks the Sparkle keys in
@@ -21,7 +21,11 @@ export const SPARKLE_LICENCE_PATH = "Contents/Resources/ThirdPartyNotices/Sparkl
 
 const SPARKLE = String.raw`Contents/Frameworks/Sparkle\.framework`;
 
-// The 0.0.1 release layout (scripts/release/fixtures/release-layout-0.0.1.txt): anything else fails closed.
+// The embedded Capture helper (ADR-0018, Issue 854).
+const HELPER = String.raw`Contents/Library/LoginItems/MadoCaptureHelper\.app/Contents`;
+
+// The 0.0.1 release layout (scripts/release/fixtures/release-layout-0.0.1.txt) and the 0.0.2 Capture helper's Release layout
+// (scripts/release/fixtures/release-layout-0.0.2-capture-helper.txt): anything else fails closed.
 const LAYOUT_FILES = [
   /^Contents\/(Info\.plist|PkgInfo|MacOS\/Mado|_CodeSignature\/CodeResources|CodeResources)$/,
   /^Contents\/Resources\/(AppIcon\.icns|Assets\.car)$/,
@@ -35,6 +39,10 @@ const LAYOUT_FILES = [
     String.raw`Updater\.app/Contents/(Info\.plist|PkgInfo|MacOS/Updater|_CodeSignature/CodeResources)|` +
     String.raw`XPCServices/(Installer|Downloader)\.xpc/Contents/(Info\.plist|_CodeSignature/CodeResources))$`),
   new RegExp(`^${SPARKLE}/Versions/B/XPCServices/(Installer|Downloader)\\.xpc/Contents/MacOS/\\1$`),
+  // The helper embeds no frameworks in Release and its resource bundle has no detached signature or PROVENANCE.md.
+  new RegExp(`^${HELPER}/(Info\\.plist|PkgInfo|MacOS/MadoCaptureHelper|_CodeSignature/CodeResources)$`),
+  new RegExp(`^${HELPER}/Resources/(en|zh-Hans)\\.lproj/(Localizable\\.strings|Localizable\\.stringsdict)$`),
+  new RegExp(`^${HELPER}/Resources/MadoKit_MadoMacUI\\.bundle/Contents/(Info\\.plist|Resources/(alley|gate|hillside|lakehouse|lakeside|temple)\\.jpg)$`),
 ];
 const LAYOUT_LINKS = [new RegExp(String.raw`^${SPARKLE}/(Sparkle|Resources|Autoupdate|Updater\.app|XPCServices|Versions/Current)$`)];
 // Each framework link's exact target, as Sparkle 2.10.0 ships it in a built Mado.app.
@@ -82,7 +90,7 @@ export function classifyPath(relativePath, kind = "any") {
   const links = kind !== "file" && LAYOUT_LINKS.some((pattern) => pattern.test(relativePath));
   if (files || links) return null;
   const extension = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-  return FORBIDDEN_EXTENSIONS.get(extension) ?? "not part of the 0.0.1 release layout";
+  return FORBIDDEN_EXTENSIONS.get(extension) ?? "not part of the release layout";
 }
 
 function walk(root, directory, files, links) {
