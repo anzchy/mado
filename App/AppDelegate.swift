@@ -153,6 +153,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController?.reconcileStandaloneImage()
     }
 
+    /// Issue 841: reopening a running Mado (a Dock-icon click, or the Capture Bar's 打开 Mado through Launch Services)
+    /// with no window visible shows the viewer window again. With a window visible, AppKit only brings Mado forward.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        logger.notice("reopen visible=\(flag, privacy: .public)")
+        if flag { return true }
+        viewer().showWindow(nil)
+        return false
+    }
+
     /// #690: quitting with unsaved Annotate Mode marks asks 存储/不存储/取消 first.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         windowController?.annotateShouldTerminate() ?? .terminateNow
