@@ -16,7 +16,7 @@ Mado 是一个原生 macOS 看图应用，给想在本地安静地看照片和�
 
 ## 下载与安装
 
-1. 从 [最新发布页](https://github.com/anzchy/mado/releases/latest) 下载 `Mado-<版本>.dmg`。第一个版本是 [Mado 0.0.1](https://github.com/anzchy/mado/releases/tag/mado-v0.0.1)；0.0.2 加入截图、标注和文字识别（见下文「功能」，变更见 [CHANGELOG](CHANGELOG.md)）。
+1. 从 [最新发布页](https://github.com/anzchy/mado/releases/latest) 下载 `Mado-<版本>.dmg`。第一个版本是 [Mado 0.0.1](https://github.com/anzchy/mado/releases/tag/mado-v0.0.1)；0.0.2（2026-11-24 发布）加入截图、标注和文字识别（见下文「功能」，变更见 [CHANGELOG](CHANGELOG.md)）。
 2. 打开 DMG，把 Mado 拖进“应用程序”文件夹。
 
 - 需要 macOS 14 或更高版本。
