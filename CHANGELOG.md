@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.0.2 (unreleased)
+## v0.0.2 (2026-11-24)
 
 Capture, annotate and recognise text. Mado now covers the path from taking a screenshot to marking it up and copying its text. All of these are `Partial` in the [feature ledger](docs/feature-ledger.md): they work and have a real-device record, with limits stated there.
 
