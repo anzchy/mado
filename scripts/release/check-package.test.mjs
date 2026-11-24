@@ -238,7 +238,7 @@ const helperLayout = readFileSync(new URL("./fixtures/release-layout-0.0.2-captu
   .split("\n").filter((line) => line && !line.startsWith("#"));
 
 test("every entry of the real 0.0.2 Capture helper Release layout is allowed", () => {
-  assert.equal(helperLayout.length, 14);
+  assert.equal(helperLayout.length, 18);
   for (const path of helperLayout) assert.ok(path.startsWith(`${helper}/Contents/`), path);
   for (const path of helperLayout) assert.equal(classifyPath(path), null, path);
 });
@@ -258,7 +258,12 @@ test("the Capture helper allow-list stays strict", () => {
     `${helper}/Contents/Resources/fr.lproj/Localizable.strings`, `${helper}/Contents/Resources/en.lproj/Secrets.strings`,
     `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/PROVENANCE.md`,
     `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/other.jpg`,
-    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature/CodeDirectory`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature/CodeEntitlements`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature/Other`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/_CodeSignature/CodeDirectory`,
+    `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/Resources/_CodeSignature/CodeDirectory`,
+    `${helper}/Contents/Resources/Other.bundle/Contents/_CodeSignature/CodeDirectory`,
+    `${helper}/Contents/Frameworks/MadoApplication.framework/Versions/A/_CodeSignature/CodeResources`,
     `${helper}/Contents/_CodeSignature/CodeDirectory`, `${helper}/Contents/CodeResources`,
     `${helper}/Contents/Library/LoginItems/MadoCaptureHelper.app/Contents/Info.plist`,
     "Contents/Library/LoginItems/Other.app/Contents/Info.plist",
@@ -266,6 +271,16 @@ test("the Capture helper allow-list stays strict", () => {
     "Contents/Library/MadoCaptureHelper.app/Contents/Info.plist",
     "Contents/Library/LaunchAgents/io.github.anzchy.mado.plist",
   ]) assert.notEqual(classifyPath(path), null, path);
+});
+
+test("the helper resource bundle's Developer ID detached signature is allowed", () => {
+  // Observed in the mado-v0.0.2-rc.2 release run 45301251512 (Issue 854): Developer ID signing adds these four files.
+  const signature = `${helper}/Contents/Resources/MadoKit_MadoMacUI.bundle/Contents/_CodeSignature`;
+  for (const name of ["CodeDirectory", "CodeRequirements", "CodeResources", "CodeSignature"]) {
+    const path = `${signature}/${name}`;
+    assert.ok(helperLayout.includes(path), path);
+    assert.equal(classifyPath(path), null, path);
+  }
 });
 
 test("an unlisted file is named as outside the release layout", () => {
