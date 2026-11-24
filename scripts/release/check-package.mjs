@@ -39,10 +39,12 @@ const LAYOUT_FILES = [
     String.raw`Updater\.app/Contents/(Info\.plist|PkgInfo|MacOS/Updater|_CodeSignature/CodeResources)|` +
     String.raw`XPCServices/(Installer|Downloader)\.xpc/Contents/(Info\.plist|_CodeSignature/CodeResources))$`),
   new RegExp(`^${SPARKLE}/Versions/B/XPCServices/(Installer|Downloader)\\.xpc/Contents/MacOS/\\1$`),
-  // The helper embeds no frameworks in Release and its resource bundle has no detached signature or PROVENANCE.md.
+  // The helper embeds no frameworks in Release and its resource bundle has no PROVENANCE.md.
   new RegExp(`^${HELPER}/(Info\\.plist|PkgInfo|MacOS/MadoCaptureHelper|_CodeSignature/CodeResources)$`),
   new RegExp(`^${HELPER}/Resources/(en|zh-Hans)\\.lproj/(Localizable\\.strings|Localizable\\.stringsdict)$`),
   new RegExp(`^${HELPER}/Resources/MadoKit_MadoMacUI\\.bundle/Contents/(Info\\.plist|Resources/(alley|gate|hillside|lakehouse|lakeside|temple)\\.jpg)$`),
+  // Developer ID signing gives the helper's resource bundle a detached signature (rc.2 run 45301251512, Issue 854).
+  new RegExp(`^${HELPER}/Resources/MadoKit_MadoMacUI\\.bundle/Contents/_CodeSignature/(CodeDirectory|CodeRequirements|CodeResources|CodeSignature)$`),
 ];
 const LAYOUT_LINKS = [new RegExp(String.raw`^${SPARKLE}/(Sparkle|Resources|Autoupdate|Updater\.app|XPCServices|Versions/Current)$`)];
 // Each framework link's exact target, as Sparkle 2.10.0 ships it in a built Mado.app.
