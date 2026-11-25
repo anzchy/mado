@@ -46,7 +46,7 @@ const SETTINGS_CONTROLS={
  display:[['缩略图大小','soon'],['显示文件名','soon'],['填充裁剪','soon'],['完整显示','soon']],
  cache:[['清理缓存…','ready']],
  // #680/#682: the 截图 controls are drawn as #682's target state, not greyed (brief states680).
- capture:[['显示截图工具条','ready'],['了解更多 ↗','ready'],['登录时启动','ready'],['更改…','ready'],['存储到文件夹','ready'],['拷贝到剪贴板','ready'],['区域截图快捷键','ready'],['窗口截图快捷键','ready'],['全屏截图快捷键','ready'],['截图并识别文字快捷键','ready'],['截图并识别表格快捷键','ready'],['显示 / 收起截图工具条快捷键','ready'],['恢复默认','ready'],['允许云识别（识别文字、识别表格）','ready'],['了解更多 ↗','ready'],['识别服务','ready'],['API Key','ready'],['Secret Key','ready'],['保存到钥匙串','ready'],['表格识别服务','ready'],['访问密钥','ready'],['保存到钥匙串','ready'],['怎么获取 ↗','ready'],['隐私说明 ↗','ready'],['测试','ready'],['高级','ready'],['了解更多 ↗','ready']],
+ capture:[['显示截图工具条','ready'],['了解更多 ↗','ready'],['登录时启动','ready'],['更改…','ready'],['存储到文件夹','ready'],['拷贝到剪贴板','ready'],['区域截图快捷键','ready'],['窗口截图快捷键','ready'],['全屏截图快捷键','ready'],['截图并识别文字快捷键','ready'],['截图并识别表格快捷键','ready'],['显示 / 收起截图工具条快捷键','ready'],['恢复默认','ready'],['允许云识别（识别文字、识别表格）','ready'],['了解更多 ↗','ready'],['识别服务','ready'],['API Key','ready'],['Secret Key','ready'],['保存到钥匙串','ready'],['表格识别服务','ready'],['访问密钥','ready'],['保存到钥匙串','ready'],['怎么获取 ↗','ready'],['隐私说明 ↗','ready'],['测试','ready'],['了解更多 ↗','ready'],['高级','ready']],
  update:[['自动检查更新','soon'],['立即检查','soon']],
  about:[['报告问题…','soon'],['隐私说明','soon'],['源代码','soon']],
 };

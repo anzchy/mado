@@ -164,7 +164,7 @@ private func store685(_ bindings: CaptureShortcutBindings, in defaults: UserDefa
     #expect(tip("capture.region") == "Region Capture ⌃⌥1")
     #expect(tip("capture.window") == "Window Capture ⌃⌥2")
     #expect(tip("capture.screen") == "Full Screen Capture ⌃⌥3")
-    #expect(tip("capture.text") == "Capture and Recognize Text ⌃⌥4")
+    #expect(tip("capture.text") == "Capture and Recognise Text ⌃⌥4")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue717DefaultsDoNotCollideWithMadoMenuShortcuts() throws {

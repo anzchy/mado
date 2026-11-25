@@ -21,6 +21,6 @@ import MadoApplication
     #expect(ScreenCaptureKitScreen.permissionState(preflight: true, previouslyRequested: true,
                                                   requestGranted: false) == .granted)
     let catalog = try captureCatalog("zh-Hans")
-    #expect(catalog["Allow Mado to record the screen in System Settings, then try Capture again."]
-            == "请在系统设置中允许 Mado 录制屏幕，然后再次截图。")
+    #expect(catalog["Allow Mado in System Settings › Privacy & Security › Screen & System Audio Recording, then try Capture again."]
+            == "请在「系统设置 › 隐私与安全性 › 录屏与系统录音」中允许 Mado，然后再次截图。")
 }

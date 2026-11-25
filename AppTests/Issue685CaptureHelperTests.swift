@@ -48,7 +48,7 @@ private let controlKeyFlag = 1 << 12, shiftKeyFlag = 1 << 9, cmdKeyFlag = 1 << 8
     #expect((try view("capture.region") as? NSButton)?.toolTip == "Region Capture ⌃⌥1")
     #expect((try view("capture.window") as? NSButton)?.toolTip == "Window Capture ⌃⌥2")
     #expect((try view("capture.screen") as? NSButton)?.toolTip == "Full Screen Capture ⌃⌥3")
-    #expect((try view("capture.text") as? NSButton)?.toolTip == "Capture and Recognize Text ⌃⌥4")
+    #expect((try view("capture.text") as? NSButton)?.toolTip == "Capture and Recognise Text ⌃⌥4")
     #expect((try view("capture.mado") as? NSButton)?.toolTip == "Open Mado")
     bar.setShortcuts(["capture.region": "⌃⌥F"])
     #expect((try view("capture.region") as? NSButton)?.toolTip == "Region Capture ⌃⌥F")

@@ -101,7 +101,7 @@ private let issue114SettingsMarkers = ["Coming Soon", "即将推出"]
         }
     }
     #expect(issue114SettingsTexts(in: pane).contains(String(localized:
-        "These are the same preferences as the grid footer Display panel; changes will sync immediately.")))
+        "These settings sync with Display in the Grid Bottom Bar; changes take effect immediately in either place.")))
     let disabled = issue114SettingsDisabled(in: root)
     #expect(Set(disabled.compactMap { $0.accessibilityIdentifier() }).subtracting(CaptureDeferredSettingsControls.barDependent)
         == Set(CaptureDeferredSettingsControls.tickets.keys))

@@ -38,7 +38,7 @@ import MadoMacUI
             ("Region Capture", "camera.viewfinder", "capture.region", true),
             ("Window Capture", "macwindow", "capture.window", true),
             ("Full Screen Capture", "display", "capture.screen", true),
-            ("Recognize Text", "text.viewfinder", "capture.text", recognizeAction != nil)
+            ("Recognise Text", "text.viewfinder", "capture.text", recognizeAction != nil)
         ] {
             let title = localize(key)
             let width = titleWidth(title) + 10 + 6 + 18 + 10
@@ -64,7 +64,7 @@ import MadoMacUI
             guard !button.title.isEmpty else { continue }
             let id = button.accessibilityIdentifier()
             // The short 识别文字 button is named in full in its tooltip (capture-bar.html:113).
-            let name = id == "capture.text" ? localize("Capture and Recognize Text") : button.title
+            let name = id == "capture.text" ? localize("Capture and Recognise Text") : button.title
             button.toolTip = shortcuts[id].map { "\(name) \($0)" } ?? name
         }
     }
