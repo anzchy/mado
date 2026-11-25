@@ -66,11 +66,9 @@ enum TableRecognitionSample {
                 CTLineDraw(line, context)
             }
         }
-        guard let image = context.makeImage() else { return Data() }
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else {
-            return Data()
-        }
+        guard let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else { return Data() }
         CGImageDestinationAddImage(destination, image, nil)
         return CGImageDestinationFinalize(destination) ? data as Data : Data()
     }

@@ -43,10 +43,10 @@ public struct TableRecognitionService: Sendable {
         let options = await settings.options()
         if Task.isCancelled { return .cancelled }
         guard options.cloudEnabled else { return .notSent(.cloudOff) }
-        guard let endpoint = options.endpoint, let url = TableRecognitionGuards.validURL(for: endpoint) else {
+        guard let endpoint = options.endpoint, let target = TableRecognitionGuards.validURL(for: endpoint) else {
             return .notSent(.invalidEndpoint)
         }
-        if let block = TableRecognitionGuards.consentBlock(options.consent, url: url) { return .notSent(block) }
+        if let block = TableRecognitionGuards.consentBlock(options.consent, host: target.host) { return .notSent(block) }
         let key = (await credentials.accessKey(for: endpoint) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if Task.isCancelled { return .cancelled }
         guard !key.isEmpty else { return .notSent(.noAccessKey) }
@@ -55,7 +55,7 @@ public struct TableRecognitionService: Sendable {
         case .failure(let block): return .notSent(block)
         case .success(let type): mediaType = type
         }
-        return .ready(TableRecognitionRequest.make(url: url, endpoint: endpoint, key: key, image: image,
+        return .ready(TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
                                                    mediaType: mediaType))
     }
 

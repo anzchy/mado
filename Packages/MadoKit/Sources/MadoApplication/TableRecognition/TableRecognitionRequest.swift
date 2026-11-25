@@ -9,12 +9,12 @@ enum TableRecognitionRequest {
     static let prompt = "识别图片中的表格，输出 Markdown 表格。要求：保留全部行列和每个单元格的完整文字，逐字照抄，不要遗漏、不要改写、不要翻译、不要纠正；第一行是表头。图片里因为单元格宽度而自动折行的文字，是同一段话，必须连成一行，不要加 `<br>`，也不要加空格；只有单元格里明显分成多段（有段落间距或项目符号）时，才用 `<br>` 分隔。只输出表格本身，不要代码围栏，不要任何解释。"
 
     /// `{base}/chat/completions`, with any trailing slashes on the base removed first.
-    static func url(base: URL) -> URL? {
-        var parts = URLComponents(url: base, resolvingAgainstBaseURL: false)
-        var path = parts?.path ?? ""
+    static func url(base: URLComponents) -> URL? {
+        var parts = base
+        var path = parts.path
         while path.hasSuffix("/") { path.removeLast() }
-        parts?.path = path + "/chat/completions"
-        return parts?.url
+        parts.path = path + "/chat/completions"
+        return parts.url
     }
 
     /// The model to send: DeepSeek falls back to `deepseek-flash` when none is set; Custom sends what was entered.
@@ -81,14 +81,16 @@ enum TableRecognitionGuards {
     static let maxSide = 8192
 
     /// A usable address: https, a host, no user or password, no query or fragment. Custom also needs a model.
-    static func validURL(for endpoint: TableRecognitionEndpoint) -> URL? {
+    /// Returns the request URL and the host that consent is checked against.
+    static func validURL(for endpoint: TableRecognitionEndpoint) -> (url: URL, host: String)? {
         guard let parts = URLComponents(string: endpoint.baseURL), parts.scheme?.lowercased() == "https",
               let host = parts.host, !host.isEmpty, parts.user == nil, parts.password == nil,
-              parts.query == nil, parts.fragment == nil, let base = parts.url else { return nil }
+              parts.query == nil, parts.fragment == nil else { return nil }
         if endpoint.preset == .custom, endpoint.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return nil
         }
-        return TableRecognitionRequest.url(base: base)
+        guard let url = TableRecognitionRequest.url(base: parts) else { return nil }
+        return (url, host)
     }
 
     /// Hosts compare without case and with one trailing dot dropped; the port is not part of the consent.
@@ -98,9 +100,9 @@ enum TableRecognitionGuards {
         return host
     }
 
-    static func consentBlock(_ record: TableRecognitionConsentRecord?, url: URL) -> TableRecognitionBlock? {
+    static func consentBlock(_ record: TableRecognitionConsentRecord?, host: String) -> TableRecognitionBlock? {
         guard let record else { return .consentNotAsked }
-        guard normalisedHost(record.host) == normalisedHost(url.host ?? "") else { return .consentHostChanged }
+        guard normalisedHost(record.host) == normalisedHost(host) else { return .consentHostChanged }
         return record.granted ? nil : .consentDeclined
     }
 
