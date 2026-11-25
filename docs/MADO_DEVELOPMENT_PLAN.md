@@ -108,7 +108,7 @@ P0 技术验证、设计映射与命令底座
 | [32 基础多选](../design/prototypes/picsee-browser/states/grid-multiselect.html) | J3 | P3-09 | 选择集合/当前项/锚点分离，计数与预览范围正确 |
 | [33 Filmstrip展开](../design/prototypes/picsee-browser/states/viewer-filmstrip.html) | J2 加厚 | P2-06 | 整合翻图/序号，不重复中部导航、不缩小画布 |
 | [34 浅色 Inspector](../design/prototypes/picsee-browser/states/viewer-inspector-light.html) | J4 | P3-13 | 同一面板随主题切换，不单独维护第二套布局 |
-| [35 设置 · 截图](../design/prototypes/picsee-browser/states/settings.html?section=capture) | J5 | P7-10 #682、#685；文字识别一组 P7-12 #689（#680，设置方案 A） | 「截图」在「更新」之前（5.1）；关闭截图工具条时其余截图设置变灰、不可编辑但仍可见（5.2，`?section=capture&bar=off`）；录屏权限状态下显示 5.7 的原句 |
+| [35 设置 · 截图](../design/prototypes/picsee-browser/states/settings.html?section=capture) | J5 | P7-10 #682、#685；云识别、文字识别两组 P7-12 #689（#680，设置方案 A） | 「截图」在「更新」之前（5.1）；「云识别」是一级标题，一个总开关管「识别文字」和「识别表格」；关闭截图工具条时其余截图设置变灰、不可编辑但仍可见（5.2，`?section=capture&bar=off`）；录屏权限状态下显示 5.7 的原句 |
 | [37 截图工具条](../design/prototypes/picsee-browser/states/capture-bar.html) | J5 | P7-10 #682、#683、#685；识别文字 P7-01 #687（#680，方案 A） | 浮动横条：拖动、区域/窗口/全屏截图、识别文字、打开 Mado、收起到菜单栏；录屏被拒时的说明与「打开系统设置」 |
 | [38 截图缩略图](../design/prototypes/picsee-browser/states/capture-thumbnail.html) | J5 | P7-10 #684、#686；P7-01 #687；P7-11 #694（#680，方案 A） | 右下角约 5 秒、悬停保持；悬停出操作；存储关闭时「存储」排第一（3.5）；识别文字的字数与引擎通知 |
 | [39 标注模式](../design/prototypes/picsee-browser/states/annotate.html) | J5 | P7-11 #690、#692、#693（#680，方案 D） | 右侧竖排工具条，图片适应左边区域不被遮挡；单字母工具键（5.5）；马赛克的常驻可还原提示（5.4）；⌘S 存为标注副本并显示「在访达中显示」；有未存标记时 Esc 弹出存储/不存储/取消 |
@@ -172,7 +172,7 @@ P0 技术验证、设计映射与命令底座
 | J3 找图与操作 | 搜索与无结果（23）、多选（32）、右键菜单（31） | P3-10 搜索部分、P3-09、P3-12 #144 | GRID-04/05/07/09/10/11 |
 | J4 信息与偏好 | Inspector（16/34）、显示面板（15）、收藏与最近查看 | P3-13、#193、P3-11 #114、P3-14 #115 | INFO-01/02、PREF-*、GRID-12/17 |
 | J5 截图与标注 | 设置「截图」（35 `?section=capture`）→ 截图工具条（37）→ 截图缩略图（38）→ 标注模式（39）→ 标注副本已存储（39 `?saved=1`）；支线：工具条关闭（35 `&bar=off`）、录屏被拒、收起到菜单栏、识别文字、存储关闭、有未存标记时 Esc、遮挡；入口：全局截图快捷键、大图 ⌘E | P7-10 #682–#686、P7-01 #687 #688、P7-12 #689、P7-11 #690 #692–#694；规格 #680 | CAP-01/02、EDIT-07/08、EXT-01/04/05 |
-| J6 识别表格 | 设置「截图 › 表格识别」（35 `?section=capture&scroll=table&case=default`）→ 入口：截图工具条（37，纯图标）、显示菜单、文字面板「按表格重新识别」、截图缩略图（40）→ 首次使用引导 / 同意 → 识别中 → 结果面板（可改单元格）→ 拷贝表格 → 粘贴到 Word（41）；支线：测试失败、云识别关闭、各类失败与「仅识别文字（本机）」 | 待 /to-spec、/to-tickets；见 docs/plans/20261124-table-recognition-plan.md 与 grilling 记录 | EXT-06（拟新增，Absent）· EXT-04/05 · CAP-01/02 |
+| J6 识别表格 | 设置「截图」里一级标题「云识别」（总开关，35 `?section=capture&scroll=cloud`）→「表格识别」（35 `?section=capture&scroll=table&case=default`）→ 入口：截图工具条（37，纯图标）、显示菜单、文字面板「按表格重新识别」、截图缩略图（40）→ 首次使用引导 / 同意 → 识别中 → 结果面板（可改单元格）→ 拷贝表格 → 粘贴到 Word（41）；支线：测试失败、云识别关闭、各类失败与「仅识别文字（本机）」 | 待 /to-spec、/to-tickets；见 docs/plans/20261124-table-recognition-plan.md 与 grilling 记录 | EXT-06（拟新增，Absent）· EXT-04/05 · CAP-01/02 |
 | 参考页 | 12 深色网格、28 键盘焦点、29 紧凑窗口、30 组件与状态 | P1-09、P3-10、P0-08、P6-04 | — |
 
 J1–J4 是 v0.0.1 的排期；J5 属于 P7 增强（#680，owner 2026-11-13 选定方案后定稿 35/37/38/39），按 P7 单独排期。J1/J2 的完成标准：各有一份签名 App 端到端真机记录（0.0.1 门槛，见 #130、#147；@2x 只做门槛已点名的项）。在此之前 J3/J4 的新实现不开工，例外见 §14.8。

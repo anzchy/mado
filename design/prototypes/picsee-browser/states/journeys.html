@@ -298,7 +298,7 @@ const JOURNEYS = [
         branches: [
           { id: 'J5-bar-off', p: 'settings', q: 'section=capture&bar=off', title: '35 设置 · 截图 · 工具条关闭', t: '工具条关闭：截图之后与快捷键变灰、不可编辑（5.2）；文字识别仍可改', outs: [
               { k: '打开「显示截图工具条」→ 回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
-          { id: 'J5-ocr', loop: true, p: 'settings', q: 'section=capture&scroll=ocr', title: '35 设置 · 截图 · 文字识别', t: '填写百度密钥，允许云端识别（EXT-04）', outs: [
+          { id: 'J5-ocr', loop: true, p: 'settings', q: 'section=capture&scroll=cloud', title: '35 设置 · 截图 · 云识别 / 文字识别', t: '先在一级标题「云识别」打开总开关，再在「文字识别」填写百度密钥（EXT-04）', outs: [
               { k: '「保存到钥匙串」，回到 35 截图', to: 'settings', toQ: 'section=capture' }] },
         ] },
       { p: 'capture-bar', t: '打开「显示截图工具条」', note: '工具条浮在所有窗口上，可拖动；关掉 Mado 窗口也在',
