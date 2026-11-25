@@ -67,3 +67,11 @@ import Testing
         try TableClipboardPayload.build(from: RecognisedTable(rows: [["A", "B"], ["only one"]]))
     }
 }
+
+@Test func issue868MarkdownSeparatorMustBeValidAndMayBeAligned() throws {
+    #expect(throws: TableRecognitionError.invalidMarkdown) {
+        try RecognisedTable.parseMarkdown("| A | B |\n| --- | nope |\n| one | two |")
+    }
+    let aligned = try RecognisedTable.parseMarkdown("| A | B |\n| :--- | ---: |\n| one | two |")
+    #expect(aligned.rows == [["A", "B"], ["one", "two"]])
+}
