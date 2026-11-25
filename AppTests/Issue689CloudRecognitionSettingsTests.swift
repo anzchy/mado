@@ -85,8 +85,8 @@ private actor OffBar: CaptureBarPreferencePort {
     return Fixture(panel: panel, secrets: secrets, preferences: preferences, consent: consent)
 }
 
-private let zhHint = "云识别只会在你为所配置服务的主机同意上传、打开此开关并点「识别文字」或「识别表格」后，发送你要识别的那张图片；在图片上直接选字始终使用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
-private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured, after you agree for that service host and turn this switch on. Recognise Text and Recognise Table use their own services; selecting text on an image always uses on-device recognition. Baidu text recognition requires a verified Baidu account; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+private let zhHint = "云识别只会在你为所配置服务的主机同意上传、打开此开关并点「识别文字」或「识别表格」后，发送你要识别的那张图片；两项命令各用各自配置的服务。在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
+private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured, after you agree for that service host, turn this switch on, and choose Recognise Text or Recognise Table. Each command uses its own configured service; selecting text on an image always uses on-device recognition only. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async throws {
@@ -99,7 +99,7 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     #expect(toggle.isEnabled)
     #expect(toggle.accessibilityLabel() == (zh ? "允许云识别" : "Allow Cloud Recognition"))
     #expect(try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self).stringValue == toggle.accessibilityLabel())
-    #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).stringValue == (zh ? "未填写密钥" : "No Key"))
+    #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).stringValue == (zh ? "未填写访问密钥" : "No Access Key"))
     let hint = try f.view("settings.capture.ocr-hint", as: NSTextField.self)
     #expect(hint.stringValue == (zh ? zhHint : enHint))
     #expect(hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: hint.frame.width, height: .greatestFiniteMagnitude)).height
@@ -147,7 +147,7 @@ func issue689SettingsSwitchNeedsSavedKeysThenConsent() async throws {
     let message = try f.view("settings.capture.ocr-message", as: NSTextField.self)
     // No keys: the switch goes back off, says why, and asks nobody.
     try f.click("settings.capture.ocr-cloud")
-    try await waitUntil { message.stringValue == "请先保存密钥。" }
+    try await waitUntil { message.stringValue == "请先保存访问密钥。" }
     #expect(toggle.state == .off)
     #expect(f.consent.alerts.isEmpty)
     #expect(await f.preferences.enabled == false)
@@ -170,7 +170,7 @@ func issue689SettingsSwitchNeedsSavedKeysThenConsent() async throws {
     #expect(saved.stringValue == "API Key ••••••••7890 · Secret Key ••••••••")
     #expect(!saved.stringValue.contains("SK-secret"))
     #expect(try f.view("settings.capture.ocr-remove", as: NSButton.self).isHidden == false)
-    #expect(try f.view("settings.capture.ocr-remove", as: NSButton.self).title == "移除密钥")
+    #expect(try f.view("settings.capture.ocr-remove", as: NSButton.self).title == "移除访问密钥")
     #expect(try f.view("settings.capture.ocr-api-key", as: NSTextField.self).isHidden)
     #expect(try f.view("settings.capture.ocr-api-key", as: NSTextField.self).stringValue.isEmpty)
     #expect(try f.view("settings.capture.ocr-secret-key", as: NSSecureTextField.self).stringValue.isEmpty)
@@ -222,7 +222,7 @@ func issue689SettingsKeychainFailureIsShown() async throws {
     try f.view("settings.capture.ocr-secret-key", as: NSSecureTextField.self).stringValue = "SK"
     try f.click("settings.capture.ocr-save")
     let message = try f.view("settings.capture.ocr-message", as: NSTextField.self)
-    try await waitUntil { message.stringValue == "The keys could not be saved to the keychain." }
+    try await waitUntil { message.stringValue == "The access keys could not be saved to the macOS Keychain." }
     #expect(try f.view("settings.capture.ocr-saved-keys", as: NSTextField.self).isHidden)
     // The typed keys stay in the fields so the user can try again.
     #expect(try f.view("settings.capture.ocr-api-key", as: NSTextField.self).stringValue == "AK")
@@ -242,13 +242,14 @@ func issue689ConsentDialogNamesBaiduTheOneImageAndTheTerms(_ locale: String) thr
     let catalog = try captureCatalog(locale)
     var opened: [URL] = []
     let alert = CloudRecognitionSettingsGroup.consentAlert(localize: { catalog[$0] ?? $0 }, openURL: { opened.append($0) })
+    #expect(!alert.informativeText.hasPrefix(alert.messageText), "Consent body must not repeat its title in \(locale)")
     if locale == "zh-Hans" {
         #expect(alert.messageText == "要用百度识别文字吗？")
-        #expect(alert.informativeText == "要用百度识别文字吗？只有你同意向这个服务主机上传并选择「识别文字」后，才会把你要识别的那张图片发送给百度。在图片上直接选字使用本机识别。上传适用百度服务条款。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。")
+        #expect(alert.informativeText == "只有你同意向这个服务主机上传并选择「识别文字」后，才会把你要识别的那张图片发送给百度。在图片上直接选字永远只用本机识别。上传适用百度服务条款。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。")
         #expect(alert.buttons.map(\.title) == ["同意并打开", "取消"])
     } else {
         #expect(alert.messageText == "Use Baidu to recognise text?")
-        #expect(alert.informativeText == "Use Baidu to recognise text? Only the image you ask to recognise is sent to Baidu after you agree for this service host and choose Recognise Text. Selecting text directly on an image uses on-device recognition. Baidu’s terms apply. Baidu text recognition needs a verified Baidu account; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed.")
+        #expect(alert.informativeText == "Only the image you ask to recognise is sent to Baidu after you agree for this service host and choose Recognise Text. Selecting text directly on an image always uses on-device recognition only. Baidu’s terms apply. Baidu text recognition needs a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed.")
         #expect(alert.buttons.map(\.title) == ["Agree and Turn On", "Cancel"])
     }
     #expect(alert.alertStyle == .informational)

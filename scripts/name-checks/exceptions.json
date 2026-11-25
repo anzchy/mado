@@ -469,6 +469,12 @@
     "reason": "Frozen historical release isolation and retained build-history oracles name the old DMG and preceding release explicitly; no production identity is exempt."
   },
   {
+    "path": "design/prototypes/picsee-browser/states/settings.html",
+    "pattern": "(?<=data-stitch-inlined=\"_ds/)picsee(?=-ui-system/tokens/(?:globals|light|dark)\\.css\")",
+    "scopes": ["content"],
+    "reason": "#882: retain the original inlined token provenance markers; only these three attribute values are exempt, not visible copy."
+  },
+  {
     "pathRegex": "^scripts/heavy-lock\\.sh$",
     "pattern": "PICSEE_\\(HEAVY\\|MDPRO\\)|(?<=\\$\\{legacy#)PICSEE_(?=\\})|(?<=\\{!)legacy|(?<=\\^)PICSEE_(?=\\(HEAVY)",
     "scopes": [

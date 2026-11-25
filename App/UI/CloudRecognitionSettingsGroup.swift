@@ -8,7 +8,7 @@ struct CloudRecognitionSettingsEnvironment {
     let model: CloudRecognitionSettingsModel
     let presentConsent: ConsentPresenter
 
-    /// The App's keychain, defaults and a sheet on the Settings window.
+    /// The App's macOS Keychain, defaults and a sheet on the Settings window.
     @MainActor static var live: CloudRecognitionSettingsEnvironment {
         CloudRecognitionSettingsEnvironment(model: CloudRecognitionAppServices.settingsModel) { window, alert, answer in
             if let window {
@@ -20,7 +20,7 @@ struct CloudRecognitionSettingsEnvironment {
     }
 
     /// For a Settings window built without the App's services (tests, fixtures): keys and answers live only in
-    /// memory, the keychain is never read, and the consent dialog is answered 取消.
+    /// memory, the macOS Keychain is never read, and the consent dialog is answered 取消.
     static func inMemory() -> CloudRecognitionSettingsEnvironment {
         CloudRecognitionSettingsEnvironment(
             model: CloudRecognitionSettingsModel(preferences: MemoryPreferences(),
@@ -54,7 +54,7 @@ struct CloudRecognitionSettingsEnvironment {
     /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
 
-    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured, after you agree for that service host and turn this switch on. Recognise Text and Recognise Table use their own services; selecting text on an image always uses on-device recognition. Baidu text recognition requires a verified Baidu account; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured, after you agree for that service host, turn this switch on, and choose Recognise Text or Recognise Table. Each command uses its own configured service; selecting text on an image always uses on-device recognition only. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
     static let productHint = "Enable “General Text Recognition” for your app in the Baidu AI Cloud console."
     static let fallbackHint = "Without an access key, offline, or when the quota is used up, Recognise Text falls back to on-device recognition and says so; Recognise Table needs Cloud Recognition."
 
@@ -64,7 +64,7 @@ struct CloudRecognitionSettingsEnvironment {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = localize("Use Baidu to recognise text?")
-        alert.informativeText = localize("Use Baidu to recognise text? Only the image you ask to recognise is sent to Baidu after you agree for this service host and choose Recognise Text. Selecting text directly on an image uses on-device recognition. Baidu’s terms apply. Baidu text recognition needs a verified Baidu account; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed.")
+        alert.informativeText = localize("Only the image you ask to recognise is sent to Baidu after you agree for this service host and choose Recognise Text. Selecting text directly on an image always uses on-device recognition only. Baidu’s terms apply. Baidu text recognition needs a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed.")
         alert.addButton(withTitle: localize("Agree and Turn On"))
         alert.addButton(withTitle: localize("Cancel"))
         let link = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { openURL(termsURL) })
@@ -86,7 +86,7 @@ struct CloudRecognitionSettingsEnvironment {
     private let message: NSTextField
     private var keysHint: NSTextField!
     private var fallback: NSTextField!
-    /// The 密钥 row's geometry, for `layoutKeyRows()`.
+    /// The 访问密钥 row's geometry, for `layoutKeyRows()`.
     private var keysRow = (top: CGFloat(0), valueX: CGFloat(0), valueWidth: CGFloat(0), width: CGFloat(0),
                            entryBottom: CGFloat(0))
     private var refreshID = 0
@@ -142,7 +142,7 @@ struct CloudRecognitionSettingsEnvironment {
             return top + height
         }
 
-        // 云端识别: switch, its caption, the 未填写密钥 pill, the ADR-0019 disclosure and the terms link.
+        // 云识别: switch, its caption, the 未填写访问密钥 pill, the ADR-0019 disclosure and the terms link.
         var top: CGFloat = 46
         rowLabel("Cloud Recognition", top: top)
         let switchTitle = localize("Allow Cloud Recognition")
@@ -165,7 +165,7 @@ struct CloudRecognitionSettingsEnvironment {
                                       font: caption.font), valueWidth - 40)
         caption.frame = NSRect(x: valueX + 40, y: top + 4, width: captionWidth, height: 18)
         addSubview(caption)
-        pill.stringValue = localize("No Key")
+        pill.stringValue = localize("No Access Key")
         pill.maximumNumberOfLines = 1
         pill.alignment = .center
         pill.wantsLayer = true
@@ -173,7 +173,7 @@ struct CloudRecognitionSettingsEnvironment {
         pill.layer?.cornerRadius = 9
         pill.layer?.backgroundColor = DesignColor.hoverBackground.nsColor.cgColor
         pill.setAccessibilityIdentifier("settings.capture.ocr-pill")
-        let pillWidth = widest([pill.stringValue, "No Key", "未填写密钥"], font: pill.font) + 10
+        let pillWidth = widest([pill.stringValue, "No Access Key", "未填写访问密钥"], font: pill.font) + 10
         let pillInline = valueX + 40 + captionWidth + 8 + pillWidth <= width
         pill.frame = NSRect(x: pillInline ? valueX + 40 + captionWidth + 8 : valueX + 40,
                             y: pillInline ? top + 3 : top + 26, width: pillWidth, height: 18)
@@ -215,7 +215,7 @@ struct CloudRecognitionSettingsEnvironment {
             field.setAccessibilityIdentifier(id)
             addSubview(field)
         }
-        remove = NSButton(title: localize("Remove Keys"), target: self, action: #selector(removeKeys(_:)))
+        remove = NSButton(title: localize("Remove Access Keys"), target: self, action: #selector(removeKeys(_:)))
         remove.font = DesignMetrics.font("uiSmall")
         remove.setAccessibilityIdentifier("settings.capture.ocr-remove")
         let removeWidth = remove.intrinsicContentSize.width.rounded(.up) + 12
@@ -336,14 +336,14 @@ struct CloudRecognitionSettingsEnvironment {
             guard wantsOn else { await environment.model.disable(); return }
             switch await environment.model.requestEnable() {
             case .enabled: break
-            case .needsKeys: setMessage(localize("Save the keys first."))
+            case .needsKeys: setMessage(localize("Save the access keys first."))
             case .needsConsent:
                 let alert = Self.consentAlert(localize: localize, openURL: openURL)
                 let agreed = await withCheckedContinuation { continuation in
                     environment.presentConsent(window, alert) { continuation.resume(returning: $0) }
                 }
                 if await environment.model.answerConsent(granted: agreed) == .needsKeys {
-                    setMessage(localize("Save the keys first."))
+                    setMessage(localize("Save the access keys first."))
                 }
             }
         }
@@ -361,7 +361,7 @@ struct CloudRecognitionSettingsEnvironment {
             } catch .emptyKey {
                 setMessage(localize("Enter both the API Key and the Secret Key."))
             } catch {
-                setMessage(localize("The keys could not be saved to the keychain."))
+                setMessage(localize("The access keys could not be saved to the macOS Keychain."))
             }
         }
     }
@@ -370,7 +370,7 @@ struct CloudRecognitionSettingsEnvironment {
         setMessage("")
         perform { [self] in
             do throws(CloudKeyError) { try await environment.model.removeKeys() }
-            catch { setMessage(localize("The keys could not be removed from the keychain.")) }
+            catch { setMessage(localize("The access keys could not be removed from the macOS Keychain.")) }
         }
     }
 }
