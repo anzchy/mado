@@ -425,7 +425,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         }
         heading(captureLocalize("Capture Bar"), top: 10, id: "settings.capture.heading-bar", divider: false)
         field(captureLocalize("Capture Bar"), top: 50, labelColumn: true)
-        captureEnabled = NSSwitch(frame: NSRect(x: valueX, y: 1124 - 50 - 18, width: 32, height: 18))
+        captureEnabled = NSSwitch(frame: NSRect(x: valueX, y: formHeight - 50 - 18, width: 32, height: 18))
         captureEnabled.controlSize = .mini
         captureEnabled.target = self
         captureEnabled.action = #selector(changeCapture(_:))
@@ -447,7 +447,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         approval.font = DesignMetrics.font("uiSmall")
         let approvalWidth = approval.intrinsicContentSize.width + 12
         // Its own row under the hint: next to the switch caption there is no room in English.
-        approval.frame = NSRect(x: valueX, y: 1124 - 186 - 24, width: approvalWidth, height: 24)
+        approval.frame = NSRect(x: valueX, y: formHeight - 186 - 24, width: approvalWidth, height: 24)
         approval.isHidden = true
         approval.setAccessibilityIdentifier("settings.capture.login-open-settings")
         form.addSubview(approval)
@@ -457,7 +457,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         // It stays usable with the bar off.
         let retry = NSButton(title: captureLocalize("Retry"), target: self, action: #selector(retryLoginRemoval(_:)))
         retry.font = DesignMetrics.font("uiSmall")
-        retry.frame = NSRect(x: approval.frame.maxX + 8, y: 1124 - 186 - 24, width: retry.intrinsicContentSize.width + 12,
+        retry.frame = NSRect(x: approval.frame.maxX + 8, y: formHeight - 186 - 24,
+                             width: retry.intrinsicContentSize.width + 12,
                              height: 24)
         retry.isHidden = true
         retry.setAccessibilityIdentifier("settings.capture.login-retry")
