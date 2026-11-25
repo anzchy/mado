@@ -17,11 +17,12 @@ enum TableRecognitionRequest {
         return parts.url
     }
 
-    /// The model to send: DeepSeek falls back to `deepseek-flash` when none is set; Custom sends what was entered.
+    /// The model to send, trimmed like the key: DeepSeek falls back to `deepseek-flash` when none is set; Custom
+    /// sends what was entered (a blank Custom model never gets here: the address guard refuses it).
     static func model(for endpoint: TableRecognitionEndpoint) -> String {
         let model = endpoint.model.trimmingCharacters(in: .whitespacesAndNewlines)
         if endpoint.preset == .deepSeek, model.isEmpty { return TableRecognitionEndpoint.deepSeekModel }
-        return endpoint.model
+        return model
     }
 
     static func make(url: URL, endpoint: TableRecognitionEndpoint, key: String, image: Data,

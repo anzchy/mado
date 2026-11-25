@@ -240,3 +240,21 @@ func issue869WI2SettingsAndKeyReadFreshEachCall(change: String) async throws {
         #expect(requests.count == 1)
     }
 }
+
+// Fix round 1 (opus L9): the model name is trimmed like the key; a blank DeepSeek model falls back to the default.
+@Test(.timeLimit(.minutes(2)), arguments: [
+    (TableRecognitionEndpoint(preset: .deepSeek, baseURL: "https://api.deepseek.com", model: "  deepseek-chat \n"),
+     "api.deepseek.com", "deepseek-chat"),
+    (TableRecognitionEndpoint(preset: .deepSeek, baseURL: "https://api.deepseek.com", model: " \t\n"),
+     "api.deepseek.com", "deepseek-flash"),
+    (TableRecognitionEndpoint.custom869(model: "\tvision-x  "), "gw.example.com", "vision-x"),
+])
+func issue869Fix1ModelNameIsTrimmed(endpoint: TableRecognitionEndpoint, host: String, sent: String) async throws {
+    let transport = RecordingTransport869()
+    let result = await makeService869(settings: FakeTableSettings869(.options869(endpoint: endpoint, consentHost: host)),
+                                      keys: FakeTableKeys869([endpoint: "sk-trim-model"]), transport: transport)
+        .recognise(makePNG869(3, 2))
+    #expect(result == .table(rows: [["A", "B"], ["1", "2"]]))
+    let request = try #require(await transport.requests.first)
+    #expect(bodyObject869(request)["model"] as? String == sent)
+}
