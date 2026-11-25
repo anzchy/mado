@@ -109,6 +109,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             let response: HTTPResponse
             do { response = try await transport.send(request, to: .baiduOCR) }
             catch { throw Self.transportFailure(error, stage: .token) }
+            try Self.refuseRedirect(response, stage: .token)
             let payload = try Self.object(response, stage: .token)
             if payload["error"] != nil || payload["error_code"] != nil {
                 // Baidu's OAuth answer is {error, error_description}; its API errors are {error_code, error_msg}. Only
@@ -141,8 +142,18 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     }
 
     private func send(_ request: URLRequest) async throws(Failure) -> HTTPResponse {
-        do { return try await transport.send(request, to: .baiduOCR) }
+        let response: HTTPResponse
+        do { response = try await transport.send(request, to: .baiduOCR) }
         catch { throw Self.transportFailure(error, stage: .recognition) }
+        try Self.refuseRedirect(response, stage: .recognition)
+        return response
+    }
+
+    /// The transport returns a redirect unfollowed (#890); Baidu's documented endpoints never redirect, so any 3xx is
+    /// the service failure, logged as the refused redirect it always was. The body is not read.
+    private static func refuseRedirect(_ response: HTTPResponse, stage: CloudFailureDetail.Stage) throws(Failure) {
+        guard (300..<400).contains(response.statusCode) else { return }
+        throw Failure(.cloudFailure, CloudFailureDetail(stage: stage, transportError: "refused redirected"))
     }
 
     /// A thrown error as a failure. A URLError's description holds the request URL (and so the token): only its code

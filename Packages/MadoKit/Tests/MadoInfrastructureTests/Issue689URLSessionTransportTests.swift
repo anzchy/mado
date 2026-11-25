@@ -294,18 +294,15 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         var request = URLRequest(url: URL(string: "https://aip.baidubce.com/oauth/2.0/token")!)
         request.httpMethod = "POST"
         request.httpBody = Data("grant_type=client_credentials&client_id=a&client_secret=b".utf8)
-        await #expect(throws: URLSessionHTTPTransport.Refusal.redirected) {
-            try await stubbedTransport().send(request, to: .baiduOCR)
-        }
+        // #890: the 30x comes back unfollowed, as the answer; the provider fails on it.
+        #expect(try await stubbedTransport().send(request, to: .baiduOCR).statusCode == status)
         #expect(StubURLProtocol.requests.count == 1)
         #expect(StubURLProtocol.requests.allSatisfy { $0.request.url?.host == "aip.baidubce.com" })
 
         // A same-host redirect is refused too; Baidu's documented endpoints never redirect.
         StubURLProtocol.reset([.redirect(status, "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"),
                                .respond(200, wordsBody)])
-        await #expect(throws: URLSessionHTTPTransport.Refusal.redirected) {
-            try await stubbedTransport().send(request, to: .baiduOCR)
-        }
+        #expect(try await stubbedTransport().send(request, to: .baiduOCR).statusCode == status)
         #expect(StubURLProtocol.requests.count == 1)
 
         // Through the provider: the image upload is redirected; the user gets the service error, and only Baidu saw it.

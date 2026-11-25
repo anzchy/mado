@@ -8,7 +8,7 @@ import MadoApplication
 /// cannot carry the keys or the image to another host. This transport cannot become a general network path.
 public final class URLSessionHTTPTransport: HTTPTransport {
     /// Why a request was refused before a connection. No case carries the request, its host, key or body.
-    public enum Refusal: Error, Equatable { case notBaiduOCR, notAllowedHost, redirected }
+    public enum Refusal: Error, Equatable { case notBaiduOCR, notAllowedHost }
 
     static let host = "aip.baidubce.com"
     /// The provider's two endpoints (defined once there).
@@ -54,8 +54,8 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         outgoing.httpShouldHandleCookies = false
         outgoing.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         let (body, response) = try await session.data(for: outgoing)
-        // The delegate refused to follow, so a 30x arrives here as the final answer; it is a failure, not a result.
-        if let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode) { throw Refusal.redirected }
+        // The delegate refused to follow, so a 3xx arrives here as the final answer and is returned as it is; each
+        // service classifies it as a failure (the HTTPTransport contract).
         // URLSession answers an https request with an HTTPURLResponse or an error; a custom protocol could not, so
         // a bare URLResponse is still mapped to the services' failure path rather than trapping.
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -83,7 +83,7 @@ public final class URLSessionHTTPTransport: HTTPTransport {
     }
 }
 
-/// Completes every redirect with nil: the 30x response becomes the task's answer and no second request is sent.
+/// Completes every redirect with nil: the 3xx response becomes the task's answer and no second request is sent.
 private final class RedirectRefusal: NSObject, URLSessionTaskDelegate, Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest) async -> URLRequest? { nil }
