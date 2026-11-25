@@ -22,6 +22,16 @@ const BRANCH_PLAYS={
  'J5-collapse':[['capture-bar','capture-bar?state=collapsed','capture-bar']],
  'J5-text':[['capture-bar','capture-thumbnail?kind=text','capture-bar']],
  'J5-save-off':[['capture-bar','capture-thumbnail?save=off','annotate']],
+ 'J6-saved':[['settings?section=capture&scroll=table&case=default','settings?section=capture&scroll=table&case=saved','settings?section=capture&scroll=table&case=ok']],
+ 'J6-test-fail':[['settings?section=capture&scroll=table&case=default','settings?section=capture&scroll=table&case=key','settings?section=capture&scroll=table&case=saved']],
+ 'J6-adv':[['settings?section=capture&scroll=table&case=default','settings?section=capture&scroll=table&case=advanced','settings?section=capture&scroll=table&case=saved']],
+ 'J6-menu':[['table-entries?entry=bar','table-entries?entry=menu','table-flow?case=working']],
+ 'J6-panel':[['table-entries?entry=bar','table-entries?entry=panel','table-flow?case=working']],
+ 'J6-thumb':[['table-entries?entry=bar','table-entries?entry=thumbnail','table-flow?case=working']],
+ 'J6-off':[['table-flow?case=setup','table-flow?case=off','settings?section=capture&scroll=table&case=saved']],
+ 'J6-fail':[['table-flow?case=working','table-flow?case=fail-key','settings?section=capture&scroll=table&case=saved']],
+ 'J6-edit':[['table-flow?case=result','table-flow?case=edited','table-flow?case=result']],
+ 'J6-more':[['table-flow?case=result','table-flow?case=more','table-flow?case=edited']],
  'J5-unsaved':[['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','annotate']],
  'J5-redact':[['annotate','annotate?tool=redact','annotate']],
 };
@@ -35,7 +45,7 @@ const SETTINGS_CONTROLS={
  display:[['缩略图大小','soon'],['显示文件名','soon'],['填充裁剪','soon'],['完整显示','soon']],
  cache:[['清理缓存…','ready']],
  // #680/#682: the 截图 controls are drawn as #682's target state, not greyed (brief states680).
- capture:[['显示截图工具条','ready'],['登录时启动','ready'],['更改…','ready'],['存储到文件夹','ready'],['拷贝到剪贴板','ready'],['区域截图快捷键','ready'],['窗口截图快捷键','ready'],['全屏截图快捷键','ready'],['截图并识别文字快捷键','ready'],['显示 / 收起截图工具条快捷键','ready'],['恢复默认','ready'],['允许「识别文字」使用云端服务','ready'],['百度服务条款','ready'],['识别服务','ready'],['API Key','ready'],['Secret Key','ready'],['保存到钥匙串','ready']],
+ capture:[['显示截图工具条','ready'],['了解更多 ↗','ready'],['登录时启动','ready'],['更改…','ready'],['存储到文件夹','ready'],['拷贝到剪贴板','ready'],['区域截图快捷键','ready'],['窗口截图快捷键','ready'],['全屏截图快捷键','ready'],['截图并识别文字快捷键','ready'],['截图并识别表格快捷键','ready'],['显示 / 收起截图工具条快捷键','ready'],['恢复默认','ready'],['允许云识别（识别文字、识别表格）','ready'],['了解更多 ↗','ready'],['识别服务','ready'],['API Key','ready'],['Secret Key','ready'],['保存到钥匙串','ready'],['表格识别服务','ready'],['访问密钥','ready'],['保存到钥匙串','ready'],['怎么获取 ↗','ready'],['隐私说明 ↗','ready'],['测试','ready'],['高级','ready'],['了解更多 ↗','ready']],
  update:[['自动检查更新','soon'],['立即检查','soon']],
  about:[['报告问题…','soon'],['隐私说明','soon'],['源代码','soon']],
 };
@@ -55,7 +65,7 @@ module.exports=async(page,{design,states,screenshot})=>{
  const errors=[],failures=[],results=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))failures.push({url:r.url(),status:r.status()})});
  await page.goto(base+'index.html');await page.getByRole('navigation',{name:'设计页面'}).waitFor();
  const catalog=await page.evaluate(async()=>{const r=await fetch('manifest.json');return r.json()});
- if(catalog.states.length!==25||await page.locator('nav button').count()!==25)throw Error('Expected 25 catalog states');
+ if(catalog.states.length!==27||await page.locator('nav button').count()!==27)throw Error('Expected 27 catalog states');
 
  // 22 and 26 are local replacements of the accepted Stitch pages (ADR-014), like 31–34.
  for(const name of ['empty-folder','permission-denied','settings','shortcuts'])if(catalog.states.find(s=>s.name===name).origin!=='local-C-adaptation')throw Error(name+' origin is not local-C-adaptation');

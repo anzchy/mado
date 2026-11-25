@@ -26,6 +26,12 @@
     ?section=capture&bar=off                              截图 with the Capture Bar off: bar-dependent settings greyed (5.2); 文字识别 editable
     ?section=capture&scroll=ocr                           截图 scrolled to 文字识别
     ?theme=dark                                           dark tokens
+  Table Recognition (grilling 2026-11-24, decisions 5-7, 13, 15): 截图 gets a 表格识别 group, a 截图并识别表格 shortcut row, and every hint is
+  one short line: the how-to steps and the long privacy text live on the help site (site/, opened by the 「了解更多 ↗」 links).
+    ?section=capture&scroll=table             截图 scrolled to 表格识别 (default DeepSeek, no key saved)
+    ?section=capture&scroll=table&case=saved  key saved, not tested
+    …&case=testing | ok | key | address | model | offline | quota | unknown   Test results in plain words
+    …&case=advanced | custom                  Advanced open (address, model); Custom opens it and makes both required
 -->
   <style data-stitch-inlined="_ds/picsee-ui-system/tokens/globals.css">:root{--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-focus-ring: var(--color-accent);--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--font-sans: "SF Pro Text", "Avenir Next", "Helvetica Neue", sans-serif;--font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;--title-bar-height: 38px;--traffic-lights-end: 0px;--traffic-lights-clearance: 0px;--traffic-lights-clearance-main: 0px;--sidebar-width: 220px;--sidebar-width-min: 180px;--main-min-width: 320px;--bottom-tabs-height: 36px;--editor-content-width: 780px;--content-padding: 40px;--editor-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--editor-font-size: 16px;--editor-line-height: 1.6;--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: #6b7280;--color-bg-secondary: #f6f7fb;--color-bg-tertiary: #eeeff3;--color-on-accent: #fff;--color-scrim: rgba(15, 23, 42, 0.35);--font-size-ui-sm: 12px;--font-size-ui: 13px;--font-size-ui-lg: 14px;--font-size-title: 16px;--radius-inner: 4px;--radius-control: 6px;--radius-popover: 10px;--motion-duration-fast: 150ms;} @media (prefers-reduced-motion: reduce){:root{--motion-duration-fast: 0ms;}} *{box-sizing: border-box;} html, body, #root{height: 100%;} body{margin: 0;font-family: var(--font-sans);background: var(--color-bg);color: var(--color-text);} body.tauri-macos{--traffic-lights-end: 78px;--traffic-lights-clearance: calc(var(--traffic-lights-end) - 16px);--traffic-lights-clearance-main: calc(var(--traffic-lights-end) + 2px);} a{color: inherit;text-decoration: none;}</style>
   <style data-stitch-inlined="_ds/picsee-ui-system/tokens/light.css">.theme-light{color-scheme: light;--color-bg: #ffffff;--color-surface: #f6f7fb;--color-panel: #ffffff;--color-text: #1a1a1a;--color-muted: #6b7280;--color-border: color-mix(in srgb, var(--color-text) 10%, transparent);--color-border-subtle: color-mix(in srgb, var(--color-text) 6%, transparent);--color-hover: color-mix(in srgb, var(--color-text) 5%, transparent);--shadow-soft: 0 0 0 0.5px color-mix(in srgb, var(--color-text) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--color-text) 8%, transparent);--color-accent: #2563eb;--color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);--color-accent-text: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));--color-accent-fill: var(--color-accent);--color-accent-fill-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));--color-tab-active-fill: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));--color-tab-active-accent: var(--color-accent);--tab-active-close-opacity: 0.5;--color-danger: #dc2626;--color-danger-soft: color-mix(in srgb, var(--color-danger) 12%, transparent);--color-error-text: #b91c1c;--color-highlight: rgba(255, 85, 130, 0.65);--color-control-border: color-mix(in srgb, var(--color-text) 50%, transparent);--color-editor-bg: #ffffff;--color-code-bg: color-mix(in srgb, var(--color-editor-bg) 94%, var(--color-text));--color-toggle-track-off: #cccccc;--color-running-fill: #dcfce7;--color-running-text: #16a34a;--color-banner-unsaved: #f59e0b;--color-group-bg: color-mix(in srgb, var(--color-surface) 80%, transparent);--color-input-bg: color-mix(in srgb, var(--color-panel) 90%, transparent);--color-text-secondary: var(--color-muted);--color-bg-secondary: var(--color-surface);--color-bg-tertiary: #eeeff3;}</style>
@@ -101,7 +107,16 @@
   .shortcut-field.unset { color: var(--color-muted); font-family: var(--font-sans); }
   .popup { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-bg); }
   .field { width: 150px; height: 24px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-input-bg); font-size: var(--font-size-ui-sm); }
+  .tbl-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-size-ui-sm); }
+  .tbl-status.ok { color: var(--color-running-text); } .tbl-status.bad { color: var(--color-error-text); }
+  .adv { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; color: var(--color-accent-text); font-size: var(--font-size-ui-sm); }
+  .field.wide { width: 260px; }
+  .field.req { border-color: var(--color-danger); }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-border); border-top-color: var(--color-accent); }
+  .hint .link { display: inline; padding: 0; }
+  .help-steps { margin: 4px 0 0; padding-left: 18px; color: var(--color-muted); font-size: var(--font-size-ui-sm); line-height: 1.6; }
 </style>
+
 </head>
 <body>
 <div class="window" role="dialog" aria-labelledby="settings-title">
@@ -144,9 +159,9 @@
       <div class="capture-group" data-group="bar">
         <h3>截图工具条</h3>
         <div class="form">
-          <span class="l">截图工具条</span><span><span class="inline"><button type="button" class="switch on" role="switch" aria-checked="true" aria-label="显示截图工具条" data-bar-switch></button>显示截图工具条</span><span class="hint">打开后 Mado 启动一个小的截图助手，即使没有 Mado 窗口也在。第一次截图时 macOS 会请求「录屏与系统录音」权限，这个权限只给截图助手，Mado 看图不会获得屏幕访问。关闭即停止助手并移除登录项。</span></span>
+          <span class="l">截图工具条</span><span><span class="inline"><button type="button" class="switch on" role="switch" aria-checked="true" aria-label="显示截图工具条" data-bar-switch></button>显示截图工具条</span><span class="hint">打开后，没有 Mado 窗口也能截图。第一次截图时 macOS 会请求录屏权限（只给截图助手）。<button type="button" class="link">了解更多 ↗</button></span></span>
           <span class="l" data-bar-dependent>登录时启动</span><span data-bar-dependent><span class="inline"><button type="button" class="switch" role="switch" aria-checked="false" aria-label="登录时启动"></button>登录时启动截图工具条</span><span class="hint">关闭后，重启电脑时截图工具条不会自动出现。</span></span>
-          <span class="l" data-bar-dependent>录屏权限</span><span data-bar-dependent><span class="inline"><span class="pill ok">已允许</span><span class="example">示例</span></span><span class="hint" data-macos15-line>在 macOS 15 及以后，系统会不定期再次询问是否允许 Mado 截取屏幕。这是系统要求，选择允许即可继续截图。</span></span>
+          <span class="l" data-bar-dependent>录屏权限</span><span data-bar-dependent><span class="inline"><span class="pill ok">已允许</span><span class="example">示例</span></span><span class="hint" data-macos15-line>macOS 15 起，系统会不定期再问一次，选「允许」即可。</span></span>
         </div>
       </div>
       <div class="capture-group" data-group="after" data-bar-dependent>
@@ -164,6 +179,7 @@
           <span class="l">窗口截图</span><span class="inline"><button type="button" class="shortcut-field" aria-label="窗口截图快捷键" title="点按后按下新的快捷键">⌃⇧⌘2</button></span>
           <span class="l">全屏截图</span><span class="inline"><button type="button" class="shortcut-field" aria-label="全屏截图快捷键" title="点按后按下新的快捷键">⌃⇧⌘3</button></span>
           <span class="l">截图并识别文字</span><span class="inline"><button type="button" class="shortcut-field" aria-label="截图并识别文字快捷键" title="点按后按下新的快捷键">⌃⇧⌘4</button></span>
+          <span class="l">截图并识别表格</span><span class="inline"><button type="button" class="shortcut-field" aria-label="截图并识别表格快捷键" title="点按后按下新的快捷键">⌃⇧⌘5</button><span class="pill">新</span></span>
           <span class="l">显示 / 收起工具条</span><span class="inline"><button type="button" class="shortcut-field unset" aria-label="显示 / 收起截图工具条快捷键" title="点按后按下新的快捷键">未设置</button></span>
           <span></span><span><span class="hint">不会占用系统的 ⌘⇧3 / ⌘⇧4 / ⌘⇧5。<button type="button" class="link">恢复默认</button></span></span>
         </div>
@@ -171,11 +187,16 @@
       <div class="capture-group" data-group="ocr" id="capture-ocr">
         <h3>文字识别</h3>
         <div class="form">
-          <span class="l">云端识别</span><span><span class="inline"><button type="button" class="switch" role="switch" aria-checked="false" aria-label="允许「识别文字」使用云端服务"></button>允许「识别文字」使用云端服务<span class="pill">未填写密钥</span></span><span class="hint">云端识别会把要识别的那张图片上传到百度。只有在你点「识别文字」、同意过一次、并且这个开关打开时才会上传；在图片上直接选字永远只用本机识别。使用百度文字识别需要一个完成实名认证的百度账号，百度文档列出的证件只有中国大陆证件。百度会把上传的图片保存多久、在中国大陆以外能否使用这项服务，目前都未经确认。<button type="button" class="link">百度服务条款</button></span></span>
+          <span class="l">云端识别</span><span><span class="inline"><button type="button" class="switch" role="switch" aria-checked="false" aria-label="允许云识别（识别文字、识别表格）"></button>允许云识别（识别文字、识别表格）<span class="pill">未填写密钥</span></span><span class="hint">只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。<button type="button" class="link">了解更多 ↗</button></span></span>
           <span class="l">服务</span><span class="inline"><button type="button" class="popup" aria-label="识别服务" aria-haspopup="listbox">百度 OCR<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></span>
           <span class="l">密钥</span><span><span class="inline wrap"><input class="field" placeholder="API Key" aria-label="API Key"><input class="field" type="password" placeholder="Secret Key" aria-label="Secret Key"><button type="button" class="btn">保存到钥匙串</button></span><span class="hint">密钥存在钥匙串里。</span></span>
-          <span></span><span class="hint">没有密钥、离线或额度用完时改用本机识别，结果会标明用了哪个引擎。</span>
+          <span></span><span class="hint">没有密钥、离线或额度用完时，文字识别改用本机并标明。</span>
         </div>
+      </div>
+
+      <div class="capture-group" data-group="table" id="capture-table">
+        <h3>表格识别</h3>
+        <div class="form" id="tbl-form"></div>
       </div>
     </section>
     <section class="settings-pane" data-section="update" aria-label="更新" hidden>
@@ -219,6 +240,35 @@
     }
   }
   if (id === 'capture' && q.get('scroll') === 'ocr') pane.scrollTop = document.getElementById('capture-ocr').offsetTop - pane.offsetTop;
+})();
+</script>
+<script>
+(() => {
+  const q = new URLSearchParams(location.search), c = q.get('case') || 'default';
+  const MSG = {
+    ok: ['ok', '测试成功，可以识别示例表格。'], key: ['bad', '密钥不被接受，请更换密钥。'], address: ['bad', '无法连接这个地址，请检查「高级」里的地址。'],
+    model: ['bad', '这个模型不支持图片，请换一个模型。'], offline: ['bad', '无法联网，请检查网络后重试。'], quota: ['bad', '额度不足，请到服务账户检查。'],
+    unknown: ['bad', '测试未通过。']
+  };
+  const saved = c !== 'default' && c !== 'custom', custom = c === 'custom', adv = c === 'advanced' || custom || c === 'address' || c === 'model';
+  const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
+  let h = '';
+  h += `<span class="l">服务</span><span class="inline"><button type="button" class="popup" aria-label="表格识别服务" aria-haspopup="listbox">${custom ? '自定义' : 'DeepSeek'}${chev}</button><span class="hint"></span></span>`;
+  h += `<span class="l">访问密钥</span><span>${saved
+    ? '<span class="inline"><span class="mono">••••••••••••3f9a</span><span class="pill ok">已保存到钥匙串</span><button type="button" class="btn">更换…</button><button type="button" class="btn danger">移除</button></span>'
+    : '<span class="inline wrap"><input class="field wide" type="password" placeholder="粘贴访问密钥（API Key）" aria-label="访问密钥"><button type="button" class="btn">保存到钥匙串</button></span>'}<span class="hint">${custom ? '' : '还没有密钥？<button type="button" class="link">怎么获取 ↗</button>'}</span></span>`;
+  h += `<span class="l">图片发送到</span><span><span class="inline"><span class="mono">${custom ? '（先填写地址）' : 'api.deepseek.com'}</span></span><span class="hint">只在你点「识别表格」后，图片才发送到这里。<button type="button" class="link">隐私说明 ↗</button></span></span>`;
+  const st = MSG[c];
+  h += `<span class="l">测试</span><span><span class="inline"><button type="button" class="btn"${c === 'testing' || !saved ? ' disabled' : ''}>${c === 'testing' ? '取消' : '测试'}</button>${c === 'testing' ? '<span class="tbl-status"><span class="spin"></span>正在测试…</span>' : ''}${st ? `<span class="tbl-status ${st[0]}">${st[0] === 'ok' ? '✓' : '⚠'} ${st[1]}</span>` : ''}</span><span class="hint">发送内置示例，不发送你的图片；可能收费。${saved ? '' : '填写并保存密钥后可测试。'}</span></span>`;
+  h += `<span class="l"></span><span><button type="button" class="adv" aria-expanded="${adv}">${chev}高级</button></span>`;
+  if (adv) {
+    h += `<span class="l">地址</span><span><input class="field wide${custom ? ' req' : ''}" value="${custom ? '' : 'https://api.deepseek.com'}" placeholder="https://…（必填，需要 OpenAI 兼容）" aria-label="服务地址"><span class="hint">${custom ? '自定义服务必须填写地址和模型。' : '换地址需要重新保存密钥并同意。'}</span></span>`;
+    h += `<span class="l">模型</span><span><input class="field wide${custom ? ' req' : ''}" value="${custom ? '' : 'deepseek-flash'}" placeholder="模型名称（必须能读图片）" aria-label="模型"><span class="hint">改模型后请重新测试。</span></span>`;
+  }
+  h += `<span class="l"></span><span class="hint">可能使用服务账户的余额，费用请到该服务查看。<button type="button" class="link">了解更多 ↗</button></span>`;
+  document.getElementById('tbl-form').innerHTML = h;
+  const pane = document.querySelector('.settings-pane[data-section="capture"]');
+  if (q.get('section') === 'capture' && q.get('scroll') === 'table') pane.scrollTop = document.getElementById('capture-table').offsetTop - pane.offsetTop - 8;
 })();
 </script>
 </body></html>

@@ -163,7 +163,8 @@ const FALLBACK = {
   'components': ['30 组件与状态', 1280, 800], 'grid-context-menu': ['31 图片右键菜单 · C', 1280, 800], 'grid-multiselect': ['32 基础多选 · C', 1280, 800],
   'viewer-filmstrip': ['33 胶片条展开 · C', 1280, 800], 'viewer-inspector-light': ['34 图片信息 · 浅色 · C', 1280, 800],
   'settings': ['35 设置 · B', 1280, 800], 'shortcuts': ['36 键盘快捷键 · C', 1280, 800],
-  'capture-bar': ['37 截图工具条 · A', 1280, 800], 'capture-thumbnail': ['38 截图缩略图 · A', 1280, 800], 'annotate': ['39 标注模式 · D', 1280, 800],
+  'capture-bar': ['37 截图工具条 · A（纯图标）', 1280, 800], 'capture-thumbnail': ['38 截图缩略图 · A', 1280, 800], 'annotate': ['39 标注模式 · D', 1280, 800],
+  'table-entries': ['40 识别表格 · 入口', 1280, 800], 'table-flow': ['41 识别表格 · 流程', 1280, 800],
 };
 // Work packages / issues and ledger IDs per page, from plan §1.3 and §1.6. No implementation status: that is the ledger's.
 const WP = {
@@ -174,6 +175,7 @@ const WP = {
   'keyboard-focus': 'P0-09 · P1-08 · P6-04', 'compact-grid': 'P3-10 · P6-04', 'components': 'P0-08',
   'settings': '#218 · #114 · #220 · #221 · P7-10 #682 #685 · P7-12 #689', 'shortcuts': '#215 · #219',
   'capture-bar': 'P7-10 #682 #683 #685 · P7-01 #687', 'capture-thumbnail': 'P7-10 #684 #686 · P7-01 #687 · P7-11 #694', 'annotate': 'P7-11 #690 #692 #693',
+  'table-entries': '待 spec（表格识别）', 'table-flow': '待 spec（表格识别）',
 };
 const LEDGER = {
   'first-launch': 'OPEN-01/08', 'folder-loading': 'FOLDER-01/05', 'grid-light': 'GRID-01/02', 'empty-folder': 'FOLDER-08',
@@ -182,6 +184,7 @@ const LEDGER = {
   'viewer-inspector': 'INFO-01/02', 'viewer-inspector-light': 'INFO-01', 'grid-display': 'PREF-03', 'grid-dark': 'PREF-01', 'keyboard-focus': 'A11Y-02',
   'compact-grid': 'GRID-08', 'settings': 'PREF-01/03 · CACHE-03 · CAP-01 · EXT-04', 'shortcuts': 'CMD-01',
   'capture-bar': 'CAP-01 · EXT-05', 'capture-thumbnail': 'CAP-02 · EXT-05', 'annotate': 'EDIT-07/08',
+  'table-entries': 'EXT-06（拟新增）', 'table-flow': 'EXT-06（拟新增）',
 };
 // A page that a later design replaces. The card stays the state page; the overlay names the replacement (not a branch).
 const REPLACED = {};
@@ -202,6 +205,7 @@ const ENTRIES = [
   ['把一张图片拖进窗口，所在文件夹不在授权范围内', 'OPEN-04 · ACCESS-01', NOT_IN_ROOT],
   ['文件菜单「打开最近使用」，或 22 的「最近打开」', 'OPEN-06', '24 → 11；授权已失效时 → 26（<a href="#J1">J1 支线</a>）'],
   ['截图工具条打开后，点工具条或按全局快捷键 [⌃⇧⌘1]–[⌃⇧⌘4]（没有 Mado 窗口也可以）', 'CAP-01 · EXT-05', '38 截图缩略图；识别文字时只有文字通知（<a href="#J5">J5</a>）'],
+  ['截图工具条点「识别表格」、[⌃⇧⌘5]、显示菜单「识别表格…」、文字面板「按表格重新识别」或截图缩略图「识别表格」（占位快捷键）', 'EXT-06（拟新增）', '首次使用引导或同意 → 识别 → 结果面板（<a href="#J6">J6</a>）'],
   ['在大图按 [⌘E]，或点缩略图上的「标注」', 'EDIT-07', '39 标注模式（<a href="#J5">J5</a>）'],
 ];
 // A journey: main steps left to right (`t` is the trigger on the arrow INTO the step). `end` is the closing step of the
@@ -329,6 +333,42 @@ const JOURNEYS = [
     ],
     end: { p: 'annotate', q: 'saved=1', t: '[⌘S] 存储', note: '另存为 DSC_0342-annotated.jpg，原图不变；留在标注模式，打开的预览集不变（#680）',
       branches: [{ id: 'J5-finder', t: '在访达中显示', to: '访达打开并选中标注副本；回到 Mado 时仍在标注模式' }] } },
+  { id: 'J6', name: '识别表格', goal: '从一张表格图片到 Word 里的完整表格', stages: ['设置服务', '进入', '首次同意', '识别', '核对修改', '拷贝与粘贴'],
+    wps: '待 /to-spec、/to-tickets；账簿 EXT-06（Absent，拟新增）· EXT-04/05 · CAP-01/02 · 计划 docs/plans/20261124-table-recognition-plan.md、grilling 记录',
+    steps: [
+      { p: 'settings', q: 'section=capture&scroll=table&case=default', title: '设置 · 截图 · 表格识别', note: '默认 DeepSeek；密钥、测试、「图片发送到」的主机名一直可见；地址与模型收在「高级」',
+        branches: [
+          { id: 'J6-saved', p: 'settings', q: 'section=capture&scroll=table&case=saved', title: '密钥已保存', t: '粘贴密钥，「保存到钥匙串」', outs: [{ k: '「测试」→ 发送内置示例', to: 'settings', toQ: 'section=capture&scroll=table&case=ok' }],
+            variants: [['section=capture&scroll=table&case=testing', '测试中（可取消）'], ['section=capture&scroll=table&case=ok', '测试成功']] },
+          { id: 'J6-test-fail', p: 'settings', q: 'section=capture&scroll=table&case=key', title: '测试没通过：用大白话说原因', t: '测试失败', outs: [{ k: '按提示改密钥、地址或模型，再测试', to: 'settings', toQ: 'section=capture&scroll=table&case=saved' }],
+            variants: [['section=capture&scroll=table&case=address', '地址连不上'], ['section=capture&scroll=table&case=model', '模型不支持图片'], ['section=capture&scroll=table&case=offline', '无法联网'], ['section=capture&scroll=table&case=quota', '额度不足'], ['section=capture&scroll=table&case=unknown', '原因不明']] },
+          { id: 'J6-adv', loop: true, p: 'settings', q: 'section=capture&scroll=table&case=advanced', title: '高级：地址与模型', t: '展开「高级」', outs: [{ k: '收起，回到设置', to: 'settings', toQ: 'section=capture&scroll=table&case=saved' }],
+            variants: [['section=capture&scroll=table&case=custom', '选「自定义」时自动展开，必填']] },
+        ] },
+      { p: 'table-entries', q: 'entry=bar', title: '入口 1：截图工具条（A 纯图标）', t: '点「识别表格」图标<br>或 [⌃⇧⌘5]', note: '只有图标，指到才显示名称和快捷键；蓝点标出新增',
+        branches: [
+          { id: 'J6-menu', p: 'table-entries', q: 'entry=menu', title: '入口 2：显示 ▸ 识别表格…', t: '大图里用菜单', outs: [{ k: '同一个流程 → 识别', to: 'table-flow', toQ: 'case=working' }] },
+          { id: 'J6-panel', p: 'table-entries', q: 'entry=panel', title: '入口 3：文字面板「按表格重新识别」', t: '文字识别出来行列对不上', outs: [{ k: '用原图走同一个流程', to: 'table-flow', toQ: 'case=working' }] },
+          { id: 'J6-thumb', p: 'table-entries', q: 'entry=thumbnail', title: '入口 4：截图缩略图「识别表格」', t: '刚截完的缩略图悬停', outs: [{ k: '用这张截图走同一个流程', to: 'table-flow', toQ: 'case=working' }] },
+        ] },
+      { p: 'table-flow', q: 'case=setup', title: '首次使用：还没设置服务', t: '没有设置服务时', note: '不让新手盲找设置：一个对话框，「开始设置」直接跳到设置组；图片还没发送，设置完点「继续识别」',
+        branches: [
+          { id: 'J6-off', p: 'table-flow', q: 'case=off', title: '云识别开关关闭', t: '「允许云识别」关闭', outs: [{ k: '「打开设置」→ 打开开关 → 继续', to: 'settings', toQ: 'section=capture&scroll=table&case=saved' }] },
+        ] },
+      { p: 'table-flow', q: 'case=consent', title: '首次发送前同意（按主机名）', t: '设置完成后继续', note: '名称里写出真实主机名；换主机再问一次；同意只对这个服务有效。属于隐私文案，需 owner 确认' },
+      { p: 'table-flow', q: 'case=working', title: '识别中', t: '「同意并识别」', note: '可取消；不自动重试（可能已收费）',
+        branches: [
+          { id: 'J6-fail', p: 'table-flow', q: 'case=fail-key', title: '失败：密钥不被接受', t: '识别失败', outs: [
+              { k: '「打开设置」「重试」；或另点「仅识别文字（本机）」，不自动回退', to: 'settings', toQ: 'section=capture&scroll=table&case=saved' }],
+            variants: [['case=fail-none', '没有找到表格'], ['case=fail-cut', '结果不完整'], ['case=fail-offline', '无法联网'], ['case=fail-big', '图片太大']] },
+        ] },
+      { p: 'table-flow', q: 'case=result', title: '识别结果：可直接改单元格', t: '识别完成', note: '原图对照；「共 7 行、4 列（含表头）」；点单元格直接修改（例：Sensoror → Sensonor）；不自动拷贝，不自动消失',
+        branches: [
+          { id: 'J6-edit', loop: true, p: 'table-flow', q: 'case=edited', title: '改过的单元格', t: '改错字', outs: [{ k: '继续核对，回到结果', to: 'table-flow', toQ: 'case=result' }] },
+          { id: 'J6-more', loop: true, p: 'table-flow', q: 'case=more', title: '「更多」菜单', t: '更多', outs: [{ k: '拷贝 Markdown / 拷贝为电子表格 / 编辑 Markdown / 仅识别文字（本机）', to: 'table-flow', toQ: 'case=edited' }] },
+        ] },
+    ],
+    end: { p: 'table-flow', q: 'case=copied', title: '表格已拷贝', t: '「拷贝表格」', note: '一次写入 HTML 和制表符文字：粘贴到 Word 得到完整表格，纯文本编辑器得到 Tab 分隔的文字。验收：粘贴到 Word，截图核对所有行、列和文字' } },
 ];
 const REF = { pages: ['grid-dark', 'keyboard-focus', 'compact-grid', 'components'],
   note: '这些页面不是某一步，而是每条旅程都要满足的约束：深色外观、键盘焦点、小窗口布局和组件状态（计划 §1.6）。' };
@@ -366,9 +406,9 @@ function branch(b, from, fromQ) {
     <div class="down"><span>${b.loop ? '可选 · ' : ''}${K(b.t)}</span></div>${body}
     ${variants ? `<div class="variants">其他情况：${variants}</div>` : ''}${rets}</div>`;
 }
-function column(p, note, branches, q) {
+function column(p, note, branches, q, title) {
   const loops = branches.filter(b => b.loop), rest = branches.filter(b => !b.loop);
-  return `<div class="col">${card(p, q || '', note)}${rest.map(b => branch(b, p, q)).join('')}`
+  return `<div class="col">${card(p, q || '', note, '', title)}${rest.map(b => branch(b, p, q)).join('')}`
     + (loops.length ? `<div class="loop-label">可选，可反复（不是必经步骤）</div>${loops.map(b => branch(b, p, q)).join('')}` : '') + '</div>';
 }
 const mainPath = j => j.steps.map(s => s.p).concat(j.end ? [j.end.p] : []);
@@ -380,8 +420,8 @@ function render() {
   const entry = `<section class="journey" id="ENTRY"><div class="jhead"><span class="no">入口</span><h2>从哪里进入</h2><span class="goal">每个入口落到哪一步（计划 §1.6，账簿 OPEN-*、ACCESS-01）</span></div>
     <table class="entries"><thead><tr><th>用户做了什么</th><th>账簿</th><th>落到</th></tr></thead><tbody>${ENTRIES.map(([a, id, to]) => `<tr><td>${K(a)}</td><td class="id">${id}</td><td>${K(to)}</td></tr>`).join('')}</tbody></table></section>`;
   const out = [entry].concat(JOURNEYS.map(j => {
-    const parts = j.steps.map((s, k) => { mark(s); return (k ? arrow(s.t) : '') + column(s.p, s.note, s.branches || [], s.q); }).join('')
-      + (j.end ? (mark(j.end), arrow(j.end.t) + column(j.end.p, j.end.note, j.end.branches || [], j.end.q)) : '');
+    const parts = j.steps.map((s, k) => { mark(s); return (k ? arrow(s.t) : '') + column(s.p, s.note, s.branches || [], s.q, s.title); }).join('')
+      + (j.end ? (mark(j.end), arrow(j.end.t) + column(j.end.p, j.end.note, j.end.branches || [], j.end.q, j.end.title)) : '');
     return `<section class="journey" id="${j.id}" data-main='${JSON.stringify(mainPath(j))}'><div class="jhead"><span class="no">${j.id}</span><h2>${j.name}</h2><span class="goal">目标：${j.goal}</span>
       <button class="play" data-play="${j.id}">▶ 播放主路径</button><span class="wps">工作包：${j.wps}</span></div>
       <div class="stages">${j.stages.map(s => `<span>${s}</span>`).join('<span class="sep">→</span>')}</div>
