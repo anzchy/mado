@@ -143,7 +143,7 @@ const pages = (key, entries, total = entries.length) => [{ total_count: total, [
 const responses = (js = jobs()) => [pages("workflow_runs", [run()]), pages("jobs", js), pages("workflow_runs", [run()])];
 
 /** Only the external gh/API boundary is fake. Node CLI, env, files and process exit are real. */
-function cli(sequence = responses(), { env = {}, shell = null, noGh = false } = {}) {
+function cli(sequence = responses(), { env = {}, shell = null, noGh = false, timeout = 10000 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "mado-tag-ci-"));
   const fixture = join(dir, "responses.json"), counter = join(dir, "counter");
   writeFileSync(fixture, JSON.stringify(sequence));
@@ -168,7 +168,7 @@ process.stdout.write(JSON.stringify(value));
   try {
     const result = spawnSync(shell ? "/bin/bash" : process.execPath,
       shell ? ["--noprofile", "--norc", "-eo", "pipefail", "-c", shell] : [script], {
-        cwd: root, encoding: "utf8", timeout: 10000,
+        cwd: root, encoding: "utf8", timeout,
         env: { PATH: dir, GITHUB_SHA: SHA, GITHUB_REPOSITORY: "anzchy/picsee", GH_TOKEN: "fixture-private-token",
           FAKE_FIXTURE: fixture, FAKE_COUNTER: counter, ...env },
       });
@@ -178,12 +178,20 @@ process.stdout.write(JSON.stringify(value));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 function cliDenied(result, names = NAMES, sha = SHA) {
+  // #891: a spawn error (ETIMEDOUT kill, missing binary) is reported as itself before any output check.
+  assert.ifError(result.error);
   assert.notEqual(result.status, 0, result.output);
   assert.match(result.output, /::error::/);
   assert.ok(result.output.includes(sha), result.output);
   for (const name of [].concat(names)) assert.ok(result.output.includes(name), result.output);
   assert.doesNotMatch(result.output, /fixture-private-token/);
 }
+
+// #891: a child killed by its deadline has empty output; the failure must name the kill, not a missing ::error::.
+test("cliDenied reports a killed CLI run as its spawn error before reading output", () => {
+  const killed = cli(responses(), { timeout: 1 });
+  assert.throws(() => cliDenied(killed), (error) => /ETIMEDOUT/.test(error.message));
+});
 
 test("CLI authenticates from the job token and reports actual success/failure", () => {
   const passed = cli();
