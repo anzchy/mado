@@ -66,3 +66,24 @@ extension Issue890TransportTests {
         #expect(Stub890.requests.count == 1)
     }
 }
+
+extension Issue890TransportTests {
+    /// URLSession alone sometimes starts a load from an already-cancelled task (seen once in a full #890 run); the
+    /// transport must never. Repeated so the race shows.
+    @Test(.timeLimit(.minutes(2)))
+    func issue890WI4bCancelledTransportCallNeverStartsALoad() async throws {
+        let transport = transport890()
+        let request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
+        var loads = 0
+        for _ in 0..<200 {
+            Stub890.reset([.respond(200, table890)])
+            let outcome = await Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return try await transport.send(request, to: .consentedHost(host: "api.deepseek.com", port: nil))
+            }.result
+            if case .success = outcome { Issue.record("a cancelled call returned an answer") }
+            loads += Stub890.requests.count
+        }
+        #expect(loads == 0)
+    }
+}

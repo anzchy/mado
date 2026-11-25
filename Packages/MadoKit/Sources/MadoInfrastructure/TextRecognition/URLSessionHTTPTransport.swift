@@ -49,6 +49,9 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         case .consentedHost(let host, let port):
             guard Self.admits(parts, host: host, port: port) else { throw Refusal.notAllowedHost }
         }
+        // URLSession starts a load even for a task that is already cancelled (#890: 199 of 200 calls did); a
+        // cancelled call sends nothing.
+        try Task.checkCancellation()
         var outgoing = request
         outgoing.timeoutInterval = timeout
         outgoing.httpShouldHandleCookies = false
