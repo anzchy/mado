@@ -22,16 +22,20 @@ import Testing
     #expect(!payload.markdown.contains("Sensoror"))
 }
 
-@Test func issue868ClipboardDelimitersStayInsideCells() throws {
+@Test func issue868TSVQuotesOnlyLineBreakFieldsKeepsBackslashesAndTurnsTabsIntoSpaces() throws {
     let table = RecognisedTable(rows: [
         ["literal \\n", "pipe | and tab\there"],
         ["line1\r\nline2", "backslash \\ and <br>"],
+        ["say \"hi\"\nbye", "C:\\Temp \"bare\""],
     ], firstRowIsHeader: false)
     let payload = try TableClipboardPayload.build(from: table)
-    // TSV uses literal backslash escapes for backslash, tab and in-cell LF.
-    // Thus physical LF is only a row boundary, and physical tab only a column boundary.
-    #expect(payload.tabSeparated == "literal \\\\n\tpipe | and tab\\there\nline1\\nline2\tbackslash \\\\ and <br>")
-    #expect(payload.tabSeparated.split(separator: "\n").count == 2)
+    // Spreadsheet paste: a field with an in-cell line break is quoted RFC 4180 style (inner quotes doubled),
+    // every other field stays bare, a backslash is never escaped, and a tab inside a cell becomes one space.
+    #expect(payload.tabSeparated == [
+        "literal \\n\tpipe | and tab here",
+        "\"line1\nline2\"\tbackslash \\ and <br>",
+        "\"say \"\"hi\"\"\nbye\"\tC:\\Temp \"bare\"",
+    ].joined(separator: "\n"))
     #expect(payload.html.contains("line1<br>line2"))
     #expect(payload.markdown.contains("pipe \\| and tab"))
     #expect(payload.markdown.contains("line1<br>line2"))
