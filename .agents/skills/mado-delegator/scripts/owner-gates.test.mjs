@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { fixtureEnv } from '../../../../scripts/tdd/fixture-env.mjs';
 
 const root = fileURLToPath(new URL('../../../..', import.meta.url));
 const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
@@ -71,11 +72,12 @@ node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
+  // #891: start from fixtureEnv so the caller's heavy-lock handoff and timing overrides never reach the
+  // fixture's own top-level lock, then apply this fixture's private values.
+  const env = fixtureEnv({ PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
     MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
     MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
-    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
-    OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' };
+    OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' });
   // The fake tools must win over the real xcodegen/Homebrew directories owner-gates.sh puts in front of PATH.
   env.OWNER_GATES_TOOL_PATH = bin;
   env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
@@ -268,4 +270,31 @@ test('fix1 the summary records the thresholds in force when one is set by enviro
   assert.match(refused.summary, /^limits=3\/25%\/1$/m);
   const defaults = fixture(t, 'pass', 2, true, {env: {}});
   assert.doesNotMatch(defaults.summary, /^limits=/m);
+});
+
+// #891: owner-gates runs its node lane under the heavy lock, so this file can inherit the lane's supervision
+// handoff and timing overrides. A fixture launches its own top-level lock and must not see them.
+test('891 fixture ignores the caller lock supervision and timing overrides', t => {
+  const inherited = {MADO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_CONTROL_FD: '99', MADO_HEAVY_FLOCK_EXPECTED: '1',
+    MDPRO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_LOCK_EXEC_SECS: '0'};
+  const saved = Object.fromEntries(Object.keys(inherited).map(name => [name, process.env[name]]));
+  t.after(() => { for (const [name, value] of Object.entries(saved)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+  Object.assign(process.env, inherited);
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^xcodegen=0$/m);
+  assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('891 fixture also drops the private status channel and wait override of its caller', t => {
+  const inherited = {MADO_HEAVY_STATUS_DIR: '/nonexistent', MADO_HEAVY_ATTEST_FD: '99', MADO_HEAVY_LOCK_WAIT_SECS: 'abc'};
+  const saved = Object.fromEntries(Object.keys(inherited).map(name => [name, process.env[name]]));
+  t.after(() => { for (const [name, value] of Object.entries(saved)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+  Object.assign(process.env, inherited);
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^xcodegen=0$/m);
+  assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
+  assert.match(f.summary, /^DONE$/m);
 });
