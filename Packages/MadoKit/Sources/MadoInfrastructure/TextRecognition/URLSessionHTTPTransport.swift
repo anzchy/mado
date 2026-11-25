@@ -1,4 +1,5 @@
 import Foundation
+import MadoApplication
 
 /// The network side of Cloud Recognition (ADR-0019): an ephemeral session with no cookies, credential storage or
 /// cache, which sends only the two Baidu requests `BaiduTextRecognitionProvider` shapes. Anything else is refused
