@@ -1,7 +1,7 @@
 import MadoCore
 import Testing
 
-@Test func issue868ClipboardEscapesHTMLAndPreservesEditedCells() throws {
+@Test func issue868HTMLDeclaresUTF8EscapesCellsAndKeepsEdgeSpacesWithPreWrap() throws {
     let table = RecognisedTable(rows: [
         ["Name", "说明"],
         ["Sensonor", "  corrected  "],
@@ -9,14 +9,18 @@ import Testing
         ["", ""],
     ])
     let payload = try TableClipboardPayload.build(from: table)
-    #expect(payload.html.hasPrefix("<table border=\"1\">"))
+    let preWrap = "style=\"white-space: pre-wrap\""
+    // UTF-8 is declared so HTML readers do not fall back to a legacy encoding for CJK; every cell is
+    // `white-space: pre-wrap` so edge spaces stay visible.
+    #expect(payload.html.hasPrefix("<meta charset=\"utf-8\"><table border=\"1\">"))
+    #expect(payload.html.hasSuffix("</table>"))
     #expect(payload.html.components(separatedBy: "<table").count == 2)
     #expect(payload.html.contains("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;quoted&#39; | pipe"))
     #expect(!payload.html.contains("<script>"))
-    #expect(payload.html.contains("<th>Name</th><th>说明</th>"))
-    #expect(payload.html.contains("<td>第一行<br>second line</td>"))
-    #expect(payload.html.contains("<td>  corrected  </td>"))
-    #expect(payload.html.contains("<td></td><td></td>"))
+    #expect(payload.html.contains("<tr><th \(preWrap)>Name</th><th \(preWrap)>说明</th></tr>"))
+    #expect(payload.html.contains("<td \(preWrap)>第一行<br>second line</td>"))
+    #expect(payload.html.contains("<td \(preWrap)>  corrected  </td>"))
+    #expect(payload.html.contains("<td \(preWrap)></td><td \(preWrap)></td>"))
     #expect(payload.tabSeparated.contains("Sensonor\t  corrected  "))
     #expect(payload.markdown.contains("Sensonor"))
     #expect(!payload.markdown.contains("Sensoror"))

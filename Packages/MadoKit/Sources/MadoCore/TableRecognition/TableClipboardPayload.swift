@@ -21,9 +21,11 @@ public struct TableClipboardPayload: Equatable, Sendable {
 
         let htmlRows = table.rows.enumerated().map { index, row in
             let tag = table.firstRowIsHeader && index == 0 ? "th" : "td"
-            return "<tr>" + row.map { "<\(tag)>\(htmlCell($0))</\(tag)>" }.joined() + "</tr>"
+            return "<tr>" + row.map { "<\(tag) style=\"white-space: pre-wrap\">\(htmlCell($0))</\(tag)>" }.joined() + "</tr>"
         }
-        let html = "<table border=\"1\">" + htmlRows.joined() + "</table>"
+        // UTF-8 is declared: HTML readers without a charset fall back to a legacy encoding and garble CJK.
+        // `white-space: pre-wrap` keeps a cell's edge and repeated spaces visible.
+        let html = "<meta charset=\"utf-8\"><table border=\"1\">" + htmlRows.joined() + "</table>"
         let tabSeparated = table.rows.map { $0.map(tsvCell).joined(separator: "\t") }.joined(separator: "\n")
         // A data-first table gets an all-empty header row. A real header that is entirely empty writes
         // `<!---->` (an empty HTML comment, rendered as nothing) in its first cell so the flag survives.
