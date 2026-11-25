@@ -1,0 +1,3 @@
+#!/bin/sh
+# #760/#891: fixed process snapshot for owner-gates.test.mjs (one competing heavy process).
+printf "101 /usr/bin/swift-frontend swift-frontend -frontend secret.swift\n102 /bin/sleep sleep 20\n"

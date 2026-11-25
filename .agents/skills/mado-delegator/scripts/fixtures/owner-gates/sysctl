@@ -1,0 +1,10 @@
+#!/bin/sh
+# #760/#891: injected machine facts for owner-gates.test.mjs; FAKE_* unset = a quiet machine, 'unreadable' = sysctl fails.
+case "$2" in
+ vm.loadavg) v=${FAKE_LOADAVG-"{ 4.20 3.00 2.00 }"};;
+ kern.memorystatus_level) v=${FAKE_MEM_LEVEL-55};;
+ kern.memorystatus_vm_pressure_level) v=${FAKE_PRESSURE-1};;
+ *) exit 1;;
+esac
+[ "$v" = unreadable ] && exit 1
+echo "$v"

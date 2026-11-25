@@ -75,9 +75,9 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
   exe('npm', '#!/bin/sh\nexit 0\n');
   exe('xcodegen', '#!/bin/sh\necho "held=$MADO_HEAVY_LOCK_HELD $*" >> "$XCODEGEN_MARKER"\nexit 0\n');
   exe('xcodebuild', '#!/bin/sh\necho "$1" >> "$XCODE_MARKER"\nexit 0\n');
-  // #760: injected machine facts; FAKE_* unset = a quiet machine, 'unreadable' = sysctl fails.
-  exe('sysctl', '#!/bin/sh\ncase "$2" in\n vm.loadavg) v=${FAKE_LOADAVG-"{ 4.20 3.00 2.00 }"};;\n kern.memorystatus_level) v=${FAKE_MEM_LEVEL-55};;\n kern.memorystatus_vm_pressure_level) v=${FAKE_PRESSURE-1};;\n *) exit 1;;\nesac\n[ "$v" = unreadable ] && exit 1\necho "$v"\n');
-  exe('fakeps', '#!/bin/sh\nprintf "101 /usr/bin/swift-frontend swift-frontend -frontend secret.swift\\n102 /bin/sleep sleep 20\\n"\n');
+  // #760: injected machine facts (fixtures/owner-gates/sysctl, fakeps). #891: linked, not written, so the probes
+  // exec an already assessed file instead of paying macOS's first-exec assessment inside their 5 s timeout.
+  for (const name of ['sysctl', 'fakeps']) fs.symlinkSync(fileURLToPath(new URL(`./fixtures/owner-gates/${name}`, import.meta.url)), path.join(bin, name));
   // #891: the competitor lane's test file only leaves a marker when it actually runs.
   fs.writeFileSync(path.join(dir, 'competitor.test.mjs'), `import fs from 'node:fs';\nfs.writeFileSync(process.env.COMPETITOR_MARKER, 'ran');\n`);
   const shell = path.join(dir, 'invoke.zsh');
@@ -343,4 +343,20 @@ test('891 a failing node lane under the lock is reported, not swallowed', t => {
   assert.equal(f.result.status, 1, f.result.stderr + f.summary);
   assert.match(f.summary, /^node=1$/m);
   assert.match(f.summary, /^DONE$/m);
+});
+
+test('891 static sysctl and ps fakes are linked checked-in executables', t => {
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  const fakes = path.join(root, '.agents/skills/mado-delegator/scripts/fixtures/owner-gates');
+  for (const name of ['sysctl', 'fakeps']) {
+    const linked = path.join(f.dir, 'bin', name);
+    assert.ok(fs.lstatSync(linked).isSymbolicLink(), `bin/${name} must be a symlink`);
+    assert.equal(fs.realpathSync(linked), fs.realpathSync(path.join(fakes, name)));
+    assert.ok(fs.statSync(linked).mode & 0o111, `${name} must be executable`);
+    const index = spawnSync('git', ['ls-files', '-s', '--', path.join(fakes, name)], { cwd: root, encoding: 'utf8' });
+    assert.match(index.stdout, /^100755 /, `${name} must be committed as 100755`);
+  }
+  assert.match(f.summary, /^load=4\.2 mem_free=55% pressure=1$/m);
+  assert.match(f.summary, /^competing-heavy=101:swift-frontend$/m);
 });

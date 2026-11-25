@@ -90,8 +90,8 @@ function freshScenario(scenario) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-fresh-codex-'));
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
-  fs.copyFileSync(path.join(freshDir, 'fake-herdr.cjs'), path.join(bin, 'herdr'));
-  fs.chmodSync(path.join(bin, 'herdr'), 0o755);
+  // #891: link the checked-in fake (mode 100755); a fresh copy pays ~400 ms of macOS first-exec assessment.
+  fs.symlinkSync(path.join(freshDir, 'fake-herdr.cjs'), path.join(bin, 'herdr'));
   const stateFile = path.join(dir, 'state.json');
   fs.writeFileSync(stateFile, JSON.stringify({ phase: 'old', name: 'gpt-auditor', status: scenario.nonIdle ? 'working' : 'idle',
     cwd: scenario.wrongCwd ? path.join(os.homedir(), 'wrong-worktree') : path.join(os.homedir(), 'fixture-worktree'),
@@ -101,7 +101,7 @@ function freshScenario(scenario) {
     MADO_FRESH_CONFIRM_SECS: '0.25', MADO_FRESH_POLL_SECS: '0.02' };
   const run = (...args) => spawnSync('/bin/bash', [freshHelper, ...args], { env, encoding: 'utf8', timeout: 10000 });
   const state = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  return { run, state, env };
+  return { run, state, env, bin };
 }
 const startWithPrompt = f => f.run('w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--prompt', 'Audit #804');
 
@@ -324,4 +324,16 @@ test('#804 followup explicit screen cwd validates both paths', () => {
   const prompted = idle.run('prompt-and-confirm', 'w1:p5', 'gpt-auditor', '--cwd', path.join(os.homedir(), 'fixture-worktree'), '--screen-cwd', screen, 'Audit #804');
   assert.equal(prompted.status, 0, prompted.stderr + prompted.stdout);
   assert.equal(idle.state().prompts, 1);
+});
+
+// #891: a copied fake is a new file; its first exec waits ~400 ms for macOS assessment and blew the 0.8 s budgets.
+test('891 fake herdr is the checked-in executable, linked not copied', () => {
+  const f = freshScenario({ dialog: false });
+  const herdr = path.join(f.bin, 'herdr');
+  const fake = path.join(freshDir, 'fake-herdr.cjs');
+  assert.ok(fs.lstatSync(herdr).isSymbolicLink(), 'bin/herdr must be a symlink');
+  assert.equal(fs.realpathSync(herdr), fs.realpathSync(fake));
+  assert.ok(fs.statSync(fake).mode & 0o111, 'fake-herdr.cjs must be executable');
+  const index = spawnSync('git', ['ls-files', '-s', '--', fake], { cwd: root, encoding: 'utf8' });
+  assert.match(index.stdout, /^100755 /, 'fake-herdr.cjs must be committed as 100755');
 });
