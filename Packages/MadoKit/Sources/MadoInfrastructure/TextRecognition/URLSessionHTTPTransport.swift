@@ -1,11 +1,13 @@
 import Foundation
 import MadoApplication
 
-/// The network side of Cloud Recognition (ADR-0019): an ephemeral session with no cookies, credential storage or
-/// cache, which sends only the two Baidu requests `BaiduTextRecognitionProvider` shapes. Anything else is refused
-/// before it reaches the network, and every redirect is refused (Baidu's documented endpoints never redirect), so a
-/// 30x cannot carry the keys or the image to another host. This transport cannot become a general network path.
+/// The network side of Cloud Recognition (ADR-0019, #890): an ephemeral session with no cookies, credential storage or
+/// cache. Each request names its destination: Baidu's two OCR endpoints, or the one table-recognition host the user
+/// configured and consented to, passed in by the caller with that request. A request to anything else is refused
+/// before a connection. A redirect is never followed: the 3xx is returned as the answer (see `HTTPTransport`), so it
+/// cannot carry the keys or the image to another host. This transport cannot become a general network path.
 public final class URLSessionHTTPTransport: HTTPTransport {
+    /// Why a request was refused before a connection. No case carries the request, its host, key or body.
     public enum Refusal: Error, Equatable { case notBaiduOCR, notAllowedHost, redirected }
 
     static let host = "aip.baidubce.com"
@@ -37,10 +39,16 @@ public final class URLSessionHTTPTransport: HTTPTransport {
     deinit { session.finishTasksAndInvalidate() }
 
     public func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
-        guard destination == .baiduOCR else { throw Refusal.notBaiduOCR }
-        guard let url = request.url, let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              parts.scheme == "https", parts.host == Self.host, parts.port == nil,
-              parts.user == nil, parts.password == nil, Self.paths.contains(parts.path) else { throw Refusal.notBaiduOCR }
+        guard let url = request.url, let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw refusal(for: destination)
+        }
+        switch destination {
+        case .baiduOCR:
+            guard parts.scheme == "https", parts.host == Self.host, parts.port == nil, parts.user == nil,
+                  parts.password == nil, Self.paths.contains(parts.path) else { throw Refusal.notBaiduOCR }
+        case .consentedHost(let host, let port):
+            guard Self.admits(parts, host: host, port: port) else { throw Refusal.notAllowedHost }
+        }
         var outgoing = request
         outgoing.timeoutInterval = timeout
         outgoing.httpShouldHandleCookies = false
@@ -49,9 +57,29 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         // The delegate refused to follow, so a 30x arrives here as the final answer; it is a failure, not a result.
         if let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode) { throw Refusal.redirected }
         // URLSession answers an https request with an HTTPURLResponse or an error; a custom protocol could not, so
-        // a bare URLResponse is still mapped to the provider's failure path rather than trapping.
+        // a bare URLResponse is still mapped to the services' failure path rather than trapping.
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         return HTTPResponse(statusCode: status, body: body)
+    }
+
+    private func refusal(for destination: HTTPDestination) -> Refusal {
+        destination == .baiduOCR ? .notBaiduOCR : .notAllowedHost
+    }
+
+    /// The consented host: https, no user or password, the same host after lowercasing and dropping one trailing dot
+    /// (the consent rule; an international name compares in the one spelling URLComponents decodes it to), and the
+    /// same port, where none means 443.
+    static func admits(_ parts: URLComponents, host: String, port: Int?) -> Bool {
+        guard parts.scheme?.lowercased() == "https", parts.user == nil, parts.password == nil,
+              let requestHost = parts.host else { return false }
+        let allowed = normalised(host)
+        return !allowed.isEmpty && normalised(requestHost) == allowed && (parts.port ?? 443) == (port ?? 443)
+    }
+
+    private static func normalised(_ host: String) -> String {
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        return host
     }
 }
 
