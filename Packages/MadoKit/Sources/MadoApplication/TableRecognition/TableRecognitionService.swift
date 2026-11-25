@@ -6,12 +6,20 @@ public struct TableRecognitionService: Sendable {
     private let settings: any TableRecognitionSettings
     private let credentials: any TableRecognitionCredentialStore
     private let transport: any HTTPTransport
+    /// Test seam: runs once the request is built, in the synchronous stretch before it is sent.
+    private let requestBuilt: @Sendable () -> Void
 
     public init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
                 transport: any HTTPTransport) {
+        self.init(settings: settings, credentials: credentials, transport: transport, requestBuilt: {})
+    }
+
+    init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
+         transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void) {
         self.settings = settings
         self.credentials = credentials
         self.transport = transport
+        self.requestBuilt = requestBuilt
     }
 
     public func recognise(_ image: Data) async -> TableRecognitionResult {
@@ -22,8 +30,10 @@ public struct TableRecognitionService: Sendable {
         }
     }
 
-    /// Sends once, never retries. A run cancelled while the reply was outstanding is cancelled, whatever came back.
+    /// Sends once, never retries. A run cancelled before the call, including while the request was being built,
+    /// sends nothing; one cancelled while the reply was outstanding is cancelled, whatever came back.
     private func send(_ request: URLRequest) async -> TableRecognitionResult {
+        if Task.isCancelled { return .cancelled }
         let result: TableRecognitionResult
         do {
             result = TableRecognitionReply.classify(try await transport.send(request))
@@ -55,8 +65,10 @@ public struct TableRecognitionService: Sendable {
         case .failure(let block): return .notSent(block)
         case .success(let type): mediaType = type
         }
-        return .ready(TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
-                                                   mediaType: mediaType))
+        let request = TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
+                                                   mediaType: mediaType)
+        requestBuilt()
+        return .ready(request)
     }
 
     /// The Settings Test: sends the built-in sample table, not the user's image, under the same switch, consent and

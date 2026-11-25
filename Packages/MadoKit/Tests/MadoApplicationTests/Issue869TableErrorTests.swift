@@ -175,3 +175,18 @@ func issue869WI3FailureDescriptionsRedactSecrets(status: Int, expected: TableRec
         #expect(!text.contains("sk-SECRET-869") && !text.contains(prefix))
     }
 }
+
+// Fix round 1 (gpt M2): a run cancelled after the key read, while the image is checked and the request built (no
+// suspension point), must not upload. The seam cancels the running task at the end of that synchronous stretch.
+@Test(.timeLimit(.minutes(2)), arguments: ["recognise", "testService"])
+func issue869Fix1CancelledWhileBuildingRequestSendsNothing(entry: String) async {
+    let transport = RecordingTransport869()
+    let service = TableRecognitionService(settings: FakeTableSettings869(), credentials: FakeTableKeys869(),
+                                          transport: transport,
+                                          requestBuilt: { withUnsafeCurrentTask { $0?.cancel() } })
+    let cancelled: Bool = await Task {
+        entry == "recognise" ? await service.recognise(png) == .cancelled : await service.testService() == .cancelled
+    }.value
+    #expect(cancelled, "\(entry)")
+    #expect(await transport.callCount == 0, "\(entry)")
+}
