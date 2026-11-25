@@ -6,7 +6,7 @@ import MadoApplication
 /// before it reaches the network, and every redirect is refused (Baidu's documented endpoints never redirect), so a
 /// 30x cannot carry the keys or the image to another host. This transport cannot become a general network path.
 public final class URLSessionHTTPTransport: HTTPTransport {
-    public enum Refusal: Error, Equatable { case notBaiduOCR, redirected }
+    public enum Refusal: Error, Equatable { case notBaiduOCR, notAllowedHost, redirected }
 
     static let host = "aip.baidubce.com"
     /// The provider's two endpoints (defined once there).
@@ -36,7 +36,8 @@ public final class URLSessionHTTPTransport: HTTPTransport {
 
     deinit { session.finishTasksAndInvalidate() }
 
-    public func send(_ request: URLRequest) async throws -> HTTPResponse {
+    public func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
+        guard destination == .baiduOCR else { throw Refusal.notBaiduOCR }
         guard let url = request.url, let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               parts.scheme == "https", parts.host == Self.host, parts.port == nil,
               parts.user == nil, parts.password == nil, Self.paths.contains(parts.path) else { throw Refusal.notBaiduOCR }

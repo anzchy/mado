@@ -107,7 +107,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.httpBody = Data("grant_type=client_credentials&client_id=\(Self.form(credentials.apiKey))&client_secret=\(Self.form(credentials.secretKey))".utf8)
             let response: HTTPResponse
-            do { response = try await transport.send(request) }
+            do { response = try await transport.send(request, to: .baiduOCR) }
             catch { throw Self.transportFailure(error, stage: .token) }
             let payload = try Self.object(response, stage: .token)
             if payload["error"] != nil || payload["error_code"] != nil {
@@ -141,7 +141,7 @@ public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     }
 
     private func send(_ request: URLRequest) async throws(Failure) -> HTTPResponse {
-        do { return try await transport.send(request) }
+        do { return try await transport.send(request, to: .baiduOCR) }
         catch { throw Self.transportFailure(error, stage: .recognition) }
     }
 

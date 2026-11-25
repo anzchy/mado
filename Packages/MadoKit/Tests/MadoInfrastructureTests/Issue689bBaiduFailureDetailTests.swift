@@ -14,7 +14,7 @@ import MadoApplication
 private actor Replies: HTTPTransport {
     var replies: [Result<HTTPResponse, any Error>]
     init(_ replies: [Result<HTTPResponse, any Error>]) { self.replies = replies }
-    func send(_ request: URLRequest) async throws -> HTTPResponse { try replies.removeFirst().get() }
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse { try replies.removeFirst().get() }
 }
 private final class Details: @unchecked Sendable {
     private let lock = NSLock()
