@@ -161,8 +161,10 @@ if node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-no
   echo "node-${node_suites[1]}" >> "$s" || summary_error
   # #891: one node lane at a time on the shared heavy lock, one test file at a time. Fresh executables written
   # by these tests wait for macOS assessment, so overlapping lanes turned short test deadlines into failures.
-  # The lane's tests start their own top-level supervisors (as on CI, scripts/tdd/node-lane.mjs), so the lock's
-  # handoff is removed at this boundary; the tests then see the same environment as an unlocked run.
+  # The lane's tests start their own top-level supervisors, so the four handoff variables are removed at this
+  # boundary (CI's scripts/tdd/node-lane.mjs strips its own set for the same reason); without them the inherited
+  # control socket is unused, and the tests see the same environment as an unlocked run. A test that used the
+  # default lock would wait behind this lane until the lock's 1800 s budget ends the lane (none does today).
   $hl env -u MADO_HEAVY_LOCK_HELD -u MADO_HEAVY_CONTROL_FD -u MADO_HEAVY_FLOCK_EXPECTED -u MDPRO_HEAVY_LOCK_HELD \
     node --test --test-concurrency=1 --test-reporter=spec "${(@)node_suites[2,-1]}" > "$o/$p-node.log" 2>&1
   lane_result node $?
