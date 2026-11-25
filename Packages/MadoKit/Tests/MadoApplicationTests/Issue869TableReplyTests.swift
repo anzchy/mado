@@ -162,11 +162,14 @@ func issue869WI5ClassificationPrecedence() async {
     let contents: [(String, String?)] = [("valid", "| A | B |\n|---|---|\n| 1 | 2 |"), ("empty", ""), ("null", nil),
                                          ("prose", "Sorry, no table here."),
                                          ("ragged", "| A | B | C |\n|---|---|---|\n| 1 | 2 |")]
-    for finish in ["stop", "length", "content_filter", nil] as [String?] {
+    // Only "stop" certifies a complete reply (fix round 1, gpt M3): a missing or null reason, or DeepSeek's
+    // insufficient_system_resource, is incomplete; content_filter and any reason we do not know are other.
+    for finish in ["stop", "length", "content_filter", nil, "insufficient_system_resource", "tool_calls", "STOP"]
+        as [String?] {
         for (name, content) in contents {
             let expected: TableRecognitionResult =
-                finish == "length" ? .failed(.incomplete)
-                : finish == "content_filter" ? .failed(.other)
+                finish == nil || finish == "length" || finish == "insufficient_system_resource" ? .failed(.incomplete)
+                : finish != "stop" ? .failed(.other)
                 : name == "valid" ? .table(rows: [["A", "B"], ["1", "2"]])
                 : name == "ragged" ? .failed(.incomplete)
                 : .failed(.noTable)
@@ -186,4 +189,16 @@ func issue869WI5ClassificationPrecedence() async {
 ])
 func issue869WI5RaggedAndMissingTableReplies(content: String, expected: TableRecognitionFailure) async {
     #expect(await recognise(content: content) == .failed(expected), "\(content)")
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue869Fix1TableWithoutFinishReasonIsIncomplete() async {
+    let message: [String: Any] = ["role": "assistant", "content": goodTable869]
+    let body = try! JSONSerialization.data(withJSONObject: ["choices": [["index": 0, "message": message]]])
+    let transport = RecordingTransport869([.response(HTTPResponse(statusCode: 200, body: body))])
+    #expect(await makeService869(transport: transport).recognise(png) == .failed(.incomplete))
+    #expect(await recognise(content: goodTable869, finish: nil) == .failed(.incomplete))
+    #expect(await recognise(content: goodTable869, finish: "insufficient_system_resource") == .failed(.incomplete))
+    #expect(await recognise(content: goodTable869, finish: "tool_calls") == .failed(.other))
+    #expect(await recognise(content: goodTable869, finish: "stop") == .table(rows: [["A", "B"], ["1", "2"]]))
 }

@@ -47,11 +47,12 @@ enum TableRecognitionReply {
               let message = choice["message"] as? [String: Any] else { return .failed(.other) }
         let content = message["content"]
         guard content == nil || content is NSNull || content is String else { return .failed(.other) }
-        // A cut-off reply is never a table, even when the part that arrived parses (AC-5).
+        // Only a reply the service says it finished certifies a table (AC-5). A cut-off reply, or one that does not
+        // say how it ended, is incomplete even when the part that arrived parses; any other ending is not a table.
         switch choice["finish_reason"] as? String {
-        case "length": return .failed(.incomplete)
-        case "content_filter": return .failed(.other)
-        default: break
+        case "stop": break
+        case nil, "length", "insufficient_system_resource": return .failed(.incomplete)
+        default: return .failed(.other)
         }
         guard let text = content as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failed(.noTable)
