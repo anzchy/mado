@@ -16,6 +16,9 @@ actor RecordingTransport869: HTTPTransport {
     private var gate: CheckedContinuation<Void, Never>?
     private var enteredWaiter: CheckedContinuation<Void, Never>?
     private var hasEntered = false
+    /// Whether the calling task was already cancelled when a held call was released: the cancellation reached the
+    /// transport call itself, not only the service's result.
+    private(set) var sawCancellation = false
 
     init(_ script: [Reply] = [], fallback: Reply = .response(goodReply869()), gated: Bool = false) {
         self.script = script
@@ -34,6 +37,7 @@ actor RecordingTransport869: HTTPTransport {
                 enteredWaiter?.resume()
                 enteredWaiter = nil
             }
+            sawCancellation = sawCancellation || Task.isCancelled
         }
         let reply = script.isEmpty ? fallback : script.removeFirst()
         switch reply {

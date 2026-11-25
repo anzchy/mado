@@ -11,8 +11,9 @@ private let customKeys: Set<String> = ["model", "messages", "stream"]
 func issue869WI1DeepSeekRequestExactShape() async throws {
     let transport = RecordingTransport869()
     let png = makePNG869(3, 2)
-    _ = await makeService869(transport: transport).recognise(png)
+    let result = await makeService869(transport: transport).recognise(png)
 
+    #expect(result == .table(rows: [["A", "B"], ["1", "2"]]))
     #expect(await transport.callCount == 1)
     let request = try #require(await transport.requests.first)
     #expect(request.httpMethod == "POST")
@@ -48,9 +49,10 @@ func issue869WI1CustomRequestCarriesOnlyStandardFields() async throws {
     let settings = FakeTableSettings869(.options869(endpoint: endpoint, consentHost: "gw.example.com"))
     let transport = RecordingTransport869()
     let png = makePNG869(3, 2)
-    _ = await makeService869(settings: settings, keys: FakeTableKeys869([endpoint: "sk-custom-ä"]),
-                             transport: transport).recognise(png)
+    let result = await makeService869(settings: settings, keys: FakeTableKeys869([endpoint: "sk-custom-ä"]),
+                                      transport: transport).recognise(png)
 
+    #expect(result == .table(rows: [["A", "B"], ["1", "2"]]))
     #expect(await transport.callCount == 1)
     let request = try #require(await transport.requests.first)
     #expect(request.httpMethod == "POST")

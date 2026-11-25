@@ -215,4 +215,5 @@ func issue869WI6CancelledWhileAwaitingReplyIsCancelled() async {
     await transport.open()
     #expect(await task.value == .cancelled)
     #expect(await transport.callCount == 1)
+    #expect(await transport.sawCancellation, "the cancellation must reach the transport call")
 }
