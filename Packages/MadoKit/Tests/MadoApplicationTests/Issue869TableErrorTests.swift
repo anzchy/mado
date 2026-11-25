@@ -5,7 +5,9 @@ import Testing
 // #869 WI-3: failures are classified (AC-4), never retried, and cancellation is its own result.
 
 private let png = makePNG869(3, 2)
-private let imageBody = #"{"error":{"message":"bad image"}}"#
+private let imageBody = #"{"error":{"message":"This model does not support image input"}}"#
+/// Mentions "image" without saying the model cannot read images: not a guess at the cause (grilling decision 7).
+private let vagueImageBody = #"{"error":{"message":"bad image"}}"#
 
 private func run(_ reply: RecordingTransport869.Reply) async -> (TableRecognitionResult, Int) {
     let transport = RecordingTransport869([reply])
@@ -43,10 +45,10 @@ func issue869WI3StatusClassTable(status: Int, body: String, expected: TableRecog
 func issue869WI3StatusSweepClassifiesEveryCode() async {
     let tableBody = String(decoding: chatReply869(content: goodTable869), as: UTF8.self)
     for status in 100...599 where status != 200 && !(300...399).contains(status) {
-        for (name, body) in [("image", imageBody), ("table", tableBody)] {
+        for (name, body) in [("image", imageBody), ("vague", vagueImageBody), ("table", tableBody)] {
             let expected: TableRecognitionFailure = switch status {
             case 401, 403: .keyRejected
-            case 404: .addressUnreachable
+            case 404: name == "table" ? .addressUnreachable : .other
             case 400, 422: name == "image" ? .modelCannotReadImages : .other
             case 402, 429: .quotaOrBalance
             case 413: .tooLarge
@@ -189,4 +191,26 @@ func issue869Fix1CancelledWhileBuildingRequestSendsNothing(entry: String) async 
     }.value
     #expect(cancelled, "\(entry)")
     #expect(await transport.callCount == 0, "\(entry)")
+}
+
+// Fix round 1 (opus M1, grilling decision 7): an error is classified only on what it says, never on a guess. A
+// message that merely mentions images is other; a 404 that names an error (a wrong model) is other, not a wrong
+// address. A 404 without an error object still means the address has no such endpoint.
+@Test(.timeLimit(.minutes(2)), arguments: [
+    (400, #"{"error":{"message":"bad image"}}"#, TableRecognitionFailure.other),
+    (400, #"{"error":{"message":"image too large"}}"#, .other),
+    (422, #"{"error":{"message":"failed to decode image"}}"#, .other),
+    (400, #"{"error":{"message":"invalid image_url: not a data URL"}}"#, .other),
+    (400, #"{"error":{"message":"Images are not supported by this model"}}"#, .modelCannotReadImages),
+    (400, #"{"error":{"message":"model deepseek-x doesn't support image input"}}"#, .modelCannotReadImages),
+    (422, #"{"error":{"message":"unknown variant image_url, expected text"}}"#, .modelCannotReadImages),
+    (404, #"{"error":{"message":"The model `vision-y` does not exist","type":"invalid_request_error","code":"model_not_found"}}"#, .other),
+    (404, #"{"error":{"message":"Not found"}}"#, .other),
+    (404, "<html>Not Found</html>", .addressUnreachable),
+    (404, "", .addressUnreachable),
+])
+func issue869Fix1ErrorClassesDoNotGuess(status: Int, body: String, expected: TableRecognitionFailure) async {
+    let (result, calls) = await run(reply869(status, body))
+    #expect(result == .failed(expected), "\(status) \(body)")
+    #expect(calls == 1)
 }

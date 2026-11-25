@@ -9,9 +9,11 @@ enum TableRecognitionReply {
         // means the address is not the service's own endpoint.
         case 300...399: return .failed(.addressUnreachable)
         case 401, 403: return .failed(.keyRejected)
-        case 404: return .failed(.addressUnreachable)
-        case 400, 422: return .failed(errorMessage(response.body)?.lowercased().contains("image") == true
-                                      ? .modelCannotReadImages : .other)
+        // A 404 that names an error (for example a model that does not exist) is not a wrong address; one without
+        // an error object means the address has no such endpoint.
+        case 404: return .failed(errorMessage(response.body) == nil ? .addressUnreachable : .other)
+        case 400, 422: return .failed(saysModelCannotReadImages(errorMessage(response.body)) ? .modelCannotReadImages
+                                                                                              : .other)
         case 402, 429: return .failed(.quotaOrBalance)
         case 413: return .failed(.tooLarge)
         default: return .failed(.other)
@@ -38,6 +40,17 @@ enum TableRecognitionReply {
     private static func errorMessage(_ body: Data) -> String? {
         let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
         return (object?["error"] as? [String: Any])?["message"] as? String
+    }
+
+    /// Only an error that says the model does not take images: "does not support image(s)", "image(s) … not
+    /// supported", or DeepSeek's text-only "unknown variant `image_url`". A message that merely mentions an image
+    /// (a bad, large or undecodable one) is not this class; there is no guessing (grilling decision 7).
+    private static func saysModelCannotReadImages(_ message: String?) -> Bool {
+        guard let message else { return false }
+        let patterns = [#"\b(does not|doesn't|do not|don't) support (image|vision)"#,
+                        #"\bimages? (input )?(is |are )?not supported"#,
+                        #"unknown variant [`'"]?image_url"#]
+        return patterns.contains { message.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
     }
 
     /// A 200 body: the first choice's content and finish reason.
