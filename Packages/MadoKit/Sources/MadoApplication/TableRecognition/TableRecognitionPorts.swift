@@ -50,7 +50,7 @@ public protocol TableRecognitionCredentialStore: Sendable {
 }
 
 /// Why nothing was sent. Every case means zero transport calls.
-public enum TableRecognitionBlock: Sendable, Equatable {
+public enum TableRecognitionBlock: Error, Sendable, Equatable {
     case cloudOff
     case invalidEndpoint
     case consentNotAsked

@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 /// Builds the one chat-completions request a Recognise Table run sends (#869 AC-1, spec #866 request contract).
 /// DeepSeek: thinking disabled, temperature 0, image detail "original". Custom: standard OpenAI-compatible fields
@@ -60,5 +61,57 @@ enum TableImageFormat {
             return "image/webp"
         }
         return nil
+    }
+
+    /// Width and height from the file's header, without decoding pixels; nil when ImageIO cannot read them.
+    static func pixelSize(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int, width > 0, height > 0 else { return nil }
+        return (width, height)
+    }
+}
+
+/// The checks before anything is sent (#869 AC-2). Each returns the reason a request must not go out.
+enum TableRecognitionGuards {
+    /// DeepSeek's limit on one image: 32 MiB of base64 and 8192 px per side (plan, API facts read 2026-11-24).
+    /// Custom endpoints get the same limits. An image over them is refused, never downscaled.
+    static let maxEncodedImageBytes = 32 * 1024 * 1024
+    static let maxSide = 8192
+
+    /// A usable address: https, a host, no user or password, no query or fragment. Custom also needs a model.
+    static func validURL(for endpoint: TableRecognitionEndpoint) -> URL? {
+        guard let parts = URLComponents(string: endpoint.baseURL), parts.scheme?.lowercased() == "https",
+              let host = parts.host, !host.isEmpty, parts.user == nil, parts.password == nil,
+              parts.query == nil, parts.fragment == nil, let base = parts.url else { return nil }
+        if endpoint.preset == .custom, endpoint.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return nil
+        }
+        return TableRecognitionRequest.url(base: base)
+    }
+
+    /// Hosts compare without case and with one trailing dot dropped; the port is not part of the consent.
+    static func normalisedHost(_ host: String) -> String {
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        return host
+    }
+
+    static func consentBlock(_ record: TableRecognitionConsentRecord?, url: URL) -> TableRecognitionBlock? {
+        guard let record else { return .consentNotAsked }
+        guard normalisedHost(record.host) == normalisedHost(url.host ?? "") else { return .consentHostChanged }
+        return record.granted ? nil : .consentDeclined
+    }
+
+    /// The media type when the image is a supported format within the limits, or why it cannot be sent.
+    static func image(_ data: Data) -> Result<String, TableRecognitionBlock> {
+        guard let mediaType = TableImageFormat.mediaType(of: data),
+              let size = TableImageFormat.pixelSize(of: data) else { return .failure(.unsupportedImage) }
+        let encodedBytes = (data.count + 2) / 3 * 4
+        guard encodedBytes <= maxEncodedImageBytes, max(size.width, size.height) <= maxSide else {
+            return .failure(.imageTooLarge)
+        }
+        return .success(mediaType)
     }
 }
