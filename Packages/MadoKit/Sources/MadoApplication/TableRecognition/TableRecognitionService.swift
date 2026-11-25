@@ -68,12 +68,10 @@ public struct TableRecognitionService: Sendable {
         }
         let request = TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
                                                    mediaType: mediaType)
-        // The transport admits this host only (#890): named here, after the consent guard, from the URL just built.
-        guard let parts = URLComponents(url: target.url, resolvingAgainstBaseURL: false), let host = parts.host else {
-            return .notSent(.invalidEndpoint)
-        }
+        // The transport admits only this host and port (#890): the consented host, named after the consent guard.
+        let port = URLComponents(url: target.url, resolvingAgainstBaseURL: false)?.port
         requestBuilt()
-        return .ready(request, .consentedHost(host: host, port: parts.port))
+        return .ready(request, .consentedHost(host: target.host, port: port))
     }
 
     /// The Settings Test: sends the built-in sample table, not the user's image, under the same switch, consent and
