@@ -59,7 +59,19 @@ public struct TableRecognitionService: Sendable {
                                                    mediaType: mediaType))
     }
 
+    /// The Settings Test: sends the built-in sample table, not the user's image, under the same switch, consent and
+    /// key rules as a real run, and passes only when the sample's cells come back (AC-6). Failures keep their class.
     public func testService() async -> TableRecognitionTestResult {
-        .failed(.other)
+        switch await prepare(TableRecognitionSample.png) {
+        case .notSent(let block): return .notSent(block)
+        case .cancelled: return .cancelled
+        case .ready(let request):
+            switch await send(request) {
+            case .table(let rows): return TableRecognitionSample.matches(rows) ? .passed : .failed(.other)
+            case .notSent(let block): return .notSent(block)
+            case .failed(let failure): return .failed(failure)
+            case .cancelled: return .cancelled
+            }
+        }
     }
 }

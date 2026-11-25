@@ -42,6 +42,8 @@ actor RecordingTransport869: HTTPTransport {
         }
     }
 
+    var didEnter: Bool { hasEntered }
+
     /// Waits until a call is held at the gate.
     func entered() async {
         if hasEntered { return }
@@ -269,4 +271,20 @@ struct SplitMix869: RandomNumberGenerator {
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)
     }
+}
+
+actor Flag869 {
+    private(set) var value = false
+    func set() { value = true }
+}
+
+/// Waits until the transport holds a call, or the task has finished without sending; true when a call is held.
+func awaitHeldSend869<T: Sendable>(_ transport: RecordingTransport869, _ task: Task<T, Never>) async -> Bool {
+    let done = Flag869()
+    Task { _ = await task.value; await done.set() }
+    while await !transport.didEnter {
+        if await done.value { return false }
+        await Task.yield()
+    }
+    return true
 }
