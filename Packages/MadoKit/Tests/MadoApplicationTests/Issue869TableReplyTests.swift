@@ -89,10 +89,6 @@ func issue869WI5AlignedSeparatorAndSingleColumn() async {
     #expect(await recognise(content: "| h |\n|---|\n| v |") == .table(rows: [["h"], ["v"]]))
 }
 
-@Test(.timeLimit(.minutes(2)))
-func issue869WI5HeaderOnlyTableIsOneRow() async {
-    #expect(await recognise(content: "| A | B |\n|---|---|") == .table(rows: [["A", "B"]]))
-}
 
 @Test(.timeLimit(.minutes(2)))
 func issue869WI5SeparatorWidthMismatchIsIncomplete() async {
@@ -104,11 +100,6 @@ func issue869WI5CRLFRepliesParse() async {
     #expect(await recognise(content: "| A | B |\r\n|---|---|\r\n| 1 | 2 |\r\n") == .table(rows: [["A", "B"], ["1", "2"]]))
 }
 
-@Test(.timeLimit(.minutes(2)))
-func issue869WI5FirstOfTwoTablesIsReturned() async {
-    let content = "| A | B |\n|---|---|\n| 1 | 2 |\n\nAnd another:\n\n| C |\n|---|\n| 3 |"
-    #expect(await recognise(content: content) == .table(rows: [["A", "B"], ["1", "2"]]))
-}
 
 /// Writes rows as a Markdown table the way a model might, with random padding, outer pipes and wrapping.
 private func markdown(_ rows: [[String]], _ rng: inout SplitMix869) -> String {
@@ -201,4 +192,35 @@ func issue869Fix1TableWithoutFinishReasonIsIncomplete() async {
     #expect(await recognise(content: goodTable869, finish: "insufficient_system_resource") == .failed(.incomplete))
     #expect(await recognise(content: goodTable869, finish: "tool_calls") == .failed(.other))
     #expect(await recognise(content: goodTable869, finish: "stop") == .table(rows: [["A", "B"], ["1", "2"]]))
+}
+
+// Fix round 1 (opus M3): a table broken by a blank or prose line with more pipe rows after it would come back with
+// rows missing, so it is incomplete, never a shorter table. A second table after the first is the same case.
+@Test(.timeLimit(.minutes(2)), arguments: [
+    "| A | B |\n|---|---|\n| 1 | 2 |\n\n| 3 | 4 |",
+    "| A | B |\n|---|---|\n| 1 | 2 |\n(continued)\n| 3 | 4 |",
+    "| A | B |\n|---|---|\n| 1 | 2 |\n   \n| 3 | 4 |\n| 5 | 6 |",
+    "A | B\n---|---\n1 | 2\n\n3 | 4",
+    "| A | B |\n|---|---|\n| 1 | 2 |\n\nAnd another:\n\n| C |\n|---|\n| 3 |",
+    "```\n| A | B |\n|---|---|\n| 1 | 2 |\n```\n```\n| 3 | 4 |\n```",
+])
+func issue869Fix1TableBrokenByALineIsIncomplete(content: String) async {
+    #expect(await recognise(content: content) == .failed(.incomplete), "\(content)")
+}
+
+// A table ended by prose or a fence with nothing tabular after it is still the whole table.
+@Test(.timeLimit(.minutes(2)), arguments: [
+    "| A | B |\n|---|---|\n| 1 | 2 |\n\nThat is all.",
+    "| A | B |\n|---|---|\n| 1 | 2 |\n```\n\nNote: cell B2 was faint.",
+    "| A | B |\n|---|---|\n| 1 | 2 |\n\n\n",
+])
+func issue869Fix1TableFollowedOnlyByProseIsWhole(content: String) async {
+    #expect(await recognise(content: content) == .table(rows: [["A", "B"], ["1", "2"]]), "\(content)")
+}
+
+// Fix round 1 (opus L5): a header with no data rows carries nothing to paste, so it is no table (AC-4's no-table
+// class), with or without prose after it.
+@Test(.timeLimit(.minutes(2)), arguments: ["| A | B |\n|---|---|", "A | B\n---|---\n\nNo rows were legible."])
+func issue869Fix1HeaderOnlyTableIsNoTable(content: String) async {
+    #expect(await recognise(content: content) == .failed(.noTable), "\(content)")
 }

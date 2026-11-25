@@ -1,6 +1,7 @@
 import Foundation
 
-/// Reads the first Markdown table in a model's reply (#869 AC-5). Fences and prose around it are ignored. `\|` is a
+/// Reads the one Markdown table in a model's reply (#869 AC-5). Fences and prose around it are ignored; pipe rows
+/// after a break, or a header with no rows, are not a whole table. `\|` is a
 /// literal pipe and `<br>` (any case, `<br/>`, `<br />`) a line break inside a cell. Whether rows carry outer
 /// pipes is read from the separator line, the one row whose cells can never be empty.
 enum MarkdownTableReader {
@@ -17,13 +18,17 @@ enum MarkdownTableReader {
         let header = cells(lines[start], leading: leading, trailing: trailing)
         guard cells(separator, leading: leading, trailing: trailing).count == header.count else { return .incomplete }
         var rows = [header]
-        for line in lines[(start + 2)...] {
-            guard hasPipe(line) else { break }
-            let row = cells(line, leading: leading, trailing: trailing)
+        var end = lines.endIndex
+        for index in (start + 2)..<lines.endIndex {
+            guard hasPipe(lines[index]) else { end = index; break }
+            let row = cells(lines[index], leading: leading, trailing: trailing)
             guard row.count == header.count else { return .incomplete }
             rows.append(row)
         }
-        return .rows(rows)
+        // A blank or prose line with more pipe rows after it broke the table: what was read is not all of it.
+        if lines[end...].contains(where: hasPipe) { return .incomplete }
+        // A header alone carries no cells to paste.
+        return rows.count > 1 ? .rows(rows) : .noTable
     }
 
     private static func hasPipe(_ line: String) -> Bool { split(line).count > 1 }
