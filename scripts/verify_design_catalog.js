@@ -17,7 +17,7 @@ const BRANCH_PLAYS={
  'J4-settings':[['grid-display','settings?section=display','grid-display']],
  'J4-shortcuts':[['grid-light','shortcuts','grid-light']],
  'J5-bar-off':[['settings?section=capture','settings?section=capture&bar=off','settings?section=capture']],
- 'J5-ocr':[['settings?section=capture','settings?section=capture&scroll=ocr','settings?section=capture']],
+ 'J5-ocr':[['settings?section=capture','settings?section=capture&scroll=cloud','settings?section=capture']],
  'J5-denied':[['capture-bar','capture-bar?state=denied','capture-bar']],
  'J5-collapse':[['capture-bar','capture-bar?state=collapsed','capture-bar']],
  'J5-text':[['capture-bar','capture-thumbnail?kind=text','capture-bar']],
