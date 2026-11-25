@@ -5,6 +5,9 @@ enum TableRecognitionReply {
     static func classify(_ response: HTTPResponse) -> TableRecognitionResult {
         switch response.statusCode {
         case 200: return reply(response.body)
+        // The service never follows a redirect: the image and key go only to the configured host (AC-3). A 3xx
+        // means the address is not the service's own endpoint.
+        case 300...399: return .failed(.addressUnreachable)
         case 401, 403: return .failed(.keyRejected)
         case 404: return .failed(.addressUnreachable)
         case 400, 422: return .failed(errorMessage(response.body)?.lowercased().contains("image") == true
