@@ -8,7 +8,8 @@
 # Exit 1: one or more lanes failed; every lane still runs and the completed summary prints to stdout.
 # A summary without DONE means the run died; treat it as no evidence. Exit 2: bad worktree, head mismatch, tracked
 # changes, or a rebase/merge/cherry-pick/revert in progress (summary says "refused: …" and has no DONE).
-# The Swift, xcodegen, Xcode build, App test and browser design jobs go through the worktree's scripts/heavy-lock.sh.
+# The Swift, xcodegen, Xcode build, App test, node test and browser design jobs go through the worktree's
+# scripts/heavy-lock.sh; the node lane runs one file at a time (--test-concurrency=1).
 # Preflight checks npm and Playwright prerequisites, then load, memory and competing heavy process names/PIDs
 # before any lane. On this four-performance-core mini defaults are load>6, free memory<25%, or VM pressure>1;
 # OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE, OWNER_GATES_MAX_PRESSURE tune them. MADO_GATES_PREFLIGHT=off
@@ -158,7 +159,15 @@ fi
 if node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-node.log"); then
   node_suites=("${(@f)node_list}")
   echo "node-${node_suites[1]}" >> "$s" || summary_error
-  node --test --test-reporter=spec "${(@)node_suites[2,-1]}" > "$o/$p-node.log" 2>&1; lane_result node $?
+  # #891: one node lane at a time on the shared heavy lock, one test file at a time. Fresh executables written
+  # by these tests wait for macOS assessment, so overlapping lanes turned short test deadlines into failures.
+  # The lane's tests start their own top-level supervisors, so the four handoff variables are removed at this
+  # boundary (CI's scripts/tdd/node-lane.mjs strips its own set for the same reason); without them the inherited
+  # control socket is unused, and the tests see the same environment as an unlocked run. A test that used the
+  # default lock would wait behind this lane until the lock's 1800 s budget ends the lane (none does today).
+  $hl env -u MADO_HEAVY_LOCK_HELD -u MADO_HEAVY_CONTROL_FD -u MADO_HEAVY_FLOCK_EXPECTED -u MDPRO_HEAVY_LOCK_HELD \
+    node --test --test-concurrency=1 --test-reporter=spec "${(@)node_suites[2,-1]}" > "$o/$p-node.log" 2>&1
+  lane_result node $?
 else
   echo "node: cannot list the node lane (owner-gates-tools.mjs node-suites failed)" >> "$o/$p-node.log"
   lane_result node 70

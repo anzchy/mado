@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { fixtureEnv } from '../../../../scripts/tdd/fixture-env.mjs';
 
 const root = fileURLToPath(new URL('../../../..', import.meta.url));
 const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
@@ -46,7 +47,19 @@ else if(process.argv[2]==='scripts/tdd/unit-lane.mjs'){
  else import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1,verifyCoverage:false});});
 }
 else if(process.argv[2]==='scripts/ci/package-coverage-local.mjs'){require('fs').appendFileSync(process.env.EXPORT_MARKER,'evaluate\\n');console.log('Package: lines ${covered}/2; functions ${covered}/2; raw functions ${covered}/2; exceptions 0; eligible functions ${covered}/2');console.log('Coverage gate: ${covered === 2 ? 'PASS' : 'FAIL'}');process.exit(${covered === 2 ? 0 : 1});}
-else if(process.argv[2]==='--test'){require('fs').writeFileSync(process.env.NODE_MARKER,process.argv.slice(2).join('\\n'));}
+else if(process.argv[2]==='--test'){
+ const fs=require('fs');fs.writeFileSync(process.env.NODE_MARKER,process.argv.slice(2).join('\\n'));
+ const handoff=['MADO_HEAVY_LOCK_HELD','MADO_HEAVY_CONTROL_FD','MADO_HEAVY_FLOCK_EXPECTED','MDPRO_HEAVY_LOCK_HELD'];
+ const record={argv:process.argv.slice(2),env:Object.fromEntries(handoff.map(k=>[k,process.env[k]??'']))};
+ if(process.env.PROBE_COMPETITOR==='1'){
+  // #891: a second node lane started now, on this fixture's heavy.lock only (mdpro off), must wait, not run.
+  const env={...process.env,MADO_MDPRO_LOCK:'off',MADO_HEAVY_LOCK_WAIT_SECS:'1'};for(const k of handoff)delete env[k];
+  const c=require('child_process').spawnSync(process.env.COMPETITOR_LOCK,[process.execPath,'--test',process.env.COMPETITOR_SCRIPT],{env,encoding:'utf8',timeout:30000});
+  record.competitor={status:c.status,stderr:c.stderr};
+ }
+ fs.appendFileSync(process.env.NODE_RECORDS,JSON.stringify(record)+'\\n');
+ if(process.env.MODE==='node-fail')process.exit(1);
+}
 else if(process.argv[2]==='scripts/tdd/app-lane.mjs'){
  const hosted=process.argv[3]?.includes('Hosted') ?? false;
  if(process.env.MODE==='app-hosted-hung'&&hosted){console.log('test runner hung before establishing connection');process.exit(70);}
@@ -62,20 +75,24 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
   exe('npm', '#!/bin/sh\nexit 0\n');
   exe('xcodegen', '#!/bin/sh\necho "held=$MADO_HEAVY_LOCK_HELD $*" >> "$XCODEGEN_MARKER"\nexit 0\n');
   exe('xcodebuild', '#!/bin/sh\necho "$1" >> "$XCODE_MARKER"\nexit 0\n');
-  // #760: injected machine facts; FAKE_* unset = a quiet machine, 'unreadable' = sysctl fails.
-  exe('sysctl', '#!/bin/sh\ncase "$2" in\n vm.loadavg) v=${FAKE_LOADAVG-"{ 4.20 3.00 2.00 }"};;\n kern.memorystatus_level) v=${FAKE_MEM_LEVEL-55};;\n kern.memorystatus_vm_pressure_level) v=${FAKE_PRESSURE-1};;\n *) exit 1;;\nesac\n[ "$v" = unreadable ] && exit 1\necho "$v"\n');
-  exe('fakeps', '#!/bin/sh\nprintf "101 /usr/bin/swift-frontend swift-frontend -frontend secret.swift\\n102 /bin/sleep sleep 20\\n"\n');
+  // #760: injected machine facts (fixtures/owner-gates/sysctl, fakeps). #891: linked, not written, so the probes
+  // exec an already assessed file instead of paying macOS's first-exec assessment inside their 5 s timeout.
+  for (const name of ['sysctl', 'fakeps']) fs.symlinkSync(fileURLToPath(new URL(`./fixtures/owner-gates/${name}`, import.meta.url)), path.join(bin, name));
+  // #891: the competitor lane's test file only leaves a marker when it actually runs.
+  fs.writeFileSync(path.join(dir, 'competitor.test.mjs'), `import fs from 'node:fs';\nfs.writeFileSync(process.env.COMPETITOR_MARKER, 'ran');\n`);
   const shell = path.join(dir, 'invoke.zsh');
   fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then print $DIFF_PATH; fi;  }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
-    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), MADO_GATES_OUT: out,
+  // #891: start from fixtureEnv so the caller's heavy-lock handoff and timing overrides never reach the
+  // fixture's own top-level lock, then apply this fixture's private values.
+  const env = fixtureEnv({ PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
+    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), NODE_RECORDS: path.join(dir, 'node-records'), MADO_GATES_OUT: out,
+    COMPETITOR_LOCK: path.join(dir, 'scripts/heavy-lock.sh'), COMPETITOR_SCRIPT: path.join(dir, 'competitor.test.mjs'), COMPETITOR_MARKER: path.join(dir, 'competitor-ran'),
     MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
-    MADO_HEAVY_LOCK_HELD: '', MDPRO_HEAVY_LOCK_HELD: '',
-    OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' };
+    OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' });
   // The fake tools must win over the real xcodegen/Homebrew directories owner-gates.sh puts in front of PATH.
   env.OWNER_GATES_TOOL_PATH = bin;
   env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
@@ -86,7 +103,7 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
   const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);
   if (process.env.OWNER_GATES_SAMPLE === '1') for (const f of fs.readdirSync(out)) console.log(`LOG ${f}\n${fs.readFileSync(path.join(out, f), 'utf8')}`);
-  return { dir, out, result, xcodeMarker: env.XCODE_MARKER, xcodegenMarker: env.XCODEGEN_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
+  return { dir, out, env, result, nodeRecords: env.NODE_RECORDS, competitorMarker: env.COMPETITOR_MARKER, xcodeMarker: env.XCODE_MARKER, xcodegenMarker: env.XCODEGEN_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
 }
 
 test('owner node lane runs the name-check tests required by CI', t => {
@@ -268,4 +285,78 @@ test('fix1 the summary records the thresholds in force when one is set by enviro
   assert.match(refused.summary, /^limits=3\/25%\/1$/m);
   const defaults = fixture(t, 'pass', 2, true, {env: {}});
   assert.doesNotMatch(defaults.summary, /^limits=/m);
+});
+
+// #891: owner-gates runs its node lane under the heavy lock, so this file can inherit the lane's supervision
+// handoff and timing overrides. A fixture launches its own top-level lock and must not see them.
+test('891 fixture ignores the caller lock supervision and timing overrides', t => {
+  const inherited = {MADO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_CONTROL_FD: '99', MADO_HEAVY_FLOCK_EXPECTED: '1',
+    MDPRO_HEAVY_LOCK_HELD: '1', MADO_HEAVY_LOCK_EXEC_SECS: '0'};
+  const saved = Object.fromEntries(Object.keys(inherited).map(name => [name, process.env[name]]));
+  t.after(() => { for (const [name, value] of Object.entries(saved)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+  Object.assign(process.env, inherited);
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^xcodegen=0$/m);
+  assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('891 fixture also drops the private status channel and wait override of its caller', t => {
+  const inherited = {MADO_HEAVY_STATUS_DIR: '/nonexistent', MADO_HEAVY_ATTEST_FD: '99', MADO_HEAVY_LOCK_WAIT_SECS: 'abc'};
+  const saved = Object.fromEntries(Object.keys(inherited).map(name => [name, process.env[name]]));
+  t.after(() => { for (const [name, value] of Object.entries(saved)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+  Object.assign(process.env, inherited);
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^xcodegen=0$/m);
+  assert.equal(fs.readFileSync(f.xcodegenMarker, 'utf8'), 'held=1 generate\n');
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('891 node lane holds the shared heavy lock once, one file at a time, without the lock handoff', t => {
+  const f = fixture(t, 'pass', 2, true, {env: {PROBE_COMPETITOR: '1'}});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^node=0$/m);
+  assert.match(f.summary, /^DONE$/m);
+  const records = fs.readFileSync(f.nodeRecords, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(records.length, 1, 'exactly one node --test invocation');
+  const [record] = records;
+  // A second lane on the same heavy.lock (mdpro lock off) waited and timed out; its test never ran.
+  assert.equal(record.competitor.status, 75, record.competitor.stderr);
+  assert.match(record.competitor.stderr, /waiting for .*heavy\.lock/);
+  assert.match(record.competitor.stderr, /lock wait timed out/);
+  assert.equal(fs.existsSync(f.competitorMarker), false, 'the competitor lane must not run while the node lane holds the lock');
+  const files = record.argv.filter(arg => !arg.startsWith('--'));
+  assert.deepEqual(record.argv.slice(0, record.argv.length - files.length).sort(), ['--test', '--test-concurrency=1', '--test-reporter=spec']);
+  assert.ok(files.includes('scripts/tdd/fixture.test.mjs') && files.includes('.agents/skills/mado-verify/tests/fixture.test.mjs'), files.join(' '));
+  assert.deepEqual(record.env, {MADO_HEAVY_LOCK_HELD: '', MADO_HEAVY_CONTROL_FD: '', MADO_HEAVY_FLOCK_EXPECTED: '', MDPRO_HEAVY_LOCK_HELD: ''});
+  // Negative control: once the lane has released the lock, the same competitor command runs.
+  const env = {...f.env, MADO_MDPRO_LOCK: 'off', MADO_HEAVY_LOCK_WAIT_SECS: '1'};
+  const after = spawnSync(f.env.COMPETITOR_LOCK, [process.execPath, '--test', f.env.COMPETITOR_SCRIPT], {env, encoding: 'utf8', timeout: 30000});
+  assert.equal(after.status, 0, after.stderr);
+  assert.equal(fs.readFileSync(f.competitorMarker, 'utf8'), 'ran');
+});
+
+test('891 a failing node lane under the lock is reported, not swallowed', t => {
+  const f = fixture(t, 'node-fail');
+  assert.equal(f.result.status, 1, f.result.stderr + f.summary);
+  assert.match(f.summary, /^node=1$/m);
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('891 static sysctl and ps fakes are linked checked-in executables', t => {
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  const fakes = path.join(root, '.agents/skills/mado-delegator/scripts/fixtures/owner-gates');
+  for (const name of ['sysctl', 'fakeps']) {
+    const linked = path.join(f.dir, 'bin', name);
+    assert.ok(fs.lstatSync(linked).isSymbolicLink(), `bin/${name} must be a symlink`);
+    assert.equal(fs.realpathSync(linked), fs.realpathSync(path.join(fakes, name)));
+    assert.ok(fs.statSync(linked).mode & 0o111, `${name} must be executable`);
+    const index = spawnSync('git', ['ls-files', '-s', '--', path.join(fakes, name)], { cwd: root, encoding: 'utf8' });
+    assert.match(index.stdout, /^100755 /, `${name} must be committed as 100755`);
+  }
+  assert.match(f.summary, /^load=4\.2 mem_free=55% pressure=1$/m);
+  assert.match(f.summary, /^competing-heavy=101:swift-frontend$/m);
 });
