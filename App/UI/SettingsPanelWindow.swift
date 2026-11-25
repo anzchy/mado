@@ -364,14 +364,16 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         scroll.drawsBackground = false
         scroll.setAccessibilityIdentifier("settings.capture.scroll")
         captureScroll = scroll
-        let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: 1124))
+        let afterCaptureShift: CGFloat = 20
+        let formHeight: CGFloat = 1124 + afterCaptureShift
+        let form = NSView(frame: NSRect(x: 0, y: 0, width: 580, height: formHeight))
         let captureLabels = ["Capture Bar", "Start at Login", "Screen & System Audio Recording", "Capture Folder",
                              "Save to Folder", "Copy to Clipboard", "Capture and Recognise Text",
                              "Show / Hide Capture Bar", "Cloud Recognition", "Service", "Keys"]
         let labelWidth = max(120, captureLabels.map {
             (captureLocalize($0) as NSString)
                 .size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
-        }.max() ?? 120)
+        }.max() ?? 120) + 8
         let valueX = 26 + labelWidth + 16
         scroll.documentView = form
         pane.addSubview(scroll)
@@ -380,7 +382,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
                    labelColumn: Bool = false, muted: Bool = false) -> NSTextField {
             let result = label(text, role: "uiSmall", muted: muted)
             result.textColor = muted ? DesignColor.textSecondary.nsColor : DesignColor.textPrimary.nsColor
-            result.frame = NSRect(x: labelColumn ? 26 : valueX, y: 1124 - top - height,
+            result.frame = NSRect(x: labelColumn ? 26 : valueX,
+                                  y: formHeight - top - (top >= 310 ? afterCaptureShift : 0) - height,
                                   width: labelColumn ? labelWidth : 554 - valueX, height: height)
             if labelColumn { result.alignment = .right }
             if let id { result.setAccessibilityIdentifier(id) }
@@ -390,7 +393,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         }
         func heading(_ text: String, top: CGFloat, id: String, divider: Bool) {
             if divider {
-                let line = NSBox(frame: NSRect(x: 26, y: 1124 - top + 14, width: 528, height: 1))
+                let line = NSBox(frame: NSRect(x: 26, y: formHeight - top - (top >= 310 ? afterCaptureShift : 0) + 14,
+                                               width: 528, height: 1))
                 line.boxType = .separator
                 form.addSubview(line)
             }
@@ -401,7 +405,9 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         }
         /// 「截图之后」 switches (#684): live, but greyed and not editable while the bar is off (grilling 5.2).
         func outputSwitch(_ title: String, top: CGFloat, id: String, action: Selector) -> NSSwitch {
-            let toggle = NSSwitch(frame: NSRect(x: valueX, y: 1124 - top - 18, width: 32, height: 18))
+            let toggle = NSSwitch(frame: NSRect(x: valueX,
+                                               y: formHeight - top - (top >= 310 ? afterCaptureShift : 0) - 18,
+                                               width: 32, height: 18))
             toggle.controlSize = .mini
             toggle.state = .on
             toggle.isEnabled = false
@@ -463,7 +469,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         capturePermissionStatus = field(captureLocalize("Unknown"), top: 220, id: "settings.capture.permission-status", muted: true)
         if #available(macOS 15, *) {
             field(captureLocalize("On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."),
-                  top: 248, height: 46, id: "settings.capture.permission-note", muted: true)
+                  top: 248, height: 64, id: "settings.capture.permission-note", muted: true)
         }
         heading(captureLocalize("After Capture"), top: 310, id: "settings.capture.heading-after", divider: true)
         field(captureLocalize("Capture Folder"), top: 345, id: "settings.capture.folder-label", labelColumn: true)
@@ -473,7 +479,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         captureFolderPath = folder
         let change = NSButton(title: captureLocalize("Change…"), target: self, action: #selector(changeFolder(_:)))
         change.font = DesignMetrics.font("uiSmall")
-        change.frame = NSRect(x: valueX + 102, y: 1124 - 345 - 24, width: max(72, change.intrinsicContentSize.width + 12),
+        change.frame = NSRect(x: valueX + 102, y: formHeight - 345 - afterCaptureShift - 24,
+                              width: max(72, change.intrinsicContentSize.width + 12),
                               height: 24)
         change.isEnabled = false
         change.alphaValue = 0.45
@@ -499,7 +506,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             let name = captureLocalize(key)
             captureShortcutNames[action] = name
             field(name, top: top, id: "settings.capture.shortcut-label-\(index)", labelColumn: true)
-            let shortcut = CaptureShortcutField(frame: NSRect(x: valueX, y: 1124 - top - 24, width: 96, height: 24),
+            let shortcut = CaptureShortcutField(frame: NSRect(x: valueX, y: formHeight - top - afterCaptureShift - 24,
+                                                              width: 96, height: 24),
                                                 name: name, localize: captureLocalize)
             shortcut.setAccessibilityIdentifier(index == 0 ? "settings.capture.shortcut-region" : "settings.capture.shortcut-\(index)")
             shortcut.isEnabled = false
@@ -528,7 +536,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let restoreWidth = restore.intrinsicContentSize.width
         let hintWidth = (systemHintText as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
         let inline = valueX + hintWidth + 6 + restoreWidth <= 554
-        restore.frame = NSRect(x: inline ? valueX + hintWidth + 6 : valueX, y: 1124 - (inline ? 734 : 752) - 16,
+        restore.frame = NSRect(x: inline ? valueX + hintWidth + 6 : valueX,
+                               y: formHeight - (inline ? 734 : 752) - afterCaptureShift - 16,
                                width: restoreWidth, height: 16)
         if inline { systemHint.frame.size.width = hintWidth + 2 }
         restore.isEnabled = false
@@ -542,12 +551,12 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let ocr = CloudRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
                                                 environment: cloudRecognition, localize: captureLocalize,
                                                 openURL: openURL)
-        let growth = max(0, 770 + ocr.frame.height - form.frame.height)
+        let growth = max(0, 770 + afterCaptureShift + ocr.frame.height - form.frame.height)
         if growth > 0 {
             form.frame.size.height += growth
             for view in form.subviews { view.frame.origin.y += growth }
         }
-        ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - ocr.frame.height)
+        ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - ocr.frame.height)
         form.addSubview(ocr)
         cloudRecognitionGroup = ocr
         refreshCapture()
