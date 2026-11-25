@@ -21,6 +21,6 @@ test('issue 882 uses one British Recognise Text key and consistent Cloud Recogni
 
 test('issue 882 state page has current app and display copy', () => {
   const page = readFileSync(new URL('../../design/prototypes/picsee-browser/states/settings.html', import.meta.url), 'utf8');
-  assert.doesNotMatch(page, /picsee|（15）|不上传图片/i);
+  assert.doesNotMatch(page, /pic\s*see|（15）|不上传图片/i);
   assert.match(page, /与网格底栏的「显示」设置同步，任一处修改立即生效。/);
 });
