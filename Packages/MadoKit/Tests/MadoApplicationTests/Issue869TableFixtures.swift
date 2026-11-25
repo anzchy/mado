@@ -14,7 +14,6 @@ actor RecordingTransport869: HTTPTransport {
     private(set) var requests: [URLRequest] = []
     private let gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
-    private var enteredWaiter: CheckedContinuation<Void, Never>?
     private var hasEntered = false
     /// Whether the calling task was already cancelled when a held call was released: the cancellation reached the
     /// transport call itself, not only the service's result.
@@ -34,8 +33,6 @@ actor RecordingTransport869: HTTPTransport {
             await withCheckedContinuation { continuation in
                 gate = continuation
                 hasEntered = true
-                enteredWaiter?.resume()
-                enteredWaiter = nil
             }
             sawCancellation = sawCancellation || Task.isCancelled
         }
@@ -48,12 +45,6 @@ actor RecordingTransport869: HTTPTransport {
 
     var didEnter: Bool { hasEntered }
 
-    /// Waits until a call is held at the gate.
-    func entered() async {
-        if hasEntered { return }
-        await withCheckedContinuation { enteredWaiter = $0 }
-    }
-
     func open() { gate?.resume(); gate = nil }
 }
 
@@ -62,7 +53,6 @@ actor FakeTableSettings869: TableRecognitionSettings {
     var current: TableRecognitionOptions
     private let gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
-    private var enteredWaiter: CheckedContinuation<Void, Never>?
     private var hasEntered = false
 
     init(_ options: TableRecognitionOptions = .default869, gated: Bool = false) {
@@ -77,17 +67,12 @@ actor FakeTableSettings869: TableRecognitionSettings {
             await withCheckedContinuation { continuation in
                 gate = continuation
                 hasEntered = true
-                enteredWaiter?.resume()
-                enteredWaiter = nil
             }
         }
         return current
     }
 
-    func entered() async {
-        if hasEntered { return }
-        await withCheckedContinuation { enteredWaiter = $0 }
-    }
+    var didEnter: Bool { hasEntered }
 
     func open() { gate?.resume(); gate = nil }
 }
@@ -98,7 +83,6 @@ actor FakeTableKeys869: TableRecognitionCredentialStore {
     private(set) var readCount = 0
     private let gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
-    private var enteredWaiter: CheckedContinuation<Void, Never>?
     private var hasEntered = false
 
     init(_ keys: [TableRecognitionEndpoint: String] = [TableRecognitionEndpoint.deepSeekDefault869: "sk-test-ds-0001"],
@@ -115,17 +99,12 @@ actor FakeTableKeys869: TableRecognitionCredentialStore {
             await withCheckedContinuation { continuation in
                 gate = continuation
                 hasEntered = true
-                enteredWaiter?.resume()
-                enteredWaiter = nil
             }
         }
         return keys[endpoint]
     }
 
-    func entered() async {
-        if hasEntered { return }
-        await withCheckedContinuation { enteredWaiter = $0 }
-    }
+    var didEnter: Bool { hasEntered }
 
     func open() { gate?.resume(); gate = nil }
 }
@@ -282,13 +261,19 @@ actor Flag869 {
     func set() { value = true }
 }
 
-/// Waits until the transport holds a call, or the task has finished without sending; true when a call is held.
-func awaitHeldSend869<T: Sendable>(_ transport: RecordingTransport869, _ task: Task<T, Never>) async -> Bool {
+/// Waits until a gated fake holds a call, or the task has finished without reaching it; true when a call is held.
+/// Every gated wait goes through this, so a regression that skips the gated call fails the test instead of hanging
+/// it (and leaving an orphan test helper).
+func awaitHeld869<T: Sendable>(_ didEnter: @escaping @Sendable () async -> Bool, _ task: Task<T, Never>) async -> Bool {
     let done = Flag869()
     Task { _ = await task.value; await done.set() }
-    while await !transport.didEnter {
+    while await !didEnter() {
         if await done.value { return false }
         await Task.yield()
     }
     return true
+}
+
+func awaitHeldSend869<T: Sendable>(_ transport: RecordingTransport869, _ task: Task<T, Never>) async -> Bool {
+    await awaitHeld869({ await transport.didEnter }, task)
 }

@@ -122,7 +122,7 @@ func issue869WI3CancelledDuringGuardReadsSendsNothing() async {
     let transport = RecordingTransport869()
     let service = makeService869(settings: settings, transport: transport)
     let task = Task { await service.recognise(png) }
-    await settings.entered()
+    #expect(await awaitHeld869({ await settings.didEnter }, task), "the run must reach the settings read")
     task.cancel()
     await settings.open()
     #expect(await task.value == .cancelled)
@@ -135,7 +135,7 @@ func issue869WI3CancelledDuringKeyReadSendsNothing() async {
     let transport = RecordingTransport869()
     let service = makeService869(keys: keys, transport: transport)
     let task = Task { await service.recognise(png) }
-    await keys.entered()
+    #expect(await awaitHeld869({ await keys.didEnter }, task), "the run must reach the key read")
     task.cancel()
     await keys.open()
     #expect(await task.value == .cancelled)
@@ -155,7 +155,7 @@ func issue869WI3CancelledWhileAwaitingReplyDiscardsTable() async {
     let transport = RecordingTransport869([.response(goodReply869())], gated: true)
     let service = makeService869(transport: transport)
     let task = Task { await service.recognise(png) }
-    await transport.entered()
+    #expect(await awaitHeldSend869(transport, task), "the run must send")
     task.cancel()
     await transport.open()
     #expect(await task.value == .cancelled)

@@ -153,6 +153,8 @@ func issue869WI1PromptStatesTheRules() async throws {
                              keys: FakeTableKeys869([endpoint: "sk-2"]), transport: custom).recognise(makePNG869(3, 2))
     let deepSeekPrompt = try #require(await deepSeek.requests.first.flatMap(promptText869))
     let customPrompt = try #require(await custom.requests.first.flatMap(promptText869))
+    // 「第一行是表头」 is kept on purpose: the owner decided 「第一行当表头，面板里可切换」, so the prompt asks for a
+    // header row and the panel (#875) lets the user switch it off.
     for rule in ["Markdown 表格", "逐字照抄", "第一行是表头", "才用 `<br>` 分隔", "不要代码围栏", "不要任何解释"] {
         #expect(deepSeekPrompt.contains(rule), "missing \(rule)")
     }
