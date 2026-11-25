@@ -136,3 +136,12 @@ import Testing
         }
     }
 }
+
+@Test func issue868MarkdownRoundTripsCombiningMarksNextToEscapesEntitiesAndEdges() throws {
+    let original = RecognisedTable(rows: [
+        ["\u{301}lead", "\\\u{301}", "|\u{301}", " \u{301}"],
+        ["&\u{301}", "x \u{301}", "*\u{301}*", "\u{3000}\u{301}"],
+    ])
+    let markdown = try TableClipboardPayload.build(from: original).markdown
+    #expect(try RecognisedTable.parseMarkdown(markdown) == original)
+}

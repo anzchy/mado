@@ -1,3 +1,5 @@
+import Foundation
+
 public enum TableRecognitionError: Error, Equatable, Sendable {
     case emptyTable
     case raggedRows
@@ -21,7 +23,7 @@ public struct TableClipboardPayload: Equatable, Sendable {
 
         let htmlRows = table.rows.enumerated().map { index, row in
             let tag = table.firstRowIsHeader && index == 0 ? "th" : "td"
-            return "<tr>" + row.map { "<\(tag) style=\"white-space: pre-wrap\">\(htmlCell($0))</\(tag)>" }.joined() + "</tr>"
+            return "<tr>" + row.map { "<\(tag) \(htmlCellStyle)>\(htmlCell($0))</\(tag)>" }.joined() + "</tr>"
         }
         // UTF-8 is declared: HTML readers without a charset fall back to a legacy encoding and garble CJK.
         // `white-space: pre-wrap` keeps a cell's edge and repeated spaces visible.
@@ -60,8 +62,6 @@ extension RecognisedTable {
         return Self(rows: rows, firstRowIsHeader: firstRowIsHeader)
     }
 }
-import Foundation
-
 
 private func normalized(_ cell: String) -> String {
     cell.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
@@ -74,6 +74,8 @@ private func escapeHTML(_ cell: String) -> String {
         .replacingOccurrences(of: "\"", with: "&quot;")
         .replacingOccurrences(of: "'", with: "&#39;")
 }
+
+private let htmlCellStyle = "style=\"white-space: pre-wrap\""
 
 private func htmlCell(_ cell: String) -> String {
     escapeHTML(normalized(cell)).replacingOccurrences(of: "\n", with: "<br>")
