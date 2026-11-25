@@ -107,7 +107,7 @@ private func issue221CatalogValue(_ key: String, _ language: String) throws -> S
 @MainActor @Test(.timeLimit(.minutes(3))) func issue221AboutLicenceTextMatchesPinnedEnglishAndChinese() throws {
     let key = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
     let english = "Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."
-    let chinese = "Mado 以 MIT 许可发布\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）"
+    let chinese = "Mado 以 MIT 许可发布。\n第三方：Sparkle（MIT）· 首次打开页样图来自 Unsplash（Unsplash License）。"
     #expect(try issue221CatalogValue(key, "en") == english)
     #expect(try issue221CatalogValue(key, "zh-Hans") == chinese)
     let panel = issue221Panel()

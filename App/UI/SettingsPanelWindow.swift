@@ -515,7 +515,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             message.textColor = DesignColor.errorText.nsColor
             captureShortcutMessages[action] = message
         }
-        let systemHintText = captureLocalize("The system shortcuts ⌘⇧3 / ⌘⇧4 / ⌘⇧5 remain available.")
+        let systemHintText = captureLocalize("macOS ⌘⇧3 / ⌘⇧4 / ⌘⇧5 still work.")
         let systemHint = field(systemHintText, top: 734, height: 18, id: "settings.capture.system-shortcuts-hint", muted: true)
         // settings.html:166 恢复默认 is a link at the end of the hint; it moves under the hint when both do not fit.
         let restoreTitle = captureLocalize("Restore Defaults")
