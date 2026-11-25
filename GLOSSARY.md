@@ -98,8 +98,12 @@ Text recognition that Mado performs on the Mac itself, without sending the image
 _Avoid_: offline OCR, Live Text (when the engine is meant)
 
 **Cloud Recognition**（云识别）:
-Text recognition by an outside OCR service, using the user's own key; the image leaves the Mac.
+Recognition by an outside service, an OCR service or a vision-model endpoint, using the user's own key; the image leaves the Mac. It is the engine side of recognition: it says who does the work, not what comes out.
 _Avoid_: online OCR, Baidu OCR (when the general concept is meant)
+
+**Table Recognition**（识别表格）:
+Recognising the table in an image as rows and columns that the user can paste as a table. It is a kind of result, like recognised text, and only **Cloud Recognition** can produce it; there is no on-device engine for it.
+_Avoid_: table OCR, "recognise text" for a table
 
 ### Capture
 
@@ -151,6 +155,8 @@ _Avoid_: edited image, overwrite, project file
 - **Lost Access** with cause Unknown is shown as plain 「无法访问此文件夹」; Mado never guesses a cause.
 - A **Recent Item** confers no access; reopening one outside every **Access Root** asks the user to grant its folder.
 - **Cloud Recognition** runs only after the user has agreed to uploads once and while its global switch is on; without a key, without network or out of quota, Mado uses **On-device Recognition** and says so on the result.
+- The command the user chooses decides the kind of result: "Recognise Text" gives text, "Recognise Table" gives a table. Mado never guesses from the image which one is wanted, because that would need an upload first.
+- **Table Recognition** runs only when the user explicitly asks for a table, with a **Cloud Recognition** service the user configured for tables. It is never answered with recognised text instead; when no table service is available, or it fails, the user is told why and may ask for text separately.
 - Selecting text on an image always uses **On-device Recognition**; **Cloud Recognition** runs only when the user explicitly asks to recognise text.
 - A **Capture** is saved to the **Capture Folder** unless saving is turned off, in which case it lives only on the clipboard until the user saves it from its **Capture Thumbnail**.
 - Recognising text straight from the **Capture Bar** never saves the **Capture**.
