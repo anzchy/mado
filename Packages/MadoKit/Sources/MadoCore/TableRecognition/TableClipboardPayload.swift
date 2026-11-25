@@ -175,7 +175,7 @@ private let markdownNamedTokens: [(token: [Unicode.Scalar], value: String)] = [
 ].map { (Array($0.0.unicodeScalars), $0.1) }
 
 private func markdownToken(in scalars: [Unicode.Scalar], at start: Int) -> (String, Int)? {
-    for entry in markdownNamedTokens where scalars[start...].starts(with: entry.token) {
+    if let entry = markdownNamedTokens.first(where: { scalars[start...].starts(with: $0.token) }) {
         return (entry.value, entry.token.count)
     }
     // Numeric character reference: `&#` then decimal, or `x` and hex, then `;`.
