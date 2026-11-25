@@ -140,10 +140,12 @@ private func splitMarkdownRow(_ line: String) throws -> [String] {
     return cells
 }
 
+/// GFM delimiter cell: one or more hyphens, with an optional colon at either edge.
 private func isSeparatorCell(_ cell: String) -> Bool {
-    let value = cell.trimmingCharacters(in: .whitespaces)
-    let hyphens = value.filter { $0 == "-" }.count
-    return hyphens >= 3 && value.allSatisfy { $0 == "-" || $0 == ":" }
+    var value = Substring(cell.trimmingCharacters(in: .whitespaces))
+    if value.first == ":" { value.removeFirst() }
+    if value.last == ":" { value.removeLast() }
+    return !value.isEmpty && value.allSatisfy { $0 == "-" }
 }
 
 /// Inverse of `markdownCell` after `splitMarkdownRow` has removed backslash escapes. Works on scalars so a

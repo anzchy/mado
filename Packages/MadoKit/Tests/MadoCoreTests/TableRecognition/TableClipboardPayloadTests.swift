@@ -124,3 +124,15 @@ import Testing
         try RecognisedTable.parseMarkdown("| | |\n| --- | --- |")
     }
 }
+
+@Test func issue868MarkdownSeparatorFollowsGFMOneOrMoreHyphensWithOptionalEdgeColons() throws {
+    for separator in ["| - | - |", "|:-:|:-:|", "|:--|--:|", "| :---: | ---- |", "|-|-|"] {
+        let parsed = try RecognisedTable.parseMarkdown("| A | B |\n\(separator)\n| one | two |")
+        #expect(parsed.rows == [["A", "B"], ["one", "two"]])
+    }
+    for separator in ["| :-:--- | --- |", "| : | --- |", "| -:- | --- |", "| --- | ::-- |", "| -- - | --- |"] {
+        #expect(throws: TableRecognitionError.invalidMarkdown) {
+            try RecognisedTable.parseMarkdown("| A | B |\n\(separator)\n| one | two |")
+        }
+    }
+}
