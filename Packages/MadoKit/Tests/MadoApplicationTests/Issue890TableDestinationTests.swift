@@ -25,8 +25,8 @@ func issue890WI1CustomRequestNamesTheConfiguredHostAndPort(base: String, consent
     let service = makeService869(settings: FakeTableSettings869(.options869(endpoint: endpoint, consentHost: consent)),
                                  keys: FakeTableKeys869([endpoint: "sk-test-custom-0001"]), transport: transport)
     #expect(await service.recognise(makePNG869(3, 2)) == .table(rows: [["A", "B"], ["1", "2"]]))
-    #expect(await transport.destinations == [.consentedHost(host: host, port: port)])
-    // The named host is the one the request goes to.
+    #expect(await transport.destinations == [.consentedHost(host: consent, port: port)])
+    // The request goes to the configured spelling of that same host.
     let url = try #require(await transport.requests.first?.url)
     #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.host == host)
 }

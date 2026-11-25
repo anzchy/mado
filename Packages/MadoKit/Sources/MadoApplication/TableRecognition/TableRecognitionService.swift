@@ -58,6 +58,7 @@ public struct TableRecognitionService: Sendable {
             return .notSent(.invalidEndpoint)
         }
         if let block = TableRecognitionGuards.consentBlock(options.consent, host: target.host) { return .notSent(block) }
+        guard let consentedHost = options.consent?.host else { return .notSent(.consentNotAsked) }
         let key = (await credentials.accessKey(for: endpoint) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if Task.isCancelled { return .cancelled }
         guard !key.isEmpty else { return .notSent(.noAccessKey) }
@@ -68,10 +69,11 @@ public struct TableRecognitionService: Sendable {
         }
         let request = TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
                                                    mediaType: mediaType)
-        // The transport admits only this host and port (#890): the consented host, named after the consent guard.
+        // The transport admits only this host and port (#890): the host from the consent record, not one read back
+        // from the request, so the transport checks the request against what the user consented to.
         let port = URLComponents(url: target.url, resolvingAgainstBaseURL: false)?.port
         requestBuilt()
-        return .ready(request, .consentedHost(host: target.host, port: port))
+        return .ready(request, .consentedHost(host: consentedHost, port: port))
     }
 
     /// The Settings Test: sends the built-in sample table, not the user's image, under the same switch, consent and
