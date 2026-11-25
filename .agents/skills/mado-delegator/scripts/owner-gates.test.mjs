@@ -100,6 +100,8 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
   env.OWNER_GATES_TOOL_PATH = bin;
   env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
   env.OWNER_GATES_PS = path.join(bin, 'fakeps');
+  // #892 fix1: the caller's role (an implementer's owner-gates run) never reaches the fixture; tests set it via options.env.
+  env.OWNER_GATES_ROLE = '';
   Object.assign(env, options.env ?? {});
   if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
@@ -476,4 +478,16 @@ test('892 review the rerun holds the shared heavy lock, and test names are writt
   assert.equal(fs.existsSync(f.competitorMarker), false);
   assert.ok(f.summary.split('\n').includes(`node-failed-test=${tddFile} :: ${name}`), f.summary);
   assert.equal(f.summary.match(/^node=/gm).length, 1, 'no injected node= line');
+});
+
+// #892 fix1: an implementer's owner-gates run (OWNER_GATES_ROLE=implementer) runs this file in its node lane; the fixture's
+// own owner-gates run must not inherit that role, or it would skip the node lane every other test here expects.
+test('892 fix1 fixture ignores the caller OWNER_GATES_ROLE', t => {
+  const saved = process.env.OWNER_GATES_ROLE;
+  t.after(() => { if (saved === undefined) delete process.env.OWNER_GATES_ROLE; else process.env.OWNER_GATES_ROLE = saved; });
+  process.env.OWNER_GATES_ROLE = 'implementer';
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=delegator$/m);
+  assert.match(f.summary, /^node=0$/m);
 });
