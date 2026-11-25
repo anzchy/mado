@@ -4,16 +4,6 @@ import ImageIO
 import MadoApplication
 import UniformTypeIdentifiers
 
-public struct HTTPResponse: Sendable {
-    public let statusCode: Int
-    public let body: Data
-    public init(statusCode: Int, body: Data) { self.statusCode = statusCode; self.body = body }
-}
-
-public protocol HTTPTransport: Sendable {
-    func send(_ request: URLRequest) async throws -> HTTPResponse
-}
-
 public actor BaiduTextRecognitionProvider: CloudTextRecognitionProviding {
     /// Baidu's endpoints and upload limits, defined once (ADR-0019 amendment, #831: the standard general-text product,
     /// so an application with only 通用文字识别 enabled works). The transport allows only these two paths.
