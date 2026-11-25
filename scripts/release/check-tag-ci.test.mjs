@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,22 +148,9 @@ function cli(sequence = responses(), { env = {}, shell = null, noGh = false, tim
   const fixture = join(dir, "responses.json"), counter = join(dir, "counter");
   writeFileSync(fixture, JSON.stringify(sequence));
   if (!noGh) {
-    const gh = join(dir, "gh");
-    writeFileSync(gh, `#!${process.execPath}\n` + `
-const fs = require('node:fs');
-const count = fs.existsSync(process.env.FAKE_COUNTER) ? Number(fs.readFileSync(process.env.FAKE_COUNTER)) : 0;
-fs.writeFileSync(process.env.FAKE_COUNTER, String(count + 1));
-const args = process.argv.slice(2);
-fs.appendFileSync(process.env.FAKE_COUNTER + '.args', JSON.stringify(args) + '\\n');
-const fixture = JSON.parse(fs.readFileSync(process.env.FAKE_FIXTURE))[count];
-if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) process.exit(9);
-if (fixture && fixture.error) { process.stderr.write('transport error token=' + process.env.GH_TOKEN); process.exit(1); }
-if (fixture && fixture.raw !== undefined) { process.stdout.write(fixture.raw); process.exit(0); }
-// Simulate gh pagination semantics, so dropping either option cannot pass pagination cases.
-const value = args.includes('--paginate') && args.includes('--slurp') ? fixture : fixture?.[0];
-process.stdout.write(JSON.stringify(value));
-`);
-    chmodSync(gh, 0o755);
+    // #891: link the checked-in fake (and node for its `env node` shebang, as PATH is only this directory).
+    symlinkSync(fileURLToPath(new URL("./fixtures/fake-gh.cjs", import.meta.url)), join(dir, "gh"));
+    symlinkSync(process.execPath, join(dir, "node"));
   }
   try {
     const result = spawnSync(shell ? "/bin/bash" : process.execPath,
@@ -172,9 +159,10 @@ process.stdout.write(JSON.stringify(value));
         env: { PATH: dir, GITHUB_SHA: SHA, GITHUB_REPOSITORY: "anzchy/picsee", GH_TOKEN: "fixture-private-token",
           FAKE_FIXTURE: fixture, FAKE_COUNTER: counter, ...env },
       });
+    const ghLink = noGh ? null : { symlink: lstatSync(join(dir, "gh")).isSymbolicLink(), target: realpathSync(join(dir, "gh")) };
     let calls = [];
     try { calls = readFileSync(`${counter}.args`, "utf8").trim().split("\n").map(JSON.parse); } catch { /* preflight can make no calls */ }
-    return { ...result, calls, output: (result.stdout ?? "") + (result.stderr ?? "") };
+    return { ...result, calls, ghLink, output: (result.stdout ?? "") + (result.stderr ?? "") };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 function cliDenied(result, names = NAMES, sha = SHA) {
@@ -186,6 +174,15 @@ function cliDenied(result, names = NAMES, sha = SHA) {
   for (const name of [].concat(names)) assert.ok(result.output.includes(name), result.output);
   assert.doesNotMatch(result.output, /fixture-private-token/);
 }
+
+// #891: a fresh gh per call paid ~400 ms of macOS first-exec assessment inside the 10 s deadline.
+test("the fake gh is the checked-in executable, linked not copied", () => {
+  const fake = fileURLToPath(new URL("./fixtures/fake-gh.cjs", import.meta.url));
+  const { ghLink } = cli();
+  assert.equal(ghLink.symlink, true);
+  assert.equal(ghLink.target, realpathSync(fake));
+  assert.match(spawnSync("git", ["ls-files", "-s", "--", fake], { cwd: root, encoding: "utf8" }).stdout, /^100755 /);
+});
 
 // #891: a child killed by its deadline has empty output; the failure must name the kill, not a missing ::error::.
 test("cliDenied reports a killed CLI run as its spawn error before reading output", () => {
