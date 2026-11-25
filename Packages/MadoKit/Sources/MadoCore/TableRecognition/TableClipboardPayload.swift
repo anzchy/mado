@@ -83,19 +83,31 @@ private func tsvCell(_ cell: String) -> String {
     return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
 }
 
+/// Markdown cell text. Every whitespace or line-break scalar the parser could trim or split on is written as
+/// `&#xNNNN;` (interior U+0020 stays literal); LF becomes `<br>`; `\\ | * _ ` [ ] ~` get a backslash; markup
+/// characters become HTML entities.
 private func markdownCell(_ cell: String) -> String {
-    let chars = Array(normalized(cell))
-    let first = chars.firstIndex(where: { $0 != " " }) ?? chars.count
-    let last = chars.lastIndex(where: { $0 != " " }) ?? -1
-    return chars.enumerated().map { index, character in
-        if character == " " && (index < first || index > last) { return "&#32;" }
-        if character == "\t" { return "&#9;" }
-        if character == "\n" { return "<br>" }
-        if character == "\\" { return "\\\\" }
-        if character == "|" { return "\\|" }
-        return escapeHTML(String(character))
-    }.joined()
+    let scalars = Array(normalized(cell).unicodeScalars)
+    let first = scalars.firstIndex(where: { $0 != " " }) ?? scalars.count
+    let last = scalars.lastIndex(where: { $0 != " " }) ?? -1
+    var text = ""
+    for (index, scalar) in scalars.enumerated() {
+        if scalar == "\n" {
+            text += "<br>"
+        } else if scalar == " " && index > first && index < last {
+            text += " "
+        } else if markdownBackslashed.contains(scalar) {
+            text += "\\" + String(scalar)
+        } else if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+            text += "&#x" + String(scalar.value, radix: 16, uppercase: true) + ";"
+        } else {
+            text += escapeHTML(String(scalar))
+        }
+    }
+    return text
 }
+
+private let markdownBackslashed: Set<Unicode.Scalar> = ["\\", "|", "*", "_", "`", "[", "]", "~"]
 
 private func splitMarkdownRow(_ line: String) throws -> [String] {
     var body = Array(line.trimmingCharacters(in: .whitespaces))
@@ -129,13 +141,45 @@ private func isSeparatorCell(_ cell: String) -> Bool {
     return hyphens >= 3 && value.allSatisfy { $0 == "-" || $0 == ":" }
 }
 
+/// Inverse of `markdownCell` after `splitMarkdownRow` has removed backslash escapes. Works on scalars so a
+/// combining mark after an entity cannot hide the entity's `;`.
 private func decodeMarkdownCell(_ cell: String) -> String {
-    cell.replacingOccurrences(of: "<br>", with: "\n")
-        .replacingOccurrences(of: "&#32;", with: " ")
-        .replacingOccurrences(of: "&#9;", with: "\t")
-        .replacingOccurrences(of: "&lt;", with: "<")
-        .replacingOccurrences(of: "&gt;", with: ">")
-        .replacingOccurrences(of: "&quot;", with: "\"")
-        .replacingOccurrences(of: "&#39;", with: "'")
-        .replacingOccurrences(of: "&amp;", with: "&")
+    let scalars = Array(cell.unicodeScalars)
+    var decoded = String.UnicodeScalarView()
+    var index = 0
+    while index < scalars.count {
+        if let (value, length) = markdownToken(in: scalars, at: index) {
+            decoded.append(contentsOf: value.unicodeScalars)
+            index += length
+        } else {
+            decoded.append(scalars[index])
+            index += 1
+        }
+    }
+    return String(decoded)
+}
+
+private let markdownNamedTokens: [(token: [Unicode.Scalar], value: String)] = [
+    ("<br>", "\n"), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+].map { (Array($0.0.unicodeScalars), $0.1) }
+
+private func markdownToken(in scalars: [Unicode.Scalar], at start: Int) -> (String, Int)? {
+    for entry in markdownNamedTokens where scalars[start...].starts(with: entry.token) {
+        return (entry.value, entry.token.count)
+    }
+    // Numeric character reference: `&#` then decimal, or `x` and hex, then `;`.
+    guard scalars[start...].starts(with: ["&", "#"]) else { return nil }
+    var index = start + 2
+    let hex = index < scalars.count && (scalars[index] == "x" || scalars[index] == "X")
+    if hex { index += 1 }
+    var digits = ""
+    while index < scalars.count, scalars[index] != ";", digits.count <= 8 {
+        digits.unicodeScalars.append(scalars[index])
+        index += 1
+    }
+    guard index < scalars.count, scalars[index] == ";", digits.allSatisfy(\.isHexDigit),
+          let value = UInt32(digits, radix: hex ? 16 : 10), let scalar = Unicode.Scalar(value) else {
+        return nil
+    }
+    return (String(scalar), index + 1 - start)
 }

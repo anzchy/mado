@@ -79,3 +79,25 @@ import Testing
     let aligned = try RecognisedTable.parseMarkdown("| A | B |\n| :--- | ---: |\n| one | two |")
     #expect(aligned.rows == [["A", "B"], ["one", "two"]])
 }
+
+@Test func issue868MarkdownEntityEncodesUnicodeSpacesAndBreaksAndBackslashEscapesActiveCharacters() throws {
+    // Every whitespace or line-break scalar the parser could trim or split on is written as `&#xNNNN;`
+    // (interior U+0020 stays literal); Markdown-active `* _ ` [ ] ~` get a backslash, which the parser drops.
+    let cells = [
+        "\u{3000}中文", "x\u{00A0}", "a\u{2028}b", "a\u{2029}b", "a\u{0B}b", "a\u{85}b",
+        " edge ", "2*3*4 _x_ `code` [link](u) ~s~", "tab\there",
+    ]
+    let original = RecognisedTable(rows: [cells, Array(cells.reversed())])
+    let markdown = try TableClipboardPayload.build(from: original).markdown
+    #expect(try RecognisedTable.parseMarkdown(markdown) == original)
+    #expect(markdown.components(separatedBy: .newlines).count == 3)
+    #expect(markdown.contains("| &#x3000;中文 | x&#xA0; | a&#x2028;b | a&#x2029;b | a&#xB;b | a&#x85;b |"))
+    #expect(markdown.contains("| &#x20;edge&#x20; | 2\\*3\\*4 \\_x\\_ \\`code\\` \\[link\\](u) \\~s\\~ | tab&#x9;here |"))
+}
+
+@Test func issue868MarkdownParserDecodesCharacterReferencesAndLeavesMalformedOnesLiteral() throws {
+    let parsed = try RecognisedTable.parseMarkdown(
+        "| &#65;&#X42;&#x63; | &#xZZ; &#+41; &#; &#x110000; &#12 |\n| --- | --- |\n| &amp;lt; | a&#x301; |"
+    )
+    #expect(parsed.rows == [["ABc", "&#xZZ; &#+41; &#; &#x110000; &#12"], ["&lt;", "a\u{301}"]])
+}
