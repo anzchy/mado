@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { MANDATORY_GATES } from '../../mado-verify/scripts/gate-policy.mjs';
+import { LOAD_THRESHOLDS } from './owner-gates-tools.mjs';
 
 // #758: mado-verify SKILL.md must describe the lanes owner-gates.sh really runs, in its order.
 const root = fileURLToPath(new URL('../../../..', import.meta.url));
@@ -336,4 +337,11 @@ test('891 fake herdr is the checked-in executable, linked not copied', () => {
   assert.ok(fs.statSync(fake).mode & 0o111, 'fake-herdr.cjs must be executable');
   const index = spawnSync('git', ['ls-files', '-s', '--', fake], { cwd: root, encoding: 'utf8' });
   assert.match(index.stdout, /^100755 /, 'fake-herdr.cjs must be committed as 100755');
+});
+
+test('891 mado-verify SKILL.md states the preflight defaults owner-gates-tools.mjs enforces', () => {
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  const { maxLoad, minMemFree, maxPressure } = LOAD_THRESHOLDS;
+  has(skill, new RegExp(`\\(defaults ${maxLoad.value}, ${minMemFree.value} %, ${maxPressure.value};`), 'mado-verify SKILL.md');
+  lacks(skill, /defaults 20, 15 %, 2/, 'mado-verify SKILL.md');
 });
