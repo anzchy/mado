@@ -81,12 +81,13 @@ private func htmlCell(_ cell: String) -> String {
     escapeHTML(normalized(cell)).replacingOccurrences(of: "\n", with: "<br>")
 }
 
-/// Spreadsheet-style field: a tab inside a cell becomes one space (a bare tab would split the column);
-/// a field with an in-cell line break is quoted, inner quotes doubled (Excel and Numbers read it as one cell);
-/// every other field, backslashes included, is written unchanged.
+/// Spreadsheet-style field: a tab inside a cell becomes one space (a bare tab would split the column).
+/// A field that starts with `"` (a quoted-field reader takes it as an opening quote) or has an in-cell line break
+/// is quoted, inner quotes doubled, so it reads back as one cell. Every other field, backslashes and later quotes
+/// included, is written unchanged.
 private func tsvCell(_ cell: String) -> String {
     let text = normalized(cell).replacingOccurrences(of: "\t", with: " ")
-    guard text.contains("\n") else { return text }
+    guard text.hasPrefix("\"") || text.contains("\n") else { return text }
     return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
 }
 

@@ -25,6 +25,29 @@ import Testing
     }
 }
 
+/// AC-3 for quote and line-break edges: a cell that starts with `"`, a cell that is only `"` followed by another
+/// column (which must not be swallowed), a `"` inside a cell, LF, CRLF and empty cells. CRLF is normalised to LF
+/// in every form, so the expected cells differ from the input only there.
+@Test func issue868AllThreeFormsKeepQuoteLeadingAndLineBreakCells() throws {
+    let edited = [
+        ["\"quoted\" & x", "\"", "after quote"],
+        ["mid \"q\" end", "", "\""],
+        ["\n", "a\r\nb", "\"\"\n\""],
+        ["", "\"x", "last"],
+    ]
+    var expected = edited
+    expected[2][1] = "a\nb"
+    for flag in [true, false] {
+        let table = RecognisedTable(rows: edited, firstRowIsHeader: flag)
+        let payload = try TableClipboardPayload.build(from: table)
+
+        #expect(htmlCells(payload.html).rows == expected)
+        #expect(tabSeparatedCells(payload.tabSeparated) == expected)
+        let markdown = try RecognisedTable.parseMarkdown(payload.markdown)
+        #expect(markdown == RecognisedTable(rows: expected, firstRowIsHeader: flag))
+    }
+}
+
 /// Test-only extraction of `<tr>` rows and `<th>`/`<td>` cell text, undoing the builder's escaping.
 private func htmlCells(_ html: String) -> (rows: [[String]], headerTagged: [Bool]) {
     let rowPattern = /<tr>(.*?)<\/tr>/.dotMatchesNewlines()
@@ -47,8 +70,9 @@ private func htmlCells(_ html: String) -> (rows: [[String]], headerTagged: [Bool
     return (rows, headerTagged)
 }
 
-/// Test-only reader for what a spreadsheet does on paste: tab ends a field, LF ends a row, and a field that
-/// starts with `"` runs to the closing quote with `""` meaning one quote.
+/// Test-only reader for what a spreadsheet does on paste, matching Python's `csv` reader with a tab delimiter
+/// and standard quoting: tab ends a field, LF ends a row, a field that starts with `"` runs to the closing quote
+/// with `""` meaning one quote (text after the closing quote is kept), and a `"` later in a field is literal.
 private func tabSeparatedCells(_ text: String) -> [[String]] {
     var rows: [[String]] = []
     var row: [String] = []
