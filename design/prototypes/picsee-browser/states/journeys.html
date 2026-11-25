@@ -205,7 +205,7 @@ const ENTRIES = [
   ['把一张图片拖进窗口，所在文件夹不在授权范围内', 'OPEN-04 · ACCESS-01', NOT_IN_ROOT],
   ['文件菜单「打开最近使用」，或 22 的「最近打开」', 'OPEN-06', '24 → 11；授权已失效时 → 26（<a href="#J1">J1 支线</a>）'],
   ['截图工具条打开后，点工具条或按全局快捷键 [⌃⇧⌘1]–[⌃⇧⌘4]（没有 Mado 窗口也可以）', 'CAP-01 · EXT-05', '38 截图缩略图；识别文字时只有文字通知（<a href="#J5">J5</a>）'],
-  ['截图工具条点「识别表格」、[⌃⇧⌘5]、显示菜单「识别表格…」、文字面板「按表格重新识别」或截图缩略图「识别表格」（占位快捷键）', 'EXT-06（拟新增）', '首次使用引导或同意 → 识别 → 结果面板（<a href="#J6">J6</a>）'],
+  ['截图工具条点「识别表格」、[⌃⌥5]、显示菜单「识别表格…」、文字面板「按表格重新识别」或截图缩略图「识别表格」（截图快捷键 ⌃⌥5）', 'EXT-06（拟新增）', '首次使用引导或同意 → 识别 → 结果面板（<a href="#J6">J6</a>）'],
   ['在大图按 [⌘E]，或点缩略图上的「标注」', 'EDIT-07', '39 标注模式（<a href="#J5">J5</a>）'],
 ];
 // A journey: main steps left to right (`t` is the trigger on the arrow INTO the step). `end` is the closing step of the
@@ -345,7 +345,7 @@ const JOURNEYS = [
           { id: 'J6-adv', loop: true, p: 'settings', q: 'section=capture&scroll=table&case=advanced', title: '高级：地址与模型', t: '展开「高级」', outs: [{ k: '收起，回到设置', to: 'settings', toQ: 'section=capture&scroll=table&case=saved' }],
             variants: [['section=capture&scroll=table&case=custom', '选「自定义」时自动展开，必填']] },
         ] },
-      { p: 'table-entries', q: 'entry=bar', title: '入口 1：截图工具条（A 纯图标）', t: '点「识别表格」图标<br>或 [⌃⇧⌘5]', note: '只有图标，指到才显示名称和快捷键；蓝点标出新增',
+      { p: 'table-entries', q: 'entry=bar', title: '入口 1：截图工具条（A 纯图标）', t: '点「识别表格」图标<br>或 [⌃⌥5]', note: '只有图标，指到才显示名称和快捷键；蓝点标出新增',
         branches: [
           { id: 'J6-menu', p: 'table-entries', q: 'entry=menu', title: '入口 2：显示 ▸ 识别表格…', t: '大图里用菜单', outs: [{ k: '同一个流程 → 识别', to: 'table-flow', toQ: 'case=working' }] },
           { id: 'J6-panel', p: 'table-entries', q: 'entry=panel', title: '入口 3：文字面板「按表格重新识别」', t: '文字识别出来行列对不上', outs: [{ k: '用原图走同一个流程', to: 'table-flow', toQ: 'case=working' }] },
@@ -364,6 +364,7 @@ const JOURNEYS = [
         ] },
       { p: 'table-flow', q: 'case=result', title: '识别结果：可直接改单元格', t: '识别完成', note: '原图对照；「共 7 行、4 列（含表头）」；点单元格直接修改（例：Sensoror → Sensonor）；不自动拷贝，不自动消失',
         branches: [
+          { id: 'J6-header', loop: true, p: 'table-flow', q: 'case=result&header=off', title: '「第一行是表头」关闭', t: '没有表头的表格：关掉「第一行是表头」', outs: [{ k: '再打开，回到结果', to: 'table-flow', toQ: 'case=result' }] },
           { id: 'J6-edit', loop: true, p: 'table-flow', q: 'case=edited', title: '改过的单元格', t: '改错字', outs: [{ k: '继续核对，回到结果', to: 'table-flow', toQ: 'case=result' }] },
           { id: 'J6-more', loop: true, p: 'table-flow', q: 'case=more', title: '「更多」菜单', t: '更多', outs: [{ k: '拷贝 Markdown / 拷贝为电子表格 / 编辑 Markdown / 仅识别文字（本机）', to: 'table-flow', toQ: 'case=edited' }] },
         ] },

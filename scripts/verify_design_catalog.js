@@ -30,6 +30,7 @@ const BRANCH_PLAYS={
  'J6-thumb':[['table-entries?entry=bar','table-entries?entry=thumbnail','table-flow?case=working']],
  'J6-off':[['table-flow?case=setup','table-flow?case=off','settings?section=capture&scroll=table&case=saved']],
  'J6-fail':[['table-flow?case=working','table-flow?case=fail-key','settings?section=capture&scroll=table&case=saved']],
+ 'J6-header':[['table-flow?case=result','table-flow?case=result&header=off','table-flow?case=result']],
  'J6-edit':[['table-flow?case=result','table-flow?case=edited','table-flow?case=result']],
  'J6-more':[['table-flow?case=result','table-flow?case=more','table-flow?case=edited']],
  'J5-unsaved':[['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','viewer-quiet'],['annotate','annotate?sheet=unsaved','annotate']],

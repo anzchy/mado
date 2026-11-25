@@ -251,7 +251,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "d744182e23a6edca879c9a5b52b13ab77187392093ac49e90ba1ff22d40f27b1"
+      "sha256": "ba8d4dc1cb256d4641aee7b7d71cf6f890c142a65d72bc20c6a66e6b2f5863ea"
     },
     {
       "name": "shortcuts",
@@ -275,7 +275,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "738e6e62017cbc78ebdc22fff7884b932c7aeea2ca70acdb70560f71b91bdfa4"
+      "sha256": "f8916ea32bf817c9b931546cc3f3985c93fb86dabeed7d5fa0fea23071d12b69"
     },
     {
       "name": "capture-thumbnail",
@@ -311,7 +311,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "1448a4b3b78380901164000233b6e27caabfbbbc5e02dad8d5a59a45bb421a60"
+      "sha256": "68149ef25f7e4700a7b645d589bba3c7b1e07467fd1a1f02401a111f1d097a9f"
     },
     {
       "name": "table-flow",
@@ -323,7 +323,7 @@
       },
       "kind": "static-mockup",
       "origin": "local-C-adaptation",
-      "sha256": "32555e4064976184a80dd7e5ce920047a3e09cad1a7c708a42a732c1ff29c363"
+      "sha256": "897cf6c2a7c89977c8418b7c7f5b054550b0691e9366acb3dfe0cfbb1c8b99b3"
     }
   ]
 }
