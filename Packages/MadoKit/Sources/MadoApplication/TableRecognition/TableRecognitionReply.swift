@@ -47,6 +47,19 @@ enum TableRecognitionReply {
               let message = choice["message"] as? [String: Any] else { return .failed(.other) }
         let content = message["content"]
         guard content == nil || content is NSNull || content is String else { return .failed(.other) }
-        return .failed(.other)
+        // A cut-off reply is never a table, even when the part that arrived parses (AC-5).
+        switch choice["finish_reason"] as? String {
+        case "length": return .failed(.incomplete)
+        case "content_filter": return .failed(.other)
+        default: break
+        }
+        guard let text = content as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failed(.noTable)
+        }
+        switch MarkdownTableReader.read(text) {
+        case .rows(let rows): return .table(rows: rows)
+        case .noTable: return .failed(.noTable)
+        case .incomplete: return .failed(.incomplete)
+        }
     }
 }
