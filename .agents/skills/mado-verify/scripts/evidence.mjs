@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { gateVerdict, notVerifiedGates } from './gate-policy.mjs';
+import { failingTestInDiff, flakyGates, gateVerdict, nodeLaneRequired, notVerifiedGates } from './gate-policy.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
@@ -14,7 +14,9 @@ function privacyHits(body) {
 }
 function render(d) {
   const sha7 = d.head.slice(0, 7);
-  const gates = d.gates.map(g => g.reusedFrom
+  const gates = d.gates.map(g => g.disposition && g.attempts?.length === 2
+    ? `- \`${g.command}\` → exit ${g.exitCode} (attempt 1, ${g.attempts[0].log}: ${(g.attempts[0].tests ?? []).map(t => t.name).join('; ')}); rerun of ${(g.attempts[1].files ?? []).join(', ')} exit ${g.attempts[1].exitCode} (${g.attempts[1].log}); FLAKY, reviewed disposition: issue #${g.disposition.issue}, owner ${g.disposition.owner}, reviewed by ${g.disposition.reviewedBy}, expires ${g.disposition.expires}; not a pass`
+    : g.reusedFrom
     ? `- \`${g.name}\` → reused from ${g.reusedFrom}; ${g.keyLine || 'prior green result'}`
     : g.scopeSkip ? `- \`${g.name}\` → n/a: ${g.scopeSkip}`
     : `- \`${g.command}\` → exit ${g.exitCode}; ${g.keyLine || 'no decisive line recorded'}`).join('\n');
@@ -64,9 +66,27 @@ function check(args) {
   else if (record.gates?.some(g => g.reusedFrom !== undefined) ||
            Object.values(record.lanes || {}).some(lane => lane.status === 'reused') || record.ciBinding)
     throw new Error('reused lanes require a verified linked record');
+  // #892: a node scope skip (implementer run) and a flake disposition are judged against the record's base..head diff.
+  const node = Array.isArray(record.gates) ? record.gates.find(g => g?.name === 'node') : undefined;
+  if (node?.scopeSkip || node?.disposition) {
+    const listed = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base)
+      ? git('diff', '--name-only', '--no-renames', record.base, named) : null;
+    const what = node.scopeSkip ? 'node scope skip' : 'node flake disposition';
+    if (listed === null) throw new Error(`${what}: cannot list the diff ${record.base}..${named}`);
+    const files = listed.split('\n').filter(Boolean);
+    if (node.scopeSkip && nodeLaneRequired(files))
+      throw new Error('node scope skip refused: the diff is empty or touches scripts/, .agents/, .github/ or .claude/, so the node lane must run');
+    for (const t of node.disposition?.tests ?? [])
+      if (t && typeof t.file === 'string' && typeof t.name === 'string' && failingTestInDiff(t, files))
+        throw new Error(`node flake disposition for "${t.name}" (${t.file}) is in the diff; an in-diff failure never gets a rerun or a disposition`);
+  }
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
+  for (const gate of flakyGates(record.gates)) {
+    const d = gate.disposition;
+    console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} owner ${d.owner} reviewed by ${d.reviewedBy} expires ${d.expires}`);
+  }
   for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is binding for the retained App group, hosted CI binding for the hosted group`);
 }
 try {
@@ -111,7 +131,7 @@ try {
       if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
       base = spawnSync('git', ['merge-base', 'origin/main', d.head], { encoding: 'utf8' }).stdout.trim();
       fingerprints = directFingerprints(cwd, d.head);
-      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
+      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.disposition ? 'flaky-disposition' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
     const record = { head: d.head, base, fingerprints, link, lanes,
       ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,

@@ -14,6 +14,9 @@
 # before any lane. On this four-performance-core mini defaults are load>6, free memory<25%, or VM pressure>1;
 # OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE, OWNER_GATES_MAX_PRESSURE tune them. MADO_GATES_PREFLIGHT=off
 # records a bypass while still printing facts and competitors. A threshold refusal exits 2 with no evidence.
+# #892: OWNER_GATES_ROLE=implementer runs the node lane only when the diff touches scripts/, .agents/, .github/ or .claude/
+# (unset or delegator: always). A node failure outside the diff gets one serial rerun of only the failed files under the
+# heavy lock; both attempts go to the summary, and the run stays exit 1 whatever the rerun says.
 set -u
 here=${0:A:h}
 (( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -34,6 +37,8 @@ for op in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_H
   [[ -e "$(git rev-parse --git-path ${op%%:*} 2>/dev/null)" ]] && refuse "${op#*:} in progress in $wt; finish or abort it and rerun on the committed head"
 done
 [[ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] || refuse "tracked changes in $wt; commit or stash them and rerun in a clean worktree at the head"
+role=${OWNER_GATES_ROLE:-delegator}
+[[ $role == delegator || $role == implementer ]] || refuse "OWNER_GATES_ROLE=$role is not delegator or implementer"
 hl=$wt/scripts/heavy-lock.sh
 export MADO_HEAVY_LOCK_WAIT_SECS=${MADO_HEAVY_LOCK_WAIT_SECS:-3600}
 mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-base of $base and HEAD"
@@ -41,12 +46,13 @@ diff_file=$o/$p-diff.txt
 git diff --name-only --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
 selection=$(node "$here/owner-gates-tools.mjs" select "$diff_file") || refuse "cannot classify gated diff"
 selection_lines=("${(@f)selection}")
-(( ${#selection_lines} == 3 )) && [[ $selection_lines[1] == native=[01] ]] &&
-  [[ $selection_lines[2] == agents=[01] ]] && [[ $selection_lines[3] == tdd=[01] ]] ||
-  refuse "invalid suite selection; expected native/agents/tdd each exactly 0 or 1"
+(( ${#selection_lines} == 4 )) && [[ $selection_lines[1] == native=[01] ]] &&
+  [[ $selection_lines[2] == agents=[01] ]] && [[ $selection_lines[3] == tdd=[01] ]] && [[ $selection_lines[4] == node=[01] ]] ||
+  refuse "invalid suite selection; expected native/agents/tdd/node each exactly 0 or 1"
 native=${${(M)${(f)selection}:#native=*}#native=}
 agents=${${(M)${(f)selection}:#agents=*}#agents=}
 tdd=${${(M)${(f)selection}:#tdd=*}#tdd=}
+node_selected=${selection_lines[4]#node=}
 preflight=$(node "$here/owner-gates-tools.mjs" preflight "$wt" "$0")
 if (( $? != 0 )); then
   echo "refused: $preflight" > "$s" || summary_error
@@ -73,6 +79,7 @@ lane_result() {
   fi
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
+echo "role=$role" >> $s || summary_error
 print -r -- "$preflight" | grep -E '^preflight: stale-owner-records=[0-9]+$' >> "$s" || true
 print -r -- "$load_facts" >> "$s" || summary_error
 if (( native )); then
@@ -156,7 +163,10 @@ fi
 # #750: the node lane is every node test the workflows run (owner-gates-tools.mjs NODE_LANE, checked against
 # .github/workflows by owner-gates-tools.test.mjs) minus the reviewed node-lane-exceptions.json entries, listed in the summary.
 # CI runs scripts/agents and scripts/tdd on every PR, so the lane runs them for every diff (i760-fix1).
-if node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-node.log"); then
+if [[ $role == implementer ]] && (( ! node_selected )); then
+  # #892 (owner 2026-11-25): a product-only diff cannot change a tooling test's outcome.
+  echo "node=skipped (implementer run; diff touches no scripts/, .agents/, .github/ or .claude/ path; the delegator's owner-gates run and GitHub CI cover node)" >> "$s" || summary_error
+elif node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-node.log"); then
   node_suites=("${(@f)node_list}")
   echo "node-${node_suites[1]}" >> "$s" || summary_error
   # #891: one node lane at a time on the shared heavy lock, one test file at a time. Fresh executables written
@@ -167,7 +177,40 @@ if node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-no
   # default lock would wait behind this lane until the lock's 1800 s budget ends the lane (none does today).
   $hl env -u MADO_HEAVY_LOCK_HELD -u MADO_HEAVY_CONTROL_FD -u MADO_HEAVY_FLOCK_EXPECTED -u MDPRO_HEAVY_LOCK_HELD \
     node --test --test-concurrency=1 --test-reporter=spec "${(@)node_suites[2,-1]}" > "$o/$p-node.log" 2>&1
-  lane_result node $?
+  node_code=$?
+  lane_result node $node_code
+  if (( node_code != 0 )); then
+    # #892: one serial rerun of only the failed files, for failures outside the diff (owner-gates-tools.mjs rerun-plan).
+    # A pass is a flake candidate, never green: the lane stays failed until a reviewed disposition is recorded.
+    plan=$(node "$here/owner-gates-tools.mjs" rerun-plan "$o/$p-node.log" "$diff_file" "$PWD") || plan='skip rerun plan failed'
+    plan_lines=("${(@f)plan}") rerun_files=() failed_tests=()
+    for line in "${plan_lines[@]}"; do
+      case $line in
+        "file "*) rerun_files+=("${line#file }") ;;
+        "test "*) failed_tests+=("${line#test }") ;;
+      esac
+    done
+    if [[ ${plan_lines[1]} == run ]] && (( ${#rerun_files} )); then
+      print -r -- "node-attempt1=$node_code log=$p-node.log files=${(j:,:)rerun_files}" >> "$s" || summary_error
+      for name in "${failed_tests[@]}"; do print -r -- "node-failed-test=$name" >> "$s" || summary_error; done
+      $hl env -u MADO_HEAVY_LOCK_HELD -u MADO_HEAVY_CONTROL_FD -u MADO_HEAVY_FLOCK_EXPECTED -u MDPRO_HEAVY_LOCK_HELD \
+        node --test --test-concurrency=1 --test-reporter=spec "${rerun_files[@]}" > "$o/$p-node-rerun.log" 2>&1
+      rerun_code=$?
+      if (( rerun_code == 0 )) && ! { grep -Eq '^ℹ pass [1-9]' "$o/$p-node-rerun.log" && grep -Eq '^ℹ fail 0$' "$o/$p-node-rerun.log"; }; then
+        echo 'node-rerun: exit 0 without a passing test; counted as a failure' >> "$o/$p-node-rerun.log"
+        rerun_code=1
+      fi
+      print -r -- "node-rerun=$rerun_code log=$p-node-rerun.log files=${(j:,:)rerun_files}" >> "$s" || summary_error
+      if (( rerun_code == 0 )); then
+        echo "node-verdict=flaky (attempt1=$node_code rerun=0); red until a reviewed disposition is recorded (exact test, issue, owner, expires, failed attempt $p-node.log)" >> "$s" || summary_error
+      else
+        echo "node-verdict=failed (attempt1=$node_code rerun=$rerun_code)" >> "$s" || summary_error
+      fi
+    else
+      print -r -- "node-rerun=skipped (${plan_lines[1]#skip })" >> "$s" || summary_error
+      echo "node-verdict=failed (attempt1=$node_code; no rerun)" >> "$s" || summary_error
+    fi
+  fi
 else
   echo "node: cannot list the node lane (owner-gates-tools.mjs node-suites failed)" >> "$o/$p-node.log"
   lane_result node 70

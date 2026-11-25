@@ -345,3 +345,33 @@ test('891 mado-verify SKILL.md states the preflight defaults owner-gates-tools.m
   has(skill, new RegExp(`\\(defaults ${maxLoad.value}, ${minMemFree.value} %, ${maxPressure.value};`), 'mado-verify SKILL.md');
   lacks(skill, /defaults 20, 15 %, 2/, 'mado-verify SKILL.md');
 });
+
+// #892 WI-4 (owner 2026-11-25): SKILL.md states the one bounded flake exception, the implementer lane-selection rule, and
+// which tooling tests GitHub CI does or does not run.
+test('892 WI-4 SKILL.md states the one bounded exception: advisory only through a reviewed disposition, never silently green', () => {
+  has(step1, /no flake exception/i, 'SKILL.md step 1');
+  has(step1, /one bounded exception/i, 'SKILL.md step 1');
+  has(step1, /advisory only through a reviewed disposition/i, 'SKILL.md step 1');
+  has(step1, /never silently green/i, 'SKILL.md step 1');
+  has(step1, /--test-concurrency=1/, 'SKILL.md step 1');
+  has(step1, /in-diff=yes[^.]*never/i, 'SKILL.md step 1: in-diff failures never rerun');
+  for (const field of ['issue', 'owner', 'expires', 'reviewedBy', 'failedAttempt']) has(step1, new RegExp(`\\b${field}\\b`), `SKILL.md step 1 names ${field}`);
+});
+
+test('892 WI-4 SKILL.md states the implementer lane-selection rule with the flag owner-gates.sh reads', () => {
+  has(step1, /OWNER_GATES_ROLE=implementer/, 'SKILL.md step 1');
+  has(owner, /\bOWNER_GATES_ROLE\b/, 'owner-gates.sh');
+  has(step1, /`scripts\/`, `\.agents\/`, `\.github\/` or `\.claude\/`/, 'SKILL.md step 1 lists the four prefixes');
+  has(step1, /delegator's owner-gates run and GitHub CI cover/i, 'SKILL.md step 1');
+});
+
+test('892 WI-4 SKILL.md says which tooling tests GitHub CI runs, matching the workflows', () => {
+  const workflows = fs.readdirSync(path.join(root, '.github/workflows')).filter(f => /\.ya?ml$/.test(f)).map(f => read(`.github/workflows/${f}`)).join('\n');
+  const inCI = /node[^\n]*--test[^\n]*\.agents\/skills\/mado-delegator\/scripts\/\*\.test\.mjs/.test(workflows) &&
+    /node[^\n]*--test[^\n]*\.agents\/skills\/mado-verify\/tests\/\*\.test\.mjs/.test(workflows);
+  if (inCI) has(skill, /GitHub CI runs `\.agents\/skills\/mado-delegator\/scripts\/\*\.test\.mjs` and `\.agents\/skills\/mado-verify\/tests\/\*\.test\.mjs`/, 'SKILL.md');
+  else {
+    has(skill, /`\.agents\/skills\/mado-delegator\/scripts\/\*\.test\.mjs` and `\.agents\/skills\/mado-verify\/tests\/\*\.test\.mjs` are local-only/, 'SKILL.md');
+    has(skill, /green main CI does not cover them/i, 'SKILL.md');
+  }
+});
