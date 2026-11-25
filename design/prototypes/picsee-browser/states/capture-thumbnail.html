@@ -16,7 +16,7 @@
   Buttons do nothing. Radii, shadows and colours use the design tokens; the thumbnail's hover scrim is a fixed dark
   overlay over the image (no token), its frame is --color-panel.
   The bare URL is the pinned main case: saving on, the thumbnail at rest, light. Sub-cases, by query:
-    ?hover=1             the pointer over the thumbnail: dark overlay with 拷贝, 标注, 在 Mado 中打开, 识别文字, 移到废纸篓
+    ?hover=1             the pointer over the thumbnail: dark overlay with 拷贝, 标注, 在 Mado 中打开, 识别文字, 识别表格, 移到废纸篓
     ?save=off            saving off, pointer over the thumbnail: 存储 first, then 拷贝, 标注, 在 Mado 中打开, 识别文字;
                          the status line says the image is only on the clipboard; no 移到废纸篓 and no discard (#680 r1 Q3)
     ?kind=text           after 截图并识别文字: the notice 「已拷贝 N 个字符」 with the engine tag, no thumbnail
@@ -125,6 +125,7 @@
       <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/></svg>标注</button>
       <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>在 Mado 中打开</button>
       <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8.5 9h7M12 9v7"/></svg>识别文字</button>
+      <button type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="7.5" y="8" width="9" height="8" rx=".6"/><path d="M7.5 11h9M12 8v8"/></svg>识别表格</button>
       <button type="button" data-save-on><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>移到废纸篓</button>
     </div>
     <button type="button" class="close" id="thumb-close" aria-label="关闭缩略图" title="关闭缩略图" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -141,7 +142,7 @@
 Mado 截图工具条 Capture Bar
 联系电话 021-5555 0123
 https://example.com/agenda</textarea>
-  <div class="foot">可以修改后再拷贝<button type="button" class="btn primary">拷贝</button></div>
+  <div class="foot">可以修改后再拷贝<button type="button" class="btn">按表格重新识别</button><button type="button" class="btn primary">拷贝</button></div>
 </div>
 <script>
 // Static state page. ?hover=1, ?save=off, ?kind=text|notext, ?engine=cloud, ?panel=1 and ?theme=dark select a sub-case (see the header comment).

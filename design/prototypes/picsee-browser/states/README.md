@@ -1,6 +1,6 @@
 # Mado C 设计状态稿
 
-这里是应随仓库提交的 **25份正式静态状态稿**，与上一级的交互原型分开维护。目录内容不依赖 `.stitch/`、登录凭据、Stitch CLI 或远程图片。
+这里是应随仓库提交的 **27份正式静态状态稿**，与上一级的交互原型分开维护。目录内容不依赖 `.stitch/`、登录凭据、Stitch CLI 或远程图片。
 
 ## 打开
 
@@ -24,7 +24,7 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | --- | --- | --- |
 | `manifest.json` | 唯一页面目录：名称、文件、视口、来源类别及每页 HTML 的 SHA256 | 是 |
 | `index.html` | 从manifest加载的浏览索引，不另维护一份页面列表 | 是 |
-| 25个同名HTML | 正式静态状态；不声明按钮行为已实现 | 是 |
+| 27个同名HTML | 正式静态状态；不声明按钮行为已实现 | 是 |
 | `journeys.html` | 用户旅程图，是[计划 §1.6](../../../../docs/PICSEE_DEVELOPMENT_PLAN.md)旅程索引的视图（ADR-013），两者不一致时以 §1.6 为准；卡片只引用本目录的状态稿，不显示实现进度（进度看功能账簿）。不是状态稿，不进 `manifest.json`，由 `index.html` 链接 | 是 |
 | `home-image-wall.html` | 首页图片墙参考稿，图片墙外观的来源：2026-10-30 用户在三个方向中选定 C（斜置拼贴、缓慢漂移）并要求放大（「选C，但是图片墙可以放大」），之后定为「C 取代 B4 外观，保留拖入反馈」（[grilling 记录](../../../../docs/plans/20261030-bottom-bar-home-wall-grilling.md)，spec #311）。正式状态是 21 `first-launch.html`（#317），`design:check` 从本页读取倾斜、透明度、圆角、阴影和漂移的期望值；21 的中央是 B4 的，不取本页的中央（#441）。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照 21，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
 | `grid-footer-fill.html` | 打开文件夹后的常驻底栏参考稿，80% 底栏外观的来源：2026-10-30 用户选定「填充 80%（很实）」、不要顶部分隔线（「不要，靠 80% 底色区分」），只有未打开文件夹的窗口没有底栏（「只有未打开文件夹的窗口没有底栏」），spec #311。正式状态是 11/12 和其他画网格底栏的页面（#317），`design:check` 从本页读取填充、分隔线和左侧竖线的期望值。`?theme=dark` 看深色。**不是状态稿，不进 `manifest.json`**；App 对照这些正式页，不对照本页。原型在分支 `prototype/footer-transparent` | 是 |
@@ -49,6 +49,8 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | `capture-bar.html`（37 截图工具条 · A） | 整块屏幕（1280×800）：系统菜单栏、另一个 App 的窗口，Capture Bar 浮在上面：拖动把手、区域截图、窗口截图、全屏截图、识别文字、打开 Mado、收起到菜单栏。画的是默认位置：鼠标所在显示器的顶部居中、菜单栏下 32 px；拖动后按显示器记住位置（grilling 2.2）。#682 只断言工具条的尺寸与内部布局，不断言屏幕位置 | `?hover=region` 悬停填充和提示（名称与快捷键；固定稿写的是 #685 的 ⌃⇧⌘1，默认已改为 ⌃⌥1，#717）；`?state=collapsed` 收起，只剩菜单栏图标；点图标恢复工具条（grilling 2.2），图标的提示写「点按显示截图工具条」。不画菜单栏图标的菜单：没有决定过（#680 r2）；`?state=denied` 录屏权限被拒：工具条下的说明与「打开系统设置」，区域截图与菜单栏图标带红点 |
 | `capture-thumbnail.html`（38 截图缩略图 · A） | 截图后右下角的 Capture Thumbnail（存储打开）：240 宽的带框缩略图和下方「已存到 ~/Downloads · 已拷贝」 | `?hover=1` 悬停：变暗，出现 拷贝、标注、在 Mado 中打开、识别文字、移到废纸篓；`?save=off` 存储关闭并悬停：「存储」排第一（决定 3.5），状态行「只在剪贴板里 · 没有存储」；`?kind=text` 识别文字后的「已拷贝 N 个字符」与引擎标签「本机识别」；`?kind=text&engine=cloud` 同一通知，引擎标签为「百度云识别」：结果总会标明用了哪个引擎（grilling 3.2，可与 `panel=1` 组合）；`?kind=text&panel=1` 点开后的可编辑文字面板；`?kind=notext` 「未找到文字 · 剪贴板没有改变」（与 EXT-05 一致）。本页画的是截图后屏幕角落的位置（右 20、下 20）；看图窗口里的识别文字通知与面板（EXT-01）底边改在缩放组上方 8 pt、仍距右 20，不遮挡缩放组（owner 2026-11-15：「移到缩放组上方（推荐）」） |
 | `annotate.html`（39 标注模式 · D） | 大图窗口的 Annotate Mode：右侧竖排工具条（选择 \| 箭头 矩形 文字 荧光笔 画笔 遮挡 裁剪 序号 \| 撤销 重做 \| 拷贝 存储 \| 完成），图片适应工具条左边的区域；矩形工具选中，有五个标记（两个矩形、一个箭头、序号 1、一段文字）。悬停提示带单字母快捷键 V A R T H P M C N（决定 5.5） | `?tool=redact` 遮挡选项浮层：马赛克/实色块、强度和常驻的可还原提示（决定 5.4）。强度滑块不带数值范围或数值标签：最低强度由 #693 的实现者在测试素材上测量，写进它的验收（决定 5.3）；画出来的马赛克只是示意；`?tool=redact&style=solid` 实色块；`?saved=1` ⌘S 之后「已存储为 DSC_0342-annotated.jpg」与「在访达中显示」；`?sheet=unsaved` 有未存储标记时按 Esc：不存储 / 取消 / 存储。窗口矮到放不下工具条（约 530 以下）时，工具条在自身内部滚动（`max-height` + `overflow-y: auto`），本页不另设矮窗口子情况 |
+| `table-entries.html`（40 识别表格 · 入口） | 整块屏幕，画识别表格的四个入口（grilling 决定 2，J6） | `?entry=bar` 截图工具条 A（悬停提示「截图并识别表格 ⌃⇧⌘5」）；`?entry=menu` 显示菜单「识别表格…」；`?entry=panel` 文字面板「按表格重新识别」；`?entry=thumbnail` 截图缩略图「识别表格」。快捷键是占位 |
+| `table-flow.html`（41 识别表格 · 流程） | 识别表格的对话框和结果（grilling 决定 3、8、9、11），背景是被识别的图片 | `?case=setup` 首次使用；`off` 云识别关闭；`consent` 首次发送前同意（写出主机名）；`working` 识别中；`result` 结果面板（原图对照、可改单元格、行列数）；`edited`、`copied`、`more`；`fail-key`、`fail-none`、`fail-cut`、`fail-offline`、`fail-big` 各种失败。35 设置「截图」里的「表格识别」组见 `settings.html?section=capture&scroll=table&case=…`；说明文字在帮助网站（`site/`） |
 | `shortcuts.html`（36 键盘快捷键 · C） | 帮助 → 键盘快捷键打开的只读窗口（用户：「选 C」），三张卡片：文件与窗口（任何时候）、网格（浏览文件夹时）、大图（查看一张图片时）；没有搜索 | `?card=files\|grid\|viewer` 给该卡片加虚线描边，只用于对照，App 没有这个状态 |
 | `first-launch.html`（21 首次打开） | 首页：没有底栏和侧栏，中央是 B4 的拖入提示「把照片文件夹拖到这里」和「选择文件夹…」「或按 ⌘O」，两行相距 18 pt，没有格式标签行（#441，用户：「打开首页的这行字我不喜欢，删掉」「B4 centre; re-pin page 21 (Recommended)」）；图片墙在中央后面缓慢漂移，「减弱动态效果」时不动 | `?drag=over` 拖入时：图片墙淡到 40%，提示改为「松开即可打开」并用强调色，虚线框用强调色；`?theme=dark` 深色 |
 | `grid-light.html`、`grid-dark.html`（11/12 网格） | 底栏盖在网格上，窗口底色 80%，没有顶部分隔线 | `?scroll=behind` 多两行图片并把一行滚到底栏后面；`?transparency=reduced` 「减弱透明度」时底栏 100% |
@@ -67,8 +69,8 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 
 | 页面 / URL | 元素 | 值 |
 | --- | --- | --- |
-| 37 `capture-bar.html` | `.capture-bar` | [359, 56, 562, 40]：水平居中，顶部 56 = 菜单栏 24 + 32；padding 4，按钮间距 2，圆角 `--radius-popover` |
-| 37 同上 | 拖动把手 `.grip`；`[data-action=region]` | 32×32；区域截图按钮高 32、左右 padding 10、图标 18 与文字间距 6、文字 `--font-size-ui-sm` |
+| 37 `capture-bar.html` | `.capture-bar` | [491.5, 56, 297, 40]：水平居中，顶部 56 = 菜单栏 24 + 32；padding 4，按钮间距 2，圆角 `--radius-popover`；所有按钮只有图标（owner 2026-11-24，选 A），名称和快捷键在悬停提示里 |
+| 37 同上 | 拖动把手 `.grip`；`[data-action=region]` | 把手 32×32；动作按钮 34×32、只有 18 的图标，区域截图按钮 [529.5, 60, 34, 32]；动作依次为区域、窗口、全屏、识别文字、识别表格，分隔线后是打开 Mado、收起 |
 | 37 `?state=collapsed` | 菜单栏图标 `#menubar-icon`；提示 `#tooltip` | 图标 [1162.7, 1, 26, 22]；提示「点按显示截图工具条」右对齐图标，图标下方 6 |
 | 38 `capture-thumbnail.html` | 角落 `#corner`；缩略图 `.thumb` | 右 20、下 20；缩略图 [1020, 595, 240, 156]，边框 3 `--color-panel`，圆角 8 |
 | 38 `?hover=1` | 关闭按钮 `#thumb-close` | [1027, 602, 20, 20]：距缩略图外框左上 (7, 7)，即边框 3 内再 4 |
@@ -81,9 +83,9 @@ python3 -m http.server 4313 --bind 127.0.0.1 --directory design/prototypes/picse
 | 39 `?saved=1` | `.save-confirmation` | [419.7, 12, 376.6, 36]：以图片区域中心 (1280 − 64) / 2 居中，不是以窗口居中 |
 | 39 `?sheet=unsaved` | `.sheet` | [440, 0, 400, 142]，贴顶，带 `--color-scrim` |
 | 39 两种外观 | 标记 | 描边 3；红 `#dc2626`，序号数字与文字 halo `#fff`（上一条） |
-| 35 `settings.html?section=capture` | 截图面板 | [440, 158, 580, 482]，内部滚动，scrollHeight 1124 |
+| 35 `settings.html?section=capture` | 截图面板 | [440, 158, 580, 482]，内部滚动，scrollHeight 1420（含「表格识别」组；每条提示一行，细节在帮助网站） |
 | 35 同上 | 表单 | 两列 120 + 392，列距 16，行距 14；标签右对齐止于 x 586，控件从 x 602 开始 |
-| 35 同上 | 工具条开关 `[data-bar-switch]`；5.7 原句 `[data-macos15-line]` | 开关 32×18 于 (602, 244.5)；原句 [602, 412.8, 392, 36]（两行） |
+| 35 同上 | 工具条开关 `[data-bar-switch]`；5.7 原句 `[data-macos15-line]` | 开关 32×18 于 (602, 244.5)；原句 [602, 394.8, 392, 18]（一行） |
 - 36 `shortcuts.html` 这次不变：它的行由 `scripts/design/shortcut-model.mjs` 与代码逐行比较，标注模式的单字母快捷键（V A R T H P M C N）、⌘E 与全局截图快捷键，由实现这些按键的 ticket 同时加进 36。
 
 ## #347 · Viewer Tools 与 Thumbnail Size 对照映射
