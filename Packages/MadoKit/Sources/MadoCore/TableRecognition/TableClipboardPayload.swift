@@ -25,20 +25,21 @@ public struct TableClipboardPayload: Equatable, Sendable {
         }
         let html = "<table border=\"1\">" + htmlRows.joined() + "</table>"
         let tabSeparated = table.rows.map { $0.map(tsvCell).joined(separator: "\t") }.joined(separator: "\n")
-        let renderedRows = table.rows.map { "| " + $0.map(markdownCell).joined(separator: " | ") + " |" }
-        let separator = "| " + Array(repeating: "---", count: width).joined(separator: " | ") + " |"
-        let prefix = table.firstRowIsHeader ? "" : "<!-- mado:first-row-is-data -->\n"
-        let markdown = prefix + ([renderedRows[0], separator] + renderedRows.dropFirst()).joined(separator: "\n")
+        // A data-first table gets an all-empty header row. A real header that is entirely empty writes
+        // `<!---->` (an empty HTML comment, rendered as nothing) in its first cell so the flag survives.
+        func markdownRow(_ cells: [String]) -> String { "| " + cells.joined(separator: " | ") + " |" }
+        var header = table.firstRowIsHeader ? table.rows[0].map(markdownCell) : Array(repeating: "", count: width)
+        if table.firstRowIsHeader && header.allSatisfy(\.isEmpty) { header[0] = emptyHeaderCell }
+        let body = table.rows.dropFirst(table.firstRowIsHeader ? 1 : 0).map { markdownRow($0.map(markdownCell)) }
+        let separator = markdownRow(Array(repeating: "---", count: width))
+        let markdown = ([markdownRow(header), separator] + body).joined(separator: "\n")
         return Self(html: html, tabSeparated: tabSeparated, markdown: markdown)
     }
 }
 
 extension RecognisedTable {
     public static func parseMarkdown(_ markdown: String) throws -> Self {
-        var lines = markdown.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let marker = "<!-- mado:first-row-is-data -->"
-        let firstRowIsHeader = lines.first != marker
-        if !firstRowIsHeader { lines.removeFirst() }
+        let lines = markdown.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 2 else { throw TableRecognitionError.invalidMarkdown }
         let header = try splitMarkdownRow(lines[0])
         let separator = try splitMarkdownRow(lines[1])
@@ -46,12 +47,14 @@ extension RecognisedTable {
               separator.allSatisfy({ isSeparatorCell($0) }) else {
             throw TableRecognitionError.invalidMarkdown
         }
-        let rows = try ([header] + lines.dropFirst(2).map(splitMarkdownRow)).map { row in
-            row.map { decodeMarkdownCell($0.trimmingCharacters(in: .whitespaces)) }
-        }
-        guard rows.allSatisfy({ $0.count == header.count }) else {
+        // An all-empty header row means the first row is data (what `build` writes for that flag).
+        let firstRowIsHeader = !header.allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let rawRows = (firstRowIsHeader ? [header] : []) + (try lines.dropFirst(2).map(splitMarkdownRow))
+        guard !rawRows.isEmpty else { throw TableRecognitionError.emptyTable }
+        guard rawRows.allSatisfy({ $0.count == header.count }) else {
             throw TableRecognitionError.raggedRows
         }
+        let rows = rawRows.map { row in row.map { decodeMarkdownCell($0.trimmingCharacters(in: .whitespaces)) } }
         return Self(rows: rows, firstRowIsHeader: firstRowIsHeader)
     }
 }
@@ -159,8 +162,10 @@ private func decodeMarkdownCell(_ cell: String) -> String {
     return String(decoded)
 }
 
+private let emptyHeaderCell = "<!---->"
+
 private let markdownNamedTokens: [(token: [Unicode.Scalar], value: String)] = [
-    ("<br>", "\n"), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+    ("<br>", "\n"), (emptyHeaderCell, ""), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
 ].map { (Array($0.0.unicodeScalars), $0.1) }
 
 private func markdownToken(in scalars: [Unicode.Scalar], at start: Int) -> (String, Int)? {

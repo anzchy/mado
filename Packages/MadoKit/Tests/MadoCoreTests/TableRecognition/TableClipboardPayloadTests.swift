@@ -101,3 +101,22 @@ import Testing
     )
     #expect(parsed.rows == [["ABc", "&#xZZ; &#+41; &#; &#x110000; &#12"], ["&lt;", "a\u{301}"]])
 }
+
+@Test func issue868MarkdownDataFirstTableWritesEmptyHeaderRowAndEmptyRealHeaderUsesEmptyComment() throws {
+    // firstRowIsHeader == false: an all-empty header row, the separator, then every row; no private marker.
+    let dataFirst = RecognisedTable(rows: [["A", "B"], ["1", "2"]], firstRowIsHeader: false)
+    let dataMarkdown = try TableClipboardPayload.build(from: dataFirst).markdown
+    #expect(dataMarkdown == "|  |  |\n| --- | --- |\n| A | B |\n| 1 | 2 |")
+    #expect(try RecognisedTable.parseMarkdown(dataMarkdown) == dataFirst)
+    // A real header row that is entirely empty writes `<!---->` (renders empty) in its first cell.
+    let emptyHeader = RecognisedTable(rows: [["", ""], ["1", "2"]])
+    let headerMarkdown = try TableClipboardPayload.build(from: emptyHeader).markdown
+    #expect(headerMarkdown == "| <!----> |  |\n| --- | --- |\n| 1 | 2 |")
+    #expect(try RecognisedTable.parseMarkdown(headerMarkdown) == emptyHeader)
+    // Markdown from elsewhere: an all-empty header reads as data-first; with no data rows it is an empty table.
+    #expect(try RecognisedTable.parseMarkdown("| | |\n| --- | --- |\n| x | y |")
+        == RecognisedTable(rows: [["x", "y"]], firstRowIsHeader: false))
+    #expect(throws: TableRecognitionError.emptyTable) {
+        try RecognisedTable.parseMarkdown("| | |\n| --- | --- |")
+    }
+}
