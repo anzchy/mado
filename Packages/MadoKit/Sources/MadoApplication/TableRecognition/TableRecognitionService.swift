@@ -18,8 +18,14 @@ public struct TableRecognitionService: Sendable {
     }
 
     init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
+         transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void) {
+        self.init(settings: settings, credentials: credentials, transport: transport,
+                  requestBuilt: requestBuilt, report: TableRecognitionDiagnostic.record)
+    }
+
+    init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
          transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void,
-         report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void = TableRecognitionDiagnostic.record) {
+         report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void) {
         self.settings = settings
         self.credentials = credentials
         self.transport = transport

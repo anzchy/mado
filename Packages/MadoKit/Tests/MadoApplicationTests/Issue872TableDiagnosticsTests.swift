@@ -55,3 +55,63 @@ func issue872SentTableRequestReportsCountsTimingWithoutPayload() async {
         #expect(!output.contains(secret), "Diagnostics leaked a request or response value")
     }
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue872FailureDiagnosticsUseFixedClassAndUnknownForMissingCounts() async {
+    let message = "PRIVATE_SERVER_TEXT_872 https://user:password@gw.example.com/v1 PRIVATE_KEY_872"
+    let body = try! JSONSerialization.data(withJSONObject: [
+        "error": ["message": message], "usage": ["prompt_tokens": 5, "completion_tokens": -9]
+    ])
+    let reports = TableDiagnostics872()
+    let transport = RecordingTransport869([.response(HTTPResponse(statusCode: 429, body: body)),
+                                           .failure(NSError(domain: message, code: 9))])
+    let service = TableRecognitionService(settings: FakeTableSettings869(), credentials: FakeTableKeys869(),
+        transport: transport, report: { reports.append($0) })
+
+    #expect(await service.recognise(makePNG869(3, 2)) == .failed(.quotaOrBalance))
+    #expect(await service.recognise(makePNG869(3, 2)) == .failed(.other))
+    let recorded = reports.all
+    #expect(recorded.count == 2)
+    guard recorded.count == 2 else { return }
+    #expect(recorded[0].promptTokens == 5)
+    #expect(recorded[0].completionTokens == nil)
+    #expect(recorded[0].errorClass == .quotaOrBalance)
+    #expect(recorded[1].promptTokens == nil && recorded[1].completionTokens == nil)
+    #expect(recorded[1].errorClass == .other)
+    #expect(recorded[0].logMessage.contains("error=quotaOrBalance"))
+    #expect(recorded[1].logMessage.contains("prompt_tokens=unknown completion_tokens=unknown"))
+    for diagnostic in recorded {
+        #expect(!diagnostic.logMessage.contains(message))
+        #expect(!diagnostic.logMessage.contains("user:password"))
+        #expect(!diagnostic.logMessage.contains("PRIVATE_KEY_872"))
+    }
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue872NoRequestMeansNoDiagnosticEvenForCredentialedAddress() async {
+    let endpoint = TableRecognitionEndpoint.custom869("https://user:password@gw.example.com/v1")
+    let settings = FakeTableSettings869(.options869(endpoint: endpoint, consentHost: "gw.example.com"))
+    let reports = TableDiagnostics872()
+    let transport = RecordingTransport869()
+    let service = TableRecognitionService(settings: settings, credentials: FakeTableKeys869(),
+        transport: transport, report: { reports.append($0) })
+
+    #expect(await service.recognise(makePNG869(3, 2)) == .notSent(.invalidEndpoint))
+    #expect(await service.testService() == .notSent(.invalidEndpoint))
+    #expect(await transport.callCount == 0)
+    #expect(reports.all.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue872SettingsTestReportsFinalSampleFailureOnce() async {
+    let reports = TableDiagnostics872()
+    let service = TableRecognitionService(settings: FakeTableSettings869(), credentials: FakeTableKeys869(),
+        transport: RecordingTransport869(), report: { reports.append($0) })
+    #expect(await service.testService() == .failed(.other))
+    let recorded = reports.all
+    #expect(recorded.count == 1)
+    guard let diagnostic = recorded.first else { return }
+    #expect(diagnostic.errorClass == .other)
+    #expect(diagnostic.promptTokens == nil && diagnostic.completionTokens == nil)
+    #expect(diagnostic.logMessage.contains("error=other"))
+}
