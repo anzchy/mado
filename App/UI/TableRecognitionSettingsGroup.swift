@@ -74,6 +74,7 @@ struct TableRecognitionSettingsEnvironment {
     static let hostHint = "Images are sent here only after you click Recognise Table."
     static let testNote = "Sends a built-in sample, not your images; may be charged."
     static let costHint = "May use your service account's balance; check the service for charges."
+    static let addressHint = "Changing the address removes the saved key; save it and agree again."
 
     /// The note beside Test (owner 2026-11-24), and without a key the reason Test is unavailable.
     static func testHint(localize: (String) -> String, hasKey: Bool) -> String {
@@ -310,7 +311,7 @@ struct TableRecognitionSettingsEnvironment {
         spinner.frame.size = NSSize(width: 14, height: 14)
         spinner.setAccessibilityIdentifier("settings.capture.table-test-spinner")
         addSubview(spinner)
-        testStatus.maximumNumberOfLines = 1
+        testStatus.maximumNumberOfLines = 2
         testStatus.setAccessibilityIdentifier("settings.capture.table-test-status")
         addSubview(testStatus)
         testHint.maximumNumberOfLines = 2
@@ -331,6 +332,8 @@ struct TableRecognitionSettingsEnvironment {
         advancedTitle.setAccessibilityIdentifier("settings.capture.table-advanced-title")
         addSubview(advancedTitle)
         labels["advancedTitle"] = advancedTitle
+        // The title toggles too, as a disclosure's label does.
+        advancedTitle.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(clickAdvancedTitle(_:))))
 
         for (field, placeholder, label, id) in [
             (address, "https://… (required, OpenAI-compatible)", "Service Address", "settings.capture.table-address"),
@@ -351,7 +354,7 @@ struct TableRecognitionSettingsEnvironment {
         advancedRows.addSubview(labels["address"]!)
         advancedRows.addSubview(labels["model"]!)
         addressHint.maximumNumberOfLines = 2
-        addressHint.stringValue = localize("Changing the address needs the key saved and consent given again.")
+        addressHint.stringValue = localize(Self.addressHint)
         addressHint.setAccessibilityIdentifier("settings.capture.table-address-hint")
         advancedRows.addSubview(addressHint)
         modelHint.stringValue = localize("Test again after changing the model.")
@@ -365,15 +368,37 @@ struct TableRecognitionSettingsEnvironment {
         costLink = link("Learn More ↗", zh: "了解更多 ↗", id: "settings.capture.table-cost-link", url: Self.costURL)
     }
 
-    /// Room for the tallest arrangement (Advanced open), so the group never changes the form's height; when
-    /// Advanced is closed the spare room is below the cost line.
+    /// Room for the tallest arrangement (Advanced open, a key message and the longest Test result), so the group
+    /// never changes the form's height; otherwise the spare room is below the cost line.
     private func tallestHeight() -> CGFloat {
-        let saved = (advancedOpen, keyMessage.stringValue)
+        let saved = (advancedOpen, keyMessage.stringValue, testStatus.stringValue, savedKey.stringValue,
+                     savedRow.isHidden)
         advancedOpen = true
         keyMessage.stringValue = localize("The key could not be removed from the keychain.")
-        let height = layoutRows()
-        (advancedOpen, keyMessage.stringValue) = saved
+        savedKey.stringValue = TableRecognitionSettingsState.masked("sk-measure-WWWW")
+        let statuses: [TableRecognitionTestStatus] = [.testing, .passed, .keyRejected, .addressUnreachable,
+                                                      .modelCannotReadImages, .offline, .quotaOrBalance, .undetermined,
+                                                      .cloudOff]
+        var height: CGFloat = 0
+        for savedShown in [false, true] {
+            savedRow.isHidden = !savedShown
+            for status in statuses {
+                testStatus.stringValue = statusLine(status)
+                height = max(height, layoutRows())
+            }
+        }
+        (advancedOpen, keyMessage.stringValue, testStatus.stringValue, savedKey.stringValue, savedRow.isHidden) = saved
         return height + 16
+    }
+
+    /// A Test result as the row shows it: ✓ for a pass, ⚠ for a failure.
+    private func statusLine(_ status: TableRecognitionTestStatus) -> String {
+        let message = localize(Self.message(status)!)
+        switch status {
+        case .passed: return "✓ " + message
+        case .testing: return message
+        default: return "⚠ " + message
+        }
     }
 
     private func width(of field: NSTextField) -> CGFloat {
@@ -423,7 +448,13 @@ struct TableRecognitionSettingsEnvironment {
         savedPill.frame.origin = NSPoint(x: savedKey.frame.maxX + 6, y: 3)
         replaceKey.frame.origin = NSPoint(x: savedPill.frame.maxX + 8, y: 0)
         removeKey.frame.origin = NSPoint(x: replaceKey.frame.maxX + 6, y: 0)
-        top += 24 + 4
+        if removeKey.frame.maxX > rowWidth {
+            // The masked key, the pill and both buttons do not fit on one line: the buttons go under the key.
+            replaceKey.frame.origin = NSPoint(x: valueX, y: 28)
+            removeKey.frame.origin = NSPoint(x: replaceKey.frame.maxX + 6, y: 28)
+            savedRow.frame.size.height = 52
+        }
+        top += (savedRow.isHidden ? 24 : savedRow.frame.height) + 4
         if !custom { top = hintLine(keyHint, link: keyHelp, top: top) }
         if !keyMessage.stringValue.isEmpty {
             keyMessage.frame = NSRect(x: valueX, y: top + 2, width: valueWidth, height: 16)
@@ -443,8 +474,14 @@ struct TableRecognitionSettingsEnvironment {
             spinner.frame.origin = NSPoint(x: statusX, y: top + 5)
             statusX += 20
         }
-        testStatus.frame = NSRect(x: statusX, y: top + 4, width: max(0, rowWidth - statusX), height: 18)
-        top += 24 + 2
+        let besideWidth = max(0, rowWidth - statusX)
+        if testStatus.stringValue.isEmpty || width(of: testStatus) <= besideWidth {
+            testStatus.frame = NSRect(x: statusX, y: top + 4, width: besideWidth, height: 18)
+            top += 24 + 2
+        } else {
+            // Too long to sit beside the button (English): it goes under it in the value column, up to two lines.
+            top = place(testStatus, top: top + 24 + 4) + 2
+        }
         top = place(testHint, top: top) + 14
 
         advanced.frame.origin = NSPoint(x: valueX, y: top + 1)
@@ -483,12 +520,15 @@ struct TableRecognitionSettingsEnvironment {
         let hasKey = state.hasKey && !replacing
         service.selectItem(at: custom ? 1 : 0)
         for view in [keyField, saveKey!] as [NSView] { view.isHidden = hasKey }
+        // A key belongs to a usable address (Custom: address and model); until then there is nothing to save it for.
+        saveKey.isEnabled = state.host != nil
         for view in [savedRow, savedKey, savedPill, replaceKey!, removeKey!] as [NSView] { view.isHidden = !hasKey }
         savedKey.stringValue = state.maskedKey ?? ""
         keyHint.isHidden = custom
         keyHelp.isHidden = custom
         keyMessage.isHidden = keyMessage.stringValue.isEmpty
-        host.stringValue = state.host ?? localize("(Enter the address first)")
+        host.stringValue = state.host
+            ?? localize(state.missing == .model ? "(Enter the model first)" : "(Enter the address first)")
         host.textColor = state.host == nil ? DesignColor.textSecondary.nsColor : DesignColor.textPrimary.nsColor
         let testing = testTask != nil
         testButton.title = localize(testing ? "Cancel" : "Test")
@@ -496,13 +536,7 @@ struct TableRecognitionSettingsEnvironment {
         spinner.isHidden = !testing
         if testing { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         let status: TableRecognitionTestStatus? = testing ? .testing : state.test
-        testStatus.stringValue = status.flatMap(Self.message).map { message in
-            switch status {
-            case .passed?: "✓ " + localize(message)
-            case .testing?, nil: localize(message)
-            default: "⚠ " + localize(message)
-            }
-        } ?? ""
+        testStatus.stringValue = status.map(statusLine) ?? ""
         testStatus.textColor = switch status {
         case .passed?: NSColor.systemGreen
         case .testing?, nil: DesignColor.textSecondary.nsColor
@@ -515,8 +549,7 @@ struct TableRecognitionSettingsEnvironment {
         if address.currentEditor() == nil { address.stringValue = state.address }
         if modelField.currentEditor() == nil { modelField.stringValue = state.model }
         address.placeholderString = localize("https://… (required, OpenAI-compatible)")
-        addressHint.stringValue = localize(custom ? "A custom service needs an address and a model."
-                                                  : "Changing the address needs the key saved and consent given again.")
+        addressHint.stringValue = localize(custom ? "A custom service needs an address and a model." : Self.addressHint)
         layoutRows()
     }
 
@@ -574,6 +607,11 @@ struct TableRecognitionSettingsEnvironment {
         }
     }
 
+    @objc private func clickAdvancedTitle(_ sender: Any?) {
+        advanced.state = advanced.state == .on ? .off : .on
+        toggleAdvanced(advanced)
+    }
+
     @objc private func toggleAdvanced(_ sender: NSButton) {
         advancedOpen = sender.state == .on || state?.advancedRequired == true
         if let state { show(state) }
@@ -597,7 +635,22 @@ struct TableRecognitionSettingsEnvironment {
             return
         }
         let model = environment.model
+        // Test uses what the fields show: an address or model typed but not yet committed (no Return, Tab or focus
+        // change; with Keyboard Navigation off a click on Test does not end editing) is committed first. A new
+        // address has no key, so then nothing is sent and the row shows the new configuration.
+        let typed = (address: address.stringValue, model: modelField.stringValue)
+        let uncommitted = state.map { typed.address != $0.address || typed.model != $0.model } ?? false
+        if address.currentEditor() != nil || modelField.currentEditor() != nil { window?.makeFirstResponder(nil) }
         testTask = Task { [weak self] in
+            if uncommitted {
+                await model.setAddress(typed.address)
+                await model.setModel(typed.model)
+                guard await model.state().canTest else {
+                    self?.testTask = nil
+                    self?.refresh()
+                    return
+                }
+            }
             var outcome = await model.test()
             if case .needsConsent(let host) = outcome, !Task.isCancelled, let self {
                 let alert = Self.consentAlert(host: host, localize: localize)
@@ -607,7 +660,10 @@ struct TableRecognitionSettingsEnvironment {
                 await model.answerConsent(granted: agreed, host: host)
                 if agreed && !Task.isCancelled { outcome = await model.test() }
             }
-            _ = outcome
+            // State 35 `case=address|model`: the message points under Advanced, so Advanced opens.
+            if case .finished(let status?) = outcome, [.addressUnreachable, .modelCannotReadImages].contains(status) {
+                self?.advancedOpen = true
+            }
             self?.testTask = nil
             self?.refresh()
         }

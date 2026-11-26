@@ -292,7 +292,7 @@ func issue871WI5AdvancedShowsAddressAndModelAndModelChangeClearsTheResult() asyn
     #expect(try f.shown("settings.capture.table-address") && f.shown("settings.capture.table-model"))
     #expect(try f.text("settings.capture.table-address") == "https://api.deepseek.com")
     #expect(try f.text("settings.capture.table-model") == "deepseek-flash")
-    #expect(try f.text("settings.capture.table-address-hint") == "换地址需要重新保存密钥并同意。")
+    #expect(try f.text("settings.capture.table-address-hint") == "换地址会移除已保存的密钥，需要重新保存并同意。")
     #expect(try f.text("settings.capture.table-model-hint") == "改模型后请重新测试。")
     let model = try f.view("settings.capture.table-model", as: NSTextField.self)
     model.stringValue = "deepseek-vision"
@@ -361,4 +361,235 @@ func issue871WI5SwitchOffTestSaysSoAndSendsNothing() async throws {
     try f.click("settings.capture.table-test")
     try await waitUntil { try f.text("settings.capture.table-test-status") == "⚠ 云识别已关闭，没有发送。" }
     #expect(await f.transport.requests.isEmpty)
+}
+
+// MARK: - Fix round 1
+
+/// The shown leaves of the group (controls and plain views), with frames in the group's coordinates.
+@MainActor private func shownLeaves871(_ root: NSView) -> [(view: NSView, frame: NSRect)] {
+    var leaves: [(NSView, NSRect)] = []
+    func walk(_ view: NSView) {
+        for child in view.subviews where !child.isHidden && !(child is NSBox) {
+            if child is NSControl || child.subviews.allSatisfy(\.isHidden) {
+                leaves.append((child, child.convert(child.bounds, to: root)))
+            } else {
+                walk(child)
+            }
+        }
+    }
+    walk(root)
+    return leaves
+}
+
+/// Whether a label's text needs more room than its frame (or its line limit) gives it.
+@MainActor private func clipped871(_ field: NSTextField) -> Bool {
+    guard !field.stringValue.isEmpty, !field.isEditable else { return false }
+    let needed = field.attributedStringValue.boundingRect(
+        with: NSSize(width: field.frame.width - 4, height: .greatestFiniteMagnitude),
+        options: [.usesLineFragmentOrigin, .usesFontLeading]).height.rounded(.up)
+    let font = field.font ?? DesignMetrics.font("uiSmall")
+    let line = (font.ascender - font.descender + font.leading).rounded(.up)
+    let lines = Int((needed / line).rounded())
+    return needed > field.frame.height + 0.5 || (field.maximumNumberOfLines > 0 && lines > field.maximumNumberOfLines)
+}
+
+/// Every shown control fits inside the group, no two overlap, and no text is cut off.
+@MainActor private func expectFitsAndApart871(_ f: Fixture871App, _ label: String) throws {
+    let group = try f.view("settings.capture.table")
+    let leaves = shownLeaves871(group)
+    for (index, a) in leaves.enumerated() {
+        let id = a.view.accessibilityIdentifier()
+        #expect(a.frame.minX >= -0.5 && a.frame.maxX <= group.frame.width + 0.5, "\(label): \(id) leaves the row")
+        #expect(a.frame.minY >= -0.5 && a.frame.maxY <= group.frame.height + 0.5, "\(label): \(id) leaves the group")
+        if let field = a.view as? NSTextField {
+            #expect(!clipped871(field), "\(label): \(id) is cut off: \(field.stringValue)")
+        }
+        for b in leaves.dropFirst(index + 1) {
+            #expect(!a.frame.intersects(b.frame), "\(label): \(id) overlaps \(b.view.accessibilityIdentifier())")
+        }
+    }
+}
+
+private func reply871(_ testCase: String) -> Result<HTTPResponse, URLError>? {
+    switch testCase {
+    case "key": .success(HTTPResponse(statusCode: 401, body: Data()))
+    case "address": .failure(URLError(.cannotFindHost))
+    case "model": .success(HTTPResponse(statusCode: 400, body: Data(#"{"error":{"message":"This model does not support image input"}}"#.utf8)))
+    case "offline": .failure(URLError(.notConnectedToInternet))
+    case "quota": .success(HTTPResponse(statusCode: 402, body: Data()))
+    case "unknown": .success(HTTPResponse(statusCode: 500, body: Data()))
+    default: nil
+    }
+}
+
+private let state35Cases871 = ["default", "saved", "testing", "ok", "key", "address", "model", "offline", "quota",
+                               "unknown", "off", "advanced", "custom"]
+
+@MainActor @Test(.timeLimit(.minutes(5)), arguments: ["en", "zh-Hans"])
+func issue871Fix1EveryCaseFitsWithoutOverlapInBothLanguages(_ locale: String) async throws {
+    for testCase in state35Cases871 {
+        let f = try fixture871App(locale, enabled: testCase != "off")
+        defer { f.panel.window.close() }
+        try await waitUntil { try !f.text("settings.capture.table-host").isEmpty }
+        switch testCase {
+        case "default":
+            break
+        case "advanced":
+            let advanced = try f.view("settings.capture.table-advanced", as: NSButton.self)
+            advanced.state = .on
+            try f.click("settings.capture.table-advanced")
+        case "custom":
+            let service = try f.view("settings.capture.table-service", as: NSPopUpButton.self)
+            service.selectItem(at: 1)
+            try f.click("settings.capture.table-service")
+            try await waitUntil { try f.shown("settings.capture.table-address") }
+            try await waitUntil { try f.view("settings.capture.table-service", as: NSPopUpButton.self).indexOfSelectedItem == 1 }
+        case "saved":
+            try await f.saveKey("sk-live-00003f9a")
+        case "testing":
+            try await f.saveKey("sk-live-00003f9a")
+            await f.transport.hold()
+            try f.click("settings.capture.table-test")
+            try await waitUntil { await f.transport.waiting }
+        default:
+            try await f.saveKey("sk-live-00003f9a")
+            if let reply = reply871(testCase) { await f.transport.queue(reply) }
+            try f.click("settings.capture.table-test")
+            try await waitUntil {
+                try !f.text("settings.capture.table-test-status").isEmpty
+                    && f.view("settings.capture.table-test", as: NSButton.self).title == (locale == "en" ? "Test" : "测试")
+            }
+        }
+        try expectFitsAndApart871(f, "\(locale) \(testCase)")
+        if testCase == "testing" {
+            try f.click("settings.capture.table-test")
+            await f.transport.open()
+        }
+    }
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["address", "model"])
+func issue871Fix1AddressAndModelFailuresOpenAdvanced(_ testCase: String) async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    #expect(try !f.shown("settings.capture.table-address"))
+    await f.transport.queue(try #require(reply871(testCase)))
+    try f.click("settings.capture.table-test")
+    try await waitUntil { try !f.text("settings.capture.table-test-status").isEmpty }
+    try await waitUntil { try f.view("settings.capture.table-test", as: NSButton.self).title == "测试" }
+    // State 35 `case=address|model`: the rows the message points at are shown.
+    #expect(try f.shown("settings.capture.table-address") && f.shown("settings.capture.table-model"))
+    #expect(try f.view("settings.capture.table-advanced", as: NSButton.self).state == .on)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1OtherFailuresLeaveAdvancedClosed() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    await f.transport.queue(try #require(reply871("key")))
+    try f.click("settings.capture.table-test")
+    try await waitUntil { try f.text("settings.capture.table-test-status") == "⚠ 密钥不被接受，请更换密钥。" }
+    #expect(try !f.shown("settings.capture.table-address"))
+}
+
+private func sentModel871(_ request: URLRequest) -> String? {
+    guard let body = request.httpBody,
+          let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else { return nil }
+    return json["model"] as? String
+}
+
+/// Opens Advanced and types into a field without ending editing (no Return, Tab or focus change).
+@MainActor private func typeWithoutCommitting871(_ f: Fixture871App, _ id: String, _ text: String) async throws {
+    let advanced = try f.view("settings.capture.table-advanced", as: NSButton.self)
+    advanced.state = .on
+    try f.click("settings.capture.table-advanced")
+    try f.view(id, as: NSTextField.self).stringValue = text
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1TestSendsTheModelTheFieldShows() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    try await typeWithoutCommitting871(f, "settings.capture.table-model", "deepseek-vision")
+    try f.click("settings.capture.table-test")
+    try await waitUntil { try f.text("settings.capture.table-test-status") == "✓ 测试成功，可以识别示例表格。" }
+    let requests = await f.transport.requests
+    #expect(requests.count == 1)
+    #expect(requests.first.flatMap(sentModel871) == "deepseek-vision")
+    #expect(await f.table.stored.deepSeekModel == "deepseek-vision")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1TestNeverSendsToTheOldAddressWhileANewOneIsTyped() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    try await typeWithoutCommitting871(f, "settings.capture.table-address", "https://gw.example.com/v1")
+    try f.click("settings.capture.table-test")
+    // The typed address is committed first; it has no key, so nothing is sent anywhere.
+    try await waitUntil { try f.text("settings.capture.table-host") == "gw.example.com" }
+    try await waitUntil { try f.view("settings.capture.table-test", as: NSButton.self).title == "测试" }
+    #expect(await f.table.stored.deepSeekAddress == "https://gw.example.com/v1")
+    #expect(await f.transport.requests.isEmpty)
+    #expect(try f.shown("settings.capture.table-key"))
+    #expect(try !f.view("settings.capture.table-test", as: NSButton.self).isEnabled)
+    #expect(try f.text("settings.capture.table-test-status").isEmpty)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1ChangingTheAddressRemovesTheKeyAndSaysSo() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    let advanced = try f.view("settings.capture.table-advanced", as: NSButton.self)
+    advanced.state = .on
+    try f.click("settings.capture.table-advanced")
+    #expect(try f.text("settings.capture.table-address-hint") == "换地址会移除已保存的密钥，需要重新保存并同意。")
+    let address = try f.view("settings.capture.table-address", as: NSTextField.self)
+    address.stringValue = "https://gw.example.com/v1"
+    try f.click("settings.capture.table-address")
+    try await waitUntil { try f.text("settings.capture.table-host") == "gw.example.com" }
+    #expect(await f.secrets.items.isEmpty)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1CustomSavesAKeyOnlyOnceAddressAndModelAreFilled() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    let service = try f.view("settings.capture.table-service", as: NSPopUpButton.self)
+    service.selectItem(at: 1)
+    try f.click("settings.capture.table-service")
+    try await waitUntil { try f.text("settings.capture.table-host") == "（先填写地址）" }
+    #expect(try !f.view("settings.capture.table-save", as: NSButton.self).isEnabled)
+    let address = try f.view("settings.capture.table-address", as: NSTextField.self)
+    address.stringValue = "https://gw.example.com/v1"
+    try f.click("settings.capture.table-address")
+    // An address but no model yet: the host row asks for the model, not the address.
+    try await waitUntil { try f.text("settings.capture.table-host") == "（先填写模型）" }
+    #expect(try !f.view("settings.capture.table-save", as: NSButton.self).isEnabled)
+    let model = try f.view("settings.capture.table-model", as: NSTextField.self)
+    model.stringValue = "vision-x"
+    try f.click("settings.capture.table-model")
+    try await waitUntil { try f.text("settings.capture.table-host") == "gw.example.com" }
+    #expect(try f.view("settings.capture.table-save", as: NSButton.self).isEnabled)
+    try await f.saveKey("sk-cu-00000002")
+    #expect(await f.secrets.items.count == 1)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix1ClickingTheAdvancedTitleToggles() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await waitUntil { try f.text("settings.capture.table-host") == "api.deepseek.com" }
+    let title = try f.view("settings.capture.table-advanced-title", as: NSTextField.self)
+    let click = try #require(title.gestureRecognizers.compactMap { $0 as? NSClickGestureRecognizer }.first)
+    let action = try #require(click.action)
+    NSApp.sendAction(action, to: click.target, from: click)
+    #expect(try f.shown("settings.capture.table-address"))
+    #expect(try f.view("settings.capture.table-advanced", as: NSButton.self).state == .on)
+    NSApp.sendAction(action, to: click.target, from: click)
+    #expect(try !f.shown("settings.capture.table-address"))
 }
