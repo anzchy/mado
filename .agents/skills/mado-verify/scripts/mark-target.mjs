@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { checkTaskWorktree, writeIdentity } from './task-worktree.mjs';
 
 // Optional <branch>: the task branch the implementer will work on; preferred over the worktree's current branch.
 const [paneHome, worktree, issueRaw, task, handoff, explicitBranch] = process.argv.slice(2);
@@ -19,8 +20,11 @@ try {
   if (fs.realpathSync(git(home, 'rev-parse', '--path-format=absolute', '--git-common-dir')) !== fs.realpathSync(git(target, 'rev-parse', '--path-format=absolute', '--git-common-dir'))) throw new Error('target must be a worktree of the pane-home repository');
   if (explicitBranch !== undefined && spawnSync('git', ['check-ref-format', '--branch', explicitBranch], { encoding: 'utf8' }).status !== 0) throw new Error(`invalid branch name: ${explicitBranch}`);
   const branch = explicitBranch ?? git(target, 'symbolic-ref', '-q', '--short', 'HEAD');
+  // #901: one task, one worktree. Refuses a pane home, another task's worktree and a dirty tree; a fix round reuses its own.
+  const { fixRound } = checkTaskWorktree({ home, target, issue, branch });
   const marker = path.join(home, '.build/mado-verify/target-worktree');
   fs.mkdirSync(path.dirname(marker), { recursive: true });
   fs.writeFileSync(marker, JSON.stringify({ worktree: target, branch, issue, task, handoff }) + '\n');
+  if (!fixRound) writeIdentity(target, { issue, branch, task });
   console.log(marker);
 } catch (error) { console.error(error.message); process.exitCode = 1; }
