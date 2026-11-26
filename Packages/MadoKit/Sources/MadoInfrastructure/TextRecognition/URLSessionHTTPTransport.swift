@@ -39,15 +39,13 @@ public final class URLSessionHTTPTransport: HTTPTransport {
     deinit { session.finishTasksAndInvalidate() }
 
     public func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
-        guard let url = request.url, let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            throw refusal(for: destination)
-        }
+        let parts = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
         switch destination {
         case .baiduOCR:
-            guard parts.scheme == "https", parts.host == Self.host, parts.port == nil, parts.user == nil,
+            guard let parts, parts.scheme == "https", parts.host == Self.host, parts.port == nil, parts.user == nil,
                   parts.password == nil, Self.paths.contains(parts.path) else { throw Refusal.notBaiduOCR }
         case .consentedHost(let host, let port):
-            guard Self.admits(parts, host: host, port: port) else { throw Refusal.notAllowedHost }
+            guard let parts, Self.admits(parts, host: host, port: port) else { throw Refusal.notAllowedHost }
         }
         // URLSession starts a load even for a task that is already cancelled (#890: 199 of 200 calls did); a
         // cancelled call sends nothing.
@@ -63,10 +61,6 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         // a bare URLResponse is still mapped to the services' failure path rather than trapping.
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         return HTTPResponse(statusCode: status, body: body)
-    }
-
-    private func refusal(for destination: HTTPDestination) -> Refusal {
-        destination == .baiduOCR ? .notBaiduOCR : .notAllowedHost
     }
 
     /// The consented host: https, no user or password, the same host after lowercasing and dropping one trailing dot
