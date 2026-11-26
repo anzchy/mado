@@ -6,20 +6,25 @@ public struct TableRecognitionService: Sendable {
     private let settings: any TableRecognitionSettings
     private let credentials: any TableRecognitionCredentialStore
     private let transport: any HTTPTransport
+    private let report: @Sendable (TableRecognitionDiagnostic) -> Void
     /// Test seam: runs once the request is built, in the synchronous stretch before it is sent.
     private let requestBuilt: @Sendable () -> Void
 
     public init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
-                transport: any HTTPTransport) {
-        self.init(settings: settings, credentials: credentials, transport: transport, requestBuilt: {})
+                transport: any HTTPTransport,
+                report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void = { _ in }) {
+        self.init(settings: settings, credentials: credentials, transport: transport,
+                  requestBuilt: {}, report: report)
     }
 
     init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
-         transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void) {
+         transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void,
+         report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void = { _ in }) {
         self.settings = settings
         self.credentials = credentials
         self.transport = transport
         self.requestBuilt = requestBuilt
+        self.report = report
     }
 
     public func recognise(_ image: Data) async -> TableRecognitionResult {
