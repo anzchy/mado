@@ -7,5 +7,10 @@ import Foundation
 /// fails the caller's expectation, not as a wait that runs to the test's time limit.
 func stopReached(within bound: Duration = .seconds(10), fileID: String = #fileID, line: Int = #line,
                  _ stopCount: () -> Int) async throws -> Bool {
-    stopCount() >= 1
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: bound)
+    try await waitUntil("stopLoading reached", fileID: fileID, line: line) {
+        stopCount() >= 1 || clock.now >= deadline
+    }
+    return stopCount() >= 1
 }
