@@ -160,13 +160,16 @@ public struct TableRecognitionSettingsState: Sendable, Equatable {
     public let test: TableRecognitionTestStatus?
     /// nil when the address is usable (`host` is set).
     public let missing: TableRecognitionMissing?
+    /// The last address change was refused because the old configuration's key could not be removed from the
+    /// keychain: the address, its key and its consent are as they were.
+    public let addressChangeFailed: Bool
 
     public init(preset: TableRecognitionPreset, address: String, model: String, host: String?, hasKey: Bool,
                 maskedKey: String?, advancedRequired: Bool, canTest: Bool, test: TableRecognitionTestStatus?,
-                missing: TableRecognitionMissing? = nil) {
+                missing: TableRecognitionMissing? = nil, addressChangeFailed: Bool = false) {
         self.preset = preset; self.address = address; self.model = model; self.host = host; self.hasKey = hasKey
         self.maskedKey = maskedKey; self.advancedRequired = advancedRequired; self.canTest = canTest; self.test = test
-        self.missing = missing
+        self.missing = missing; self.addressChangeFailed = addressChangeFailed
     }
 
     /// State 35 draws twelve dots and the key's last four characters.
