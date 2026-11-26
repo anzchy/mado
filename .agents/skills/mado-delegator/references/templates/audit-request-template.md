@@ -1,6 +1,6 @@
 # Audit request: #<n> <WP> <summary> — round 1, blind
 
-Item: <item>. Range: base <sha7>..<head7> on branch `<branch>`, worktree ~/Documents/mac-app/picsee-wt/<implementer>.
+Item: <item>. Range: base <sha7>..<head7> on branch `<branch>`, task worktree ~/Documents/mac-app/picsee-wt/<issue>-<slug>.
 <N> commits, ~<lines> production lines. Objects are shared; use git show and git diff --no-ext-diff.
 <main has moved to <sha7> (…); the rebase comes after audit — name conflict risks as notes only.>
 

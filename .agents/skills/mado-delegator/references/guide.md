@@ -330,14 +330,15 @@ conversation, but reset it if its context is above ~80%; the fix brief must then
 
 | Agent | Reset | Notes |
 |---|---|---|
-| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> [--screen-cwd <screen-worktree>] --prompt '<task prompt>'` | The helper types `/new`, waits until the current composer shows it, presses Enter, and retries Enter once if the slash-command popup still holds `/new`. If startup fails with only `/new` in the current composer, it clears that line. It then waits for the directory dialog or a fresh empty Codex prompt, explicitly chooses option 1 (current Git worktree) if shown, restores and checks the agent and pane names, then sends the prompt. It succeeds only after `herdr agent list` reports `working`; an idle agent with a still-empty prompt gets one retry, while a submitted prompt fails without duplication. `--cwd` checks the agent-list cwd; `--screen-cwd`, when supplied, separately checks the screen cwd. Without it, both must match `--cwd`. Use `prompt-and-confirm <pane> <name> --cwd <worktree> [--screen-cwd <screen-worktree>] '<task prompt>'` for an already fresh idle session. For fresh gpt-auditor and Codex implementer dispatch, use this helper instead of `reset.sh` plus a separate `herdr agent prompt`. |
+| Codex (p2–p5) | `.agents/skills/mado-delegator/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> [--screen-cwd <screen-worktree>] --prompt '<task prompt>'` | The helper types `/new`, waits until the current composer shows it, presses Enter, and retries Enter once if the slash-command popup still holds `/new`. If startup fails with only `/new` in the current composer, it clears that line. It then waits for the directory dialog or a fresh empty Codex prompt, explicitly chooses option 1 (current Git worktree) if shown, restores and checks the agent and pane names, then sends the prompt. It succeeds only after `herdr agent list` reports `working`; an idle agent with a still-empty prompt gets one retry, while a submitted prompt fails without duplication. `--cwd` checks the agent-list cwd; `--screen-cwd`, when supplied, separately checks the screen cwd. Without it, both must match `--cwd`. Use `prompt-and-confirm <pane> <name> --cwd <worktree> [--screen-cwd <screen-worktree>] '<task prompt>'` for an already fresh idle session. **Implementers (#901):** `--cwd <pane-home> --task-worktree <picsee-wt/<issue>-<slug>>`. The Codex pane keeps running in its pane home (agent-list cwd, role overlay, `-s danger-full-access`, so it can write the task worktree) and the prompt names the task worktree; the helper checks that the task worktree is a separate `<issue>-<slug>` worktree root named in the prompt, and refuses an implementer (`*-imple-*`) whose `--cwd` is a pane home without `--task-worktree`, before it touches the pane. Chosen over relaunching Codex in each task worktree, which would need a scripted `/quit` and `herdr agent start` per task and loses the pane name (2026-11-25 failure: "pane cwd … != expected"). An implementer you did relaunch inside its task worktree passes `--cwd <task-worktree>` alone. For fresh gpt-auditor and Codex implementer dispatch, use this helper instead of `reset.sh` plus a separate `herdr agent prompt`. |
 | opus-auditor (p6) | `herdr pane send-text w1:p6 '/clear'` + `send-keys Enter`; the footer must show `Context 0%` | Start: `herdr agent start opus-auditor --kind claude --pane w1:p6 -- --agent mado-opus-auditor --model opus --dangerously-skip-permissions`. `/clear` does not reload the agent file: after a change to it lands, move `picsee-wt/opus-auditor` to the new main and restart the pane. Network drops show `ECONNRESET` retries; if a turn ends "Interrupted", prompt it to resume the same request. |
 | gpt-auditor (p5) | No requests while paused | Only an explicit user restoration reactivates it; a Codex quota reset does not. |
 | kimi-imple-1 (p7), **retired 2026-11-01, do not dispatch** | type `/new`, Enter; the status bar must show `context: 0%` | Start: `herdr agent start kimi-imple-1 --kind kimi --pane w1:p7 -- --yolo -m kimi-code/k3.1-pro`. Effort comes from `~/.kimi-code/config.toml` (`[models."kimi-code/k3.1-pro"] default_effort = "high"`). The status bar must read `K3.1 Pro thinking: high`. The first run in a new folder asks "Trust this folder?". Kimi lives in `~/.kimi-code/bin`, which `.zshrc` puts on PATH; a non-login shell may not find `kimi`. |
 
 To create a **new implementer pane**:
 
-1. `git worktree add -b <branch> ~/Documents/mac-app/picsee-wt/<name> origin/main`
+1. `git worktree add --detach ~/Documents/mac-app/picsee-wt/<name> origin/main` — the pane home: the pane's identity, its
+   dispatch marker and (Codex) its role overlay only. Tasks never run there (one task, one worktree, §5.2).
 2. `herdr pane split …`, then `send-text 'cd <worktree>'` + Enter.
 3. `herdr agent start <name> --kind … --pane … -- <args>`.
 4. Give it a small Low trial task first. Audit it with the active independent auditor and evaluate the agent before
@@ -427,8 +428,18 @@ signed-device comparison and independent review **before merging the UI PR**. Un
 12. **Open questions with defaults,** plus a closing line: "follow each default; if WI-0 or the code contradicts one,
     stop and report".
 
+**One task, one worktree (#901, owner 2026-11-25).** Create the task worktree first:
+`git fetch origin && $SK/scripts/new-task-worktree.sh <issue> <slug> --pane-home ~/Documents/mac-app/picsee-wt/<pane> --task <Report-Task> --handoff <absolute-handoff-path> [--branch <type>/<issue>-<slug>] [--codex] --pane <id> --brief <brief>`.
+It creates `~/Documents/mac-app/picsee-wt/<issue>-<slug>` and the branch (default `task/<issue>-<slug>`) from `origin/main` (or
+`<base>`), installs the implementor role overlay with `--codex`, runs `mark-target.mjs` and prints the worktree, branch, marker
+and the dispatch line. It refuses an existing path, an existing branch (unless `--existing-branch`, to move a pre-#901 task's
+fix round), a base branch with uncommitted changes, a bad issue or slug, and the pane home as the target. A fix round stays in
+its task worktree: run `mark-target.mjs` with the new Report-Task (it accepts the same issue and branch, untracked tool files
+included, and refuses tracked changes). Rebase, owner-gates, mado-verify and the device smoke use the task worktree; the
+cleanup job removes it after merge.
+
 Dispatch a fresh Codex session with a one-line prompt that points at the file, for example
-`$SK/scripts/start-fresh-codex.sh w1:p3 gpt-imple-2 --cwd ~/Documents/mac-app/picsee-wt/gpt-imple-2 --prompt 'New task: … Read and follow ~/.mado/herdr/gpt-imple-2/<brief>.md … Do not push.'`.
+`$SK/scripts/start-fresh-codex.sh w1:p3 gpt-imple-2 --cwd ~/Documents/mac-app/picsee-wt/gpt-imple-2 --task-worktree ~/Documents/mac-app/picsee-wt/<issue>-<slug> --prompt 'New task: … Worktree: ~/Documents/mac-app/picsee-wt/<issue>-<slug> … Read and follow ~/.mado/herdr/gpt-imple-2/<brief>.md … Do not push.'`.
 After it confirms `working`, start a fresh listener event as described
 in [Durable listener notification](#durable-listener-notification).
 

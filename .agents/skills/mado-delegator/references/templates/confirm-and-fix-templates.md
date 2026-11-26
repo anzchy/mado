@@ -4,7 +4,7 @@
 # <item> fix round <k> (merged audit, delegator <date>)<. One round, no confirm round (no C/H).>
 
 <If the implementer's context was reset: "Your context was reset. Read your handoff … and the brief … first.">
-Branch <branch> @ <head7>. <Step 0: rebase onto origin/main — expected conflicts only in xcstrings / ledger md /
+Branch <branch> @ <head7>, in the task worktree ~/Documents/mac-app/picsee-wt/<issue>-<slug> (the fix round continues there; the delegator re-runs mark-target.mjs for the new Report-Task). <Step 0: rebase onto origin/main — expected conflicts only in xcstrings / ledger md /
 ledger html (regenerate); never pipe git rebase; a conflict elsewhere: stop and report.> Reports (unblinded for you):
 ~/.mado/herdr/gpt-auditor/<item>-r1.md and ~/.mado/herdr/opus-auditor/<item>-r1.md.
 

@@ -144,7 +144,15 @@ Output: ~/.mado/herdr/gpt-planner/p318-plan.md, Report-Task: p318-plan-r1.
 **delegator 审读后**再复制到实现者目录作为正式 brief；fence、tier、用户原话由 delegator 负责最终核对。
 
 ### 5.3 实现者
-与现在一样：`herdr agent prompt opus-imple-1 'New task: P3-18. Read and follow ~/.mado/herdr/opus-imple-1/p318-brief.md'`。
+**一个任务一个 worktree**（#901，用户 2026-11-25：「同意，下一个 dispatch 起每个任务用独立 worktree，而且这个看看写入 /mado-delegator 相关skill中，强制执行」）。
+每个新任务由 delegator 用 `.agents/skills/mado-delegator/scripts/new-task-worktree.sh <issue> <slug> …` 从 `origin/main` 建
+`~/Documents/mac-app/picsee-wt/<issue>-<slug>`；实现者只在这里改代码、提交、跑 gates 与 mado-verify。修复轮继续用同一个任务
+worktree；rebase、Device-Smoke 也在这里跑；合并后由清理任务删除。pane 自己的 worktree（`picsee-wt/<pane 名>`，即 pane home）
+只保存 pane 身份与派发标记，不再用来干活。原因：复用 pane worktree 时，delegator 的 rebase 让正在进行的工作处于 detached HEAD、
+一个 pane 被钉在 PR head 上做复测而接不了新任务、遗留的未跟踪文件弄坏了真机构建、tdd-guardian 的 `dirty_source` 混入旧任务的文件。
+`mark-target.mjs`、`evidence.mjs check`、`start-fresh-codex.sh --task-worktree` 在运行时强制；CI 的
+`scripts/agents/task-worktree-lint.mjs` 检查 brief 模板和 delegator skill 不会写回 pane home。
+派发：`/clear` 后 `herdr agent prompt opus-imple-1 'New task: #<issue>. Worktree: ~/Documents/mac-app/picsee-wt/<issue>-<slug>. Read and follow ~/.mado/herdr/opus-imple-1/<item>-brief.md'`。
 两个实现者文件的规则段相同：只改 brief 的 You own、每个 WI 先 RED、`--files` 只填该 WI 的测试文件、
 改坏 fixture/素材得到的失败不算 RED、UI 断言看渲染几何、只把重任务放进 heavy lock、命名路径暂存、按 WI 提交、
 不 push / 不开 PR、账簿只改「限制：」，handoff 首行 `Report-Task:`。

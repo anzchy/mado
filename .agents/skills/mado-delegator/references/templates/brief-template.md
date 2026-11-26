@@ -1,8 +1,9 @@
 # <implementer> task: <WP or #issue> — <one-line summary> (delegator, <date>)
 
-You are **<implementer>**. New task, fresh session. Worktree `~/Documents/mac-app/picsee-wt/<implementer>`.
-Branch: `git fetch origin && git switch -c <branch> origin/main` (main ≥ <sha7>). Issue #<n>.
-Target marker: the delegator runs `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` before dispatch (pass `<task-branch>` when the implementer will create or switch to a branch other than the worktree's current one). This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
+You are **<implementer>**. New task, fresh session. Issue #<n>.
+Worktree: `~/Documents/mac-app/picsee-wt/<issue>-<slug>` (branch `<branch>`, created from origin/main ≥ <sha7> by the delegator; a fix round continues in this same worktree).
+One task, one worktree (#901, owner 2026-11-25): work, commit, run gates and mado-verify only in this task worktree. Never edit in your pane home (the fixed worktree named after your pane: identity and marker only) or in another task's worktree.
+Target marker: the delegator runs `.agents/skills/mado-delegator/scripts/new-task-worktree.sh <issue> <slug> …`, which calls `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` before dispatch (fix rounds call mark-target.mjs directly). This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree` and the task identity in the worktree's `.build/mado-verify/task-identity.json`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first
@@ -112,7 +113,7 @@ and paste each generated `Red-Receipt:` line into the implementation commit (rep
 Compile stubs: their own earlier commit with `Stub-For: <receipt-ID>` (see Test-first).
 The script refuses unverified receipts; verify first. A BROKEN receipt means re-recording under a new ID after
 resolving and explaining the changed specification; never commit BROKEN evidence. Stage named paths only.
-No push, PR, branch switch/deletion, `rm -r`, other worktrees.
+No push, PR, branch switch/deletion, `rm -r`, other worktrees (your pane home included).
 
 ## Handoff
 Done when: the handoff includes the mado-verify evidence comment URL and the exact final head SHA it covers (see Verify).

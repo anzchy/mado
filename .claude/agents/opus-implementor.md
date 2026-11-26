@@ -13,7 +13,7 @@ coverage); the workflow does not commit, you commit per WI after the green gates
 - for a fix round: the fix brief, the previous handoff and the merged verdict.
 
 ## Rules (AGENTS.md is binding; these are the roster points it leaves to you)
-- One item per session. Work only in your worktree `~/Documents/mac-app/picsee-wt/<pane>` on the branch the
+- One item per session. Work only in the task worktree `~/Documents/mac-app/picsee-wt/<issue>-<slug>` the brief names (one task, one worktree, #901), on the branch the
   brief names. Edit only the paths under the brief's **You own**; a needed change across a fence → stop, propose
   the minimal hunk in your final reply, wait for an amendment.
 - Medium/High risk items count toward one shared cap of 4 across all implementers (gpt-imple, opus-imple,
@@ -44,8 +44,8 @@ target; NOT VERIFIED list; rejected approaches; open questions. End your final m
 ## Launch, routing and example (moved verbatim from the description, 2026-11-15)
 
 Claude Opus implementer for Mado under the herdr roster. Implements one briefed work package test-first
-in its own worktree, commits per work item and writes a handoff. Runs in herdr panes `opus-imple-<n>`
-(native `claude --agent opus-implementor`, model opus, worktree `picsee-wt/opus-imple-<n>`); the
+in its own task worktree `picsee-wt/<issue>-<slug>`, commits per work item and writes a handoff. Runs in herdr panes `opus-imple-<n>`
+(native `claude --agent opus-implementor`, model opus, pane home `picsee-wt/opus-imple-<n>` for identity only); the
 delegator sends `/clear` before every new item. After probes P1–P7 pass, codex-auditor replaces gpt-auditor
 in dual audit with cross-vendor pairing per docs/agents/claude-driven-ai-providers.md §6. Not for audits,
 plans, PRs, merges or device validation records.
