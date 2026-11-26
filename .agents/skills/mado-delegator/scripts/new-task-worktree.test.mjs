@@ -121,3 +121,52 @@ test('#901 --existing-branch moves a fix round of an older task into its own wor
   assert.equal(git(path.join(f.root, '651-demo'), 'symbolic-ref', '--short', 'HEAD'), 'task/651-demo');
   assert.equal(f.marker().branch, 'task/651-demo');
 });
+
+// Runs one printed command line in `cwd` with bash; fake commands write their argv NUL-separated to `out`.
+function fakeCommand(file, out) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `#!/bin/bash\nprintf '%s\\0' "$@" >> ${JSON.stringify(out)}\nprintf '\\n' >> ${JSON.stringify(out)}\n`, { mode: 0o755 });
+}
+const calls = out => fs.readFileSync(out, 'utf8').split('\n').filter(Boolean).map(line => line.split('\0').slice(0, -1));
+
+test('#901 fix1 (gpt F2) printed dispatch lines are shell-quoted: paths with spaces and a brief with a quote', t => {
+  const f = fixture(t);
+  const roots = path.join(f.root, 'task roots');
+  fs.mkdirSync(roots);
+  const home = path.join(f.root, 'pane homes', 'gpt-imple-8');
+  git(f.home, 'worktree', 'add', '-q', '--detach', home, 'origin/main');
+  const brief = path.join(f.root, "it's brief.md");
+  const helperArgs = ['--pane-home', home, '--task', 'i651', '--handoff', f.handoff, '--root', roots, '--pane', 'w1:p2', '--brief', brief];
+  const codex = run('bash', [helper, '651', 'demo', '--codex', ...helperArgs], f.root);
+  assert.equal(codex.status, 0, codex.stderr + codex.stdout);
+  const wt = path.join(roots, '651-demo');
+  const line = codex.stdout.match(/^dispatch \(Codex\): (.*)$/m)?.[1];
+  assert.ok(line, codex.stdout);
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-i901-q-'));
+  t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+  const out = path.join(sandbox, 'argv');
+  fakeCommand(path.join(sandbox, '.agents/skills/mado-delegator/scripts/start-fresh-codex.sh'), out);
+  const exec = run('bash', ['-c', line], sandbox);
+  assert.equal(exec.status, 0, exec.stderr);
+  const [argv] = calls(out);
+  assert.deepEqual(argv.slice(0, 6), ['w1:p2', 'gpt-imple-8', '--cwd', home, '--task-worktree', wt]);
+  assert.equal(argv[6], '--prompt');
+  assert.match(argv[7], new RegExp(`Worktree: ${wt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} `));
+  assert.ok(argv[7].includes(brief), argv[7]);
+  assert.equal(argv.length, 8);
+
+  // The Claude line: the commands after "then" run as printed with a fake herdr.
+  fs.writeFileSync(out, '');
+  const claude = run('bash', [helper, '652', 'demo', ...helperArgs], f.root);
+  assert.equal(claude.status, 0, claude.stderr + claude.stdout);
+  const send = claude.stdout.match(/^dispatch \(Claude\): .*?; then (.*)$/m)?.[1];
+  assert.ok(send, claude.stdout);
+  fakeCommand(path.join(sandbox, 'bin/herdr'), out);
+  const sent = spawnSync('bash', ['-c', send], { cwd: sandbox, encoding: 'utf8', env: { ...process.env, PATH: `${sandbox}/bin:${process.env.PATH}` } });
+  assert.equal(sent.status, 0, sent.stderr);
+  const [text, keys] = calls(out);
+  assert.deepEqual(text.slice(0, 3), ['pane', 'send-text', 'w1:p2']);
+  assert.equal(text.length, 4);
+  assert.ok(text[3].includes(`Worktree: ${path.join(roots, '652-demo')} `) && text[3].includes(brief), text[3]);
+  assert.deepEqual(keys, ['pane', 'send-keys', 'w1:p2', 'Enter']);
+});

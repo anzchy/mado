@@ -77,6 +77,12 @@ fi
 marker=$(node "$mark_target" "$home_abs" "$target" "$issue" "$task" "$handoff" "$branch") \
   || die "mark-target.mjs refused $target (above); the worktree exists, fix the cause and run mark-target.mjs again"
 
+# Every printed argument is shell-quoted so a line copied as printed parses back to the same arguments (paths with
+# spaces, a brief path with a quote); plain tokens stay bare.
+q() {
+  if [[ $1 =~ ^[A-Za-z0-9_./:@%+=,-]+$ ]]; then printf '%s' "$1"
+  else local s=${1//\'/\'\\\'\'}; printf "'%s'" "$s"; fi
+}
 name=$(basename "$home_abs")
 prompt="New task: Worktree: $target (branch $branch; one task, one worktree, work only there). Read and follow $brief. Do not push."
 echo "worktree: $target"
@@ -84,7 +90,7 @@ echo "branch: $branch"
 echo "marker: $marker"
 if (( codex )); then
   echo "overlay: $target/.codex/rules/picsee-role.rules"
-  echo "dispatch (Codex): .agents/skills/mado-delegator/scripts/start-fresh-codex.sh $pane $name --cwd $home_abs --task-worktree $target --prompt '$prompt'"
+  echo "dispatch (Codex): .agents/skills/mado-delegator/scripts/start-fresh-codex.sh $(q "$pane") $(q "$name") --cwd $(q "$home_abs") --task-worktree $(q "$target") --prompt $(q "$prompt")"
 else
-  echo "dispatch (Claude): herdr pane send-text $pane '/clear' && herdr pane send-keys $pane Enter; confirm Context 0%; then herdr pane send-text $pane '$prompt' && herdr pane send-keys $pane Enter"
+  echo "dispatch (Claude): herdr pane send-text $(q "$pane") '/clear' && herdr pane send-keys $(q "$pane") Enter; confirm Context 0%; then herdr pane send-text $(q "$pane") $(q "$prompt") && herdr pane send-keys $(q "$pane") Enter"
 fi
