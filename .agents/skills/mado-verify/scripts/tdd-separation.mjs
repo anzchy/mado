@@ -10,15 +10,17 @@
 //   tdd-separation.mjs evaluate <same options>          (prints the JSON result)
 //   tdd-separation.mjs replay --worktree <wt> --head <sha> --receipt <id> --kind node|swift --filter <f> [--archive <dir>]
 //
-// gate prints one summary line and exits 0 in report-only mode whatever the verdict (gate-policy.mjs TDD_SEPARATION_MODE);
-// in mandatory mode a refused, unknown or error verdict exits 1.
+// gate prints one summary line and exits 0 in report-only mode whatever the verdict (gate-policy.mjs TDD_SEPARATION_MODE).
+// In mandatory mode (the constant, or --mandatory for one run: there is no option that downgrades) an error exits 1, and a
+// refused or unknown verdict exits 1 only when the diff needs the lane (tddSeparationRequired: product code), so the
+// switch does not refuse tooling-only tickets (fix1, gpt F2 / opus M6). The line ends with required=yes|no.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { TDD_SEPARATION_MODE, isTestPath, isDocPath, isProductionPath, partyKey } from './gate-policy.mjs';
+import { TDD_SEPARATION_MODE, isTestPath, isDocPath, isProductionPath, listDiffPaths, partyKey, tddSeparationRequired } from './gate-policy.mjs';
 
 export { isTestPath, isDocPath, isProductionPath };
 export const LANE_VERSION = 1;
@@ -332,9 +334,11 @@ export function summaryLine(r) {
   if (r.acceptProblems?.length) parts.push(`ACCEPT-PROBLEM ${r.acceptProblems.length}`);
   if (r.invalidWaivers?.length) parts.push(`INVALID-WAIVER ${r.invalidWaivers.map(w => w.id ?? '?').join(',')}`);
   if (r.exceptions?.length) parts.push(`EXCEPTIONS ${r.exceptions.map(e => `${e.kind}:${sha7(e.commit)}`).join(',')}`);
+  if (typeof r.required === 'boolean') parts.push(`required=${r.required ? 'yes' : 'no'}`);
   return parts.join(' ');
 }
-export const gateExitCode = (r, mode = TDD_SEPARATION_MODE) => mode === 'mandatory' && ['refused', 'unknown', 'error'].includes(r?.verdict) ? 1 : 0;
+export const gateExitCode = (r, mode = TDD_SEPARATION_MODE, required = true) => mode !== 'mandatory' ? 0
+  : r?.verdict === 'error' || (required && ['refused', 'unknown'].includes(r?.verdict)) ? 1 : 0;
 
 // Replay (#898 AC 4): the production tree at the receipt's head_sha plus the receipt's test files from HEAD must fail by
 // assertion, and HEAD must pass, with the same filter. Zero selected tests, a crash or an environment exit is rejected.
@@ -400,7 +404,9 @@ function parseArgs(args) {
   const flags = { '--worktree': 'worktree', '--base': 'base', '--head': 'head', '--out': 'out', '--archive': 'archiveDir', '--waivers': 'waiverDir',
     '--receipt': 'receiptId', '--kind': 'kind', '--filter': 'filter', '--issue': 'issue' };
   while (args.length) {
-    const flag = args.shift(), value = args.shift();
+    const flag = args.shift();
+    if (flag === '--mandatory') { o.mode = 'mandatory'; continue; }
+    const value = args.shift();
     if (value === undefined) throw new Error(`${flag} needs a value`);
     if (flag === '--receipts') o.receiptFiles.push(value);
     else if (flag === '--accept-waiver') o.acceptedWaivers.push(value);
@@ -417,16 +423,18 @@ function parseArgs(args) {
 function main() {
   const [mode, ...rest] = process.argv.slice(2);
   if (mode === 'gate') {
-    let result, out;
+    let result, out, mode = rest.includes('--mandatory') ? 'mandatory' : TDD_SEPARATION_MODE;
     try {
-      const o = parseArgs(rest); out = o.out;
+      const o = parseArgs(rest); out = o.out; mode = o.mode ?? TDD_SEPARATION_MODE;
       result = evaluateSeparation(o);
+      const files = listDiffPaths(o.worktree, result.base, result.head);
+      result.required = files === null ? true : tddSeparationRequired(files);
     } catch (error) {
-      result = { lane: 'tdd-separation', version: LANE_VERSION, mode: TDD_SEPARATION_MODE, verdict: 'error', reason: String(error.message).replace(/\s+/g, ' ').replace(/[()]/g, '') };
+      result = { lane: 'tdd-separation', version: LANE_VERSION, mode, verdict: 'error', reason: String(error.message).replace(/\s+/g, ' ').replace(/[()]/g, '') };
     }
     if (out) { try { fs.writeFileSync(out, JSON.stringify(result, null, 2) + '\n'); } catch (error) { result = { ...result, verdict: 'error', reason: `cannot write ${out}` }; } }
     console.log(summaryLine(result));
-    return gateExitCode(result);
+    return gateExitCode(result, mode, result.required ?? true);
   }
   if (mode === 'evaluate') { console.log(JSON.stringify(evaluateSeparation(parseArgs(rest)), null, 2)); return 0; }
   if (mode === 'replay') {

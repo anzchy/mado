@@ -566,6 +566,21 @@ test('898 WI-3 owner-gates writes the tdd-separation line and its JSON path, and
   }
 });
 
+// #898 fix1 WI-3b: the delegator accepts waiver claims for its own run with OWNER_GATES_ACCEPT_WAIVERS (space-separated
+// <id>@<sha256>); an implementer-role run never passes them on.
+test('898 fix1 WI-3b OWNER_GATES_ACCEPT_WAIVERS reaches the lane only in the delegator role', t => {
+  const accept = 'W1-1@aaaaaaaaaaaa W1-2@bbbbbbbbbbbb';
+  for (const [args, passed] of [[[], true], [['--role', 'implementer'], false]]) {
+    const marker = path.join(os.tmpdir(), `sep-accept-${process.pid}-${args.length}`);
+    t.after(() => fs.rmSync(marker, { force: true }));
+    const f = fixture(t, 'pass', 2, true, { args, env: { SEP_LINE: 'tdd-separation=pass mode=report-only receipts=0 held=0 refused=0 unknown=0 waived=0 exceptions=0', SEP_CODE: '0', SEP_MARKER: marker, OWNER_GATES_ACCEPT_WAIVERS: accept } });
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    const extra = fs.readFileSync(marker, 'utf8').split('\n').slice(9);
+    assert.deepEqual(extra, passed ? ['--accept-waiver', 'W1-1@aaaaaaaaaaaa', '--accept-waiver', 'W1-2@bbbbbbbbbbbb'] : [], args.join(' '));
+    if (!passed) assert.match(f.result.stderr, /OWNER_GATES_ACCEPT_WAIVERS ignored/);
+  }
+});
+
 test('898 WI-3 a tdd-separation lane exit 1 (mandatory refusal) fails the run; a silent lane is an error line', t => {
   const f = fixture(t, 'pass', 2, true, { env: { SEP_LINE: 'tdd-separation=refused mode=mandatory receipts=1 held=0 refused=1 unknown=0 waived=0 exceptions=0', SEP_CODE: '1' } });
   assert.equal(f.result.status, 1, f.summary);

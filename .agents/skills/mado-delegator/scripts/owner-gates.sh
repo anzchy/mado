@@ -232,8 +232,18 @@ fi
 # #898: the tdd-separation lane (RED recorded on a clean committed tree). Report-only (gate-policy.mjs TDD_SEPARATION_MODE):
 # the lane exits 0 whatever its verdict; once the delegator makes it mandatory, refused, unknown or error exits 1 and the run
 # fails. Its JSON (<prefix>-tdd-separation.json) is the evidence input's tddSeparation.
+# #898 fix1: OWNER_GATES_ACCEPT_WAIVERS (space-separated <id>@<sha256>) turns the delegator's reviewed waiver claims into
+# WAIVED for this run; an implementer-role run never passes them (its run is not binding; a claim stays a claim).
+sep_accept=()
+if [[ -n ${OWNER_GATES_ACCEPT_WAIVERS:-} ]]; then
+  if [[ $role == delegator ]]; then
+    for token in ${=OWNER_GATES_ACCEPT_WAIVERS}; do sep_accept+=(--accept-waiver "$token"); done
+  else
+    print -r -- "owner-gates: warning: OWNER_GATES_ACCEPT_WAIVERS ignored in the implementer role" >&2
+  fi
+fi
 sep_line=$(node "$here/../../mado-verify/scripts/tdd-separation.mjs" gate --worktree "$wt" --base "$mb" --head "$(git rev-parse HEAD)" \
-  --out "$o/$p-tdd-separation.json" 2> "$o/$p-tdd-separation.log")
+  --out "$o/$p-tdd-separation.json" "${sep_accept[@]}" 2> "$o/$p-tdd-separation.log")
 sep_code=$?
 sep_line=${sep_line%%$'\n'*}
 [[ $sep_line == tdd-separation=* ]] || sep_line="tdd-separation=error (no result line; exit $sep_code; see $p-tdd-separation.log)"

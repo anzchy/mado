@@ -391,6 +391,26 @@ test('898 WI-1 gate CLI: report-only prints the line, writes the JSON and exits 
   assert.equal(sep.gateExitCode({ ...saved, verdict: 'skipped' }, 'mandatory'), 0);
 });
 
+// fix1 WI-3 (gpt F2, opus M6): the mandatory exit honours the selection; --mandatory flips the mode for one run (upgrade only).
+test('898 fix1 WI-3 mandatory mode exits 1 only when the diff needs the lane: tooling-only refusals exit 0', t => {
+  const gate = (f, extra = []) => run('node', [lane, 'gate', '--worktree', f.dir, '--base', f.base, '--head', f.head(), '--archive', f.archive, '--waivers', f.waivers, ...extra], f.dir);
+  const tooling = repo(t);
+  tooling.write('scripts/x.mjs', 'export const x = 1;\n'); tooling.commit('tooling without a RED');
+  const tr = gate(tooling, ['--mandatory']);
+  assert.match(tr.stdout, /^tdd-separation=refused mode=mandatory .*required=no/);
+  assert.equal(tr.status, 0, 'a tooling-only refusal does not fail the mandatory gate');
+  const product = repo(t); compliant(product, ['App/Foo.swift']);
+  const pr = gate(product, ['--mandatory']);
+  assert.match(pr.stdout, /^tdd-separation=refused mode=mandatory .*required=yes/);
+  assert.equal(pr.status, 1);
+  assert.equal(gate(product).status, 0, 'report-only still exits 0');
+  const r = { verdict: 'refused' };
+  assert.equal(sep.gateExitCode(r, 'mandatory', false), 0);
+  assert.equal(sep.gateExitCode(r, 'mandatory', true), 1);
+  assert.equal(sep.gateExitCode({ verdict: 'error' }, 'mandatory', false), 1, 'an error is never exempt');
+  assert.match(gate(product, ['--mode', 'report-only']).stdout, /^tdd-separation=error \(unknown option --mode\)/, 'no option downgrades the mode');
+});
+
 test('898 WI-1 gate CLI: a broken invocation prints an error line instead of a verdict', t => {
   const f = repo(t);
   const r = run('node', [lane, 'gate', '--worktree', f.dir, '--base', 'nope', '--head', f.head(), '--archive', f.archive, '--waivers', f.waivers], f.dir);
