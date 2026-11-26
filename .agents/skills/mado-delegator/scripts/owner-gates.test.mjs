@@ -63,6 +63,12 @@ else if(process.argv[2]==='--test'){
  // #892: NODE_SCRIPT is a JSON list of {code,out}, one per node --test invocation (attempt 1, then the rerun).
  if(process.env.NODE_SCRIPT){const step=JSON.parse(process.env.NODE_SCRIPT)[attempt]??{code:0,out:''};process.stdout.write(step.out);process.exit(step.code);}
 }
+else if(process.argv[2].endsWith('tdd-separation.mjs')){
+ // #898: the lane prints one summary line; SEP_LINE/SEP_CODE script it, SEP_MARKER records its arguments.
+ if(process.env.SEP_MARKER)require('fs').writeFileSync(process.env.SEP_MARKER,process.argv.slice(3).join('\\n'));
+ if(process.env.SEP_LINE)console.log(process.env.SEP_LINE);
+ process.exit(Number(process.env.SEP_CODE||0));
+}
 else if(process.argv[2]==='scripts/tdd/app-lane.mjs'){
  const hosted=process.argv[3]?.includes('Hosted') ?? false;
  if(process.env.MODE==='app-hosted-hung'&&hosted){console.log('test runner hung before establishing connection');process.exit(70);}
@@ -541,4 +547,31 @@ test('892 fix1 WI-4 --role needs implementer or delegator, and the positional ar
   assert.equal(f.result.status, 0, f.result.stderr + f.summary);
   assert.match(f.summary, /^role=implementer$/m);
   assert.match(f.summary, /^node=skipped /m);
+});
+
+// #898: the tdd-separation lane line. Report-only today: the lane exits 0 whatever its verdict, so the run does not fail;
+// a lane exit 1 (mandatory mode) fails the run. The line and its JSON go to the summary and the out directory.
+test('898 WI-3 owner-gates writes the tdd-separation line and its JSON path, and a report-only refusal does not fail the run', t => {
+  const line = 'tdd-separation=refused mode=report-only receipts=1 held=0 refused=1 unknown=0 waived=0 exceptions=0';
+  for (const args of [[], ['--role', 'implementer']]) {
+    const marker = path.join(os.tmpdir(), `sep-marker-${process.pid}-${args.length}`);
+    t.after(() => fs.rmSync(marker, { force: true }));
+    const f = fixture(t, 'pass', 2, true, { args, env: { SEP_LINE: line, SEP_CODE: '0', SEP_MARKER: marker } });
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    assert.ok(f.summary.split('\n').includes(line), f.summary);
+    assert.ok(f.summary.indexOf(line) < f.summary.indexOf('\nDONE'), 'the line comes before DONE');
+    const argv = fs.readFileSync(marker, 'utf8').split('\n');
+    assert.deepEqual(argv.slice(0, 7), ['gate', '--worktree', f.dir, '--base', 'fixture-base', '--head', 'fixture-sha']);
+    assert.deepEqual(argv.slice(7), ['--out', path.join(f.out, 'run-tdd-separation.json')]);
+  }
+});
+
+test('898 WI-3 a tdd-separation lane exit 1 (mandatory refusal) fails the run; a silent lane is an error line', t => {
+  const f = fixture(t, 'pass', 2, true, { env: { SEP_LINE: 'tdd-separation=refused mode=mandatory receipts=1 held=0 refused=1 unknown=0 waived=0 exceptions=0', SEP_CODE: '1' } });
+  assert.equal(f.result.status, 1, f.summary);
+  assert.match(f.summary, /^tdd-separation=refused mode=mandatory /m);
+  assert.match(f.summary, /^DONE$/m);
+  const silent = fixture(t, 'pass', 2, true, {});
+  assert.equal(silent.result.status, 0, silent.summary);
+  assert.match(silent.summary, /^tdd-separation=error \(no result line; exit 0; see run-tdd-separation\.log\)$/m);
 });

@@ -19,6 +19,7 @@
 # role; an OWNER_GATES_ROLE left in a shell is ignored with a warning, so the delegator's run cannot inherit a skip.
 # A node failure outside the diff gets one serial rerun of only the failed files under the
 # heavy lock; both attempts go to the summary, and the run stays exit 1 whatever the rerun says.
+# #898: a tdd-separation= line (report-only today) and <prefix>-tdd-separation.json follow the node lane.
 set -u
 here=${0:A:h}
 role=delegator
@@ -228,6 +229,16 @@ else
   echo "node: cannot list the node lane (owner-gates-tools.mjs node-suites failed)" >> "$o/$p-node.log"
   lane_result node 70
 fi
+# #898: the tdd-separation lane (RED recorded on a clean committed tree). Report-only (gate-policy.mjs TDD_SEPARATION_MODE):
+# the lane exits 0 whatever its verdict; once the delegator makes it mandatory, refused, unknown or error exits 1 and the run
+# fails. Its JSON (<prefix>-tdd-separation.json) is the evidence input's tddSeparation.
+sep_line=$(node "$here/../../mado-verify/scripts/tdd-separation.mjs" gate --worktree "$wt" --base "$mb" --head "$(git rev-parse HEAD)" \
+  --out "$o/$p-tdd-separation.json" 2> "$o/$p-tdd-separation.log")
+sep_code=$?
+sep_line=${sep_line%%$'\n'*}
+[[ $sep_line == tdd-separation=* ]] || sep_line="tdd-separation=error (no result line; exit $sep_code; see $p-tdd-separation.log)"
+print -r -- "$sep_line" >> "$s" || summary_error
+(( sep_code != 0 )) && failed=1
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
 if [[ ! -d node_modules ]]; then
