@@ -26,6 +26,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         self.afterRecord = afterRecord
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
+    /// Stops of a load that was still hanging, started since the last reset: the stops only a cancellation causes.
+    /// URLSession also stops a load after it finished or `failHung` ended it; those never count (#904).
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
     /// Ends every hanging load with `error`, as the network or the transport's timeout would later (#787: no test waits
     /// for the real 20-second timeout).
@@ -92,7 +94,10 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {
-        Self.lock.lock(); Self.stopped += 1; Self.lock.unlock()
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        guard let index = Self.hung.firstIndex(where: { $0 === self }) else { return }
+        Self.hung.remove(at: index)
+        Self.stopped += 1
     }
 }
 
@@ -268,7 +273,8 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         let uploaded = await upload.result
         #expect(Date().timeIntervalSince(uploadCancelledAt) < 5)
         #expect(uploaded.failureValue as? TextRecognitionError == .cancelled)
-        #expect(StubURLProtocol.stopCount >= 1)
+        // stopLoading can arrive after the cancelled result (#904).
+        #expect(try await stopReached { StubURLProtocol.stopCount })
     }
 
     @Test(.timeLimit(.minutes(2)), arguments: [

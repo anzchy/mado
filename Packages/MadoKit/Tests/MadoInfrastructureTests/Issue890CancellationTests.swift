@@ -17,11 +17,12 @@ extension Issue890TransportTests {
         let cancelledAt = Date()
         task.cancel()
         let result = await task.value
-        Stub890.failHung(URLError(.timedOut))
         #expect(result == .cancelled)
         #expect(Date().timeIntervalSince(cancelledAt) < 5)
-        // The cancellation reached the URLSession load itself.
-        #expect(Stub890.stopCount >= 1)
+        // The cancellation reached the URLSession load itself (its stopLoading can arrive after the result, #904).
+        // Checked before the stub ends the hung load: a stop of a load the stub ended itself never counts.
+        #expect(try await stopReached { Stub890.stopCount })
+        Stub890.failHung(URLError(.timedOut))
     }
 
     @Test(.timeLimit(.minutes(2)))
