@@ -232,11 +232,52 @@ def prompt_and_confirm(pane, name, prompt):
     raise Refused("agent never reached working after two prompt attempts")
 
 
+TASK_NAME = re.compile(r"[1-9][0-9]*-[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def check_task_worktree(name, cwd, task_worktree, prompt):
+    """#901: one task, one worktree. Runs before the pane is touched."""
+    if task_worktree is None:
+        if "-imple-" in name and not TASK_NAME.fullmatch(os.path.basename(cwd)):
+            raise Refused(f"--cwd {cwd} is a pane home and {name} is an implementer; pass --task-worktree <picsee-wt/<issue>-<slug>> for a new task (new-task-worktree.sh prints the line)")
+        return
+    path = os.path.expanduser(task_worktree)
+    if not os.path.isabs(path):
+        raise Refused("task worktree is not absolute")
+    if not os.path.isdir(path):
+        raise Refused(f"task worktree {path} is not a directory (does not exist?)")
+    path = os.path.realpath(path)
+    if path == cwd:
+        raise Refused(f"task worktree {path} is the pane home --cwd; a task needs its own worktree")
+    try:
+        top = subprocess.run(["git", "-C", path, "rev-parse", "--show-toplevel"], text=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Refused(f"git unavailable for the task worktree: {type(exc).__name__}") from exc
+    if top.returncode != 0 or os.path.realpath(top.stdout.strip()) != path:
+        raise Refused(f"task worktree {path} is not a worktree root")
+    if not TASK_NAME.fullmatch(os.path.basename(path)):
+        raise Refused(f"task worktree {path} is not a task worktree (expected picsee-wt/<issue>-<slug>)")
+    home = os.path.expanduser("~")
+    named = {path, os.path.expanduser(task_worktree)}
+    named |= {"~" + p[len(home):] for p in list(named) if p.startswith(home + os.sep)}
+    if prompt is not None and not any(p in prompt for p in named):
+        raise Refused(f"prompt does not name the task worktree {path}; the session starts in the pane home and works only there")
+
+
 try:
     START = timer("MADO_FRESH_START_SECS", "45")
     CONFIRM = timer("MADO_FRESH_CONFIRM_SECS", "20")
     POLL = timer("MADO_FRESH_POLL_SECS", "0.25")
     args = sys.argv[1:]
+    # #901: --task-worktree <path> (after <pane> <agent-name>) names the task worktree a Codex implementer works in
+    # while the pane stays in its pane home, which --cwd names. The other options keep their positions.
+    task_worktree = None
+    if "--task-worktree" in args:
+        at = args.index("--task-worktree")
+        if args.count("--task-worktree") != 1 or at < (3 if args[:1] == ["prompt-and-confirm"] else 2) or at + 1 >= len(args):
+            raise Refused("invalid --task-worktree arguments")
+        task_worktree = args[at + 1]
+        del args[at:at + 2]
     if args and args[0] == "prompt-and-confirm":
         if len(args) == 6 and args[3] == "--cwd":
             _, pane, name, _, expected, prompt = args
@@ -260,11 +301,12 @@ try:
         prompt = args[7] if len(args) == 8 else None
         start_mode = True
     else:
-        raise Refused("usage: start-fresh-codex.sh <pane> <agent-name> --cwd <worktree> [--prompt <text>] | prompt-and-confirm <pane> <agent-name> --cwd <worktree> <text>")
+        raise Refused("usage: start-fresh-codex.sh <pane> <agent-name> --cwd <worktree> [--screen-cwd <path>] [--task-worktree <path>] [--prompt <text>] | prompt-and-confirm <pane> <agent-name> --cwd <worktree> [--screen-cwd <path>] [--task-worktree <path>] <text>")
     if not re.fullmatch(r"w[0-9]+:p[A-Za-z0-9]+", pane) or not re.fullmatch(r"[a-z][a-z0-9-]+", name):
         raise Refused("invalid pane or agent name")
     EXPECTED_CWD = normalized_cwd(expected)
     EXPECTED_SCREEN_CWD = normalized_cwd(screen_expected)
+    check_task_worktree(name, EXPECTED_CWD, task_worktree, prompt)
     if prompt is not None and prompt.startswith("-"):
         raise Refused("task prompt starts with -; herdr agent prompt has no safe option-like text argument")
     if start_mode:
