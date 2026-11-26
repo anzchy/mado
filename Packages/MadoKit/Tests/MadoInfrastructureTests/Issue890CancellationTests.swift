@@ -20,8 +20,8 @@ extension Issue890TransportTests {
         Stub890.failHung(URLError(.timedOut))
         #expect(result == .cancelled)
         #expect(Date().timeIntervalSince(cancelledAt) < 5)
-        // The cancellation reached the URLSession load itself.
-        #expect(Stub890.stopCount >= 1)
+        // The cancellation reached the URLSession load itself (its stopLoading can arrive after the result, #904).
+        #expect(try await stopReached { Stub890.stopCount })
     }
 
     @Test(.timeLimit(.minutes(2)))

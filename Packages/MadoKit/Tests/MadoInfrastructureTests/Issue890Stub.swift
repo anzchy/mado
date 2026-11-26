@@ -13,20 +13,39 @@ final class Stub890: URLProtocol, @unchecked Sendable {
         case redirect(Int, String, Data)
         case hang
     }
+    /// When a cancelled load's `stopLoading` is counted (#904). `.immediate` is what URLSession gives; `.after` counts
+    /// it later on another queue, the way it can arrive after the cancelled result; `.never` drops it, as if
+    /// cancellation never reached the load.
+    enum StopDelivery {
+        case immediate
+        case after(TimeInterval)
+        case never
+    }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var outcomes: [Outcome] = []
     nonisolated(unsafe) private static var seen: [(request: URLRequest, body: Data)] = []
     nonisolated(unsafe) private static var stopped = 0
     nonisolated(unsafe) private static var hung: [Stub890] = []
     nonisolated(unsafe) private static var afterRecord: (@Sendable () -> Void)?
+    nonisolated(unsafe) private static var stops = StopDelivery.immediate
+    /// Bumped by every reset. A load remembers the one it started in, and its stop counts only while that reset is
+    /// current, so a stop from an earlier test is never counted in a later one, however late it arrives (#904).
+    nonisolated(unsafe) private static var generation = 0
+    nonisolated(unsafe) private static var stopCallCount = 0
+    private var startedIn = -1
 
-    static func reset(_ outcomes: [Outcome], afterRecord: (@Sendable () -> Void)? = nil) {
+    static func reset(_ outcomes: [Outcome], afterRecord: (@Sendable () -> Void)? = nil,
+                      stops: StopDelivery = .immediate) {
         lock.lock(); defer { lock.unlock() }
-        self.outcomes = outcomes; seen = []; stopped = 0; hung = []
+        self.outcomes = outcomes; seen = []; stopped = 0; stopCallCount = 0; hung = []
         self.afterRecord = afterRecord
+        self.stops = stops
+        generation += 1
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
+    /// Every `stopLoading` call since the last reset, counted or not, whatever its delivery (#904).
+    static var stopCalls: Int { lock.lock(); defer { lock.unlock() }; return stopCallCount }
     static var hosts: [String?] { requests.map { $0.request.url?.host } }
     /// Ends every hanging load, as the network would later.
     static func failHung(_ error: URLError) {
@@ -50,6 +69,7 @@ final class Stub890: URLProtocol, @unchecked Sendable {
             stream.close()
         }
         Self.lock.lock()
+        startedIn = Self.generation
         Self.seen.append((request, body))
         let outcome = Self.outcomes.isEmpty ? Outcome.respond(599, Data()) : Self.outcomes.removeFirst()
         if case .hang = outcome { Self.hung.append(self) }
@@ -80,7 +100,20 @@ final class Stub890: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {
-        Self.lock.lock(); Self.stopped += 1; Self.lock.unlock()
+        Self.lock.lock()
+        Self.stopCallCount += 1
+        let stops = Self.stops, startedIn = startedIn
+        Self.lock.unlock()
+        switch stops {
+        case .immediate: Self.countStop(startedIn)
+        case .after(let delay): DispatchQueue.global().asyncAfter(deadline: .now() + delay) { Self.countStop(startedIn) }
+        case .never: break
+        }
+    }
+
+    private static func countStop(_ startedIn: Int) {
+        lock.lock(); defer { lock.unlock() }
+        if startedIn == generation { stopped += 1 }
     }
 }
 
