@@ -203,16 +203,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updatesStarted = false
 
     func makeSettingsWindow(defaults: UserDefaults = .standard,
-                            cloudRecognition: CloudRecognitionSettingsEnvironment? = nil) -> SettingsPanelWindow {
+                            cloudRecognition: CloudRecognitionSettingsEnvironment? = nil,
+                            tableRecognition: TableRecognitionSettingsEnvironment? = nil) -> SettingsPanelWindow {
         SettingsPanelWindow(cache: thumbnailCache, appearanceAdapter: appearanceAdapter,
                             preferencesStore: displayPreferences, defaults: defaults, updates: updates,
-                            cloudRecognition: cloudRecognition)
+                            cloudRecognition: cloudRecognition, tableRecognition: tableRecognition)
     }
 
     private func showSettings() {
         if settingsWindow == nil {
-            // Only the real Settings window reads and writes the keychain keys (#689).
-            settingsWindow = makeSettingsWindow(cloudRecognition: .live)
+            // Only the real Settings window reads and writes the keychain keys (#689, #871).
+            settingsWindow = makeSettingsWindow(cloudRecognition: .live, tableRecognition: .live)
         }
         settingsWindow?.show()
     }

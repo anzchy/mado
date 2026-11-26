@@ -183,6 +183,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     private var captureRestore: NSButton?
     private let cloudRecognition: CloudRecognitionSettingsEnvironment
     private var cloudRecognitionGroup: CloudRecognitionSettingsGroup?
+    private let tableRecognition: TableRecognitionSettingsEnvironment
+    private var tableRecognitionGroup: TableRecognitionSettingsGroup?
 
     init(cache: ThumbnailDiskCache, appearanceAdapter: WindowAppearanceAdapter,
          preferencesStore: any DisplayPreferencesStore, defaults: UserDefaults,
@@ -197,6 +199,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
          captureSignal: (@MainActor (String) -> Void)? = nil,
          captureYieldActivation: (@MainActor (String) -> Void)? = nil,
          cloudRecognition: CloudRecognitionSettingsEnvironment? = nil,
+         tableRecognition: TableRecognitionSettingsEnvironment? = nil,
          confirmClear: ((NSWindow, @escaping (Bool) -> Void) -> Void)? = nil,
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          aboutInfoDictionary: [String: Any]? = nil,
@@ -223,6 +226,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             NSApp.yieldActivation(toApplicationWithBundleIdentifier: $0)
         }
         self.cloudRecognition = cloudRecognition ?? .inMemory()
+        self.tableRecognition = tableRecognition ?? .inMemory()
         self.window = SettingsPanelNativeWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 482),
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
@@ -251,6 +255,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             scrollCaptureToTop()
             refreshCapture()
             cloudRecognitionGroup?.refresh()
+            tableRecognitionGroup?.refresh()
         }
     }
 
@@ -275,6 +280,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             scrollCaptureToTop()
             refreshCapture()
             cloudRecognitionGroup?.refresh()
+            tableRecognitionGroup?.refresh()
         }
     }
 
@@ -552,7 +558,11 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let ocr = CloudRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
                                                 environment: cloudRecognition, localize: captureLocalize,
                                                 openURL: openURL)
-        let growth = max(0, 770 + afterCaptureShift + ocr.frame.height - form.frame.height)
+        // 表格识别 (#871, state 35): right after 文字识别, no switch of its own, editable whatever the switch says.
+        let table = TableRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
+                                                  environment: tableRecognition, localize: captureLocalize,
+                                                  openURL: openURL)
+        let growth = max(0, 770 + afterCaptureShift + ocr.frame.height + table.frame.height - form.frame.height)
         if growth > 0 {
             form.frame.size.height += growth
             for view in form.subviews { view.frame.origin.y += growth }
@@ -560,6 +570,9 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - ocr.frame.height)
         form.addSubview(ocr)
         cloudRecognitionGroup = ocr
+        table.frame.origin = NSPoint(x: 26, y: ocr.frame.minY - table.frame.height)
+        form.addSubview(table)
+        tableRecognitionGroup = table
         refreshCapture()
     }
 

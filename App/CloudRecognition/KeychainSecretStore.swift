@@ -85,6 +85,15 @@ enum CloudRecognitionAppServices {
         CloudRecognitionSettingsModel(preferences: preferences, keys: keys)
     }
 
+    /// #871: Table Recognition shares the global switch (`preferences`) but keeps its own per-host consent, its own
+    /// keychain service (one key per service configuration) and the real transport (#890). One model, so the last
+    /// Test result survives closing and reopening Settings.
+    static let tablePreferences: any TableRecognitionPreferencePort =
+        UserDefaultsTableRecognitionPreferences(defaults: .standard)
+    static let tableKeys = TableRecognitionKeyStore(secrets: KeychainSecretStore())
+    static let tableSettingsModel = TableRecognitionSettingsModel(cloud: preferences, preferences: tablePreferences,
+                                                                  keys: tableKeys, transport: URLSessionHTTPTransport())
+
     /// The service Recognise Text uses (#687b wires it into the action).
     static func recognitionService(onDevice: any OnDeviceTextRecognitionProviding) -> TextRecognitionService {
         CloudRecognitionConfiguration.service(onDevice: onDevice, preferences: preferences, keys: keys,
