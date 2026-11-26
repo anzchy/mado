@@ -61,7 +61,12 @@ export function listDiffPaths(cwd, base, head) {
 
 // #892: is a failing node test "in the diff"? Its file is in the diff, the diff touches its directory (the source it
 // tests usually sits beside it), or its name contains the base name of a test file in the diff (the failureFact rule).
+// #892 fix1 (gpt F2 / opus M2): fail closed. A node test's inputs outside its directory are not proven (owner-gates.test.mjs
+// copies and runs scripts/heavy-lock.sh, scripts/tdd/heavy-lock.py, scripts/ci/native-inputs.mjs and gate-policy.mjs;
+// owner-gates-tools.test.mjs imports gate-policy.mjs), so any changed path under a NODE_LANE_PREFIXES directory puts every
+// failing node test in the diff: no rerun, no disposition. Product files the tests read are the reviewer's check (SKILL.md).
 export function failingTestInDiff({ file, name }, diffFiles) {
+  if (diffFiles.some(changed => NODE_LANE_PREFIXES.some(prefix => changed.startsWith(prefix)))) return true;
   const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : '';
   // A test directory named tests/ tests its parent's tree (for example mado-verify/tests and mado-verify/scripts).
   const tree = /(?:^|\/)tests\/$/.test(dir) ? dir.replace(/tests\/$/, '') : null;

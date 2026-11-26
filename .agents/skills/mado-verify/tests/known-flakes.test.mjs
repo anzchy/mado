@@ -183,7 +183,8 @@ function check(r, node, base = r.base, extra = {}) {
 const liveFlaky = () => flakyNode(g => { g.disposition.expires = inDays(7); return g; });
 
 test('892 WI-3 check accepts a reviewed disposition outside the diff and warns that it is a flake, not a pass', t => {
-  const r = repo(t, ['App/MadoApp.swift', 'scripts/agents/tool.mjs']);
+  // #892 fix1 WI-2: a tooling path in the diff now puts every node failure in the diff, so this diff is product-only.
+  const r = repo(t, ['App/MadoApp.swift', 'docs/guide.md']);
   const ok = check(r, liveFlaky());
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /^OK head=/m);
@@ -304,5 +305,16 @@ test('892 fix1 WI-1 check refuses a node scope skip when the only tooling path i
     const res = check(r, skip, r.base, { role: 'implementer' });
     assert.equal(res.status, 1, `${JSON.stringify(rel)}: ${res.stdout}`);
     assert.match(res.stderr, /node scope skip refused/, JSON.stringify(rel));
+  }
+});
+
+// #892 fix1 WI-2 (gpt F2 / opus M2): check uses the same fail-closed in-diff rule: a changed tooling file outside the
+// failing test's directory (an import, a copied or spawned script) still refuses the disposition.
+test('892 fix1 WI-2 check refuses a disposition when the diff changes a tooling file outside the test directory', t => {
+  for (const changed of [['scripts/heavy-lock.sh'], ['.agents/skills/mado-verify/scripts/gate-policy.mjs'], ['App/MadoApp.swift', '.github/workflows/ci.yml']]) {
+    const r = repo(t, changed);
+    const res = check(r, liveFlaky());
+    assert.equal(res.status, 1, `${changed}: ${res.stdout}`);
+    assert.match(res.stderr, /disposition .*in the diff/, `${changed}`);
   }
 });

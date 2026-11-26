@@ -166,7 +166,9 @@ fi
 # .github/workflows by owner-gates-tools.test.mjs) minus the reviewed node-lane-exceptions.json entries, listed in the summary.
 # CI runs scripts/agents and scripts/tdd on every PR, so the lane runs them for every diff (i760-fix1).
 if [[ $role == implementer ]] && (( ! node_selected )); then
-  # #892 (owner 2026-11-25): a product-only diff cannot change a tooling test's outcome.
+  # #892 (owner 2026-11-25): the implementer skip follows the owner's four prefixes. It is not a proof:
+  # node tests also read product files (docs/agents/*.md, AppTests/, Packages/, project.yml and more; static scan in
+  # #892 fix1), so a product-only diff can still change a node result. The delegator's run always runs node and is binding.
   echo "node=skipped (implementer run; diff touches no scripts/, .agents/, .github/ or .claude/ path; the delegator's owner-gates run and GitHub CI cover node)" >> "$s" || summary_error
 elif node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-node.log"); then
   node_suites=("${(@f)node_list}")

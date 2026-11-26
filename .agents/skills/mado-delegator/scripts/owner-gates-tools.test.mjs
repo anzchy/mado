@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { DIFF_NAME_ARGS, nodeLaneRequired, NODE_LANE_PREFIXES } from '../../mado-verify/scripts/gate-policy.mjs';
+import { DIFF_NAME_ARGS, failingTestInDiff, nodeLaneRequired, NODE_LANE_PREFIXES } from '../../mado-verify/scripts/gate-policy.mjs';
 import { rerunPlan, selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -372,4 +372,31 @@ test('892 fix1 WI-1 select and rerun-plan read real git -z output: a non-ASCII t
   const plan = spawnSync(process.execPath, [tools, 'rerun-plan', log, diff, dir], {encoding: 'utf8'});
   assert.equal(plan.status, 0, plan.stderr);
   assert.equal(plan.stdout, 'skip in-diff=yes\n');
+});
+
+// #892 fix1 WI-2 (gpt F2 / opus M2): a node test's inputs outside its directory are not proven (imports, copied fixtures,
+// spawned scripts), so any changed tooling path counts as in the diff for every failing node test: no rerun, stays red.
+test('892 fix1 WI-2 a changed tooling file anywhere makes every node failure in-diff (this repo\'s cross-directory inputs)', () => {
+  for (const [file, changed] of [
+    // owner-gates-tools.test.mjs imports mado-verify's gate-policy.mjs.
+    ['.agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs', '.agents/skills/mado-verify/scripts/gate-policy.mjs'],
+    // owner-gates.test.mjs copies and runs these into its fixture.
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/heavy-lock.sh'],
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/tdd/heavy-lock.py'],
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/ci/native-inputs.mjs'],
+    ['scripts/tdd/b.test.mjs', '.github/workflows/ci.yml'], ['scripts/tdd/b.test.mjs', '.claude/tdd-guardian/config.json']]) {
+    assert.equal(failingTestInDiff({file, name: 'x'}, ['App/MadoApp.swift', changed]), true, `${file} <- ${changed}`);
+    assert.deepEqual(rerunPlan(failingBlock([[file, 'x']]), [changed], '/wt'), {rerun: false, reason: 'in-diff=yes', files: [], tests: []}, changed);
+  }
+  // A product-only diff still allows the one rerun.
+  assert.equal(failingTestInDiff({file: 'scripts/tdd/b.test.mjs', name: 'x'}, ['App/MadoApp.swift', 'docs/guide.md', 'Packages/MadoKit/Sources/MadoCore/A.swift']), false);
+});
+
+test('892 fix1 WI-2 owner-gates.sh and SKILL.md no longer claim a product-only diff cannot change a tooling test', () => {
+  const owner = fs.readFileSync(new URL('./owner-gates.sh', import.meta.url), 'utf8');
+  const skill = fs.readFileSync(new URL('../../mado-verify/SKILL.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(owner, /cannot change a tooling test/);
+  assert.match(owner, /node tests also read product files/);
+  assert.match(skill, /node tests also read product files/);
+  assert.match(skill, /any changed path under `scripts\/`, `\.agents\/`, `\.github\/` or `\.claude\/` puts every failing node test in the diff/);
 });
