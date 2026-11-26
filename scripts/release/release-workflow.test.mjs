@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 const root = new URL("../../", import.meta.url);
@@ -34,16 +37,62 @@ test("only the mado-v* tag pattern triggers a release", () => {
 test("manual rehearsal uses the same signed verification steps and cannot reach release writes", () => {
   assert.equal((workflow.match(/^  release:$/gm) ?? []).length, 1, "one shared job");
   assert.match(workflow, /github\.repository == 'anzchy\/mado'/);
-  assert.match(step(/^Checkout$/).text, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.commit_sha \|\| github\.ref \}\}/);
+  assert.match(workflow, /RELEASE_MODE: \$\{\{ github\.event_name == 'workflow_dispatch' && 'rehearsal' \|\| 'tag' \}\}/);
+  assert.match(step(/^Checkout$/).text, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.commit_sha \|\| '' \}\}/);
+  assert.match(step(/^Checkout$/).text, /persist-credentials: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/);
   assert.match(step(/^Check rehearsal inputs$/).text, /if: env\.RELEASE_MODE == 'rehearsal'/);
   assert.match(step(/^Check rehearsal inputs$/).text, /git cat-file -e/);
+  assert.match(step(/^Check rehearsal inputs$/).text, /git for-each-ref --contains "\$REHEARSAL_SHA" refs\/remotes\/origin/);
   for (const name of [/^Build Release$/, /^Re-sign Sparkle/, /^Check entitlements/, /^Check product identity/, /^Check package contents$/]) {
     assert.doesNotMatch(step(name).text, /if:/, `shared verification: ${name}`);
   }
   for (const name of [/^Notarise the DMG$/, /^Build and sign the DMG$/, /^Write the DMG checksum$/, /^Create the draft release$/, /^Sign the update and open the appcast PR$/]) {
     assert.match(step(name).text, /if: env\.RELEASE_MODE == 'tag'/, `tag-only side effect: ${name}`);
   }
+  assert.match(step(/^Notarise the app$/).text, /if: env\.RELEASE_MODE == 'tag' \|\| inputs\.notarize_app == true/);
+  const write = /\bgh\s+(?:release|pr)\b|\bgit\s+(?:tag|push)\b|\bgh\s+api\b[^\n]*(?:--method\s+(?:POST|PUT|PATCH|DELETE)|-X\s+(?:POST|PUT|PATCH|DELETE))|\bappcast\.mjs\b/;
+  for (const entry of steps().filter(s => write.test(s.text))) {
+    assert.match(entry.text, /^        if: env\.RELEASE_MODE == 'tag'$/m, `GitHub write must be tag-only: ${entry.name}`);
+  }
+  assert.deepEqual(steps().map(s => s.name), [
+    "Checkout", "Check rehearsal inputs", "Check the tag against the project version", "Check CI on the tag commit",
+    "Set up Xcode", "Download Sparkle tools", "Import the Developer ID certificate", "Build Release",
+    "Bundle Sparkle's licence", "Re-sign Sparkle's helpers and the app", "Check entitlements of the signed app",
+    "Check product identity for release", "Check package contents", "Notarise the app", "Build and sign the DMG",
+    "Notarise the DMG", "Write the DMG checksum", "Create the draft release",
+    "Sign the update and open the appcast PR", "Delete the temporary keychain",
+  ]);
   assert.match(step(/^Delete the temporary keychain$/).text, /if: always\(\)/);
+});
+
+test("rehearsal accepts an origin branch commit and refuses an unreferenced commit", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mado-rehearsal-check-"));
+  const git = (...args) => execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args],
+    { cwd: dir, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(dir, "project.yml"), "MARKETING_VERSION: 0.0.2\n");
+    git("add", "project.yml"); git("commit", "-q", "-m", "base");
+    git("switch", "-q", "-c", "scratch"); git("commit", "-q", "--allow-empty", "-m", "scratch");
+    const sha = git("rev-parse", "HEAD");
+    const text = step(/^Check rehearsal inputs$/).text;
+    const script = text.split("\n        run: |\n")[1]?.split("\n      - name:")[0]
+      ?.split("\n").map(line => line.startsWith("          ") ? line.slice(10) : line).join("\n");
+    assert.ok(script, "rehearsal check script");
+    const run = () => {
+      const envFile = join(dir, "env"); writeFileSync(envFile, "");
+      return spawnSync("/bin/bash", ["--noprofile", "--norc", "-eo", "pipefail"], {
+        cwd: dir, input: script, encoding: "utf8", env: { ...process.env, GITHUB_ENV: envFile,
+          REHEARSAL_SHA: sha, REHEARSAL_VERSION: "0.0.2", DEVELOPMENT_TEAM: "GRT84NAK4T" },
+      });
+    };
+    const rejected = run();
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stdout + rejected.stderr, /commit_sha must be reachable from a branch of this repository/);
+    git("update-ref", "refs/remotes/origin/scratch", sha);
+    const accepted = run();
+    assert.equal(accepted.status, 0, accepted.stderr);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("permissions are only contents and pull-requests write plus actions read", () => {
