@@ -23,7 +23,7 @@ App lane：`node scripts/tdd/app-lane.mjs` 读取 `scripts/tdd/app-quarantine.js
 本地在 `~/Documents` 下的 worktree 运行时，`.build/dd-ci` 中的 Mado.app 可能触发文件夹访问授权提示；即使把 DerivedData 放到 Documents 外，也可能拿不到目标 key window。这类本地失败不能当作 hosted CI 的测试结论。
 升级 Xcode 后，重跑混合 XCTest + Swift Testing probe，确认枚举 ABI 与控制台标签仍兼容。
 
-新 API 按此流程先写可编译桩，桩在 record 时是未提交的实现改动，Swift receipt 总会带 `implementation-already-present` MEDIUM；审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。
+新 API 先写可编译桩，桩单独提交在 RED 之前（#898）：只有签名、没有行为（`fatalError` 或 throw），提交说明带 `Stub-For: <receipt-ID>`；然后在干净的生产代码树上 record RED，实现提交带它的 `Red-Receipt:`。`tdd-separation` lane（`.agents/skills/mado-verify/scripts/tdd-separation.mjs`）核对 RED 记录时没有生产文件与 `head_sha` 不同；它说明 RED 记录在干净的已提交树上，不证明先写了测试。`dirty_source` 被插件截到 50 条，满 50 条按未知处理：先清掉未跟踪的工具噪声（`.tokenize/`、`__pycache__/`）再 record。审计仍须核对桩与 RED。断言消息含 “No such file or directory” 时，插件会把失败升级为环境失败并拒收有效 RED。
 
 Trash 集成 lane（#672）：真实 `FileManager.trashItem` 测试只在 `#if MADO_TRASH_INTEGRATION` 内编译，默认包 lane 不运行，名单在 `scripts/tdd/trash-integration.json`。`node scripts/tdd/trash-lane.mjs` 自行取锁：先单独编译（`.build/trash-integration`），再在一次锁内逐个场景运行，每个场景 120 秒，随后 TERM、10 秒、KILL、5 秒；整条命令预算 10 分钟（不含编译）。首个超时或存活进程即停止，不重试；缺前置条件（Swift、`~/.Trash`）或场景被跳过时退出 70 且不输出计数。`node scripts/tdd/trash-lane.mjs --discover` 双向证明默认 lane 不含这些场景、集成 lane 恰好多出它们。不要用外层 `scripts/heavy-lock.sh` 包它。
 

@@ -89,3 +89,77 @@ test('SKILL.md step 1 runs App tests the CI way and names the Codex key-window l
   assert.match(step1, /NOT VERIFIED/);
   assert.match(step1, /delegator's `?owner-gates/);
 });
+
+// #898 (owner 2026-11-25): 「执行更严格的tdd：在 brief 里加一条：实现之前不得有生产代码改动进入 RED 记录的 dirty_source…」
+const sepDocs = ['.agents/skills/mado-delegator/references/templates/brief-template.md', '.agents/skills/mado-verify/SKILL.md',
+  '.agents/skills/mado-verify/evidence-template.md', 'docs/agents/audit-dimensions.md', 'docs/agents/test-lanes.md',
+  '.agents/skills/mado-delegator/SKILL.md', '.agents/skills/mado-delegator/references/templates/audit-brief.md',
+  '.agents/skills/mado-delegator/references/templates/audit-request-template.md'];
+
+test('898 brief template Test-first carries the RED separation rule and the stub policy', () => {
+  const tf = section(read(`${templates}/brief-template.md`), '## Test-first');
+  assert.match(tf, /no tracked production file may differ from the RED record's `head_sha`/);
+  assert.match(tf, /Stub-For: <receipt-ID>/);
+  assert.match(tf, /signatures only/);
+  assert.match(tf, /clean committed tree/);
+  assert.match(tf, /waiver/i);
+  assert.match(section(read(`${templates}/brief-template.md`), '## Handoff'), /RED separation/);
+});
+
+test('898 mado-verify SKILL, evidence template, D5 and the audit templates name the tdd-separation lane', () => {
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  for (const re of [/tdd-separation\.mjs/, /report-only/, /Stub-For:/, /RED was recorded on a clean committed tree/, /--rebased-from/, /replay/, /tdd-waivers/])
+    assert.match(skill, re);
+  assert.match(read('.agents/skills/mado-verify/evidence-template.md'), /RED separation/);
+  const d5 = read('docs/agents/audit-dimensions.md').split('\n').find(line => line.startsWith('| D5 '));
+  assert.match(d5, /tdd-separation/); assert.match(d5, /waiver/); assert.match(d5, /receipt present/i);
+  for (const rel of ['.agents/skills/mado-delegator/references/templates/audit-brief.md', '.agents/skills/mado-delegator/references/templates/audit-request-template.md'])
+    assert.match(read(rel), /tdd-separation/, rel);
+  const delegator = read('.agents/skills/mado-delegator/SKILL.md');
+  assert.match(delegator, /tdd-waivers/); assert.match(delegator, /Stub-For:/);
+});
+
+test('898 test-lanes.md reconciles the stub policy: stubs are committed before the RED', () => {
+  const lanes = read('docs/agents/test-lanes.md');
+  // A boolean, not doesNotMatch: the doc quotes "No such file or directory", which the plugin reads as an environment failure.
+  assert.equal(lanes.includes('桩在 record 时是未提交的实现改动'), false, 'test-lanes.md still says stubs are uncommitted at record time');
+  assert.match(lanes, /Stub-For:/);
+  assert.match(lanes, /tdd-separation/);
+});
+
+test('898 no text claims the lane proves test-first', () => {
+  for (const rel of sepDocs)
+    for (const line of read(rel).split('\n'))
+      if (/test-first is proven|proves? test-first/i.test(line)) assert.match(line, /\b(never|not|no)\b/i, `${rel}: ${line}`);
+});
+
+// #898 fix1 WI-6: the docs describe the fix-round rules (anchored Refactor:, waiver claims accepted by digest, required
+// replays by assertion, exceptions on the auditor checklist).
+test('898 fix1 WI-6 docs: anchored Refactor:, accepted waiver claims, required replays, exceptions on the audit checklist', () => {
+  const tf = section(read(`${templates}/brief-template.md`), '## Test-first');
+  assert.match(tf, /Refactor: <receipt-ID> <why>/);
+  assert.match(tf, /claim/);
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  for (const re of [/--accept-waiver/, /CLAIMED-WAIVER/, /OWNER_GATES_ACCEPT_WAIVERS/, /\.build\/mado-verify\/replay\//, /ERR_ASSERTION/, /required=yes\|no/, /--remerge-diff/, /byte for byte/, /stub-only-window/])
+    assert.match(skill, re);
+  const delegator = read('.agents/skills/mado-delegator/SKILL.md');
+  assert.match(delegator, /--accept-waiver/); assert.match(delegator, /expires/);
+  const d5 = read('docs/agents/audit-dimensions.md').split('\n').find(line => line.startsWith('| D5 '));
+  assert.match(d5, /EXCEPTIONS/); assert.match(d5, /CLAIMED-WAIVER/);
+  for (const rel of ['.agents/skills/mado-delegator/references/templates/audit-brief.md', '.agents/skills/mado-delegator/references/templates/audit-request-template.md']) {
+    const text = read(rel);
+    assert.match(text, /EXCEPTIONS/, rel); assert.match(text, /CLAIMED-WAIVER/, rel);
+  }
+});
+
+// #898 fix2 WI-4: the docs name the replay acceptance mechanism and say which owner-gates run binds.
+test('898 fix2 WI-4 docs: replay files are claims accepted by digest; only the delegator run with --role binds', () => {
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  for (const re of [/--accept-replay <receipt>@<sha256>/, /CLAIMED-REPLAY/, /OWNER_GATES_ACCEPT_REPLAYS/, /role-source=/, /REPLAY <receipt>@<digest>=<verdict>:<file>/])
+    assert.ok(re.test(skill), `mado-verify SKILL lacks ${re}`);
+  assert.ok(!/the delegator reruns the replay for a binding result/.test(skill), 'mado-verify SKILL still says the delegator reruns the replay');
+  const delegator = read('.agents/skills/mado-delegator/SKILL.md');
+  for (const re of [/--accept-replay/, /OWNER_GATES_ACCEPT_REPLAYS/, /role-source=/]) assert.ok(re.test(delegator), `delegator SKILL lacks ${re}`);
+  for (const rel of ['docs/agents/audit-dimensions.md', '.agents/skills/mado-delegator/references/templates/audit-brief.md', '.agents/skills/mado-delegator/references/templates/audit-request-template.md'])
+    assert.ok(/CLAIMED-REPLAY/.test(read(rel)), `${rel} lacks CLAIMED-REPLAY`);
+});

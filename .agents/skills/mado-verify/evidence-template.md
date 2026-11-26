@@ -6,6 +6,9 @@
 #### 门禁
 <每条命令 + 退出码 + 关键行（测试数、覆盖率、swift-lane filter= 行）>
 
+#### RED separation
+<owner-gates `tdd-separation=` 行；每个非 held 的 receipt、OUTSIDE 提交、WAIVED 豁免 id 与例外逐条列出；需要时附 replay 结果>
+
 #### 测试完整性
 <扫描结果；每个命中逐条解释>
 

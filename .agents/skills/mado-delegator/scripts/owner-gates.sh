@@ -19,11 +19,12 @@
 # role; an OWNER_GATES_ROLE left in a shell is ignored with a warning, so the delegator's run cannot inherit a skip.
 # A node failure outside the diff gets one serial rerun of only the failed files under the
 # heavy lock; both attempts go to the summary, and the run stays exit 1 whatever the rerun says.
+# #898: a tdd-separation= line (report-only today) and <prefix>-tdd-separation.json follow the node lane.
 set -u
 here=${0:A:h}
-role=delegator
+role=delegator role_source='default (not passed)'
 if [[ ${1:-} == --role ]]; then
-  role=${2:-}
+  role=${2:-} role_source=--role
   (( $# >= 2 )) && shift 2 || shift 1
 fi
 (( $# >= 3 )) || { echo "usage: owner-gates.sh [--role implementer|delegator] <worktree> <sha> <prefix> [base]"; exit 2; }
@@ -89,6 +90,9 @@ lane_result() {
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
 echo "role=$role" >> $s || summary_error
+# #898 fix2 (opus L-new-1): the default stays delegator (#892); this line says whether --role was passed, so a run without
+# --role (anyone's) is visibly not a `--role delegator` run. Only the delegator's own run is binding.
+echo "role-source=$role_source" >> $s || summary_error
 [[ -n $role_env ]] && { print -r -- "role-env-ignored=$role_env (OWNER_GATES_ROLE is not read; pass --role implementer)" >> $s || summary_error; }
 print -r -- "$preflight" | grep -E '^preflight: stale-owner-records=[0-9]+$' >> "$s" || true
 print -r -- "$load_facts" >> "$s" || summary_error
@@ -228,6 +232,35 @@ else
   echo "node: cannot list the node lane (owner-gates-tools.mjs node-suites failed)" >> "$o/$p-node.log"
   lane_result node 70
 fi
+# #898: the tdd-separation lane (RED recorded on a clean committed tree). Report-only (gate-policy.mjs TDD_SEPARATION_MODE):
+# the lane exits 0 whatever its verdict; once the delegator makes it mandatory, refused, unknown or error exits 1 and the run
+# fails. Its JSON (<prefix>-tdd-separation.json) is the evidence input's tddSeparation.
+# #898 fix1: OWNER_GATES_ACCEPT_WAIVERS (space-separated <id>@<sha256>) turns the delegator's reviewed waiver claims into
+# WAIVED for this run; an implementer-role run never passes them (its run is not binding; a claim stays a claim).
+# #898 fix2: OWNER_GATES_ACCEPT_REPLAYS (space-separated <receipt>@<sha256 of the replay file>) binds the delegator's
+# reviewed replay files the same way; an unaccepted replay file is only CLAIMED-REPLAY.
+sep_accept=()
+if [[ -n ${OWNER_GATES_ACCEPT_REPLAYS:-} ]]; then
+  if [[ $role == delegator ]]; then
+    for token in ${=OWNER_GATES_ACCEPT_REPLAYS}; do sep_accept+=(--accept-replay "$token"); done
+  else
+    print -r -- "owner-gates: warning: OWNER_GATES_ACCEPT_REPLAYS ignored in the implementer role" >&2
+  fi
+fi
+if [[ -n ${OWNER_GATES_ACCEPT_WAIVERS:-} ]]; then
+  if [[ $role == delegator ]]; then
+    for token in ${=OWNER_GATES_ACCEPT_WAIVERS}; do sep_accept+=(--accept-waiver "$token"); done
+  else
+    print -r -- "owner-gates: warning: OWNER_GATES_ACCEPT_WAIVERS ignored in the implementer role" >&2
+  fi
+fi
+sep_line=$(node "$here/../../mado-verify/scripts/tdd-separation.mjs" gate --worktree "$wt" --base "$mb" --head "$(git rev-parse HEAD)" \
+  --out "$o/$p-tdd-separation.json" "${sep_accept[@]}" 2> "$o/$p-tdd-separation.log")
+sep_code=$?
+sep_line=${sep_line%%$'\n'*}
+[[ $sep_line == tdd-separation=* ]] || sep_line="tdd-separation=error (no result line; exit $sep_code; see $p-tdd-separation.log)"
+print -r -- "$sep_line" >> "$s" || summary_error
+(( sep_code != 0 )) && failed=1
 node scripts/ledger/build.mjs --check > /dev/null 2>&1; lane_result ledger $?
 git diff --check "$base"..HEAD > /dev/null 2>&1; lane_result diffcheck $?
 if [[ ! -d node_modules ]]; then

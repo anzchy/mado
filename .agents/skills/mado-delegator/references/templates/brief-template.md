@@ -72,6 +72,19 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
 - Test matrix: every applicable Interaction & lifecycle row becomes a matrix entry (or a named device run) before
   implementation; the handoff maps row → test.
 - Changing an existing assertion: only where it asserts the old behaviour; list before/after/why.
+- **RED separation (#898, owner 2026-11-25):** no tracked production file may differ from the RED record's `head_sha`
+  when the RED is recorded (a new, still untracked production file counts too). Compile stubs go in their own earlier
+  commit: signatures only, no behaviour (`fatalError`/throwing), with a `Stub-For: <receipt-ID>` trailer per receipt it
+  serves; then record the RED on that clean production tree. A WI's implementation commit is the one carrying its
+  `Red-Receipt:` trailer, and the RED's `head_sha` must be a strict ancestor of it. Anything else is a SEPARATION
+  breach: re-record the receipt under a new ID on a clean tree, or the item returns. A behaviour-preserving refactor
+  commit carries `Refactor: <receipt-ID> <why>` in its trailer block and comes after that receipt's implementation
+  commit; any other production commit outside a RED window is refused. A stub commit whose RED window then changes no
+  production file needs a replay. Tests strengthened after green need a manual mutant in the handoff. Only the
+  delegator issues a waiver; a waiver file is only a claim until the delegator accepts it in its own run. One you write
+  never counts.
+  The `tdd-separation` lane checks this; it shows the RED was recorded on a clean committed tree, not that the work
+  was test-first.
 
 ## Gates
 Follow `.agents/skills/mado-verify/SKILL.md` step 1: a clean worktree at the committed head, `git diff --check`, then
@@ -96,6 +109,7 @@ pre-granting, no container/store edits, no system settings; list root IDs you le
 `<type>(<scope>): <summary>`; body names #<n>, <WP>, ledger IDs; trailer `Implemented-by: <implementer>`; one WI per
 commit. Generate this commit's receipt trailer with `node scripts/tdd/red-receipt-trailer.mjs --id <receipt-ID>`
 and paste each generated `Red-Receipt:` line into the implementation commit (repeat for each relied-on ID).
+Compile stubs: their own earlier commit with `Stub-For: <receipt-ID>` (see Test-first).
 The script refuses unverified receipts; verify first. A BROKEN receipt means re-recording under a new ID after
 resolving and explaining the changed specification; never commit BROKEN evidence. Stage named paths only.
 No push, PR, branch switch/deletion, `rm -r`, other worktrees.
@@ -103,6 +117,7 @@ No push, PR, branch switch/deletion, `rm -r`, other worktrees.
 ## Handoff
 Done when: the handoff includes the mado-verify evidence comment URL and the exact final head SHA it covers (see Verify).
 `~/.mado/herdr/<implementer>/<item>-handoff.md`: design; AC table (AC → proving test); RED/GREEN or receipts;
+RED separation row (the owner-gates `tdd-separation=` line, waiver ids, exceptions and any replay);
 changed existing assertions; gates output; `git diff --stat origin/main..HEAD`; production lines per target; NOT
 VERIFIED list; open questions. Reply DONE with the path.
 

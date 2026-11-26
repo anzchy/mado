@@ -21,7 +21,8 @@ F1 [High] <one-paragraph trace> Fix: <direction, not code>. Tests: <continuation
 ## Still open (do not fix)
 <list>
 
-Gates as before. RED receipts / pasted RED per behavioural fix (ids <item>-FIX<k>-WI-n). Commit per fix with Refs #<n>
+Gates as before. RED receipts / pasted RED per behavioural fix (ids <item>-FIX<k>-WI-n), each recorded on a clean
+committed tree (stubs in their own `Stub-For:` commit; the `tdd-separation=` line in the handoff). Commit per fix with Refs #<n>
 and Implemented-by: <implementer>. Rerun mado-verify (Claude `/mado-verify`, Codex `.agents/skills/mado-verify/SKILL.md`)
 on the final fix head and post a new evidence comment. Update the handoff with "Fix round <k>", the new comment URL
 and the head SHA it covers. Do not push.

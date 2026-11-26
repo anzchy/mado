@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
-import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates, reviewRefKind } from './gate-policy.mjs';
+import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates, reviewRefKind,
+  TDD_SEPARATION_MODE, tddSeparationFindings, tddSeparationRequired } from './gate-policy.mjs';
+import { evaluateSeparation, summaryLine } from './tdd-separation.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
@@ -21,9 +23,11 @@ function render(d) {
     ? `- \`${g.name}\` → reused from ${g.reusedFrom}; ${g.keyLine || 'prior green result'}`
     : g.scopeSkip ? `- \`${g.name}\` → n/a: ${g.scopeSkip}`
     : `- \`${g.command}\` → exit ${g.exitCode}; ${g.keyLine || 'no decisive line recorded'}`).join('\n');
+  // #898: the tdd-separation lane line (report-only until gate-policy.mjs TDD_SEPARATION_MODE says mandatory).
+  const separation = d.tddSeparation ? `\n\n#### RED separation\n${summaryLine(d.tddSeparation)}${(d.tddSeparation.receipts ?? []).filter(e => e.status !== 'held').map(e => `\n- ${e.id}: ${e.status}${e.waiver ? ` (${e.waiver})` : ''}; ${e.problems.join('; ')}`).join('')}${(d.tddSeparation.outside ?? []).map(o => `\n- commit ${o.commit.slice(0, 7)} outside any RED window${o.waiver ? ` (${o.waiver})` : ''}: ${o.paths.join(', ')}`).join('')}${(d.tddSeparation.exceptions ?? []).map(e => `\n- exception ${e.kind} ${e.commit.slice(0, 7)}: ${e.note ?? e.subject}`).join('')}` : '';
   const rows = d.byType.map(x => `| ${x.behavior} | ${x.expected} | ${x.actual} | ${x.result} |`).join('\n');
   const shots = d.screenshots?.length ? `\n\n#### 截图（仅 UI 修改）\n| 状态 | 修复前（base \`${d.base?.slice(0, 7)}\`） | 修复后（head \`${sha7}\`） | 机器 |\n|---|---|---|---|\n${d.screenshots.map(s => `| ${s.state} | ${s.before} | ${s.after} | ${s.machine} |`).join('\n')}` : '';
-  return `<!-- mado-verify issue=${d.issue} task=${d.task} head=${d.head} -->\n### mado-verify：#${d.issue} · \`${d.task}\` · \`${d.branch}\` @ \`${sha7}\`\n\n工具链：${d.toolchain || 'NOT VERIFIED'}；机器：${d.machine || 'NOT VERIFIED'}；沙盒模式（Codex）：${d.sandbox || 'n/a'}${d.link ? '\nGitHub CI remains binding on the new head; the reused local lanes were not executed there.' : ''}\n\n#### 门禁\n${gates}\n\n#### 测试完整性\n${d.integrity}\n\n#### 按类型加跑\n| 行为（brief / 账簿行） | 预期 | 实际 | 结果 |\n|---|---|---|---|\n${rows}${shots}\n\n#### NOT VERIFIED\n${d.notVerified.map(x => `- ${x}`).join('\n')}\n`;
+  return `<!-- mado-verify issue=${d.issue} task=${d.task} head=${d.head} -->\n### mado-verify：#${d.issue} · \`${d.task}\` · \`${d.branch}\` @ \`${sha7}\`\n\n工具链：${d.toolchain || 'NOT VERIFIED'}；机器：${d.machine || 'NOT VERIFIED'}；沙盒模式（Codex）：${d.sandbox || 'n/a'}${d.link ? '\nGitHub CI remains binding on the new head; the reused local lanes were not executed there.' : ''}\n\n#### 门禁\n${gates}${separation}\n\n#### 测试完整性\n${d.integrity}\n\n#### 按类型加跑\n| 行为（brief / 账簿行） | 预期 | 实际 | 结果 |\n|---|---|---|---|\n${rows}${shots}\n\n#### NOT VERIFIED\n${d.notVerified.map(x => `- ${x}`).join('\n')}\n`;
 }
 function head() { const r = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }); if (r.status) throw new Error('not a git repo'); return r.stdout.trim(); }
 // Pinned to the canonical repository name (renamed from anzchy/picsee; GitHub redirects the old name). No network lookup:
@@ -32,13 +36,16 @@ export const COMMENT_REPO = 'anzchy/mado';
 const commentPattern = issue => new RegExp(`^https://github\\.com/${COMMENT_REPO.replace('/', '\\/')}/issues/${issue}#issuecomment-\\d+$`);
 // Manual acceptance check the delegator runs before audit and before merge (no Stop hook since 2026-11-14).
 function check(args) {
-  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>]';
+  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>] [--accept-waiver <id>@<sha256>]… [--accept-replay <receipt>@<sha256>]…';
   let want, issue, worktree = process.cwd();
+  const acceptedWaivers = [], acceptedReplays = [];
   while (args.length) {
     const flag = args.shift(), value = args.shift();
     if (flag === '--head' && value && !want) want = value;
     else if (flag === '--issue' && value && issue === undefined) issue = value;
     else if (flag === '--worktree' && value) worktree = value;
+    else if (flag === '--accept-waiver' && value) acceptedWaivers.push(value);
+    else if (flag === '--accept-replay' && value) acceptedReplays.push(value);
     else throw new Error(usage);
   }
   if (!want || !/^[0-9a-f]{7,40}$/i.test(want) || !issue || !/^[1-9]\d*$/.test(issue)) throw new Error(usage);
@@ -96,6 +103,18 @@ function check(args) {
         throw new Error(`node flake disposition reviewRef ${ref} has no line "${marker}"`);
     }
   }
+  // #898: recompute the tdd-separation lane on the record's range (via the old range for a linked record) and compare.
+  const sepFiles = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base) ? listDiffPaths(worktree, record.base, named) : null;
+  const sepRequired = sepFiles === null ? true : tddSeparationRequired(sepFiles);
+  let recomputed;
+  if (sepRequired || record.tddSeparation !== undefined) {
+    try {
+      recomputed = evaluateSeparation({ worktree, base: record.base, head: named, issue: Number(issue), acceptedWaivers, acceptedReplays,
+        rebasedFrom: record.link ? { base: record.link.oldBase, head: record.link.oldHead } : undefined });
+    } catch (error) { recomputed = { lane: 'tdd-separation', verdict: 'error', reason: error.message }; }
+  }
+  const separation = tddSeparationFindings({ stored: record.tddSeparation, recomputed, required: sepRequired, mode: TDD_SEPARATION_MODE });
+  if (separation.problems.length) throw new Error(`tdd-separation refused: ${separation.problems.join('; ')}`);
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
@@ -103,6 +122,7 @@ function check(args) {
     const d = gate.disposition;
     console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} author ${d.author} owner ${d.owner} reviewed by ${d.reviewedBy} (${d.reviewRef}) expires ${d.expires}`);
   }
+  for (const warning of separation.warnings) console.log(`WARNING tdd-separation (${TDD_SEPARATION_MODE}): ${warning}`);
   for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is binding for the retained App group, hosted CI binding for the hosted group`);
 }
 try {
@@ -112,6 +132,7 @@ try {
   if (!/^[0-9a-f]{40}$/.test(d.head) || !Number.isSafeInteger(d.issue) || d.issue < 1 || !Array.isArray(d.gates) || !Array.isArray(d.byType) || !Array.isArray(d.notVerified)) throw new Error('invalid evidence fields');
   if (d.head !== head()) throw new Error('evidence head does not match current HEAD');
   // #892 fix1 WI-4: the owner-gates role from the summary's role= line.
+  if (d.tddSeparation !== undefined && (d.tddSeparation === null || typeof d.tddSeparation !== 'object' || d.tddSeparation.lane !== 'tdd-separation')) throw new Error('tddSeparation must be the tdd-separation lane JSON (owner-gates <prefix>-tdd-separation.json)');
   if (d.role !== undefined && d.role !== 'implementer' && d.role !== 'delegator') throw new Error(`evidence role must be implementer or delegator (the summary's role= line), got ${JSON.stringify(d.role)}`);
   if (d.link) {
     if (d.head !== d.link.newHead || d.base !== d.link.newBase) throw new Error('linked record head/base mismatch');
@@ -152,7 +173,7 @@ try {
       lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.disposition ? 'flaky-disposition' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
     const record = { head: d.head, base, ...(d.role ? { role: d.role } : {}), fingerprints, link, lanes,
-      ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,
+      ...(link ? { ciBinding: 'required-new-head' } : {}), ...(d.tddSeparation ? { tddSeparation: d.tddSeparation } : {}), gates: d.gates, complete: verdict.complete,
       problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() };
     if (link) verifyLinkedRecord(cwd, record);
     fs.writeFileSync(target, JSON.stringify(record, null, 2) + '\n');

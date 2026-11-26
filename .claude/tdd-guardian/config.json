@@ -377,6 +377,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 180000
+    },
+    {
+      "name": "tdd-separation-node",
+      "description": "Manual #898 RED receipts for the tdd-separation lane, its evidence wiring and the brief/audit texts.",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/tdd-separation.test.mjs .agents/skills/mado-verify/tests/brief-template.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 300000
     }
   ],
   "coverageThresholds": {
