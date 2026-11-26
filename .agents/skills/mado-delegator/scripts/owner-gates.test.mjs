@@ -581,6 +581,32 @@ test('898 fix1 WI-3b OWNER_GATES_ACCEPT_WAIVERS reaches the lane only in the del
   }
 });
 
+// #898 fix2 WI-2 (opus N1, gpt F3): the delegator binds reviewed replay files for its own run with
+// OWNER_GATES_ACCEPT_REPLAYS (space-separated <receipt>@<sha256>); an implementer-role run never passes them on.
+test('898 fix2 WI-2 OWNER_GATES_ACCEPT_REPLAYS reaches the lane only in the delegator role', t => {
+  const accept = 'R1@cccccccccccc R2@dddddddddddd';
+  for (const [args, passed] of [[[], true], [['--role', 'implementer'], false]]) {
+    const marker = path.join(os.tmpdir(), `sep-replay-${process.pid}-${args.length}`);
+    t.after(() => fs.rmSync(marker, { force: true }));
+    const f = fixture(t, 'pass', 2, true, { args, env: { SEP_LINE: 'tdd-separation=pass mode=report-only receipts=0 held=0 refused=0 unknown=0 waived=0 exceptions=0', SEP_CODE: '0', SEP_MARKER: marker, OWNER_GATES_ACCEPT_REPLAYS: accept } });
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    const extra = fs.readFileSync(marker, 'utf8').split('\n').slice(9);
+    assert.deepEqual(extra, passed ? ['--accept-replay', 'R1@cccccccccccc', '--accept-replay', 'R2@dddddddddddd'] : [], args.join(' '));
+    if (!passed) assert.match(f.result.stderr, /OWNER_GATES_ACCEPT_REPLAYS ignored/);
+  }
+});
+
+// #898 fix2 WI-2 (opus L-new-1): the default role stays delegator (#892), but the summary says whether --role was passed,
+// so an implementer's run without --role cannot pass for the delegator's own run.
+test('898 fix2 WI-2 the summary records whether the role was passed or defaulted', t => {
+  for (const [args, source] of [[[], 'default (not passed)'], [['--role', 'delegator'], '--role'], [['--role', 'implementer'], '--role']]) {
+    const f = fixture(t, 'pass', 2, true, { args });
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    assert.match(f.summary, new RegExp(`^role=${args[1] ?? 'delegator'}\n`, 'm'));
+    assert.match(f.summary, new RegExp(`^role-source=${source.replace(/[()]/g, '\\$&')}$`, 'm'), args.join(' '));
+  }
+});
+
 test('898 WI-3 a tdd-separation lane exit 1 (mandatory refusal) fails the run; a silent lane is an error line', t => {
   const f = fixture(t, 'pass', 2, true, { env: { SEP_LINE: 'tdd-separation=refused mode=mandatory receipts=1 held=0 refused=1 unknown=0 waived=0 exceptions=0', SEP_CODE: '1' } });
   assert.equal(f.result.status, 1, f.summary);
