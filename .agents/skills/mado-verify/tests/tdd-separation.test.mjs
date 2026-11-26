@@ -689,6 +689,19 @@ test('898 fix2 WI-1 evidence check takes --accept-replay; the implementer-stored
   assert.doesNotMatch(accepted.stdout, /WARNING tdd-separation/);
 });
 
+// fix2 WI-3 (opus L-new-2): ERR_ASSERTION counts only at the failing leaf's own level, not inside a nested cause block.
+test('898 fix2 WI-3 a leaf whose ERR_ASSERTION appears only in a nested cause is not a RED by assertion', () => {
+  assert.equal(typeof sep.redByAssertion, 'function', 'redByAssertion(tap) is exported');
+  const nested = ['TAP version 13', 'not ok 1 - adds', '  ---', '  duration_ms: 1', "  failureType: 'testCodeFailure'", "  error: 'wrapped'",
+    "  code: 'ERR_TEST_FAILURE'", '  cause:', "    code: 'ERR_ASSERTION'", '  ...', '1..1', ''].join('\n');
+  assert.equal(sep.redByAssertion(nested), false);
+  const subtest = ['TAP version 13', '    not ok 1 - inner', '      ---', "      failureType: 'testCodeFailure'", "      code: 'ERR_ASSERTION'", '      ...',
+    'not ok 1 - outer', '  ---', "  failureType: 'subtestsFailed'", '  ...', '1..1', ''].join('\n');
+  assert.equal(sep.redByAssertion(subtest), true);
+  assert.equal(sep.redByAssertion(['not ok 1 - a', '  ---', "  code: 'ERR_ASSERTION'", '  ...', 'not ok 2 - b', '  ---', "  code: 'ERR_TEST_FAILURE'", '  ...', ''].join('\n')), false);
+  assert.equal(sep.redByAssertion('ok 1 - a\n'), false);
+});
+
 // WI-3: gate policy and evidence wiring.
 test('898 WI-3 selection: product code needs the lane; tests, docs and tooling do not', () => {
   assert.equal(policy.tddSeparationRequired(['App/X.swift']), true);

@@ -439,6 +439,15 @@ function laneCommand(dir, kind, filter, tests) {
   if (kind === 'swift') return [process.execPath, 'scripts/tdd/swift-lane.mjs', filter];
   throw new Error(`replay kind ${kind} is not supported (node or swift; App tests need build-for-testing in the replay tree first)`);
 }
+// fix1 (opus M4) / fix2 (opus L-new-2): node TAP is a RED by assertion when every failing leaf (not a parent that failed
+// only because of its subtests) carries code ERR_ASSERTION at its own YAML level (the indent of its `---`), not in a
+// nested block such as a cause.
+export function redByAssertion(tap) {
+  const blocks = [...String(tap).matchAll(/^[ \t]*not ok \d+ - .*\n([ \t]*)---\n((?:[ \t]+.*\n)*?)[ \t]+\.\.\.$/gm)];
+  const own = (indent, body, line) => body.split('\n').some(l => l === `${indent}${line}`);
+  const leaves = blocks.filter(([, indent, body]) => !own(indent, body, "failureType: 'subtestsFailed'"));
+  return leaves.length > 0 && leaves.every(([, indent, body]) => own(indent, body, "code: 'ERR_ASSERTION'"));
+}
 function runPhase(dir, cmd, kind) {
   const r = spawnSync(cmd[0], cmd.slice(1), { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000, env: runEnv });
   const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
@@ -451,12 +460,7 @@ function runPhase(dir, cmd, kind) {
   // fix1 (opus M4): a RED must fail by assertion. node: every failing test point (a parent that failed only because of its
   // subtests aside) carries code ERR_ASSERTION; a file that fails to load or a thrown non-assertion error does not.
   // swift: scripts/tdd/swift-lane.mjs exits 1 only for assertion failures (70 for compile errors, zero tests or crashes).
-  let assertion = r.status === 1;
-  if (kind === 'node') {
-    const blocks = [...out.matchAll(/^\s*not ok \d+ - .*\n((?:\s+.*\n)*?)\s+\.\.\.$/gm)].map(m => m[1]);
-    const leaves = blocks.filter(b => !/failureType: 'subtestsFailed'/.test(b));
-    assertion = leaves.length > 0 && leaves.every(b => /^\s+code: 'ERR_ASSERTION'$/m.test(b));
-  }
+  const assertion = kind === 'node' ? redByAssertion(out) : r.status === 1;
   return { command: cmd.map(a => a === process.execPath ? 'node' : a).join(' '), exitCode: r.status ?? -1, signal: r.signal ?? null,
     tests, failed, assertion, tail: out.trim().split('\n').slice(-8).join('\n') };
 }
