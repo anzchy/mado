@@ -44,6 +44,9 @@ final class Stub890: URLProtocol, @unchecked Sendable {
         generation += 1
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
+    /// Stops of a load that was still hanging when URLSession stopped it, started since the last reset: the stops
+    /// only a cancellation causes. URLSession also stops a load after it finished or `failHung` ended it; those never
+    /// count (#904).
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
     /// Every `stopLoading` call since the last reset, counted or not, whatever its delivery (#904). Loose on purpose:
     /// a late call from an earlier test's load counts here too, so a test only uses it to know a call happened.
@@ -107,8 +110,11 @@ final class Stub890: URLProtocol, @unchecked Sendable {
     override func stopLoading() {
         Self.lock.lock()
         Self.stopCallCount += 1
+        let index = Self.hung.firstIndex { $0 === self }
+        if let index { Self.hung.remove(at: index) }
         let stops = Self.stops, startedIn = startedIn
         Self.lock.unlock()
+        guard index != nil else { return }
         switch stops {
         case .immediate: Self.countStop(startedIn)
         case .after(let delay): DispatchQueue.global().asyncAfter(deadline: .now() + delay) { Self.countStop(startedIn) }
