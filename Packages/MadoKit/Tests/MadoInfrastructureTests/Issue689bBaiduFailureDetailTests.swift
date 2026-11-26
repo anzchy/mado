@@ -14,7 +14,7 @@ import MadoApplication
 private actor Replies: HTTPTransport {
     var replies: [Result<HTTPResponse, any Error>]
     init(_ replies: [Result<HTTPResponse, any Error>]) { self.replies = replies }
-    func send(_ request: URLRequest) async throws -> HTTPResponse { try replies.removeFirst().get() }
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse { try replies.removeFirst().get() }
 }
 private final class Details: @unchecked Sendable {
     private let lock = NSLock()
@@ -115,7 +115,8 @@ func issue689bTransportFailuresReportOnlyTheirCode() async throws {
     let (ocrThrown, ocrDetails) = try await run([token, .failure(timedOut)])
     #expect(ocrThrown == .cloudOffline)
     #expect(ocrDetails == [CloudFailureDetail(stage: .recognition, transportError: "URLError -1001")])
-    let (refusedThrown, refusedDetails) = try await run([token, .failure(URLSessionHTTPTransport.Refusal.redirected)])
+    // #890: the transport returns a redirect unfollowed; the provider logs it exactly as the old thrown refusal.
+    let (refusedThrown, refusedDetails) = try await run([token, reply("<a href=x>moved</a>", status: 302)])
     #expect(refusedThrown == .cloudFailure)
     #expect(refusedDetails == [CloudFailureDetail(stage: .recognition, transportError: "refused redirected")])
     struct Other: Error { let secret = "AKdevice0001" }

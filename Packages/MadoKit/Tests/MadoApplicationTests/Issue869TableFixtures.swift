@@ -12,6 +12,8 @@ actor RecordingTransport869: HTTPTransport {
     private var script: [Reply]
     private let fallback: Reply
     private(set) var requests: [URLRequest] = []
+    /// The destination named with each request (#890).
+    private(set) var destinations: [HTTPDestination] = []
     private let gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
     private var hasEntered = false
@@ -27,8 +29,9 @@ actor RecordingTransport869: HTTPTransport {
 
     var callCount: Int { requests.count }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         requests.append(request)
+        destinations.append(destination)
         if gated {
             await withCheckedContinuation { continuation in
                 gate = continuation

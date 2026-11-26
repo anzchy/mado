@@ -15,7 +15,7 @@ private actor Stub831: HTTPTransport {
     var requests: [URLRequest] = []
     var responses: [HTTPResponse]
     init(_ responses: [String]) { self.responses = responses.map { HTTPResponse(statusCode: 200, body: Data($0.utf8)) } }
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         requests.append(request)
         guard !responses.isEmpty else { throw URLError(.badServerResponse) }
         return responses.removeFirst()

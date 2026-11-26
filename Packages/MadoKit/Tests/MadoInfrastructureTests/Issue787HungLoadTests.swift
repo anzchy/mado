@@ -14,7 +14,7 @@ extension Issue689URLSessionTransportTests {
         let transport = URLSessionHTTPTransport(timeout: 2, protocolClasses: [StubURLProtocol.self])
         var request = URLRequest(url: URL(string: "https://aip.baidubce.com/oauth/2.0/token")!)
         request.httpMethod = "POST"
-        let error = await #expect(throws: URLError.self) { try await transport.send(request) }
+        let error = await #expect(throws: URLError.self) { try await transport.send(request, to: .baiduOCR) }
         #expect(error?.code == .cannotFindHost, "failHung found no registered load; the transport timed out instead")
         #expect(StubURLProtocol.requests.count == 1)
     }

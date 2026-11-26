@@ -10,7 +10,7 @@ private actor StubHTTP: HTTPTransport {
     var requests: [URLRequest] = []
     var responses: [Result<HTTPResponse, URLError>]
     init(_ responses: [Result<HTTPResponse, URLError>]) { self.responses = responses }
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         requests.append(request)
         return try responses.removeFirst().get()
     }
@@ -116,7 +116,7 @@ private actor PausingHTTP: HTTPTransport {
     var resume: CheckedContinuation<Void, Never>?
     let entered: AsyncStream<Void>.Continuation
     init(entered: AsyncStream<Void>.Continuation) { self.entered = entered }
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         requests.append(request)
         if request.url?.path == "/oauth/2.0/token" {
             await withCheckedContinuation { resume = $0; entered.yield(()) }
@@ -169,7 +169,7 @@ private actor PausingFailHTTP: HTTPTransport {
     var resume: CheckedContinuation<Void, Never>?
     let entered: AsyncStream<Void>.Continuation
     init(entered: AsyncStream<Void>.Continuation) { self.entered = entered }
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         if request.url?.path == "/oauth/2.0/token" {
             tokenCount += 1
             if tokenCount == 1 {
@@ -214,7 +214,7 @@ private actor CancellationHTTP: HTTPTransport {
     var pending: CheckedContinuation<HTTPResponse, Error>?
     var requests: [URLRequest] = []
     init(stage: Stage, entered: AsyncStream<Void>.Continuation) { self.stage = stage; self.entered = entered }
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         requests.append(request)
         let isToken = request.url?.path == "/oauth/2.0/token"
         if (isToken && stage == .token) || (!isToken && stage == .recognition) {
@@ -367,7 +367,7 @@ func issue689FixDownscaleRejectsTooNarrowImageBeforeNetwork() async throws {
 
 private struct CancellationErrorHTTP: HTTPTransport {
     let atRecognition: Bool
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         let isToken = request.url?.path == "/oauth/2.0/token"
         if isToken != atRecognition { throw CancellationError() }
         return try tokenJSON.get()
@@ -387,7 +387,7 @@ func issue689FixTransportCancellationErrorNeverFallsBack(atRecognition: Bool) as
 private enum UnexpectedTransportError: Error { case failed }
 private struct UnexpectedErrorHTTP: HTTPTransport {
     let atRecognition: Bool
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         let isToken = request.url?.path == "/oauth/2.0/token"
         if isToken != atRecognition { throw UnexpectedTransportError.failed }
         return try tokenJSON.get()

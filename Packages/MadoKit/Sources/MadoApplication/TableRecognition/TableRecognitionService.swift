@@ -26,24 +26,25 @@ public struct TableRecognitionService: Sendable {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
-        case .ready(let request): return await send(request)
+        case .ready(let request, let destination): return await send(request, to: destination)
         }
     }
 
-    /// Sends once, never retries. A run cancelled before the call, including while the request was being built,
-    /// sends nothing; one cancelled while the reply was outstanding is cancelled, whatever came back.
-    private func send(_ request: URLRequest) async -> TableRecognitionResult {
+    /// Sends once, never retries, and only to `destination`, the consented host. A run cancelled before the call,
+    /// including while the request was being built, sends nothing; one cancelled while the reply was outstanding is
+    /// cancelled, whatever came back.
+    private func send(_ request: URLRequest, to destination: HTTPDestination) async -> TableRecognitionResult {
         if Task.isCancelled { return .cancelled }
         let result: TableRecognitionResult
         do {
-            result = TableRecognitionReply.classify(try await transport.send(request))
+            result = TableRecognitionReply.classify(try await transport.send(request, to: destination))
         } catch {
             result = TableRecognitionReply.classify(error)
         }
         return Task.isCancelled ? .cancelled : result
     }
 
-    private enum Prepared { case ready(URLRequest), notSent(TableRecognitionBlock), cancelled }
+    private enum Prepared { case ready(URLRequest, HTTPDestination), notSent(TableRecognitionBlock), cancelled }
 
     /// Runs the guards in order (switch, address, consent, key, format, size) and builds the request. The key is read
     /// only once the switch, the address and the consent allow a request, and every input is read fresh. A run
@@ -57,6 +58,7 @@ public struct TableRecognitionService: Sendable {
             return .notSent(.invalidEndpoint)
         }
         if let block = TableRecognitionGuards.consentBlock(options.consent, host: target.host) { return .notSent(block) }
+        guard let consentedHost = options.consent?.host else { return .notSent(.consentNotAsked) }
         let key = (await credentials.accessKey(for: endpoint) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if Task.isCancelled { return .cancelled }
         guard !key.isEmpty else { return .notSent(.noAccessKey) }
@@ -67,8 +69,11 @@ public struct TableRecognitionService: Sendable {
         }
         let request = TableRecognitionRequest.make(url: target.url, endpoint: endpoint, key: key, image: image,
                                                    mediaType: mediaType)
+        // The transport admits only this host and port (#890): the host from the consent record, not one read back
+        // from the request, so the transport checks the request against what the user consented to.
+        let port = URLComponents(url: target.url, resolvingAgainstBaseURL: false)?.port
         requestBuilt()
-        return .ready(request)
+        return .ready(request, .consentedHost(host: consentedHost, port: port))
     }
 
     /// The Settings Test: sends the built-in sample table, not the user's image, under the same switch, consent and
@@ -77,8 +82,8 @@ public struct TableRecognitionService: Sendable {
         switch await prepare(TableRecognitionSample.png) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
-        case .ready(let request):
-            switch await send(request) {
+        case .ready(let request, let destination):
+            switch await send(request, to: destination) {
             case .table(let rows): return TableRecognitionSample.matches(rows) ? .passed : .failed(.other)
             case .notSent(let block): return .notSent(block)
             case .failed(let failure): return .failed(failure)
