@@ -98,6 +98,14 @@
     ]
   },
   {
+    "pathRegex": "^\\.agents/skills/mado-delegator/scripts/new-task-worktree\\.(?:sh|test\\.mjs)$",
+    "reason": "#901: the task-worktree helper prints and tests the role overlay that scripts/codex-rules/install-role.py writes; its filename is the coordinated #556 tooling token. Only the overlay rule filenames and the overlay header are deferred.",
+    "pattern": "picsee(?:-role)?\\.rules|(?<=Local )picsee(?= role)",
+    "scopes": [
+      "content"
+    ]
+  },
+  {
     "prefix": "scripts/git-hooks/",
     "reason": "#556: roster hook paths and role identity remain until tooling migration. Only the listed tool tokens are deferred; live schemes, modules and bundle IDs are rejected.",
     "pattern": "picsee-(?:hook-snapshots|pre-push-installer-v1|pre-push\\.)",
