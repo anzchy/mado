@@ -57,10 +57,13 @@ extension Issue890TransportTests {
     @Test(.timeLimit(.minutes(2)))
     func issue904LateStopFromAnEarlierResetIsNotCounted() async throws {
         Stub890.reset([.hang], stops: .after(0.3))
-        #expect(await cancel904(try await startHanging904()) == .cancelled)
-        try await waitUntil("stopLoading called") { Stub890.stopCalls >= 1 }
+        let task = try await startHanging904()
+        let delivered = Stub890.deliveredStops
+        #expect(await cancel904(task) == .cancelled)
+        // This test's own load was stopped (a late stop of an earlier test's load cannot open this gate).
+        try await waitUntil("this load stopped") { Stub890.hungCount == 0 }
         Stub890.reset([], stops: .after(0.3))
-        try await waitUntil("the earlier stop landed") { Stub890.deliveredStops >= 1 }
+        try await waitUntil("the earlier stop landed") { Stub890.deliveredStops > delivered }
         #expect(Stub890.stopCount == 0)
     }
 

@@ -38,7 +38,7 @@ final class Stub890: URLProtocol, @unchecked Sendable {
     static func reset(_ outcomes: [Outcome], afterRecord: (@Sendable () -> Void)? = nil,
                       stops: StopDelivery = .immediate) {
         lock.lock(); defer { lock.unlock() }
-        self.outcomes = outcomes; seen = []; stopped = 0; stopCallCount = 0; deliveredCount = 0; hung = []
+        self.outcomes = outcomes; seen = []; stopped = 0; stopCallCount = 0; hung = []
         self.afterRecord = afterRecord
         self.stops = stops
         generation += 1
@@ -51,9 +51,11 @@ final class Stub890: URLProtocol, @unchecked Sendable {
     /// Every `stopLoading` call since the last reset, counted or not, whatever its delivery (#904). Loose on purpose:
     /// a late call from an earlier test's load counts here too, so a test only uses it to know a call happened.
     static var stopCalls: Int { lock.lock(); defer { lock.unlock() }; return stopCallCount }
-    /// Stops whose delivery landed since the last reset, counted or not (#904): a test waits for this instead of
-    /// sleeping until a delayed stop has surely landed.
+    /// Every stop delivery that has landed, counted or not, never reset (#904): a test snapshots it before a cancel
+    /// and waits for it to grow instead of sleeping until a delayed stop has surely landed.
     static var deliveredStops: Int { lock.lock(); defer { lock.unlock() }; return deliveredCount }
+    /// Loads still hanging since the last reset (#904): zero once this test's own load was stopped or ended.
+    static var hungCount: Int { lock.lock(); defer { lock.unlock() }; return hung.count }
     static var hosts: [String?] { requests.map { $0.request.url?.host } }
     /// Ends every hanging load, as the network would later.
     static func failHung(_ error: URLError) {
