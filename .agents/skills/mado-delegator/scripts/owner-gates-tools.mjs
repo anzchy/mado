@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { skippable } from '../../../../scripts/ci/native-inputs.mjs';
-import { failingTestInDiff, nodeLaneRequired } from '../../mado-verify/scripts/gate-policy.mjs';
+import { failingTestInDiff, nodeLaneRequired, parseNulPaths } from '../../mado-verify/scripts/gate-policy.mjs';
 
 // CI's classifier remains the one definition of native inputs. Optional Node suites
 // are skipped only for paths this reviewed set does not read.
@@ -318,15 +318,16 @@ export function readCompetingHeavyProcesses(ps = process.env.OWNER_GATES_PS || '
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === 'select') {
-    const files = fs.readFileSync(args[0], 'utf8').split('\n').filter(Boolean);
+    // #892 fix1: owner-gates.sh writes the diff NUL-delimited (`git diff --name-only -z`).
+    const files = parseNulPaths(fs.readFileSync(args[0], 'utf8'));
     const choice = selectSuites(files);
     for (const [key, value] of Object.entries(choice)) console.log(`${key}=${value ? 1 : 0}`);
   } else if (cmd === 'fact') {
     const [lane, code, log, diff] = args;
-    console.log(failureFact(lane, Number(code), fs.readFileSync(log, 'utf8'), fs.readFileSync(diff, 'utf8').split('\n').filter(Boolean)));
+    console.log(failureFact(lane, Number(code), fs.readFileSync(log, 'utf8'), parseNulPaths(fs.readFileSync(diff, 'utf8'))));
   } else if (cmd === 'rerun-plan') {
     const [log, diff, root] = args;
-    const plan = rerunPlan(fs.readFileSync(log, 'utf8'), fs.readFileSync(diff, 'utf8').split('\n').filter(Boolean), root);
+    const plan = rerunPlan(fs.readFileSync(log, 'utf8'), parseNulPaths(fs.readFileSync(diff, 'utf8')), root);
     if (!plan.rerun) { console.log(`skip ${plan.reason}`); return; }
     console.log('run');
     for (const file of plan.files) console.log(`file ${file}`);

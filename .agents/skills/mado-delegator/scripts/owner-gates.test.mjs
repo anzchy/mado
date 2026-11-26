@@ -84,7 +84,11 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
   // #891: the competitor lane's test file only leaves a marker when it actually runs.
   fs.writeFileSync(path.join(dir, 'competitor.test.mjs'), `import fs from 'node:fs';\nfs.writeFileSync(process.env.COMPETITOR_MARKER, 'ran');\n`);
   const shell = path.join(dir, 'invoke.zsh');
-  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then print $DIFF_PATH; fi;  }
+  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then
+  # #892 fix1: like git, -z prints raw NUL-terminated paths; without it, a path with non-ASCII bytes is quoted.
+  if [[ " $* " == *" -z "* ]]; then if [[ -n $DIFF_PATH ]]; then print -rn -- "$DIFF_PATH"$'\\0'; fi
+  elif [[ -n \${DIFF_PATH//[ -~]/} ]]; then print -r -- "\\"$DIFF_PATH\\""; else print -r -- $DIFF_PATH; fi
+fi;  }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
 source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
@@ -490,4 +494,17 @@ test('892 fix1 fixture ignores the caller OWNER_GATES_ROLE', t => {
   assert.equal(f.result.status, 0, f.result.stderr + f.summary);
   assert.match(f.summary, /^role=delegator$/m);
   assert.match(f.summary, /^node=0$/m);
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): a non-ASCII path is read from `git diff -z`, not Git's quoted display form, so it
+// selects the node lane for an implementer and the App-facing lanes for App/ paths.
+test('892 fix1 WI-1 non-ASCII paths select the node lane and the App-facing build', t => {
+  const tooling = fixture(t, 'pass', 2, true, {diff: 'scripts/测试.test.mjs', env: {OWNER_GATES_ROLE: 'implementer'}});
+  assert.equal(tooling.result.status, 0, tooling.result.stderr + tooling.summary);
+  assert.match(tooling.summary, /^node=0$/m);
+  assert.equal(nodeRuns(tooling), 1);
+  const app = fixture(t, 'pass', 2, true, {diff: 'App/视图.swift'});
+  assert.equal(app.result.status, 0, app.result.stderr + app.summary);
+  assert.match(fs.readFileSync(app.xcodeMarker, 'utf8'), /^build-for-testing$/m);
+  assert.match(app.summary, /^apptests-retained=0 /m);
 });

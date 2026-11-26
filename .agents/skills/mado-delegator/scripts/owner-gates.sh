@@ -42,8 +42,9 @@ role=${OWNER_GATES_ROLE:-delegator}
 hl=$wt/scripts/heavy-lock.sh
 export MADO_HEAVY_LOCK_WAIT_SECS=${MADO_HEAVY_LOCK_WAIT_SECS:-3600}
 mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-base of $base and HEAD"
-diff_file=$o/$p-diff.txt
-git diff --name-only --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
+# #892 fix1: NUL-delimited raw paths (gate-policy.mjs DIFF_NAME_ARGS); Git's display form quotes non-ASCII paths.
+diff_file=$o/$p-diff.nul
+git diff --name-only -z --no-renames "$mb" HEAD > "$diff_file" || refuse "cannot list gated diff"
 selection=$(node "$here/owner-gates-tools.mjs" select "$diff_file") || refuse "cannot classify gated diff"
 selection_lines=("${(@f)selection}")
 (( ${#selection_lines} == 4 )) && [[ $selection_lines[1] == native=[01] ]] &&
@@ -114,7 +115,8 @@ echo >> $s || summary_error
 fi
 $hl xcodegen generate > $o/$p-xcodegen.log 2>&1; lane_result xcodegen $?
 app_facing='^(App/|AppTests/|project\.yml$|Packages/MadoKit/Sources/MadoMacUI/)'
-if grep -Eq "$app_facing" "$diff_file"; then
+# One path per line for grep: a newline inside a name can only add a match, never hide a path that starts with App/.
+if tr '\0' '\n' < "$diff_file" | grep -Eq "$app_facing"; then
   $hl xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
     -derivedDataPath .build/dd-ci > "$o/$p-xcodebuild.log" 2>&1
   build_code=$?

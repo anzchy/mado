@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { nodeLaneRequired, NODE_LANE_PREFIXES } from '../../mado-verify/scripts/gate-policy.mjs';
+import { DIFF_NAME_ARGS, nodeLaneRequired, NODE_LANE_PREFIXES } from '../../mado-verify/scripts/gate-policy.mjs';
 import { rerunPlan, selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -44,9 +44,10 @@ test('892 WI-1 the node lane is required exactly for diffs under scripts/, .agen
 test('892 WI-1 select prints native, agents, tdd and node, one per line', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'select-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-  for (const [diff, node] of [['App/MadoApp.swift\n', 0], ['App/MadoApp.swift\nscripts/ci/foo.mjs\n', 1]]) {
-    fs.writeFileSync(path.join(dir, 'diff.txt'), diff);
-    const r = spawnSync(process.execPath, [new URL('./owner-gates-tools.mjs', import.meta.url).pathname, 'select', path.join(dir, 'diff.txt')], {encoding: 'utf8'});
+  // #892 fix1: the diff file is NUL-delimited (`git diff --name-only -z`).
+  for (const [diff, node] of [['App/MadoApp.swift\0', 0], ['App/MadoApp.swift\0scripts/ci/foo.mjs\0', 1]]) {
+    fs.writeFileSync(path.join(dir, 'diff.nul'), diff);
+    const r = spawnSync(process.execPath, [new URL('./owner-gates-tools.mjs', import.meta.url).pathname, 'select', path.join(dir, 'diff.nul')], {encoding: 'utf8'});
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, new RegExp(`^native=1\\nagents=[01]\\ntdd=[01]\\nnode=${node}\\n$`));
   }
@@ -338,4 +339,37 @@ test('892 review rerun plan: a failing block that does not account for every fai
   assert.equal(rerunPlan(two.replace('ℹ fail 2', 'ℹ fail 3'), ['docs/x.md'], '/wt').reason, 'failing tests incomplete');
   assert.equal(rerunPlan(two.replace('ℹ fail 2\n', ''), ['docs/x.md'], '/wt').reason, 'failing tests incomplete');
   assert.equal(rerunPlan(two, ['docs/x.md'], '/wt').rerun, true);
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): owner-gates lists the diff with the shared NUL-delimited arguments, and every
+// owner-gates-tools command reads that file with the shared parser. Real git, core.quotePath at its default.
+const tools = new URL('./owner-gates-tools.mjs', import.meta.url).pathname;
+const runGit = (cwd, ...args) => { const r = spawnSync('git', args, {cwd, encoding: 'utf8'}); assert.equal(r.status, 0, r.stderr); return r.stdout; };
+test('892 fix1 WI-1 owner-gates.sh lists the gated diff with the shared NUL-delimited arguments', () => {
+  const owner = fs.readFileSync(new URL('./owner-gates.sh', import.meta.url), 'utf8');
+  assert.ok(owner.includes(`git ${DIFF_NAME_ARGS.join(' ')} "$mb" HEAD > "$diff_file"`), 'owner-gates.sh uses DIFF_NAME_ARGS');
+  assert.doesNotMatch(owner, /git diff --name-only(?! -z)/, 'no display-form listing left');
+});
+
+test('892 fix1 WI-1 select and rerun-plan read real git -z output: a non-ASCII tooling path selects node', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'select-z-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  runGit(dir, 'init', '-q'); runGit(dir, 'config', 'user.email', 'f@example.invalid'); runGit(dir, 'config', 'user.name', 'F');
+  runGit(dir, 'config', 'core.quotePath', 'true');
+  fs.writeFileSync(path.join(dir, 'README'), 'x\n'); runGit(dir, 'add', '-A'); runGit(dir, 'commit', '-qm', 'base');
+  fs.mkdirSync(path.join(dir, 'App')); fs.mkdirSync(path.join(dir, 'scripts'));
+  fs.writeFileSync(path.join(dir, 'App/视图.swift'), 'x\n'); fs.writeFileSync(path.join(dir, 'scripts/测试.test.mjs'), 'x\n');
+  runGit(dir, 'add', '-A'); runGit(dir, 'commit', '-qm', 'change');
+  const diff = path.join(dir, 'diff.nul');
+  fs.writeFileSync(diff, runGit(dir, ...DIFF_NAME_ARGS, 'HEAD~1', 'HEAD'));
+  const sel = spawnSync(process.execPath, [tools, 'select', diff], {encoding: 'utf8'});
+  assert.equal(sel.status, 0, sel.stderr);
+  assert.match(sel.stdout, /^node=1$/m);
+  // rerun-plan: a test beside a changed helper is in the diff; the old newline split read one NUL-joined string.
+  const log = path.join(dir, 'node.log');
+  fs.writeFileSync(log, failingBlock([['scripts/tdd/b.test.mjs', 'b']]));
+  fs.writeFileSync(diff, 'App/x.swift\0scripts/tdd/helper.mjs\0');
+  const plan = spawnSync(process.execPath, [tools, 'rerun-plan', log, diff, dir], {encoding: 'utf8'});
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.equal(plan.stdout, 'skip in-diff=yes\n');
 });

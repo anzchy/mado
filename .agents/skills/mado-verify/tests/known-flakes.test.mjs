@@ -174,8 +174,8 @@ function repo(t, changed) {
 }
 const utcToday = () => new Date().toISOString().slice(0, 10);
 const inDays = n => new Date(Date.parse(`${utcToday()}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-function check(r, node, base = r.base) {
-  const record = { head: r.head, base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1', gates: ladder(node) };
+function check(r, node, base = r.base, extra = {}) {
+  const record = { head: r.head, base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1', gates: ladder(node), ...extra };
   fs.mkdirSync(path.join(r.dir, '.build/mado-verify'), { recursive: true });
   fs.writeFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), JSON.stringify(record));
   return spawnSync(process.execPath, [evidence, 'check', '--head', r.head, '--issue', '892', '--worktree', r.dir], { encoding: 'utf8' });
@@ -254,5 +254,55 @@ test('892 review the reviewer differs from the owner, and an invalid today fails
     if (today === undefined) continue; // the default is the real UTC date
     assert.equal(v.complete, false, String(today));
     assert.match(v.problems.join('\n'), /today/, String(today));
+  }
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): Git's display form quotes non-ASCII and control characters, so diff paths come from
+// `git diff --name-only -z` and one NUL parser, never from the quoted text. Real-git fixtures, core.quotePath at its default.
+import { DIFF_NAME_ARGS, listDiffPaths, parseNulPaths } from '../scripts/gate-policy.mjs';
+
+function repoWith(t, setup, change) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-892z-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  git(dir, 'init', '-q'); git(dir, 'config', 'user.email', 'fixture@example.invalid'); git(dir, 'config', 'user.name', 'Fixture');
+  git(dir, 'config', 'core.quotePath', 'true');
+  fs.writeFileSync(path.join(dir, 'README'), 'base\n');
+  setup(dir); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'base');
+  const base = git(dir, 'rev-parse', 'HEAD');
+  git(dir, 'update-ref', 'refs/remotes/origin/main', base);
+  change(dir); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'change', '--allow-empty');
+  return { dir, base, head: git(dir, 'rev-parse', 'HEAD') };
+}
+const put = (dir, rel, text = 'x\n', mode = 0o644) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text, { mode }); };
+
+test('892 fix1 WI-1 the NUL parser keeps every byte of a path and drops only the separators', () => {
+  assert.deepEqual(parseNulPaths(''), []);
+  assert.deepEqual(parseNulPaths('a\0 b c \0scripts/new\nline.mjs\0\0"q"\0'), ['a', ' b c ', 'scripts/new\nline.mjs', '"q"']);
+  assert.deepEqual(DIFF_NAME_ARGS, ['diff', '--name-only', '-z', '--no-renames']);
+});
+
+test('892 fix1 WI-1 diff paths: non-ASCII, spaces, a newline, a rename (both paths), a deletion, a mode change and a symlink', t => {
+  const r = repoWith(t, dir => { put(dir, 'scripts/old.mjs', 'same\n'); put(dir, 'scripts/gone.mjs'); put(dir, 'scripts/mode.sh'); put(dir, 'docs/keep.md'); },
+    dir => {
+      fs.renameSync(path.join(dir, 'scripts/old.mjs'), path.join(dir, 'scripts/renamed file.mjs'));
+      fs.rmSync(path.join(dir, 'scripts/gone.mjs'));
+      fs.chmodSync(path.join(dir, 'scripts/mode.sh'), 0o755);
+      fs.symlinkSync('mode.sh', path.join(dir, 'scripts/link'));
+      put(dir, 'scripts/测试.test.mjs'); put(dir, 'docs/a b.md'); put(dir, 'scripts/new\nline.mjs');
+    });
+  // The display form is what the old parser read: quoted, so no prefix matched.
+  assert.match(git(r.dir, 'diff', '--name-only', '--no-renames', r.base, r.head), /^"scripts\/\\346/m);
+  assert.deepEqual(listDiffPaths(r.dir, r.base, r.head).sort(), ['docs/a b.md', 'scripts/gone.mjs', 'scripts/link', 'scripts/mode.sh',
+    'scripts/new\nline.mjs', 'scripts/old.mjs', 'scripts/renamed file.mjs', 'scripts/测试.test.mjs'].sort());
+  assert.equal(listDiffPaths(r.dir, 'f'.repeat(40), r.head), null, 'an unlistable diff is null, not empty');
+});
+
+test('892 fix1 WI-1 check refuses a node scope skip when the only tooling path is non-ASCII or has a newline', t => {
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, scopeSkip: 'implementer run; product-only diff' };
+  for (const rel of ['scripts/测试.test.mjs', '.agents/skills/工具/test.mjs', 'scripts/new\nline.mjs', '.claude/a "b".md']) {
+    const r = repoWith(t, () => {}, dir => { put(dir, 'App/MadoApp.swift'); put(dir, rel); });
+    const res = check(r, skip, r.base, { role: 'implementer' });
+    assert.equal(res.status, 1, `${JSON.stringify(rel)}: ${res.stdout}`);
+    assert.match(res.stderr, /node scope skip refused/, JSON.stringify(rel));
   }
 });

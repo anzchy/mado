@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { failingTestInDiff, flakyGates, gateVerdict, nodeLaneRequired, notVerifiedGates } from './gate-policy.mjs';
+import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates } from './gate-policy.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
@@ -69,11 +69,10 @@ function check(args) {
   // #892: a node scope skip (implementer run) and a flake disposition are judged against the record's base..head diff.
   const node = Array.isArray(record.gates) ? record.gates.find(g => g?.name === 'node') : undefined;
   if (node?.scopeSkip || node?.disposition) {
-    const listed = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base)
-      ? git('diff', '--name-only', '--no-renames', record.base, named) : null;
+    // #892 fix1: NUL-delimited raw paths (gate-policy.mjs listDiffPaths), not Git's quoted display form.
+    const files = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base) ? listDiffPaths(worktree, record.base, named) : null;
     const what = node.scopeSkip ? 'node scope skip' : 'node flake disposition';
-    if (listed === null) throw new Error(`${what}: cannot list the diff ${record.base}..${named}`);
-    const files = listed.split('\n').filter(Boolean);
+    if (files === null) throw new Error(`${what}: cannot list the diff ${record.base}..${named}`);
     if (node.scopeSkip && nodeLaneRequired(files))
       throw new Error('node scope skip refused: the diff is empty or touches scripts/, .agents/, .github/ or .claude/, so the node lane must run');
     for (const t of node.disposition?.tests ?? [])

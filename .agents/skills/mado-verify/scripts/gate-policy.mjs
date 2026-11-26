@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 // The completion ladder is shared by the evidence writer and the manual `evidence.mjs check`.
 export const MANDATORY_GATES = Object.freeze(['diffcheck', 'swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests', 'node', 'ledger', 'design']);
 
@@ -42,6 +44,19 @@ export function gateVerdict(gates, { today } = {}) {
 export const NODE_LANE_PREFIXES = Object.freeze(['scripts/', '.agents/', '.github/', '.claude/']);
 export function nodeLaneRequired(files) {
   return !files.length || files.some(file => NODE_LANE_PREFIXES.some(prefix => file.startsWith(prefix)));
+}
+
+// #892 fix1 (gpt F1 / opus M1): diff paths are read from `git diff --name-only -z`. Git's display form quotes non-ASCII
+// and control characters ("scripts/\346\265\213…"), which matched no prefix. owner-gates.sh runs `git <DIFF_NAME_ARGS>` (a
+// test checks the text); evidence.mjs check uses listDiffPaths. --no-renames lists a rename as its old and new path.
+export const DIFF_NAME_ARGS = Object.freeze(['diff', '--name-only', '-z', '--no-renames']);
+export function parseNulPaths(text) {
+  return text.split('\0').filter(file => file !== '');
+}
+// null when Git cannot list the diff (bad base, not a repository): the caller fails closed.
+export function listDiffPaths(cwd, base, head) {
+  const r = spawnSync('git', [...DIFF_NAME_ARGS, base, head], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 ? parseNulPaths(r.stdout) : null;
 }
 
 // #892: is a failing node test "in the diff"? Its file is in the diff, the diff touches its directory (the source it
