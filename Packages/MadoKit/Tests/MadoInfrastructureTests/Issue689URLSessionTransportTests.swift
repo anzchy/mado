@@ -268,7 +268,8 @@ private let wordsBody = Data(#"{"words_result":[{"words":"雲"}]}"#.utf8)
         let uploaded = await upload.result
         #expect(Date().timeIntervalSince(uploadCancelledAt) < 5)
         #expect(uploaded.failureValue as? TextRecognitionError == .cancelled)
-        #expect(StubURLProtocol.stopCount >= 1)
+        // stopLoading can arrive after the cancelled result (#904).
+        #expect(try await stopReached { StubURLProtocol.stopCount })
     }
 
     @Test(.timeLimit(.minutes(2)), arguments: [
