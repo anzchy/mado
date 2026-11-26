@@ -24,7 +24,10 @@ public struct TableRecognitionStoredSettings: Sendable, Equatable {
 
     /// The endpoint of the chosen preset.
     public var endpoint: TableRecognitionEndpoint {
-        TableRecognitionEndpoint(preset: preset, baseURL: "", model: "")
+        switch preset {
+        case .deepSeek: TableRecognitionEndpoint(preset: .deepSeek, baseURL: deepSeekAddress, model: deepSeekModel)
+        case .custom: TableRecognitionEndpoint(preset: .custom, baseURL: customAddress, model: customModel)
+        }
     }
 }
 
@@ -52,13 +55,41 @@ public struct TableRecognitionKeyStore: TableRecognitionCredentialStore {
     }
 
     /// The keychain account for one configuration.
-    public static func account(for endpoint: TableRecognitionEndpoint) -> String { "" }
+    /// The keychain account for one configuration: the preset and the address, compared the way a user means it
+    /// (surrounding spaces, the case of the scheme and host, one trailing host dot and trailing slashes do not count).
+    public static func account(for endpoint: TableRecognitionEndpoint) -> String {
+        "\(endpoint.preset.rawValue)|\(canonicalAddress(endpoint.baseURL))"
+    }
 
-    public func accessKey(for endpoint: TableRecognitionEndpoint) async -> String? { nil }
+    static func canonicalAddress(_ address: String) -> String {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var parts = URLComponents(string: trimmed), let host = parts.host, !host.isEmpty else { return trimmed }
+        parts.scheme = parts.scheme?.lowercased()
+        parts.host = TableRecognitionGuards.normalisedHost(host)
+        var path = parts.path
+        while path.hasSuffix("/") { path.removeLast() }
+        parts.path = path
+        return parts.string ?? trimmed
+    }
 
-    public func save(_ key: String, for endpoint: TableRecognitionEndpoint) async throws(CloudKeyError) {}
+    public func accessKey(for endpoint: TableRecognitionEndpoint) async -> String? {
+        guard let key = try? await secrets.secret(service: service, account: Self.account(for: endpoint)),
+              !key.isEmpty else { return nil }
+        return key
+    }
 
-    public func remove(for endpoint: TableRecognitionEndpoint) async throws(CloudKeyError) {}
+    /// Saves the key trimmed, for this configuration only.
+    public func save(_ key: String, for endpoint: TableRecognitionEndpoint) async throws(CloudKeyError) {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { throw .emptyKey }
+        do { try await secrets.setSecret(key, service: service, account: Self.account(for: endpoint)) }
+        catch { throw .storeFailed }
+    }
+
+    public func remove(for endpoint: TableRecognitionEndpoint) async throws(CloudKeyError) {
+        do { try await secrets.removeSecret(service: service, account: Self.account(for: endpoint)) }
+        catch { throw .storeFailed }
+    }
 }
 
 /// What the table service reads before every request: the global Allow Cloud Recognition switch (shared with text),
@@ -73,7 +104,16 @@ public struct TableRecognitionConfiguration: TableRecognitionSettings {
     }
 
     public func options() async -> TableRecognitionOptions {
-        TableRecognitionOptions(cloudEnabled: false, endpoint: nil, consent: nil)
+        let enabled = await cloud.isEnabled()
+        let endpoint = await preferences.storedSettings().endpoint
+        var consent: TableRecognitionConsentRecord?
+        if let host = TableRecognitionGuards.validURL(for: endpoint)?.host {
+            let normalised = TableRecognitionGuards.normalisedHost(host)
+            consent = await preferences.consent(forHost: normalised).map {
+                TableRecognitionConsentRecord(host: normalised, granted: $0)
+            }
+        }
+        return TableRecognitionOptions(cloudEnabled: enabled, endpoint: endpoint, consent: consent)
     }
 }
 
@@ -120,7 +160,10 @@ public struct TableRecognitionSettingsState: Sendable, Equatable {
     }
 
     /// State 35 draws twelve dots and the key's last four characters.
-    public static func masked(_ key: String) -> String { "" }
+    public static func masked(_ key: String) -> String {
+        let dots = String(repeating: "•", count: 12)
+        return key.count >= 8 ? dots + String(key.suffix(4)) : dots
+    }
 }
 
 /// The rules behind Settings › 截图 › 表格识别 (#871, state 35): preset, key per configuration, the real host, the
@@ -139,23 +182,124 @@ public actor TableRecognitionSettingsModel {
         self.transport = transport
     }
 
-    public func state() async -> TableRecognitionSettingsState {
-        TableRecognitionSettingsState(preset: .deepSeek, address: "", model: "", host: nil, hasKey: false,
-                                      maskedKey: nil, advancedRequired: false, canTest: false, test: nil)
+    /// The last Test's status, and a counter that every change of preset, address, model or key moves on, so a
+    /// Test still in flight cannot report on settings that are no longer there.
+    private var testStatus: TableRecognitionTestStatus?
+    private var generation = 0
+
+    private func invalidateTest() {
+        generation += 1
+        testStatus = nil
     }
 
-    public func selectPreset(_ preset: TableRecognitionPreset) async {}
+    public func state() async -> TableRecognitionSettingsState {
+        let stored = await preferences.storedSettings()
+        let endpoint = stored.endpoint
+        let key = await keys.accessKey(for: endpoint)
+        let host = TableRecognitionGuards.validURL(for: endpoint).map { TableRecognitionGuards.normalisedHost($0.host) }
+        return TableRecognitionSettingsState(preset: stored.preset, address: endpoint.baseURL, model: endpoint.model,
+                                             host: host, hasKey: key != nil,
+                                             maskedKey: key.map(TableRecognitionSettingsState.masked),
+                                             advancedRequired: stored.preset == .custom,
+                                             canTest: key != nil && host != nil, test: testStatus)
+    }
 
-    public func setAddress(_ address: String) async {}
+    public func selectPreset(_ preset: TableRecognitionPreset) async {
+        var stored = await preferences.storedSettings()
+        guard stored.preset != preset else { return }
+        stored.preset = preset
+        await preferences.setStoredSettings(stored)
+        invalidateTest()
+    }
 
-    public func setModel(_ model: String) async {}
+    /// A different address (not just other spacing, case or a trailing slash) drops the old host's consent and the
+    /// Test result; the key is per address, so the old one is not used for the new one.
+    public func setAddress(_ address: String) async {
+        let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        var stored = await preferences.storedSettings()
+        let old = stored.endpoint
+        guard TableRecognitionKeyStore.canonicalAddress(old.baseURL) != TableRecognitionKeyStore.canonicalAddress(address)
+        else { return }
+        let oldAddress = old.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let host = URLComponents(string: oldAddress)?.host, !host.isEmpty {
+            await preferences.setConsent(nil, forHost: TableRecognitionGuards.normalisedHost(host))
+        }
+        switch stored.preset {
+        case .deepSeek: stored.deepSeekAddress = address
+        case .custom: stored.customAddress = address
+        }
+        await preferences.setStoredSettings(stored)
+        invalidateTest()
+    }
 
-    public func saveKey(_ key: String) async throws(CloudKeyError) {}
+    /// A different model clears the Test result (spec #866 story 12); the key and the consent stay.
+    public func setModel(_ model: String) async {
+        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        var stored = await preferences.storedSettings()
+        guard stored.endpoint.model.trimmingCharacters(in: .whitespacesAndNewlines) != model else { return }
+        switch stored.preset {
+        case .deepSeek: stored.deepSeekModel = model
+        case .custom: stored.customModel = model
+        }
+        await preferences.setStoredSettings(stored)
+        invalidateTest()
+    }
 
-    public func removeKey() async throws(CloudKeyError) {}
+    public func saveKey(_ key: String) async throws(CloudKeyError) {
+        let endpoint = await preferences.storedSettings().endpoint
+        try await keys.save(key, for: endpoint)
+        invalidateTest()
+    }
 
-    public func test() async -> TableRecognitionTestOutcome { .finished(nil) }
+    public func removeKey() async throws(CloudKeyError) {
+        let endpoint = await preferences.storedSettings().endpoint
+        invalidateTest()
+        try await keys.remove(for: endpoint)
+    }
+
+    /// Runs the real service's Test (switch, consent, key, the built-in sample). A missing consent returns the
+    /// host to ask about and sends nothing; a cancelled or superseded run shows nothing.
+    public func test() async -> TableRecognitionTestOutcome {
+        let started = generation
+        testStatus = .testing
+        let service = TableRecognitionService(settings: TableRecognitionConfiguration(cloud: cloud, preferences: preferences),
+                                              credentials: keys, transport: transport)
+        let result = await service.testService()
+        guard started == generation else { return .finished(nil) }
+        switch result {
+        case .notSent(.consentNotAsked), .notSent(.consentHostChanged), .notSent(.consentDeclined):
+            let endpoint = await preferences.storedSettings().endpoint
+            if let host = TableRecognitionGuards.validURL(for: endpoint)?.host {
+                testStatus = nil
+                return .needsConsent(host: TableRecognitionGuards.normalisedHost(host))
+            }
+            testStatus = .undetermined
+        case .cancelled:
+            testStatus = nil
+        default:
+            testStatus = Self.status(result)
+        }
+        return .finished(testStatus)
+    }
+
+    static func status(_ result: TableRecognitionTestResult) -> TableRecognitionTestStatus? {
+        switch result {
+        case .passed: .passed
+        case .cancelled: nil
+        case .notSent(.cloudOff): .cloudOff
+        case .notSent: .undetermined
+        case .failed(.keyRejected): .keyRejected
+        case .failed(.addressUnreachable): .addressUnreachable
+        case .failed(.modelCannotReadImages): .modelCannotReadImages
+        case .failed(.offline): .offline
+        case .failed(.quotaOrBalance): .quotaOrBalance
+        case .failed(.tooLarge), .failed(.noTable), .failed(.incomplete), .failed(.other): .undetermined
+        }
+    }
 
     /// The consent dialog's answer for `host`. Agreeing stores it for that host; declining changes nothing.
-    public func answerConsent(granted: Bool, host: String) async {}
+    public func answerConsent(granted: Bool, host: String) async {
+        guard granted else { return }
+        await preferences.setConsent(true, forHost: TableRecognitionGuards.normalisedHost(host))
+    }
 }
