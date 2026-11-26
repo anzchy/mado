@@ -65,7 +65,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    device smoke run there too; after merge the worktree cleanup job removes it. Why: reused pane worktrees caused a delegator
    rebase that detached HEAD under work in progress (#892), a pane pinned to a PR head for a re-smoke (#894), a stale untracked
    `default.profraw` that broke a device build (#882) and tdd-guardian `dirty_source` noise (#898). Enforced by `mark-target.mjs`
-   (refuses a pane home, a worktree not named `<issue>-<slug>`, a second task and a dirty tree), `evidence.mjs check` (refuses a
+   (refuses a pane home, a worktree not named `<issue>-<slug>`, a new task whose branch does not name the issue as `<prefix>/<issue>-<slug>`, a second task and a dirty tree), `evidence.mjs check` (refuses a
    pane home; `--legacy-worktree` only for a task dispatched before #901), `start-fresh-codex.sh` (an implementer with a pane-home
    `--cwd` needs `--task-worktree`) and the CI lint `scripts/agents/task-worktree-lint.mjs`. Tasks running before #901 finish where
    they are; to move one of their fix rounds, detach the pane home and use `new-task-worktree.sh … --existing-branch`.
@@ -95,7 +95,7 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --cwd <pane-home> --task-worktree <briefed-worktree> --prompt 'New task: … Worktree: <briefed-worktree> … Read and follow <brief>…'`.
    A Codex implementer stays in its pane home (agent-list cwd, its role overlay, `-s danger-full-access`) and works in the task
    worktree the prompt names; the helper refuses an implementer with a pane-home `--cwd` and no `--task-worktree`, a task worktree
-   that is the pane home, not a `<issue>-<slug>` worktree root, or not named in the prompt. Auditors keep `--cwd <auditor-worktree>`.
+   that is the pane home, not a `<issue>-<slug>` worktree root beside the pane home in its repository, or not named in the prompt as a whole path outside comments. Auditors keep `--cwd <auditor-worktree>`.
    The helper checks `--cwd` against the agent-list cwd and the fresh screen cwd, chooses current worktree in the directory dialog, restores both names, and requires `working` before success. If a pane runs from a separate Codex worktree, add `--screen-cwd <absolute-path>` before `--prompt`; the screen must match that path exactly while the agent-list cwd must still match `--cwd`.
    For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> --cwd <pane-home> --task-worktree <briefed-worktree> '<task prompt>'`.
    Do not use `reset.sh` plus a separate prompt for these dispatches: that reset reports only fresh context and does not confirm that the task reached `working`.
