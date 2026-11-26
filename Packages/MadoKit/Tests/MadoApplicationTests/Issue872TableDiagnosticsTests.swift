@@ -115,3 +115,13 @@ func issue872SettingsTestReportsFinalSampleFailureOnce() async {
     #expect(diagnostic.promptTokens == nil && diagnostic.completionTokens == nil)
     #expect(diagnostic.logMessage.contains("error=other"))
 }
+
+@Test(.timeLimit(.minutes(2)))
+func issue872RequestBuiltInitializerUsesDefaultRecorderAfterSend() async {
+    let transport = RecordingTransport869([.response(HTTPResponse(statusCode: 429, body: Data()))])
+    let service = TableRecognitionService(settings: FakeTableSettings869(), credentials: FakeTableKeys869(),
+        transport: transport, requestBuilt: {})
+
+    #expect(await service.recognise(makePNG869(3, 2)) == .failed(.quotaOrBalance))
+    #expect(await transport.callCount == 1)
+}
