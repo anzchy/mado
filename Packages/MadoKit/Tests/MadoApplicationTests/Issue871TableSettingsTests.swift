@@ -396,3 +396,79 @@ func issue871WI3ConsentBlockForAnAddressChangedMeanwhileAsksNothing() async {
     #expect(await preferences.consents.isEmpty)
     #expect(await transport.requests.isEmpty)
 }
+
+// MARK: - Fix round 1: no orphaned key (opus M2), what to fill in (opus L1), an address change mid-Test (opus M6)
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix1ChangingTheAddressRemovesTheOldKey() async throws {
+    let fixture = fixture871(consents: ["api.deepseek.com": true])
+    try await fixture.model.saveKey("sk-live-abcd1234")
+    await fixture.model.setAddress("https://api.deepseek.com/beta")
+    // Nothing is left behind that the group can no longer show or remove.
+    #expect(await fixture.secrets.items.isEmpty)
+    // Going back to the old address does not bring a key back.
+    await fixture.model.setAddress("https://api.deepseek.com")
+    #expect(await !fixture.model.state().hasKey)
+    // Remove deletes the key the group shows, for the address now set.
+    try await fixture.model.saveKey("sk-live-0000beef")
+    try await fixture.model.removeKey()
+    #expect(await fixture.secrets.items.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix1ChangingTheAddressKeepsTheOtherPresetsKey() async throws {
+    let fixture = fixture871()
+    try await fixture.model.saveKey("sk-ds-00000001")
+    await fixture.model.selectPreset(.custom)
+    await fixture.model.setAddress("https://gw.example.com/v1")
+    await fixture.model.setModel("vision-x")
+    try await fixture.model.saveKey("sk-cu-00000002")
+    await fixture.model.setAddress("https://gw2.example.com/v1")
+    #expect(await fixture.secrets.items.values.sorted() == ["sk-ds-00000001"])
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix1CustomRefusesAKeyUntilTheAddressIsUsable() async throws {
+    let fixture = fixture871()
+    await fixture.model.selectPreset(.custom)
+    // Filled top to bottom (service, key, then Advanced): the key has no configuration to belong to yet.
+    await #expect(throws: CloudKeyError.addressNeeded) { try await fixture.model.saveKey("sk-cu-00000002") }
+    await fixture.model.setAddress("https://gw.example.com/v1")
+    await #expect(throws: CloudKeyError.addressNeeded) { try await fixture.model.saveKey("sk-cu-00000002") }
+    #expect(await fixture.secrets.items.isEmpty)
+    await fixture.model.setModel("vision-x")
+    try await fixture.model.saveKey("sk-cu-00000002")
+    #expect(await fixture.model.state().hasKey)
+    #expect(await fixture.secrets.items.count == 1)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix1StateNamesWhatToFillInFirst() async {
+    let fixture = fixture871()
+    #expect(await fixture.model.state().missing == nil)
+    await fixture.model.selectPreset(.custom)
+    #expect(await fixture.model.state().missing == .address)
+    await fixture.model.setModel("vision-x")
+    #expect(await fixture.model.state().missing == .address)
+    await fixture.model.setAddress("http://gw.example.com/v1")
+    #expect(await fixture.model.state().missing == .address, "only https is usable")
+    await fixture.model.setAddress("https://gw.example.com/v1")
+    #expect(await fixture.model.state().missing == nil)
+    await fixture.model.setModel("")
+    let state = await fixture.model.state()
+    #expect(state.missing == .model && state.host == nil)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix1AddressChangeDuringATestDropsItsAnswer() async throws {
+    let fixture = fixture871(consents: ["api.deepseek.com": true], gated: true)
+    try await fixture.model.saveKey("sk-live-abcd1234")
+    let model = fixture.model
+    let run = Task { await model.test() }
+    #expect(await awaitHeldSend869(fixture.transport, run))
+    await fixture.model.setAddress("https://api.deepseek.com/beta")
+    #expect(await fixture.model.state().test == nil)
+    await fixture.transport.open()
+    #expect(await run.value == .finished(nil))
+    #expect(await fixture.model.state().test == nil)
+}

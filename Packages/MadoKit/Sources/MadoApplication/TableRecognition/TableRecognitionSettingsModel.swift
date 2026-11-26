@@ -54,7 +54,6 @@ public struct TableRecognitionKeyStore: TableRecognitionCredentialStore {
         self.service = service
     }
 
-    /// The keychain account for one configuration.
     /// The keychain account for one configuration: the preset and the address, compared the way a user means it
     /// (surrounding spaces, the case of the scheme and host, one trailing host dot and trailing slashes do not count).
     public static func account(for endpoint: TableRecognitionEndpoint) -> String {
@@ -208,11 +207,15 @@ public actor TableRecognitionSettingsModel {
         let endpoint = stored.endpoint
         let key = await keys.accessKey(for: endpoint)
         let host = TableRecognitionGuards.validURL(for: endpoint).map { TableRecognitionGuards.normalisedHost($0.host) }
+        // Unusable: the address itself, or (Custom) only the model is missing.
+        let withModel = TableRecognitionEndpoint(preset: endpoint.preset, baseURL: endpoint.baseURL, model: "model")
+        let missing: TableRecognitionMissing? = host != nil ? nil
+            : TableRecognitionGuards.validURL(for: withModel) == nil ? .address : .model
         return TableRecognitionSettingsState(preset: stored.preset, address: endpoint.baseURL, model: endpoint.model,
                                              host: host, hasKey: key != nil,
                                              maskedKey: key.map(TableRecognitionSettingsState.masked),
                                              advancedRequired: stored.preset == .custom,
-                                             canTest: key != nil && host != nil, test: testStatus)
+                                             canTest: key != nil && host != nil, test: testStatus, missing: missing)
     }
 
     public func selectPreset(_ preset: TableRecognitionPreset) async {
@@ -224,7 +227,8 @@ public actor TableRecognitionSettingsModel {
     }
 
     /// A different address (not just other spacing, case or a trailing slash) drops the old host's consent and the
-    /// Test result; the key is per address, so the old one is not used for the new one.
+    /// Test result, and removes the key saved for the old address, so no key is left that the group can no longer
+    /// show or remove (the hint says so). The other preset's key stays.
     public func setAddress(_ address: String) async {
         let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         var stored = await preferences.storedSettings()
@@ -235,6 +239,7 @@ public actor TableRecognitionSettingsModel {
         if let host = URLComponents(string: oldAddress)?.host, !host.isEmpty {
             await preferences.setConsent(nil, forHost: TableRecognitionGuards.normalisedHost(host))
         }
+        try? await keys.remove(for: old)
         switch stored.preset {
         case .deepSeek: stored.deepSeekAddress = address
         case .custom: stored.customAddress = address
@@ -256,8 +261,11 @@ public actor TableRecognitionSettingsModel {
         invalidateTest()
     }
 
+    /// Saves the key for the configuration shown. Until the address is usable there is no configuration to save it
+    /// for (Custom filled top to bottom), so it is refused rather than kept under an address that is about to change.
     public func saveKey(_ key: String) async throws(CloudKeyError) {
         let endpoint = await preferences.storedSettings().endpoint
+        guard TableRecognitionGuards.validURL(for: endpoint) != nil else { throw .addressNeeded }
         try await keys.save(key, for: endpoint)
         invalidateTest()
     }
