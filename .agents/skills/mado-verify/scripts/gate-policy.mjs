@@ -35,13 +35,23 @@ export function gateVerdict(gates, { today } = {}) {
   // #892 fix1 review M1: a skipped node lane is recorded only as a scopeSkip, which evidence.mjs check judges (role and diff);
   // a skip copied into keyLine or command would bypass that check.
   const node = byName.get('node');
-  if (node && !node.scopeSkip && /\bskip(?:ped)?\b/i.test(`${node.keyLine ?? ''} ${node.command ?? ''}`))
+  if (node && !node.scopeSkip && nodeTextSaysLaneSkipped(`${node.keyLine ?? ''} ${node.command ?? ''}`))
     problems.push('node: a skipped node lane must be recorded as scopeSkip (evidence.mjs check judges it)');
   // #892: a flake disposition is checked wherever it appears; only a valid one on a failed node gate counts.
   for (const gate of byName.values()) if (gate.disposition !== undefined) problems.push(...flakeDispositionProblems(gate, today));
   return { complete: problems.length === 0, problems };
 }
 
+
+// #892 fix2 H1 (opus confirm H1 / gpt L1): node's spec reporter prints its own skipped-test count (`ℹ skipped 3`), so a
+// passing keyLine such as "tests 1879, pass 1876, fail 0, skipped 3" is not a skipped lane. The lane-level form owner-gates
+// writes (`node=skipped (…)`, also `node: skip`) always counts; otherwise a count next to the word is removed first, and
+// any "skip"/"skipped" left (for example "skipped (" or "node lane skipped") counts.
+const LANE_SKIP = /\bnode\s*[=:]\s*skip(?:ped)?\b/i;
+const SKIP_COUNT = /\bskip(?:ped)?\s*[:=]?\s*\d+\b|\b\d+\s+skip(?:ped)?\b(?!\s*\()/gi;
+export function nodeTextSaysLaneSkipped(text) {
+  return LANE_SKIP.test(text) || /\bskip(?:ped)?\b/i.test(text.replace(SKIP_COUNT, ' '));
+}
 
 // #892 (owner 2026-11-25): an implementer runs the node lane only when the diff touches one of these prefixes; the
 // delegator's owner-gates run and GitHub CI cover the rest. owner-gates-tools.mjs `select` and evidence.mjs check share it.

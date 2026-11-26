@@ -474,3 +474,21 @@ test('892 fix1 review a node gate that says skipped needs a scopeSkip; a blank-k
   assert.equal(verdict(flakyNode(g => { g.disposition.author = '张三'; g.disposition.owner = '王五'; g.disposition.reviewedBy = '李四'; return g; })).complete, true);
   assert.equal(verdict(flakyNode(g => { g.disposition.author = '李四'; g.disposition.reviewedBy = '李四'; return g; })).complete, false);
 });
+
+// #892 fix2 H1 (opus confirm H1 / gpt L1): node's own skipped-test count in a passing keyLine is not a skipped lane. Only a
+// lane-level skip (owner-gates' `node=skipped (…)`, a "skipped (" reason, "node lane skipped") needs a scopeSkip.
+test('892 fix2 H1 a passing node gate may report node skipped-test counts; a lane-level skip still needs scopeSkip', () => {
+  for (const keyLine of ['tests 1879, pass 1876, fail 0, skipped 3', '3 skipped', 'skipped 0', 'ℹ skipped 3', 'pass 10, skipped: 2, todo 0']) {
+    const v = verdict({ name: 'node', command: 'owner-gates.sh --role implementer (node lane)', exitCode: 0, keyLine });
+    assert.equal(v.complete, true, `${keyLine}: ${v.problems.join('; ')}`);
+  }
+  for (const node of [
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'node=skipped (no scripts change)' },
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'pass (lane skipped (product-only diff))' },
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'tests 5, pass 5, skipped 3; node=skipped' },
+    { name: 'node', command: 'owner-gates.sh', exitCode: 0, keyLine: 'pass; node: skip' }]) {
+    const v = verdict(node);
+    assert.equal(v.complete, false, JSON.stringify(node));
+    assert.match(v.problems.join('\n'), /scopeSkip/, JSON.stringify(node));
+  }
+});
