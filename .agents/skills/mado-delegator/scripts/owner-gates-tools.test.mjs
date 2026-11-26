@@ -400,3 +400,13 @@ test('892 fix1 WI-2 owner-gates.sh and SKILL.md no longer claim a product-only d
   assert.match(skill, /node tests also read product files/);
   assert.match(skill, /any changed path under `scripts\/`, `\.agents\/`, `\.github\/` or `\.claude\/` puts every failing node test in the diff/);
 });
+
+// #892 fix1 L1 (opus L1): a failing subtest inside a parent. Real node v22.22.3 spec output (fixtures/spec-subtest-failure.log,
+// paths rewritten): `ℹ fail 2` counts the child and its parent, but the failing block lists only the child, so the plan is
+// incomplete and there is no rerun. This fails closed: such a failure stays red.
+test('892 fix1 L1 a failing subtest inside a parent is never rerun: the block does not account for the parent', () => {
+  const out = fixture('spec-subtest-failure.log');
+  assert.match(out, /^ℹ fail 2$/m);
+  assert.equal((out.split(/^✖ failing tests:\s*$/m)[1].match(/^✖ /gm) ?? []).length, 1);
+  assert.deepEqual(rerunPlan(out, ['docs/guide.md'], '/wt'), {rerun: false, reason: 'failing tests incomplete', files: [], tests: []});
+});
