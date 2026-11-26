@@ -1,6 +1,6 @@
 # Releasing Mado
 
-A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. The artifact is `Mado-<version>.dmg`, containing `Mado.app`. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222).
+A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflows/release.yml) builds, signs, notarises and packages Mado. The artifact is `Mado-<version>.dmg`, containing `Mado.app`. It then opens a **draft** GitHub release and an **appcast pull request**. Nothing reaches users until the owner publishes the draft and merges the PR (spec #212, #222). A manual rehearsal uses the same signed-build verification steps before tagging, without creating release artifacts on GitHub.
 
 ## Before the first release
 
@@ -12,13 +12,26 @@ A release is a tag push. [`.github/workflows/release.yml`](../../.github/workflo
 
 ## Cut a release candidate
 
+Before creating a tag, ask the owner to approve a rehearsal, then dispatch it against the exact commit to release:
+
+```sh
+git rev-parse HEAD # copy the full SHA after confirming this is the intended release commit
+gh workflow run release.yml --repo anzchy/mado --ref main -f commit_sha=<full-sha> -f version=<version>
+gh run list --repo anzchy/mado --workflow release.yml --event workflow_dispatch --limit 5
+gh run view <run-id> --repo anzchy/mado --log
+```
+
+Select **Release → Run workflow** on `main` in Actions if using the web UI. Enter the full commit SHA and its `MARKETING_VERSION`. The optional `notarize_app` input also submits and staples the app; the default stops after the signed entitlement, product identity and package checks. The selected commit may be on a scratch branch for a deliberate failing check. The workflow runs only in `anzchy/mado`, requires the SHA to be reachable from a branch of this repository, and deletes its temporary signing keychain even when a check fails. It does not create or move tags, draft releases, appcast branches or PRs. Confirm the rehearsal passes before pushing a release tag; a rehearsal does not replace the tag commit's green `main` CI requirement.
+
+The workflow definition comes from the dispatched `--ref` (use `main` above), while the selected commit supplies its own local composite actions, build phases and release-check scripts. Those run with the Developer ID identity unlocked. Review the exact selected commit before approving a secret-bearing rehearsal, especially a scratch branch; branch reachability prevents a fork-only SHA, but does not make branch code trusted. The shared job still has `contents: write` and `pull-requests: write` for the tag path; checkout does not persist those credentials for a rehearsal. Secrets are not protected by a GitHub environment approval gate. Run rehearsals sequentially: the shared concurrency group allows one running and one pending run, and a third dispatch can cancel the pending run.
+
 ```sh
 git switch main && git pull
 git tag -a mado-v0.0.1-rc.1 -m "Mado 0.0.1 rc.1"
 git push origin mado-v0.0.1-rc.1
 ```
 
-The workflow triggers only on `mado-v*` tags, including release candidates such as `mado-v0.0.1-rc.N` and the final `mado-v0.0.1` (#547, ADR-0017). The run fails before building if:
+The tag release path triggers only on `mado-v*` tags, including release candidates such as `mado-v0.0.1-rc.N` and the final `mado-v0.0.1` (#547, ADR-0017). The tag run fails before building if:
 - the tag isn't on `main`;
 - the tag's version differs from `MARKETING_VERSION`;
 - `DEVELOPMENT_TEAM` is unset.
@@ -35,7 +48,7 @@ The six secrets reach only the steps that use them, through step environment var
 - The Apple ID and the app-specific password reach the process arguments of `xcrun notarytool submit` and `notarytool log`. That is the Apple ID + app-specific password contract chosen for #222. Without `--password`, notarytool prompts on a terminal, which a runner doesn't have. A keychain profile would need the same password on the command line to create it.
 - The keychain password and the .p12 password reach the process arguments of `security create-keychain`, `unlock-keychain`, `import` and `set-key-partition-list`.
 
-Another process on the same machine could read them from the process list while those commands run. The GitHub-hosted macOS runner is single-tenant and ephemeral: one job per fresh virtual machine, discarded afterwards. So the exposure is limited to this job's own processes, and the workflow runs only on tags pushed to this repository, never on pull requests.
+Another process on the same machine could read them from the process list while those commands run. The GitHub-hosted macOS runner is single-tenant and ephemeral: one job per fresh virtual machine, discarded afterwards. So the exposure is limited to this job's own processes. The workflow runs on tags or manual dispatch in this repository, never on pull requests or fork repositories; the rehearsal also requires the selected SHA to be on one of this repository's branches.
 
 Other measures:
 - The Sparkle EdDSA key never appears in arguments: `sign_update` reads it on standard input.
