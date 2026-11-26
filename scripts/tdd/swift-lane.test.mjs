@@ -236,10 +236,12 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   const manual734=['smoke-inputs-node'];
   // #898: the tdd-separation lane's RED receipts (light, manual).
   const manual898=['tdd-separation-node'];
-  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','release-package-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node','rebase-docs-py','reuse-check-node',...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898].includes(l.name));
+  // #901: per-task worktree enforcement receipts (light, manual).
+  const manual901=['task-worktree-node'];
+  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','release-package-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node','rebase-docs-py','reuse-check-node',...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);
-  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', ...manual788, 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', ...manual758, 'heavy-lock-node', 'integration', ...manual759, 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-package-node', 'rebase-docs-py', 'reuse-check-node', 'release-tag-ci-node', ...manual734, 'swift-red', ...manual898, 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
-  for(const name of [...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898]){
+  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', ...manual788, 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', ...manual758, 'heavy-lock-node', 'integration', ...manual759, 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-package-node', 'rebase-docs-py', 'reuse-check-node', 'release-tag-ci-node', ...manual734, 'swift-red', ...manual898, ...manual901, 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
+  for(const name of [...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901]){
     const lane=config.lanes.find(l=>l.name===name);
     assert.deepEqual(lane.gateOn,['manual']);
     assert.equal(lane.probeCommand,'node --version');
