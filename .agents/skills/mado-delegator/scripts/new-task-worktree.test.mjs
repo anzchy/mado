@@ -170,3 +170,19 @@ test('#901 fix1 (gpt F2) printed dispatch lines are shell-quoted: paths with spa
   assert.ok(text[3].includes(`Worktree: ${path.join(roots, '652-demo')} `) && text[3].includes(brief), text[3]);
   assert.deepEqual(keys, ['pane', 'send-keys', 'w1:p2', 'Enter']);
 });
+
+test('#901 fix1 (gpt M1) an explicit HEAD base is checked for uncommitted tracked changes too', t => {
+  for (const base of ['HEAD', '@']) {
+    const f = fixture(t);
+    fs.writeFileSync(path.join(f.home, 'tracked.txt'), 'uncommitted\n');
+    const r = f.helperRun('651', 'demo', base);
+    assert.notEqual(r.status, 0, base);
+    assert.match(r.stderr, new RegExp(`base ${base} has uncommitted changes in .*gpt-imple-9`), base);
+    assert.equal(fs.existsSync(path.join(f.root, '651-demo')), false, base);
+    assert.equal(f.hasMarker(), false, base);
+    // A clean HEAD is a valid base.
+    fs.writeFileSync(path.join(f.home, 'tracked.txt'), 'base\n');
+    const ok = f.helperRun('651', 'demo', base);
+    assert.equal(ok.status, 0, ok.stderr);
+  }
+});

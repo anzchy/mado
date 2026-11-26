@@ -54,8 +54,12 @@ if git -C "$home_abs" show-ref --verify --quiet "refs/heads/$branch"; then
 else
   (( ! existing )) || die "--existing-branch given but branch $branch does not exist"
   git -C "$home_abs" rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "base $base is not a commit (git fetch origin first for origin/main)"
-  # A dirty base: the base is a local branch whose worktree has uncommitted tracked changes the new task would miss.
-  if git -C "$home_abs" show-ref --verify --quiet "refs/heads/$base"; then
+  # A dirty base: the base is a local branch whose worktree has uncommitted tracked changes the new task would miss,
+  # or HEAD (@), which names the pane home's own checkout (#901 fix1).
+  if [[ $base == HEAD || $base == @ ]]; then
+    [[ -z $(git -C "$home_abs" status --porcelain --untracked-files=no 2>/dev/null) ]] \
+      || die "base $base has uncommitted changes in $home_abs; commit them or pick another base"
+  elif git -C "$home_abs" show-ref --verify --quiet "refs/heads/$base"; then
     wt=''
     while IFS= read -r line; do
       case "$line" in
