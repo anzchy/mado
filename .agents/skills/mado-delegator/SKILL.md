@@ -66,6 +66,10 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    The file is only a claim (`CLAIMED-WAIVER <id>@<digest>`): any pane can write that directory. Read the claim, then
    accept it in your own runs with `--accept-waiver <id>@<sha256>` (`evidence.mjs check`, the lane) or
    `OWNER_GATES_ACCEPT_WAIVERS="<id>@<sha256> …"` (owner-gates, delegator role only); a changed file no longer matches.
+   Replay results (`<wt>/.build/mado-verify/replay/*.json`) are claims too (`CLAIMED-REPLAY <receipt>@<digest>`): run the
+   replay yourself, then bind its file with `--accept-replay <receipt>@<sha256>` (the token the replay prints) or
+   `OWNER_GATES_ACCEPT_REPLAYS="<receipt>@<sha256> …"`. Run owner-gates with `--role delegator`: the summary's
+   `role-source=` line shows whether the role was passed, and only your own run is binding.
    For UI work, fill the per-state design and evidence fields in
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the

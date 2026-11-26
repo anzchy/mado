@@ -21,7 +21,7 @@ Inputs:
   Missing or mismatched evidence is a finding, not proof of test-first work. Check the `tdd-separation` lane result
   (owner-gates `tdd-separation=` line, the record's `tddSeparation`) and every waiver against the delegator's note; read
   each `Stub-For:` commit's diff (signatures only). Review every `EXCEPTIONS` entry (refactor, test-after-green); a
-  `CLAIMED-WAIVER` is not a waiver until the delegator accepts it. "Receipt present" alone is not enough. (Kimi: no receipts — judge the pasted RED/GREEN in the handoff.)
+  `CLAIMED-WAIVER` is not a waiver, and `CLAIMED-REPLAY` not a replay, until the delegator accepts it. "Receipt present" alone is not enough. (Kimi: no receipts — judge the pasted RED/GREEN in the handoff.)
 
 UI review when this range changes visible UI (otherwise state `无 UI 变化`):
 - Read [`docs/agents/ui-parity-contract.md`](../../../../../docs/agents/ui-parity-contract.md), the exact manifest/HTML, `design/DESIGN.md`, native mapping, plan §1.3, ledger rows, and the implementer brief's pinned design hashes. Check source SHA drift and any new native exception against its design authority.

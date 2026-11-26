@@ -151,3 +151,15 @@ test('898 fix1 WI-6 docs: anchored Refactor:, accepted waiver claims, required r
     assert.match(text, /EXCEPTIONS/, rel); assert.match(text, /CLAIMED-WAIVER/, rel);
   }
 });
+
+// #898 fix2 WI-4: the docs name the replay acceptance mechanism and say which owner-gates run binds.
+test('898 fix2 WI-4 docs: replay files are claims accepted by digest; only the delegator run with --role binds', () => {
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  for (const re of [/--accept-replay <receipt>@<sha256>/, /CLAIMED-REPLAY/, /OWNER_GATES_ACCEPT_REPLAYS/, /role-source=/, /REPLAY <receipt>@<digest>=<verdict>:<file>/])
+    assert.ok(re.test(skill), `mado-verify SKILL lacks ${re}`);
+  assert.ok(!/the delegator reruns the replay for a binding result/.test(skill), 'mado-verify SKILL still says the delegator reruns the replay');
+  const delegator = read('.agents/skills/mado-delegator/SKILL.md');
+  for (const re of [/--accept-replay/, /OWNER_GATES_ACCEPT_REPLAYS/, /role-source=/]) assert.ok(re.test(delegator), `delegator SKILL lacks ${re}`);
+  for (const rel of ['docs/agents/audit-dimensions.md', '.agents/skills/mado-delegator/references/templates/audit-brief.md', '.agents/skills/mado-delegator/references/templates/audit-request-template.md'])
+    assert.ok(/CLAIMED-REPLAY/.test(read(rel)), `${rel} lacks CLAIMED-REPLAY`);
+});
