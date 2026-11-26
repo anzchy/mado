@@ -140,3 +140,30 @@ test('#901 a detached task worktree is accepted with an explicit task branch (re
   assert.equal(r.status, 0, r.stderr);
   assert.equal(f.marker().branch, 'task/651-demo');
 });
+
+test('#901 fix1 (gpt F1) a new task worktree on another task\'s branch is refused, with or without an explicit branch', t => {
+  const f = fixture(t);
+  // 651-demo, no identity file, checked out on another issue's branch: the branch must name #651.
+  const wt = f.worktree('651-demo', '-b', 'task/652-other');
+  const implicit = f.mark(wt, 651, 'i651');
+  assert.notEqual(implicit.status, 0, 'branch taken from HEAD names #652');
+  assert.match(implicit.stderr, /branch task\/652-other does not name #651/);
+  const detached = f.worktree('651-detached', '--detach');
+  for (const branch of ['task/652-other', 'feature', 'tooling/6510-x', 'task/x-651']) {
+    const r = f.mark(detached, 651, 'i651', branch);
+    assert.notEqual(r.status, 0, branch);
+    assert.match(r.stderr, /does not name #651/, branch);
+  }
+  // A detached new target needs an explicit branch: there is no branch to take from HEAD.
+  const none = f.mark(detached, 651, 'i651');
+  assert.notEqual(none.status, 0);
+  assert.match(none.stderr, /no task branch/);
+  assert.equal(f.hasMarker(), false);
+  assert.equal(fs.existsSync(path.join(wt, '.build/mado-verify/task-identity.json')), false);
+  // Documented prefixes are allowed: task/, tooling/, fix/, feat/… and the bare <issue>-<slug>.
+  for (const branch of ['tooling/651-x', 'fix/651-y', '651-z', 'task/651']) {
+    const ok = f.worktree(`651-ok-${branch.replace(/\W/g, '')}`, '--detach');
+    const r = f.mark(ok, 651, 'i651', branch);
+    assert.equal(r.status, 0, `${branch}: ${r.stderr}`);
+  }
+});

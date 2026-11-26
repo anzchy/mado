@@ -10,6 +10,8 @@ export const IDENTITY = '.build/mado-verify/task-identity.json';
 // Pane names of the roster (gpt-imple-1, opus-imple-2, gpt-auditor, kimi-researcher, gpt-planner, resource-broker…).
 export const PANE_NAME = /^[a-z][a-z0-9]*-(?:imple|implementor|implementer|auditor|planner|researcher|delegator|broker)(?:-[0-9]+)?$/;
 export const taskName = issue => new RegExp(`^${Number(issue)}-[A-Za-z0-9][A-Za-z0-9._-]*$`);
+// A new task's branch names its issue: <issue>[-<slug>] after any documented prefix (task/, tooling/, fix/, feat/…).
+export const taskBranch = issue => new RegExp(`^(?:[A-Za-z0-9._-]+/)*${Number(issue)}(?:-[A-Za-z0-9._-]+)?$`);
 export const HOW = issue => `create one with .agents/skills/mado-delegator/scripts/new-task-worktree.sh ${issue} <slug> (see the delegator SKILL, step 2)`;
 
 // Why `dir` is a pane home, or null. A pane home is named after its pane, or holds a dispatch marker (only
@@ -45,6 +47,13 @@ export function checkTaskWorktree({ home, target, issue, branch }) {
   if (current && current !== branch)
     throw new Error(`${target} holds branch ${current}, not the task branch ${branch}; one task, one worktree: ${HOW(issue)}`);
   const fixRound = identity !== null;
+  // A new target's branch must name the briefed issue, so an identity-free worktree on another task's branch
+  // (651-demo on task/652-other) is not taken over (#901 fix1).
+  if (!fixRound) {
+    if (!branch) throw new Error(`${target} is detached and no task branch was given; pass the task branch (task/${issue}-<slug>) to mark-target.mjs`);
+    if (!taskBranch(issue).test(branch))
+      throw new Error(`${target}: branch ${branch} does not name #${issue} (expected <prefix>/${issue}-<slug>, for example task/${issue}-<slug>); one task, one worktree: ${HOW(issue)}`);
+  }
   // A new task starts from a fully clean tree (untracked leftovers broke a device build, #882); a fix round keeps its
   // own untracked tool files (tdd-guardian receipts) but never uncommitted tracked changes.
   const status = git(target, 'status', '--porcelain', ...(fixRound ? ['--untracked-files=no'] : []));

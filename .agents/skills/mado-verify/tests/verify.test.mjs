@@ -233,11 +233,11 @@ const taskTarget = (f, slug = 'target') => path.join(path.dirname(f.dir), `651-$
 test('mark-target writes complete dispatch identity', t => {
   const f = fixture(t), target = taskTarget(f);
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
-  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'task/651-feature', target], f.dir).status, 0);
   const handoff = path.join(f.dir, 'round-handoff.md');
   const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-20261111-a', handoff], f.dir);
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'feature', issue: 651, task: 'i651-20261111-a', handoff });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'task/651-feature', issue: 651, task: 'i651-20261111-a', handoff });
 });
 
 test('manual check requires the apptests gate; a recorded skip is exit 0 with the summary line', t => {
@@ -292,9 +292,9 @@ test('mark-target prefers an explicit task branch over the worktree current bran
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
   assert.equal(run('git', ['worktree', 'add', '-q', '--detach', target], f.dir).status, 0);
   const handoff = path.join(f.dir, 'round-handoff.md');
-  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'tooling/i651-task'], f.dir);
+  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'tooling/651-task'], f.dir);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))).branch, 'tooling/i651-task');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))).branch, 'tooling/651-task');
   const bad = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'bad..branch'], f.dir);
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /invalid branch/);

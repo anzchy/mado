@@ -19,7 +19,9 @@ try {
   if (fs.realpathSync(git(home, 'rev-parse', '--show-toplevel')) !== home || fs.realpathSync(git(target, 'rev-parse', '--show-toplevel')) !== target) throw new Error('both paths must be worktree roots');
   if (fs.realpathSync(git(home, 'rev-parse', '--path-format=absolute', '--git-common-dir')) !== fs.realpathSync(git(target, 'rev-parse', '--path-format=absolute', '--git-common-dir'))) throw new Error('target must be a worktree of the pane-home repository');
   if (explicitBranch !== undefined && spawnSync('git', ['check-ref-format', '--branch', explicitBranch], { encoding: 'utf8' }).status !== 0) throw new Error(`invalid branch name: ${explicitBranch}`);
-  const branch = explicitBranch ?? git(target, 'symbolic-ref', '-q', '--short', 'HEAD');
+  // A detached target has no current branch (null): a new task then needs the explicit branch (task-worktree.mjs).
+  const current = spawnSync('git', ['symbolic-ref', '-q', '--short', 'HEAD'], { cwd: target, encoding: 'utf8', timeout: 1000 });
+  const branch = explicitBranch ?? (current.status === 0 ? current.stdout.trim() : null);
   // #901: one task, one worktree. Refuses a pane home, another task's worktree and a dirty tree; a fix round reuses its own.
   const { fixRound } = checkTaskWorktree({ home, target, issue, branch });
   const marker = path.join(home, '.build/mado-verify/target-worktree');
