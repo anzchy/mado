@@ -457,7 +457,10 @@ struct TableRecognitionSettingsEnvironment {
         }
         top += (savedRow.isHidden ? 24 : savedRow.frame.height) + 4
         if !custom { top = hintLine(keyHint, link: keyHelp, top: top) }
-        if !keyMessage.stringValue.isEmpty {
+        if keyMessage.stringValue.isEmpty {
+            // Hidden: no stale frame from measuring (a two-line message) is left over the row.
+            keyMessage.frame = NSRect(x: valueX, y: top, width: valueWidth, height: 0)
+        } else {
             top = place(keyMessage, top: top + 2)
         }
         top += 14
