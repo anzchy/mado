@@ -39,8 +39,8 @@ a successful guarded dry-run before a remote write (see `scripts/codex-rules/REA
 
 | Pane | Name | Agent | Reset before a new item |
 |---|---|---|---|
-| w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<task>'` |
-| w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<task>'` |
+| w1:p2 | gpt-imple-1 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <pane-home> --task-worktree <task-worktree> --prompt '<task>'` (the line `new-task-worktree.sh --codex` prints) |
+| w1:p3 | gpt-imple-2 | Codex `gpt-6-sol`, effort `medium` | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <pane-home> --task-worktree <task-worktree> --prompt '<task>'` (the line `new-task-worktree.sh --codex` prints) |
 | w1:p5 | gpt-auditor | Codex `gpt-6-sol`, effort `medium`; for a device run only, restart it with `-s danger-full-access` (its sandbox cannot run `pgrep`) and restart without it afterwards | `$SK/scripts/start-fresh-codex.sh <pane> <name> --cwd <worktree> --prompt '<audit request>'` |
 | w1:p6 | opus-auditor | Claude `--agent mado-opus-auditor --model opus` | send `/clear` + Enter, confirm `Context 0%` |
 | w1:p9 | opus-imple-1 | Claude Opus implementer (added 2026-10-25) | `/clear` + Enter |
@@ -56,7 +56,20 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    parents). **Ready now** is the query `milestone:v0.0.1 -is:blocked label:ready-for-agent -has:sub-issue`, never a
    stored list; then drop items already in flight or overlapping files, and pick by journey order (plan §1.6,
    ADR-013) within the in-flight cap and auditor capacity. Why: `docs/knowledge/owner-questions.md`.
-2. **Brief** — copy [templates/brief-template.md](references/templates/brief-template.md) to
+2. **Brief** — **One task, one worktree** (#901, owner 2026-11-25: 「同意，下一个 dispatch 起每个任务用独立 worktree，而且这个看看写入
+   /mado-delegator 相关skill中，强制执行」). Every new task gets its own worktree `~/Documents/mac-app/picsee-wt/<issue>-<slug>`
+   from `origin/main`, made with `$SK/scripts/new-task-worktree.sh <issue> <slug> [<base>] --pane-home <pane-home> --task <Report-Task>
+   --handoff <absolute-handoff-path> [--branch <name>] [--codex] [--pane <id>] [--brief <path>]` after `git fetch origin`. Never a pane home
+   (`picsee-wt/<pane-name>`: the pane's identity and dispatch marker only) and never another task's worktree. A fix round continues
+   in the same task worktree (run `mark-target.mjs` again with the new Report-Task); the PR rebase, owner-gates, mado-verify and the
+   device smoke run there too; after merge the worktree cleanup job removes it. Why: reused pane worktrees caused a delegator
+   rebase that detached HEAD under work in progress (#892), a pane pinned to a PR head for a re-smoke (#894), a stale untracked
+   `default.profraw` that broke a device build (#882) and tdd-guardian `dirty_source` noise (#898). Enforced by `mark-target.mjs`
+   (refuses a pane home, a worktree not named `<issue>-<slug>`, a new task whose branch does not name the issue as `<prefix>/<issue>-<slug>`, a second task and a dirty tree), `evidence.mjs check` (refuses a
+   pane home; `--legacy-worktree` only for a task dispatched before #901), `start-fresh-codex.sh` (an implementer with a pane-home
+   `--cwd` needs `--task-worktree`) and the CI lint `scripts/agents/task-worktree-lint.mjs`. Tasks running before #901 finish where
+   they are; to move one of their fix rounds, detach the pane home and use `new-task-worktree.sh … --existing-branch`.
+   Then copy [templates/brief-template.md](references/templates/brief-template.md) to
    `~/.mado/herdr/<impl>/<item>-brief.md`. Every brief starts from the template and keeps its
    `## Verify (mado-verify)` section; a hand-written brief copies that section verbatim (the briefs for #682, #683,
    #687, #690 and #692 omitted it and were never verified). There is no hook. The template's Test-first section carries the
@@ -77,11 +90,14 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    writing fences. Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
    `SHARED` code file with an in-flight branch means sequence the two items, or base the new branch on the other one
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
-   Before dispatch, run `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when it differs from the worktree's current branch) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree`. Codex uses `$tdd-guardian-workflow`;
+   Before dispatch, `new-task-worktree.sh` runs (for a fix round, run it yourself) `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when the worktree is detached) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree` and the task identity in the worktree's `.build/mado-verify/task-identity.json`. Codex uses `$tdd-guardian-workflow`;
    Kimi needs the hand-written test-first steps. For a fresh Codex implementer or gpt-auditor session, dispatch only through
-   `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --cwd <briefed-worktree> --prompt 'New task: … Read and follow <brief>…'`.
+   `$SK/scripts/start-fresh-codex.sh <pane> <agent-name> --cwd <pane-home> --task-worktree <briefed-worktree> --prompt 'New task: … Worktree: <briefed-worktree> … Read and follow <brief>…'`.
+   A Codex implementer stays in its pane home (agent-list cwd, its role overlay, `-s danger-full-access`) and works in the task
+   worktree the prompt names; the helper refuses an implementer with a pane-home `--cwd` and no `--task-worktree`, a task worktree
+   that is the pane home, not a `<issue>-<slug>` worktree root beside the pane home in its repository, or not named in the prompt as a whole path outside comments. Auditors keep `--cwd <auditor-worktree>`.
    The helper checks `--cwd` against the agent-list cwd and the fresh screen cwd, chooses current worktree in the directory dialog, restores both names, and requires `working` before success. If a pane runs from a separate Codex worktree, add `--screen-cwd <absolute-path>` before `--prompt`; the screen must match that path exactly while the agent-list cwd must still match `--cwd`.
-   For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> --cwd <briefed-worktree> '<task prompt>'`.
+   For an already fresh, idle Codex session use `$SK/scripts/start-fresh-codex.sh prompt-and-confirm <pane> <agent-name> --cwd <pane-home> --task-worktree <briefed-worktree> '<task prompt>'`.
    Do not use `reset.sh` plus a separate prompt for these dispatches: that reset reports only fresh context and does not confirm that the task reached `working`.
 3. **Watch** — after the fresh Codex helper confirms `working`, and after every dispatch and rearm for every fix/audit round, attach
    `$SK/scripts/listen-notify.py start` with a fresh event/round ID, agent, expected handoff/report path, and an

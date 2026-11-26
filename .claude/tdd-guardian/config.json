@@ -386,6 +386,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 300000
+    },
+    {
+      "name": "task-worktree-node",
+      "description": "Manual #901 RED receipts: per-task worktree enforcement (mark-target, evidence check), the new-task-worktree helper, the start-fresh-codex task-worktree mode and the CI lint of the delegator texts.",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/task-worktree-marker.test.mjs .agents/skills/mado-verify/tests/task-worktree-evidence.test.mjs .agents/skills/mado-delegator/scripts/new-task-worktree.test.mjs .agents/skills/mado-delegator/scripts/fresh-codex-task-worktree.test.mjs scripts/agents/task-worktree-lint.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 300000
     }
   ],
   "coverageThresholds": {

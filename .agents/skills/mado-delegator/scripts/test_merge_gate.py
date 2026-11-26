@@ -78,7 +78,7 @@ esac
         verify_source = SCRIPT.parents[2] / 'mado-verify' / 'scripts'
         verify_target = self.repo / '.agents/skills/mado-verify/scripts'
         verify_target.mkdir(parents=True)
-        for name in ('gate-policy.mjs', 'evidence.mjs', 'reuse-policy.mjs', 'reuse-check.mjs', 'reuse-allowlist.json'):
+        for name in ('gate-policy.mjs', 'evidence.mjs', 'tdd-separation.mjs', 'task-worktree.mjs', 'reuse-policy.mjs', 'reuse-check.mjs', 'reuse-allowlist.json'):
             shutil.copy2(verify_source / name, verify_target / name)
         rebase_target = self.repo / '.agents/skills/mado-delegator/scripts'
         rebase_target.mkdir(parents=True)

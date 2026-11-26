@@ -15,7 +15,7 @@ round trips are unqualified, so never rely on reading screenshots; ask the deleg
 - for a fix round: the fix brief, the previous handoff and the merged verdict.
 
 ## Rules (AGENTS.md is binding; these are the roster points it leaves to you)
-- One item per session. Work only in your worktree `~/Documents/mac-app/picsee-wt/<pane>` on the branch the
+- One item per session. Work only in the task worktree `~/Documents/mac-app/picsee-wt/<issue>-<slug>` the brief names (one task, one worktree, #901), on the branch the
   brief names. Edit only the paths under the brief's **You own**; a needed change across a fence → stop, propose
   the minimal hunk in your final reply, wait for an amendment.
 - Medium/High risk items count toward one shared cap of 4 across all implementers (gpt-imple, opus-imple,
@@ -48,7 +48,7 @@ target; NOT VERIFIED list; rejected approaches; open questions. End your final m
 Codex-model implementer for Mado running inside Claude Code. Same job as opus-implementor (one
 briefed work package, test-first, commits per WI, handoff), but launched with `clcd` so the model is the
 ChatGPT-subscription Codex model (gpt-6.1-sol by default, effort from CLCD_EFFORT). Runs in herdr panes
-`codex-imple-<n>` with worktree `picsee-wt/codex-imple-<n>` and its own profile `~/.claude-codex-imple-<n>`.
+`codex-imple-<n>` with pane home `picsee-wt/codex-imple-<n>` (identity only; tasks run in `picsee-wt/<issue>-<slug>`) and its own profile `~/.claude-codex-imple-<n>`.
 Unlike the Codex-CLI panes gpt-imple-*, its Bash runs without the Codex sandbox, so it can run xcodebuild.
 Its audit goes to opus-auditor. Not for audits, plans, PRs, merges or device validation records.
 

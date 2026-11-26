@@ -7,6 +7,7 @@ import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequ
   TDD_SEPARATION_MODE, tddSeparationFindings, tddSeparationRequired } from './gate-policy.mjs';
 import { evaluateSeparation, summaryLine } from './tdd-separation.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
+import { paneHomeReason } from './task-worktree.mjs';
 
 const [mode, input] = process.argv.slice(2);
 function privacyHits(body) {
@@ -36,10 +37,12 @@ export const COMMENT_REPO = 'anzchy/mado';
 const commentPattern = issue => new RegExp(`^https://github\\.com/${COMMENT_REPO.replace('/', '\\/')}/issues/${issue}#issuecomment-\\d+$`);
 // Manual acceptance check the delegator runs before audit and before merge (no Stop hook since 2026-11-14).
 function check(args) {
-  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>] [--accept-waiver <id>@<sha256>]… [--accept-replay <receipt>@<sha256>]…';
-  let want, issue, worktree = process.cwd();
+  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>] [--accept-waiver <id>@<sha256>]… [--accept-replay <receipt>@<sha256>]… [--legacy-worktree]';
+  let want, issue, worktree = process.cwd(), legacyWorktree = false;
   const acceptedWaivers = [], acceptedReplays = [];
   while (args.length) {
+    // #901: a task dispatched before #901 into a pane home finishes there; the delegator says so with this flag.
+    if (args[0] === '--legacy-worktree') { args.shift(); legacyWorktree = true; continue; }
     const flag = args.shift(), value = args.shift();
     if (flag === '--head' && value && !want) want = value;
     else if (flag === '--issue' && value && issue === undefined) issue = value;
@@ -70,6 +73,16 @@ function check(args) {
   if (!Number.isSafeInteger(record.issue) || record.issue < 1) throw new Error('record has no valid issue');
   if (record.issue !== Number(issue)) throw new Error(`record is for issue #${record.issue}, not #${issue}`);
   if (typeof record.commentUrl !== 'string' || !commentPattern(record.issue).test(record.commentUrl)) throw new Error(`record commentUrl is missing or not an evidence comment on ${COMMENT_REPO} issue #${record.issue}`);
+  // #901: one task, one worktree. The record names the worktree it was written in; a pane home never carries task evidence.
+  const topReal = fs.realpathSync(top);
+  const worktreeWarnings = [];
+  if (record.worktree === undefined) worktreeWarnings.push('WARNING worktree: the record has no worktree path (written before #901)');
+  else if (typeof record.worktree !== 'string' || (fs.existsSync(record.worktree) ? fs.realpathSync(record.worktree) : record.worktree) !== topReal)
+    throw new Error(`record was written in ${record.worktree}, not in ${topReal}; check the record in the task worktree that wrote it`);
+  const paneHome = paneHomeReason(topReal);
+  if (paneHome && !legacyWorktree)
+    throw new Error(`${paneHome}; task evidence belongs to the task worktree picsee-wt/${record.issue}-<slug>. A task dispatched before #901 that still runs in its pane home: pass --legacy-worktree`);
+  if (paneHome) worktreeWarnings.push(`WARNING worktree ${paneHome}; accepted with --legacy-worktree for a task dispatched before #901`);
   if (record.link) verifyLinkedRecord(top, record);
   else if (record.gates?.some(g => g.reusedFrom !== undefined) ||
            Object.values(record.lanes || {}).some(lane => lane.status === 'reused') || record.ciBinding)
@@ -118,6 +131,7 @@ function check(args) {
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
+  for (const warning of worktreeWarnings) console.log(warning);
   for (const gate of flakyGates(record.gates)) {
     const d = gate.disposition;
     console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} author ${d.author} owner ${d.owner} reviewed by ${d.reviewedBy} (${d.reviewRef}) expires ${d.expires}`);
@@ -172,7 +186,9 @@ try {
       fingerprints = directFingerprints(cwd, d.head);
       lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.disposition ? 'flaky-disposition' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
-    const record = { head: d.head, base, ...(d.role ? { role: d.role } : {}), fingerprints, link, lanes,
+    // #901: the worktree the record was written in; check refuses it elsewhere and in a pane home.
+    const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).stdout.trim();
+    const record = { head: d.head, base, worktree: fs.realpathSync(top || cwd), ...(d.role ? { role: d.role } : {}), fingerprints, link, lanes,
       ...(link ? { ciBinding: 'required-new-head' } : {}), ...(d.tddSeparation ? { tddSeparation: d.tddSeparation } : {}), gates: d.gates, complete: verdict.complete,
       problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() };
     if (link) verifyLinkedRecord(cwd, record);

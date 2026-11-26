@@ -21,16 +21,7 @@ function fixture(t) {
   run('git', ['add', 'sample.test.swift'], dir); run('git', ['commit', '-qm', 'base'], dir);
   const base = run('git', ['rev-parse', 'HEAD'], dir).stdout.trim();
   run('git', ['update-ref', 'refs/remotes/origin/main', base], dir);
-  marker(dir, dir, run('git', ['symbolic-ref', '-q', '--short', 'HEAD'], dir).stdout.trim(), 648, 'i648');
   return { dir, base, head: () => run('git', ['rev-parse', 'HEAD'], dir).stdout.trim(), commit: () => { run('git', ['add', 'sample.test.swift'], dir); run('git', ['commit', '-qm', 'change'], dir); } };
-}
-function marker(home, worktree, branch, issue = 651, task = 'i651-20261111-a', handoff = path.join(home, 'handoff.md')) {
-  const file = path.join(home, '.build/mado-verify/target-worktree');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ worktree, branch, issue, task, handoff }) + '\n');
-  const head = run('git', ['rev-parse', 'HEAD'], worktree);
-  if (head.status === 0) fs.writeFileSync(handoff, `Worktree: ${worktree}\nBranch: ${branch}\nHEAD: ${head.stdout.trim()}\n`);
-  return file;
 }
 
 test('integrity scan reports assertion removal, skips, retry, timeout, exit and counts', t => {
@@ -237,14 +228,16 @@ test('manual check fails on tracked changes and on bad usage', t => {
   assert.equal(run('node', [script('evidence.mjs'), 'check', '--head', 'zzz'], f.dir).status, 1);
 });
 
+// #901: the briefed worktree is a task worktree named <issue>-<slug>, never the pane home.
+const taskTarget = (f, slug = 'target') => path.join(path.dirname(f.dir), `651-${path.basename(f.dir)}-${slug}`);
 test('mark-target writes complete dispatch identity', t => {
-  const f = fixture(t), target = `${f.dir}-target`;
+  const f = fixture(t), target = taskTarget(f);
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
-  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'feature', target], f.dir).status, 0);
+  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'task/651-feature', target], f.dir).status, 0);
   const handoff = path.join(f.dir, 'round-handoff.md');
   const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-20261111-a', handoff], f.dir);
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'feature', issue: 651, task: 'i651-20261111-a', handoff });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))), { worktree: fs.realpathSync(target), branch: 'task/651-feature', issue: 651, task: 'i651-20261111-a', handoff });
 });
 
 test('manual check requires the apptests gate; a recorded skip is exit 0 with the summary line', t => {
@@ -294,13 +287,14 @@ test('direct NOT VERIFIED App lane is recorded as not-verified provenance', t =>
 });
 
 test('mark-target prefers an explicit task branch over the worktree current branch', t => {
-  const f = fixture(t), target = `${f.dir}-target`;
+  // #901: a worktree on another named branch is refused, so the explicit branch applies to a detached task worktree.
+  const f = fixture(t), target = taskTarget(f);
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
-  assert.equal(run('git', ['worktree', 'add', '-q', '-b', 'pane-home-branch', target], f.dir).status, 0);
+  assert.equal(run('git', ['worktree', 'add', '-q', '--detach', target], f.dir).status, 0);
   const handoff = path.join(f.dir, 'round-handoff.md');
-  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'tooling/i651-task'], f.dir);
+  const r = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'tooling/651-task'], f.dir);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))).branch, 'tooling/i651-task');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, '.build/mado-verify/target-worktree'))).branch, 'tooling/651-task');
   const bad = run('node', [script('mark-target.mjs'), f.dir, target, '651', 'i651-a', handoff, 'bad..branch'], f.dir);
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /invalid branch/);
