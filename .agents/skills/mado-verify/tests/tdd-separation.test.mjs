@@ -442,6 +442,34 @@ test('898 WI-2 after a rebase the old range is evaluated and carried over only w
   assert.match(changed.reason ?? '', /map/);
 });
 
+// fix1 WI-5 (gpt F5, opus M5): carry only a byte-identical replay of every commit; a merge of main counts only its own changes.
+test('898 fix1 WI-5 a whitespace-only change during the rebase is not carried (patch-id ignores whitespace, the tree does not)', t => {
+  const f = repo(t); compliant(f);
+  const oldBase = f.base, oldHead = f.head();
+  f.git('switch', '-q', 'main'); f.write('docs/b.md', 'main moved\n'); f.git('add', 'docs/b.md'); f.git('commit', '-qm', 'main moves');
+  const newBase = f.git('rev-parse', 'HEAD');
+  f.git('switch', '-q', 'topic'); f.git('rebase', '-q', 'main');
+  assert.equal(f.evaluate({ base: newBase, rebasedFrom: { base: oldBase, head: oldHead } }).verdict, 'pass');
+  f.write('App/Foo.swift', 'struct Foo {  func bar() -> Int { 1 } }\n'); f.git('add', 'App/Foo.swift'); f.git('commit', '-q', '--amend', '--no-edit');
+  const changed = f.evaluate({ base: newBase, rebasedFrom: { base: oldBase, head: oldHead } });
+  assert.equal(changed.verdict, 'unknown', JSON.stringify(changed));
+  assert.match(changed.reason ?? '', /tree|map/);
+});
+
+test('898 fix1 WI-5 merging main into the branch does not attribute main\'s changes to the branch; an evil merge does count', t => {
+  const f = repo(t); compliant(f);
+  f.git('switch', '-q', 'main'); f.write('App/Bar.swift', 'struct Bar {}\n'); f.git('add', 'App/Bar.swift'); f.git('commit', '-qm', 'main adds Bar');
+  const mainTip = f.git('rev-parse', 'HEAD');
+  f.git('switch', '-q', 'topic'); f.git('merge', '-q', '--no-edit', 'main');
+  const merged = f.evaluate({ base: mainTip });
+  assert.equal(merged.verdict, 'pass', JSON.stringify(merged));
+  assert.deepEqual(merged.outside, []);
+  f.write('App/Baz.swift', 'struct Baz {}\n'); f.git('add', 'App/Baz.swift'); f.git('commit', '-q', '--amend', '--no-edit');
+  const evil = f.evaluate({ base: mainTip });
+  assert.equal(evil.verdict, 'refused', JSON.stringify(evil));
+  assert.deepEqual(evil.outside.map(o => o.paths), [['App/Baz.swift']]);
+});
+
 function nodeRepo(t, fixedAtRed) {
   const f = repo(t);
   f.write('lib.mjs', `export const add = (a, b) => a ${fixedAtRed ? '+' : '-'} b;\n`);

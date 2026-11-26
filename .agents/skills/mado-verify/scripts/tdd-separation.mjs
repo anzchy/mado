@@ -36,8 +36,8 @@ const WAIVER_ISSUERS = new Set(['delegator', 'owner']);
 // A replay run must not inherit a parent node:test runner's context (it would skip the files) or git's GIT_* state.
 const runEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && key !== 'NODE_TEST_CONTEXT'));
 const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
-function git(cwd, args, input) {
-  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...gitEnv, LC_ALL: 'C' }, input });
+function git(cwd, args, input, extraEnv = {}) {
+  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...gitEnv, LC_ALL: 'C', ...extraEnv }, input });
 }
 function gitOut(cwd, args) {
   const r = git(cwd, args);
@@ -70,8 +70,13 @@ function trailers(body) {
 function listCommits(cwd, base, head) {
   return gitOut(cwd, ['rev-list', '--reverse', '--topo-order', `${base}..${head}`]).split('\n').filter(Boolean).map(sha => {
     const body = gitOut(cwd, ['log', '-1', '--format=%B', sha]);
-    const paths = nul(gitOut(cwd, ['diff-tree', '--root', '-r', '--no-commit-id', '--name-only', '-z', '--no-renames', '-m', '--first-parent', sha]));
-    return { sha, subject: body.split('\n')[0], body, paths, ...trailers(body) };
+    // fix1 (opus M5): a merge commit (main merged into the branch) counts only its own changes: --remerge-diff shows what
+    // the merge commit changed beyond Git's automatic merge (a conflict resolution, an evil edit), not main's commits.
+    const parents = gitOut(cwd, ['rev-list', '--parents', '-n', '1', sha]).trim().split(' ').length - 1;
+    const paths = nul(gitOut(cwd, parents > 1
+      ? ['diff-tree', '--remerge-diff', '-r', '--no-commit-id', '--name-only', '-z', '--no-renames', sha]
+      : ['diff-tree', '--root', '-r', '--no-commit-id', '--name-only', '-z', '--no-renames', sha]));
+    return { sha, subject: body.split('\n')[0], body, paths, merge: parents > 1, ...trailers(body) };
   });
 }
 
@@ -325,11 +330,24 @@ export function evaluateSeparation({ worktree, base, head, archiveDir = defaultA
 }
 
 // #898 AC 7: after a rebase the receipts' head_sha are out of the new history. Evaluate the old range (its commits still
-// exist in the worktree) and carry the result only when every new commit maps to the old one at the same position by
-// patch-id and message. Anything else is unknown. After a squash merge nothing can be re-checked on main.
-function patchId(cwd, sha) {
-  const diff = git(cwd, ['show', '--format=', '--no-renames', '--no-color', sha]).stdout || '';
-  return (git(cwd, ['patch-id', '--stable'], diff).stdout || '').split(' ')[0];
+// exist in the worktree) and carry the result only when every new commit is the old one replayed byte for byte: the old
+// commit's binary diff applied (no whitespace fixing) to the new commit's parent gives exactly the new commit's tree, and
+// the message is the same (fix1, gpt F5: git patch-id --stable ignores whitespace, so it is not CODE same). Merge commits
+// do not map. Anything else is unknown. After a squash merge nothing can be re-checked on main.
+function replaysExactly(cwd, oldSha, newSha) {
+  const parents = sha => gitOut(cwd, ['rev-list', '--parents', '-n', '1', sha]).trim().split(' ').slice(1);
+  const [oldParent, ...oldMore] = parents(oldSha), [newParent, ...newMore] = parents(newSha);
+  if (!oldParent || !newParent || oldMore.length || newMore.length) return false;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tdd-carry-'));
+  try {
+    const env = { GIT_INDEX_FILE: path.join(dir, 'index') };
+    if (git(cwd, ['read-tree', newParent], undefined, env).status !== 0) return false;
+    const diff = git(cwd, ['diff', '--binary', '--full-index', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', oldParent, oldSha]);
+    if (diff.status !== 0) return false;
+    if (diff.stdout && git(cwd, ['apply', '--cached', '--whitespace=nowarn'], diff.stdout, env).status !== 0) return false;
+    const tree = git(cwd, ['write-tree'], undefined, env);
+    return tree.status === 0 && tree.stdout.trim() === gitOut(cwd, ['rev-parse', `${newSha}^{tree}`]).trim();
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers, replayFiles }) {
   const oldBase = resolveCommit(cwd, rebasedFrom.base), oldHead = resolveCommit(cwd, rebasedFrom.head);
@@ -337,11 +355,11 @@ function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles,
   const old = evaluateSeparation({ worktree: cwd, base: oldBase, head: oldHead, archiveDir, waiverDir, receiptFiles, mode, issue, acceptedWaivers, replayFiles });
   const before = listCommits(cwd, oldBase, oldHead), after = listCommits(cwd, baseSha, headSha);
   const mismatch = before.length !== after.length ? `the old range has ${before.length} commits, the new ${after.length}`
-    : before.map((c, i) => c.body !== after[i].body || patchId(cwd, c.sha) !== patchId(cwd, after[i].sha) ? i : -1).find(i => i >= 0);
+    : before.map((c, i) => c.body !== after[i].body || !replaysExactly(cwd, c.sha, after[i].sha) ? i : -1).find(i => i >= 0);
   const carried = { ...old, base: baseSha, head: headSha, rebasedFrom: { base: oldBase, head: oldHead } };
   if (mismatch === undefined) return { ...carried, carriedFrom: oldHead };
   const reason = typeof mismatch === 'string' ? `rebase: ${mismatch}; the old result does not map`
-    : `rebase: commit ${mismatch + 1} of ${oldBase.slice(0, 7)}..${oldHead.slice(0, 7)} does not map to ${baseSha.slice(0, 7)}..${headSha.slice(0, 7)} (patch-id or message differs)`;
+    : `rebase: commit ${mismatch + 1} of ${oldBase.slice(0, 7)}..${oldHead.slice(0, 7)} does not map to ${baseSha.slice(0, 7)}..${headSha.slice(0, 7)} (its replayed tree or its message differs)`;
   return { ...carried, verdict: 'unknown', reason, oldVerdict: old.verdict };
 }
 
