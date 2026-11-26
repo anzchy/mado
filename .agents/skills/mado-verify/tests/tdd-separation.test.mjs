@@ -248,12 +248,15 @@ test('898 WI-1 a test-only commit after green without a RED trailer is a named e
 
 const waiver = (f, w, name = 'i1.json') => fs.writeFileSync(path.join(f.waivers, name), JSON.stringify({ waivers: [w] }));
 const goodWaiver = { id: 'W1-1', issue: 1, receipt: 'R1', paths: ['App/Foo.swift'], reason: 'stub predates the rule; replay recorded in the handoff',
-  issuedBy: 'delegator', ref: '~/.mado/herdr/opus-imple-1/i1-brief.md' };
+  issuedBy: 'delegator', ref: '~/.mado/herdr/opus-imple-1/i1-brief.md', expires: '2099-12-31' };
+// fix1 WI-2: a waiver file is a claim; the delegator accepts it by id and content digest in its own invocation.
+const claimsOf = r => { assert.ok(Array.isArray(r.claims), `no claims list: ${JSON.stringify(r)}`); return r.claims; };
+const accept = (f, extra = {}) => claimsOf(f.evaluate(extra)).map(c => `${c.id}@${c.digest}`);
 
 test('898 WI-1 a delegator waiver turns a refusal into WAIVED, counted and shown', t => {
   const f = repo(t); compliant(f, ['App/Foo.swift']);
   waiver(f, goodWaiver);
-  const r = f.evaluate();
+  const r = f.evaluate({ acceptedWaivers: accept(f) });
   assert.equal(r.verdict, 'pass', JSON.stringify(r));
   assert.equal(r.receipts[0].status, 'waived');
   assert.equal(r.receipts[0].waiver, 'W1-1');
@@ -279,6 +282,74 @@ test('898 WI-1 an implementer-written, unreasoned or out-of-scope waiver does no
   assert.equal(f.evaluate().verdict, 'refused', 'a symlinked waiver file is not read');
 });
 
+test('898 fix1 WI-2 a well-formed waiver file nobody accepted is only a claim: refused, CLAIMED-WAIVER with its digest', t => {
+  const f = repo(t); compliant(f, ['App/Foo.swift']);
+  waiver(f, goodWaiver); // written by whoever can write the directory, e.g. an implementer pane
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.equal(r.counts.waived, 0);
+  assert.deepEqual(r.waivers, []);
+  assert.deepEqual(r.claims.map(c => c.id), ['W1-1']);
+  assert.match(r.claims[0].digest, /^[0-9a-f]{64}$/);
+  assert.match(sep.summaryLine(r), /CLAIMED-WAIVER W1-1@[0-9a-f]{12}/);
+  assert.doesNotMatch(sep.summaryLine(r), /\bWAIVED\b/);
+});
+
+test('898 fix1 WI-2 an accepted waiver whose file changed after acceptance (digest differs) is not applied', t => {
+  const f = repo(t); compliant(f, ['App/Foo.swift']);
+  waiver(f, goodWaiver);
+  const accepted = accept(f);
+  waiver(f, { ...goodWaiver, paths: ['App/Foo.swift', 'App/Other.swift'] });
+  const r = f.evaluate({ acceptedWaivers: accepted });
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.equal(r.counts.waived, 0);
+  assert.match(String(r.acceptProblems), /W1-1.*digest/);
+});
+
+test('898 fix1 WI-2 a waiver for another issue, an expired one or one without expiry never applies', t => {
+  for (const [bad, re] of [[{ ...goodWaiver, issue: 850 }, null], [{ ...goodWaiver, expires: '2020-01-01' }, /expired/], [{ ...goodWaiver, expires: undefined }, /expires/]]) {
+    const f = repo(t); compliant(f, ['App/Foo.swift']);
+    waiver(f, bad);
+    const all = accept(f);
+    const r = f.evaluate({ acceptedWaivers: all });
+    assert.equal(r.verdict, 'refused', JSON.stringify(bad));
+    assert.equal(r.counts.waived, 0);
+    assert.deepEqual(r.claims, []);
+    if (re) assert.match(r.invalidWaivers.map(w => w.reason).join(' '), re);
+  }
+  // The ticket is the --issue given, else the single `Refs #n` of the range's trailer blocks.
+  const f = repo(t); compliant(f, ['App/Foo.swift']);
+  waiver(f, { ...goodWaiver, issue: 2 });
+  assert.equal(claimsOf(f.evaluate()).length, 0);
+  assert.equal(claimsOf(f.evaluate({ issue: 2 })).length, 1);
+});
+
+test('898 fix1 WI-2 a symlinked waiver directory is not read', t => {
+  const f = repo(t); compliant(f, ['App/Foo.swift']);
+  const real = path.join(f.home, 'elsewhere'); fs.mkdirSync(real);
+  fs.writeFileSync(path.join(real, 'i1.json'), JSON.stringify({ waivers: [goodWaiver] }));
+  const linked = path.join(f.home, 'linked-waivers'); fs.symlinkSync(real, linked);
+  const r = f.evaluate({ waiverDir: linked });
+  assert.deepEqual(claimsOf(r), []);
+  assert.equal(claimsOf(f.evaluate({ waiverDir: real })).length, 1);
+});
+
+test('898 fix1 WI-2 gate CLI and evidence check take --accept-waiver; the stored raw result still matches', t => {
+  const f = repo(t); compliant(f, ['App/Foo.swift']);
+  fs.writeFileSync(path.join(f.waivers, 'i1.json'), JSON.stringify({ waivers: [goodWaiver] }));
+  const [token] = accept(f);
+  const gate = extra => run('node', [lane, 'gate', '--worktree', f.dir, '--base', f.base, '--head', f.head(), '--archive', f.archive, '--waivers', f.waivers, ...extra], f.dir);
+  assert.match(gate([]).stdout, /^tdd-separation=refused .*CLAIMED-WAIVER W1-1@/);
+  assert.match(gate(['--accept-waiver', token, '--issue', '1']).stdout, /^tdd-separation=pass .*waived=1 .*WAIVED W1-1/);
+  recordFor(f, { tddSeparation: f.evaluate() });
+  const plain = check(f);
+  assert.equal(plain.status, 0, plain.stderr);
+  assert.match(plain.stdout, /WARNING tdd-separation \(report-only\): verdict refused/);
+  const accepted = run('node', [evidence, 'check', '--head', f.head(), '--issue', '1', '--accept-waiver', token], f.dir, { ...process.env, HOME: f.home });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.doesNotMatch(accepted.stdout, /WARNING tdd-separation/);
+});
+
 test('898 WI-1 a commit waiver covers a production commit outside any RED window', t => {
   const f = repo(t);
   f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { 1 } }\n');
@@ -286,8 +357,8 @@ test('898 WI-1 a commit waiver covers a production commit outside any RED window
   f.receipts([receipt('R1', early)]);
   f.write('Packages/MadoKit/Tests/CoreTests/FooTests.swift', '@Test func a() {}\n');
   f.commit('tests', [trailer('R1')]);
-  waiver(f, { id: 'W1-2', issue: 1, commit: early, reason: 'hotfix agreed before the RED; replay attached', issuedBy: 'Delegator', ref: 'https://github.com/anzchy/mado/issues/1#issuecomment-1' });
-  const r = f.evaluate();
+  waiver(f, { id: 'W1-2', issue: 1, commit: early, reason: 'hotfix agreed before the RED; replay attached', issuedBy: 'Delegator', ref: 'https://github.com/anzchy/mado/issues/1#issuecomment-1', expires: '2099-12-31' });
+  const r = f.evaluate({ acceptedWaivers: accept(f) });
   assert.equal(r.verdict, 'pass', JSON.stringify(r));
   assert.deepEqual(r.outside.map(x => [x.commit, x.waiver]), [[early, 'W1-2']]);
   assert.equal(r.counts.waived, 1);

@@ -196,8 +196,14 @@ export function tddSeparationRequired(files) {
 const COUNT_KEYS = ['receipts', 'held', 'refused', 'unknown', 'waived', 'exceptions'];
 const wellFormed = r => r && typeof r === 'object' && r.lane === TDD_SEPARATION_LANE && typeof r.verdict === 'string' &&
   (['skipped', 'error'].includes(r.verdict) || (r.counts && COUNT_KEYS.every(k => Number.isSafeInteger(r.counts[k]))));
-const fingerprint = r => JSON.stringify([r.verdict, COUNT_KEYS.map(k => r.counts?.[k] ?? null), (r.receipts ?? []).map(e => `${e.id}:${e.status}`),
-  (r.outside ?? []).map(o => `${o.commit}:${o.waiver ?? ''}`), r.waivers ?? []]);
+// fix1: a stored result matches the recomputation as accepted (the delegator's run, with its --accept-waiver list) or as
+// raw (before any acceptance: the implementer's run). The claims and their digests are part of both views.
+const claimsKey = r => (r.claims ?? []).map(c => `${c.id}@${c.digest}`);
+const acceptedView = r => JSON.stringify([r.verdict, COUNT_KEYS.map(k => r.counts?.[k] ?? null), (r.receipts ?? []).map(e => `${e.id}:${e.status}`),
+  (r.outside ?? []).map(o => `${o.commit}:${o.waiver ?? ''}`), r.waivers ?? [], claimsKey(r)]);
+const rawView = r => JSON.stringify([r.raw?.verdict ?? r.verdict, COUNT_KEYS.map(k => (r.raw?.counts ?? r.counts)?.[k] ?? null),
+  (r.receipts ?? []).map(e => `${e.id}:${e.rawStatus ?? e.status}`), (r.outside ?? []).map(o => `${o.commit}:`), [], claimsKey(r)]);
+const sameResult = (stored, recomputed) => acceptedView(stored) === acceptedView(recomputed) || acceptedView(stored) === rawView(recomputed);
 // stored: the record's tddSeparation; recomputed: evidence.mjs check's own run of the lane (undefined if not run);
 // required: tddSeparationRequired(diff). Mandatory mode turns required findings into problems (refusal); report-only, and
 // any finding on a diff that does not require the lane, are warnings.
@@ -207,7 +213,7 @@ export function tddSeparationFindings({ stored, recomputed, required, mode = TDD
     if (required) issues.push('missing: a product-code record needs the lane result (owner-gates <prefix>-tdd-separation.json as tddSeparation)');
   } else if (!wellFormed(stored)) issues.push('malformed lane result in the record');
   else {
-    if (recomputed && fingerprint(stored) !== fingerprint(recomputed))
+    if (recomputed && !sameResult(stored, recomputed))
       issues.push(`stored result differs from the recomputation (stored ${stored.verdict}, recomputed ${recomputed.verdict}${recomputed.reason ? `: ${recomputed.reason}` : ''})`);
     const verdict = recomputed?.verdict ?? stored.verdict;
     if (['refused', 'unknown', 'error'].includes(verdict)) issues.push(`verdict ${verdict}${(recomputed ?? stored).reason ? ` (${(recomputed ?? stored).reason})` : ''}`);

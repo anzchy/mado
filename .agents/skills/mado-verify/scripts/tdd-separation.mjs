@@ -6,11 +6,13 @@
 //
 //   tdd-separation.mjs gate --worktree <wt> --base <sha> --head <sha> [--out <json>] [--archive <dir>] [--waivers <dir>]
 //                           [--receipts <receipts.json>]… [--rebased-from <old-base>..<old-head>]
+//                           [--issue <n>] [--accept-waiver <id>@<sha256>]…
 //   tdd-separation.mjs evaluate <same options>          (prints the JSON result)
 //   tdd-separation.mjs replay --worktree <wt> --head <sha> --receipt <id> --kind node|swift --filter <f> [--archive <dir>]
 //
 // gate prints one summary line and exits 0 in report-only mode whatever the verdict (gate-policy.mjs TDD_SEPARATION_MODE);
 // in mandatory mode a refused, unknown or error verdict exits 1.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,7 +61,8 @@ function trailerLines(body) {
 function trailers(body) {
   const lines = trailerLines(body);
   const pick = re => lines.map(line => re.exec(line)?.[1]).filter(Boolean);
-  return { red: [...new Set(pick(/^Red-Receipt:\s+(\S+)/))], stubFor: [...new Set(pick(/^Stub-For:\s+(\S+)/))], refactor: pick(/^Refactor:\s+(.+)$/) };
+  return { red: [...new Set(pick(/^Red-Receipt:\s+(\S+)/))], stubFor: [...new Set(pick(/^Stub-For:\s+(\S+)/))], refactor: pick(/^Refactor:\s+(.+)$/),
+    refs: [...new Set(pick(/^Refs\s+#(\d+)\b/).map(Number))] };
 }
 function listCommits(cwd, base, head) {
   return gitOut(cwd, ['rev-list', '--reverse', '--topo-order', `${base}..${head}`]).split('\n').filter(Boolean).map(sha => {
@@ -108,11 +111,19 @@ function findReceipt(ctx, id) {
   return candidates.length ? { found: candidates[0] } : { problem: `receipt ${id} not found in receipts.json or the archive` };
 }
 
-// Waivers are issued by the delegator (or the owner) as JSON files in ~/.mado/herdr/delegator/tdd-waivers/:
-// {"waivers":[{"id","issue","receipt"|"commit","paths"?,"reason","issuedBy","ref"}]}. Regular files only, no symlinks.
-// The names are trusted to the writer, like a flake reviewRef; an implementer never writes there, and the auditor
-// checks the waiver against the brief or the delegator's note it references.
-export function waiverProblems(w) {
+// Waivers (fix1, gpt F1 / opus M3): a JSON file in ~/.mado/herdr/delegator/tdd-waivers/ is only a CLAIM:
+// {"waivers":[{"id","issue","receipt"|"commit","paths"?,"reason","issuedBy","ref","expires":"YYYY-MM-DD"}]}.
+// Any process running as this user can write that directory (every pane is the same user), so no file, owner or mode check
+// can tell who wrote it. Trust comes from the invocation instead: a claim becomes WAIVED only when the caller names it with
+// --accept-waiver <id>@<sha256 of the waiver entry> (a prefix of at least 12 hex). Only the delegator's own runs (its
+// owner-gates run, its evidence.mjs check before merge) are binding, and an implementer cannot put arguments into them.
+// The digest binds the accepted content: an edit after acceptance (wider paths, another receipt) no longer matches.
+// A claim must be for this ticket's issue and not expired; the directory itself must not be a symlink.
+const canonical = v => Array.isArray(v) ? `[${v.map(canonical).join(',')}]`
+  : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v);
+export const waiverDigest = w => crypto.createHash('sha256').update(canonical(w)).digest('hex');
+const today = () => new Date().toISOString().slice(0, 10);
+export function waiverProblems(w, now = today()) {
   const problems = [];
   if (!w || typeof w !== 'object') return ['not an object'];
   if (typeof w.id !== 'string' || !SAFE_ID.test(w.id)) problems.push('id');
@@ -123,35 +134,45 @@ export function waiverProblems(w) {
   if (typeof w.reason !== 'string' || !w.reason.trim()) problems.push('reason');
   if (!WAIVER_ISSUERS.has(partyKey(w.issuedBy))) problems.push('issuedBy must be the delegator or the owner');
   if (typeof w.ref !== 'string' || !w.ref.trim()) problems.push('ref (the brief or note that issued it)');
+  const date = typeof w.expires === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(w.expires) && new Date(`${w.expires}T00:00:00Z`);
+  if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== w.expires) problems.push('expires (YYYY-MM-DD)');
+  else if (w.expires < now) problems.push(`expired on ${w.expires}`);
   return problems;
 }
 function loadWaivers(dir) {
   const valid = [], invalid = [];
   let names = [];
-  try { names = fs.readdirSync(dir).filter(name => name.endsWith('.json')).sort(); } catch { /* no waiver directory */ }
+  let dirStat;
+  try { dirStat = fs.lstatSync(dir); } catch { /* no waiver directory */ }
+  if (dirStat?.isDirectory()) {
+    try { names = fs.readdirSync(dir).filter(name => name.endsWith('.json')).sort(); } catch { /* unreadable */ }
+  }
   for (const name of names) {
     const file = readJson(path.join(dir, name));
     for (const w of Array.isArray(file?.waivers) ? file.waivers : []) {
       const problems = waiverProblems(w);
-      if (problems.length) invalid.push({ id: w?.id ?? null, receipt: w?.receipt, commit: w?.commit, file: name, reason: `invalid waiver: ${problems.join(', ')}` });
-      else valid.push(w);
+      if (problems.length) invalid.push({ id: w?.id ?? null, issue: w?.issue, receipt: w?.receipt, commit: w?.commit, file: name, reason: `invalid waiver: ${problems.join(', ')}` });
+      else valid.push({ ...w, digest: waiverDigest(w) });
     }
   }
   return { valid, invalid };
+}
+function parseAccepted(tokens) {
+  return (tokens ?? []).map(token => { const m = /^([A-Za-z0-9][A-Za-z0-9._-]{0,127})@([0-9a-f]{12,64})$/.exec(String(token)); return m ? { token, id: m[1], digest: m[2] } : { token, problem: `--accept-waiver ${token} is not <id>@<sha256>` }; });
 }
 
 const ignoredPaths = (cwd, paths) => paths.length ? new Set(nul(git(cwd, ['check-ignore', '-z', '--stdin'], paths.join('\0') + '\0').stdout || '')) : new Set();
 
 export function evaluateSeparation({ worktree, base, head, archiveDir = defaultArchiveDir(), waiverDir = defaultWaiverDir(),
-  receiptFiles = [], rebasedFrom, mode = TDD_SEPARATION_MODE } = {}) {
+  receiptFiles = [], rebasedFrom, mode = TDD_SEPARATION_MODE, issue, acceptedWaivers = [] } = {}) {
   const cwd = worktree;
   const baseSha = resolveCommit(cwd, base), headSha = resolveCommit(cwd, head);
   if (!baseSha) throw new Error(`base ${base} is not a commit in ${cwd}`);
   if (!headSha) throw new Error(`head ${head} is not a commit in ${cwd}`);
-  if (rebasedFrom) return carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode });
+  if (rebasedFrom) return carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers });
   const result = { lane: 'tdd-separation', version: LANE_VERSION, mode, base: baseSha, head: headSha, verdict: 'pass',
     counts: { receipts: 0, held: 0, refused: 0, unknown: 0, waived: 0, exceptions: 0 },
-    receipts: [], outside: [], exceptions: [], waivers: [], invalidWaivers: [], replayNeeded: [] };
+    receipts: [], outside: [], exceptions: [], waivers: [], claims: [], acceptProblems: [], invalidWaivers: [], replayNeeded: [] };
   const commits = listCommits(cwd, baseSha, headSha);
   for (const c of commits) c.production = c.paths.filter(isProductionPath);
   const ids = [...new Set(commits.flatMap(c => c.red))];
@@ -229,19 +250,39 @@ export function evaluateSeparation({ worktree, base, head, archiveDir = defaultA
       result.exceptions.push({ kind: 'test-after-green', commit: c.sha, subject: c.subject, note: 'test change without a RED: review it with a manual mutant' });
     }
   }
-  // Delegator waivers: a receipt waiver (optionally limited to paths) or a commit waiver.
+  // Waiver claims for this ticket (a receipt waiver, optionally limited to paths, or a commit waiver); applied only when accepted.
+  const refs = [...new Set(commits.flatMap(c => c.refs))];
+  const ticket = Number.isSafeInteger(Number(issue)) && Number(issue) > 0 ? Number(issue) : refs.length === 1 ? refs[0] : null;
+  result.issue = ticket;
+  const scoped = waivers.valid.filter(w => w.issue === ticket);
   const rangeShas = new Set(commits.map(c => c.sha));
-  result.invalidWaivers = waivers.invalid.filter(w => ids.includes(w.receipt) || rangeShas.has(w.commit));
+  result.invalidWaivers = waivers.invalid.filter(w => ids.includes(w.receipt) || rangeShas.has(w.commit)).filter(w => !Number.isSafeInteger(w.issue) || w.issue === ticket);
+  const claim = (w, target) => { if (!result.claims.some(c => c.id === w.id)) result.claims.push({ id: w.id, digest: w.digest, issue: w.issue, ...target }); return w; };
+  const receiptClaims = new Map(), outsideClaims = new Map();
   for (const entry of result.receipts) {
     if (entry.status === 'held') continue;
-    const w = waivers.valid.find(x => x.receipt === entry.id && (!x.paths ||
+    const w = scoped.find(x => x.receipt === entry.id && (!x.paths ||
       (entry.status === 'refused' && entry.problems.length === 1 && entry.production.length && entry.production.every(p => x.paths.includes(p)))));
-    if (w) { entry.status = 'waived'; entry.waiver = w.id; result.waivers.push(w.id); }
+    if (w) receiptClaims.set(entry, claim(w, { receipt: entry.id }));
   }
   for (const o of result.outside) {
-    const w = waivers.valid.find(x => x.commit === o.commit);
-    if (w) { o.waiver = w.id; result.waivers.push(w.id); }
+    const w = scoped.find(x => x.commit === o.commit);
+    if (w) outsideClaims.set(o, claim(w, { commit: o.commit }));
   }
+  const rawStatus = s => result.receipts.filter(e => e.status === s).length;
+  result.raw = { verdict: rawStatus('refused') || result.outside.length ? 'refused' : rawStatus('unknown') ? 'unknown' : 'pass',
+    counts: { receipts: result.receipts.length, held: rawStatus('held'), refused: rawStatus('refused'), unknown: rawStatus('unknown'), waived: 0, exceptions: result.exceptions.length } };
+  const accepted = parseAccepted(acceptedWaivers);
+  const isAccepted = w => accepted.some(a => a.id === w.id && w.digest.startsWith(a.digest));
+  for (const a of accepted) {
+    if (a.problem) { result.acceptProblems.push(a.problem); continue; }
+    const c = result.claims.find(x => x.id === a.id);
+    if (!c) result.acceptProblems.push(`accepted waiver ${a.id} is not a claim on this range (wrong issue, expired, invalid or out of scope)`);
+    else if (!c.digest.startsWith(a.digest)) result.acceptProblems.push(`accepted waiver ${a.id}: digest ${a.digest.slice(0, 12)} does not match the file's ${c.digest.slice(0, 12)} (changed after acceptance?)`);
+  }
+  for (const [entry, w] of receiptClaims) if (isAccepted(w)) { entry.rawStatus = entry.status; entry.status = 'waived'; entry.waiver = w.id; result.waivers.push(w.id); }
+  for (const [o, w] of outsideClaims) if (isAccepted(w)) { o.waiver = w.id; result.waivers.push(w.id); }
+  for (const c of result.claims) c.accepted = result.waivers.includes(c.id);
   const status = s => result.receipts.filter(e => e.status === s).length;
   result.counts = { receipts: result.receipts.length, held: status('held'), refused: status('refused'), unknown: status('unknown'),
     waived: status('waived') + result.outside.filter(o => o.waiver).length, exceptions: result.exceptions.length };
@@ -257,10 +298,10 @@ function patchId(cwd, sha) {
   const diff = git(cwd, ['show', '--format=', '--no-renames', '--no-color', sha]).stdout || '';
   return (git(cwd, ['patch-id', '--stable'], diff).stdout || '').split(' ')[0];
 }
-function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode }) {
+function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers }) {
   const oldBase = resolveCommit(cwd, rebasedFrom.base), oldHead = resolveCommit(cwd, rebasedFrom.head);
   if (!oldBase || !oldHead) throw new Error(`--rebased-from ${rebasedFrom.base}..${rebasedFrom.head} is not two commits in ${cwd}`);
-  const old = evaluateSeparation({ worktree: cwd, base: oldBase, head: oldHead, archiveDir, waiverDir, receiptFiles, mode });
+  const old = evaluateSeparation({ worktree: cwd, base: oldBase, head: oldHead, archiveDir, waiverDir, receiptFiles, mode, issue, acceptedWaivers });
   const before = listCommits(cwd, oldBase, oldHead), after = listCommits(cwd, baseSha, headSha);
   const mismatch = before.length !== after.length ? `the old range has ${before.length} commits, the new ${after.length}`
     : before.map((c, i) => c.body !== after[i].body || patchId(cwd, c.sha) !== patchId(cwd, after[i].sha) ? i : -1).find(i => i >= 0);
@@ -286,6 +327,9 @@ export function summaryLine(r) {
   const outside = (r.outside ?? []).filter(o => !o.waiver);
   if (outside.length) parts.push(`OUTSIDE ${outside.map(o => sha7(o.commit)).join(',')}`);
   if (r.waivers?.length) parts.push(`WAIVED ${r.waivers.join(',')}`);
+  const claimed = (r.claims ?? []).filter(c => !c.accepted);
+  if (claimed.length) parts.push(`CLAIMED-WAIVER ${claimed.map(c => `${c.id}@${String(c.digest).slice(0, 12)}`).join(',')}`);
+  if (r.acceptProblems?.length) parts.push(`ACCEPT-PROBLEM ${r.acceptProblems.length}`);
   if (r.invalidWaivers?.length) parts.push(`INVALID-WAIVER ${r.invalidWaivers.map(w => w.id ?? '?').join(',')}`);
   if (r.exceptions?.length) parts.push(`EXCEPTIONS ${r.exceptions.map(e => `${e.kind}:${sha7(e.commit)}`).join(',')}`);
   return parts.join(' ');
@@ -352,13 +396,14 @@ export function replay({ worktree, head, receiptId, kind, filter, archiveDir = d
 }
 
 function parseArgs(args) {
-  const o = { receiptFiles: [] };
+  const o = { receiptFiles: [], acceptedWaivers: [] };
   const flags = { '--worktree': 'worktree', '--base': 'base', '--head': 'head', '--out': 'out', '--archive': 'archiveDir', '--waivers': 'waiverDir',
-    '--receipt': 'receiptId', '--kind': 'kind', '--filter': 'filter' };
+    '--receipt': 'receiptId', '--kind': 'kind', '--filter': 'filter', '--issue': 'issue' };
   while (args.length) {
     const flag = args.shift(), value = args.shift();
     if (value === undefined) throw new Error(`${flag} needs a value`);
     if (flag === '--receipts') o.receiptFiles.push(value);
+    else if (flag === '--accept-waiver') o.acceptedWaivers.push(value);
     else if (flag === '--rebased-from') {
       const m = /^([^.]+)\.\.([^.]+)$/.exec(value);
       if (!m) throw new Error('--rebased-from needs <old-base>..<old-head>');
