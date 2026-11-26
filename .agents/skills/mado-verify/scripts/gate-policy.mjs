@@ -165,3 +165,9 @@ export function flakeDispositionProblems(gate, today = new Date().toISOString().
   return problems;
 }
 export const flakyGates = gates => Array.isArray(gates) ? gates.filter(g => g && g.name === 'node' && g.exitCode !== 0 && g.disposition) : [];
+
+// #898 tdd-separation lane (stub; signatures only).
+export const TDD_SEPARATION_LANE = 'tdd-separation';
+export const TDD_SEPARATION_MODE = 'report-only';
+export function tddSeparationRequired(files) { throw new Error('tddSeparationRequired not implemented'); }
+export function tddSeparationFindings(options) { throw new Error('tddSeparationFindings not implemented'); }
