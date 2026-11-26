@@ -20,12 +20,22 @@ function scenario(t, { name = 'gpt-imple-9', cwd } = {}) {
   fs.mkdirSync(bin);
   // #891: link the checked-in fake (mode 100755); a fresh copy pays the macOS first-exec assessment.
   fs.symlinkSync(path.join(freshDir, 'fake-herdr.cjs'), path.join(bin, 'herdr'));
+  // #901 fix1: the pane home is a git worktree, and task worktrees are worktrees of the same repository beside it.
   const paneHome = path.join(dir, name);
   fs.mkdirSync(paneHome);
-  const repo = nameOf => {
+  const git = (cwd, ...args) => assert.equal(spawnSync('git', args, { cwd }).status, 0, `git ${args.join(' ')}`);
+  git(paneHome, 'init', '-q', '-b', 'main');
+  git(paneHome, '-c', 'user.email=f@example.invalid', '-c', 'user.name=F', 'commit', '-q', '--allow-empty', '-m', 'base');
+  const repo = (nameOf, at = dir) => {
+    const wt = path.join(at, nameOf);
+    fs.mkdirSync(path.dirname(wt), { recursive: true });
+    git(paneHome, 'worktree', 'add', '-q', '--detach', wt);
+    return wt;
+  };
+  const alien = nameOf => {
     const wt = path.join(dir, nameOf);
     fs.mkdirSync(wt);
-    assert.equal(spawnSync('git', ['init', '-q'], { cwd: wt }).status, 0);
+    git(wt, 'init', '-q');
     return wt;
   };
   const stateFile = path.join(dir, 'state.json');
@@ -35,7 +45,7 @@ function scenario(t, { name = 'gpt-imple-9', cwd } = {}) {
     MADO_FRESH_CONFIRM_SECS: '0.25', MADO_FRESH_POLL_SECS: '0.02' };
   const run = (...args) => spawnSync('/bin/bash', [helper, ...args], { env, encoding: 'utf8', timeout: 10000 });
   const state = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  return { dir, paneHome, repo, run, state, name };
+  return { dir, paneHome, repo, alien, run, state, name };
 }
 const untouched = s => { assert.equal(s.state().prompts, 0); assert.ok(!s.state().events.includes('send-new'), 'pane was touched'); };
 
@@ -98,4 +108,40 @@ test('#901 a Codex implementer relaunched in its task worktree, and auditors in 
   const a = scenario(t, { name: 'gpt-auditor' });
   const audit = a.run('w1:p5', 'gpt-auditor', '--cwd', a.paneHome, '--prompt', 'Audit #901');
   assert.equal(audit.status, 0, audit.stderr + audit.stdout);
+});
+
+test('#901 fix1 (gpt M3, opus M3) the task worktree sits beside the pane home in the same repository', t => {
+  const s = scenario(t);
+  const elsewhere = s.repo('651-x', path.join(s.dir, 'tmp'));
+  const outside = s.run('w1:p5', s.name, '--cwd', s.paneHome, '--task-worktree', elsewhere, '--prompt', `Worktree: ${elsewhere}`);
+  assert.notEqual(outside.status, 0);
+  assert.match(outside.stderr, /not under the picsee-wt root .* of the pane home/);
+  const other = s.alien('651-alien');
+  const alien = s.run('w1:p5', s.name, '--cwd', s.paneHome, '--task-worktree', other, '--prompt', `Worktree: ${other}`);
+  assert.notEqual(alien.status, 0);
+  assert.match(alien.stderr, /not a worktree of the pane home's repository/);
+  untouched(s);
+});
+
+test('#901 fix1 (gpt M3, opus M3) the prompt names the task worktree as a whole path in live text', t => {
+  const s = scenario(t);
+  const wt = s.repo('651-demo');
+  for (const prompt of [
+    `<!-- Worktree: ${wt} --> Work in the pane home.`,
+    `# Worktree: ${wt}\nWork in the pane home.`,
+    `Worktree: ${wt}-old. Read the brief.`,
+    `Worktree: ${wt}/sub. Read the brief.`,
+    `Worktree: x${wt}. Read the brief.`,
+  ]) {
+    const r = s.run('w1:p5', s.name, '--cwd', s.paneHome, '--task-worktree', wt, '--prompt', prompt);
+    assert.notEqual(r.status, 0, prompt);
+    assert.match(r.stderr, /prompt does not name the task worktree/, prompt);
+  }
+  untouched(s);
+  for (const prompt of [`Worktree: \`${wt}\` (branch task/651-demo).`, `New task (${wt}): read the brief`, `Refs #651. Worktree: ${wt}, then read`]) {
+    const ok = scenario(t);
+    const wt2 = ok.repo('651-demo');
+    const r = ok.run('w1:p5', ok.name, '--cwd', ok.paneHome, '--task-worktree', wt2, '--prompt', prompt.replaceAll(wt, wt2));
+    assert.equal(r.status, 0, prompt + r.stderr);
+  }
 });

@@ -257,11 +257,38 @@ def check_task_worktree(name, cwd, task_worktree, prompt):
         raise Refused(f"task worktree {path} is not a worktree root")
     if not TASK_NAME.fullmatch(os.path.basename(path)):
         raise Refused(f"task worktree {path} is not a task worktree (expected picsee-wt/<issue>-<slug>)")
+    # #901 fix1: picsee-wt/<issue>-<slug> beside the pane home, in the pane home's repository.
+    root = os.path.dirname(cwd)
+    if os.path.dirname(path) != root:
+        raise Refused(f"task worktree {path} is not under the picsee-wt root {root} of the pane home")
+    if git_common_dir(path) != git_common_dir(cwd):
+        raise Refused(f"task worktree {path} is not a worktree of the pane home's repository ({cwd})")
     home = os.path.expanduser("~")
     named = {path, os.path.expanduser(task_worktree)}
     named |= {"~" + p[len(home):] for p in list(named) if p.startswith(home + os.sep)}
-    if prompt is not None and not any(p in prompt for p in named):
-        raise Refused(f"prompt does not name the task worktree {path}; the session starts in the pane home and works only there")
+    if prompt is not None and not any(names_path(live_prompt(prompt), p) for p in named):
+        raise Refused(f"prompt does not name the task worktree {path} as a whole path in live text (not in a comment); the session starts in the pane home and works only there")
+
+
+def git_common_dir(at):
+    try:
+        out = subprocess.run(["git", "-C", at, "rev-parse", "--path-format=absolute", "--git-common-dir"], text=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Refused(f"git unavailable for {at}: {type(exc).__name__}") from exc
+    if out.returncode != 0:
+        raise Refused(f"{at} is not a git worktree")
+    return os.path.realpath(out.stdout.strip())
+
+
+def live_prompt(prompt):
+    # HTML comments and `#` comment lines are not instructions; `#<digits>` (an issue reference) starts no comment.
+    text = re.sub(r"<!--.*?(?:-->|$)", " ", prompt, flags=re.S)
+    return "\n".join(line for line in text.split("\n") if not re.match(r"\s*#(?![0-9])", line))
+
+
+def names_path(text, path):
+    # The path as a whole token: not a prefix of a longer path (…-old, …/sub) and not the tail of another word.
+    return re.search(r"(?:^|(?<=[\s'\"`(\[<:=]))" + re.escape(path) + r"(?=$|[\s'\"`)\]>,;:]|\.(?:\s|$))", text) is not None
 
 
 try:
