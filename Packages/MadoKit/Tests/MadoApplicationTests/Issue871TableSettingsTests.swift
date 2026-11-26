@@ -510,3 +510,20 @@ func issue871Fix2NoKeyToRemoveIsNotAFailure() async {
     let state = await fixture.model.state()
     #expect(!state.addressChangeFailed && state.address == "https://api.deepseek.com/beta")
 }
+
+// MARK: - Fix round 3 (opus L1): committing the stored address again, or a cosmetic variant of it, clears a stale
+// "address not changed" flag; no removal is attempted, so nothing failed.
+
+@Test(.timeLimit(.minutes(2)), arguments: ["https://api.deepseek.com", "https://API.deepseek.com/", "  https://api.deepseek.com  "])
+func issue871Fix3SameAddressClearsTheFailedChange(_ variant: String) async throws {
+    let fixture = fixture871(consents: ["api.deepseek.com": true])
+    try await fixture.model.saveKey("sk-live-abcd1234")
+    await fixture.secrets.fail()
+    await fixture.model.setAddress("https://gw.example.com/v1")
+    #expect(await fixture.model.state().addressChangeFailed)
+    await fixture.model.setAddress(variant)
+    let state = await fixture.model.state()
+    #expect(!state.addressChangeFailed)
+    #expect(state.address == TableRecognitionEndpoint.deepSeekBaseURL && state.hasKey)
+    #expect(await fixture.table.consents["api.deepseek.com"] == true)
+}

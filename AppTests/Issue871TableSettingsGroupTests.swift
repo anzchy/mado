@@ -657,22 +657,93 @@ func issue871Fix2TestWithATypedAddressSendsNothingWhenTheKeyCannotBeRemoved() as
     #expect(try f.text("settings.capture.table-test-status").isEmpty)
 }
 
-@MainActor @Test(.timeLimit(.minutes(3)))
-func issue871Fix2ServiceChangeDuringTheTestCommitIsNotMixedIn() async throws {
+// MARK: - Fix round 3: type the way users do (the field editor), then click Test once (opus H1); a commit of the stored
+// address after a refused change does not repeat the refusal (opus L1)
+
+/// Opens Advanced and types into a field through its field editor, as the keyboard does; editing has not ended.
+@MainActor private func typeInEditor871(_ f: Fixture871App, _ id: String, _ text: String) async throws {
+    let advanced = try f.view("settings.capture.table-advanced", as: NSButton.self)
+    if advanced.state != .on {
+        advanced.state = .on
+        try f.click("settings.capture.table-advanced")
+    }
+    let field = try f.view(id, as: NSTextField.self)
+    #expect(f.panel.window.makeFirstResponder(field))
+    let editor = try #require(field.currentEditor() as? NSTextView)
+    editor.selectAll(nil)
+    editor.insertText(text)
+    #expect(field.currentEditor() != nil && field.stringValue == text)
+}
+
+/// Clicks Test once. With Keyboard Navigation on, the button takes focus on mouse-down, so editing (and the field's
+/// own commit) ends before Test's action; with it off, editing is still going on when Test's action runs.
+@MainActor private func clickTestOnce871(_ f: Fixture871App, keyboardNavigation: Bool) throws {
+    if keyboardNavigation { f.panel.window.makeFirstResponder(nil) }
+    try f.click("settings.capture.table-test")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [false, true])
+func issue871Fix3TypedModelThenOneTestClickSendsIt(_ keyboardNavigation: Bool) async throws {
     let f = try fixture871App()
     defer { f.panel.window.close() }
-    try await waitUntil { try f.text("settings.capture.table-host") == "api.deepseek.com" }
-    try await typeWithoutCommitting871(f, "settings.capture.table-model", "deepseek-vision")
-    // Test commits the typed model; its first read is held while the user picks Custom.
-    await f.table.holdRead()
-    try f.click("settings.capture.table-test")
-    try await waitUntil { await f.table.readWaiting }
-    let service = try f.view("settings.capture.table-service", as: NSPopUpButton.self)
-    service.selectItem(at: 1)
-    try f.click("settings.capture.table-service")
-    await f.table.releaseRead()
+    try await f.saveKey("sk-live-00003f9a")
+    try await typeInEditor871(f, "settings.capture.table-model", "deepseek-vision")
+    try clickTestOnce871(f, keyboardNavigation: keyboardNavigation)
+    try await waitUntil { try f.text("settings.capture.table-test-status") == "✓ 测试成功，可以识别示例表格。" }
+    let requests = await f.transport.requests
+    #expect(requests.count == 1)
+    #expect(requests.first.flatMap(sentModel871) == "deepseek-vision")
+    #expect(await f.table.stored.deepSeekModel == "deepseek-vision")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [false, true])
+func issue871Fix3TypedAddressThenOneTestClickSendsIt(_ keyboardNavigation: Bool) async throws {
+    // The same address written another way (case, trailing slash) keeps its key and its consent, so the one click
+    // tests it: exactly one request, to that host.
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    try await typeInEditor871(f, "settings.capture.table-address", "https://API.deepseek.com/")
+    try await typeInEditor871(f, "settings.capture.table-model", "deepseek-vision")
+    try clickTestOnce871(f, keyboardNavigation: keyboardNavigation)
+    try await waitUntil { try f.text("settings.capture.table-test-status") == "✓ 测试成功，可以识别示例表格。" }
+    let requests = await f.transport.requests
+    #expect(requests.count == 1)
+    #expect(requests.first?.url?.host?.lowercased() == "api.deepseek.com")
+    #expect(requests.first.flatMap(sentModel871) == "deepseek-vision")
+    #expect(f.dialogs.alerts.isEmpty)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: [false, true])
+func issue871Fix3TypedNewAddressThenOneTestClickCommitsItAndSendsNothing(_ keyboardNavigation: Bool) async throws {
+    let f = try fixture871App(consents: ["api.deepseek.com": true, "gw.example.com": true])
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    try await typeInEditor871(f, "settings.capture.table-address", "https://gw.example.com/v1")
+    try clickTestOnce871(f, keyboardNavigation: keyboardNavigation)
+    // The new address has no key: it is committed, and nothing is sent to it or to the old one.
+    try await waitUntil { try f.text("settings.capture.table-host") == "gw.example.com" }
     try await waitUntil { try f.view("settings.capture.table-test", as: NSButton.self).title == "测试" }
-    try await waitUntil { await f.table.stored.deepSeekModel == "deepseek-vision" }
-    // The DeepSeek field's model never lands in Custom's model.
-    #expect(await f.table.stored.customModel == "")
+    #expect(await f.table.stored.deepSeekAddress == "https://gw.example.com/v1")
+    #expect(await f.transport.requests.isEmpty)
+    #expect(try f.shown("settings.capture.table-key"))
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix3CommittingTheStoredAddressAfterARefusalSaysNothing() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    await f.secrets.failRemoval()
+    try await typeInEditor871(f, "settings.capture.table-address", "https://gw.example.com/v1")
+    f.panel.window.makeFirstResponder(nil)
+    try await waitUntil { try f.text("settings.capture.table-key-message") == "无法移除已保存的密钥，地址未更改。" }
+    // The stored address written another way: no removal is attempted, so nothing failed.
+    try await typeInEditor871(f, "settings.capture.table-address", "https://api.deepseek.com/")
+    f.panel.window.makeFirstResponder(nil)
+    try await waitUntil { try f.text("settings.capture.table-key-message").isEmpty }
+    try await Task.sleep(for: .milliseconds(300))
+    #expect(try f.text("settings.capture.table-key-message").isEmpty)
+    #expect(await f.table.stored.deepSeekAddress == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(await f.secrets.items.count == 1)
 }

@@ -155,6 +155,8 @@ struct TableRecognitionSettingsEnvironment {
     private var testTask: Task<Void, Never>?
     private var refreshID = 0
     private var busy = false
+    /// The change `perform` is running (nil when none); Test waits for it before it commits or tests.
+    private var change: Task<Void, Never>?
 
     init(width: CGFloat, labelWidth: CGFloat, valueX: CGFloat, environment: TableRecognitionSettingsEnvironment,
          localize: @escaping (String) -> String, openURL: @escaping (URL) -> Void) {
@@ -556,15 +558,14 @@ struct TableRecognitionSettingsEnvironment {
         layoutRows()
     }
 
-    /// One change at a time; each ends by reading the model back. Returns nil (and changes nothing) while another
-    /// change is running.
-    @discardableResult
-    private func perform(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
-        guard !busy else { refresh(); return nil }
+    /// One change at a time; each ends by reading the model back. A second change while one is running is dropped.
+    private func perform(_ work: @escaping @MainActor () async -> Void) {
+        guard !busy else { refresh(); return }
         busy = true
-        return Task {
+        change = Task {
             await work()
             busy = false
+            change = nil
             refreshID += 1
             show(await environment.model.state())
         }
@@ -654,21 +655,20 @@ struct TableRecognitionSettingsEnvironment {
         // Test uses what the fields show: an address or model typed but not yet committed (no Return, Tab or focus
         // change; with Keyboard Navigation off a click on Test does not end editing) is committed first. A new
         // address has no key, so then nothing is sent and the row shows the new configuration.
-        // The commit is one change like the others (perform), so a service change cannot land in between.
+        // Ending editing here (or the button taking focus, with Keyboard Navigation on) already starts the field's own
+        // commit; Test waits for it, so the two commits do not interleave, and then runs once (opus H1, fix round 3).
         let typed = (address: address.stringValue, model: modelField.stringValue)
         let uncommitted = state.map { typed.address != $0.address || typed.model != $0.model } ?? false
         if address.currentEditor() != nil || modelField.currentEditor() != nil { window?.makeFirstResponder(nil) }
-        let commit = uncommitted ? perform { [self] in
-            if await applyAddress(typed.address) { await model.setModel(typed.model) }
-        } : nil
-        // Another change is still running: this click does nothing (as for any second change meanwhile).
-        if uncommitted && commit == nil { return }
+        let running = change
         testTask = Task { [weak self] in
-            if let commit {
-                await commit.value
-                // The address was not changed (its old key stayed): test neither the typed address nor the old one.
-                let state = await model.state()
-                guard !state.addressChangeFailed, state.canTest else {
+            await running?.value
+            if uncommitted {
+                // The old key could not be removed, so the address stayed: test neither the typed address nor the
+                // old one.
+                let applied = await self?.applyAddress(typed.address) ?? false
+                if applied { await model.setModel(typed.model) }
+                guard applied, await model.state().canTest else {
                     self?.testTask = nil
                     self?.refresh()
                     return

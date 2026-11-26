@@ -199,7 +199,8 @@ public actor TableRecognitionSettingsModel {
     /// Test still in flight cannot report on settings that are no longer there.
     private var testStatus: TableRecognitionTestStatus?
     private var generation = 0
-    /// The last address change was refused (its old key could not be removed); any later change clears it.
+    /// The last address change was refused (its old key could not be removed); any later change, or a commit of the
+    /// stored address itself, clears it.
     private var addressChangeFailed = false
 
     private func invalidateTest() {
@@ -242,8 +243,9 @@ public actor TableRecognitionSettingsModel {
         let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         var stored = await preferences.storedSettings()
         let old = stored.endpoint
+        // The same address written another way: nothing to remove, so nothing failed.
         guard TableRecognitionKeyStore.canonicalAddress(old.baseURL) != TableRecognitionKeyStore.canonicalAddress(address)
-        else { return }
+        else { addressChangeFailed = false; return }
         do throws(CloudKeyError) { try await keys.remove(for: old) } catch {
             addressChangeFailed = true
             return
