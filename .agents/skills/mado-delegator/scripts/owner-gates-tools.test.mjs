@@ -5,12 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
+import { DIFF_NAME_ARGS, failingTestInDiff, nodeLaneRequired, NODE_LANE_PREFIXES } from '../../mado-verify/scripts/gate-policy.mjs';
+import { rerunPlan, selectSuites, failureFact, preflight, inspectLock, workflowNodeTests, expandPattern, readExceptions, nodeLaneFiles, uncoveredWorkflowTests, NODE_LANE_EXCEPTIONS, loadThresholds, parseFacts, loadVerdict, competingHeavyProcesses } from './owner-gates-tools.mjs';
 
 const fixture = name => fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 test('WI-1 skips both optional suites only for reviewed native-only paths', () => {
-  assert.deepEqual(selectSuites(['App/MadoApp.swift']), {native:true, agents:false, tdd:false});
-  assert.deepEqual(selectSuites(['Packages/MadoKit/Tests/Foo.swift','TestAssets/foo.png']), {native:true, agents:false, tdd:false});
+  assert.deepEqual(selectSuites(['App/MadoApp.swift']), {native:true, agents:false, tdd:false, node:false});
+  assert.deepEqual(selectSuites(['Packages/MadoKit/Tests/Foo.swift','TestAssets/foo.png']), {native:true, agents:false, tdd:false, node:false});
   for (const file of ['.github/workflows/pr-body.yml','.github/workflows/ci.yml','.agents/skills/pr/SKILL.md',
     'docs/agents/ui-parity-contract.md','.agents/skills/ci-linux-preflight/scripts/preflight.mjs',
     '.claude/agents/auditor.md','docs/agents/interaction-lifecycle-checklist.md',
@@ -21,7 +22,35 @@ test('WI-1 skips both optional suites only for reviewed native-only paths', () =
     assert.equal(selected.agents, true, file);
     assert.equal(selected.tdd, true, file);
   }
-  assert.deepEqual(selectSuites(['App/MadoApp.swift','docs/guide.md']), {native:true, agents:true, tdd:true});
+  assert.deepEqual(selectSuites(['App/MadoApp.swift','docs/guide.md']), {native:true, agents:true, tdd:true, node:false});
+});
+
+// #892 (owner 2026-11-25): an implementer runs the node lane only when the diff touches scripts/, .agents/, .github/ or
+// .claude/; the delegator's owner-gates run and GitHub CI cover the rest. One rule, shared with evidence.mjs check.
+test('892 WI-1 the node lane is required exactly for diffs under scripts/, .agents/, .github/ or .claude/', () => {
+  for (const file of ['scripts/ci/foo.mjs', '.agents/skills/pr/SKILL.md', '.github/workflows/ci.yml', '.claude/agents/auditor.md',
+    'scripts/tdd/app-lane.test.mjs', '.agents/skills/mado-verify/tests/verify.test.mjs'])
+    assert.equal(nodeLaneRequired([file]), true, file);
+  for (const file of ['App/MadoApp.swift', 'AppTests/FooTests.swift', 'Packages/MadoKit/Sources/MadoCore/A.swift', 'docs/guide.md',
+    'design/DESIGN.md', 'project.yml', 'scriptsfoo/x.mjs', 'docs/scripts/x.md', 'TestAssets/a.png'])
+    assert.equal(nodeLaneRequired([file]), false, file);
+  assert.equal(nodeLaneRequired(['App/MadoApp.swift', 'scripts/ci/foo.mjs']), true, 'mixed diff');
+  assert.equal(nodeLaneRequired([]), true, 'an empty or unreadable diff fails closed');
+  assert.deepEqual(NODE_LANE_PREFIXES, ['scripts/', '.agents/', '.github/', '.claude/']);
+  assert.equal(selectSuites(['scripts/ci/foo.mjs']).node, true);
+  assert.equal(selectSuites([]).node, true);
+});
+
+test('892 WI-1 select prints native, agents, tdd and node, one per line', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'select-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  // #892 fix1: the diff file is NUL-delimited (`git diff --name-only -z`).
+  for (const [diff, node] of [['App/MadoApp.swift\0', 0], ['App/MadoApp.swift\0scripts/ci/foo.mjs\0', 1]]) {
+    fs.writeFileSync(path.join(dir, 'diff.nul'), diff);
+    const r = spawnSync(process.execPath, [new URL('./owner-gates-tools.mjs', import.meta.url).pathname, 'select', path.join(dir, 'diff.nul')], {encoding: 'utf8'});
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, new RegExp(`^native=1\\nagents=[01]\\ntdd=[01]\\nnode=${node}\\n$`));
+  }
 });
 
 test('WI-2 facts parse captured spec and heavy-lock output', () => {
@@ -264,4 +293,126 @@ test('760 fix1 TERM-resistant probes expire as unknown within the hard deadline'
   for(const pid of fs.readFileSync(probePids,'utf8').trim().split('\n').map(Number)) {
     assert.throws(()=>process.kill(pid,0), {code:'ESRCH'}, `probe ${pid} must be gone`);
   }
+});
+
+// #892 WI-2: the spec reporter's failing block, as node 22 prints it: `test at <file>:<line>:<col>` before each `✖ <name> (<ms>ms)`.
+const failingBlock = tests => `ℹ fail ${tests.length}\n\n✖ failing tests:\n\n` +
+  tests.map(([file, name]) => `${file === null ? '' : `test at ${file}:12:3\n`}✖ ${name} (12.5ms)\n  AssertionError [ERR_ASSERTION]: boom\n`).join('\n');
+test('892 WI-2 rerun plan: out-of-diff failures rerun their files once; the exact names are kept', () => {
+  const out = failingBlock([['scripts/tdd/b.test.mjs', 'b times out, first exec'], ['scripts/agents/a.test.mjs', 'a, with comma'],
+    ['scripts/tdd/b.test.mjs', 'b second']]);
+  assert.deepEqual(rerunPlan(out, ['docs/guide.md', 'App/MadoApp.swift'], '/wt'), {rerun: true, reason: null,
+    files: ['scripts/agents/a.test.mjs', 'scripts/tdd/b.test.mjs'],
+    tests: [{file: 'scripts/tdd/b.test.mjs', name: 'b times out, first exec'}, {file: 'scripts/agents/a.test.mjs', name: 'a, with comma'},
+      {file: 'scripts/tdd/b.test.mjs', name: 'b second'}]});
+});
+
+test('892 WI-2 rerun plan: an in-diff failure never reruns (file, sibling source, name, absolute and file:// paths)', () => {
+  const one = (file, name = 'x fails') => failingBlock([[file, name]]);
+  for (const [out, diff] of [
+    [one('scripts/tdd/b.test.mjs'), ['scripts/tdd/b.test.mjs']],
+    [one('scripts/tdd/b.test.mjs'), ['scripts/tdd/heavy-lock.py']],
+    [one('scripts/ci/x.test.mjs', 'pre-push keeps the hook'), ['scripts/agents/pre-push.test.mjs']],
+    [one('/wt/scripts/tdd/b.test.mjs'), ['scripts/tdd/b.test.mjs']],
+    [one('file:///wt/scripts/tdd/b.test.mjs'), ['scripts/tdd/b.test.mjs']],
+    [failingBlock([['scripts/agents/a.test.mjs', 'a'], ['scripts/tdd/b.test.mjs', 'b']]), ['scripts/tdd/b.test.mjs']]]) {
+    const plan = rerunPlan(out, diff, '/wt');
+    assert.equal(plan.rerun, false, `${diff} ${out}`);
+    assert.equal(plan.reason, 'in-diff=yes', `${diff}`);
+  }
+  // The same absolute path outside the diff reruns, as a repository-relative file.
+  assert.deepEqual(rerunPlan(one('/wt/scripts/tdd/b.test.mjs'), ['docs/x.md'], '/wt').files, ['scripts/tdd/b.test.mjs']);
+});
+
+test('892 WI-2 rerun plan: unknown failing tests or files never rerun', () => {
+  assert.deepEqual(rerunPlan('crashed before the reporter ran', [], '/wt'), {rerun: false, reason: 'failing tests unknown', files: [], tests: []});
+  assert.equal(rerunPlan(failingBlock([[null, 'no location']]), ['docs/x.md'], '/wt').reason, 'failed files unknown');
+  assert.equal(rerunPlan(failingBlock([['scripts/agents/a.test.mjs', 'a'], [null, 'no location']]), ['docs/x.md'], '/wt').reason, 'failed files unknown');
+  assert.equal(rerunPlan(failingBlock([['/elsewhere/scripts/tdd/b.test.mjs', 'b']]), ['docs/x.md'], '/wt').reason, 'failed files unknown');
+});
+
+test('892 review rerun plan: a failing block that does not account for every failure never reruns', () => {
+  const two = failingBlock([['scripts/tdd/b.test.mjs', 'b'], ['scripts/agents/a.test.mjs', 'a']]);
+  // One failure the parser cannot read (another duration format) must not let the readable one turn into a flake.
+  const partial = two.replace('✖ a (12.5ms)', '✖ a (1.2s)');
+  assert.deepEqual(rerunPlan(partial, ['docs/x.md'], '/wt'), {rerun: false, reason: 'failing tests incomplete', files: [], tests: []});
+  assert.equal(rerunPlan(two.replace('ℹ fail 2', 'ℹ fail 3'), ['docs/x.md'], '/wt').reason, 'failing tests incomplete');
+  assert.equal(rerunPlan(two.replace('ℹ fail 2\n', ''), ['docs/x.md'], '/wt').reason, 'failing tests incomplete');
+  assert.equal(rerunPlan(two, ['docs/x.md'], '/wt').rerun, true);
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): owner-gates lists the diff with the shared NUL-delimited arguments, and every
+// owner-gates-tools command reads that file with the shared parser. Real git, core.quotePath at its default.
+const tools = new URL('./owner-gates-tools.mjs', import.meta.url).pathname;
+const runGit = (cwd, ...args) => { const r = spawnSync('git', args, {cwd, encoding: 'utf8'}); assert.equal(r.status, 0, r.stderr); return r.stdout; };
+test('892 fix1 WI-1 owner-gates.sh lists the gated diff with the shared NUL-delimited arguments', () => {
+  const owner = fs.readFileSync(new URL('./owner-gates.sh', import.meta.url), 'utf8');
+  assert.ok(owner.includes(`git ${DIFF_NAME_ARGS.join(' ')} "$mb" HEAD > "$diff_file"`), 'owner-gates.sh uses DIFF_NAME_ARGS');
+  assert.doesNotMatch(owner, /git diff --name-only(?! -z)/, 'no display-form listing left');
+});
+
+test('892 fix1 WI-1 select and rerun-plan read real git -z output: a non-ASCII tooling path selects node', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'select-z-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  runGit(dir, 'init', '-q'); runGit(dir, 'config', 'user.email', 'f@example.invalid'); runGit(dir, 'config', 'user.name', 'F');
+  runGit(dir, 'config', 'core.quotePath', 'true');
+  fs.writeFileSync(path.join(dir, 'README'), 'x\n'); runGit(dir, 'add', '-A'); runGit(dir, 'commit', '-qm', 'base');
+  fs.mkdirSync(path.join(dir, 'App')); fs.mkdirSync(path.join(dir, 'scripts'));
+  fs.writeFileSync(path.join(dir, 'App/视图.swift'), 'x\n'); fs.writeFileSync(path.join(dir, 'scripts/测试.test.mjs'), 'x\n');
+  runGit(dir, 'add', '-A'); runGit(dir, 'commit', '-qm', 'change');
+  const diff = path.join(dir, 'diff.nul');
+  fs.writeFileSync(diff, runGit(dir, ...DIFF_NAME_ARGS, 'HEAD~1', 'HEAD'));
+  const sel = spawnSync(process.execPath, [tools, 'select', diff], {encoding: 'utf8'});
+  assert.equal(sel.status, 0, sel.stderr);
+  assert.match(sel.stdout, /^node=1$/m);
+  // rerun-plan: a test beside a changed helper is in the diff; the old newline split read one NUL-joined string.
+  const log = path.join(dir, 'node.log');
+  fs.writeFileSync(log, failingBlock([['scripts/tdd/b.test.mjs', 'b']]));
+  fs.writeFileSync(diff, 'App/x.swift\0scripts/tdd/helper.mjs\0');
+  const plan = spawnSync(process.execPath, [tools, 'rerun-plan', log, diff, dir], {encoding: 'utf8'});
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.equal(plan.stdout, 'skip in-diff=yes\n');
+});
+
+// #892 fix1 WI-2 (gpt F2 / opus M2): a node test's inputs outside its directory are not proven (imports, copied fixtures,
+// spawned scripts), so any changed tooling path counts as in the diff for every failing node test: no rerun, stays red.
+test('892 fix1 WI-2 a changed tooling file anywhere makes every node failure in-diff (this repo\'s cross-directory inputs)', () => {
+  for (const [file, changed] of [
+    // owner-gates-tools.test.mjs imports mado-verify's gate-policy.mjs.
+    ['.agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs', '.agents/skills/mado-verify/scripts/gate-policy.mjs'],
+    // owner-gates.test.mjs copies and runs these into its fixture.
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/heavy-lock.sh'],
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/tdd/heavy-lock.py'],
+    ['.agents/skills/mado-delegator/scripts/owner-gates.test.mjs', 'scripts/ci/native-inputs.mjs'],
+    ['scripts/tdd/b.test.mjs', '.github/workflows/ci.yml'], ['scripts/tdd/b.test.mjs', '.claude/tdd-guardian/config.json']]) {
+    assert.equal(failingTestInDiff({file, name: 'x'}, ['App/MadoApp.swift', changed]), true, `${file} <- ${changed}`);
+    assert.deepEqual(rerunPlan(failingBlock([[file, 'x']]), [changed], '/wt'), {rerun: false, reason: 'in-diff=yes', files: [], tests: []}, changed);
+  }
+  // A product-only diff still allows the one rerun.
+  assert.equal(failingTestInDiff({file: 'scripts/tdd/b.test.mjs', name: 'x'}, ['App/MadoApp.swift', 'docs/guide.md', 'Packages/MadoKit/Sources/MadoCore/A.swift']), false);
+});
+
+test('892 fix1 WI-2 owner-gates.sh and SKILL.md no longer claim a product-only diff cannot change a tooling test', () => {
+  const owner = fs.readFileSync(new URL('./owner-gates.sh', import.meta.url), 'utf8');
+  const skill = fs.readFileSync(new URL('../../mado-verify/SKILL.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(owner, /cannot change a tooling test/);
+  assert.match(owner, /node tests also read product files/);
+  assert.match(skill, /node tests also read product files/);
+  assert.match(skill, /any changed path under `scripts\/`, `\.agents\/`, `\.github\/` or `\.claude\/` puts every failing node test in the diff/);
+});
+
+// #892 fix1 L1 (opus L1): a failing subtest inside a parent. Real node v22.22.3 spec output (fixtures/spec-subtest-failure.log,
+// paths rewritten): `ℹ fail 2` counts the child and its parent, but the failing block lists only the child, so the plan is
+// incomplete and there is no rerun. This fails closed: such a failure stays red.
+test('892 fix1 L1 a failing subtest inside a parent is never rerun: the block does not account for the parent', () => {
+  const out = fixture('spec-subtest-failure.log');
+  assert.match(out, /^ℹ fail 2$/m);
+  assert.equal((out.split(/^✖ failing tests:\s*$/m)[1].match(/^✖ /gm) ?? []).length, 1);
+  assert.deepEqual(rerunPlan(out, ['docs/guide.md'], '/wt'), {rerun: false, reason: 'failing tests incomplete', files: [], tests: []});
+});
+
+// #892 fix1 review (tdd-reviewer L2): an empty (or unreadable) diff fails closed here too, as in nodeLaneRequired.
+test('892 fix1 review an empty diff puts every node failure in the diff', () => {
+  assert.equal(failingTestInDiff({file: 'scripts/tdd/b.test.mjs', name: 'b'}, []), true);
+  assert.equal(rerunPlan(failingBlock([['scripts/tdd/b.test.mjs', 'b']]), [], '/wt').reason, 'in-diff=yes');
 });

@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { gateVerdict, notVerifiedGates } from './gate-policy.mjs';
+import os from 'node:os';
+import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates, reviewRefKind } from './gate-policy.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
@@ -14,7 +15,9 @@ function privacyHits(body) {
 }
 function render(d) {
   const sha7 = d.head.slice(0, 7);
-  const gates = d.gates.map(g => g.reusedFrom
+  const gates = d.gates.map(g => g.disposition && g.attempts?.length === 2
+    ? `- \`${g.command}\` → exit ${g.exitCode} (attempt 1, ${g.attempts[0].log}: ${(g.attempts[0].tests ?? []).map(t => t.name).join('; ')}); rerun of ${(g.attempts[1].files ?? []).join(', ')} exit ${g.attempts[1].exitCode} (${g.attempts[1].log}); FLAKY, reviewed disposition: issue #${g.disposition.issue}, author ${g.disposition.author}, owner ${g.disposition.owner}, reviewed by ${g.disposition.reviewedBy} (${g.disposition.reviewRef}), expires ${g.disposition.expires}; not a pass`
+    : g.reusedFrom
     ? `- \`${g.name}\` → reused from ${g.reusedFrom}; ${g.keyLine || 'prior green result'}`
     : g.scopeSkip ? `- \`${g.name}\` → n/a: ${g.scopeSkip}`
     : `- \`${g.command}\` → exit ${g.exitCode}; ${g.keyLine || 'no decisive line recorded'}`).join('\n');
@@ -64,9 +67,42 @@ function check(args) {
   else if (record.gates?.some(g => g.reusedFrom !== undefined) ||
            Object.values(record.lanes || {}).some(lane => lane.status === 'reused') || record.ciBinding)
     throw new Error('reused lanes require a verified linked record');
+  // #892: a node scope skip (implementer run) and a flake disposition are judged against the record's base..head diff.
+  const node = Array.isArray(record.gates) ? record.gates.find(g => g?.name === 'node') : undefined;
+  if (node?.scopeSkip || node?.disposition) {
+    // #892 fix1: NUL-delimited raw paths (gate-policy.mjs listDiffPaths), not Git's quoted display form.
+    const files = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base) ? listDiffPaths(worktree, record.base, named) : null;
+    const what = node.scopeSkip ? 'node scope skip' : 'node flake disposition';
+    if (files === null) throw new Error(`${what}: cannot list the diff ${record.base}..${named}`);
+    // #892 fix1 WI-4: only an implementer run (owner-gates.sh --role implementer, written to the record) may skip node.
+    if (node.scopeSkip && record.role !== 'implementer')
+      throw new Error(`node scope skip refused: the record role is ${JSON.stringify(record.role ?? null)}, not implementer; only an owner-gates.sh --role implementer run skips node`);
+    if (node.scopeSkip && nodeLaneRequired(files))
+      throw new Error('node scope skip refused: the diff is empty or touches scripts/, .agents/, .github/ or .claude/, so the node lane must run');
+    for (const t of node.disposition?.tests ?? [])
+      if (t && typeof t.file === 'string' && typeof t.name === 'string' && failingTestInDiff(t, files))
+        throw new Error(`node flake disposition for "${t.name}" (${t.file}) is in the diff; an in-diff failure never gets a rerun or a disposition`);
+    // #892 fix1 WI-3: a delegator summary reference is opened here; it must exist and name this head. A comment URL cannot
+    // be fetched offline: the WARNING below prints it for the delegator to open.
+    const ref = node.disposition?.reviewRef;
+    if (reviewRefKind(ref) === 'path') {
+      const file = path.join(os.homedir(), ref.slice(2));
+      let stat;
+      try { stat = fs.lstatSync(file); } catch { throw new Error(`node flake disposition reviewRef ${ref} does not exist`); }
+      if (!stat.isFile()) throw new Error(`node flake disposition reviewRef ${ref} is not a regular file (no symlinks)`);
+      // review H1: the reviewer's own marker line, never written by owner-gates, binds the note to this head and reviewer.
+      const marker = `flake-review: head=${named} reviewedBy=${node.disposition.reviewedBy}`;
+      if (!fs.readFileSync(file, 'utf8').split('\n').some(line => line.trimEnd() === marker))
+        throw new Error(`node flake disposition reviewRef ${ref} has no line "${marker}"`);
+    }
+  }
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
+  for (const gate of flakyGates(record.gates)) {
+    const d = gate.disposition;
+    console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} author ${d.author} owner ${d.owner} reviewed by ${d.reviewedBy} (${d.reviewRef}) expires ${d.expires}`);
+  }
   for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is binding for the retained App group, hosted CI binding for the hosted group`);
 }
 try {
@@ -75,6 +111,8 @@ try {
   const d = JSON.parse(fs.readFileSync(input, 'utf8'));
   if (!/^[0-9a-f]{40}$/.test(d.head) || !Number.isSafeInteger(d.issue) || d.issue < 1 || !Array.isArray(d.gates) || !Array.isArray(d.byType) || !Array.isArray(d.notVerified)) throw new Error('invalid evidence fields');
   if (d.head !== head()) throw new Error('evidence head does not match current HEAD');
+  // #892 fix1 WI-4: the owner-gates role from the summary's role= line.
+  if (d.role !== undefined && d.role !== 'implementer' && d.role !== 'delegator') throw new Error(`evidence role must be implementer or delegator (the summary's role= line), got ${JSON.stringify(d.role)}`);
   if (d.link) {
     if (d.head !== d.link.newHead || d.base !== d.link.newBase) throw new Error('linked record head/base mismatch');
     const decision = evaluateReuse(process.cwd(), d.link.oldBase, d.link.newBase, d.link.oldHead, d.link.newHead);
@@ -111,9 +149,9 @@ try {
       if (d.gates.some(g => g.reusedFrom !== undefined)) throw new Error('reused gate requires a verified link');
       base = spawnSync('git', ['merge-base', 'origin/main', d.head], { encoding: 'utf8' }).stdout.trim();
       fingerprints = directFingerprints(cwd, d.head);
-      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
+      lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.disposition ? 'flaky-disposition' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
-    const record = { head: d.head, base, fingerprints, link, lanes,
+    const record = { head: d.head, base, ...(d.role ? { role: d.role } : {}), fingerprints, link, lanes,
       ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,
       problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() };
     if (link) verifyLinkedRecord(cwd, record);

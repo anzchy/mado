@@ -12,7 +12,7 @@ const owner = fileURLToPath(new URL('./owner-gates.sh', import.meta.url));
 function fixture(t, mode = 'pass', covered = 2, npmInstalled = true, options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const rel of ['.agents/skills/mado-delegator/scripts/owner-gates.sh', '.agents/skills/mado-delegator/scripts/owner-gates-tools.mjs', 'scripts/ci/native-inputs.mjs', 'scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/status-channel.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
+  for (const rel of ['.agents/skills/mado-delegator/scripts/owner-gates.sh', '.agents/skills/mado-delegator/scripts/owner-gates-tools.mjs', 'scripts/ci/native-inputs.mjs', '.agents/skills/mado-verify/scripts/gate-policy.mjs', 'scripts/heavy-lock.sh', 'scripts/tdd/heavy-lock.py', 'scripts/ci/test-watchdog.mjs', 'scripts/ci/coverage-atomic.mjs', 'scripts/tdd/unit-lane.mjs', 'scripts/tdd/status-channel.mjs', 'scripts/tdd/unit-locked.mjs', 'scripts/tdd/swift-lcov.sh']) {
     const dest = path.join(dir, rel); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(root, rel), dest);
   }
   if (process.env.OWNER_GATES_SCRIPT_OVERRIDE)
@@ -57,8 +57,11 @@ else if(process.argv[2]==='--test'){
   const c=require('child_process').spawnSync(process.env.COMPETITOR_LOCK,[process.execPath,'--test',process.env.COMPETITOR_SCRIPT],{env,encoding:'utf8',timeout:30000});
   record.competitor={status:c.status,stderr:c.stderr};
  }
+ const attempt=fs.existsSync(process.env.NODE_RECORDS)?fs.readFileSync(process.env.NODE_RECORDS,'utf8').trim().split('\\n').filter(Boolean).length:0;
  fs.appendFileSync(process.env.NODE_RECORDS,JSON.stringify(record)+'\\n');
  if(process.env.MODE==='node-fail')process.exit(1);
+ // #892: NODE_SCRIPT is a JSON list of {code,out}, one per node --test invocation (attempt 1, then the rerun).
+ if(process.env.NODE_SCRIPT){const step=JSON.parse(process.env.NODE_SCRIPT)[attempt]??{code:0,out:''};process.stdout.write(step.out);process.exit(step.code);}
 }
 else if(process.argv[2]==='scripts/tdd/app-lane.mjs'){
  const hosted=process.argv[3]?.includes('Hosted') ?? false;
@@ -81,10 +84,14 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
   // #891: the competitor lane's test file only leaves a marker when it actually runs.
   fs.writeFileSync(path.join(dir, 'competitor.test.mjs'), `import fs from 'node:fs';\nfs.writeFileSync(process.env.COMPETITOR_MARKER, 'ran');\n`);
   const shell = path.join(dir, 'invoke.zsh');
-  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then print $DIFF_PATH; fi;  }
+  fs.writeFileSync(shell, `git() { if [[ "$1" == rev-parse ]]; then print fixture-sha; elif [[ "$1" == merge-base ]]; then print fixture-base; elif [[ "$1" == diff && "$2" == --name-only ]]; then
+  # #892 fix1: like git, -z prints raw NUL-terminated paths; without it, a path with non-ASCII bytes is quoted.
+  if [[ " $* " == *" -z "* ]]; then if [[ -n $DIFF_PATH ]]; then print -rn -- "$DIFF_PATH"$'\\0'; fi
+  elif [[ -n \${DIFF_PATH//[ -~]/} ]]; then print -r -- "\\"$DIFF_PATH\\""; else print -r -- $DIFF_PATH; fi
+fi;  }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
-source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
+source "$OWNER" \${=OWNER_ARGS} "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   // #891: start from fixtureEnv so the caller's heavy-lock handoff and timing overrides never reach the
   // fixture's own top-level lock, then apply this fixture's private values.
@@ -97,10 +104,16 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
   env.OWNER_GATES_TOOL_PATH = bin;
   env.OWNER_GATES_SYSCTL = path.join(bin, 'sysctl');
   env.OWNER_GATES_PS = path.join(bin, 'fakeps');
+  // #892 fix1: the caller's role (an implementer's owner-gates run) never reaches the fixture; tests set it via options.env.
+  env.OWNER_GATES_ROLE = '';
+  // #892 fix1 WI-4: the role is an argument (`--role implementer`), never the environment.
+  env.OWNER_ARGS = (options.args ?? []).join(' ');
   Object.assign(env, options.env ?? {});
   if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
-  const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
+  // #892 fix1: a run that wrote no summary (usage error before it) gives '' so the assertions, not a throw, report it.
+  const summaryFile = path.join(out, 'run-summary.txt');
+  const summary = fs.existsSync(summaryFile) ? fs.readFileSync(summaryFile, 'utf8') : '';
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);
   if (process.env.OWNER_GATES_SAMPLE === '1') for (const f of fs.readdirSync(out)) console.log(`LOG ${f}\n${fs.readFileSync(path.join(out, f), 'utf8')}`);
   return { dir, out, env, result, nodeRecords: env.NODE_RECORDS, competitorMarker: env.COMPETITOR_MARKER, xcodeMarker: env.XCODE_MARKER, xcodegenMarker: env.XCODEGEN_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
@@ -118,7 +131,9 @@ test('owner node lane runs the name-check tests required by CI', t => {
 });
 
 test('invalid select output refuses before every lane', t => {
-  for (const selectOutput of ['native=0\nagents=0', 'native=maybe\nagents=0\ntdd=0', 'native=0\nnative=1\nagents=0\ntdd=0']) {
+  for (const selectOutput of ['native=0\nagents=0', 'native=maybe\nagents=0\ntdd=0\nnode=1', 'native=0\nnative=1\nagents=0\ntdd=0',
+    // #892: the selection has a node line; the old three-line shape and a bad node value are refused.
+    'native=0\nagents=0\ntdd=0', 'native=0\nagents=0\ntdd=0\nnode=2', 'native=0\nagents=0\ntdd=0\nnode=yes', 'native=0\nagents=0\ntdd=0\nnode=']) {
     const f = fixture(t, 'pass', 2, true, {selectOutput});
     assert.equal(f.result.status, 2, f.result.stderr);
     assert.match(f.summary, /^owner-gates: refused: invalid suite selection/m);
@@ -359,4 +374,171 @@ test('891 static sysctl and ps fakes are linked checked-in executables', t => {
   }
   assert.match(f.summary, /^load=4\.2 mem_free=55% pressure=1$/m);
   assert.match(f.summary, /^competing-heavy=101:swift-frontend$/m);
+});
+
+// #892 WI-1 (owner 2026-11-25): OWNER_GATES_ROLE=implementer runs the node lane only for diffs under scripts/, .agents/,
+// .github/ or .claude/; the delegator's run (role unset or delegator) always runs it. Every other lane runs either way.
+const nodeRuns = f => fs.existsSync(f.nodeRecords) ? fs.readFileSync(f.nodeRecords, 'utf8').trim().split('\n').filter(Boolean).length : 0;
+test('892 WI-1 an implementer run skips the node lane on a product-only diff and says so', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', args: ['--role', 'implementer']});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=implementer$/m);
+  assert.match(f.summary, /^node=skipped \(implementer run; diff touches no scripts\/, \.agents\/, \.github\/ or \.claude\/ path; the delegator's owner-gates run and GitHub CI cover node\)$/m);
+  assert.equal(nodeRuns(f), 0, 'no node --test invocation');
+  for (const lane of ['swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests-retained', 'apptests', 'ledger', 'diffcheck', 'design'])
+    assert.match(f.summary, new RegExp(`^${lane}=0( |$)`, 'm'), lane);
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('892 WI-1 an implementer run on a tooling diff and every delegator run still run the node lane', t => {
+  // #892 fix1 WI-4: the role comes from `--role`, not OWNER_GATES_ROLE.
+  for (const [diff, args] of [['scripts/ci/foo.mjs', ['--role', 'implementer']], ['.claude/agents/x.md', ['--role', 'implementer']],
+    ['', ['--role', 'implementer']],
+    ['App/MadoApp.swift', []], ['App/MadoApp.swift', ['--role', 'delegator']]]) {
+    const f = fixture(t, 'pass', 2, true, {diff, args});
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    assert.match(f.summary, /^node=0$/m, `${diff} ${args}`);
+    assert.equal(nodeRuns(f), 1, `${diff} ${args}`);
+    assert.match(f.summary, new RegExp(`^role=${args[1] ?? 'delegator'}$`, 'm'));
+  }
+});
+
+test('892 WI-1 an unknown --role is refused before any lane', t => {
+  const f = fixture(t, 'pass', 2, true, {args: ['--role', 'auditor']});
+  assert.equal(f.result.status, 2, f.result.stderr + f.summary);
+  assert.match(f.summary, /refused: .*--role auditor/);
+  assert.doesNotMatch(f.summary, /^DONE$/m);
+  assert.doesNotMatch(f.summary, /^(swift|xcodegen|node)=/m);
+});
+
+// #892 WI-2: a node failure outside the diff gets exactly one serial rerun of only the failed files, under the heavy lock;
+// both attempts and the exact test names go to the summary. A passing rerun is a flake candidate and the run stays exit 1.
+const block = tests => `ℹ fail ${tests.length}\n\n✖ failing tests:\n\n` + tests.map(([file, name]) => `test at ${file}:3:1\n✖ ${name} (12.5ms)\n  AssertionError: boom\n`).join('\n');
+const passed = n => `ℹ tests ${n}\nℹ pass ${n}\nℹ fail 0\n`;
+const tddFile = 'scripts/tdd/fixture.test.mjs', agentsFile = 'scripts/agents/fixture.test.mjs';
+const records = f => fs.existsSync(f.nodeRecords) ? fs.readFileSync(f.nodeRecords, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
+const script = steps => ({NODE_SCRIPT: JSON.stringify(steps.map(([code, out]) => ({code, out})))});
+
+test('892 WI-2 an out-of-diff failure reruns only its file once, serially, and a pass is a flake candidate, not green', t => {
+  const f = fixture(t, 'pass', 2, true, {env: script([[1, block([[tddFile, 'first exec, slow']])], [0, passed(1)]])});
+  assert.equal(f.result.status, 1, 'never silently green: ' + f.result.stderr + f.summary);
+  const runs = records(f);
+  assert.equal(runs.length, 2, 'attempt 1 and exactly one rerun');
+  assert.deepEqual(runs[1].argv, ['--test', '--test-concurrency=1', '--test-reporter=spec', tddFile]);
+  assert.deepEqual(runs[1].env, {MADO_HEAVY_LOCK_HELD: '', MADO_HEAVY_CONTROL_FD: '', MADO_HEAVY_FLOCK_EXPECTED: '', MDPRO_HEAVY_LOCK_HELD: ''});
+  assert.match(f.summary, /^node=1$/m);
+  assert.match(f.summary, /^node-attempt1=1 log=run-node\.log files=scripts\/tdd\/fixture\.test\.mjs$/m);
+  assert.match(f.summary, /^node-failed-test=scripts\/tdd\/fixture\.test\.mjs :: first exec, slow$/m);
+  assert.match(f.summary, /^node-rerun=0 log=run-node-rerun\.log files=scripts\/tdd\/fixture\.test\.mjs$/m);
+  assert.match(f.summary, /^node-verdict=flaky \(attempt1=1 rerun=0\); red until a reviewed disposition is recorded \(exact test, issue, owner, expires, failed attempt run-node\.log\)$/m);
+  assert.match(fs.readFileSync(path.join(f.out, 'run-node.log'), 'utf8'), /first exec, slow/, 'the failed attempt is retained');
+  assert.match(fs.readFileSync(path.join(f.out, 'run-node-rerun.log'), 'utf8'), /ℹ pass 1/);
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('892 WI-2 a rerun that fails, times out on the lock or passes nothing stays red', t => {
+  for (const [rerun, code] of [[[1, block([[tddFile, 'first exec, slow']])], 1], [[75, '[heavy-lock] lock wait timed out after 1s\n'], 75],
+    [[0, 'ℹ tests 0\nℹ pass 0\nℹ fail 0\n'], 1]]) {
+    const f = fixture(t, 'pass', 2, true, {env: script([[1, block([[tddFile, 'first exec, slow']])], rerun])});
+    assert.equal(f.result.status, 1, f.summary);
+    assert.equal(records(f).length, 2);
+    assert.match(f.summary, new RegExp(`^node-rerun=${code} `, 'm'));
+    assert.match(f.summary, new RegExp(`^node-verdict=failed \\(attempt1=1 rerun=${code}\\)$`, 'm'));
+    assert.doesNotMatch(f.summary, /^node-verdict=flaky/m);
+  }
+});
+
+test('892 WI-2 two failing files, one flaky and one real: both rerun together and the lane stays failed', t => {
+  const f = fixture(t, 'pass', 2, true, {env: script([[1, block([[tddFile, 'flaky'], [agentsFile, 'real']])], [1, block([[agentsFile, 'real']])]])});
+  assert.equal(f.result.status, 1, f.summary);
+  const runs = records(f);
+  assert.equal(runs.length, 2);
+  assert.deepEqual(runs[1].argv.slice(3), [agentsFile, tddFile]);
+  assert.match(f.summary, /^node-verdict=failed \(attempt1=1 rerun=1\)$/m);
+});
+
+test('892 WI-2 an in-diff or unlocated failure never gets a rerun', t => {
+  for (const [diff, out, reason] of [[tddFile, block([[tddFile, 'mine']]), 'in-diff=yes'], ['scripts/tdd/other.mjs', block([[tddFile, 'sibling']]), 'in-diff=yes'],
+    ['Packages/MadoKit/Sources/MadoCore/Fake.swift', 'crashed\n', 'failing tests unknown']]) {
+    const f = fixture(t, 'pass', 2, true, {diff, env: script([[1, out], [0, passed(1)]])});
+    assert.equal(f.result.status, 1, f.summary);
+    assert.equal(records(f).length, 1, `${diff}: no rerun`);
+    assert.match(f.summary, new RegExp(`^node-rerun=skipped \\(${reason}\\)$`, 'm'));
+    assert.match(f.summary, /^node-verdict=failed \(attempt1=1; no rerun\)$/m);
+    assert.equal(fs.existsSync(path.join(f.out, 'run-node-rerun.log')), false);
+  }
+});
+
+test('892 WI-2 a passing node lane has no rerun lines', t => {
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.summary);
+  assert.equal(records(f).length, 1);
+  assert.doesNotMatch(f.summary, /^node-(rerun|verdict|attempt1)/m);
+});
+
+test('892 review the rerun holds the shared heavy lock, and test names are written verbatim', t => {
+  const name = String.raw`name with \n node=0 and \c cut`;
+  const f = fixture(t, 'pass', 2, true, {env: {...script([[1, block([[tddFile, name]])], [0, passed(1)]]), PROBE_COMPETITOR: '1'}});
+  assert.equal(f.result.status, 1, f.summary);
+  const runs = records(f);
+  assert.equal(runs.length, 2);
+  // A second lane on the same heavy.lock waited and timed out while the rerun ran: the rerun held the lock.
+  assert.equal(runs[1].competitor.status, 75, runs[1].competitor.stderr);
+  assert.equal(fs.existsSync(f.competitorMarker), false);
+  assert.ok(f.summary.split('\n').includes(`node-failed-test=${tddFile} :: ${name}`), f.summary);
+  assert.equal(f.summary.match(/^node=/gm).length, 1, 'no injected node= line');
+});
+
+// #892 fix1: an implementer's owner-gates run (OWNER_GATES_ROLE=implementer) runs this file in its node lane; the fixture's
+// own owner-gates run must not inherit that role, or it would skip the node lane every other test here expects.
+test('892 fix1 fixture ignores the caller OWNER_GATES_ROLE', t => {
+  const saved = process.env.OWNER_GATES_ROLE;
+  t.after(() => { if (saved === undefined) delete process.env.OWNER_GATES_ROLE; else process.env.OWNER_GATES_ROLE = saved; });
+  process.env.OWNER_GATES_ROLE = 'implementer';
+  const f = fixture(t);
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=delegator$/m);
+  assert.match(f.summary, /^node=0$/m);
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): a non-ASCII path is read from `git diff -z`, not Git's quoted display form, so it
+// selects the node lane for an implementer and the App-facing lanes for App/ paths.
+test('892 fix1 WI-1 non-ASCII paths select the node lane and the App-facing build', t => {
+  const tooling = fixture(t, 'pass', 2, true, {diff: 'scripts/测试.test.mjs', args: ['--role', 'implementer']});
+  assert.equal(tooling.result.status, 0, tooling.result.stderr + tooling.summary);
+  assert.match(tooling.summary, /^node=0$/m);
+  assert.equal(nodeRuns(tooling), 1);
+  const app = fixture(t, 'pass', 2, true, {diff: 'App/视图.swift'});
+  assert.equal(app.result.status, 0, app.result.stderr + app.summary);
+  assert.match(fs.readFileSync(app.xcodeMarker, 'utf8'), /^build-for-testing$/m);
+  assert.match(app.summary, /^apptests-retained=0 /m);
+});
+
+// #892 fix1 WI-4 (gpt F4 / opus L4): an implementer run is chosen by an explicit `--role implementer` argument. An
+// OWNER_GATES_ROLE left in the delegator's shell is ignored with a warning, so the delegator's run never skips node.
+test('892 fix1 WI-4 an ambient OWNER_GATES_ROLE=implementer is ignored with a warning; the run is the delegator\'s', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', env: {OWNER_GATES_ROLE: 'implementer'}});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=delegator$/m);
+  assert.match(f.summary, /^role-env-ignored=implementer \(OWNER_GATES_ROLE is not read; pass --role implementer\)$/m);
+  assert.match(f.result.stderr, /owner-gates: warning: OWNER_GATES_ROLE=implementer ignored/);
+  assert.match(f.summary, /^node=0$/m);
+  assert.equal(nodeRuns(f), 1);
+});
+
+test('892 fix1 WI-4 --role needs implementer or delegator, and the positional arguments still follow', t => {
+  for (const args of [['--role', 'Implementer'], ['--role', 'IMPLEMENTER'], ['--role', 'implementer,delegator']]) {
+    const f = fixture(t, 'pass', 2, true, {args});
+    assert.equal(f.result.status, 2, `${args}: ${f.result.stderr}${f.summary}`);
+    assert.match(f.summary, /refused: --role .* is not implementer or delegator/, `${args}`);
+    assert.doesNotMatch(f.summary, /^DONE$/m, `${args}`);
+  }
+  // A bare --role (no value, no positional arguments) is a usage error before any summary.
+  const bare = spawnSync('/bin/zsh', [owner, '--role'], {encoding: 'utf8', env: fixtureEnv({})});
+  assert.equal(bare.status, 2);
+  assert.match(bare.stdout, /^usage: owner-gates\.sh \[--role implementer\|delegator\] <worktree>/);
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', args: ['--role', 'implementer'], env: {OWNER_GATES_ROLE: 'delegator'}});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=implementer$/m);
+  assert.match(f.summary, /^node=skipped /m);
 });

@@ -85,3 +85,423 @@ test('SKILL.md step 1 points to the list and the exact two-rerun procedure, with
   assert.doesNotMatch(owner, /known-flakes|retry/i);
   assert.match(fs.readFileSync(path.join(root, 'docs/agents/ci-flake-repro.md'), 'utf8'), /known-flakes\.json/);
 });
+
+// #892 (owner 2026-11-25): the one bounded exception to "no flake exception". A node lane that failed outside the diff and
+// passed its single serial rerun is accepted only through a reviewed disposition: advisory, never silently green.
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
+import { FLAKE_ISSUES, gateVerdict, MANDATORY_GATES } from '../scripts/gate-policy.mjs';
+
+const day = '2026-11-25';
+const failing = [{ file: 'scripts/tdd/b.test.mjs', name: 'b first exec, slow' }];
+const flakyNode = (change = g => g) => change({
+  name: 'node', command: 'owner-gates.sh (node lane)', exitCode: 1, keyLine: 'node=1',
+  attempts: [{ exitCode: 1, log: 'i9-node.log', tests: structuredClone(failing) },
+    { exitCode: 0, log: 'i9-node-rerun.log', files: ['scripts/tdd/b.test.mjs'] }],
+  // #892 fix1 WI-3: author (who wrote the record), owner (who fixes the flake) and reviewedBy are three parties, and the
+  // review has a reference that can be opened.
+  disposition: { kind: 'flaky', tests: structuredClone(failing), issue: 891, author: 'opus-imple-1', owner: 'gpt-imple-1', reviewedBy: 'delegator',
+    reviewRef: 'https://github.com/anzchy/mado/issues/891#issuecomment-123', expires: '2026-12-01', failedAttempt: 'i9-node.log' },
+});
+const ladder = node => MANDATORY_GATES.map(name => name === 'node' ? node : { name, command: name, exitCode: 0 });
+const verdict = (node, today = day) => gateVerdict(ladder(node), { today });
+
+test('892 WI-3 a reviewed flake disposition satisfies the node gate; an unexplained non-zero node lane does not', () => {
+  assert.deepEqual(verdict(flakyNode()), { complete: true, problems: [] });
+  assert.match(verdict({ name: 'node', command: 'node', exitCode: 1 }).problems.join('\n'), /failed node: 1/);
+  assert.match(verdict(flakyNode(g => { delete g.disposition; return g; })).problems.join('\n'), /failed node: 1/);
+});
+
+test('892 WI-3 the disposition needs an expiry within 30 days', () => {
+  for (const [expires, ok] of [['2026-11-25', true], ['2026-12-25', true], ['2026-12-26', false], ['2026-11-24', false],
+    ['2026-02-30', false], ['2026-12-1', false], [undefined, false]]) {
+    const v = verdict(flakyNode(g => { if (expires === undefined) delete g.disposition.expires; else g.disposition.expires = expires; return g; }));
+    assert.equal(v.complete, ok, `${expires}: ${v.problems}`);
+    if (!ok) assert.match(v.problems.join('\n'), /expires/, `${expires}`);
+  }
+});
+
+test('892 WI-3 the disposition names an issue, an owner, a reviewer and the retained failed attempt', () => {
+  for (const [label, change] of [
+    ['issue 0', g => { g.disposition.issue = 0; }], ['issue -1', g => { g.disposition.issue = -1; }], ['issue text', g => { g.disposition.issue = '#123'; }],
+    ['no issue', g => { delete g.disposition.issue; }], ['blank owner', g => { g.disposition.owner = ' '; }], ['no owner', g => { delete g.disposition.owner; }],
+    ['no reviewer', g => { delete g.disposition.reviewedBy; }], ['blank reviewer', g => { g.disposition.reviewedBy = ''; }],
+    ['other failed attempt', g => { g.disposition.failedAttempt = 'i9-node-rerun.log'; }], ['kind', g => { g.disposition.kind = 'quarantine'; }]]) {
+    const v = verdict(flakyNode(g => { change(g); return g; }));
+    assert.equal(v.complete, false, label);
+  }
+});
+
+test('892 WI-3 exactly two attempts: the failed first equals the gate exit, the single rerun passed the same files', () => {
+  for (const [label, change] of [
+    ['one attempt', g => { g.attempts.pop(); }], ['three attempts', g => { g.attempts.push({ exitCode: 0, log: 'x', files: ['scripts/tdd/b.test.mjs'] }); }],
+    ['rerun failed', g => { g.attempts[1].exitCode = 1; }], ['first passed', g => { g.attempts[0].exitCode = 0; }],
+    ['first differs from gate', g => { g.attempts[0].exitCode = 2; }], ['rerun other files', g => { g.attempts[1].files = ['scripts/tdd/c.test.mjs']; }],
+    ['rerun extra files', g => { g.attempts[1].files.push('scripts/tdd/c.test.mjs'); }], ['no failing tests', g => { g.attempts[0].tests = []; }],
+    ['no attempts', g => { delete g.attempts; }]]) {
+    assert.equal(verdict(flakyNode(g => { change(g); return g; })).complete, false, label);
+  }
+});
+
+test('892 WI-3 the disposition covers exactly the failing tests, in both directions', () => {
+  const two = g => { const extra = { file: 'scripts/agents/a.test.mjs', name: 'a' }; g.attempts[0].tests.push(extra);
+    g.attempts[1].files = ['scripts/agents/a.test.mjs', 'scripts/tdd/b.test.mjs']; g.disposition.tests.push({ ...extra }); return g; };
+  assert.equal(verdict(flakyNode(two)).complete, true);
+  assert.equal(verdict(flakyNode(g => { two(g); g.disposition.tests.pop(); return g; })).complete, false, 'one failing test not disposed');
+  assert.equal(verdict(flakyNode(g => { g.disposition.tests.push({ file: 'scripts/tdd/b.test.mjs', name: 'other' }); return g; })).complete, false, 'extra test');
+  assert.equal(verdict(flakyNode(g => { g.disposition.tests[0].name = 'b first exec'; return g; })).complete, false, 'inexact name');
+});
+
+test('892 WI-3 only the node gate carries a disposition, and only when it failed', () => {
+  const passing = flakyNode(g => { g.exitCode = 0; return g; });
+  assert.equal(gateVerdict(ladder(passing), { today: day }).complete, false, 'disposition on a passing node gate');
+  const swift = { ...flakyNode(), name: 'swift' };
+  const gates = ladder({ name: 'node', command: 'node', exitCode: 0 }).map(g => g.name === 'swift' ? swift : g);
+  assert.match(gateVerdict(gates, { today: day }).problems.join('\n'), /swift/);
+});
+
+// evidence.mjs check on a real git repository: the record's base..head diff decides in-diff and the node scope skip.
+const evidence = path.join(skillDir, 'scripts/evidence.mjs');
+const git = (dir, ...args) => { const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+function repo(t, changed) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-892-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  git(dir, 'init', '-q'); git(dir, 'config', 'user.email', 'fixture@example.invalid'); git(dir, 'config', 'user.name', 'Fixture');
+  fs.writeFileSync(path.join(dir, 'README'), 'base\n'); git(dir, 'add', 'README'); git(dir, 'commit', '-qm', 'base');
+  const base = git(dir, 'rev-parse', 'HEAD');
+  git(dir, 'update-ref', 'refs/remotes/origin/main', base);
+  for (const file of changed) { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), 'x\n'); git(dir, 'add', file); }
+  git(dir, 'commit', '-qm', 'change', '--allow-empty');
+  return { dir, base, head: git(dir, 'rev-parse', 'HEAD') };
+}
+const utcToday = () => new Date().toISOString().slice(0, 10);
+const inDays = n => new Date(Date.parse(`${utcToday()}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+function check(r, node, base = r.base, extra = {}) {
+  const record = { head: r.head, base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1', gates: ladder(node), ...extra };
+  fs.mkdirSync(path.join(r.dir, '.build/mado-verify'), { recursive: true });
+  fs.writeFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), JSON.stringify(record));
+  return spawnSync(process.execPath, [evidence, 'check', '--head', r.head, '--issue', '892', '--worktree', r.dir], { encoding: 'utf8' });
+}
+const liveFlaky = () => flakyNode(g => { g.disposition.expires = inDays(7); return g; });
+
+test('892 WI-3 check accepts a reviewed disposition outside the diff and warns that it is a flake, not a pass', t => {
+  // #892 fix1 WI-2: a tooling path in the diff now puts every node failure in the diff, so this diff is product-only.
+  const r = repo(t, ['App/MadoApp.swift', 'docs/guide.md']);
+  const ok = check(r, liveFlaky());
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /^OK head=/m);
+  assert.match(ok.stdout, /^WARNING node FLAKY: b first exec, slow \(scripts\/tdd\/b\.test\.mjs\) failed attempt 1 \(i9-node\.log\), passed its one serial rerun; disposition issue #891 author opus-imple-1 owner gpt-imple-1 reviewed by delegator \(https:\/\/github\.com\/anzchy\/mado\/issues\/891#issuecomment-123\) expires \d{4}-\d{2}-\d{2}$/m);
+  const red = check(r, { name: 'node', command: 'node', exitCode: 1 });
+  assert.equal(red.status, 1);
+  assert.match(red.stderr, /failed node: 1/);
+});
+
+test('892 WI-3 check rejects a disposition for a test the diff touches, its file or its directory', t => {
+  for (const changed of [['scripts/tdd/b.test.mjs'], ['scripts/tdd/heavy-lock.py']]) {
+    const r = repo(t, changed);
+    const res = check(r, liveFlaky());
+    assert.equal(res.status, 1, `${changed}: ${res.stdout}`);
+    assert.match(res.stderr, /disposition .*in the diff/, `${changed}`);
+  }
+});
+
+test('892 WI-1 check accepts a node scope skip only when the diff selects no node lane', t => {
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0,
+    scopeSkip: 'implementer run; diff touches no scripts/, .agents/, .github/ or .claude/ path' };
+  const product = repo(t, ['App/MadoApp.swift', 'Packages/MadoKit/Sources/MadoCore/A.swift']);
+  // #892 fix1 WI-4: the record says the implementer ran it.
+  const ok = check(product, skip, product.base, { role: 'implementer' });
+  assert.equal(ok.status, 0, ok.stderr);
+  for (const changed of [['App/MadoApp.swift', 'scripts/ci/x.mjs'], ['.github/workflows/ci.yml'], ['.claude/agents/a.md'], ['.agents/skills/x/SKILL.md'], []]) {
+    const r = repo(t, changed);
+    const res = check(r, skip);
+    assert.equal(res.status, 1, `${changed}: ${res.stdout}`);
+    assert.match(res.stderr, /node scope skip/, `${changed}`);
+  }
+  const unlistable = check(product, skip, 'f'.repeat(40));
+  assert.equal(unlistable.status, 1);
+  assert.match(unlistable.stderr, /node scope skip/);
+});
+
+test('892 WI-3 the rendered comment and the record show both attempts and the disposition', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const input = path.join(r.dir, '.build/input.json');
+  fs.mkdirSync(path.dirname(input), { recursive: true });
+  const data = { issue: 892, task: 'i892', branch: 'b', head: r.head, gates: ladder(liveFlaky()), integrity: 'none', byType: [], notVerified: ['none'],
+    commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-2' };
+  fs.writeFileSync(input, JSON.stringify(data));
+  const rendered = spawnSync(process.execPath, [evidence, 'render', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(rendered.status, 0, rendered.stderr);
+  assert.match(rendered.stdout, /exit 1 \(attempt 1, i9-node\.log: b first exec, slow\); rerun of scripts\/tdd\/b\.test\.mjs exit 0 \(i9-node-rerun\.log\); FLAKY, reviewed disposition: issue #891, author opus-imple-1, owner gpt-imple-1, reviewed by delegator \(https:\/\/github\.com\/anzchy\/mado\/issues\/891#issuecomment-123\), expires \d{4}-\d{2}-\d{2}; not a pass/);
+  const recorded = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(recorded.status, 0, recorded.stderr);
+  const record = JSON.parse(fs.readFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), 'utf8'));
+  assert.equal(record.lanes.node.status, 'flaky-disposition');
+  assert.deepEqual(record.gates.find(g => g.name === 'node').attempts.map(a => a.exitCode), [1, 0]);
+  assert.equal(record.complete, true);
+});
+
+// #892 review round: the fields that decide in-diff must be repo-relative, the reviewer is not the flake's owner, and an
+// unreadable date fails closed.
+test('892 review a disposition test file must be a normalized repository-relative path', () => {
+  for (const file of ['/abs/scripts/tdd/b.test.mjs', './scripts/tdd/b.test.mjs', '../scripts/tdd/b.test.mjs', 'scripts//tdd/b.test.mjs', 'scripts/tdd/../tdd/b.test.mjs']) {
+    const v = verdict(flakyNode(g => { for (const t of [...g.attempts[0].tests, ...g.disposition.tests]) t.file = file; g.attempts[1].files = [file]; return g; }));
+    assert.equal(v.complete, false, file);
+    assert.match(v.problems.join('\n'), /repository-relative/, file);
+  }
+});
+
+test('892 review the reviewer differs from the owner, and an invalid today fails closed', () => {
+  assert.match(verdict(flakyNode(g => { g.disposition.reviewedBy = g.disposition.owner; return g; })).problems.join('\n'), /reviewedBy/);
+  for (const today of ['not-a-day', '2026-02-30', undefined]) {
+    const v = gateVerdict(ladder(flakyNode()), { today });
+    if (today === undefined) continue; // the default is the real UTC date
+    assert.equal(v.complete, false, String(today));
+    assert.match(v.problems.join('\n'), /today/, String(today));
+  }
+});
+
+// #892 fix1 WI-1 (gpt F1 / opus M1): Git's display form quotes non-ASCII and control characters, so diff paths come from
+// `git diff --name-only -z` and one NUL parser, never from the quoted text. Real-git fixtures, core.quotePath at its default.
+import { DIFF_NAME_ARGS, listDiffPaths, parseNulPaths } from '../scripts/gate-policy.mjs';
+
+function repoWith(t, setup, change) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-892z-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  git(dir, 'init', '-q'); git(dir, 'config', 'user.email', 'fixture@example.invalid'); git(dir, 'config', 'user.name', 'Fixture');
+  git(dir, 'config', 'core.quotePath', 'true');
+  fs.writeFileSync(path.join(dir, 'README'), 'base\n');
+  setup(dir); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'base');
+  const base = git(dir, 'rev-parse', 'HEAD');
+  git(dir, 'update-ref', 'refs/remotes/origin/main', base);
+  change(dir); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'change', '--allow-empty');
+  return { dir, base, head: git(dir, 'rev-parse', 'HEAD') };
+}
+const put = (dir, rel, text = 'x\n', mode = 0o644) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text, { mode }); };
+
+test('892 fix1 WI-1 the NUL parser keeps every byte of a path and drops only the separators', () => {
+  assert.deepEqual(parseNulPaths(''), []);
+  assert.deepEqual(parseNulPaths('a\0 b c \0scripts/new\nline.mjs\0\0"q"\0'), ['a', ' b c ', 'scripts/new\nline.mjs', '"q"']);
+  assert.deepEqual(DIFF_NAME_ARGS, ['diff', '--name-only', '-z', '--no-renames']);
+});
+
+test('892 fix1 WI-1 diff paths: non-ASCII, spaces, a newline, a rename (both paths), a deletion, a mode change and a symlink', t => {
+  const r = repoWith(t, dir => { put(dir, 'scripts/old.mjs', 'same\n'); put(dir, 'scripts/gone.mjs'); put(dir, 'scripts/mode.sh'); put(dir, 'docs/keep.md'); },
+    dir => {
+      fs.renameSync(path.join(dir, 'scripts/old.mjs'), path.join(dir, 'scripts/renamed file.mjs'));
+      fs.rmSync(path.join(dir, 'scripts/gone.mjs'));
+      fs.chmodSync(path.join(dir, 'scripts/mode.sh'), 0o755);
+      fs.symlinkSync('mode.sh', path.join(dir, 'scripts/link'));
+      put(dir, 'scripts/测试.test.mjs'); put(dir, 'docs/a b.md'); put(dir, 'scripts/new\nline.mjs');
+    });
+  // The display form is what the old parser read: quoted, so no prefix matched.
+  assert.match(git(r.dir, 'diff', '--name-only', '--no-renames', r.base, r.head), /^"scripts\/\\346/m);
+  assert.deepEqual(listDiffPaths(r.dir, r.base, r.head).sort(), ['docs/a b.md', 'scripts/gone.mjs', 'scripts/link', 'scripts/mode.sh',
+    'scripts/new\nline.mjs', 'scripts/old.mjs', 'scripts/renamed file.mjs', 'scripts/测试.test.mjs'].sort());
+  assert.equal(listDiffPaths(r.dir, 'f'.repeat(40), r.head), null, 'an unlistable diff is null, not empty');
+});
+
+test('892 fix1 WI-1 check refuses a node scope skip when the only tooling path is non-ASCII or has a newline', t => {
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, scopeSkip: 'implementer run; product-only diff' };
+  for (const rel of ['scripts/测试.test.mjs', '.agents/skills/工具/test.mjs', 'scripts/new\nline.mjs', '.claude/a "b".md']) {
+    const r = repoWith(t, () => {}, dir => { put(dir, 'App/MadoApp.swift'); put(dir, rel); });
+    const res = check(r, skip, r.base, { role: 'implementer' });
+    assert.equal(res.status, 1, `${JSON.stringify(rel)}: ${res.stdout}`);
+    assert.match(res.stderr, /node scope skip refused/, JSON.stringify(rel));
+  }
+});
+
+// #892 fix1 WI-2 (gpt F2 / opus M2): check uses the same fail-closed in-diff rule: a changed tooling file outside the
+// failing test's directory (an import, a copied or spawned script) still refuses the disposition.
+test('892 fix1 WI-2 check refuses a disposition when the diff changes a tooling file outside the test directory', t => {
+  for (const changed of [['scripts/heavy-lock.sh'], ['.agents/skills/mado-verify/scripts/gate-policy.mjs'], ['App/MadoApp.swift', '.github/workflows/ci.yml']]) {
+    const r = repo(t, changed);
+    const res = check(r, liveFlaky());
+    assert.equal(res.status, 1, `${changed}: ${res.stdout}`);
+    assert.match(res.stderr, /disposition .*in the diff/, `${changed}`);
+  }
+});
+
+// #892 fix1 WI-3 (gpt F3 / opus M3): the reviewer is neither the record's author nor the flake's owner (compared after
+// normalising case, punctuation and a leading "mado-"), and the review has a reference that can be checked. L3: the issue is
+// #891 or a listed successor.
+test('892 fix1 WI-3 self-review is rejected: reviewer equals author, or is the owner under another spelling', () => {
+  for (const [label, change] of [
+    ['reviewer is author', d => { d.reviewedBy = d.author; }],
+    ['reviewer is author, other case and spaces', d => { d.reviewedBy = ' OPUS-imple-1 '; }],
+    ['reviewer is author with mado- prefix', d => { d.reviewedBy = 'mado-opus-imple-1'; }],
+    ['reviewer is owner alias', d => { d.owner = 'delegator'; d.reviewedBy = 'mado-delegator'; }],
+    ['reviewer is owner, underscore', d => { d.reviewedBy = 'gpt_imple_1'; }],
+    ['no author', d => { delete d.author; }], ['blank author', d => { d.author = '  '; }]]) {
+    const v = verdict(flakyNode(g => { change(g.disposition); return g; }));
+    assert.equal(v.complete, false, label);
+    assert.match(v.problems.join('\n'), /author|reviewedBy/, label);
+  }
+  // The author may own the flake; only the reviewer must be someone else.
+  assert.equal(verdict(flakyNode(g => { g.disposition.owner = g.disposition.author; return g; })).complete, true);
+});
+
+test('892 fix1 WI-3 the review reference is a comment URL on anzchy/mado or a delegator summary path', () => {
+  for (const ref of ['https://github.com/anzchy/mado/issues/891#issuecomment-1', 'https://github.com/anzchy/mado/pull/893#issuecomment-22',
+    'https://github.com/anzchy/mado/pull/893#pullrequestreview-333', '~/.mado/herdr/delegator/i892-review.md'])
+    assert.equal(verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; })).complete, true, ref);
+  for (const ref of [undefined, '', 'reviewed', 'https://github.com/other/mado/issues/891#issuecomment-1', 'https://github.com/anzchy/mado/issues/891',
+    'http://github.com/anzchy/mado/issues/891#issuecomment-1', '~/.mado/herdr/delegator/../opus-imple-1/x.md', '~/.mado/herdr/opus-imple-1/x.md',
+    '/Users/someone/.mado/herdr/delegator/x.md', '~/.mado/herdr/delegator/']) {
+    const v = verdict(flakyNode(g => { if (ref === undefined) delete g.disposition.reviewRef; else g.disposition.reviewRef = ref; return g; }));
+    assert.equal(v.complete, false, String(ref));
+    assert.match(v.problems.join('\n'), /reviewRef/, String(ref));
+  }
+});
+
+test('892 fix1 WI-3 L3 the disposition issue is #891 or a listed successor', () => {
+  assert.deepEqual(FLAKE_ISSUES, [891]);
+  for (const issue of [892, 1, 890]) {
+    const v = verdict(flakyNode(g => { g.disposition.issue = issue; return g; }));
+    assert.equal(v.complete, false, String(issue));
+    assert.match(v.problems.join('\n'), /#891/, String(issue));
+  }
+});
+
+test('892 fix1 WI-3 check opens a delegator summary reference: it must exist and name the record head', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-home-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const node = () => flakyNode(g => { g.disposition.expires = inDays(7); g.disposition.reviewRef = '~/.mado/herdr/delegator/i9-review.md'; return g; });
+  const run = () => {
+    const record = { head: r.head, base: r.base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1', gates: ladder(node()) };
+    fs.mkdirSync(path.join(r.dir, '.build/mado-verify'), { recursive: true });
+    fs.writeFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), JSON.stringify(record));
+    return spawnSync(process.execPath, [evidence, 'check', '--head', r.head, '--issue', '892', '--worktree', r.dir], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+  };
+  const missing = run();
+  assert.equal(missing.status, 1, missing.stdout);
+  assert.match(missing.stderr, /reviewRef .*does not exist/);
+  const ref = path.join(home, '.mado/herdr/delegator/i9-review.md');
+  fs.mkdirSync(path.dirname(ref), { recursive: true });
+  fs.writeFileSync(ref, 'reviewed flake for another head 0123456789abcdef0123456789abcdef01234567\n');
+  const other = run();
+  assert.equal(other.status, 1, other.stdout);
+  assert.match(other.stderr, /reviewRef .*has no line "flake-review: head=/);
+  // #892 fix1 review H1: the note needs the reviewer's marker line, which owner-gates never writes.
+  fs.writeFileSync(ref, `flake-review: head=${r.head} reviewedBy=delegator\n`);
+  const ok = run();
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /reviewed by delegator \(~\/\.mado\/herdr\/delegator\/i9-review\.md\)/);
+});
+
+// #892 fix1 WI-4 (gpt F4 / opus L4): the evidence record carries the owner-gates role; only an implementer record may skip
+// node, and record refuses a role that is neither implementer nor delegator.
+test('892 fix1 WI-4 check refuses a node scope skip unless the record role is implementer', t => {
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, scopeSkip: 'implementer run; product-only diff' };
+  const r = repo(t, ['App/MadoApp.swift']);
+  for (const extra of [{}, { role: 'delegator' }, { role: 'Implementer' }, { role: '' }]) {
+    const res = check(r, skip, r.base, extra);
+    assert.equal(res.status, 1, `${JSON.stringify(extra)}: ${res.stdout}`);
+    assert.match(res.stderr, /node scope skip refused: the record role is .*, not implementer/, JSON.stringify(extra));
+  }
+  assert.equal(check(r, skip, r.base, { role: 'implementer' }).status, 0);
+});
+
+test('892 fix1 WI-4 record writes the role and refuses an unknown one', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const input = path.join(r.dir, '.build/input.json');
+  fs.mkdirSync(path.dirname(input), { recursive: true });
+  const data = role => ({ issue: 892, task: 'i892', branch: 'b', head: r.head, role, gates: ladder({ name: 'node', command: 'node', exitCode: 0 }),
+    integrity: 'none', byType: [], notVerified: ['none'], commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-2' });
+  fs.writeFileSync(input, JSON.stringify(data('implementer')));
+  const ok = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), 'utf8')).role, 'implementer');
+  fs.writeFileSync(input, JSON.stringify(data('auditor')));
+  const bad = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /role must be implementer or delegator/);
+});
+
+// #892 fix1 review (tdd-reviewer H1, M1, M2, L1): an owner-gates summary or log is never a review note (it names the head
+// too); the note must be a regular file with the reviewer's marker line; a node gate that says "skipped" without scopeSkip
+// is refused; a reviewer name that normalises to nothing is refused, while distinct non-ASCII names stay distinct.
+test('892 fix1 review a summary or log path is never a review reference', () => {
+  for (const ref of ['~/.mado/herdr/delegator/i9-summary.txt', '~/.mado/herdr/delegator/i9-node.log', '~/.mado/herdr/delegator/i9-node-rerun.log', '~/.mado/herdr/delegator/i9-diff.nul']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; }));
+    assert.equal(v.complete, false, ref);
+    assert.match(v.problems.join('\n'), /reviewRef/, ref);
+  }
+});
+
+test('892 fix1 review check refuses a note without the marker, with another reviewer, or behind a symlink', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-home-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const run = () => {
+    const record = { head: r.head, base: r.base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1',
+      gates: ladder(flakyNode(g => { g.disposition.expires = inDays(7); g.disposition.reviewRef = '~/.mado/herdr/delegator/i9-review.md'; return g; })) };
+    fs.mkdirSync(path.join(r.dir, '.build/mado-verify'), { recursive: true });
+    fs.writeFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), JSON.stringify(record));
+    return spawnSync(process.execPath, [evidence, 'check', '--head', r.head, '--issue', '892', '--worktree', r.dir], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+  };
+  const dir = path.join(home, '.mado/herdr/delegator'), ref = path.join(dir, 'i9-review.md');
+  fs.mkdirSync(dir, { recursive: true });
+  // An owner-gates summary names the head but is not a review.
+  fs.writeFileSync(ref, `head=${r.head}\nrole=implementer\nnode-verdict=flaky (attempt1=1 rerun=0)\nDONE\n`);
+  assert.match(run().stderr, /has no line "flake-review: head=/);
+  fs.writeFileSync(ref, `flake-review: head=${r.head} reviewedBy=someone-else\n`);
+  assert.match(run().stderr, /has no line "flake-review: head=/);
+  const target = path.join(home, 'elsewhere.md');
+  fs.writeFileSync(target, `flake-review: head=${r.head} reviewedBy=delegator\n`);
+  fs.rmSync(ref); fs.symlinkSync(target, ref);
+  const linked = run();
+  assert.equal(linked.status, 1, linked.stdout);
+  assert.match(linked.stderr, /reviewRef .*is not a regular file/);
+  fs.rmSync(ref); fs.writeFileSync(ref, `notes\nflake-review: head=${r.head} reviewedBy=delegator\n`);
+  assert.equal(run().status, 0);
+});
+
+test('892 fix1 review a node gate that says skipped needs a scopeSkip; a blank-key reviewer is refused', () => {
+  for (const node of [{ name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'node=skipped (implementer run; product-only diff)' },
+    { name: 'node', command: 'node lane skipped', exitCode: 0 }]) {
+    const v = verdict(node);
+    assert.equal(v.complete, false, JSON.stringify(node));
+    assert.match(v.problems.join('\n'), /scopeSkip/);
+  }
+  assert.equal(verdict({ name: 'node', command: 'owner-gates.sh (node lane)', exitCode: 0, keyLine: 'node=0' }).complete, true);
+  for (const reviewedBy of ['—', '...', ' - ']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewedBy = reviewedBy; return g; }));
+    assert.equal(v.complete, false, reviewedBy);
+    assert.match(v.problems.join('\n'), /reviewedBy/, reviewedBy);
+  }
+  assert.equal(verdict(flakyNode(g => { g.disposition.author = '张三'; g.disposition.owner = '王五'; g.disposition.reviewedBy = '李四'; return g; })).complete, true);
+  assert.equal(verdict(flakyNode(g => { g.disposition.author = '李四'; g.disposition.reviewedBy = '李四'; return g; })).complete, false);
+});
+
+// #892 fix2 H1 (opus confirm H1 / gpt L1): node's own skipped-test count in a passing keyLine is not a skipped lane. Only a
+// lane-level skip (owner-gates' `node=skipped (…)`, a "skipped (" reason, "node lane skipped") needs a scopeSkip.
+test('892 fix2 H1 a passing node gate may report node skipped-test counts; a lane-level skip still needs scopeSkip', () => {
+  for (const keyLine of ['tests 1879, pass 1876, fail 0, skipped 3', '3 skipped', 'skipped 0', 'ℹ skipped 3', 'pass 10, skipped: 2, todo 0']) {
+    const v = verdict({ name: 'node', command: 'owner-gates.sh --role implementer (node lane)', exitCode: 0, keyLine });
+    assert.equal(v.complete, true, `${keyLine}: ${v.problems.join('; ')}`);
+  }
+  for (const node of [
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'node=skipped (no scripts change)' },
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'pass (lane skipped (product-only diff))' },
+    { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'tests 5, pass 5, skipped 3; node=skipped' },
+    { name: 'node', command: 'owner-gates.sh', exitCode: 0, keyLine: 'pass; node: skip' }]) {
+    const v = verdict(node);
+    assert.equal(v.complete, false, JSON.stringify(node));
+    assert.match(v.problems.join('\n'), /scopeSkip/, JSON.stringify(node));
+  }
+});
+
+// #892 fix2 (opus confirm L2): a review note is a Markdown file; any other file under ~/.mado/herdr/delegator/ (an older
+// owner-gates `<p>-diff.txt`, an `.out`, a script) is not an accepted kind of reference.
+test('892 fix2 L2 a path review reference must be a .md note', () => {
+  for (const ref of ['~/.mado/herdr/delegator/i9-diff.txt', '~/.mado/herdr/delegator/i9-review.txt', '~/.mado/herdr/delegator/i9.out',
+    '~/.mado/herdr/delegator/i9-review', '~/.mado/herdr/delegator/i9-review.md.log', '~/.mado/herdr/delegator/.md']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; }));
+    assert.equal(v.complete, false, ref);
+    assert.match(v.problems.join('\n'), /reviewRef/, ref);
+  }
+  for (const ref of ['~/.mado/herdr/delegator/i9-review.md', '~/.mado/herdr/delegator/reviews/i9.md'])
+    assert.equal(verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; })).complete, true, ref);
+});

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { skippable } from '../../../../scripts/ci/native-inputs.mjs';
+import { failingTestInDiff, nodeLaneRequired, parseNulPaths } from '../../mado-verify/scripts/gate-policy.mjs';
 
 // CI's classifier remains the one definition of native inputs. Optional Node suites
 // are skipped only for paths this reviewed set does not read.
@@ -15,6 +16,8 @@ export function selectSuites(files) {
     native: !files.length || files.some(file => !skippable(file)),
     agents: !nodeSafe,
     tdd: !nodeSafe,
+    // #892: whether an implementer run needs the node lane (owner-gates.sh --role implementer); the delegator's always runs it.
+    node: nodeLaneRequired(files),
   };
 }
 
@@ -47,6 +50,39 @@ export function failureFact(lane, code, output, files = []) {
   const tests = /Tests run: (\d+), Failures: (\d+)/.exec(output);
   if (tests) return `${lane}: tests=${tests[1]} failed=${tests[2]}`;
   return `${lane}: exit=${code}`;
+}
+
+// #892: the failing tests of a node run, from the spec reporter's `✖ failing tests:` block (`test at <file>:<line>:<col>`
+// before each `✖ <name> (<ms>ms)`). Only failures outside the diff, each with a known file in the worktree, get the one
+// serial rerun of their files; anything else (in the diff, no location, nothing parsed) is not rerun and stays a failure.
+export function rerunPlan(output, diffFiles, root) {
+  const none = reason => ({rerun: false, reason, files: [], tests: []});
+  const block = output.split(/^✖ failing tests:\s*$/m)[1];
+  if (block === undefined) return none('failing tests unknown');
+  const found = [];
+  let at = null;
+  for (const line of block.split('\n')) {
+    const location = /^test at (.+?):\d+(?::\d+)?$/.exec(line);
+    if (location) { at = location[1]; continue; }
+    const failed = /^✖ (.+?) \(\d+(?:\.\d+)?ms\)$/.exec(line);
+    if (failed) { found.push({file: at, name: failed[1]}); at = null; }
+  }
+  if (!found.length) return none('failing tests unknown');
+  // Every failure the run counted must be one we read; otherwise an unread real failure could hide behind a passing rerun.
+  const counted = /^ℹ fail (\d+)$/m.exec(output.split(/^✖ failing tests:\s*$/m)[0])?.[1];
+  if (counted === undefined || Number(counted) !== found.length) return none('failing tests incomplete');
+  const relative = file => {
+    if (file === null) return null;
+    let text = file;
+    if (text.startsWith('file://')) { try { text = fileURLToPath(text); } catch { return null; } }
+    if (!path.isAbsolute(text)) return path.posix.normalize(text).startsWith('../') ? null : path.posix.normalize(text);
+    const rel = path.relative(root, text);
+    return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(path.sep).join('/') : null;
+  };
+  const tests = found.map(t => ({file: relative(t.file), name: t.name}));
+  if (tests.some(t => t.file === null)) return none('failed files unknown');
+  if (tests.some(t => failingTestInDiff(t, diffFiles))) return none('in-diff=yes');
+  return {rerun: true, reason: null, files: [...new Set(tests.map(t => t.file))].sort(), tests};
 }
 
 export function preflight({ scriptsOwn, nodeModules, playwright, holder }) {
@@ -282,12 +318,20 @@ export function readCompetingHeavyProcesses(ps = process.env.OWNER_GATES_PS || '
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === 'select') {
-    const files = fs.readFileSync(args[0], 'utf8').split('\n').filter(Boolean);
+    // #892 fix1: owner-gates.sh writes the diff NUL-delimited (`git diff --name-only -z`).
+    const files = parseNulPaths(fs.readFileSync(args[0], 'utf8'));
     const choice = selectSuites(files);
     for (const [key, value] of Object.entries(choice)) console.log(`${key}=${value ? 1 : 0}`);
   } else if (cmd === 'fact') {
     const [lane, code, log, diff] = args;
-    console.log(failureFact(lane, Number(code), fs.readFileSync(log, 'utf8'), fs.readFileSync(diff, 'utf8').split('\n').filter(Boolean)));
+    console.log(failureFact(lane, Number(code), fs.readFileSync(log, 'utf8'), parseNulPaths(fs.readFileSync(diff, 'utf8'))));
+  } else if (cmd === 'rerun-plan') {
+    const [log, diff, root] = args;
+    const plan = rerunPlan(fs.readFileSync(log, 'utf8'), parseNulPaths(fs.readFileSync(diff, 'utf8')), root);
+    if (!plan.rerun) { console.log(`skip ${plan.reason}`); return; }
+    console.log('run');
+    for (const file of plan.files) console.log(`file ${file}`);
+    for (const t of plan.tests) console.log(`test ${t.file} :: ${t.name}`);
   } else if (cmd === 'preflight') {
     const [wt, script] = args;
     let own = false;
@@ -331,6 +375,6 @@ async function main() {
     if (process.env.MADO_GATES_PREFLIGHT === 'off') console.log('preflight-guard=off');
     for (const note of verdict.notes) console.log(note);
     if (verdict.refuse && process.env.MADO_GATES_PREFLIGHT !== 'off') { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
-  } else { console.error('usage: owner-gates-tools.mjs select|fact|preflight|node-suites|load-preflight'); process.exitCode = 2; }
+  } else { console.error('usage: owner-gates-tools.mjs select|fact|rerun-plan|preflight|node-suites|load-preflight'); process.exitCode = 2; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
