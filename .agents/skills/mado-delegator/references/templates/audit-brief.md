@@ -50,6 +50,12 @@ The archive envelope records `worktree` and the complete `receipt`. Match ID, la
 Before post-merge archival, use the request's named local receipts; identify unavailable or mismatched
 archive evidence explicitly. Generated trailers come from `node scripts/tdd/red-receipt-trailer.mjs --id <ID>`.
 
+RED separation (#898): verify the `tdd-separation` lane result rather than the receipt's presence. Rerun it read-only
+with `node .agents/skills/mado-verify/scripts/tdd-separation.mjs evaluate --worktree <wt> --base <base> --head <head>`
+(after a rebase add `--rebased-from <old-base>..<old-head>`). A `refused` or `unknown` verdict, an `OUTSIDE` commit, an
+`INVALID-WAIVER` or a waiver the delegator did not issue is a D5 finding. Read each `Stub-For:` commit's diff: a stub
+with behaviour is a finding. The lane shows the RED was recorded on a clean committed tree; it is not proof of test-first.
+
 ## Scratch reproductions must not write into any worktree (added 2026-10-23)
 
 When you reproduce a RED by copying old scripts into a scratch directory, make sure nothing they run resolves paths

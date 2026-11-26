@@ -59,7 +59,11 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
 2. **Brief** — copy [templates/brief-template.md](references/templates/brief-template.md) to
    `~/.mado/herdr/<impl>/<item>-brief.md`. Every brief starts from the template and keeps its
    `## Verify (mado-verify)` section; a hand-written brief copies that section verbatim (the briefs for #682, #683,
-   #687, #690 and #692 omitted it and were never verified). There is no hook. For UI work, fill the per-state design and evidence fields in
+   #687, #690 and #692 omitted it and were never verified). There is no hook. The template's Test-first section carries the
+   RED separation rule (#898): stubs in their own `Stub-For:` commit, the RED on a clean production tree. Only you issue a
+   waiver, before audit, as `~/.mado/herdr/delegator/tdd-waivers/<item>.json` (`{"waivers":[{id, issue, receipt|commit,
+   paths?, reason, issuedBy:"delegator", ref}]}`, bounded, with a reason); name its id in the brief or a written note.
+   For UI work, fill the per-state design and evidence fields in
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the
    implementer must turn into the first RED. Late assertions drove P3-01, P3-10 and #136 past the round cap. Read the code before
