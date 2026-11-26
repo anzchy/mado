@@ -113,7 +113,8 @@ export function reviewRefKind(ref) {
   if (!ref.startsWith(REVIEW_REF_DIR) || ref.includes('\0')) return null;
   const parts = ref.slice(REVIEW_REF_DIR.length).split('/');
   // review H1: an owner-gates summary, log or diff list names the head too, and an implementer's run can write one here.
-  if (/(?:-summary\.txt|\.log|\.nul)$/.test(ref)) return null;
+  // fix2 (opus confirm L2): owner-gates writes only .txt, .log and .nul files, so the one accepted kind is a .md note.
+  if (!/[^/]\.md$/.test(ref)) return null;
   return parts.every(part => part !== '' && part !== '.' && part !== '..') ? 'path' : null;
 }
 const isoDay = text => {

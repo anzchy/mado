@@ -492,3 +492,16 @@ test('892 fix2 H1 a passing node gate may report node skipped-test counts; a lan
     assert.match(v.problems.join('\n'), /scopeSkip/, JSON.stringify(node));
   }
 });
+
+// #892 fix2 (opus confirm L2): a review note is a Markdown file; any other file under ~/.mado/herdr/delegator/ (an older
+// owner-gates `<p>-diff.txt`, an `.out`, a script) is not an accepted kind of reference.
+test('892 fix2 L2 a path review reference must be a .md note', () => {
+  for (const ref of ['~/.mado/herdr/delegator/i9-diff.txt', '~/.mado/herdr/delegator/i9-review.txt', '~/.mado/herdr/delegator/i9.out',
+    '~/.mado/herdr/delegator/i9-review', '~/.mado/herdr/delegator/i9-review.md.log', '~/.mado/herdr/delegator/.md']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; }));
+    assert.equal(v.complete, false, ref);
+    assert.match(v.problems.join('\n'), /reviewRef/, ref);
+  }
+  for (const ref of ['~/.mado/herdr/delegator/i9-review.md', '~/.mado/herdr/delegator/reviews/i9.md'])
+    assert.equal(verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; })).complete, true, ref);
+});
