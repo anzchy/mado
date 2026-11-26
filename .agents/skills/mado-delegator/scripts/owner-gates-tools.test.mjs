@@ -410,3 +410,9 @@ test('892 fix1 L1 a failing subtest inside a parent is never rerun: the block do
   assert.equal((out.split(/^✖ failing tests:\s*$/m)[1].match(/^✖ /gm) ?? []).length, 1);
   assert.deepEqual(rerunPlan(out, ['docs/guide.md'], '/wt'), {rerun: false, reason: 'failing tests incomplete', files: [], tests: []});
 });
+
+// #892 fix1 review (tdd-reviewer L2): an empty (or unreadable) diff fails closed here too, as in nodeLaneRequired.
+test('892 fix1 review an empty diff puts every node failure in the diff', () => {
+  assert.equal(failingTestInDiff({file: 'scripts/tdd/b.test.mjs', name: 'b'}, []), true);
+  assert.equal(rerunPlan(failingBlock([['scripts/tdd/b.test.mjs', 'b']]), [], '/wt').reason, 'in-diff=yes');
+});

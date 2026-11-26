@@ -382,8 +382,9 @@ test('892 fix1 WI-3 check opens a delegator summary reference: it must exist and
   fs.writeFileSync(ref, 'reviewed flake for another head 0123456789abcdef0123456789abcdef01234567\n');
   const other = run();
   assert.equal(other.status, 1, other.stdout);
-  assert.match(other.stderr, /reviewRef .*does not name head/);
-  fs.writeFileSync(ref, `reviewed: node flake disposition for head ${r.head}\n`);
+  assert.match(other.stderr, /reviewRef .*has no line "flake-review: head=/);
+  // #892 fix1 review H1: the note needs the reviewer's marker line, which owner-gates never writes.
+  fs.writeFileSync(ref, `flake-review: head=${r.head} reviewedBy=delegator\n`);
   const ok = run();
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /reviewed by delegator \(~\/\.mado\/herdr\/delegator\/i9-review\.md\)/);
@@ -416,4 +417,60 @@ test('892 fix1 WI-4 record writes the role and refuses an unknown one', t => {
   const bad = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /role must be implementer or delegator/);
+});
+
+// #892 fix1 review (tdd-reviewer H1, M1, M2, L1): an owner-gates summary or log is never a review note (it names the head
+// too); the note must be a regular file with the reviewer's marker line; a node gate that says "skipped" without scopeSkip
+// is refused; a reviewer name that normalises to nothing is refused, while distinct non-ASCII names stay distinct.
+test('892 fix1 review a summary or log path is never a review reference', () => {
+  for (const ref of ['~/.mado/herdr/delegator/i9-summary.txt', '~/.mado/herdr/delegator/i9-node.log', '~/.mado/herdr/delegator/i9-node-rerun.log', '~/.mado/herdr/delegator/i9-diff.nul']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewRef = ref; return g; }));
+    assert.equal(v.complete, false, ref);
+    assert.match(v.problems.join('\n'), /reviewRef/, ref);
+  }
+});
+
+test('892 fix1 review check refuses a note without the marker, with another reviewer, or behind a symlink', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mado-verify-home-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const run = () => {
+    const record = { head: r.head, base: r.base, issue: 892, commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-1',
+      gates: ladder(flakyNode(g => { g.disposition.expires = inDays(7); g.disposition.reviewRef = '~/.mado/herdr/delegator/i9-review.md'; return g; })) };
+    fs.mkdirSync(path.join(r.dir, '.build/mado-verify'), { recursive: true });
+    fs.writeFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), JSON.stringify(record));
+    return spawnSync(process.execPath, [evidence, 'check', '--head', r.head, '--issue', '892', '--worktree', r.dir], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+  };
+  const dir = path.join(home, '.mado/herdr/delegator'), ref = path.join(dir, 'i9-review.md');
+  fs.mkdirSync(dir, { recursive: true });
+  // An owner-gates summary names the head but is not a review.
+  fs.writeFileSync(ref, `head=${r.head}\nrole=implementer\nnode-verdict=flaky (attempt1=1 rerun=0)\nDONE\n`);
+  assert.match(run().stderr, /has no line "flake-review: head=/);
+  fs.writeFileSync(ref, `flake-review: head=${r.head} reviewedBy=someone-else\n`);
+  assert.match(run().stderr, /has no line "flake-review: head=/);
+  const target = path.join(home, 'elsewhere.md');
+  fs.writeFileSync(target, `flake-review: head=${r.head} reviewedBy=delegator\n`);
+  fs.rmSync(ref); fs.symlinkSync(target, ref);
+  const linked = run();
+  assert.equal(linked.status, 1, linked.stdout);
+  assert.match(linked.stderr, /reviewRef .*is not a regular file/);
+  fs.rmSync(ref); fs.writeFileSync(ref, `notes\nflake-review: head=${r.head} reviewedBy=delegator\n`);
+  assert.equal(run().status, 0);
+});
+
+test('892 fix1 review a node gate that says skipped needs a scopeSkip; a blank-key reviewer is refused', () => {
+  for (const node of [{ name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, keyLine: 'node=skipped (implementer run; product-only diff)' },
+    { name: 'node', command: 'node lane skipped', exitCode: 0 }]) {
+    const v = verdict(node);
+    assert.equal(v.complete, false, JSON.stringify(node));
+    assert.match(v.problems.join('\n'), /scopeSkip/);
+  }
+  assert.equal(verdict({ name: 'node', command: 'owner-gates.sh (node lane)', exitCode: 0, keyLine: 'node=0' }).complete, true);
+  for (const reviewedBy of ['—', '...', ' - ']) {
+    const v = verdict(flakyNode(g => { g.disposition.reviewedBy = reviewedBy; return g; }));
+    assert.equal(v.complete, false, reviewedBy);
+    assert.match(v.problems.join('\n'), /reviewedBy/, reviewedBy);
+  }
+  assert.equal(verdict(flakyNode(g => { g.disposition.author = '张三'; g.disposition.owner = '王五'; g.disposition.reviewedBy = '李四'; return g; })).complete, true);
+  assert.equal(verdict(flakyNode(g => { g.disposition.author = '李四'; g.disposition.reviewedBy = '李四'; return g; })).complete, false);
 });

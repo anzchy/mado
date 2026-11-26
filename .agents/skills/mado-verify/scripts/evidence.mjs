@@ -87,9 +87,13 @@ function check(args) {
     const ref = node.disposition?.reviewRef;
     if (reviewRefKind(ref) === 'path') {
       const file = path.join(os.homedir(), ref.slice(2));
-      let text;
-      try { text = fs.readFileSync(file, 'utf8'); } catch { throw new Error(`node flake disposition reviewRef ${ref} does not exist`); }
-      if (!text.includes(named)) throw new Error(`node flake disposition reviewRef ${ref} does not name head ${named}`);
+      let stat;
+      try { stat = fs.lstatSync(file); } catch { throw new Error(`node flake disposition reviewRef ${ref} does not exist`); }
+      if (!stat.isFile()) throw new Error(`node flake disposition reviewRef ${ref} is not a regular file (no symlinks)`);
+      // review H1: the reviewer's own marker line, never written by owner-gates, binds the note to this head and reviewer.
+      const marker = `flake-review: head=${named} reviewedBy=${node.disposition.reviewedBy}`;
+      if (!fs.readFileSync(file, 'utf8').split('\n').some(line => line.trimEnd() === marker))
+        throw new Error(`node flake disposition reviewRef ${ref} has no line "${marker}"`);
     }
   }
   const verdict = gateVerdict(record.gates);

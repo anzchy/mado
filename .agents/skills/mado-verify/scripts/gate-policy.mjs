@@ -32,6 +32,11 @@ export function gateVerdict(gates, { today } = {}) {
     if (!gate) problems.push(`missing ${name}`);
     else if (gate.exitCode !== 0 && !notVerifiedEscape(gate) && !gate.disposition) problems.push(`failed ${name}: ${gate.exitCode}`);
   }
+  // #892 fix1 review M1: a skipped node lane is recorded only as a scopeSkip, which evidence.mjs check judges (role and diff);
+  // a skip copied into keyLine or command would bypass that check.
+  const node = byName.get('node');
+  if (node && !node.scopeSkip && /\bskip(?:ped)?\b/i.test(`${node.keyLine ?? ''} ${node.command ?? ''}`))
+    problems.push('node: a skipped node lane must be recorded as scopeSkip (evidence.mjs check judges it)');
   // #892: a flake disposition is checked wherever it appears; only a valid one on a failed node gate counts.
   for (const gate of byName.values()) if (gate.disposition !== undefined) problems.push(...flakeDispositionProblems(gate, today));
   return { complete: problems.length === 0, problems };
@@ -66,6 +71,8 @@ export function listDiffPaths(cwd, base, head) {
 // owner-gates-tools.test.mjs imports gate-policy.mjs), so any changed path under a NODE_LANE_PREFIXES directory puts every
 // failing node test in the diff: no rerun, no disposition. Product files the tests read are the reviewer's check (SKILL.md).
 export function failingTestInDiff({ file, name }, diffFiles) {
+  // An empty (or unreadable) diff fails closed, as in nodeLaneRequired (review L2).
+  if (!diffFiles.length) return true;
   if (diffFiles.some(changed => NODE_LANE_PREFIXES.some(prefix => changed.startsWith(prefix)))) return true;
   const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : '';
   // A test directory named tests/ tests its parent's tree (for example mado-verify/tests and mado-verify/scripts).
@@ -83,9 +90,11 @@ export const FLAKE_MAX_DAYS = 30;
 // #892 fix1 L3: the disposition names #891 or one of its successors, listed here in a reviewed commit.
 export const FLAKE_ISSUES = Object.freeze([891]);
 // #892 fix1 WI-3 (gpt F3 / opus M3): one party under different spellings ("delegator", "mado-delegator", "Delegator ").
-export const partyKey = name => String(name ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^mado-/, '');
+// Letters and digits of any script count (review L1: "李四" stays itself); a name with none ("—") has an empty key, refused.
+export const partyKey = name => String(name ?? '').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').replace(/^mado-/, '');
 // The review reference must be something a human can open: a comment or review on the evidence repository, or a file the
-// delegator wrote under ~/.mado/herdr/delegator/ (evidence.mjs check opens it and requires the record head in it).
+// reviewer wrote under ~/.mado/herdr/delegator/ (evidence.mjs check opens it and requires the reviewer's marker line
+// `flake-review: head=<full sha> reviewedBy=<reviewedBy>`, which owner-gates never writes).
 const REVIEW_REF_DIR = '~/.mado/herdr/delegator/';
 const REVIEW_REF_URL = /^https:\/\/github\.com\/anzchy\/mado\/(?:issues\/[1-9]\d*#issuecomment-\d+|pull\/[1-9]\d*#(?:issuecomment-\d+|pullrequestreview-\d+|discussion_r\d+))$/;
 export function reviewRefKind(ref) {
@@ -93,6 +102,8 @@ export function reviewRefKind(ref) {
   if (REVIEW_REF_URL.test(ref)) return 'url';
   if (!ref.startsWith(REVIEW_REF_DIR) || ref.includes('\0')) return null;
   const parts = ref.slice(REVIEW_REF_DIR.length).split('/');
+  // review H1: an owner-gates summary, log or diff list names the head too, and an implementer's run can write one here.
+  if (/(?:-summary\.txt|\.log|\.nul)$/.test(ref)) return null;
   return parts.every(part => part !== '' && part !== '.' && part !== '..') ? 'path' : null;
 }
 const isoDay = text => {
@@ -128,9 +139,9 @@ export function flakeDispositionProblems(gate, today = new Date().toISOString().
   if (named.length !== got.size || want.size !== got.size || [...want].some(key => !got.has(key))) problems.push('node: disposition must name exactly the failing tests');
   if (!Number.isSafeInteger(d.issue) || d.issue < 1) problems.push('node: disposition issue must be a positive integer');
   else if (!FLAKE_ISSUES.includes(d.issue)) problems.push(`node: disposition issue must be #891 or a listed successor (${FLAKE_ISSUES.map(n => `#${n}`).join(', ')}), got #${d.issue}`);
-  if (!nonblank(d.author)) problems.push('node: disposition needs an author (who wrote the record)');
-  if (!nonblank(d.owner)) problems.push('node: disposition needs an owner');
-  if (!nonblank(d.reviewedBy)) problems.push('node: disposition needs reviewedBy');
+  if (!nonblank(d.author) || partyKey(d.author) === '') problems.push('node: disposition needs an author (who wrote the record)');
+  if (!nonblank(d.owner) || partyKey(d.owner) === '') problems.push('node: disposition needs an owner');
+  if (!nonblank(d.reviewedBy) || partyKey(d.reviewedBy) === '') problems.push('node: disposition needs reviewedBy (a name with letters or digits)');
   else if (partyKey(d.reviewedBy) === partyKey(d.owner)) problems.push('node: disposition reviewedBy must be someone other than its owner');
   else if (partyKey(d.reviewedBy) === partyKey(d.author)) problems.push('node: disposition reviewedBy must be someone other than its author (no self-review)');
   if (!reviewRefKind(d.reviewRef)) problems.push('node: disposition reviewRef must be a comment URL on anzchy/mado or a ~/.mado/herdr/delegator/<file> path');
