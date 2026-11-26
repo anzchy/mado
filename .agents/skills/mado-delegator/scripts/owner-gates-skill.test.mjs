@@ -359,8 +359,11 @@ test('892 WI-4 SKILL.md states the one bounded exception: advisory only through 
 });
 
 test('892 WI-4 SKILL.md states the implementer lane-selection rule with the flag owner-gates.sh reads', () => {
-  has(step1, /OWNER_GATES_ROLE=implementer/, 'SKILL.md step 1');
-  has(owner, /\bOWNER_GATES_ROLE\b/, 'owner-gates.sh');
+  // #892 fix1 WI-4: an explicit argument, never an ambient variable.
+  has(step1, /owner-gates\.sh --role implementer /, 'SKILL.md step 1');
+  lacks(step1, /OWNER_GATES_ROLE=implementer owner-gates/, 'SKILL.md step 1');
+  has(owner, /--role implementer/, 'owner-gates.sh');
+  has(step1, /`role`/, 'SKILL.md step 1 says the record carries the role');
   has(step1, /`scripts\/`, `\.agents\/`, `\.github\/` or `\.claude\/`/, 'SKILL.md step 1 lists the four prefixes');
   has(step1, /delegator's owner-gates run and GitHub CI cover/i, 'SKILL.md step 1');
 });

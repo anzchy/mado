@@ -16,7 +16,7 @@ export function selectSuites(files) {
     native: !files.length || files.some(file => !skippable(file)),
     agents: !nodeSafe,
     tdd: !nodeSafe,
-    // #892: whether an implementer run needs the node lane (OWNER_GATES_ROLE=implementer); the delegator's always runs it.
+    // #892: whether an implementer run needs the node lane (owner-gates.sh --role implementer); the delegator's always runs it.
     node: nodeLaneRequired(files),
   };
 }

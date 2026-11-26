@@ -14,12 +14,19 @@
 # before any lane. On this four-performance-core mini defaults are load>6, free memory<25%, or VM pressure>1;
 # OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE, OWNER_GATES_MAX_PRESSURE tune them. MADO_GATES_PREFLIGHT=off
 # records a bypass while still printing facts and competitors. A threshold refusal exits 2 with no evidence.
-# #892: OWNER_GATES_ROLE=implementer runs the node lane only when the diff touches scripts/, .agents/, .github/ or .claude/
-# (unset or delegator: always). A node failure outside the diff gets one serial rerun of only the failed files under the
+# #892: `--role implementer` (an argument before <worktree>) runs the node lane only when the diff touches scripts/,
+# .agents/, .github/ or .claude/; the default role, delegator, always runs it. #892 fix1: the environment never picks the
+# role; an OWNER_GATES_ROLE left in a shell is ignored with a warning, so the delegator's run cannot inherit a skip.
+# A node failure outside the diff gets one serial rerun of only the failed files under the
 # heavy lock; both attempts go to the summary, and the run stays exit 1 whatever the rerun says.
 set -u
 here=${0:A:h}
-(( $# >= 3 )) || { echo "usage: owner-gates.sh <worktree> <sha> <prefix> [base]"; exit 2; }
+role=delegator
+if [[ ${1:-} == --role ]]; then
+  role=${2:-}
+  (( $# >= 2 )) && shift 2 || shift 1
+fi
+(( $# >= 3 )) || { echo "usage: owner-gates.sh [--role implementer|delegator] <worktree> <sha> <prefix> [base]"; exit 2; }
 wt=$1 sha=$2 p=$3 base=${4:-origin/main} o=${MADO_GATES_OUT:-$HOME/.mado/herdr/delegator}
 s=$o/$p-summary.txt
 summary_error() { echo "owner-gates: cannot write summary $s" >&2; exit 1; }
@@ -37,8 +44,9 @@ for op in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_H
   [[ -e "$(git rev-parse --git-path ${op%%:*} 2>/dev/null)" ]] && refuse "${op#*:} in progress in $wt; finish or abort it and rerun on the committed head"
 done
 [[ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] || refuse "tracked changes in $wt; commit or stash them and rerun in a clean worktree at the head"
-role=${OWNER_GATES_ROLE:-delegator}
-[[ $role == delegator || $role == implementer ]] || refuse "OWNER_GATES_ROLE=$role is not delegator or implementer"
+[[ $role == delegator || $role == implementer ]] || refuse "--role $role is not implementer or delegator"
+role_env=${OWNER_GATES_ROLE:-}
+[[ -n $role_env ]] && print -r -- "owner-gates: warning: OWNER_GATES_ROLE=$role_env ignored; the role is --role (now $role)" >&2
 hl=$wt/scripts/heavy-lock.sh
 export MADO_HEAVY_LOCK_WAIT_SECS=${MADO_HEAVY_LOCK_WAIT_SECS:-3600}
 mb=$(git merge-base "$base" HEAD 2>/dev/null) || refuse "cannot compute merge-base of $base and HEAD"
@@ -81,6 +89,7 @@ lane_result() {
 }
 echo "head=$(git rev-parse HEAD)" > $s || summary_error
 echo "role=$role" >> $s || summary_error
+[[ -n $role_env ]] && { print -r -- "role-env-ignored=$role_env (OWNER_GATES_ROLE is not read; pass --role implementer)" >> $s || summary_error; }
 print -r -- "$preflight" | grep -E '^preflight: stale-owner-records=[0-9]+$' >> "$s" || true
 print -r -- "$load_facts" >> "$s" || summary_error
 if (( native )); then

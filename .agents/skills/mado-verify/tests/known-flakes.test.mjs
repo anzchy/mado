@@ -206,10 +206,11 @@ test('892 WI-3 check rejects a disposition for a test the diff touches, its file
 });
 
 test('892 WI-1 check accepts a node scope skip only when the diff selects no node lane', t => {
-  const skip = { name: 'node', command: 'owner-gates.sh (OWNER_GATES_ROLE=implementer)', exitCode: 0,
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0,
     scopeSkip: 'implementer run; diff touches no scripts/, .agents/, .github/ or .claude/ path' };
   const product = repo(t, ['App/MadoApp.swift', 'Packages/MadoKit/Sources/MadoCore/A.swift']);
-  const ok = check(product, skip);
+  // #892 fix1 WI-4: the record says the implementer ran it.
+  const ok = check(product, skip, product.base, { role: 'implementer' });
   assert.equal(ok.status, 0, ok.stderr);
   for (const changed of [['App/MadoApp.swift', 'scripts/ci/x.mjs'], ['.github/workflows/ci.yml'], ['.claude/agents/a.md'], ['.agents/skills/x/SKILL.md'], []]) {
     const r = repo(t, changed);
@@ -386,4 +387,33 @@ test('892 fix1 WI-3 check opens a delegator summary reference: it must exist and
   const ok = run();
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /reviewed by delegator \(~\/\.mado\/herdr\/delegator\/i9-review\.md\)/);
+});
+
+// #892 fix1 WI-4 (gpt F4 / opus L4): the evidence record carries the owner-gates role; only an implementer record may skip
+// node, and record refuses a role that is neither implementer nor delegator.
+test('892 fix1 WI-4 check refuses a node scope skip unless the record role is implementer', t => {
+  const skip = { name: 'node', command: 'owner-gates.sh --role implementer', exitCode: 0, scopeSkip: 'implementer run; product-only diff' };
+  const r = repo(t, ['App/MadoApp.swift']);
+  for (const extra of [{}, { role: 'delegator' }, { role: 'Implementer' }, { role: '' }]) {
+    const res = check(r, skip, r.base, extra);
+    assert.equal(res.status, 1, `${JSON.stringify(extra)}: ${res.stdout}`);
+    assert.match(res.stderr, /node scope skip refused: the record role is .*, not implementer/, JSON.stringify(extra));
+  }
+  assert.equal(check(r, skip, r.base, { role: 'implementer' }).status, 0);
+});
+
+test('892 fix1 WI-4 record writes the role and refuses an unknown one', t => {
+  const r = repo(t, ['App/MadoApp.swift']);
+  const input = path.join(r.dir, '.build/input.json');
+  fs.mkdirSync(path.dirname(input), { recursive: true });
+  const data = role => ({ issue: 892, task: 'i892', branch: 'b', head: r.head, role, gates: ladder({ name: 'node', command: 'node', exitCode: 0 }),
+    integrity: 'none', byType: [], notVerified: ['none'], commentUrl: 'https://github.com/anzchy/mado/issues/892#issuecomment-2' });
+  fs.writeFileSync(input, JSON.stringify(data('implementer')));
+  const ok = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(r.dir, '.build/mado-verify', `${r.head}.json`), 'utf8')).role, 'implementer');
+  fs.writeFileSync(input, JSON.stringify(data('auditor')));
+  const bad = spawnSync(process.execPath, [evidence, 'record', input], { cwd: r.dir, encoding: 'utf8' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /role must be implementer or delegator/);
 });

@@ -91,7 +91,7 @@ console.log('SF:/fixture.swift\\nFN:1,a\\nFN:2,b\\nFNDA:1,a\\nFNDA:${covered ===
 fi;  }
 node() { export PATH="$FIXTURE_BIN:$PATH"; "$FIXTURE_BIN/node" "$@"; }
 xcodegen() { "$FIXTURE_BIN/xcodegen" "$@"; }
-source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
+source "$OWNER" \${=OWNER_ARGS} "$FIXTURE_DIR" fixture-sha run fixture-base
 `);
   // #891: start from fixtureEnv so the caller's heavy-lock handoff and timing overrides never reach the
   // fixture's own top-level lock, then apply this fixture's private values.
@@ -106,10 +106,14 @@ source "$OWNER" "$FIXTURE_DIR" fixture-sha run fixture-base
   env.OWNER_GATES_PS = path.join(bin, 'fakeps');
   // #892 fix1: the caller's role (an implementer's owner-gates run) never reaches the fixture; tests set it via options.env.
   env.OWNER_GATES_ROLE = '';
+  // #892 fix1 WI-4: the role is an argument (`--role implementer`), never the environment.
+  env.OWNER_ARGS = (options.args ?? []).join(' ');
   Object.assign(env, options.env ?? {});
   if (options.staleOwner) fs.writeFileSync(`${env.MADO_HEAVY_LOCK}.guardian-stale.owner`, fs.readFileSync(new URL('./fixtures/guardian.owner', import.meta.url)));
   const result = spawnSync('/bin/zsh', [shell], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 });
-  const summary = fs.readFileSync(path.join(out, 'run-summary.txt'), 'utf8');
+  // #892 fix1: a run that wrote no summary (usage error before it) gives '' so the assertions, not a throw, report it.
+  const summaryFile = path.join(out, 'run-summary.txt');
+  const summary = fs.existsSync(summaryFile) ? fs.readFileSync(summaryFile, 'utf8') : '';
   if (process.env.OWNER_GATES_SAMPLE === '1') console.log(`SAMPLE mode=${mode} diff=${env.DIFF_PATH} hosted=${env.OWNER_GATES_HOSTED}\n${summary}`);
   if (process.env.OWNER_GATES_SAMPLE === '1') for (const f of fs.readdirSync(out)) console.log(`LOG ${f}\n${fs.readFileSync(path.join(out, f), 'utf8')}`);
   return { dir, out, env, result, nodeRecords: env.NODE_RECORDS, competitorMarker: env.COMPETITOR_MARKER, xcodeMarker: env.XCODE_MARKER, xcodegenMarker: env.XCODEGEN_MARKER, marker: env.EXPORT_MARKER, nodeMarker: env.NODE_MARKER, summary };
@@ -376,7 +380,7 @@ test('891 static sysctl and ps fakes are linked checked-in executables', t => {
 // .github/ or .claude/; the delegator's run (role unset or delegator) always runs it. Every other lane runs either way.
 const nodeRuns = f => fs.existsSync(f.nodeRecords) ? fs.readFileSync(f.nodeRecords, 'utf8').trim().split('\n').filter(Boolean).length : 0;
 test('892 WI-1 an implementer run skips the node lane on a product-only diff and says so', t => {
-  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', env: {OWNER_GATES_ROLE: 'implementer'}});
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', args: ['--role', 'implementer']});
   assert.equal(f.result.status, 0, f.result.stderr + f.summary);
   assert.match(f.summary, /^role=implementer$/m);
   assert.match(f.summary, /^node=skipped \(implementer run; diff touches no scripts\/, \.agents\/, \.github\/ or \.claude\/ path; the delegator's owner-gates run and GitHub CI cover node\)$/m);
@@ -387,21 +391,22 @@ test('892 WI-1 an implementer run skips the node lane on a product-only diff and
 });
 
 test('892 WI-1 an implementer run on a tooling diff and every delegator run still run the node lane', t => {
-  for (const [diff, env] of [['scripts/ci/foo.mjs', {OWNER_GATES_ROLE: 'implementer'}], ['.claude/agents/x.md', {OWNER_GATES_ROLE: 'implementer'}],
-    ['', {OWNER_GATES_ROLE: 'implementer'}],
-    ['App/MadoApp.swift', {}], ['App/MadoApp.swift', {OWNER_GATES_ROLE: 'delegator'}]]) {
-    const f = fixture(t, 'pass', 2, true, {diff, env});
+  // #892 fix1 WI-4: the role comes from `--role`, not OWNER_GATES_ROLE.
+  for (const [diff, args] of [['scripts/ci/foo.mjs', ['--role', 'implementer']], ['.claude/agents/x.md', ['--role', 'implementer']],
+    ['', ['--role', 'implementer']],
+    ['App/MadoApp.swift', []], ['App/MadoApp.swift', ['--role', 'delegator']]]) {
+    const f = fixture(t, 'pass', 2, true, {diff, args});
     assert.equal(f.result.status, 0, f.result.stderr + f.summary);
-    assert.match(f.summary, /^node=0$/m, `${diff} ${JSON.stringify(env)}`);
-    assert.equal(nodeRuns(f), 1, `${diff} ${JSON.stringify(env)}`);
-    assert.match(f.summary, new RegExp(`^role=${env.OWNER_GATES_ROLE ?? 'delegator'}$`, 'm'));
+    assert.match(f.summary, /^node=0$/m, `${diff} ${args}`);
+    assert.equal(nodeRuns(f), 1, `${diff} ${args}`);
+    assert.match(f.summary, new RegExp(`^role=${args[1] ?? 'delegator'}$`, 'm'));
   }
 });
 
-test('892 WI-1 an unknown OWNER_GATES_ROLE is refused before any lane', t => {
-  const f = fixture(t, 'pass', 2, true, {env: {OWNER_GATES_ROLE: 'auditor'}});
+test('892 WI-1 an unknown --role is refused before any lane', t => {
+  const f = fixture(t, 'pass', 2, true, {args: ['--role', 'auditor']});
   assert.equal(f.result.status, 2, f.result.stderr + f.summary);
-  assert.match(f.summary, /refused: .*OWNER_GATES_ROLE/);
+  assert.match(f.summary, /refused: .*--role auditor/);
   assert.doesNotMatch(f.summary, /^DONE$/m);
   assert.doesNotMatch(f.summary, /^(swift|xcodegen|node)=/m);
 });
@@ -499,7 +504,7 @@ test('892 fix1 fixture ignores the caller OWNER_GATES_ROLE', t => {
 // #892 fix1 WI-1 (gpt F1 / opus M1): a non-ASCII path is read from `git diff -z`, not Git's quoted display form, so it
 // selects the node lane for an implementer and the App-facing lanes for App/ paths.
 test('892 fix1 WI-1 non-ASCII paths select the node lane and the App-facing build', t => {
-  const tooling = fixture(t, 'pass', 2, true, {diff: 'scripts/测试.test.mjs', env: {OWNER_GATES_ROLE: 'implementer'}});
+  const tooling = fixture(t, 'pass', 2, true, {diff: 'scripts/测试.test.mjs', args: ['--role', 'implementer']});
   assert.equal(tooling.result.status, 0, tooling.result.stderr + tooling.summary);
   assert.match(tooling.summary, /^node=0$/m);
   assert.equal(nodeRuns(tooling), 1);
@@ -507,4 +512,33 @@ test('892 fix1 WI-1 non-ASCII paths select the node lane and the App-facing buil
   assert.equal(app.result.status, 0, app.result.stderr + app.summary);
   assert.match(fs.readFileSync(app.xcodeMarker, 'utf8'), /^build-for-testing$/m);
   assert.match(app.summary, /^apptests-retained=0 /m);
+});
+
+// #892 fix1 WI-4 (gpt F4 / opus L4): an implementer run is chosen by an explicit `--role implementer` argument. An
+// OWNER_GATES_ROLE left in the delegator's shell is ignored with a warning, so the delegator's run never skips node.
+test('892 fix1 WI-4 an ambient OWNER_GATES_ROLE=implementer is ignored with a warning; the run is the delegator\'s', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', env: {OWNER_GATES_ROLE: 'implementer'}});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=delegator$/m);
+  assert.match(f.summary, /^role-env-ignored=implementer \(OWNER_GATES_ROLE is not read; pass --role implementer\)$/m);
+  assert.match(f.result.stderr, /owner-gates: warning: OWNER_GATES_ROLE=implementer ignored/);
+  assert.match(f.summary, /^node=0$/m);
+  assert.equal(nodeRuns(f), 1);
+});
+
+test('892 fix1 WI-4 --role needs implementer or delegator, and the positional arguments still follow', t => {
+  for (const args of [['--role', 'Implementer'], ['--role', 'IMPLEMENTER'], ['--role', 'implementer,delegator']]) {
+    const f = fixture(t, 'pass', 2, true, {args});
+    assert.equal(f.result.status, 2, `${args}: ${f.result.stderr}${f.summary}`);
+    assert.match(f.summary, /refused: --role .* is not implementer or delegator/, `${args}`);
+    assert.doesNotMatch(f.summary, /^DONE$/m, `${args}`);
+  }
+  // A bare --role (no value, no positional arguments) is a usage error before any summary.
+  const bare = spawnSync('/bin/zsh', [owner, '--role'], {encoding: 'utf8', env: fixtureEnv({})});
+  assert.equal(bare.status, 2);
+  assert.match(bare.stdout, /^usage: owner-gates\.sh \[--role implementer\|delegator\] <worktree>/);
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/MadoApp.swift', args: ['--role', 'implementer'], env: {OWNER_GATES_ROLE: 'delegator'}});
+  assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+  assert.match(f.summary, /^role=implementer$/m);
+  assert.match(f.summary, /^node=skipped /m);
 });

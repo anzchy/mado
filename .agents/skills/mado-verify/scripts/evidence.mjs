@@ -74,6 +74,9 @@ function check(args) {
     const files = typeof record.base === 'string' && /^[0-9a-f]{7,40}$/i.test(record.base) ? listDiffPaths(worktree, record.base, named) : null;
     const what = node.scopeSkip ? 'node scope skip' : 'node flake disposition';
     if (files === null) throw new Error(`${what}: cannot list the diff ${record.base}..${named}`);
+    // #892 fix1 WI-4: only an implementer run (owner-gates.sh --role implementer, written to the record) may skip node.
+    if (node.scopeSkip && record.role !== 'implementer')
+      throw new Error(`node scope skip refused: the record role is ${JSON.stringify(record.role ?? null)}, not implementer; only an owner-gates.sh --role implementer run skips node`);
     if (node.scopeSkip && nodeLaneRequired(files))
       throw new Error('node scope skip refused: the diff is empty or touches scripts/, .agents/, .github/ or .claude/, so the node lane must run');
     for (const t of node.disposition?.tests ?? [])
@@ -104,6 +107,8 @@ try {
   const d = JSON.parse(fs.readFileSync(input, 'utf8'));
   if (!/^[0-9a-f]{40}$/.test(d.head) || !Number.isSafeInteger(d.issue) || d.issue < 1 || !Array.isArray(d.gates) || !Array.isArray(d.byType) || !Array.isArray(d.notVerified)) throw new Error('invalid evidence fields');
   if (d.head !== head()) throw new Error('evidence head does not match current HEAD');
+  // #892 fix1 WI-4: the owner-gates role from the summary's role= line.
+  if (d.role !== undefined && d.role !== 'implementer' && d.role !== 'delegator') throw new Error(`evidence role must be implementer or delegator (the summary's role= line), got ${JSON.stringify(d.role)}`);
   if (d.link) {
     if (d.head !== d.link.newHead || d.base !== d.link.newBase) throw new Error('linked record head/base mismatch');
     const decision = evaluateReuse(process.cwd(), d.link.oldBase, d.link.newBase, d.link.oldHead, d.link.newHead);
@@ -142,7 +147,7 @@ try {
       fingerprints = directFingerprints(cwd, d.head);
       lanes = Object.fromEntries(d.gates.map(g => [g.name, { status: g.notVerified ? 'not-verified' : g.disposition ? 'flaky-disposition' : g.scopeSkip ? 'scope-skip' : 'executed' }]));
     }
-    const record = { head: d.head, base, fingerprints, link, lanes,
+    const record = { head: d.head, base, ...(d.role ? { role: d.role } : {}), fingerprints, link, lanes,
       ...(link ? { ciBinding: 'required-new-head' } : {}), gates: d.gates, complete: verdict.complete,
       problems: verdict.problems, commentUrl: d.commentUrl, issue: d.issue, recordedAt: new Date().toISOString() };
     if (link) verifyLinkedRecord(cwd, record);
