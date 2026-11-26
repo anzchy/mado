@@ -167,11 +167,74 @@ test('898 WI-1 a SEPARATION-BROKEN receipt is refused', t => {
 test('898 WI-1 a behaviour-preserving refactor commit is a named exception, not a refusal', t => {
   const f = repo(t); compliant(f);
   f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { return 1 } }\n');
-  const refactor = f.commit('refactor', ['Refactor: i1-WI-2 inline return, behaviour unchanged']);
+  const refactor = f.commit('refactor', ['Refactor: R1 inline return, behaviour unchanged']);
   const r = f.evaluate();
   assert.equal(r.verdict, 'pass', JSON.stringify(r));
   assert.deepEqual(r.exceptions.map(x => [x.kind, x.commit]), [['refactor', refactor]]);
   assert.equal(r.counts.exceptions, 1);
+});
+
+// fix1 WI-1 (opus F1, gpt M1, opus M1, L2): exceptions are anchored, not self-asserted.
+test('898 fix1 WI-1 implementation first with a Refactor: line and no RED at all is refused, not pass', t => {
+  const f = repo(t);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { 1 } }\n');
+  const impl = f.commit('implementation', ['Refactor: WI-1 tidy']);
+  f.write('Packages/MadoKit/Tests/CoreTests/FooTests.swift', '@Test func a() { #expect(Foo().bar() == 1) }\n');
+  f.commit('tests');
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.deepEqual(r.outside.map(x => x.commit), [impl]);
+  assert.equal(r.exceptions.filter(x => x.kind === 'refactor').length, 0);
+});
+
+test('898 fix1 WI-1 a Refactor: commit before its receipt\'s implementation commit, or naming a receipt not in the range, is outside', t => {
+  const f = repo(t);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { fatalError() } }\n');
+  const stub = f.commit('stub', ['Stub-For: R1']);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { 1 } }\n');
+  const early = f.commit('early', ['Refactor: R1 claimed refactor']);
+  f.receipts([receipt('R1', early)]);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { 1 }; func baz() {} }\n');
+  f.write('Packages/MadoKit/Tests/CoreTests/FooTests.swift', '@Test func a() { #expect(Foo().bar() == 1) }\n');
+  f.commit('impl', [trailer('R1')]);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { return 1 }; func baz() {} }\n');
+  const late = f.commit('refactor', ['Refactor: R2 names a receipt that is not in the range']);
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.deepEqual(r.outside.map(x => x.commit).sort(), [early, late].sort());
+  assert.equal(stub.length, 40);
+});
+
+test('898 fix1 WI-1 trailers count only in the trailer block, not in prose', t => {
+  const f = repo(t); compliant(f);
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { return 1 } }\n');
+  f.git('add', 'App/Foo.swift');
+  f.git('commit', '-q', '-m', 'tidy', '-m', 'Refactor: R1 this line is prose in the body', '-m', 'More prose after it.', '-m', 'Refs #1');
+  const prose = f.head();
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.deepEqual(r.outside.map(x => x.commit), [prose]);
+  // The same trailer in the final paragraph (with a separate Co-Authored-By paragraph after it) counts.
+  f.git('commit', '-q', '--amend', '-m', 'tidy', '-m', 'Why: prose.', '-m', 'Refs #1\nRefactor: R1 inline return', '-m', 'Co-Authored-By: X <x@example.invalid>');
+  const ok = f.evaluate();
+  assert.equal(ok.verdict, 'pass', JSON.stringify(ok));
+  assert.deepEqual(ok.exceptions.map(x => x.kind), ['refactor']);
+});
+
+test('898 fix1 WI-1 a Stub-For commit whose RED window changes no production file needs a replay (unknown, replay required)', t => {
+  const f = repo(t);
+  // The "stub" holds the full implementation; the carrier only fixes a deliberately wrong test.
+  f.write('App/Foo.swift', 'struct Foo { func bar() -> Int { 1 } }\n');
+  const stub = f.commit('stub', ['Stub-For: R1']);
+  f.receipts([receipt('R1', stub)]);
+  f.write('Packages/MadoKit/Tests/CoreTests/FooTests.swift', '@Test func a() { #expect(Foo().bar() == 1) }\n');
+  f.commit('test fix', [trailer('R1')]);
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'unknown', JSON.stringify(r));
+  assert.equal(r.receipts[0].status, 'unknown');
+  assert.equal(r.receipts[0].flag, 'stub-only-window');
+  assert.match(r.receipts[0].problems.join(' '), /replay/);
+  assert.deepEqual(r.replayNeeded, ['R1']);
 });
 
 test('898 WI-1 a test-only commit after green without a RED trailer is a named exception', t => {
@@ -230,7 +293,7 @@ test('898 WI-1 a commit waiver covers a production commit outside any RED window
   assert.equal(r.counts.waived, 1);
 });
 
-test('898 WI-1 a docs-only range with no RED trailers is skipped; product code without trailers is unknown', t => {
+test('898 WI-1 a docs-only range with no RED trailers is skipped; product code without trailers is refused', t => {
   const f = repo(t);
   f.write('docs/a.md', 'changed\n'); f.commit('docs');
   const r = f.evaluate();

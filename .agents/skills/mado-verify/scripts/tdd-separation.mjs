@@ -44,8 +44,20 @@ const resolveCommit = (cwd, rev) => typeof rev === 'string' && rev && !rev.start
 const isAncestor = (cwd, a, b) => git(cwd, ['merge-base', '--is-ancestor', a, b]).status === 0;
 const nul = text => text.split('\0').filter(Boolean);
 
+// fix1 (L2): trailers are read from the trailer block only: the trailing paragraphs (never the subject) whose every line
+// is `Key: value` or `Refs #n`. A prose line that starts with `Refactor:` or `Red-Receipt:` in the body does not count.
+const TRAILER_LINE = /^[A-Za-z][A-Za-z0-9-]*(?::\s|\s+#\d)/;
+function trailerLines(body) {
+  const paragraphs = body.replace(/\s+$/, '').split(/\n[ \t]*\n/), lines = [];
+  for (let i = paragraphs.length - 1; i >= 1; i--) {
+    const para = paragraphs[i].split('\n').filter(line => line.trim());
+    if (!para.length || !para.every(line => TRAILER_LINE.test(line))) break;
+    lines.unshift(...para);
+  }
+  return lines;
+}
 function trailers(body) {
-  const lines = body.split('\n');
+  const lines = trailerLines(body);
   const pick = re => lines.map(line => re.exec(line)?.[1]).filter(Boolean);
   return { red: [...new Set(pick(/^Red-Receipt:\s+(\S+)/))], stubFor: [...new Set(pick(/^Stub-For:\s+(\S+)/))], refactor: pick(/^Refactor:\s+(.+)$/) };
 }
@@ -185,10 +197,29 @@ export function evaluateSeparation({ worktree, base, head, archiveDir = defaultA
     }
     result.receipts.push(entry);
   }
-  const unknownIds = new Set(result.receipts.filter(e => e.status === 'unknown').map(e => e.id));
+  // fix1 (gpt M1, opus M1): a Stub-For commit that changed production while its receipt's RED window changes none may hold
+  // the whole implementation (the RED then came from a wrong test fixed later). Not refused by itself: a replay decides.
+  for (const entry of result.receipts) {
+    const w = windows.get(entry.id);
+    if (!w || entry.status !== 'held') continue;
+    const stubbed = commits.some(c => c.stubFor.includes(entry.id) && c.production.length);
+    const windowProduction = commits.some(c => c.production.length && c.sha !== w.from && isAncestor(cwd, w.from, c.sha) && isAncestor(cwd, c.sha, w.to));
+    if (stubbed && !windowProduction) {
+      entry.flag = 'stub-only-window';
+      entry.status = 'unknown';
+      entry.problems.push('its Stub-For commit changed production but its RED window changes none: the stub may hold the implementation; replay required');
+    }
+  }
+  const unknownIds = new Set(result.receipts.filter(e => e.status === 'unknown' && !e.flag).map(e => e.id));
+  const held = new Map(result.receipts.filter(e => windows.has(e.id) && (e.status === 'held' || e.flag)).map(e => [e.id, e]));
   for (const c of commits) {
     if (c.production.length) {
-      if (c.refactor.length) { result.exceptions.push({ kind: 'refactor', commit: c.sha, subject: c.subject, note: c.refactor[0] }); continue; }
+      // fix1 (opus F1): `Refactor: <receipt-id> <why>` is an exception only after that receipt's implementation commit, for a
+      // receipt in this range whose RED window holds. Otherwise the commit is judged like any other production commit, so
+      // implementation-first + a Refactor: line + no RED is OUTSIDE (refused), never pass.
+      const anchored = c.refactor.map(note => ({ note, id: note.split(/\s+/)[0] }))
+        .find(({ id }) => held.has(id) && held.get(id).impl !== c.sha && isAncestor(cwd, held.get(id).impl, c.sha));
+      if (anchored) { result.exceptions.push({ kind: 'refactor', commit: c.sha, subject: c.subject, receipt: anchored.id, note: anchored.note }); continue; }
       const stub = c.stubFor.some(id => windows.has(id) && isAncestor(cwd, c.sha, windows.get(id).from));
       const inWindow = [...windows.values()].some(w => w.from !== c.sha && isAncestor(cwd, w.from, c.sha) && isAncestor(cwd, c.sha, w.to));
       // A commit tied to a receipt that cannot be judged is part of that unknown, not a separate refusal.
