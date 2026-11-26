@@ -6,42 +6,73 @@ public struct TableRecognitionService: Sendable {
     private let settings: any TableRecognitionSettings
     private let credentials: any TableRecognitionCredentialStore
     private let transport: any HTTPTransport
+    private let report: @Sendable (TableRecognitionDiagnostic) -> Void
     /// Test seam: runs once the request is built, in the synchronous stretch before it is sent.
     private let requestBuilt: @Sendable () -> Void
 
     public init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
-                transport: any HTTPTransport) {
-        self.init(settings: settings, credentials: credentials, transport: transport, requestBuilt: {})
+                transport: any HTTPTransport,
+                report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void = TableRecognitionDiagnostic.record) {
+        self.init(settings: settings, credentials: credentials, transport: transport,
+                  requestBuilt: {}, report: report)
     }
 
     init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
          transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void) {
+        self.init(settings: settings, credentials: credentials, transport: transport,
+                  requestBuilt: requestBuilt, report: TableRecognitionDiagnostic.record)
+    }
+
+    init(settings: any TableRecognitionSettings, credentials: any TableRecognitionCredentialStore,
+         transport: any HTTPTransport, requestBuilt: @escaping @Sendable () -> Void,
+         report: @escaping @Sendable (TableRecognitionDiagnostic) -> Void) {
         self.settings = settings
         self.credentials = credentials
         self.transport = transport
         self.requestBuilt = requestBuilt
+        self.report = report
     }
 
     public func recognise(_ image: Data) async -> TableRecognitionResult {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
-        case .ready(let request, let destination): return await send(request, to: destination)
+        case .ready(let request, let destination):
+            let sent = await send(request, to: destination)
+            if case .cancelled = sent.result { return .cancelled }
+            report(TableRecognitionDiagnostic.make(response: sent.response,
+                                                   durationMilliseconds: sent.durationMilliseconds,
+                                                   errorClass: sent.result.failureClass))
+            return sent.result
         }
     }
 
     /// Sends once, never retries, and only to `destination`, the consented host. A run cancelled before the call,
     /// including while the request was being built, sends nothing; one cancelled while the reply was outstanding is
     /// cancelled, whatever came back.
-    private func send(_ request: URLRequest, to destination: HTTPDestination) async -> TableRecognitionResult {
-        if Task.isCancelled { return .cancelled }
+    private struct Sent {
         let result: TableRecognitionResult
+        let response: HTTPResponse?
+        let durationMilliseconds: Int
+    }
+
+    private func send(_ request: URLRequest, to destination: HTTPDestination) async -> Sent {
+        if Task.isCancelled { return Sent(result: .cancelled, response: nil, durationMilliseconds: 0) }
+        let start = ContinuousClock.now
+        let result: TableRecognitionResult
+        let response: HTTPResponse?
         do {
-            result = TableRecognitionReply.classify(try await transport.send(request, to: destination))
+            let received = try await transport.send(request, to: destination)
+            response = received
+            result = TableRecognitionReply.classify(received)
         } catch {
+            response = nil
             result = TableRecognitionReply.classify(error)
         }
-        return Task.isCancelled ? .cancelled : result
+        let elapsed = start.duration(to: .now).components
+        let milliseconds = Double(elapsed.seconds) * 1_000 + Double(elapsed.attoseconds) / 1_000_000_000_000_000
+        return Sent(result: Task.isCancelled ? .cancelled : result, response: response,
+                    durationMilliseconds: Int(min(Double(Int.max), max(0, milliseconds))))
     }
 
     private enum Prepared { case ready(URLRequest, HTTPDestination), notSent(TableRecognitionBlock), cancelled }
@@ -83,12 +114,32 @@ public struct TableRecognitionService: Sendable {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
         case .ready(let request, let destination):
-            switch await send(request, to: destination) {
-            case .table(let rows): return TableRecognitionSample.matches(rows) ? .passed : .failed(.other)
-            case .notSent(let block): return .notSent(block)
-            case .failed(let failure): return .failed(failure)
+            let sent = await send(request, to: destination)
+            let answer: TableRecognitionTestResult
+            switch sent.result {
+            case .table(let rows): answer = TableRecognitionSample.matches(rows) ? .passed : .failed(.other)
+            case .notSent(let block): answer = .notSent(block)
+            case .failed(let failure): answer = .failed(failure)
             case .cancelled: return .cancelled
             }
+            report(TableRecognitionDiagnostic.make(response: sent.response,
+                                                   durationMilliseconds: sent.durationMilliseconds,
+                                                   errorClass: answer.failureClass))
+            return answer
         }
+    }
+}
+
+private extension TableRecognitionResult {
+    var failureClass: TableRecognitionFailure? {
+        if case .failed(let failure) = self { return failure }
+        return nil
+    }
+}
+
+private extension TableRecognitionTestResult {
+    var failureClass: TableRecognitionFailure? {
+        if case .failed(let failure) = self { return failure }
+        return nil
     }
 }
