@@ -30,7 +30,8 @@ function fixture(t, mainPath = 'docs/note.md', options = {}) {
   git(dir, 'init', '-q', '-b', 'main');
   git(dir, 'config', 'user.email', 'fixture@example.invalid');
   git(dir, 'config', 'user.name', 'Fixture');
-  for (const name of ['gate-policy.mjs', 'evidence.mjs', 'reuse-policy.mjs', 'reuse-check.mjs', 'reuse-allowlist.json'])
+  // #898: evidence.mjs imports the tdd-separation lane.
+  for (const name of ['gate-policy.mjs', 'evidence.mjs', 'tdd-separation.mjs', 'reuse-policy.mjs', 'reuse-check.mjs', 'reuse-allowlist.json'])
     write(dir, `.agents/skills/mado-verify/scripts/${name}`, fs.readFileSync(path.join(skill, 'scripts', name)));
   for (const name of ['rebase-verify.sh', 'rebase-verify-tree.py', 'scan-conflict-markers.py'])
     write(dir, `.agents/skills/mado-delegator/scripts/${name}`, fs.readFileSync(path.join(verifierScripts, name)));

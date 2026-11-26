@@ -166,8 +166,51 @@ export function flakeDispositionProblems(gate, today = new Date().toISOString().
 }
 export const flakyGates = gates => Array.isArray(gates) ? gates.filter(g => g && g.name === 'node' && g.exitCode !== 0 && g.disposition) : [];
 
-// #898 tdd-separation lane (stub; signatures only).
+// #898 tdd-separation lane (owner 2026-11-25): evidence that each RED was recorded on a clean committed tree. The lane is
+// tdd-separation.mjs; the path classes, the selection and the record findings live here so owner-gates-tools, evidence.mjs
+// and the lane share them. It ships report-only: owner-gates and evidence.mjs check print its verdict and warnings but do
+// not fail, until the delegator flips TDD_SEPARATION_MODE to 'mandatory' in a reviewed commit after the dry run.
 export const TDD_SEPARATION_LANE = 'tdd-separation';
 export const TDD_SEPARATION_MODE = 'report-only';
-export function tddSeparationRequired(files) { throw new Error('tddSeparationRequired not implemented'); }
-export function tddSeparationFindings(options) { throw new Error('tddSeparationFindings not implemented'); }
+// Test paths: tdd-guardian 0.10.2's isTestFile heuristic (file names and test directories) plus Mado's test targets and
+// fixtures. Documentation: docs/ and *.md. Everything else is production (tooling scripts included).
+const TEST_FILE_RES = [/[._-](test|tests|spec|specs)\.[a-z0-9]+$/i, /^test_[^/]+\.py$/i, /^[^/]+_test\.(go|py|rb|rs|dart|exs?)$/i,
+  /(Test|Tests|Spec|Specs|IT)\.(java|kt|kts|scala|cs|fs|swift|groovy)$/, /^[^/]+Tests?\.swift$/, /\.feature$/i];
+const TEST_DIR_RE = /(^|\/)(tests?|specs?|__tests__|__specs__|testing|it|e2e|integration-tests|fixtures|AppTests|UITests|TestAssets)(\/|$)/i;
+const BOOKKEEPING_RE = /(^|\/)\.claude\/tdd-guardian\//;
+export function isTestPath(file) {
+  const clean = String(file ?? '').trim().replace(/\\/g, '/');
+  if (!clean) return false;
+  const base = clean.slice(clean.lastIndexOf('/') + 1);
+  return TEST_FILE_RES.some(re => re.test(base)) || TEST_DIR_RE.test(clean.slice(0, clean.lastIndexOf('/') + 1));
+}
+export const isDocPath = file => typeof file === 'string' && (file.startsWith('docs/') || /\.md$/i.test(file));
+export const isProductionPath = file => typeof file === 'string' && file !== '' && !isTestPath(file) && !isDocPath(file) && !BOOKKEEPING_RE.test(file);
+// Selection: the lane is required for product code (App/, Packages/, project.yml outside tests and docs). Docs-only and
+// tooling diffs are skipped by this rule; their RED trailers are still evaluated and reported (warnings only).
+export const PRODUCT_CODE_PREFIXES = Object.freeze(['App/', 'Packages/']);
+export const PRODUCT_CODE_FILES = Object.freeze(['project.yml']);
+export function tddSeparationRequired(files) {
+  return files.some(file => isProductionPath(file) && (PRODUCT_CODE_FILES.includes(file) || PRODUCT_CODE_PREFIXES.some(prefix => file.startsWith(prefix))));
+}
+const COUNT_KEYS = ['receipts', 'held', 'refused', 'unknown', 'waived', 'exceptions'];
+const wellFormed = r => r && typeof r === 'object' && r.lane === TDD_SEPARATION_LANE && typeof r.verdict === 'string' &&
+  (['skipped', 'error'].includes(r.verdict) || (r.counts && COUNT_KEYS.every(k => Number.isSafeInteger(r.counts[k]))));
+const fingerprint = r => JSON.stringify([r.verdict, COUNT_KEYS.map(k => r.counts?.[k] ?? null), (r.receipts ?? []).map(e => `${e.id}:${e.status}`),
+  (r.outside ?? []).map(o => `${o.commit}:${o.waiver ?? ''}`), r.waivers ?? []]);
+// stored: the record's tddSeparation; recomputed: evidence.mjs check's own run of the lane (undefined if not run);
+// required: tddSeparationRequired(diff). Mandatory mode turns required findings into problems (refusal); report-only, and
+// any finding on a diff that does not require the lane, are warnings.
+export function tddSeparationFindings({ stored, recomputed, required, mode = TDD_SEPARATION_MODE }) {
+  const issues = [];
+  if (stored === undefined || stored === null) {
+    if (required) issues.push('missing: a product-code record needs the lane result (owner-gates <prefix>-tdd-separation.json as tddSeparation)');
+  } else if (!wellFormed(stored)) issues.push('malformed lane result in the record');
+  else {
+    if (recomputed && fingerprint(stored) !== fingerprint(recomputed))
+      issues.push(`stored result differs from the recomputation (stored ${stored.verdict}, recomputed ${recomputed.verdict}${recomputed.reason ? `: ${recomputed.reason}` : ''})`);
+    const verdict = recomputed?.verdict ?? stored.verdict;
+    if (['refused', 'unknown', 'error'].includes(verdict)) issues.push(`verdict ${verdict}${(recomputed ?? stored).reason ? ` (${(recomputed ?? stored).reason})` : ''}`);
+  }
+  return mode === 'mandatory' && required ? { problems: issues, warnings: [] } : { problems: [], warnings: issues };
+}
