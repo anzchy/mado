@@ -18,6 +18,15 @@ const AGENTS = ['.claude/agents/opus-implementor.md', '.claude/agents/codex-impl
 const PANE_REF = /picsee-wt\/(?:<(?!issue>-<slug>)[^>\s]+>|[a-z][a-z0-9]*-(?:imple|implementor|implementer|auditor|planner|researcher)(?:-(?:[0-9]+|<n>))?(?![\w<-]))/g;
 
 const paneRefs = text => [...new Set(text.match(PANE_REF) ?? [])];
+// Live text only (#901 fix1): HTML comments, and `#` comment lines inside code fences, are not instructions. Line
+// breaks inside an HTML comment are kept so the step and line structure around it stays the same.
+export function liveText(text) {
+  let fenced = false;
+  return text.replace(/<!--[\s\S]*?(?:-->|$)/g, c => c.replace(/[^\n]/g, '')).split('\n').filter(line => {
+    if (/^\s*(?:```|~~~)/.test(line)) { fenced = !fenced; return true; }
+    return !(fenced && /^\s*#/.test(line));
+  }).join('\n');
+}
 const hasRule = text => text.toLowerCase().includes(RULE.toLowerCase());
 
 function step(skill, n) {
@@ -29,7 +38,10 @@ function step(skill, n) {
 }
 
 // files: { brief, skill, templates: {name: text}, agents: {name: text} } → problem strings (empty when clean).
-export function lintTaskWorktree({ brief, skill, templates = {}, agents = {} }) {
+export function lintTaskWorktree(files) {
+  const live = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, liveText(v)]));
+  const brief = liveText(files.brief), skill = liveText(files.skill);
+  const templates = live(files.templates ?? {}), agents = live(files.agents ?? {});
   const problems = [];
   if (!hasRule(brief)) problems.push(`brief template: missing the rule "${RULE}"`);
   if (!/^Worktree: `?~\/Documents\/mac-app\/picsee-wt\/<issue>-<slug>`?/m.test(brief))

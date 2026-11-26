@@ -66,3 +66,23 @@ test('#901 an implementer definition that works in its pane worktree fails', () 
   files.agents['codex-implementor.md'] = '- One item per session. Work only in your worktree `~/Documents/mac-app/picsee-wt/<pane>` on the branch.\n';
   assert.match(lintTaskWorktree(files).join('\n'), /codex-implementor\.md.*pane-home worktree/);
 });
+
+test('#901 fix1 (gpt M2, opus L4) the rule and the placeholder count only as live text, not inside comments', () => {
+  const briefInHtml = good();
+  briefInHtml.brief = '<!-- One task, one worktree\nWorktree: `~/Documents/mac-app/picsee-wt/<issue>-<slug>` -->\nWork only in the pane home.\n';
+  const brief = lintTaskWorktree(briefInHtml).join('\n');
+  assert.match(brief, /brief template: missing the rule/);
+  assert.match(brief, /brief template: no `Worktree:/);
+  const skillInHtml = good();
+  skillInHtml.skill = '1. **Issue** — x\n2. **Brief** — copy. <!-- One task, one worktree: picsee-wt/<issue>-<slug> --> Work in the pane home.\n3. **Watch** — y\n';
+  const skill = lintTaskWorktree(skillInHtml).join('\n');
+  assert.match(skill, /SKILL\.md step 2: missing the rule/);
+  assert.match(skill, /SKILL\.md step 2: no picsee-wt\/<issue>-<slug>/);
+  const shell = good();
+  shell.brief = 'Worktree: `~/Documents/mac-app/picsee-wt/<issue>-<slug>`.\n```sh\n# One task, one worktree\ncd "$pane_home"\n```\n';
+  assert.match(lintTaskWorktree(shell).join('\n'), /brief template: missing the rule/);
+  // Live text next to a comment still counts.
+  const live = good();
+  live.brief = `<!-- note -->\n${live.brief}`;
+  assert.deepEqual(lintTaskWorktree(live), []);
+});
