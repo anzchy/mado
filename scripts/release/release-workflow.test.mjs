@@ -34,7 +34,7 @@ test("only the mado-v* tag pattern triggers a release", () => {
 test("manual rehearsal uses the same signed verification steps and cannot reach release writes", () => {
   assert.equal((workflow.match(/^  release:$/gm) ?? []).length, 1, "one shared job");
   assert.match(workflow, /github\.repository == 'anzchy\/mado'/);
-  assert.match(step(/^Checkout$/).text, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.commit_sha \|\| github\.sha \}\}/);
+  assert.match(step(/^Checkout$/).text, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.commit_sha \|\| github\.ref \}\}/);
   assert.match(step(/^Check rehearsal inputs$/).text, /if: env\.RELEASE_MODE == 'rehearsal'/);
   assert.match(step(/^Check rehearsal inputs$/).text, /git cat-file -e/);
   for (const name of [/^Build Release$/, /^Re-sign Sparkle/, /^Check entitlements/, /^Check product identity/, /^Check package contents$/]) {

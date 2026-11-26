@@ -46,7 +46,7 @@ jobs:
         with:
           # The build number is the commit count, and the tag must be on main.
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.ref }}
 
       - name: Check rehearsal inputs
         if: env.RELEASE_MODE == 'rehearsal'
