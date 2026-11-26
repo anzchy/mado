@@ -7,6 +7,7 @@
 //   tdd-separation.mjs gate --worktree <wt> --base <sha> --head <sha> [--out <json>] [--archive <dir>] [--waivers <dir>]
 //                           [--receipts <receipts.json>]… [--rebased-from <old-base>..<old-head>]
 //                           [--issue <n>] [--accept-waiver <id>@<sha256>]… [--replay <replay.json>]…
+//                           [--accept-replay <receipt>@<sha256 of the replay file>]…
 //   tdd-separation.mjs evaluate <same options>          (prints the JSON result)
 //   tdd-separation.mjs replay --worktree <wt> --head <sha> --receipt <id> --kind node|swift --filter <f> [--archive <dir>]
 //                             [--out <wt>/.build/mado-verify/replay/<id>.json]
@@ -165,28 +166,37 @@ function loadWaivers(dir) {
   }
   return { valid, invalid };
 }
-function parseAccepted(tokens) {
-  return (tokens ?? []).map(token => { const m = /^([A-Za-z0-9][A-Za-z0-9._-]{0,127})@([0-9a-f]{12,64})$/.exec(String(token)); return m ? { token, id: m[1], digest: m[2] } : { token, problem: `--accept-waiver ${token} is not <id>@<sha256>` }; });
+function parseAccepted(tokens, flag = '--accept-waiver') {
+  return (tokens ?? []).map(token => { const m = /^([A-Za-z0-9][A-Za-z0-9._-]{0,127})@([0-9a-f]{12,64})$/.exec(String(token)); return m ? { token, id: m[1], digest: m[2] } : { token, problem: `${flag} ${token} is not <id>@<sha256>` }; });
 }
 
+// fix2 (opus N1, gpt F3): a replay file is a claim, like a waiver file: anyone who can write the worktree can write it.
+// Its digest is the sha256 of the file's bytes; it binds only when the invocation names it with
+// --accept-replay <receipt>@<digest> (the delegator's own lane, evidence check or owner-gates run).
 const defaultReplayFiles = cwd => {
   const dir = path.join(cwd, '.build/mado-verify/replay');
   try { return fs.readdirSync(dir).filter(n => n.endsWith('.json')).sort().map(n => path.join(dir, n)); } catch { return []; }
 };
-const loadReplays = files => files.map(file => ({ ...readJson(file), file: path.basename(file) })).filter(r => typeof r.receipt === 'string' && typeof r.verdict === 'string');
+export const replayFileDigest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const loadReplays = files => files.flatMap(file => {
+  let digest; try { digest = replayFileDigest(file); } catch { return []; }
+  const r = readJson(file);
+  return r && typeof r.receipt === 'string' && typeof r.verdict === 'string' ? [{ ...r, file: path.basename(file), digest }] : [];
+});
+const replayKey = r => `${r.verdict}:${r.red?.assertion === true}`;
 
 const ignoredPaths = (cwd, paths) => paths.length ? new Set(nul(git(cwd, ['check-ignore', '-z', '--stdin'], paths.join('\0') + '\0').stdout || '')) : new Set();
 
 export function evaluateSeparation({ worktree, base, head, archiveDir = defaultArchiveDir(), waiverDir = defaultWaiverDir(),
-  receiptFiles = [], rebasedFrom, mode = TDD_SEPARATION_MODE, issue, acceptedWaivers = [], replayFiles } = {}) {
+  receiptFiles = [], rebasedFrom, mode = TDD_SEPARATION_MODE, issue, acceptedWaivers = [], replayFiles, acceptedReplays = [] } = {}) {
   const cwd = worktree;
   const baseSha = resolveCommit(cwd, base), headSha = resolveCommit(cwd, head);
   if (!baseSha) throw new Error(`base ${base} is not a commit in ${cwd}`);
   if (!headSha) throw new Error(`head ${head} is not a commit in ${cwd}`);
-  if (rebasedFrom) return carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers, replayFiles });
+  if (rebasedFrom) return carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers, replayFiles, acceptedReplays });
   const result = { lane: 'tdd-separation', version: LANE_VERSION, mode, base: baseSha, head: headSha, verdict: 'pass',
     counts: { receipts: 0, held: 0, refused: 0, unknown: 0, waived: 0, exceptions: 0 },
-    receipts: [], outside: [], exceptions: [], waivers: [], claims: [], acceptProblems: [], invalidWaivers: [], replayNeeded: [] };
+    receipts: [], outside: [], exceptions: [], waivers: [], claims: [], acceptProblems: [], invalidWaivers: [], replayNeeded: [], replayClaims: [] };
   const commits = listCommits(cwd, baseSha, headSha);
   for (const c of commits) c.production = c.paths.filter(isProductionPath);
   const ids = [...new Set(commits.flatMap(c => c.red))];
@@ -248,24 +258,41 @@ export function evaluateSeparation({ worktree, base, head, archiveDir = defaultA
   // fix1 (gpt F3, opus M4): replay is required for a receipt that is not held (refused/unknown: a waiver can only cover it
   // with a replay), a stub-only window, and a held receipt whose implementation commit is a bug fix (`fix(...)`). A replay
   // binds when its JSON (replay --out, read from <wt>/.build/mado-verify/replay/ or --replay) names this receipt, its
-  // head_sha and this head. Missing: unknown (a waived receipt stays waived but the verdict is not pass). no-red, no-green
-  // or rejected: refused. A replay file is written by whoever ran it; the delegator reruns it for a binding result.
+  // head_sha and this head, AND the invocation accepted its file digest (--accept-replay, fix2). Missing: unknown (a waived
+  // receipt stays waived but the verdict is not pass). no-red, no-green or rejected: refused; accepted results that
+  // disagree: refused. An unaccepted file is shown as CLAIMED-REPLAY and decides nothing.
   const replays = loadReplays(replayFiles ?? defaultReplayFiles(cwd));
+  const acceptedR = parseAccepted(acceptedReplays, '--accept-replay');
+  const isAcceptedReplay = r => acceptedR.some(a => a.id === r.receipt && r.digest.startsWith(a.digest));
+  for (const r of replays) if (ids.includes(r.receipt)) result.replayClaims.push({ receipt: r.receipt, file: r.file, digest: r.digest, verdict: r.verdict, head: r.head, accepted: isAcceptedReplay(r) });
+  for (const a of acceptedR) {
+    if (a.problem) { result.acceptProblems.push(a.problem); continue; }
+    const hit = replays.filter(r => r.receipt === a.id && r.digest.startsWith(a.digest));
+    if (!hit.length) result.acceptProblems.push(`accepted replay ${a.id}@${a.digest.slice(0, 12)} matches no replay file for that receipt (changed after acceptance?)`);
+    else if (!hit.some(r => r.head === headSha)) result.acceptProblems.push(`accepted replay ${a.id}@${a.digest.slice(0, 12)} (${hit[0].file}) is for head ${sha7(hit[0].head)}, not ${sha7(headSha)}`);
+  }
   for (const entry of result.receipts) {
     const bugFix = commits.some(c => c.sha === entry.impl && /^fix(\([^)]*\))?!?:/.test(c.subject));
     const why = entry.flag ?? (entry.status !== 'held' ? entry.status : bugFix ? 'bug fix' : null);
     if (!why) continue;
     entry.replayRequired = why;
-    const bound = replays.find(r => r.receipt === entry.id && r.head === headSha && r.headSha && r.headSha === resolveCommit(cwd, entry.headSha ?? ''));
-    if (!bound) {
+    const red = resolveCommit(cwd, entry.headSha ?? '');
+    const bound = replays.filter(r => r.receipt === entry.id && r.head === headSha && r.headSha && r.headSha === red && isAcceptedReplay(r));
+    if (!bound.length) {
       entry.replayMissing = true;
-      if (entry.status === 'held') { entry.status = 'unknown'; entry.problems.push(`replay required (${why}): none bound to this receipt and head`); }
-      else if (!entry.problems.some(p => /replay required/.test(p))) entry.problems.push(`replay required (${why}): none bound to this receipt and head`);
+      if (entry.status === 'held') { entry.status = 'unknown'; entry.problems.push(`replay required (${why}): none accepted for this receipt and head`); }
+      else if (!entry.problems.some(p => /replay required/.test(p))) entry.problems.push(`replay required (${why}): none accepted for this receipt and head`);
       continue;
     }
-    entry.replay = { verdict: bound.verdict, file: bound.file };
-    if (bound.verdict === 'discriminates' && bound.red?.assertion === true) { if (entry.flag) entry.status = 'held'; }
-    else { entry.status = 'refused'; entry.problems.push(`replay ${bound.verdict}${bound.reason ? ` (${bound.reason})` : ''}`); }
+    if (new Set(bound.map(replayKey)).size > 1) {
+      entry.replay = { verdict: 'disagree', files: bound.map(r => r.file), digest: bound[0].digest, file: bound.map(r => r.file).join('+') };
+      entry.status = 'refused'; entry.problems.push(`accepted replays disagree: ${bound.map(r => `${r.file} ${r.verdict}`).join(', ')}`);
+      continue;
+    }
+    const [first] = bound;
+    entry.replay = { verdict: first.verdict, file: first.file, digest: first.digest };
+    if (first.verdict === 'discriminates' && first.red?.assertion === true) { if (entry.flag) entry.status = 'held'; }
+    else { entry.status = 'refused'; entry.problems.push(`replay ${first.verdict}${first.reason ? ` (${first.reason})` : ''}`); }
   }
   const unknownIds = new Set(result.receipts.filter(e => e.status === 'unknown' && !e.flag).map(e => e.id));
   const held = new Map(result.receipts.filter(e => windows.has(e.id) && (e.status === 'held' || e.flag)).map(e => [e.id, e]));
@@ -326,6 +353,13 @@ export function evaluateSeparation({ worktree, base, head, archiveDir = defaultA
   result.verdict = result.counts.refused || result.outside.some(o => !o.waiver) ? 'refused'
     : result.counts.unknown || result.receipts.some(e => e.replayMissing) ? 'unknown' : 'pass';
   result.replayNeeded = result.receipts.filter(e => e.replayRequired && !(e.replay?.verdict === 'discriminates')).map(e => e.id);
+  // fix2: the raw view is the run without any acceptance (no waiver, no replay), so an implementer's stored result still
+  // matches the delegator's accepted recomputation (gate-policy.mjs sameResult).
+  if (acceptedReplays.length) {
+    const bare = evaluateSeparation({ worktree, base: baseSha, head: headSha, archiveDir, waiverDir, receiptFiles, mode, issue, replayFiles });
+    result.raw = { ...bare.raw, outside: bare.outside.map(o => o.commit), claims: bare.claims.map(c => `${c.id}@${c.digest}`) };
+    for (const e of result.receipts) e.rawStatus = bare.receipts.find(x => x.id === e.id)?.status ?? e.status;
+  }
   return result;
 }
 
@@ -349,10 +383,10 @@ function replaysExactly(cwd, oldSha, newSha) {
     return tree.status === 0 && tree.stdout.trim() === gitOut(cwd, ['rev-parse', `${newSha}^{tree}`]).trim();
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
-function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers, replayFiles }) {
+function carryOver({ cwd, baseSha, headSha, archiveDir, waiverDir, receiptFiles, rebasedFrom, mode, issue, acceptedWaivers, replayFiles, acceptedReplays }) {
   const oldBase = resolveCommit(cwd, rebasedFrom.base), oldHead = resolveCommit(cwd, rebasedFrom.head);
   if (!oldBase || !oldHead) throw new Error(`--rebased-from ${rebasedFrom.base}..${rebasedFrom.head} is not two commits in ${cwd}`);
-  const old = evaluateSeparation({ worktree: cwd, base: oldBase, head: oldHead, archiveDir, waiverDir, receiptFiles, mode, issue, acceptedWaivers, replayFiles });
+  const old = evaluateSeparation({ worktree: cwd, base: oldBase, head: oldHead, archiveDir, waiverDir, receiptFiles, mode, issue, acceptedWaivers, replayFiles, acceptedReplays });
   const before = listCommits(cwd, oldBase, oldHead), after = listCommits(cwd, baseSha, headSha);
   const mismatch = before.length !== after.length ? `the old range has ${before.length} commits, the new ${after.length}`
     : before.map((c, i) => c.body !== after[i].body || !replaysExactly(cwd, c.sha, after[i].sha) ? i : -1).find(i => i >= 0);
@@ -381,6 +415,10 @@ export function summaryLine(r) {
   const claimed = (r.claims ?? []).filter(c => !c.accepted);
   if (claimed.length) parts.push(`CLAIMED-WAIVER ${claimed.map(c => `${c.id}@${String(c.digest).slice(0, 12)}`).join(',')}`);
   if (r.acceptProblems?.length) parts.push(`ACCEPT-PROBLEM ${r.acceptProblems.length}`);
+  const decided = (r.receipts ?? []).filter(e => e.replay);
+  if (decided.length) parts.push(`REPLAY ${decided.map(e => `${e.id}@${String(e.replay.digest).slice(0, 12)}=${e.replay.verdict}:${e.replay.file}`).join(',')}`);
+  const claimedReplays = (r.replayClaims ?? []).filter(c => !c.accepted);
+  if (claimedReplays.length) parts.push(`CLAIMED-REPLAY ${claimedReplays.map(c => `${c.receipt}@${String(c.digest).slice(0, 12)}`).join(',')}`);
   if (r.invalidWaivers?.length) parts.push(`INVALID-WAIVER ${r.invalidWaivers.map(w => w.id ?? '?').join(',')}`);
   if (r.exceptions?.length) parts.push(`EXCEPTIONS ${r.exceptions.map(e => `${e.kind}:${sha7(e.commit)}`).join(',')}`);
   if (typeof r.required === 'boolean') parts.push(`required=${r.required ? 'yes' : 'no'}`);
@@ -487,7 +525,11 @@ export function replay({ worktree, head, receiptId, kind, filter, archiveDir = d
   } finally {
     process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal);
     result.cleanupProblems = cleanup();
-    if (out) { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(result, null, 2) + '\n'); }
+    if (out) {
+      fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(result, null, 2) + '\n');
+      // fix2: the file is a claim until accepted; print the token that binds exactly these bytes.
+      process.stderr.write(`tdd-separation replay: ${out} verdict=${result.verdict ?? 'none'}; bind it with --accept-replay ${receiptId}@${replayFileDigest(out)}\n`);
+    }
   }
 }
 
@@ -495,7 +537,7 @@ function parseArgs(args) {
   const o = { receiptFiles: [], acceptedWaivers: [] };
   const flags = { '--worktree': 'worktree', '--base': 'base', '--head': 'head', '--out': 'out', '--archive': 'archiveDir', '--waivers': 'waiverDir',
     '--receipt': 'receiptId', '--kind': 'kind', '--filter': 'filter', '--issue': 'issue' };
-  const lists = { '--receipts': 'receiptFiles', '--accept-waiver': 'acceptedWaivers', '--replay': 'replayFiles' };
+  const lists = { '--receipts': 'receiptFiles', '--accept-waiver': 'acceptedWaivers', '--replay': 'replayFiles', '--accept-replay': 'acceptedReplays' };
   while (args.length) {
     const flag = args.shift();
     if (flag === '--mandatory') { o.mode = 'mandatory'; continue; }

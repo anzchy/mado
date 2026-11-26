@@ -36,15 +36,16 @@ export const COMMENT_REPO = 'anzchy/mado';
 const commentPattern = issue => new RegExp(`^https://github\\.com/${COMMENT_REPO.replace('/', '\\/')}/issues/${issue}#issuecomment-\\d+$`);
 // Manual acceptance check the delegator runs before audit and before merge (no Stop hook since 2026-11-14).
 function check(args) {
-  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>] [--accept-waiver <id>@<sha256>]…';
+  const usage = 'usage: evidence.mjs check --head <sha> --issue <n> [--worktree <wt>] [--accept-waiver <id>@<sha256>]… [--accept-replay <receipt>@<sha256>]…';
   let want, issue, worktree = process.cwd();
-  const acceptedWaivers = [];
+  const acceptedWaivers = [], acceptedReplays = [];
   while (args.length) {
     const flag = args.shift(), value = args.shift();
     if (flag === '--head' && value && !want) want = value;
     else if (flag === '--issue' && value && issue === undefined) issue = value;
     else if (flag === '--worktree' && value) worktree = value;
     else if (flag === '--accept-waiver' && value) acceptedWaivers.push(value);
+    else if (flag === '--accept-replay' && value) acceptedReplays.push(value);
     else throw new Error(usage);
   }
   if (!want || !/^[0-9a-f]{7,40}$/i.test(want) || !issue || !/^[1-9]\d*$/.test(issue)) throw new Error(usage);
@@ -108,7 +109,7 @@ function check(args) {
   let recomputed;
   if (sepRequired || record.tddSeparation !== undefined) {
     try {
-      recomputed = evaluateSeparation({ worktree, base: record.base, head: named, issue: Number(issue), acceptedWaivers,
+      recomputed = evaluateSeparation({ worktree, base: record.base, head: named, issue: Number(issue), acceptedWaivers, acceptedReplays,
         rebasedFrom: record.link ? { base: record.link.oldBase, head: record.link.oldHead } : undefined });
     } catch (error) { recomputed = { lane: 'tdd-separation', verdict: 'error', reason: error.message }; }
   }

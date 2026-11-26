@@ -2,6 +2,7 @@
 // Every case is a real Git fixture: commits, trailers, receipts.json, an archive and a delegator waiver directory.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,7 @@ const skill = fileURLToPath(new URL('../', import.meta.url));
 const lane = path.join(skill, 'scripts', 'tdd-separation.mjs');
 const evidence = path.join(skill, 'scripts', 'evidence.mjs');
 const run = (cmd, args, cwd, env) => spawnSync(cmd, args, { cwd, encoding: 'utf8', env: env ?? process.env });
+const fileDigest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const tmp = (t, prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };
 
 function repo(t) {
@@ -338,17 +340,22 @@ test('898 fix1 WI-2 gate CLI and evidence check take --accept-waiver; the stored
   const f = repo(t); compliant(f, ['App/Foo.swift']);
   fs.writeFileSync(path.join(f.waivers, 'i1.json'), JSON.stringify({ waivers: [goodWaiver] }));
   const [token] = accept(f);
-  // fix1 WI-4: a waived receipt also needs its bound replay (here written by hand: a replay file is trusted as written).
+  // fix1 WI-4: a waived receipt also needs its bound replay. fix2 WI-1: the replay file is a claim until the delegator
+  // accepts it by file digest (--accept-replay), like the waiver.
   const stubSha = JSON.parse(fs.readFileSync(path.join(f.dir, '.claude/tdd-guardian/receipts.json'), 'utf8')).receipts[0].head_sha;
   f.write('.build/mado-verify/replay/R1.json', JSON.stringify({ receipt: 'R1', headSha: stubSha, head: f.head(), verdict: 'discriminates', red: { assertion: true } }));
+  const replayToken = `R1@${fileDigest(path.join(f.dir, '.build/mado-verify/replay/R1.json'))}`;
   const gate = extra => run('node', [lane, 'gate', '--worktree', f.dir, '--base', f.base, '--head', f.head(), '--archive', f.archive, '--waivers', f.waivers, ...extra], f.dir);
   assert.match(gate([]).stdout, /^tdd-separation=refused .*CLAIMED-WAIVER W1-1@/);
-  assert.match(gate(['--accept-waiver', token, '--issue', '1']).stdout, /^tdd-separation=pass .*waived=1 .*WAIVED W1-1/);
+  assert.match(gate(['--accept-waiver', token, '--issue', '1']).stdout, /^tdd-separation=unknown .*waived=1 .*WAIVED W1-1.*CLAIMED-REPLAY R1@/);
+  assert.match(gate(['--accept-waiver', token, '--accept-replay', replayToken, '--issue', '1']).stdout, /^tdd-separation=pass .*waived=1 .*WAIVED W1-1.*REPLAY R1@[0-9a-f]{12}=discriminates:R1\.json/);
   recordFor(f, { tddSeparation: f.evaluate() });
   const plain = check(f);
   assert.equal(plain.status, 0, plain.stderr);
   assert.match(plain.stdout, /WARNING tdd-separation \(report-only\): verdict refused/);
-  const accepted = run('node', [evidence, 'check', '--head', f.head(), '--issue', '1', '--accept-waiver', token], f.dir, { ...process.env, HOME: f.home });
+  const waivedOnly = run('node', [evidence, 'check', '--head', f.head(), '--issue', '1', '--accept-waiver', token], f.dir, { ...process.env, HOME: f.home });
+  assert.match(waivedOnly.stdout, /WARNING tdd-separation \(report-only\): verdict unknown/);
+  const accepted = run('node', [evidence, 'check', '--head', f.head(), '--issue', '1', '--accept-waiver', token, '--accept-replay', replayToken], f.dir, { ...process.env, HOME: f.home });
   assert.equal(accepted.status, 0, accepted.stderr);
   assert.doesNotMatch(accepted.stdout, /WARNING tdd-separation/);
 });
@@ -574,12 +581,16 @@ test('898 fix1 WI-4 a bug-fix receipt needs a bound replay: unknown without one,
   const out = path.join(f.dir, '.build/mado-verify/replay/B1.json');
   const cli = run('node', [lane, 'replay', '--worktree', f.dir, '--head', f.head(), '--receipt', 'B1', '--kind', 'node', '--filter', 'adds', '--archive', f.archive, '--out', out], f.dir);
   assert.equal(cli.status, 0, cli.stdout + cli.stderr);
-  const after = f.evaluate();
+  // fix2 WI-1: the replay prints the token that binds its file; the file binds only when the invocation accepts it.
+  const token = `B1@${fileDigest(out)}`;
+  assert.match(cli.stderr, new RegExp(`--accept-replay ${token}`));
+  assert.equal(f.evaluate().verdict, 'unknown');
+  const after = f.evaluate({ acceptedReplays: [token] });
   assert.equal(after.verdict, 'pass', JSON.stringify(after));
   assert.equal(after.receipts[0].replay?.verdict, 'discriminates');
   // A replay result for another head does not bind.
   f.write('docs/a.md', 'moved\n'); f.commit('docs');
-  assert.equal(f.evaluate().verdict, 'unknown');
+  assert.equal(f.evaluate({ acceptedReplays: [token] }).verdict, 'unknown');
 });
 
 test('898 fix1 WI-4 a stub-only window is refused when its replay shows no RED; a waived receipt without a replay is not pass', t => {
@@ -587,7 +598,8 @@ test('898 fix1 WI-4 a stub-only window is refused when its replay shows no RED; 
   assert.equal(f.evaluate().receipts[0].flag, 'stub-only-window');
   const r = replayOf(f, { out: path.join(f.dir, '.build/mado-verify/replay/B1.json') });
   assert.equal(r.verdict, 'no-red');
-  const e = f.evaluate();
+  assert.equal(f.evaluate().verdict, 'unknown'); // fix2 WI-1: not accepted, so it does not bind
+  const e = f.evaluate({ acceptedReplays: [`B1@${fileDigest(path.join(f.dir, '.build/mado-verify/replay/B1.json'))}`] });
   assert.equal(e.verdict, 'refused', JSON.stringify(e));
   assert.match(e.receipts[0].problems.join(' '), /no-red/);
   const w = repo(t); compliant(w, ['App/Foo.swift']);
@@ -595,6 +607,86 @@ test('898 fix1 WI-4 a stub-only window is refused when its replay shows no RED; 
   const waived = w.evaluate({ acceptedWaivers: accept(w) });
   assert.equal(waived.receipts[0].status, 'waived');
   assert.equal(waived.verdict, 'unknown', JSON.stringify(waived));
+});
+
+// fix2 WI-1 (opus N1, gpt F3): a replay file is a claim; it binds only when the invocation names it by file digest
+// (--accept-replay <receipt>@<sha256>), and accepted results for one receipt that disagree are refused.
+const replayDir = f => path.join(f.dir, '.build/mado-verify/replay');
+const forge = (f, name, verdict = 'discriminates') => {
+  const red = JSON.parse(fs.readFileSync(path.join(f.dir, '.claude/tdd-guardian/receipts.json'), 'utf8')).receipts[0].head_sha;
+  const file = path.join(replayDir(f), name);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ receipt: 'B1', headSha: red, head: f.head(), verdict, red: { assertion: verdict !== 'no-red' } }));
+  return file;
+};
+
+test('898 fix2 WI-1 a hand-written replay file nobody accepted does not bind: unknown, CLAIMED-REPLAY with its digest', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n', subject: 'fix(x): add adds' });
+  const file = forge(f, '0.json');
+  const r = f.evaluate();
+  assert.equal(r.verdict, 'unknown', JSON.stringify(r));
+  assert.equal(r.receipts[0].replay, undefined);
+  assert.deepEqual(r.replayNeeded, ['B1']);
+  assert.deepEqual(r.replayClaims.map(c => [c.receipt, c.file, c.digest, c.accepted]), [['B1', '0.json', fileDigest(file), false]]);
+  assert.match(sep.summaryLine(r), new RegExp(`CLAIMED-REPLAY B1@${fileDigest(file).slice(0, 12)}`));
+  assert.doesNotMatch(sep.summaryLine(r), / REPLAY B1@/);
+});
+
+test('898 fix2 WI-1 an accepted replay digest binds and the line names its file; a file changed after acceptance does not bind', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n', subject: 'fix(x): add adds' });
+  const out = path.join(replayDir(f), 'B1.json');
+  assert.equal(replayOf(f, { out }).verdict, 'discriminates');
+  const token = `B1@${fileDigest(out).slice(0, 16)}`;
+  const r = f.evaluate({ acceptedReplays: [token] });
+  assert.equal(r.verdict, 'pass', JSON.stringify(r));
+  assert.deepEqual([r.receipts[0].replay.file, r.receipts[0].replay.digest], ['B1.json', fileDigest(out)]);
+  assert.match(sep.summaryLine(r), new RegExp(`REPLAY B1@${fileDigest(out).slice(0, 12)}=discriminates:B1\\.json`));
+  assert.doesNotMatch(sep.summaryLine(r), /CLAIMED-REPLAY/);
+  fs.writeFileSync(out, fs.readFileSync(out, 'utf8').replace('"tests"', '"tests" '));
+  const changed = f.evaluate({ acceptedReplays: [token] });
+  assert.equal(changed.verdict, 'unknown', JSON.stringify(changed));
+  assert.match(changed.acceptProblems.join(' '), /accepted replay B1@/);
+  assert.equal(f.evaluate({ acceptedReplays: ['B1@zz'] }).acceptProblems.length, 1);
+});
+
+test('898 fix2 WI-1 two accepted replay results for one receipt that disagree are refused', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n', subject: 'fix(x): add adds' });
+  const good = forge(f, 'a.json'), bad = forge(f, 'b.json', 'no-red');
+  const r = f.evaluate({ acceptedReplays: [`B1@${fileDigest(good)}`, `B1@${fileDigest(bad)}`] });
+  assert.equal(r.verdict, 'refused', JSON.stringify(r));
+  assert.match(r.receipts[0].problems.join(' '), /accepted replays disagree.*a\.json.*b\.json/);
+  // Two accepted results that agree bind.
+  const twin = forge(f, 'c.json');
+  assert.equal(f.evaluate({ acceptedReplays: [`B1@${fileDigest(good)}`, `B1@${fileDigest(twin)}`] }).verdict, 'pass');
+});
+
+test('898 fix2 WI-1 opus S3-forged: implementation in the stub, forged 0.json beside the honest no-red rerun ends refused or unknown, never pass', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a + b;\n' });
+  assert.equal(f.evaluate().receipts[0].flag, 'stub-only-window');
+  forge(f, '0.json');
+  const honest = path.join(replayDir(f), 'R1.json');
+  assert.equal(replayOf(f, { out: honest }).verdict, 'no-red');
+  const none = f.evaluate();
+  assert.equal(none.verdict, 'unknown', JSON.stringify(none));
+  const delegator = f.evaluate({ acceptedReplays: [`B1@${fileDigest(honest)}`] });
+  assert.equal(delegator.verdict, 'refused', JSON.stringify(delegator));
+  assert.equal(delegator.receipts[0].replay.file, 'R1.json');
+  assert.match(sep.summaryLine(delegator), /CLAIMED-REPLAY B1@/);
+  const both = f.evaluate({ acceptedReplays: [`B1@${fileDigest(honest)}`, `B1@${fileDigest(path.join(replayDir(f), '0.json'))}`] });
+  assert.equal(both.verdict, 'refused', JSON.stringify(both));
+});
+
+test('898 fix2 WI-1 evidence check takes --accept-replay; the implementer-stored result (no acceptance) still matches', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n', subject: 'fix(x): add adds' });
+  const out = path.join(replayDir(f), 'B1.json');
+  replayOf(f, { out });
+  recordFor(f, { tddSeparation: f.evaluate() });
+  const plain = check(f);
+  assert.match(plain.stdout, /WARNING tdd-separation \(report-only\): verdict unknown/);
+  assert.doesNotMatch(plain.stdout, /differs/);
+  const accepted = run('node', [evidence, 'check', '--head', f.head(), '--issue', '1', '--accept-replay', `B1@${fileDigest(out)}`], f.dir, { ...process.env, HOME: f.home });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.doesNotMatch(accepted.stdout, /WARNING tdd-separation/);
 });
 
 // WI-3: gate policy and evidence wiring.

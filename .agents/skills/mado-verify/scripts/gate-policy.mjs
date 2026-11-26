@@ -201,8 +201,10 @@ const wellFormed = r => r && typeof r === 'object' && r.lane === TDD_SEPARATION_
 const claimsKey = r => (r.claims ?? []).map(c => `${c.id}@${c.digest}`);
 const acceptedView = r => JSON.stringify([r.verdict, COUNT_KEYS.map(k => r.counts?.[k] ?? null), (r.receipts ?? []).map(e => `${e.id}:${e.status}`),
   (r.outside ?? []).map(o => `${o.commit}:${o.waiver ?? ''}`), r.waivers ?? [], claimsKey(r)]);
+// fix2: a run with --accept-replay stores raw.outside and raw.claims from its run without any acceptance.
 const rawView = r => JSON.stringify([r.raw?.verdict ?? r.verdict, COUNT_KEYS.map(k => (r.raw?.counts ?? r.counts)?.[k] ?? null),
-  (r.receipts ?? []).map(e => `${e.id}:${e.rawStatus ?? e.status}`), (r.outside ?? []).map(o => `${o.commit}:`), [], claimsKey(r)]);
+  (r.receipts ?? []).map(e => `${e.id}:${e.rawStatus ?? e.status}`), (r.raw?.outside ?? (r.outside ?? []).map(o => o.commit)).map(c => `${c}:`), [],
+  r.raw?.claims ?? claimsKey(r)]);
 const sameResult = (stored, recomputed) => acceptedView(stored) === acceptedView(recomputed) || acceptedView(stored) === rawView(recomputed);
 // stored: the record's tddSeparation; recomputed: evidence.mjs check's own run of the lane (undefined if not run);
 // required: tddSeparationRequired(diff). Mandatory mode turns required findings into problems (refusal); report-only, and
