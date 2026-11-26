@@ -32,20 +32,25 @@ final class Stub890: URLProtocol, @unchecked Sendable {
     /// current, so a stop from an earlier test is never counted in a later one, however late it arrives (#904).
     nonisolated(unsafe) private static var generation = 0
     nonisolated(unsafe) private static var stopCallCount = 0
+    nonisolated(unsafe) private static var deliveredCount = 0
     private var startedIn = -1
 
     static func reset(_ outcomes: [Outcome], afterRecord: (@Sendable () -> Void)? = nil,
                       stops: StopDelivery = .immediate) {
         lock.lock(); defer { lock.unlock() }
-        self.outcomes = outcomes; seen = []; stopped = 0; stopCallCount = 0; hung = []
+        self.outcomes = outcomes; seen = []; stopped = 0; stopCallCount = 0; deliveredCount = 0; hung = []
         self.afterRecord = afterRecord
         self.stops = stops
         generation += 1
     }
     static var requests: [(request: URLRequest, body: Data)] { lock.lock(); defer { lock.unlock() }; return seen }
     static var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stopped }
-    /// Every `stopLoading` call since the last reset, counted or not, whatever its delivery (#904).
+    /// Every `stopLoading` call since the last reset, counted or not, whatever its delivery (#904). Loose on purpose:
+    /// a late call from an earlier test's load counts here too, so a test only uses it to know a call happened.
     static var stopCalls: Int { lock.lock(); defer { lock.unlock() }; return stopCallCount }
+    /// Stops whose delivery landed since the last reset, counted or not (#904): a test waits for this instead of
+    /// sleeping until a delayed stop has surely landed.
+    static var deliveredStops: Int { lock.lock(); defer { lock.unlock() }; return deliveredCount }
     static var hosts: [String?] { requests.map { $0.request.url?.host } }
     /// Ends every hanging load, as the network would later.
     static func failHung(_ error: URLError) {
@@ -113,6 +118,7 @@ final class Stub890: URLProtocol, @unchecked Sendable {
 
     private static func countStop(_ startedIn: Int) {
         lock.lock(); defer { lock.unlock() }
+        deliveredCount += 1
         if startedIn == generation { stopped += 1 }
     }
 }
