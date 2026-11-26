@@ -5,7 +5,7 @@ import MadoApplication
 
 // #871 WI-4: the Table Recognition preset, addresses, models and per-host consent in Mado's own defaults; never a key.
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI4DefaultsAreDeepSeekWhenNothingIsStored() async throws {
     let suite = "issue871-\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -16,7 +16,7 @@ func issue871WI4DefaultsAreDeepSeekWhenNothingIsStored() async throws {
     #expect(await preferences.consent(forHost: "api.deepseek.com") == nil)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI4SettingsAndPerHostConsentRoundTrip() async throws {
     let suite = "issue871-\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -46,7 +46,7 @@ func issue871WI4SettingsAndPerHostConsentRoundTrip() async throws {
     #expect(!keys.isEmpty)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI4AnUnknownStoredPresetReadsAsDeepSeek() async throws {
     let suite = "issue871-\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))

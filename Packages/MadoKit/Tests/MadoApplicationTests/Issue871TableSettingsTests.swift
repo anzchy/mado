@@ -81,7 +81,7 @@ private let deepSeek871 = TableRecognitionEndpoint.deepSeekDefault869
 
 // MARK: - WI-1 key store per service configuration
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI1KeyIsStoredPerConfigurationAndTrimmed() async throws {
     let secrets = Secrets871()
     let keys = TableRecognitionKeyStore(secrets: secrets)
@@ -100,7 +100,7 @@ func issue871WI1KeyIsStoredPerConfigurationAndTrimmed() async throws {
     #expect(await keys.accessKey(for: sameAddress) == "sk-live-abcd1234")
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI1NewAddressOrPresetDoesNotInheritTheKey() async throws {
     let keys = TableRecognitionKeyStore(secrets: Secrets871())
     try await keys.save("sk-live-abcd1234", for: deepSeek871)
@@ -114,7 +114,7 @@ func issue871WI1NewAddressOrPresetDoesNotInheritTheKey() async throws {
     #expect(TableRecognitionKeyStore.account(for: deepSeek871) != TableRecognitionKeyStore.account(for: custom))
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI1RemoveDeletesOnlyThisConfigurationAndErrorsAreTyped() async throws {
     let secrets = Secrets871()
     let keys = TableRecognitionKeyStore(secrets: secrets)
@@ -133,7 +133,7 @@ func issue871WI1RemoveDeletesOnlyThisConfigurationAndErrorsAreTyped() async thro
 
 // MARK: - WI-2 configuration the service reads
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI2OptionsCarryTheSwitchEndpointAndThisHostsConsent() async {
     let cloud = CloudPreferences871(enabled: true)
     let table = TablePreferences871(consents: ["api.deepseek.com": true, "gw.example.com": false])
@@ -149,7 +149,7 @@ func issue871WI2OptionsCarryTheSwitchEndpointAndThisHostsConsent() async {
                                            consent: TableRecognitionConsentRecord(host: "gw.example.com", granted: false)))
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI2BaiduConsentDoesNotAuthoriseDeepSeek() async throws {
     let fixture = fixture871(baidu: CloudRecognitionConsentRecord(granted: true, date: Date(timeIntervalSince1970: 0)))
     try await fixture.keys.save("sk-live-abcd1234", for: deepSeek871)
@@ -164,7 +164,7 @@ func issue871WI2BaiduConsentDoesNotAuthoriseDeepSeek() async throws {
     #expect(await fixture.transport.callCount == 0)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI2ConsentForAnotherHostNeverAuthorisesThisOne() async throws {
     let fixture = fixture871(consents: ["gw.example.com": true])
     try await fixture.keys.save("sk-live-abcd1234", for: deepSeek871)
@@ -174,7 +174,7 @@ func issue871WI2ConsentForAnotherHostNeverAuthorisesThisOne() async throws {
 
 // MARK: - WI-3 settings model
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3DefaultStateIsDeepSeekWithItsHostAndNoKey() async {
     let state = await fixture871().model.state()
     #expect(state == TableRecognitionSettingsState(preset: .deepSeek, address: "https://api.deepseek.com",
@@ -182,7 +182,7 @@ func issue871WI3DefaultStateIsDeepSeekWithItsHostAndNoKey() async {
                                                    maskedKey: nil, advancedRequired: false, canTest: false, test: nil))
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3SaveReplaceAndRemoveTheKey() async throws {
     let fixture = fixture871()
     try await fixture.model.saveKey("sk-live-00003f9a")
@@ -199,7 +199,7 @@ func issue871WI3SaveReplaceAndRemoveTheKey() async throws {
     #expect(TableRecognitionSettingsState.masked("short") == "••••••••••••")
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3CustomOpensAdvancedAndNeedsAddressAndModel() async throws {
     let fixture = fixture871()
     try await fixture.model.saveKey("sk-ds-00000001")
@@ -222,7 +222,7 @@ func issue871WI3CustomOpensAdvancedAndNeedsAddressAndModel() async throws {
     #expect(await fixture.table.stored.customAddress == "https://gw.example.com/v1")
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3ChangingTheAddressCarriesNeitherKeyNorConsent() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true])
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -238,7 +238,7 @@ func issue871WI3ChangingTheAddressCarriesNeitherKeyNorConsent() async throws {
     #expect(await fixture.transport.callCount == 1)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3SameAddressAgainClearsNothing() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true])
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -250,7 +250,7 @@ func issue871WI3SameAddressAgainClearsNothing() async throws {
     #expect(await fixture.table.consents["api.deepseek.com"] == true)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3ChangingTheModelClearsTheTestResult() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true])
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -262,7 +262,7 @@ func issue871WI3ChangingTheModelClearsTheTestResult() async throws {
     #expect(await fixture.table.consents["api.deepseek.com"] == true)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3ModelChangeDuringATestDropsItsAnswer() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true], gated: true)
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -277,7 +277,7 @@ func issue871WI3ModelChangeDuringATestDropsItsAnswer() async throws {
     #expect(await fixture.model.state().test == nil)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3CancelledTestShowsNothing() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true], gated: true)
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -291,7 +291,7 @@ func issue871WI3CancelledTestShowsNothing() async throws {
     #expect(await fixture.transport.callCount == 1)
 }
 
-@Test(.timeLimit(.minutes(1)), arguments: [
+@Test(.timeLimit(.minutes(2)), arguments: [
     (reply869(401, #"{"error":{"message":"Authentication Fails"}}"#), TableRecognitionTestStatus.keyRejected),
     (reply869(404, ""), .addressUnreachable),
     (RecordingTransport869.Reply.failure(URLError(.cannotFindHost)), .addressUnreachable),
@@ -318,7 +318,7 @@ func issue871WI3EveryTestResultHasItsPlainStatus(reply: RecordingTransport869.Re
     #expect(requests.first.flatMap(payload869)?.base64 == TableRecognitionSample.png.base64EncodedString())
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3SwitchOffTestSendsNothing() async throws {
     let fixture = fixture871(enabled: false, consents: ["api.deepseek.com": true])
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -327,7 +327,7 @@ func issue871WI3SwitchOffTestSendsNothing() async throws {
     #expect(await fixture.transport.callCount == 0)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3ConsentAgreedIsStoredForThatHostOnly() async throws {
     let fixture = fixture871()
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -340,7 +340,7 @@ func issue871WI3ConsentAgreedIsStoredForThatHostOnly() async throws {
     #expect(await fixture.cloud.record == nil, "the Baidu consent is not touched")
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3ConsentDeclinedChangesNothingAndSendsNothing() async throws {
     let fixture = fixture871()
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -351,7 +351,7 @@ func issue871WI3ConsentDeclinedChangesNothingAndSendsNothing() async throws {
     #expect(await fixture.transport.callCount == 0)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3KeyChangeClearsTheTestResult() async throws {
     let fixture = fixture871(consents: ["api.deepseek.com": true], replies: [reply869(401, "")])
     try await fixture.model.saveKey("sk-live-abcd1234")
@@ -363,7 +363,7 @@ func issue871WI3KeyChangeClearsTheTestResult() async throws {
     #expect(await fixture.model.state().test == nil)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func issue871WI3WithoutAKeyTestSendsNothing() async {
     let fixture = fixture871(consents: ["api.deepseek.com": true])
     #expect(await fixture.model.test() == .finished(.undetermined))

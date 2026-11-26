@@ -132,6 +132,10 @@ struct TableRecognitionSettingsEnvironment {
     private var privacy: NSButton!
     private var testButton: NSButton!
     private let spinner = NSProgressIndicator()
+    /// The saved-key row and the Advanced rows sit in their own views, laid out whether shown or not, so a hidden
+    /// control never lies on top of a shown one.
+    private let savedRow = FlippedRowView()
+    private let advancedRows = FlippedRowView()
     private let testStatus: NSTextField
     private let testHint: NSTextField
     private var advanced: NSButton!
@@ -174,8 +178,8 @@ struct TableRecognitionSettingsEnvironment {
         build()
         frame.size.height = tallestHeight()
         // Until the first state arrives the group shows the no-key arrangement, never a saved key it has not read.
-        for view in [savedKey, savedPill, replaceKey!, removeKey!, spinner, keyMessage] as [NSView] { view.isHidden = true }
-        for view in [labels["address"]!, address, addressHint, labels["model"]!, modelField, modelHint] as [NSView] {
+        for view in [savedRow, savedKey, savedPill, replaceKey!, removeKey!, spinner, keyMessage, advancedRows,
+                     labels["address"]!, address, addressHint, labels["model"]!, modelField, modelHint] as [NSView] {
             view.isHidden = true
         }
         layoutRows()
@@ -194,19 +198,26 @@ struct TableRecognitionSettingsEnvironment {
         return field
     }
 
-    private func button(_ title: String, id: String, action: Selector) -> NSButton {
+    /// The width of the widest title, so a control fits in both English and Chinese (as CloudRecognitionSettingsGroup).
+    private static func widest(_ titles: [String]) -> CGFloat {
+        titles.map { ($0 as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up) }.max()!
+    }
+
+    private func button(_ title: String, zh: String, id: String, action: Selector, in parent: NSView? = nil) -> NSButton {
         let button = NSButton(title: localize(title), target: self, action: action)
         button.font = DesignMetrics.font("uiSmall")
         button.setAccessibilityIdentifier(id)
-        button.frame.size = NSSize(width: button.intrinsicContentSize.width.rounded(.up) + 12, height: 24)
-        addSubview(button)
+        let bezel = button.intrinsicContentSize.width.rounded(.up) - Self.widest([button.title])
+        button.frame.size = NSSize(width: Self.widest([button.title, title, zh]) + bezel + 12, height: 24)
+        (parent ?? self).addSubview(button)
         return button
     }
 
-    private func link(_ title: String, id: String, url: URL) -> NSButton {
+    private func link(_ title: String, zh: String, id: String, url: URL) -> NSButton {
         let link = HelpLinkButton(title: localize(title)) { [weak self] in self?.openURL(url) }
         link.setAccessibilityIdentifier(id)
-        link.frame.size = NSSize(width: link.intrinsicContentSize.width.rounded(.up), height: 16)
+        link.frame.size = NSSize(width: max(link.intrinsicContentSize.width.rounded(.up), Self.widest([title, zh]) + 4),
+                                 height: 16)
         addSubview(link)
         return link
     }
@@ -246,11 +257,12 @@ struct TableRecognitionSettingsEnvironment {
         keyField.cell?.isScrollable = true
         keyField.setAccessibilityIdentifier("settings.capture.table-key")
         addSubview(keyField)
-        saveKey = button("Save to Keychain", id: "settings.capture.table-save", action: #selector(save(_:)))
+        saveKey = button("Save to Keychain", zh: "保存到钥匙串", id: "settings.capture.table-save", action: #selector(save(_:)))
         savedKey.font = DesignMetrics.font("uiSmall", monospaced: true)
         savedKey.maximumNumberOfLines = 1
         savedKey.setAccessibilityIdentifier("settings.capture.table-saved-key")
-        addSubview(savedKey)
+        addSubview(savedRow)
+        savedRow.addSubview(savedKey)
         savedPill.stringValue = localize("Saved to Keychain")
         savedPill.maximumNumberOfLines = 1
         savedPill.alignment = .center
@@ -260,9 +272,11 @@ struct TableRecognitionSettingsEnvironment {
         savedPill.textColor = NSColor.systemGreen
         savedPill.setAccessibilityIdentifier("settings.capture.table-key-pill")
         savedPill.frame.size = NSSize(width: savedPill.intrinsicContentSize.width.rounded(.up) + 14, height: 18)
-        addSubview(savedPill)
-        replaceKey = button("Replace…", id: "settings.capture.table-replace", action: #selector(replace(_:)))
-        removeKey = button("Remove", id: "settings.capture.table-remove", action: #selector(remove(_:)))
+        savedRow.addSubview(savedPill)
+        replaceKey = button("Replace…", zh: "更换…", id: "settings.capture.table-replace", action: #selector(replace(_:)),
+                            in: savedRow)
+        removeKey = button("Remove", zh: "移除", id: "settings.capture.table-remove", action: #selector(remove(_:)),
+                           in: savedRow)
         removeKey.contentTintColor = DesignColor.error.nsColor
         removeKey.attributedTitle = NSAttributedString(string: removeKey.title, attributes: [
             .font: DesignMetrics.font("uiSmall"), .foregroundColor: DesignColor.error.nsColor
@@ -271,7 +285,7 @@ struct TableRecognitionSettingsEnvironment {
         keyHint.maximumNumberOfLines = 1
         keyHint.setAccessibilityIdentifier("settings.capture.table-key-hint")
         addSubview(keyHint)
-        keyHelp = link("How to Get One ↗", id: "settings.capture.table-key-help", url: Self.keyHelpURL)
+        keyHelp = link("How to Get One ↗", zh: "怎么获取 ↗", id: "settings.capture.table-key-help", url: Self.keyHelpURL)
         keyMessage.textColor = DesignColor.errorText.nsColor
         keyMessage.maximumNumberOfLines = 1
         keyMessage.setAccessibilityIdentifier("settings.capture.table-key-message")
@@ -286,13 +300,10 @@ struct TableRecognitionSettingsEnvironment {
         hostHint.maximumNumberOfLines = 2
         hostHint.setAccessibilityIdentifier("settings.capture.table-host-hint")
         addSubview(hostHint)
-        privacy = link("Privacy ↗", id: "settings.capture.table-privacy", url: Self.privacyURL)
+        privacy = link("Privacy ↗", zh: "隐私说明 ↗", id: "settings.capture.table-privacy", url: Self.privacyURL)
 
-        testButton = button("Test", id: "settings.capture.table-test", action: #selector(test(_:)))
-        let widest = [localize("Test"), localize("Cancel")].map {
-            ($0 as NSString).size(withAttributes: [.font: DesignMetrics.font("uiSmall")]).width.rounded(.up)
-        }.max()!
-        testButton.frame.size.width = widest + 28
+        testButton = button("Test", zh: "测试", id: "settings.capture.table-test", action: #selector(test(_:)))
+        testButton.frame.size.width = Self.widest(["Test", "Cancel", "测试", "取消", localize("Test"), localize("Cancel")]) + 28
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
@@ -334,21 +345,24 @@ struct TableRecognitionSettingsEnvironment {
             field.target = self
             field.action = field === address ? #selector(commitAddress(_:)) : #selector(commitModel(_:))
             field.setAccessibilityIdentifier(id)
-            addSubview(field)
+            advancedRows.addSubview(field)
         }
+        addSubview(advancedRows)
+        advancedRows.addSubview(labels["address"]!)
+        advancedRows.addSubview(labels["model"]!)
         addressHint.maximumNumberOfLines = 2
         addressHint.stringValue = localize("Changing the address needs the key saved and consent given again.")
         addressHint.setAccessibilityIdentifier("settings.capture.table-address-hint")
-        addSubview(addressHint)
+        advancedRows.addSubview(addressHint)
         modelHint.stringValue = localize("Test again after changing the model.")
         modelHint.maximumNumberOfLines = 2
         modelHint.setAccessibilityIdentifier("settings.capture.table-model-hint")
-        addSubview(modelHint)
+        advancedRows.addSubview(modelHint)
         costHint.stringValue = localize(Self.costHint)
         costHint.maximumNumberOfLines = 2
         costHint.setAccessibilityIdentifier("settings.capture.table-cost")
         addSubview(costHint)
-        costLink = link("Learn More ↗", id: "settings.capture.table-cost-link", url: Self.costURL)
+        costLink = link("Learn More ↗", zh: "了解更多 ↗", id: "settings.capture.table-cost-link", url: Self.costURL)
     }
 
     /// Room for the tallest arrangement (Advanced open), so the group never changes the form's height; when
@@ -394,7 +408,6 @@ struct TableRecognitionSettingsEnvironment {
         func label(_ key: String, top: CGFloat) {
             labels[key]!.frame = NSRect(x: 0, y: top + 4, width: labelWidth, height: 18)
         }
-        let hasKey = (state?.hasKey ?? false) && !replacing
         let custom = state?.preset == .custom
         var top: CGFloat = 46
         label("service", top: top)
@@ -402,16 +415,14 @@ struct TableRecognitionSettingsEnvironment {
         top += 24 + 14
 
         label("key", top: top)
-        if hasKey {
-            savedKey.frame = NSRect(x: valueX, y: top + 4, width: width(of: savedKey), height: 18)
-            savedPill.frame.origin = NSPoint(x: savedKey.frame.maxX + 6, y: top + 3)
-            replaceKey.frame.origin = NSPoint(x: savedPill.frame.maxX + 8, y: top)
-            removeKey.frame.origin = NSPoint(x: replaceKey.frame.maxX + 6, y: top)
-        } else {
-            let fieldWidth = min(240, valueWidth - saveKey.frame.width - 8)
-            keyField.frame = NSRect(x: valueX, y: top, width: fieldWidth, height: 24)
-            saveKey.frame.origin = NSPoint(x: keyField.frame.maxX + 8, y: top)
-        }
+        let fieldWidth = min(240, valueWidth - saveKey.frame.width - 8)
+        keyField.frame = NSRect(x: valueX, y: top, width: fieldWidth, height: 24)
+        saveKey.frame.origin = NSPoint(x: keyField.frame.maxX + 8, y: top)
+        savedRow.frame = NSRect(x: 0, y: top, width: rowWidth, height: 24)
+        savedKey.frame = NSRect(x: valueX, y: 4, width: width(of: savedKey), height: 18)
+        savedPill.frame.origin = NSPoint(x: savedKey.frame.maxX + 6, y: 3)
+        replaceKey.frame.origin = NSPoint(x: savedPill.frame.maxX + 8, y: 0)
+        removeKey.frame.origin = NSPoint(x: replaceKey.frame.maxX + 6, y: 0)
         top += 24 + 4
         if !custom { top = hintLine(keyHint, link: keyHelp, top: top) }
         if !keyMessage.stringValue.isEmpty {
@@ -440,16 +451,17 @@ struct TableRecognitionSettingsEnvironment {
         labels["advancedTitle"]!.frame = NSRect(x: valueX + 20, y: top, width: 160, height: 18)
         top += 18 + 14
 
-        if advancedOpen {
-            label("address", top: top)
-            address.frame = NSRect(x: valueX, y: top, width: min(320, valueWidth), height: 24)
-            top += 24 + 2
-            top = place(addressHint, top: top) + 14
-            label("model", top: top)
-            modelField.frame = NSRect(x: valueX, y: top, width: min(320, valueWidth), height: 24)
-            top += 24 + 2
-            top = place(modelHint, top: top) + 14
-        }
+        var inner: CGFloat = 0
+        label("address", top: inner)
+        address.frame = NSRect(x: valueX, y: inner, width: min(320, valueWidth), height: 24)
+        inner += 24 + 2
+        inner = place(addressHint, top: inner) + 14
+        label("model", top: inner)
+        modelField.frame = NSRect(x: valueX, y: inner, width: min(320, valueWidth), height: 24)
+        inner += 24 + 2
+        inner = place(modelHint, top: inner) + 14
+        advancedRows.frame = NSRect(x: 0, y: top, width: rowWidth, height: inner)
+        if advancedOpen { top += inner }
         return hintLine(costHint, link: costLink, top: top)
     }
 
@@ -471,7 +483,7 @@ struct TableRecognitionSettingsEnvironment {
         let hasKey = state.hasKey && !replacing
         service.selectItem(at: custom ? 1 : 0)
         for view in [keyField, saveKey!] as [NSView] { view.isHidden = hasKey }
-        for view in [savedKey, savedPill, replaceKey!, removeKey!] as [NSView] { view.isHidden = !hasKey }
+        for view in [savedRow, savedKey, savedPill, replaceKey!, removeKey!] as [NSView] { view.isHidden = !hasKey }
         savedKey.stringValue = state.maskedKey ?? ""
         keyHint.isHidden = custom
         keyHelp.isHidden = custom
@@ -498,9 +510,8 @@ struct TableRecognitionSettingsEnvironment {
         }
         testHint.stringValue = Self.testHint(localize: localize, hasKey: state.hasKey)
         advanced.state = advancedOpen ? .on : .off
-        for view in [labels["address"]!, address, addressHint, labels["model"]!, modelField, modelHint] as [NSView] {
-            view.isHidden = !advancedOpen
-        }
+        for view in [advancedRows, labels["address"]!, address, addressHint, labels["model"]!, modelField, modelHint]
+            as [NSView] { view.isHidden = !advancedOpen }
         if address.currentEditor() == nil { address.stringValue = state.address }
         if modelField.currentEditor() == nil { modelField.stringValue = state.model }
         address.placeholderString = localize("https://… (required, OpenAI-compatible)")
@@ -602,6 +613,11 @@ struct TableRecognitionSettingsEnvironment {
         }
         if let state { show(state) }
     }
+}
+
+/// A plain row container with the group's top-down coordinates.
+private final class FlippedRowView: NSView {
+    override var isFlipped: Bool { true }
 }
 
 /// A text link in the accent colour (settings.html `.link`); opens a help page in the default browser.
