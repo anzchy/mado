@@ -257,7 +257,7 @@ test('898 WI-1 a delegator waiver turns a refusal into WAIVED, counted and shown
   const f = repo(t); compliant(f, ['App/Foo.swift']);
   waiver(f, goodWaiver);
   const r = f.evaluate({ acceptedWaivers: accept(f) });
-  assert.equal(r.verdict, 'pass', JSON.stringify(r));
+  assert.equal(r.verdict, 'unknown', JSON.stringify(r)); // fix1 WI-4: a waived receipt still needs its replay
   assert.equal(r.receipts[0].status, 'waived');
   assert.equal(r.receipts[0].waiver, 'W1-1');
   assert.equal(r.counts.waived, 1);
@@ -338,6 +338,9 @@ test('898 fix1 WI-2 gate CLI and evidence check take --accept-waiver; the stored
   const f = repo(t); compliant(f, ['App/Foo.swift']);
   fs.writeFileSync(path.join(f.waivers, 'i1.json'), JSON.stringify({ waivers: [goodWaiver] }));
   const [token] = accept(f);
+  // fix1 WI-4: a waived receipt also needs its bound replay (here written by hand: a replay file is trusted as written).
+  const stubSha = JSON.parse(fs.readFileSync(path.join(f.dir, '.claude/tdd-guardian/receipts.json'), 'utf8')).receipts[0].head_sha;
+  f.write('.build/mado-verify/replay/R1.json', JSON.stringify({ receipt: 'R1', headSha: stubSha, head: f.head(), verdict: 'discriminates', red: { assertion: true } }));
   const gate = extra => run('node', [lane, 'gate', '--worktree', f.dir, '--base', f.base, '--head', f.head(), '--archive', f.archive, '--waivers', f.waivers, ...extra], f.dir);
   assert.match(gate([]).stdout, /^tdd-separation=refused .*CLAIMED-WAIVER W1-1@/);
   assert.match(gate(['--accept-waiver', token, '--issue', '1']).stdout, /^tdd-separation=pass .*waived=1 .*WAIVED W1-1/);
@@ -470,6 +473,100 @@ test('898 WI-2 replay: zero selected tests is rejected, not a RED', t => {
   const f = nodeRepo(t, false);
   const r = sep.replay({ worktree: f.dir, head: f.head(), receiptId: 'B1', kind: 'node', filter: 'no-such-test', archiveDir: f.archive });
   assert.equal(r.verdict, 'rejected', JSON.stringify(r));
+});
+
+// fix1 WI-4 (gpt F3/F4, opus M4, gpt M3): replay RED must fail by assertion; no write through a symlink; required replays.
+function nodeFixture(t, { redLib, subject = 'feat(x): add', test: body = "test('adds', () => assert.equal(add(2, 2), 4));" }) {
+  const f = repo(t);
+  f.write('lib.mjs', redLib);
+  const red = f.commit('stub', ['Stub-For: B1']);
+  f.receipts([{ ...receipt('B1', red), lane: 'node', test_files: { 'lib.test.mjs': { state: 'ok', lines: [] } } }]);
+  f.write('lib.mjs', 'export const add = (a, b) => a + b;\n');
+  f.write('lib.test.mjs', `import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './lib.mjs';\n${body}\n`);
+  f.commit(subject, [trailer('B1')]);
+  return f;
+}
+const replayOf = (f, extra = {}) => sep.replay({ worktree: f.dir, head: f.head(), receiptId: 'B1', kind: 'node', filter: 'adds', archiveDir: f.archive, ...extra });
+
+test('898 fix1 WI-4 replay: a test file that fails to import at head_sha (missing export) is not a RED', t => {
+  const f = nodeFixture(t, { redLib: 'export const other = 1;\n' });
+  const r = replayOf(f);
+  assert.equal(r.verdict, 'rejected', JSON.stringify(r));
+  assert.match(r.reason ?? '', /assertion/);
+  assert.equal(r.red.assertion, false);
+});
+
+test('898 fix1 WI-4 replay: a throwing stub (no assertion failure) is not a RED; an assertion failure is', t => {
+  const thrown = nodeFixture(t, { redLib: "export const add = () => { throw new Error('not implemented'); };\n" });
+  assert.equal(replayOf(thrown).verdict, 'rejected');
+  const ok = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n' });
+  const r = replayOf(ok);
+  assert.equal(r.verdict, 'discriminates', JSON.stringify(r));
+  assert.equal(r.red.assertion, true);
+});
+
+test('898 fix1 WI-4 replay: a tracked symlink at a test path in the head_sha tree is refused and nothing outside is written', t => {
+  const f = repo(t);
+  const outside = path.join(f.home, 'victim.txt'); fs.writeFileSync(outside, 'keep\n');
+  f.write('lib.mjs', 'export const add = (a, b) => a - b;\n');
+  fs.symlinkSync(outside, path.join(f.dir, 'lib.test.mjs'));
+  f.git('add', 'lib.mjs', 'lib.test.mjs');
+  const red = f.commit('stub', ['Stub-For: B1']);
+  f.receipts([{ ...receipt('B1', red), lane: 'node', test_files: { 'lib.test.mjs': { state: 'ok', lines: [] } } }]);
+  fs.rmSync(path.join(f.dir, 'lib.test.mjs'));
+  f.write('lib.mjs', 'export const add = (a, b) => a + b;\n');
+  f.write('lib.test.mjs', "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './lib.mjs';\ntest('adds', () => assert.equal(add(2, 2), 4));\n");
+  f.git('add', 'lib.mjs', 'lib.test.mjs');
+  f.commit('impl', [trailer('B1')]);
+  const r = replayOf(f);
+  assert.equal(r.verdict, 'rejected', JSON.stringify(r));
+  assert.match(r.reason ?? '', /symlink/);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'keep\n');
+});
+
+test('898 fix1 WI-4 replay removes only its own worktrees: an unrelated stale registration is not pruned', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n' });
+  const stale = path.join(f.home, 'stale-wt');
+  f.git('worktree', 'add', '--detach', '--quiet', stale, 'HEAD');
+  fs.rmSync(stale, { recursive: true, force: true });
+  const r = replayOf(f);
+  assert.equal(r.verdict, 'discriminates', JSON.stringify(r));
+  assert.deepEqual(r.cleanupProblems ?? [], []);
+  const list = run('git', ['worktree', 'list', '--porcelain'], f.dir).stdout;
+  assert.ok(list.includes(fs.realpathSync(f.home) + '/stale-wt') || list.includes(stale), list);
+  assert.doesNotMatch(list, /tdd-replay-/);
+});
+
+test('898 fix1 WI-4 a bug-fix receipt needs a bound replay: unknown without one, pass with a discriminating one', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a - b;\n', subject: 'fix(x): add adds' });
+  const before = f.evaluate();
+  assert.equal(before.verdict, 'unknown', JSON.stringify(before));
+  assert.match(before.receipts[0].problems.join(' '), /replay required/);
+  assert.deepEqual(before.replayNeeded, ['B1']);
+  const out = path.join(f.dir, '.build/mado-verify/replay/B1.json');
+  const cli = run('node', [lane, 'replay', '--worktree', f.dir, '--head', f.head(), '--receipt', 'B1', '--kind', 'node', '--filter', 'adds', '--archive', f.archive, '--out', out], f.dir);
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr);
+  const after = f.evaluate();
+  assert.equal(after.verdict, 'pass', JSON.stringify(after));
+  assert.equal(after.receipts[0].replay?.verdict, 'discriminates');
+  // A replay result for another head does not bind.
+  f.write('docs/a.md', 'moved\n'); f.commit('docs');
+  assert.equal(f.evaluate().verdict, 'unknown');
+});
+
+test('898 fix1 WI-4 a stub-only window is refused when its replay shows no RED; a waived receipt without a replay is not pass', t => {
+  const f = nodeFixture(t, { redLib: 'export const add = (a, b) => a + b;\n', test: "test('adds', () => assert.equal(add(2, 2), 4));" });
+  assert.equal(f.evaluate().receipts[0].flag, 'stub-only-window');
+  const r = replayOf(f, { out: path.join(f.dir, '.build/mado-verify/replay/B1.json') });
+  assert.equal(r.verdict, 'no-red');
+  const e = f.evaluate();
+  assert.equal(e.verdict, 'refused', JSON.stringify(e));
+  assert.match(e.receipts[0].problems.join(' '), /no-red/);
+  const w = repo(t); compliant(w, ['App/Foo.swift']);
+  waiver(w, goodWaiver);
+  const waived = w.evaluate({ acceptedWaivers: accept(w) });
+  assert.equal(waived.receipts[0].status, 'waived');
+  assert.equal(waived.verdict, 'unknown', JSON.stringify(waived));
 });
 
 // WI-3: gate policy and evidence wiring.
