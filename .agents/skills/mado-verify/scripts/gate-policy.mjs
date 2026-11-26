@@ -77,9 +77,24 @@ export function failingTestInDiff({ file, name }, diffFiles) {
 
 // #892: the one bounded exception to "no flake exception". A node gate that failed may count only with a reviewed flake
 // disposition: attempt 1 failed (its exit is the gate's), exactly one serial rerun of exactly the failed files passed, and
-// the disposition names exactly the failing tests, an issue, an owner, a reviewer, an expiry at most 30 days out and the
-// retained failed attempt. Whether the tests are outside the diff is checked by evidence.mjs check (it has the diff).
+// the disposition names exactly the failing tests, an issue, an author, an owner, a distinct reviewer with a checkable
+// reference, an expiry at most 30 days out and the retained failed attempt. Whether the tests are outside the diff is checked by evidence.mjs check (it has the diff).
 export const FLAKE_MAX_DAYS = 30;
+// #892 fix1 L3: the disposition names #891 or one of its successors, listed here in a reviewed commit.
+export const FLAKE_ISSUES = Object.freeze([891]);
+// #892 fix1 WI-3 (gpt F3 / opus M3): one party under different spellings ("delegator", "mado-delegator", "Delegator ").
+export const partyKey = name => String(name ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^mado-/, '');
+// The review reference must be something a human can open: a comment or review on the evidence repository, or a file the
+// delegator wrote under ~/.mado/herdr/delegator/ (evidence.mjs check opens it and requires the record head in it).
+const REVIEW_REF_DIR = '~/.mado/herdr/delegator/';
+const REVIEW_REF_URL = /^https:\/\/github\.com\/anzchy\/mado\/(?:issues\/[1-9]\d*#issuecomment-\d+|pull\/[1-9]\d*#(?:issuecomment-\d+|pullrequestreview-\d+|discussion_r\d+))$/;
+export function reviewRefKind(ref) {
+  if (typeof ref !== 'string') return null;
+  if (REVIEW_REF_URL.test(ref)) return 'url';
+  if (!ref.startsWith(REVIEW_REF_DIR) || ref.includes('\0')) return null;
+  const parts = ref.slice(REVIEW_REF_DIR.length).split('/');
+  return parts.every(part => part !== '' && part !== '.' && part !== '..') ? 'path' : null;
+}
 const isoDay = text => {
   if (typeof text !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
   const date = new Date(`${text}T00:00:00.000Z`);
@@ -112,9 +127,13 @@ export function flakeDispositionProblems(gate, today = new Date().toISOString().
   const want = new Set(tests.map(testKey)), got = new Set(named.map(t => testKey(t ?? {})));
   if (named.length !== got.size || want.size !== got.size || [...want].some(key => !got.has(key))) problems.push('node: disposition must name exactly the failing tests');
   if (!Number.isSafeInteger(d.issue) || d.issue < 1) problems.push('node: disposition issue must be a positive integer');
+  else if (!FLAKE_ISSUES.includes(d.issue)) problems.push(`node: disposition issue must be #891 or a listed successor (${FLAKE_ISSUES.map(n => `#${n}`).join(', ')}), got #${d.issue}`);
+  if (!nonblank(d.author)) problems.push('node: disposition needs an author (who wrote the record)');
   if (!nonblank(d.owner)) problems.push('node: disposition needs an owner');
   if (!nonblank(d.reviewedBy)) problems.push('node: disposition needs reviewedBy');
-  else if (d.reviewedBy.trim() === String(d.owner ?? '').trim()) problems.push('node: disposition reviewedBy must be someone other than its owner');
+  else if (partyKey(d.reviewedBy) === partyKey(d.owner)) problems.push('node: disposition reviewedBy must be someone other than its owner');
+  else if (partyKey(d.reviewedBy) === partyKey(d.author)) problems.push('node: disposition reviewedBy must be someone other than its author (no self-review)');
+  if (!reviewRefKind(d.reviewRef)) problems.push('node: disposition reviewRef must be a comment URL on anzchy/mado or a ~/.mado/herdr/delegator/<file> path');
   if (d.failedAttempt !== first?.log) problems.push('node: disposition failedAttempt must be the retained attempt 1 log');
   const expiry = isoDay(d.expires), now = isoDay(today);
   if (!now) problems.push(`node: cannot judge the disposition expiry: today ${today} is not a real ISO date`);

@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates } from './gate-policy.mjs';
+import os from 'node:os';
+import { failingTestInDiff, flakyGates, gateVerdict, listDiffPaths, nodeLaneRequired, notVerifiedGates, reviewRefKind } from './gate-policy.mjs';
 import { directFingerprints, evaluateReuse, linkedLanes, verifyLinkedRecord } from './reuse-policy.mjs';
 
 const [mode, input] = process.argv.slice(2);
@@ -15,7 +16,7 @@ function privacyHits(body) {
 function render(d) {
   const sha7 = d.head.slice(0, 7);
   const gates = d.gates.map(g => g.disposition && g.attempts?.length === 2
-    ? `- \`${g.command}\` → exit ${g.exitCode} (attempt 1, ${g.attempts[0].log}: ${(g.attempts[0].tests ?? []).map(t => t.name).join('; ')}); rerun of ${(g.attempts[1].files ?? []).join(', ')} exit ${g.attempts[1].exitCode} (${g.attempts[1].log}); FLAKY, reviewed disposition: issue #${g.disposition.issue}, owner ${g.disposition.owner}, reviewed by ${g.disposition.reviewedBy}, expires ${g.disposition.expires}; not a pass`
+    ? `- \`${g.command}\` → exit ${g.exitCode} (attempt 1, ${g.attempts[0].log}: ${(g.attempts[0].tests ?? []).map(t => t.name).join('; ')}); rerun of ${(g.attempts[1].files ?? []).join(', ')} exit ${g.attempts[1].exitCode} (${g.attempts[1].log}); FLAKY, reviewed disposition: issue #${g.disposition.issue}, author ${g.disposition.author}, owner ${g.disposition.owner}, reviewed by ${g.disposition.reviewedBy} (${g.disposition.reviewRef}), expires ${g.disposition.expires}; not a pass`
     : g.reusedFrom
     ? `- \`${g.name}\` → reused from ${g.reusedFrom}; ${g.keyLine || 'prior green result'}`
     : g.scopeSkip ? `- \`${g.name}\` → n/a: ${g.scopeSkip}`
@@ -78,13 +79,22 @@ function check(args) {
     for (const t of node.disposition?.tests ?? [])
       if (t && typeof t.file === 'string' && typeof t.name === 'string' && failingTestInDiff(t, files))
         throw new Error(`node flake disposition for "${t.name}" (${t.file}) is in the diff; an in-diff failure never gets a rerun or a disposition`);
+    // #892 fix1 WI-3: a delegator summary reference is opened here; it must exist and name this head. A comment URL cannot
+    // be fetched offline: the WARNING below prints it for the delegator to open.
+    const ref = node.disposition?.reviewRef;
+    if (reviewRefKind(ref) === 'path') {
+      const file = path.join(os.homedir(), ref.slice(2));
+      let text;
+      try { text = fs.readFileSync(file, 'utf8'); } catch { throw new Error(`node flake disposition reviewRef ${ref} does not exist`); }
+      if (!text.includes(named)) throw new Error(`node flake disposition reviewRef ${ref} does not name head ${named}`);
+    }
   }
   const verdict = gateVerdict(record.gates);
   if (!verdict.complete) throw new Error(`record gates incomplete: ${verdict.problems.join(', ')}`);
   console.log(`OK head=${named} issue=${record.issue} comment=${record.commentUrl}`);
   for (const gate of flakyGates(record.gates)) {
     const d = gate.disposition;
-    console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} owner ${d.owner} reviewed by ${d.reviewedBy} expires ${d.expires}`);
+    console.log(`WARNING node FLAKY: ${d.tests.map(t => `${t.name} (${t.file})`).join('; ')} failed attempt 1 (${gate.attempts[0].log}), passed its one serial rerun; disposition issue #${d.issue} author ${d.author} owner ${d.owner} reviewed by ${d.reviewedBy} (${d.reviewRef}) expires ${d.expires}`);
   }
   for (const gate of notVerifiedGates(record.gates)) console.log(`WARNING ${gate.name} NOT VERIFIED: ${gate.notVerified} (exit ${gate.exitCode}); the delegator's owner-gates run is binding for the retained App group, hosted CI binding for the hosted group`);
 }
