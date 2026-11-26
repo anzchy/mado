@@ -369,3 +369,30 @@ func issue871WI3WithoutAKeyTestSendsNothing() async {
     #expect(await fixture.model.test() == .finished(.undetermined))
     #expect(await fixture.transport.callCount == 0)
 }
+
+/// The stored address changes to an unusable one while Test runs: the first read gives the DeepSeek default, every
+/// later read a Custom service with no address.
+private actor ChangingPreferences871: TableRecognitionPreferencePort {
+    private(set) var reads = 0
+    private(set) var consents: [String: Bool] = [:]
+    func storedSettings() async -> TableRecognitionStoredSettings {
+        reads += 1
+        return reads == 1 ? .defaults : TableRecognitionStoredSettings(preset: .custom)
+    }
+    func setStoredSettings(_ settings: TableRecognitionStoredSettings) async {}
+    func consent(forHost host: String) async -> Bool? { consents[host] }
+    func setConsent(_ granted: Bool?, forHost host: String) async { consents[host] = granted }
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871WI3ConsentBlockForAnAddressChangedMeanwhileAsksNothing() async {
+    let preferences = ChangingPreferences871()
+    let transport = RecordingTransport869([], fallback: sampleReply871())
+    let model = TableRecognitionSettingsModel(cloud: CloudPreferences871(enabled: true, record: nil), preferences: preferences,
+                                              keys: TableRecognitionKeyStore(secrets: Secrets871()), transport: transport)
+    // The service saw api.deepseek.com without consent; by then the address is gone, so no host is named for consent.
+    #expect(await model.test() == .finished(.undetermined))
+    #expect(await preferences.reads == 2)
+    #expect(await preferences.consents.isEmpty)
+    #expect(await transport.requests.isEmpty)
+}

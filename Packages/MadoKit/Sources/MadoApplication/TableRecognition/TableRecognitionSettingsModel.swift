@@ -69,7 +69,8 @@ public struct TableRecognitionKeyStore: TableRecognitionCredentialStore {
         var path = parts.path
         while path.hasSuffix("/") { path.removeLast() }
         parts.path = path
-        return parts.string ?? trimmed
+        // Parsed with a host, so the path is empty or starts with "/": the parts always serialise again.
+        return parts.string!
     }
 
     public func accessKey(for endpoint: TableRecognitionEndpoint) async -> String? {
