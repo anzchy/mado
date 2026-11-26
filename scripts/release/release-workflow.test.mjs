@@ -25,7 +25,25 @@ const index = (pattern) => steps().findIndex((entry) => pattern.test(entry.name)
 
 test("only the mado-v* tag pattern triggers a release", () => {
   const on = workflow.slice(workflow.indexOf("\non:\n") + 1, workflow.indexOf("\npermissions:"));
-  assert.match(on, /^on:\n  push:\n    tags:\n      - 'mado-v\*'\n$/);
+  assert.match(on, /^on:\n  push:\n    tags:\n      - 'mado-v\*'\n  workflow_dispatch:\n    inputs:/);
+  assert.match(on, /commit_sha:\n        required: true/);
+  assert.match(on, /version:\n        required: true/);
+  assert.doesNotMatch(on, /pull_request|pull_request_target|repository_dispatch/);
+});
+
+test("manual rehearsal uses the same signed verification steps and cannot reach release writes", () => {
+  assert.equal((workflow.match(/^  release:$/gm) ?? []).length, 1, "one shared job");
+  assert.match(workflow, /github\.repository == 'anzchy\/mado'/);
+  assert.match(step(/^Checkout$/).text, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.commit_sha \|\| github\.sha \}\}/);
+  assert.match(step(/^Check rehearsal inputs$/).text, /if: env\.RELEASE_MODE == 'rehearsal'/);
+  assert.match(step(/^Check rehearsal inputs$/).text, /git cat-file -e/);
+  for (const name of [/^Build Release$/, /^Re-sign Sparkle/, /^Check entitlements/, /^Check product identity/, /^Check package contents$/]) {
+    assert.doesNotMatch(step(name).text, /if:/, `shared verification: ${name}`);
+  }
+  for (const name of [/^Notarise the DMG$/, /^Build and sign the DMG$/, /^Write the DMG checksum$/, /^Create the draft release$/, /^Sign the update and open the appcast PR$/]) {
+    assert.match(step(name).text, /if: env\.RELEASE_MODE == 'tag'/, `tag-only side effect: ${name}`);
+  }
+  assert.match(step(/^Delete the temporary keychain$/).text, /if: always\(\)/);
 });
 
 test("permissions are only contents and pull-requests write plus actions read", () => {
@@ -44,7 +62,8 @@ test("tag CI is checked immediately after version validation and before any sign
   }
   assert.match(gate.text, /GH_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(gate.text, /run: node scripts\/release\/check-tag-ci\.mjs/);
-  assert.doesNotMatch(gate.text, /continue-on-error|if:|\|\|/);
+  assert.match(gate.text, /if: env\.RELEASE_MODE == 'tag'/);
+  assert.doesNotMatch(gate.text, /continue-on-error|\|\|/);
 });
 
 test("every action is local or pinned to a full commit SHA", () => {

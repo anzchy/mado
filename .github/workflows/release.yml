@@ -6,6 +6,21 @@ on:
   push:
     tags:
       - 'mado-v*'
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        required: true
+        description: Full commit SHA to rehearse (from this repository)
+        type: string
+      version:
+        required: true
+        description: Marketing version to verify
+        type: string
+      notarize_app:
+        description: Also notarise and staple the app
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -18,19 +33,41 @@ concurrency:
 
 jobs:
   release:
-    name: Notarised DMG and draft release
+    name: Signed release verification
+    if: github.repository == 'anzchy/mado' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: macos-26
     timeout-minutes: 90
     env:
       DEVELOPMENT_TEAM: ${{ vars.DEVELOPMENT_TEAM }}
+      RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && 'rehearsal' || 'tag' }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The build number is the commit count, and the tag must be on main.
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
+
+      - name: Check rehearsal inputs
+        if: env.RELEASE_MODE == 'rehearsal'
+        env:
+          REHEARSAL_SHA: ${{ inputs.commit_sha }}
+          REHEARSAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$REHEARSAL_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::commit_sha must be a full lowercase commit SHA'; exit 1; }
+          [[ "$REHEARSAL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo '::error::version must be MAJOR.MINOR.PATCH'; exit 1; }
+          git cat-file -e "$REHEARSAL_SHA^{commit}" || { echo '::error::commit not found'; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$REHEARSAL_SHA" ]] || { echo '::error::checkout does not match commit_sha'; exit 1; }
+          MARKETING=$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | head -1)
+          [[ "$REHEARSAL_VERSION" == "$MARKETING" ]] || { echo "::error::version $REHEARSAL_VERSION does not match MARKETING_VERSION $MARKETING"; exit 1; }
+          [[ -n "$DEVELOPMENT_TEAM" ]] || { echo '::error::repository variable DEVELOPMENT_TEAM is not set'; exit 1; }
+          BUILD=$(git rev-list --count "$REHEARSAL_SHA")
+          { echo "VERSION=$REHEARSAL_VERSION"; echo "BUILD=$BUILD"; } >> "$GITHUB_ENV"
+          echo "Rehearsing Mado $REHEARSAL_VERSION ($BUILD) from $REHEARSAL_SHA"
 
       - name: Check the tag against the project version
+        if: env.RELEASE_MODE == 'tag'
         run: |
           set -euo pipefail
           TAG="$GITHUB_REF_NAME"
@@ -45,6 +82,7 @@ jobs:
           echo "Releasing Mado $VERSION ($BUILD) from $TAG"
 
       - name: Check CI on the tag commit
+        if: env.RELEASE_MODE == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release/check-tag-ci.mjs
@@ -141,6 +179,7 @@ jobs:
         run: node scripts/release/check-package.mjs "$APP" --require-sparkle-licence --expect-version "$VERSION" --expect-build "$BUILD"
 
       - name: Notarise the app
+        if: env.RELEASE_MODE == 'tag' || inputs.notarize_app == true
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -155,6 +194,7 @@ jobs:
           xcrun stapler validate "$APP"
 
       - name: Build and sign the DMG
+        if: env.RELEASE_MODE == 'tag'
         run: |
           set -euo pipefail
           DMG="$PWD/.build/release/Mado-$VERSION.dmg"
@@ -167,6 +207,7 @@ jobs:
           echo "DMG=$DMG" >> "$GITHUB_ENV"
 
       - name: Notarise the DMG
+        if: env.RELEASE_MODE == 'tag'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -181,6 +222,7 @@ jobs:
           spctl -a -vv "$APP"
 
       - name: Write the DMG checksum
+        if: env.RELEASE_MODE == 'tag'
         run: |
           set -euo pipefail
           cd "$(dirname "$DMG")"
@@ -189,6 +231,7 @@ jobs:
           echo "SHA256=$(cut -d ' ' -f 1 "$(basename "$DMG").sha256")" >> "$GITHUB_ENV"
 
       - name: Create the draft release
+        if: env.RELEASE_MODE == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -205,6 +248,7 @@ jobs:
           gh "${args[@]}"
 
       - name: Sign the update and open the appcast PR
+        if: env.RELEASE_MODE == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}

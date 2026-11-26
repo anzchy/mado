@@ -30,6 +30,11 @@ The delegator itself:
 7. Keeps the user informed, asks for decisions only when they are genuinely the user's, and records every user
    decision verbatim (commit body, roster plan, handoff log).
 
+For a Mado release, follow [`docs/release/README.md`](../../../../docs/release/README.md): after selecting the exact
+release commit and version, ask the owner before dispatching the manual `release.yml` rehearsal with signing secrets.
+Read its signed-build verification result before creating or pushing a `mado-v*` tag. The rehearsal does not replace
+the tag commit's green `main` CI requirement. Review any `.github/workflows/` diff manually before landing it.
+
 Merge authority, granted by the user: merge without asking when the active audit shows no blocking Critical/High and CI
 is green.
 
