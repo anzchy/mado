@@ -12,6 +12,7 @@ actor Secrets871: CloudSecretStorePort {
     private(set) var items: [String: String] = [:]
     private var failing = false
     func fail() { failing = true }
+    func recover() { failing = false }
     func secret(service: String, account: String) async throws(CloudSecretStoreError) -> String? {
         items["\(service)/\(account)"]
     }
@@ -471,4 +472,41 @@ func issue871Fix1AddressChangeDuringATestDropsItsAnswer() async throws {
     await fixture.transport.open()
     #expect(await run.value == .finished(nil))
     #expect(await fixture.model.state().test == nil)
+}
+
+// MARK: - Fix round 2: a failed keychain removal is not swallowed (gpt F5 / opus N1)
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix2AFailedKeyRemovalKeepsTheAddress() async throws {
+    let fixture = fixture871(consents: ["api.deepseek.com": true])
+    try await fixture.model.saveKey("sk-live-abcd1234")
+    await fixture.secrets.fail()
+    await fixture.model.setAddress("https://api.deepseek.com/beta")
+    // The address does not change: the old configuration and its key stay visible and removable.
+    let state = await fixture.model.state()
+    #expect(state.addressChangeFailed)
+    #expect(state.address == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(state.host == "api.deepseek.com")
+    #expect(state.hasKey && state.maskedKey == TableRecognitionSettingsState.masked("sk-live-abcd1234"))
+    #expect(await fixture.table.stored.deepSeekAddress == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(await fixture.secrets.items.values.sorted() == ["sk-live-abcd1234"])
+    // No consent is dropped.
+    #expect(await fixture.table.consents["api.deepseek.com"] == true)
+    // Once the keychain works again, the change goes through and the failure is gone.
+    await fixture.secrets.recover()
+    await fixture.model.setAddress("https://api.deepseek.com/beta")
+    let changed = await fixture.model.state()
+    #expect(!changed.addressChangeFailed)
+    #expect(changed.address == "https://api.deepseek.com/beta" && !changed.hasKey)
+    #expect(await fixture.secrets.items.isEmpty)
+    #expect(await fixture.table.consents["api.deepseek.com"] == nil)
+}
+
+@Test(.timeLimit(.minutes(2)))
+func issue871Fix2NoKeyToRemoveIsNotAFailure() async {
+    // Nothing saved for the old address ("not found" in the keychain): the address changes as before.
+    let fixture = fixture871()
+    await fixture.model.setAddress("https://api.deepseek.com/beta")
+    let state = await fixture.model.state()
+    #expect(!state.addressChangeFailed && state.address == "https://api.deepseek.com/beta")
 }

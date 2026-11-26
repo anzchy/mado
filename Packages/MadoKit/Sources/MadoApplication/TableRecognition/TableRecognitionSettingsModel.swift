@@ -199,10 +199,13 @@ public actor TableRecognitionSettingsModel {
     /// Test still in flight cannot report on settings that are no longer there.
     private var testStatus: TableRecognitionTestStatus?
     private var generation = 0
+    /// The last address change was refused (its old key could not be removed); any later change clears it.
+    private var addressChangeFailed = false
 
     private func invalidateTest() {
         generation += 1
         testStatus = nil
+        addressChangeFailed = false
     }
 
     public func state() async -> TableRecognitionSettingsState {
@@ -218,7 +221,8 @@ public actor TableRecognitionSettingsModel {
                                              host: host, hasKey: key != nil,
                                              maskedKey: key.map(TableRecognitionSettingsState.masked),
                                              advancedRequired: stored.preset == .custom,
-                                             canTest: key != nil && host != nil, test: testStatus, missing: missing)
+                                             canTest: key != nil && host != nil, test: testStatus, missing: missing,
+                                             addressChangeFailed: addressChangeFailed)
     }
 
     public func selectPreset(_ preset: TableRecognitionPreset) async {
@@ -231,18 +235,23 @@ public actor TableRecognitionSettingsModel {
 
     /// A different address (not just other spacing, case or a trailing slash) drops the old host's consent and the
     /// Test result, and removes the key saved for the old address, so no key is left that the group can no longer
-    /// show or remove (the hint says so). The other preset's key stays.
+    /// show or remove (the hint says so). The other preset's key stays. When the keychain refuses that removal
+    /// (nothing saved is not a refusal), nothing changes: the old address, its key and its consent stay, and the state
+    /// says the address was not changed.
     public func setAddress(_ address: String) async {
         let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         var stored = await preferences.storedSettings()
         let old = stored.endpoint
         guard TableRecognitionKeyStore.canonicalAddress(old.baseURL) != TableRecognitionKeyStore.canonicalAddress(address)
         else { return }
+        do throws(CloudKeyError) { try await keys.remove(for: old) } catch {
+            addressChangeFailed = true
+            return
+        }
         let oldAddress = old.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if let host = URLComponents(string: oldAddress)?.host, !host.isEmpty {
             await preferences.setConsent(nil, forHost: TableRecognitionGuards.normalisedHost(host))
         }
-        try? await keys.remove(for: old)
         switch stored.preset {
         case .deepSeek: stored.deepSeekAddress = address
         case .custom: stored.customAddress = address

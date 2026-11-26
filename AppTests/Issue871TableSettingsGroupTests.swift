@@ -10,11 +10,17 @@ import MadoMacUI
 
 private actor Secrets871App: CloudSecretStorePort {
     var items: [String: String] = [:]
+    /// Removal fails as SecItemDelete can (any status but success or not-found).
+    var removalFails = false
+    func failRemoval() { removalFails = true }
     func secret(service: String, account: String) async throws(CloudSecretStoreError) -> String? { items["\(service)/\(account)"] }
     func setSecret(_ value: String, service: String, account: String) async throws(CloudSecretStoreError) {
         items["\(service)/\(account)"] = value
     }
-    func removeSecret(service: String, account: String) async throws(CloudSecretStoreError) { items["\(service)/\(account)"] = nil }
+    func removeSecret(service: String, account: String) async throws(CloudSecretStoreError) {
+        if removalFails { throw .failed(status: -25308) }
+        items["\(service)/\(account)"] = nil
+    }
 }
 
 private actor Cloud871App: CloudRecognitionPreferencePort {
@@ -30,7 +36,19 @@ private actor Table871App: TableRecognitionPreferencePort {
     var stored = TableRecognitionStoredSettings.defaults
     var consents: [String: Bool]
     init(consents: [String: Bool]) { self.consents = consents }
-    func storedSettings() async -> TableRecognitionStoredSettings { stored }
+    /// Holds the next read of the stored settings until `releaseRead()`; it then returns what is stored by then.
+    private var holdNextRead = false
+    private var heldRead: CheckedContinuation<Void, Never>?
+    func holdRead() { holdNextRead = true }
+    func releaseRead() { heldRead?.resume(); heldRead = nil }
+    var readWaiting: Bool { heldRead != nil }
+    func storedSettings() async -> TableRecognitionStoredSettings {
+        if holdNextRead {
+            holdNextRead = false
+            await withCheckedContinuation { heldRead = $0 }
+        }
+        return stored
+    }
     func setStoredSettings(_ settings: TableRecognitionStoredSettings) async { stored = settings }
     func consent(forHost host: String) async -> Bool? { consents[host] }
     func setConsent(_ granted: Bool?, forHost host: String) async { consents[host] = granted }
@@ -592,4 +610,69 @@ func issue871Fix1ClickingTheAdvancedTitleToggles() async throws {
     #expect(try f.view("settings.capture.table-advanced", as: NSButton.self).state == .on)
     NSApp.sendAction(action, to: click.target, from: click)
     #expect(try !f.shown("settings.capture.table-address"))
+}
+
+// MARK: - Fix round 2: a failed keychain removal is shown, not swallowed (gpt F5 / opus N1); the Test commit is one
+// change among the others (opus N2)
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue871Fix2AFailedKeyRemovalKeepsTheAddressAndSaysSo(_ locale: String) async throws {
+    let f = try fixture871App(locale)
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    await f.secrets.failRemoval()
+    let advanced = try f.view("settings.capture.table-advanced", as: NSButton.self)
+    advanced.state = .on
+    try f.click("settings.capture.table-advanced")
+    let address = try f.view("settings.capture.table-address", as: NSTextField.self)
+    address.stringValue = "https://gw.example.com/v1"
+    try f.click("settings.capture.table-address")
+    let line = locale == "en" ? "Could not remove the saved key. The address was not changed."
+                              : "无法移除已保存的密钥，地址未更改。"
+    try await waitUntil { try f.shown("settings.capture.table-key-message") && f.text("settings.capture.table-key-message") == line }
+    // The field shows the old address again; the old configuration and its key stay on screen and removable.
+    try await waitUntil { address.stringValue == TableRecognitionEndpoint.deepSeekBaseURL }
+    #expect(try f.text("settings.capture.table-host") == "api.deepseek.com")
+    #expect(try f.shown("settings.capture.table-saved-key") && f.shown("settings.capture.table-remove"))
+    #expect(await f.table.stored.deepSeekAddress == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(await f.secrets.items.count == 1)
+    #expect(await f.table.consents["api.deepseek.com"] == true)
+    try expectFitsAndApart871(f, "\(locale) remove-failed")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix2TestWithATypedAddressSendsNothingWhenTheKeyCannotBeRemoved() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await f.saveKey("sk-live-00003f9a")
+    await f.secrets.failRemoval()
+    try await typeWithoutCommitting871(f, "settings.capture.table-address", "https://gw.example.com/v1")
+    try f.click("settings.capture.table-test")
+    try await waitUntil { try f.text("settings.capture.table-key-message") == "无法移除已保存的密钥，地址未更改。" }
+    try await waitUntil { try f.view("settings.capture.table-test", as: NSButton.self).title == "测试" }
+    // Neither the typed address nor the old one is tested: the user asked to test the typed one.
+    #expect(await f.transport.requests.isEmpty)
+    #expect(await f.table.stored.deepSeekAddress == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(try f.text("settings.capture.table-address") == TableRecognitionEndpoint.deepSeekBaseURL)
+    #expect(try f.text("settings.capture.table-test-status").isEmpty)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)))
+func issue871Fix2ServiceChangeDuringTheTestCommitIsNotMixedIn() async throws {
+    let f = try fixture871App()
+    defer { f.panel.window.close() }
+    try await waitUntil { try f.text("settings.capture.table-host") == "api.deepseek.com" }
+    try await typeWithoutCommitting871(f, "settings.capture.table-model", "deepseek-vision")
+    // Test commits the typed model; its first read is held while the user picks Custom.
+    await f.table.holdRead()
+    try f.click("settings.capture.table-test")
+    try await waitUntil { await f.table.readWaiting }
+    let service = try f.view("settings.capture.table-service", as: NSPopUpButton.self)
+    service.selectItem(at: 1)
+    try f.click("settings.capture.table-service")
+    await f.table.releaseRead()
+    try await waitUntil { try f.view("settings.capture.table-test", as: NSButton.self).title == "测试" }
+    try await waitUntil { await f.table.stored.deepSeekModel == "deepseek-vision" }
+    // The DeepSeek field's model never lands in Custom's model.
+    #expect(await f.table.stored.customModel == "")
 }

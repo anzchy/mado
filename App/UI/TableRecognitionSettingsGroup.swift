@@ -75,6 +75,7 @@ struct TableRecognitionSettingsEnvironment {
     static let testNote = "Sends a built-in sample, not your images; may be charged."
     static let costHint = "May use your service account's balance; check the service for charges."
     static let addressHint = "Changing the address removes the saved key; save it and agree again."
+    static let addressNotChanged = "Could not remove the saved key. The address was not changed."
 
     /// The note beside Test (owner 2026-11-24), and without a key the reason Test is unavailable.
     static func testHint(localize: (String) -> String, hasKey: Bool) -> String {
@@ -288,7 +289,7 @@ struct TableRecognitionSettingsEnvironment {
         addSubview(keyHint)
         keyHelp = link("How to Get One ↗", zh: "怎么获取 ↗", id: "settings.capture.table-key-help", url: Self.keyHelpURL)
         keyMessage.textColor = DesignColor.errorText.nsColor
-        keyMessage.maximumNumberOfLines = 1
+        keyMessage.maximumNumberOfLines = 2
         keyMessage.setAccessibilityIdentifier("settings.capture.table-key-message")
         addSubview(keyMessage)
 
@@ -374,7 +375,7 @@ struct TableRecognitionSettingsEnvironment {
         let saved = (advancedOpen, keyMessage.stringValue, testStatus.stringValue, savedKey.stringValue,
                      savedRow.isHidden)
         advancedOpen = true
-        keyMessage.stringValue = localize("The key could not be removed from the keychain.")
+        keyMessage.stringValue = localize(Self.addressNotChanged)  // the longest key message
         savedKey.stringValue = TableRecognitionSettingsState.masked("sk-measure-WWWW")
         let statuses: [TableRecognitionTestStatus] = [.testing, .passed, .keyRejected, .addressUnreachable,
                                                       .modelCannotReadImages, .offline, .quotaOrBalance, .undetermined,
@@ -457,8 +458,7 @@ struct TableRecognitionSettingsEnvironment {
         top += (savedRow.isHidden ? 24 : savedRow.frame.height) + 4
         if !custom { top = hintLine(keyHint, link: keyHelp, top: top) }
         if !keyMessage.stringValue.isEmpty {
-            keyMessage.frame = NSRect(x: valueX, y: top + 2, width: valueWidth, height: 16)
-            top += 18
+            top = place(keyMessage, top: top + 2)
         }
         top += 14
 
@@ -553,16 +553,28 @@ struct TableRecognitionSettingsEnvironment {
         layoutRows()
     }
 
-    /// One change at a time; each ends by reading the model back.
-    private func perform(_ work: @escaping @MainActor () async -> Void) {
-        guard !busy else { refresh(); return }
+    /// One change at a time; each ends by reading the model back. Returns nil (and changes nothing) while another
+    /// change is running.
+    @discardableResult
+    private func perform(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+        guard !busy else { refresh(); return nil }
         busy = true
-        Task {
+        return Task {
             await work()
             busy = false
             refreshID += 1
             show(await environment.model.state())
         }
+    }
+
+    /// Commits an address. When the old key could not be removed the address stays: the field shows it again and
+    /// the key row says so. Returns whether the address is the one asked for.
+    private func applyAddress(_ value: String) async -> Bool {
+        await environment.model.setAddress(value)
+        guard await environment.model.state().addressChangeFailed else { return true }
+        address.abortEditing()
+        setKeyMessage(localize(Self.addressNotChanged))
+        return false
     }
 
     private func setKeyMessage(_ text: String) {
@@ -620,7 +632,8 @@ struct TableRecognitionSettingsEnvironment {
     @objc private func commitAddress(_ sender: NSTextField) {
         let value = sender.stringValue
         guard value != state?.address else { return }
-        perform { [self] in await environment.model.setAddress(value) }
+        setKeyMessage("")
+        perform { [self] in _ = await applyAddress(value) }
     }
 
     @objc private func commitModel(_ sender: NSTextField) {
@@ -638,14 +651,21 @@ struct TableRecognitionSettingsEnvironment {
         // Test uses what the fields show: an address or model typed but not yet committed (no Return, Tab or focus
         // change; with Keyboard Navigation off a click on Test does not end editing) is committed first. A new
         // address has no key, so then nothing is sent and the row shows the new configuration.
+        // The commit is one change like the others (perform), so a service change cannot land in between.
         let typed = (address: address.stringValue, model: modelField.stringValue)
         let uncommitted = state.map { typed.address != $0.address || typed.model != $0.model } ?? false
         if address.currentEditor() != nil || modelField.currentEditor() != nil { window?.makeFirstResponder(nil) }
+        let commit = uncommitted ? perform { [self] in
+            if await applyAddress(typed.address) { await model.setModel(typed.model) }
+        } : nil
+        // Another change is still running: this click does nothing (as for any second change meanwhile).
+        if uncommitted && commit == nil { return }
         testTask = Task { [weak self] in
-            if uncommitted {
-                await model.setAddress(typed.address)
-                await model.setModel(typed.model)
-                guard await model.state().canTest else {
+            if let commit {
+                await commit.value
+                // The address was not changed (its old key stayed): test neither the typed address nor the old one.
+                let state = await model.state()
+                guard !state.addressChangeFailed, state.canTest else {
                     self?.testTask = nil
                     self?.refresh()
                     return
