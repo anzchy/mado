@@ -132,3 +132,22 @@ test('898 no text claims the lane proves test-first', () => {
     for (const line of read(rel).split('\n'))
       if (/test-first is proven|proves? test-first/i.test(line)) assert.match(line, /\b(never|not|no)\b/i, `${rel}: ${line}`);
 });
+
+// #898 fix1 WI-6: the docs describe the fix-round rules (anchored Refactor:, waiver claims accepted by digest, required
+// replays by assertion, exceptions on the auditor checklist).
+test('898 fix1 WI-6 docs: anchored Refactor:, accepted waiver claims, required replays, exceptions on the audit checklist', () => {
+  const tf = section(read(`${templates}/brief-template.md`), '## Test-first');
+  assert.match(tf, /Refactor: <receipt-ID> <why>/);
+  assert.match(tf, /claim/);
+  const skill = read('.agents/skills/mado-verify/SKILL.md');
+  for (const re of [/--accept-waiver/, /CLAIMED-WAIVER/, /OWNER_GATES_ACCEPT_WAIVERS/, /\.build\/mado-verify\/replay\//, /ERR_ASSERTION/, /required=yes\|no/, /--remerge-diff/, /byte for byte/, /stub-only-window/])
+    assert.match(skill, re);
+  const delegator = read('.agents/skills/mado-delegator/SKILL.md');
+  assert.match(delegator, /--accept-waiver/); assert.match(delegator, /expires/);
+  const d5 = read('docs/agents/audit-dimensions.md').split('\n').find(line => line.startsWith('| D5 '));
+  assert.match(d5, /EXCEPTIONS/); assert.match(d5, /CLAIMED-WAIVER/);
+  for (const rel of ['.agents/skills/mado-delegator/references/templates/audit-brief.md', '.agents/skills/mado-delegator/references/templates/audit-request-template.md']) {
+    const text = read(rel);
+    assert.match(text, /EXCEPTIONS/, rel); assert.match(text, /CLAIMED-WAIVER/, rel);
+  }
+});

@@ -53,8 +53,9 @@ archive evidence explicitly. Generated trailers come from `node scripts/tdd/red-
 RED separation (#898): verify the `tdd-separation` lane result rather than the receipt's presence. Rerun it read-only
 with `node .agents/skills/mado-verify/scripts/tdd-separation.mjs evaluate --worktree <wt> --base <base> --head <head>`
 (after a rebase add `--rebased-from <old-base>..<old-head>`). A `refused` or `unknown` verdict, an `OUTSIDE` commit, an
-`INVALID-WAIVER` or a waiver the delegator did not issue is a D5 finding. Read each `Stub-For:` commit's diff: a stub
-with behaviour is a finding. The lane shows the RED was recorded on a clean committed tree; it is not proof of test-first.
+`INVALID-WAIVER`, a `CLAIMED-WAIVER` the delegator did not accept, or a missing required replay is a D5 finding.
+Review each `EXCEPTIONS` entry: an anchored `Refactor:` commit must not change behaviour, and a test added after green
+needs its manual mutant. Read each `Stub-For:` commit's diff: a stub with behaviour is a finding. The lane shows the RED was recorded on a clean committed tree; it is not proof of test-first.
 
 ## Scratch reproductions must not write into any worktree (added 2026-10-23)
 

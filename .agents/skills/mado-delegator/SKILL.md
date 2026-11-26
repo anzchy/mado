@@ -62,7 +62,10 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    #687, #690 and #692 omitted it and were never verified). There is no hook. The template's Test-first section carries the
    RED separation rule (#898): stubs in their own `Stub-For:` commit, the RED on a clean production tree. Only you issue a
    waiver, before audit, as `~/.mado/herdr/delegator/tdd-waivers/<item>.json` (`{"waivers":[{id, issue, receipt|commit,
-   paths?, reason, issuedBy:"delegator", ref}]}`, bounded, with a reason); name its id in the brief or a written note.
+   paths?, reason, issuedBy:"delegator", ref, expires:"YYYY-MM-DD"}]}`, bounded, with a reason); name its id in the brief or a written note.
+   The file is only a claim (`CLAIMED-WAIVER <id>@<digest>`): any pane can write that directory. Read the claim, then
+   accept it in your own runs with `--accept-waiver <id>@<sha256>` (`evidence.mjs check`, the lane) or
+   `OWNER_GATES_ACCEPT_WAIVERS="<id>@<sha256> …"` (owner-gates, delegator role only); a changed file no longer matches.
    For UI work, fill the per-state design and evidence fields in
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the

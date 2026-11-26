@@ -78,8 +78,11 @@ If a needed change crosses a fence: stop, propose the minimal hunk, ask in your 
   serves; then record the RED on that clean production tree. A WI's implementation commit is the one carrying its
   `Red-Receipt:` trailer, and the RED's `head_sha` must be a strict ancestor of it. Anything else is a SEPARATION
   breach: re-record the receipt under a new ID on a clean tree, or the item returns. A behaviour-preserving refactor
-  commit carries `Refactor: <WI> <why>`; tests strengthened after green need a manual mutant in the handoff. Only the
-  delegator issues a waiver (`~/.mado/herdr/delegator/tdd-waivers/`, referenced by id); one you write does not count.
+  commit carries `Refactor: <receipt-ID> <why>` in its trailer block and comes after that receipt's implementation
+  commit; any other production commit outside a RED window is refused. A stub commit whose RED window then changes no
+  production file needs a replay. Tests strengthened after green need a manual mutant in the handoff. Only the
+  delegator issues a waiver; a waiver file is only a claim until the delegator accepts it in its own run. One you write
+  never counts.
   The `tdd-separation` lane checks this; it shows the RED was recorded on a clean committed tree, not that the work
   was test-first.
 
