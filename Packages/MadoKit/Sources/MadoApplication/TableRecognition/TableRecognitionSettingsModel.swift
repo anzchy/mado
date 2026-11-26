@@ -140,6 +140,12 @@ public enum TableRecognitionTestOutcome: Sendable, Equatable {
     case needsConsent(host: String)
 }
 
+/// What the user has to fill in before the address is usable (「（先填写地址）」 or 「（先填写模型）」).
+public enum TableRecognitionMissing: Sendable, Equatable {
+    case address
+    case model
+}
+
 public struct TableRecognitionSettingsState: Sendable, Equatable {
     public let preset: TableRecognitionPreset
     public let address: String
@@ -153,11 +159,15 @@ public struct TableRecognitionSettingsState: Sendable, Equatable {
     /// A key is saved and the address is usable.
     public let canTest: Bool
     public let test: TableRecognitionTestStatus?
+    /// nil when the address is usable (`host` is set).
+    public let missing: TableRecognitionMissing?
 
     public init(preset: TableRecognitionPreset, address: String, model: String, host: String?, hasKey: Bool,
-                maskedKey: String?, advancedRequired: Bool, canTest: Bool, test: TableRecognitionTestStatus?) {
+                maskedKey: String?, advancedRequired: Bool, canTest: Bool, test: TableRecognitionTestStatus?,
+                missing: TableRecognitionMissing? = nil) {
         self.preset = preset; self.address = address; self.model = model; self.host = host; self.hasKey = hasKey
         self.maskedKey = maskedKey; self.advancedRequired = advancedRequired; self.canTest = canTest; self.test = test
+        self.missing = missing
     }
 
     /// State 35 draws twelve dots and the key's last four characters.
