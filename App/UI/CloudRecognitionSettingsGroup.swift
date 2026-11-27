@@ -52,9 +52,9 @@ struct CloudRecognitionSettingsEnvironment {
     override var isFlipped: Bool { true }
 }
 
-/// Settings › 截图 › 文字识别 (settings.html lines 174–176, ADR-0019). It stays editable with the Capture Bar off
-/// (owner 2026-11-13: 「文字识别不变灰」). The switch turns on only after both keys are saved and consent is given
-/// (settings.html line 23); the first turn-on shows the consent dialog; 移除密钥 deletes both keys and turns it off.
+/// Settings › 截图 › 云识别 and 文字识别 (state 35, ADR-0019). The sibling cloud group owns the global switch;
+/// the text group keeps its service, keys, disclosure and terms. Both remain editable with the Capture Bar off
+/// (owner 2026-11-13: 「文字识别不变灰」). Turning on requires keys and consent; removing keys turns it off.
 @MainActor final class CloudRecognitionSettingsGroup: NSView {
     /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
@@ -153,7 +153,7 @@ struct CloudRecognitionSettingsEnvironment {
             return top + height
         }
 
-        // 云识别: switch, its caption, the 未填写访问密钥 pill, the ADR-0019 disclosure and the terms link.
+        // 云识别: switch, caption, status pill, short hint and shared privacy link.
         var top: CGFloat = 46
         rowLabel("Allow", top: top)
         let switchTitle = localize("Allow Cloud Recognition (Recognise Text, Recognise Table)")
@@ -195,7 +195,7 @@ struct CloudRecognitionSettingsEnvironment {
         hint.maximumNumberOfLines = 2
         hint.setAccessibilityIdentifier("settings.capture.cloud-hint")
         let learn = TermsLinkButton(title: localize("Learn More ↗"), open: { [weak self] in
-            self?.openURL(URL(string: "https://anzchy.github.io/mado/cloud-recognition.html")!)
+            self?.openURL(TableRecognitionSettingsGroup.privacyURL)
         })
         learn.setAccessibilityIdentifier("settings.capture.cloud-learn")
         let learnWidth = learn.intrinsicContentSize.width.rounded(.up)
