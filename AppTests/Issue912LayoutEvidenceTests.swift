@@ -84,6 +84,8 @@ private func scratchDirectory() -> URL {
     #expect(written.flatMap { String(data: $0, encoding: .utf8) } == line + "\n")
 }
 
+// #672: the time-limit policy needs a limit on every AppKit test; the suite gives the tests below one.
+@Suite(.timeLimit(.minutes(1))) struct Issue912LayoutFitTimed {
 @Test func issue912ButtonFitNeedsMarginOverTheTitle() {
     // Title 80 pt in a control whose bezel adds 20 pt: at a 5% margin an exact 100 pt frame (+1 pt slack) no longer passes.
     #expect(!layoutButtonMeasure(intrinsicWidth: 100, textWidth: 80, frame: NSSize(width: 100, height: 22), margin: 1.05).fits)
@@ -128,4 +130,5 @@ private func scratchDirectory() -> URL {
     let line = emitLayoutMetricsFingerprint()
     let written = FileManager.default.contents(atPath: layoutEvidenceDirectory().appendingPathComponent("fingerprint.txt").path)
     #expect(written.flatMap { String(data: $0, encoding: .utf8) } == line + "\n")
+}
 }
