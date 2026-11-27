@@ -62,6 +62,7 @@ jobs:
           [[ "$REHEARSAL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo '::error::version must be MAJOR.MINOR.PATCH'; exit 1; }
           git cat-file -e "$REHEARSAL_SHA^{commit}" || { echo '::error::commit not found'; exit 1; }
           [[ "$(git rev-parse HEAD)" == "$REHEARSAL_SHA" ]] || { echo '::error::checkout does not match commit_sha'; exit 1; }
+          git cat-file -e "$REHEARSAL_SHA:scripts/release/release-build.sh" 2>/dev/null || { echo "::error::commit_sha $REHEARSAL_SHA has no scripts/release/release-build.sh (it predates #861); rehearse a later commit"; exit 1; }
           BRANCHES=$(git for-each-ref --contains "$REHEARSAL_SHA" refs/remotes/origin)
           [[ -n "$BRANCHES" ]] || { echo '::error::commit_sha must be reachable from a branch of this repository'; exit 1; }
           MARKETING=$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | head -1)
@@ -96,18 +97,7 @@ jobs:
         uses: ./.github/actions/xcode-setup
 
       - name: Download Sparkle tools
-        run: |
-          set -euo pipefail
-          SPARKLE_TOOLS="$RUNNER_TEMP/sparkle-2.10.0"
-          curl --fail --location --silent --show-error \
-            https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz \
-            --output "$RUNNER_TEMP/Sparkle-2.10.0.tar.xz"
-          echo "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c  $RUNNER_TEMP/Sparkle-2.10.0.tar.xz" | shasum -a 256 --check
-          mkdir -p "$SPARKLE_TOOLS"
-          tar -xJf "$RUNNER_TEMP/Sparkle-2.10.0.tar.xz" -C "$SPARKLE_TOOLS"
-          test -x "$SPARKLE_TOOLS/bin/sign_update"
-          grep -q '^EXTERNAL LICENSES' "$SPARKLE_TOOLS/LICENSE"
-          echo "SPARKLE_TOOLS=$SPARKLE_TOOLS" >> "$GITHUB_ENV"
+        run: scripts/release/release-build.sh sparkle-tools
 
       - name: Import the Developer ID certificate
         env:
@@ -138,27 +128,11 @@ jobs:
           echo "IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build Release
-        run: |
-          set -euo pipefail
-          # Stripping removes the build machine's paths from the binary (check-package fails on them).
-          xcodebuild build -scheme Mado -configuration Release -destination 'generic/platform=macOS' \
-            -derivedDataPath .build/dd-release \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN --timestamp" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
-            ENABLE_HARDENED_RUNTIME=YES DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES \
-            CURRENT_PROJECT_VERSION="$BUILD"
-          APP="$PWD/.build/dd-release/Build/Products/Release/Mado.app"
-          test -d "$APP"
-          echo "APP=$APP" >> "$GITHUB_ENV"
+        # The Release build is defined once (#861); CI's PR-time Release build runs the same script ad-hoc.
+        run: scripts/release/release-build.sh build developer-id
 
       - name: Bundle Sparkle's licence
-        run: |
-          set -euo pipefail
-          # Sparkle's LICENSE carries its own MIT licence and its EXTERNAL LICENSES notices (#220 M2).
-          embedded=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Frameworks/Sparkle.framework/Resources/Info.plist")
-          [[ "$embedded" == "2.10.0" ]] || { echo "::error::embedded Sparkle is $embedded, licence is for 2.10.0"; exit 1; }
-          mkdir -p "$APP/Contents/Resources/ThirdPartyNotices"
-          cp "$SPARKLE_TOOLS/LICENSE" "$APP/Contents/Resources/ThirdPartyNotices/Sparkle-2.10.0-LICENSE.txt"
+        run: scripts/release/release-build.sh licence
 
       - name: Re-sign Sparkle's helpers and the app
         run: |
@@ -175,13 +149,13 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Check entitlements of the signed app
-        run: node scripts/release/check-entitlements.mjs "$APP" --configuration release --expect-bundle-id io.github.anzchy.mado
+        run: scripts/release/release-build.sh check-entitlements
 
       - name: Check product identity for release
-        run: node scripts/name-checks/built-product.mjs "$APP" --release
+        run: scripts/release/release-build.sh check-identity
 
       - name: Check package contents
-        run: node scripts/release/check-package.mjs "$APP" --require-sparkle-licence --expect-version "$VERSION" --expect-build "$BUILD"
+        run: scripts/release/release-build.sh check-package
 
       - name: Notarise the app
         if: env.RELEASE_MODE == 'tag' || inputs.notarize_app == true

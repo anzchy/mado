@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { checkEntitlements, parsePlistXml } from "./check-entitlements.mjs";
+import { checkEntitlements, checkHelperEntitlements, parsePlistXml } from "./check-entitlements.mjs";
 
 const bundleId = "io.github.anzchy.mado";
 
@@ -211,4 +211,44 @@ test("the entitlement CLI refuses an explicit bundle-ID option without its value
     assert.equal(run.status, 2, run.stderr);
     assert.match(run.stderr, /usage:.*--expect-bundle-id/);
   }
+});
+
+// #861 fix 1: the embedded Capture helper's own entitlements (App/CaptureHelper/CaptureHelper.entitlements, ADR-0022)
+// are an exact set too: a new grant fails until this allow-list changes.
+const helperSource = parsePlistXml(readFileSync(new URL("../../App/CaptureHelper/CaptureHelper.entitlements", import.meta.url), "utf8"));
+const helperFlags = ["com.apple.security.app-sandbox", "com.apple.security.files.downloads.read-write",
+  "com.apple.security.files.user-selected.read-write", "com.apple.security.files.bookmarks.app-scope"];
+
+test("#861 fix 1: the helper's checked-in entitlements are exactly the decided Release set", () => {
+  assert.deepEqual(Object.keys(helperSource).sort(), [...helperFlags, appGroups].sort());
+  assert.deepEqual(checkHelperEntitlements(helperSource, { configuration: "release" }), []);
+});
+
+test("#861 fix 1: a new, missing, false or changed helper entitlement fails", () => {
+  const with_ = (change) => ({ ...helperSource, ...change });
+  const without = (key) => Object.fromEntries(Object.entries(helperSource).filter(([name]) => name !== key));
+  assert.deepEqual(checkHelperEntitlements(with_({ "com.apple.security.device.camera": true }), { configuration: "release" }),
+    ["Capture helper: unexpected entitlement com.apple.security.device.camera"]);
+  assert.deepEqual(checkHelperEntitlements(with_({ "com.apple.security.network.client": true }), { configuration: "release" }),
+    ["Capture helper: unexpected entitlement com.apple.security.network.client"]);
+  for (const key of helperFlags) {
+    assert.deepEqual(checkHelperEntitlements(without(key), { configuration: "release" }), [`Capture helper: missing entitlement ${key}`], key);
+    assert.deepEqual(checkHelperEntitlements(with_({ [key]: false }), { configuration: "release" }),
+      [`Capture helper: ${key} must be true, found false`], key);
+  }
+  assert.deepEqual(checkHelperEntitlements(without(appGroups), { configuration: "release" }), [`Capture helper: missing entitlement ${appGroups}`]);
+  for (const groups of [[], [captureGroup, "GRT84NAK4T.other"], ["group.io.github.anzchy.mado.capture"], captureGroup]) {
+    assert.deepEqual(checkHelperEntitlements(with_({ [appGroups]: groups }), { configuration: "release" }),
+      [`Capture helper: ${appGroups} must be exactly ${JSON.stringify([captureGroup])}, found ${JSON.stringify(groups)}`]);
+  }
+});
+
+test("#861 fix 1: get-task-allow is a helper entitlement only in debug, and then only true", () => {
+  const taskAllow = { ...helperSource, "com.apple.security.get-task-allow": true };
+  assert.deepEqual(checkHelperEntitlements(taskAllow, { configuration: "release" }),
+    ["Capture helper: unexpected entitlement com.apple.security.get-task-allow"]);
+  assert.deepEqual(checkHelperEntitlements(taskAllow, { configuration: "debug" }), []);
+  assert.deepEqual(checkHelperEntitlements({ ...helperSource, "com.apple.security.get-task-allow": false }, { configuration: "debug" }),
+    ["Capture helper: com.apple.security.get-task-allow must be true when present in debug"]);
+  assert.throws(() => checkHelperEntitlements(helperSource, { configuration: "beta" }), /configuration must be release or debug/);
 });

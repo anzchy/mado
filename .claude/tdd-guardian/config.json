@@ -404,6 +404,60 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 120000
+    },
+    {
+      "name": "release-contents-node",
+      "description": "Manual #861 WI-1 RED receipts: the release-contents path filter and the classifier's release_contents output.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/release-contents.test.mjs scripts/ci/native-inputs.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "release-build-node",
+      "description": "Manual #861 WI-2 RED receipts: the shared Release build script and release.yml calling it.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/release-build.test.mjs scripts/release/release-workflow.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "release-pr-job-node",
+      "description": "Manual #861 WI-3 RED receipts: CI's path-filtered PR-time Release build job.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/release-pr-job.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "native-inputs-standalone-node",
+      "description": "Manual #861 WI-4 RED receipts: native-inputs.mjs still loads on its own (owner-gates imports and copies it alone).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/native-inputs-standalone.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "release-entitlements-node",
+      "description": "Manual #861 fix 1 WI-2 RED receipts: the embedded Capture helper's entitlements in the shared check.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/check-entitlements.test.mjs scripts/release/release-build.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "release-recipe-node",
+      "description": "Manual #861 fix 1 WI-5 RED receipts: the release runbook's local recipe and its coverage wording.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/release-recipe.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
     }
   ],
   "coverageThresholds": {
