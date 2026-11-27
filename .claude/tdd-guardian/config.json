@@ -14,7 +14,9 @@
       "description": "Manual #657 heavy-lock process supervision RED receipts.",
       "command": "node scripts/tdd/heavy-lock-receipt-lane.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     },
@@ -23,7 +25,9 @@
       "description": "Manual #672 Trash integration lane process/discovery contracts (fake Swift under the real heavy-lock).",
       "command": "node scripts/tdd/node-lane.mjs scripts/tdd/trash-lane.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 180000
     },
@@ -207,7 +211,9 @@
       "name": "ci-host-owner-log-node",
       "description": "Focused #657 hosted-owner query timing log RED receipt.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/integration/hosted-owner.test.mjs",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
@@ -216,7 +222,9 @@
       "name": "ci-host-register-node",
       "description": "Focused #657 hosted registration delay RED receipt.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/integration/hosted-register-delay.test.mjs",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
@@ -225,7 +233,9 @@
       "name": "ci-host-timeout-node",
       "description": "Focused #657 phase 4 synchronous OS ownership inspector RED receipt.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-host-ownership.test.mjs",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "probeCommand": "node --version",
       "timeoutMs": 120000
@@ -329,7 +339,9 @@
       "description": "Manual Node receipts for the owner-gates/mado-verify alignment (#758 lane list and xcodegen lock, #750 node lane parity with the workflows, #760 load and memory preflight).",
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-delegator/scripts/owner-gates.test.mjs .agents/skills/mado-delegator/scripts/owner-gates-tools.test.mjs .agents/skills/mado-delegator/scripts/owner-gates-skill.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 300000
     },
@@ -338,7 +350,9 @@
       "description": "Manual Node receipts for #788 item 3: bounded install retries (scripts/ci/retry.sh) in the Agent tooling and Design check install steps, never around a test step.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/retry.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     },
@@ -347,7 +361,9 @@
       "description": "Manual Node receipts for #788 item 4: failed job attempts hidden by reruns (scripts/ci/attempt-history.mjs) and the failing tests without a ticket, replayed from recorded API fixtures.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/attempt-history.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     },
@@ -356,7 +372,9 @@
       "description": "Manual Python receipts for #733: rebase-verify's CODE same / DOCS differ / CODE differ results, the states README row merger and rebase-ledger.sh calling it.",
       "command": "python3 .agents/skills/mado-delegator/scripts/test_rebase_docs.py",
       "probeCommand": "python3 --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 300000
     },
@@ -365,7 +383,9 @@
       "description": "Manual #772 RED receipts for rebased-head reuse proof and linked record refusals.",
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/reuse-check.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 180000
     },
@@ -374,7 +394,9 @@
       "description": "Manual Node receipts for #734: one hash over the App build inputs (scripts/ci/app-inputs-hash.mjs) and the PR-body lint's Device-Smoke inputs=<hash> rule.",
       "command": "node scripts/tdd/node-lane.mjs scripts/ci/app-inputs-hash.test.mjs scripts/agents/ui-parity-pr-body-lint.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 180000
     },
@@ -383,7 +405,9 @@
       "description": "Manual #898 RED receipts for the tdd-separation lane, its evidence wiring and the brief/audit texts.",
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/tdd-separation.test.mjs .agents/skills/mado-verify/tests/brief-template.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 300000
     },
@@ -392,9 +416,22 @@
       "description": "Manual #901 RED receipts: per-task worktree enforcement (mark-target, evidence check), the new-task-worktree helper, the start-fresh-codex task-worktree mode and the CI lint of the delegator texts.",
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-verify/tests/task-worktree-marker.test.mjs .agents/skills/mado-verify/tests/task-worktree-evidence.test.mjs .agents/skills/mado-delegator/scripts/new-task-worktree.test.mjs .agents/skills/mado-delegator/scripts/fresh-codex-task-worktree.test.mjs scripts/agents/task-worktree-lint.test.mjs",
       "probeCommand": "node --version",
-      "gateOn": ["manual"],
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 300000
+    },
+    {
+      "name": "site-content-node",
+      "description": "Help-site content check RED receipt for #887.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/site/check.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
