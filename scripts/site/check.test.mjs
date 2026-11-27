@@ -53,6 +53,21 @@ test('accepts user-facing copy and external links', async () => {
   });
 });
 
+test('rejects robots noindex metadata while accepting other robots directives', async () => {
+  for (const markup of [
+    '<meta name="robots" content="noindex">',
+    '<meta content="follow, NOINDEX" name="ROBOTS">',
+    '<meta name=robots content="noindex, nofollow">',
+  ]) {
+    await fixture({ 'index.html': `<h1>Help</h1>${markup}` }, async dir => {
+      assert.match((await checkSite(dir)).join('\n'), /robots noindex/);
+    });
+  }
+  await fixture({ 'index.html': '<h1>Help</h1><meta name="robots" content="index, follow">' }, async dir => {
+    assert.deepEqual(await checkSite(dir), []);
+  });
+});
+
 test('rejects internal notes hidden in HTML comments', async () => {
   await fixture({ 'index.html': '<!-- TODO: internal note #887 --><h1>Help</h1>' }, async dir => {
     assert.match((await checkSite(dir)).join('\n'), /internal note in HTML comment/);
