@@ -195,6 +195,12 @@ test('stale pre-host observation cannot declare registration missing after leade
 test('owned host may exit shortly after its iteration leader without forced cleanup',async t=>{
   const dir=directory(t),token=randomUUID(),marker=path.join(dir,'host-pid'),release=path.join(dir,'release');
   t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  // Supervision uses a movable clock; time spent waiting for this test's
+  // release signal is not part of the process-group budget under test.
+  const supervisedNow=Date.now();
+  t.mock.method(Date,'now',()=>supervisedNow);
+  const watchdog=setTimeout(()=>process.emit('SIGTERM'),30000);
+  t.after(()=>clearTimeout(watchdog));
   const inspector=await prepareHostInspector({deadline:Date.now()+10000});
   assert.equal(inspector.ready,true);t.after(()=>inspector.close());
   const hostSource=`const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},String(process.pid));process.send('ready');const poll=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(poll);setTimeout(()=>process.exit(0),500);}},10);`;
