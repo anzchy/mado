@@ -106,6 +106,47 @@ test('rejects internal markers and proto banner but allows ordinary draft and pu
   });
 });
 
+test('rejects draft banners in visible text, comments and metadata', async () => {
+  const cases = [
+    ['English block', '<div>Draft: not ready to publish</div>'],
+    ['Chinese block', '<p>草稿：本页内容</p>'],
+    ['English after sentence', '<p>Help. Draft: not ready to publish</p>'],
+    ['comment', '<!-- Draft: not ready to publish -->'],
+    ['meta content', '<meta name="description" content="Draft: not ready to publish">'],
+    ['alt', '<img alt="Draft: not ready to publish">'],
+    ['title', '<a href="index.html" title="Draft: not ready to publish">Help</a>'],
+    ['aria-label', '<button aria-label="草稿：尚未发布">Help</button>'],
+    ['proto class', '<div class="proto">草稿：本页内容</div>'],
+  ];
+  for (const [name, markup] of cases) {
+    await fixture({ 'index.html': `<h1>Help</h1>${markup}` }, async dir => {
+      assert.match((await checkSite(dir)).join('\n'), /draft banner|proto or draft banner class/, name);
+    });
+  }
+});
+
+test('allows ordinary draft copy and a public issue link', async () => {
+  await fixture({ 'index.html': '<p>Save a draft before sending it.</p><a href="https://github.com/anzchy/mado/issues/887">Issue #887</a>' }, async dir => {
+    assert.deepEqual(await checkSite(dir), []);
+  });
+});
+
+test('accepts a contained stylesheet while rejecting missing, escaping and navigation asset hrefs', async () => {
+  await fixture({ 'index.html': '<link rel="stylesheet" href="style.css">', 'style.css': 'body { margin: 0; }' }, async dir => {
+    assert.deepEqual(await checkSite(dir), []);
+  });
+  await fixture({
+    'index.html': '<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="missing.css"><link rel="stylesheet" href="../outside.css"><a href="style.css">CSS</a>',
+    'style.css': 'body { margin: 0; }',
+  }, async dir => {
+    const errors = await checkSite(dir);
+    assert.equal(errors.length, 3);
+    assert.match(errors.join('\n'), /missing\.css/);
+    assert.match(errors.join('\n'), /outside\.css/);
+    assert.match(errors.join('\n'), /link is not a page: style\.css/);
+  });
+});
+
 test('checks quoted, single-quoted and unquoted href and src forms', async () => {
   await fixture({
     'index.html': `<a href=missing-a.html>A</a><a href='missing-b.html'>B</a><a href="missing-c.html">C</a><img src=missing.png><a href=/mado>home</a>`,
