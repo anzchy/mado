@@ -72,7 +72,7 @@ struct TableRecognitionSettingsEnvironment {
     static let costURL = URL(string: "https://anzchy.github.io/mado/deepseek-key.html")!
 
     static let hostHint = "Images are sent here only after you click Recognise Table."
-    static let testNote = "Sends a built-in sample, not your images; may be charged."
+    static let testNote = "Sends a built-in sample, not your images; the service may charge."
     static let costHint = "May use your service account's balance; check the service for charges."
     static let addressHint = "Changing the address removes the saved key; save it and agree again."
     static let addressNotChanged = "Could not remove the saved key. The address was not changed."

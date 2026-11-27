@@ -1005,7 +1005,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         version.textColor = DesignColor.textSecondary.nsColor
         version.frame = NSRect(x: 108, y: 383, width: 390, height: 20)
         pane.addSubview(version)
-        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac unless you enable Cloud Recognition and agree to send an image to the service you configured. Only the image you ask to recognise is sent. The sandbox reads only folders you authorise."), role: "uiSmall", muted: true)
+        let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac. The only exception is Cloud Recognition, which is off until you turn it on with your own service key and agree; it then sends only the image you ask to recognise (text or table) to the service you chose. The sandbox reads only folders you choose."), role: "uiSmall", muted: true)
         privacy.textColor = DesignColor.textSecondary.nsColor
         // #849: the text names the Cloud Recognition exception, so it can take more than three lines; the box grows
         // down to fit it and the links and licences move down with it. Measured by the field's own cell, which wraps

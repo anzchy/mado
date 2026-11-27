@@ -154,10 +154,10 @@ _Avoid_: edited image, overwrite, project file
 - **Lost Access** belongs to the **Access Root** as a whole; one unreadable subfolder or image inside it is not Lost Access.
 - **Lost Access** with cause Unknown is shown as plain 「无法访问此文件夹」; Mado never guesses a cause.
 - A **Recent Item** confers no access; reopening one outside every **Access Root** asks the user to grant its folder.
-- **Cloud Recognition** runs only after the user has agreed to uploads once and while its global switch is on; without a key, without network or out of quota, Mado uses **On-device Recognition** and says so on the result.
+- **Cloud Recognition** runs only after the user has agreed once for the configured service host and while its global switch is on. Without a key, without network or out of quota, **Recognise Text** uses **On-device Recognition** and says so on the result; **Recognise Table** has no on-device fallback.
 - The command the user chooses decides the kind of result: "Recognise Text" gives text, "Recognise Table" gives a table. Mado never guesses from the image which one is wanted, because that would need an upload first.
 - **Table Recognition** runs only when the user explicitly asks for a table, with a **Cloud Recognition** service the user configured for tables. It is never answered with recognised text instead; when no table service is available, or it fails, the user is told why and may ask for text separately.
-- Selecting text on an image always uses **On-device Recognition**; **Cloud Recognition** runs only when the user explicitly asks to recognise text.
+- Selecting text on an image always uses **On-device Recognition**; **Cloud Recognition** runs only when the user explicitly asks to recognise text or a table, or tests the table service with a built-in sample.
 - A **Capture** is saved to the **Capture Folder** unless saving is turned off, in which case it lives only on the clipboard until the user saves it from its **Capture Thumbnail**.
 - Recognising text straight from the **Capture Bar** never saves the **Capture**.
 - Opening a **Capture** in Mado gives a **File Grant** for that one file; browsing the other Captures needs the **Capture Folder** to be an **Access Root**.

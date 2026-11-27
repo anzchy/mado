@@ -54,7 +54,7 @@ struct CloudRecognitionSettingsEnvironment {
     /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
 
-    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured, after you agree for that service host, turn this switch on, and choose Recognise Text or Recognise Table. Each command uses its own configured service; selecting text on an image always uses on-device recognition only. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
     static let productHint = "Enable “General Text Recognition” for your app in the Baidu AI Cloud console."
     static let fallbackHint = "Without an access key, offline, or when the quota is used up, Recognise Text falls back to on-device recognition and says so; Recognise Table needs Cloud Recognition."
 
