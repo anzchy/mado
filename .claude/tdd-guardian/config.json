@@ -431,6 +431,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 180000
+    },
+    {
+      "name": "native-inputs-standalone-node",
+      "description": "Manual #861 WI-4 RED receipts: native-inputs.mjs still loads on its own (owner-gates imports and copies it alone).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/native-inputs-standalone.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
     }
   ],
   "coverageThresholds": {
