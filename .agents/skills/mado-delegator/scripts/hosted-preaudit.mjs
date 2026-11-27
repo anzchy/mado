@@ -6,14 +6,16 @@
 //   hosted-preaudit.mjs app-facing --worktree <wt> --base <sha> --head <sha>
 //       prints `app-facing=yes|no` from owner-gates.sh's own `app_facing=` pattern (one source for both).
 //   hosted-preaudit.mjs dispatch --worktree <wt> --ref <branch> --head <sha> [--filter <re>] [--repeat <n>] [--out <dir>]
-//       refuses unless origin/<branch> is exactly <head>; runs `gh workflow run ci.yml` (app_tests=true), finds the new
-//       run for that head, waits, exports run.json, downloads app-crash-evidence, then evaluates as below.
+//       refuses unless origin/<branch> is exactly <head>; lists the dispatch runs, runs `gh workflow run ci.yml`
+//       (app_tests=true), takes the one run that is new since that list, waits, exports run.json, downloads
+//       app-crash-evidence into <out>/run-<id>/, then evaluates as below. --filter makes it diagnostic (never GREEN).
 //   hosted-preaudit.mjs evaluate --run <run.json> --head <sha> [--log <app-tests.log>] [--result <app-result.json>]
 //
 // Every mode that judges a run prints exactly one line
 //   Hosted-Preaudit: <GREEN|RED|NOT COUNTED (<reason>)> head=<40> run=<id> attempt=<n> event=<e> app-job=<c>
 //     run-step=<c> counts=<run>/<fail>|unknown retried=<yes|no|unknown> url=<url>
-// and exits 0 for GREEN, 1 for RED, 3 for NOT COUNTED, 2 for a usage or input error.
+// and exits 0 for GREEN, 1 for RED, 3 for NOT COUNTED, 2 for a usage or input error. A dispatch that fails at run time
+// (gh failure, no run or two new runs, existing evidence directory) is a NOT COUNTED line with run=unknown or the id.
 // A cancelled, stale, rerun (attempt > 1), still-running, skipped-native, build-only or filtered/repeated run is
 // NOT COUNTED; a filtered run that passed prints `NOT COUNTED (filtered run)`. GREEN also needs this run's own
 // app-result.json (runId <run>-<attempt>, complete, status 0, filter null, default retry and quarantine) and the counts
@@ -121,48 +123,103 @@ function git(worktree, args) {
   return r.stdout;
 }
 
+const usageError = message => Object.assign(new Error(message), { usage: true });
+const reasonText = text => String(text ?? '').replace(/[\r\n|]+/g, ' ').trim().slice(0, 240) || 'unknown';
+const firstLine = text => String(text ?? '').trim().split('\n')[0];
+
+/** The judged line for a dispatch that produced no judgeable run (exit 3). */
+export function notCountedLine(reason, head, run = 'unknown') {
+  const verdict = `NOT COUNTED (${reasonText(reason)})`;
+  const fields = { head, run: clean(run), attempt: 'unknown', event: 'unknown', 'app-job': 'unknown', 'run-step': 'unknown',
+    counts: 'unknown', retried: 'unknown', url: 'unknown' };
+  const line = `Hosted-Preaudit: ${verdict} ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`;
+  return { verdict, line, exit: EXIT.notCounted, fields };
+}
+
 /**
  * Dispatch and wait. `gh` is injectable for tests: (args) => { status, stdout, stderr }.
- * Returns { line, exit } like evaluateRun, after writing run.json and the artifact into `out`.
+ * Returns { line, exit } like evaluateRun. Bad arguments throw a usage error; every runtime failure is a NOT COUNTED line.
+ *
+ * Run association (#912 fix 1): the workflow_dispatch runs for <ref> are listed before the dispatch; the judged run is
+ * the one run that was not listed then, has <head>, and was created between the dispatch and the find timeout. More than
+ * one such run, at selection or after the wait, is `ambiguous dispatch`. The artifact goes into `<out>/run-<id>/`, a
+ * directory created fresh for that run (an existing one is refused, never reused); `<out>/run.json` is the latest export.
  */
 export function dispatchAndEvaluate({ worktree, ref, head, filter = '', repeat = 1, out,
   gh = args => spawnSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }),
   sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), now = () => Date.now(),
   findTimeoutMs = 180_000, log = text => process.stderr.write(text) }) {
-  if (!FULL_SHA.test(String(head ?? ''))) throw new Error('--head must be a full 40-hex SHA');
-  if (!/^[A-Za-z0-9._/-]+$/.test(String(ref ?? '')) || ref.startsWith('-')) throw new Error('--ref must be a branch name');
-  if (!Number.isSafeInteger(repeat) || repeat < 1 || repeat > 50) throw new Error('--repeat must be 1–50');
-  const remote = git(worktree, ['ls-remote', 'origin', `refs/heads/${ref}`]).trim().split(/\s+/)[0] ?? '';
+  if (!FULL_SHA.test(String(head ?? ''))) throw usageError('--head must be a full 40-hex SHA');
+  if (!/^[A-Za-z0-9._/-]+$/.test(String(ref ?? '')) || ref.startsWith('-')) throw usageError('--ref must be a branch name');
+  if (!Number.isSafeInteger(repeat) || repeat < 1 || repeat > 50) throw usageError('--repeat must be 1–50');
+  if (!out) throw usageError('--out is required');
+  const fail = (reason, run) => {
+    log(`hosted-preaudit: ${reasonText(reason)}\n`);
+    return notCountedLine(reason, head, run);
+  };
+  let remote;
+  try { remote = git(worktree, ['ls-remote', 'origin', `refs/heads/${ref}`]).trim().split(/\s+/)[0] ?? ''; }
+  catch (error) { return fail(error.message); }
   if (remote.toLowerCase() !== head.toLowerCase())
-    throw Object.assign(new Error(`origin/${ref} is ${remote || 'absent'}, not ${head}: push the verified head first (push-guard)`), { notCounted: true });
-  const started = now();
-  const run = gh(['workflow', 'run', 'ci.yml', '--ref', ref, '-f', 'app_tests=true', '-f', `app_filter=${filter}`, '-f', `app_repeat=${repeat}`]);
-  if (run.status !== 0) throw new Error(`gh workflow run failed: ${(run.stderr || '').trim()}`);
-  let id;
-  while (!id) {
-    const list = gh(['run', 'list', '--workflow', 'ci.yml', '--event', 'workflow_dispatch', '--branch', ref, '--limit', '20',
+    return fail(`origin/${ref} is ${remote || 'absent'}, not ${head}: push the verified head first (push-guard)`);
+  const list = () => {
+    const r = gh(['run', 'list', '--workflow', 'ci.yml', '--event', 'workflow_dispatch', '--branch', ref, '--limit', '50',
       '--json', 'databaseId,headSha,createdAt']);
-    if (list.status === 0) {
-      const runs = JSON.parse(list.stdout || '[]').filter(r => String(r.headSha).toLowerCase() === head.toLowerCase() &&
-        Date.parse(r.createdAt) >= started - 60_000).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-      id = runs[0]?.databaseId;
-    }
-    if (!id) {
-      if (now() - started > findTimeoutMs) throw new Error('dispatched run did not appear');
-      sleep(5000);
-    }
+    if (r.status !== 0) return { error: `gh run list failed: ${firstLine(r.stderr)}` };
+    try {
+      const runs = JSON.parse(r.stdout || '[]');
+      return Array.isArray(runs) ? { runs } : { error: 'gh run list output is not a list' };
+    } catch { return { error: 'gh run list output unreadable' }; }
+  };
+  const started = now();
+  const before = list();
+  if (before.error) return fail(before.error);
+  const known = new Set(before.runs.map(r => String(r?.databaseId)));
+  const dispatched = gh(['workflow', 'run', 'ci.yml', '--ref', ref, '-f', 'app_tests=true', '-f', `app_filter=${filter}`,
+    '-f', `app_repeat=${repeat}`]);
+  if (dispatched.status !== 0) return fail(`gh workflow run failed: ${firstLine(dispatched.stderr)}`);
+  const ours = runs => runs.filter(r => r && !known.has(String(r.databaseId)) &&
+    String(r.headSha).toLowerCase() === head.toLowerCase() &&
+    Date.parse(r.createdAt) >= started && Date.parse(r.createdAt) <= started + findTimeoutMs)
+    .map(r => String(r.databaseId)).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
+  const ambiguous = ids => `ambiguous dispatch: runs ${ids.join(', ')}`;
+  let found = [];
+  for (;;) {
+    const listed = list();
+    if (listed.error) log(`hosted-preaudit: ${listed.error}; retrying\n`);
+    else found = ours(listed.runs);
+    if (found.length) break;
+    if (now() - started > findTimeoutMs) return fail(`dispatched run did not appear within ${Math.round(findTimeoutMs / 1000)} s`);
+    sleep(5000);
   }
+  if (found.length > 1) return fail(ambiguous(found));
+  const id = found[0];
+  if (!/^\d+$/.test(id)) return fail(`run id ${id} unreadable`);
   log(`hosted-preaudit: run ${id} for ${head.slice(0, 12)}; waiting\n`);
-  gh(['run', 'watch', String(id), '--interval', '30']);
-  const view = gh(['run', 'view', String(id), '--json', 'headSha,url,status,conclusion,jobs,event,attempt,databaseId']);
-  if (view.status !== 0) throw new Error(`gh run view failed: ${(view.stderr || '').trim()}`);
-  fs.mkdirSync(out, { recursive: true });
+  gh(['run', 'watch', id, '--interval', '30']);
+  // A second dispatch can show up after ours was picked: check again once the run is done.
+  const after = list();
+  if (after.error) return fail(after.error, id);
+  const finalIds = ours(after.runs);
+  if (finalIds.length !== 1 || finalIds[0] !== id) return fail(ambiguous([...new Set([id, ...finalIds])].sort((a, b) => a - b)), id);
+  const view = gh(['run', 'view', id, '--json', 'headSha,url,status,conclusion,jobs,event,attempt,databaseId']);
+  if (view.status !== 0) return fail(`gh run view failed: ${firstLine(view.stderr)}`, id);
+  const runDir = path.join(out, `run-${id}`);
+  try {
+    fs.mkdirSync(out, { recursive: true });
+    fs.mkdirSync(runDir);
+  } catch (error) {
+    return fail(error.code === 'EEXIST' ? `evidence directory ${runDir} already exists` : `cannot create ${runDir}: ${error.code}`, id);
+  }
+  fs.writeFileSync(path.join(runDir, 'run.json'), view.stdout);
   fs.writeFileSync(path.join(out, 'run.json'), view.stdout);
-  const artifact = path.join(out, 'app-crash-evidence');
-  const download = gh(['run', 'download', String(id), '-n', 'app-crash-evidence', '-D', artifact]);
-  if (download.status !== 0) log(`hosted-preaudit: app-crash-evidence not downloaded: ${(download.stderr || '').trim()}\n`);
-  return evaluateFiles({ run: path.join(out, 'run.json'), head, log: path.join(artifact, 'app-tests.log'),
-    result: path.join(artifact, 'app-result.json'), filter });
+  const artifact = path.join(runDir, 'app-crash-evidence');
+  const download = gh(['run', 'download', id, '-n', 'app-crash-evidence', '-D', artifact]);
+  if (download.status !== 0) log(`hosted-preaudit: app-crash-evidence not downloaded: ${firstLine(download.stderr)}\n`);
+  try {
+    return evaluateFiles({ run: path.join(runDir, 'run.json'), head, log: path.join(artifact, 'app-tests.log'),
+      result: path.join(artifact, 'app-result.json'), filter });
+  } catch (error) { return fail(`run export unreadable: ${error.message}`, id); }
 }
 
 function readOptional(file) {
@@ -215,14 +272,14 @@ export function main(argv = process.argv.slice(2), { stdout = t => process.stdou
       if (!o.worktree || !o.ref || !o.head) throw Object.assign(new Error('missing argument'), { usage: true });
       const out = o.out ?? path.join(o.worktree, '.build/hosted-preaudit', o.head.slice(0, 12));
       const judged = dispatchAndEvaluate({ worktree: o.worktree, ref: o.ref, head: o.head, filter: o.filter ?? '',
-        repeat: o.repeat === undefined ? 1 : Number(o.repeat), out, ...(gh ? { gh } : {}) });
+        repeat: o.repeat === undefined ? 1 : Number(o.repeat), out, log: stderr, ...(gh ? { gh } : {}) });
       stdout(`${judged.line}\n`);
       return judged.exit;
     }
     throw Object.assign(new Error(`unknown mode ${mode ?? '(none)'}`), { usage: true });
   } catch (error) {
     stderr(`hosted-preaudit: ${error.message}\n${error.usage ? USAGE : ''}`);
-    return error.notCounted ? EXIT.notCounted : EXIT.usage;
+    return EXIT.usage;
   }
 }
 

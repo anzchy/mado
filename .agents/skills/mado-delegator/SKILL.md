@@ -128,11 +128,12 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    `app-facing=yes` (owner-gates' own pattern), push the verified head with push-guard (no PR) and run
    `node $SK/scripts/hosted-preaudit.mjs dispatch --worktree <wt> --ref <branch> --head <sha>` in the background, beside
    owner-gates: it refuses unless `origin/<branch>` is that head, dispatches `ci.yml` (`app_tests=true`, full bundle),
-   waits, downloads `app-crash-evidence` and prints one `Hosted-Preaudit:` line (head, run, attempt, App job, run step,
-   counts). Dispatch the audits only on `GREEN`. `RED` means no audit dispatch: the failure, with its
-   `.build/layout-evidence/` records from the artifact, goes back to the implementer as fix-round input. `NOT COUNTED`
+   judges only the one run that is new since its pre-dispatch run list, waits, downloads `app-crash-evidence` into
+   `.build/hosted-preaudit/<head12>/run-<id>/` and prints one `Hosted-Preaudit:` line (head, run, attempt, App job, run
+   step, counts, retried). Dispatch the audits only on `GREEN`. `RED` means no audit dispatch: the failure, with its
+   `layout-evidence/` records from that artifact, goes back to the implementer as fix-round input. `NOT COUNTED`
    (cancelled, stale, rerun, skipped-native, build-only, filtered/repeated, counts missing, app-result.json missing or
-   from another run) is no evidence: dispatch again. A fix for a hosted-only failure is not audit-ready until a dispatch
+   from another run, ambiguous dispatch, a gh failure; exit 3) is no evidence: dispatch again. A fix for a hosted-only failure is not audit-ready until a dispatch
    on the fix head is `GREEN`; a GREEN with `retried=yes` (it passed only after the App lane's one automatic retry) is
    not enough for a fix of a hosted-only failure: dispatch again until a `retried=no` GREEN. For any other App-facing
    diff a `retried=yes` GREEN may start the audits; name the retry in the audit request. A focused `--filter` run

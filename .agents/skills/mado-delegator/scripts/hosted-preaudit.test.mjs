@@ -217,11 +217,147 @@ test('dispatch runs ci.yml with app_tests=true on the ref, finds that head\'s ne
   };
   const judged = dispatchAndEvaluate({ worktree: dir, ref: 'tooling/912-x', head, out, gh, sleep: () => { clock += 5000; },
     now: () => clock, log: () => {} });
+  const beforeDispatch = calls.splice(0, calls.findIndex(c => c[0] === 'workflow'));
+  assert.deepEqual(beforeDispatch.map(c => c.slice(0, 2).join(' ')), ['run list'], 'the runs are listed once before the dispatch');
   assert.deepEqual(calls[0], ['workflow', 'run', 'ci.yml', '--ref', 'tooling/912-x', '-f', 'app_tests=true', '-f', 'app_filter=', '-f', 'app_repeat=1']);
   assert.ok(calls.some(c => c.join(' ') === 'run watch 77 --interval 30'), 'waits on the new run, not the older one');
   assert.equal(judged.verdict, 'GREEN');
   assert.match(judged.line, / run=77 .* counts=779\/0 /);
   assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'run.json'), 'utf8')).databaseId, 77);
+});
+
+// #912 fix 1 (gpt F3, opus L5, M1, L3): the judged run is the one this dispatch created, its artifact is downloaded
+// into a directory of its own, and a runtime failure is one NOT COUNTED line (exit 3), never a usage error.
+const T0 = Date.parse('2026-11-27T00:00:00Z');
+const at = seconds => new Date(T0 + seconds * 1000).toISOString();
+/**
+ * A fake gh. `before` is what `run list` shows before the dispatch; `after(poll)` what it shows on the n-th list after
+ * it (1-based; the list after `run watch` is the last poll). Every listed run uses the repo head unless it says otherwise.
+ */
+function fakeGh(head, { before = [], after = () => [], download = 'pass', dispatch = 0, view = 0 } = {}) {
+  const calls = [];
+  let dispatched = false, polls = 0;
+  const gh = args => {
+    calls.push(args);
+    const key = args.slice(0, 2).join(' ');
+    if (key === 'workflow run') { dispatched = true; return { status: dispatch, stdout: '', stderr: dispatch ? 'HTTP 422' : '' }; }
+    if (key === 'run list') {
+      const listed = dispatched ? after(++polls) : before;
+      return { status: 0, stdout: JSON.stringify(listed.map(r => ({ headSha: head, ...r }))) };
+    }
+    if (key === 'run view') {
+      const id = Number(args[2]);
+      return { status: view, stdout: view ? '' : JSON.stringify({ ...runOf(), headSha: head, databaseId: id }), stderr: view ? 'HTTP 502' : '' };
+    }
+    if (key === 'run download') {
+      if (download !== 'pass') return { status: 1, stdout: '', stderr: 'no artifact' };
+      const dest = args[args.indexOf('-D') + 1];
+      fs.mkdirSync(dest, { recursive: true });
+      fs.writeFileSync(path.join(dest, 'app-tests.log'), PASS_LOG);
+      fs.writeFileSync(path.join(dest, 'app-result.json'), JSON.stringify({ ...RESULT, runId: `${args[2]}-1` }));
+    }
+    return { status: 0, stdout: '' };
+  };
+  return { gh, calls };
+}
+function dispatchWith(fake, extra = {}) {
+  const { dir, head } = extra.repo ?? repo();
+  const out = extra.out ?? fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-preaudit-out-'));
+  let clock = T0;
+  let judged;
+  try {
+    judged = dispatchAndEvaluate({ worktree: dir, ref: 'tooling/912-x', head, out, gh: fake.gh, log: () => {},
+      sleep: ms => { clock += ms; }, now: () => clock, findTimeoutMs: 60_000 });
+  } catch (error) {
+    judged = { verdict: `threw: ${error.message}`, exit: null, line: '' }; // a throw is a wrong answer, not a crash
+  }
+  return { judged, out, head };
+}
+const watched = calls => calls.filter(c => c[0] === 'run' && c[1] === 'watch').map(c => c[2]);
+
+test('a passing run on the same head 10 s before the dispatch is never the judged run', () => {
+  const prior = { databaseId: 70, createdAt: at(-10) };
+  const fresh = { databaseId: 77, createdAt: at(12) };
+  for (const before of [[prior], []]) { // listed before the dispatch, or missing from that list (no early window)
+    const r = repo();
+    const fixed = fakeGh(r.head, { before: before.map(b => ({ ...b })), after: poll => poll === 1 ? [prior] : [fresh, prior] });
+    const { judged } = dispatchWith(fixed, { repo: r });
+    assert.deepEqual(watched(fixed.calls), ['77'], JSON.stringify(before));
+    assert.equal(judged.verdict, 'GREEN');
+    assert.match(judged.line, / run=77 /);
+  }
+});
+
+test('two new runs for one dispatch are NOT COUNTED (ambiguous dispatch), whenever the second one shows', () => {
+  const a = { databaseId: 77, createdAt: at(5) };
+  const b = { databaseId: 78, createdAt: at(6) };
+  const r1 = repo();
+  const together = fakeGh(r1.head, { after: () => [b, a] });
+  const first = dispatchWith(together, { repo: r1 }).judged;
+  assert.equal(first.verdict, 'NOT COUNTED (ambiguous dispatch: runs 77, 78)');
+  assert.equal(first.exit, EXIT.notCounted);
+  assert.deepEqual(watched(together.calls), [], 'no wait on a run that may not be ours');
+  const r2 = repo();
+  const later = fakeGh(r2.head, { after: poll => poll === 1 ? [a] : [b, a] });
+  const second = dispatchWith(later, { repo: r2 }).judged;
+  assert.equal(second.verdict, 'NOT COUNTED (ambiguous dispatch: runs 77, 78)');
+  assert.match(second.line, / run=77 /);
+});
+
+test('the artifact is downloaded into a fresh directory per run; stale files from an earlier dispatch are never read', () => {
+  const r = repo();
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-preaudit-out-'));
+  const stale = path.join(out, 'app-crash-evidence');
+  fs.mkdirSync(stale);
+  fs.writeFileSync(path.join(stale, 'app-tests.log'), PASS_LOG);
+  fs.writeFileSync(path.join(stale, 'app-result.json'), JSON.stringify({ ...RESULT, runId: '77-1' }));
+  const failing = fakeGh(r.head, { after: () => [{ databaseId: 77, createdAt: at(5) }], download: 'fail' });
+  const { judged } = dispatchWith(failing, { repo: r, out });
+  const download = failing.calls.find(c => c[1] === 'download');
+  assert.equal(download[download.indexOf('-D') + 1], path.join(out, 'run-77', 'app-crash-evidence'));
+  assert.equal(judged.verdict, 'NOT COUNTED (counts unavailable: app-tests.log missing from app-crash-evidence)');
+  // A directory left for that run id is refused, not reused.
+  const again = fakeGh(r.head, { after: () => [{ databaseId: 77, createdAt: at(5) }] });
+  const reused = dispatchWith(again, { repo: r, out }).judged;
+  assert.equal(reused.verdict, `NOT COUNTED (evidence directory ${path.join(out, 'run-77')} already exists)`);
+  assert.equal(again.calls.filter(c => c[1] === 'download').length, 0);
+});
+
+test('runtime failures print one NOT COUNTED line and exit 3', () => {
+  const cases = [
+    [{ dispatch: 1, after: () => [] }, /^NOT COUNTED \(gh workflow run failed: HTTP 422\)$/, 'unknown'],
+    [{ after: () => [] }, /^NOT COUNTED \(dispatched run did not appear within 60 s\)$/, 'unknown'],
+    [{ after: () => [{ databaseId: 77, createdAt: at(5) }], view: 1 }, /^NOT COUNTED \(gh run view failed: HTTP 502\)$/, '77'],
+  ];
+  for (const [options, expected, run] of cases) {
+    const r = repo();
+    const fake = fakeGh(r.head, options);
+    const { judged } = dispatchWith(fake, { repo: r });
+    assert.match(judged.verdict, expected);
+    assert.equal(judged.exit, EXIT.notCounted);
+    assert.equal(judged.line, `Hosted-Preaudit: ${judged.verdict} head=${r.head} run=${run} attempt=unknown event=unknown ` +
+      'app-job=unknown run-step=unknown counts=unknown retried=unknown url=unknown');
+  }
+  // A failed list before the dispatch stops before anything is dispatched.
+  const r = repo();
+  const calls = [];
+  const { judged } = dispatchWith({ gh: args => { calls.push(args); return { status: 1, stdout: '', stderr: 'HTTP 401' }; } }, { repo: r });
+  assert.equal(judged.exit, EXIT.notCounted);
+  assert.equal(judged.verdict, 'NOT COUNTED (gh run list failed: HTTP 401)');
+  assert.equal(calls.filter(c => c[0] === 'workflow').length, 0);
+  // Through the CLI: the line goes to stdout, the exit is 3, and the remote-head refusal is a line too.
+  const cli = repo();
+  let out = '';
+  assert.equal(main(['dispatch', '--worktree', cli.dir, '--ref', 'tooling/912-x', '--head', cli.head, '--out',
+    fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-preaudit-out-'))],
+  { stdout: t => { out += t; }, stderr: () => {}, gh: fakeGh(cli.head, { dispatch: 1 }).gh }), EXIT.notCounted);
+  assert.match(out, /^Hosted-Preaudit: NOT COUNTED \(gh workflow run failed: HTTP 422\) head=[0-9a-f]{40} run=unknown /);
+  out = '';
+  assert.equal(main(['dispatch', '--worktree', cli.dir, '--ref', 'tooling/912-x', '--head', OTHER],
+    { stdout: t => { out += t; }, stderr: () => {}, gh: () => ({ status: 0, stdout: '[]' }) }), EXIT.notCounted);
+  assert.match(out, new RegExp(`^Hosted-Preaudit: NOT COUNTED \\(origin/tooling/912-x is [0-9a-f]{40}, not ${OTHER}: push the verified head first`));
+  assert.equal(main(['dispatch', '--worktree', cli.dir, '--ref', 'tooling/912-x', '--head', 'abc'],
+    { stdout: () => {}, stderr: () => {}, gh: () => ({ status: 0, stdout: '[]' }) }), EXIT.usage, 'a bad --head is a usage error');
 });
 
 test('evaluate CLI exits by verdict and reports usage errors', () => {
