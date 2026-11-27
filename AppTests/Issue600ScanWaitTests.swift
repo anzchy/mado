@@ -11,12 +11,17 @@ import MadoMacUI
 @MainActor private final class Steps600 {
     let base = ContinuousClock.now
     let realTime: Bool
+    let yieldAfterPause: Bool
+    let tick: Duration
     var offset = Duration.zero
     var steps: [Duration]
     var silent: [(ContinuousClock.Instant, ContinuousClock.Instant)] = []
     var pauses = 0
     var onStep: () -> Void = {}
-    init(_ steps: [Duration], realTime: Bool = false) { self.steps = steps; self.realTime = realTime }
+    init(_ steps: [Duration], realTime: Bool = false, yieldAfterPause: Bool = false,
+         tick: Duration = .milliseconds(5)) {
+        self.steps = steps; self.realTime = realTime; self.yieldAfterPause = yieldAfterPause; self.tick = tick
+    }
     func wait() -> ActiveTimeWait {
         var wait = ActiveTimeWait()
         wait.now = { [self] in (realTime ? ContinuousClock.now : base).advanced(by: offset) }
@@ -30,10 +35,13 @@ import MadoMacUI
                 onStep()
                 await Task.yield()
             } else if steps.isEmpty {
-                offset += .milliseconds(5)
+                offset += tick
+                if yieldAfterPause { try await Task.sleep(for: .milliseconds(1)) }
             } else {
                 offset += steps.removeFirst()
                 silent.append((from, base.advanced(by: offset)))
+                onStep()
+                if yieldAfterPause { try await Task.sleep(for: .milliseconds(1)) }
             }
         }
         wait.heartbeatSilence = { [self] from, to in
@@ -145,8 +153,10 @@ func issue600StalledDeadlineStillSeesTheSymlinkScanComplete() async throws {
     // The open has only queued its work: nothing scans before the first look.
     #expect(controller.session.folderScan == nil)
     // The first look's pause is a 2.5 s process-wide stall; the gate opens only after it, so the scan cannot have
-    // completed before the deadline passed. Later looks sleep 5 ms of real time.
-    let steps = Steps600([.milliseconds(2_500)], realTime: true)
+    // completed before the deadline passed. Later looks give the real scan an actor turn while moving only the
+    // synthetic clock; a slow CI runner cannot consume the budget on behalf of the scan.
+    let steps = Steps600([.milliseconds(2_500)], yieldAfterPause: true, tick: .milliseconds(1))
+    #expect(!steps.realTime, "the real scan's scheduling delay must not consume the synthetic active budget")
     var completeAtStall: Bool?
     steps.onStep = {
         completeAtStall = controller.session.folderScan?.sourceSnapshot?.isComplete == true

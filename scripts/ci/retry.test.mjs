@@ -74,6 +74,14 @@ test('788 Agent tooling installs only missing tools, with apt retries and a boun
   assert.throws(() => parseWorkflow(read('pr-body.yml').replace('-y python3 git zsh', '-y python3 git zsh curl')), /unsupported provision mapping/);
 });
 
+test('907 Agent tooling keeps two minutes after the measured normal run and survives slow provisioning', () => {
+  const job = jobOf(read('pr-body.yml'), 'agent-tests');
+  const minutes = Number(/timeout-minutes: (\d+)/.exec(job)?.[1]);
+  // Last 30 successful jobs: median 211 s. One observed install took 235 s instead of the 9 s median.
+  assert.ok(minutes * 60 - 211 >= 120, 'normal run needs at least two minutes of headroom');
+  assert.ok(minutes * 60 - (211 - 9 + 235) >= 120, 'slow apt still needs two minutes for tests and cleanup');
+});
+
 test('788 Design check retries apt downloads and the Playwright install, and keeps the pinned browser cache', () => {
   const job = jobOf(read('ci.yml'), 'design-check');
   const install = steps(job).find(s => s.name === 'Install Playwright Chromium');
