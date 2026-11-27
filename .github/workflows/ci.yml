@@ -496,6 +496,7 @@ jobs:
             .build/app-result.json
             .build/crash-evidence
             .build/hosted-*/result.xcresult
+            .build/layout-evidence
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

@@ -233,6 +233,17 @@ test('#732 crash evidence is summarized and uploaded on every outcome, directly 
     '.build/hosted-*/result.xcresult']) assert.ok(upload.split('\n').includes(`            ${path}`), path);
 });
 
+test('#912 layout-failure records and the fingerprint ride the same failure-safe upload as the crash evidence', () => {
+  const upload = stepNamed('app-tests', 'Upload App crash evidence');
+  const paths = upload.split('\n').filter(line => /^ {12}\S/.test(line)).map(line => line.trim());
+  assert.deepEqual(paths, ['.build/app-tests.log', '.build/app-result.json', '.build/crash-evidence',
+    '.build/hosted-*/result.xcresult', '.build/layout-evidence'], 'extended, not replaced');
+  // The App tests write there by default (AppTests/LayoutFitSupport.swift); nothing in the job overrides the directory.
+  assert.doesNotMatch(workflow, /MADO_LAYOUT_EVIDENCE_DIR/);
+  const support = readFileSync(new URL('../../AppTests/LayoutFitSupport.swift', import.meta.url), 'utf8');
+  assert.match(support, /appendingPathComponent\("\.build\/layout-evidence", isDirectory: true\)/);
+});
+
 test('#732 a mid-run exit still fails the App run step: no retry and no continue-on-error were added there', () => {
   const run = stepNamed('app-tests', 'Run App tests');
   assert.doesNotMatch(run, /continue-on-error/);
