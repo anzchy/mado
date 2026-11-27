@@ -59,8 +59,11 @@ test("#861: the ad-hoc build shares every other flag, signs with no identity and
     for (const text of [step.stdout, step.summary]) {
       assert.match(text, /Ad-hoc signed Release build: no Developer ID identity and no secrets\./);
       assert.match(text, /not covered here: Developer ID signatures and their _CodeSignature entries/);
-      assert.match(text, /notarisation, stapling and Gatekeeper/);
       assert.match(text, /rehearsal[^\n]*#860/);
+      // #861 fix 1 (M1): the rehearsal notarises and staples only when asked to, and only the tag run checks Gatekeeper.
+      assert.match(text, /notarisation and stapling[^\n]*only when notarize_app is set/);
+      assert.match(text, /Gatekeeper[^\n]*only on the tag run/);
+      assert.doesNotMatch(text, /covers those[^\n]*Gatekeeper|Gatekeeper[^\n]*rehearsal[^\n]*covers/);
     }
   } finally { step.cleanup(); }
 });
@@ -182,7 +185,9 @@ test("#861: version reads MARKETING_VERSION and counts the commits for the build
 // Failing-first for the PR-time check (#861 AC-1): the real checks on a real ad-hoc signed bundle pass, and fail
 // once a new embedded file or a new entitlement appears without the allow-lists changing.
 const sparkleLicence = "Copyright (c) 2006-2013 Andy Matuschak.\nPermission is hereby granted\nEXTERNAL LICENSES\nbsdiff\n";
-function signedApp(extraEntitlements = "") {
+// The app embeds the Capture helper where Xcode puts it, ad-hoc signed with App/CaptureHelper/CaptureHelper.entitlements
+// (plus `helperExtra`), as the Release build does (#861 fix 1).
+function signedApp(extraEntitlements = "", { helperExtra = "", helper = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "mado-adhoc-app-"));
   const app = join(dir, "Mado.app");
   const vars = { DEVELOPMENT_LANGUAGE: "en", EXECUTABLE_NAME: "Mado", PRODUCT_BUNDLE_IDENTIFIER: "io.github.anzchy.mado",
@@ -201,6 +206,20 @@ function signedApp(extraEntitlements = "") {
   }
   mkdirSync(join(app, "Contents/MacOS"));
   copyFileSync("/usr/bin/true", join(app, "Contents/MacOS/Mado"));
+  if (helper) {
+    const helperApp = join(app, "Contents/Library/LoginItems/MadoCaptureHelper.app");
+    const helperVars = { ...vars, EXECUTABLE_NAME: "MadoCaptureHelper", PRODUCT_NAME: "MadoCaptureHelper",
+      PRODUCT_BUNDLE_IDENTIFIER: "io.github.anzchy.mado.capture-helper" };
+    const helperInfo = readFileSync(join(root, "App/CaptureHelper/Info.plist"), "utf8")
+      .replace(/\$\(([A-Z_]+)\)/g, (_, name) => helperVars[name] ?? assert.fail(`unknown ${name}`));
+    mkdirSync(join(helperApp, "Contents/MacOS"), { recursive: true });
+    writeFileSync(join(helperApp, "Contents/Info.plist"), helperInfo);
+    writeFileSync(join(helperApp, "Contents/PkgInfo"), "APPL????");
+    copyFileSync("/usr/bin/true", join(helperApp, "Contents/MacOS/MadoCaptureHelper"));
+    writeFileSync(join(dir, "helper.entitlements"), readFileSync(join(root, "App/CaptureHelper/CaptureHelper.entitlements"), "utf8")
+      .replace("</dict>", `${helperExtra}</dict>`));
+    execFileSync("/usr/bin/codesign", ["-f", "-s", "-", "--entitlements", join(dir, "helper.entitlements"), helperApp], { stdio: "ignore" });
+  }
   const entitlements = fill(readFileSync(join(root, "App/Resources/Mado.entitlements"), "utf8"))
     .replace("</dict>", `${extraEntitlements}</dict>`);
   writeFileSync(join(dir, "app.entitlements"), entitlements);
@@ -232,4 +251,32 @@ test("#861 AC-1: a new embedded file or entitlement fails the shared checks unti
         assert.match(step.stderr, /^FAIL unexpected entitlement com\.apple\.security\.device\.camera$/m);
       } finally { step.cleanup(); }
     } finally { camera.cleanup(); }
+  });
+
+test("#861 fix 1: a new Capture helper entitlement, or no helper, fails the shared entitlement check",
+  { skip: process.platform !== "darwin" && "needs codesign" }, () => {
+    const clean = signedApp();
+    try {
+      const step = real("check-entitlements", clean.app);
+      try {
+        assert.equal(step.status, 0, `${step.stdout}${step.stderr}`);
+        assert.match(step.stdout, /^PASS release entitlements for the Capture helper$/m);
+      } finally { step.cleanup(); }
+    } finally { clean.cleanup(); }
+    const camera = signedApp("", { helperExtra: "<key>com.apple.security.device.camera</key><true/>" });
+    try {
+      const step = real("check-entitlements", camera.app);
+      try {
+        assert.equal(step.status, 1);
+        assert.match(step.stderr, /^FAIL Capture helper: unexpected entitlement com\.apple\.security\.device\.camera$/m);
+      } finally { step.cleanup(); }
+    } finally { camera.cleanup(); }
+    const none = signedApp("", { helper: false });
+    try {
+      const step = real("check-entitlements", none.app);
+      try {
+        assert.equal(step.status, 1);
+        assert.match(step.stderr, /^FAIL missing Capture helper Contents\/Library\/LoginItems\/MadoCaptureHelper\.app$/m);
+      } finally { step.cleanup(); }
+    } finally { none.cleanup(); }
   });

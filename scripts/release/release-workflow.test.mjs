@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -72,7 +72,9 @@ test("rehearsal accepts an origin branch commit and refuses an unreferenced comm
   try {
     git("init", "-q", "-b", "main");
     writeFileSync(join(dir, "project.yml"), "MARKETING_VERSION: 0.0.2\n");
-    git("add", "project.yml"); git("commit", "-q", "-m", "base");
+    mkdirSync(join(dir, "scripts/release"), { recursive: true });
+    writeFileSync(join(dir, "scripts/release/release-build.sh"), "#!/bin/bash\n");
+    git("add", "project.yml", "scripts/release/release-build.sh"); git("commit", "-q", "-m", "base");
     git("switch", "-q", "-c", "scratch"); git("commit", "-q", "--allow-empty", "-m", "scratch");
     const sha = git("rev-parse", "HEAD");
     const text = step(/^Check rehearsal inputs$/).text;
@@ -278,4 +280,31 @@ test("the workflow never names the frozen appcast as a write or signing target",
   assert.doesNotMatch(workflow, /(?<![-\w])appcast\.xml/);
   assert.match(step(/appcast/i).text, /node scripts\/release\/appcast\.mjs appcast-mado\.xml/);
   assert.match(step(/appcast/i).text, /git add appcast-mado\.xml/);
+});
+
+// #861 fix 1 (M3): a rehearsal runs the commit's own scripts/release/release-build.sh. A commit from before #861 has
+// none, so the input check stops early with a clear message instead of failing later at "Download Sparkle tools".
+test("a rehearsal of a commit without scripts/release/release-build.sh stops at the input check", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mado-rehearsal-script-"));
+  const git = (...args) => execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args],
+    { cwd: dir, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(dir, "project.yml"), "MARKETING_VERSION: 0.0.2\n");
+    git("add", "project.yml"); git("commit", "-q", "-m", "before #861");
+    const sha = git("rev-parse", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", sha);
+    const text = step(/^Check rehearsal inputs$/).text;
+    const script = text.split("\n        run: |\n")[1]?.split("\n      - name:")[0]
+      ?.split("\n").map(line => line.startsWith("          ") ? line.slice(10) : line).join("\n");
+    const envFile = join(dir, "env"); writeFileSync(envFile, "");
+    const run = spawnSync("/bin/bash", ["--noprofile", "--norc", "-eo", "pipefail"], {
+      cwd: dir, input: script, encoding: "utf8", env: { ...process.env, GITHUB_ENV: envFile,
+        REHEARSAL_SHA: sha, REHEARSAL_VERSION: "0.0.2", DEVELOPMENT_TEAM: "GRT84NAK4T" },
+    });
+    assert.equal(run.status, 1);
+    assert.match(run.stdout + run.stderr,
+      /::error::commit_sha [0-9a-f]{40} has no scripts\/release\/release-build\.sh \(it predates #861\); rehearse a later commit/);
+    assert.equal(readFileSync(envFile, "utf8"), "", "no VERSION or BUILD for a rejected commit");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

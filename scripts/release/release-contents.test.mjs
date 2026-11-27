@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { listChangedFiles } from '../ci/native-inputs.mjs';
 import { classifyRelease, releaseContent } from './release-contents.mjs';
 
+// #861 fix 1: the classifier validates the file list once and hands the result to the filter, which imports nothing
+// back (the import cycle deadlocked the entry script).
+const decide = ({ event, changedFiles, pages } = {}) =>
+  classifyRelease({ event, listed: event === 'pull_request' ? listChangedFiles({ changedFiles, pages }) : undefined });
 const entry = (filename, extra = {}) => ({ filename, status: 'modified', ...extra });
-const pr = (...files) => classifyRelease({ event: 'pull_request', changedFiles: files.length, pages: [files] });
+const pr = (...files) => decide({ event: 'pull_request', changedFiles: files.length, pages: [files] });
 
 test('#861: inputs that decide the shipped app contents or entitlements are release content', () => {
   for (const file of ['project.yml', 'App/Resources/Mado.entitlements', 'App/CaptureHelper/CaptureHelper.entitlements',
@@ -51,12 +56,12 @@ test('#861: a rename counts both ends', () => {
 test('#861: an incomplete or malformed file list runs the Release build', () => {
   const docs = entry('docs/a.md');
   for (const [name, result] of Object.entries({
-    'count mismatch': classifyRelease({ event: 'pull_request', changedFiles: 2, pages: [[docs]] }),
-    'missing changed_files': classifyRelease({ event: 'pull_request', pages: [[docs]] }),
-    'no pages': classifyRelease({ event: 'pull_request', changedFiles: 1, pages: [] }),
-    'malformed entry': classifyRelease({ event: 'pull_request', changedFiles: 1, pages: [[{ status: 'modified' }]] }),
+    'count mismatch': decide({ event: 'pull_request', changedFiles: 2, pages: [[docs]] }),
+    'missing changed_files': decide({ event: 'pull_request', pages: [[docs]] }),
+    'no pages': decide({ event: 'pull_request', changedFiles: 1, pages: [] }),
+    'malformed entry': decide({ event: 'pull_request', changedFiles: 1, pages: [[{ status: 'modified' }]] }),
     'rename without previous_filename': pr(entry('docs/b.md', { status: 'renamed' })),
-    'error page': classifyRelease({ event: 'pull_request', changedFiles: 1, pages: [{ message: 'Not Found' }] }),
+    'error page': decide({ event: 'pull_request', changedFiles: 1, pages: [{ message: 'Not Found' }] }),
   })) {
     assert.equal(result.release, true, name);
   }
@@ -64,8 +69,28 @@ test('#861: an incomplete or malformed file list runs the Release build', () => 
 
 test('#861: pushes and dispatches never run the PR-time Release build', () => {
   for (const event of ['push', 'workflow_dispatch', 'merge_group']) {
-    const result = classifyRelease({ event });
+    const result = decide({ event });
     assert.equal(result.release, false, event);
     assert.match(result.reason, /pull requests only/);
   }
+});
+
+test('#861 fix 1: a case-only variant of a filtered path is release content (the macOS checkout ignores case)', () => {
+  for (const file of ['app/Resources/x.json', 'packages/MadoKit/Sources/x.json', 'PACKAGES/madokit/sources/MadoCore/d.json',
+    'Project.yml', 'app/captureHelper/Main.swift', 'App/Resources/Mado.ENTITLEMENTS', 'Scripts/Release/check-package.mjs',
+    'packages/madokit/package.swift', '.GitHub/workflows/CI.yml', 'scripts/CI/native-inputs.mjs', 'App/Viewer/Thing.SWIFT']) {
+    assert.equal(releaseContent(file), true, file);
+  }
+  for (const file of ['app/AppDelegate.swift', 'packages/MadoKit/Sources/MadoCore/ItemID.swift', 'docs/App/x.json']) {
+    assert.equal(releaseContent(file), false, file);
+  }
+  assert.equal(pr(entry('app/Resources/x.json')).release, true);
+});
+
+test('#861 fix 1: the filter takes the validated list; an error or a missing list runs the Release build', () => {
+  assert.equal(classifyRelease({ event: 'pull_request', listed: { files: ['docs/a.md'], count: 1 } }).release, false);
+  assert.equal(classifyRelease({ event: 'pull_request', listed: { files: ['project.yml'], count: 1 } }).release, true);
+  const failed = classifyRelease({ event: 'pull_request', listed: { error: 'listed 1 files, event says 2' } });
+  assert.deepEqual(failed, { release: true, reason: 'listed 1 files, event says 2' });
+  assert.equal(classifyRelease({ event: 'pull_request' }).release, true);
 });

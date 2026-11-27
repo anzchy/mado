@@ -440,6 +440,24 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 180000
+    },
+    {
+      "name": "release-entitlements-node",
+      "description": "Manual #861 fix 1 WI-2 RED receipts: the embedded Capture helper's entitlements in the shared check.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/check-entitlements.test.mjs scripts/release/release-build.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
+    },
+    {
+      "name": "release-recipe-node",
+      "description": "Manual #861 fix 1 WI-5 RED receipts: the release runbook's local recipe and its coverage wording.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/release/release-recipe.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 180000
     }
   ],
   "coverageThresholds": {
