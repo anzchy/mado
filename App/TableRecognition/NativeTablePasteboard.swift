@@ -7,5 +7,10 @@ import MadoApplication
     let pasteboard: NSPasteboard
     init(_ pasteboard: NSPasteboard) { self.pasteboard = pasteboard }
 
-    func writeTable(html: String, tabSeparated: String) -> Bool { false }
+    func writeTable(html: String, tabSeparated: String) -> Bool {
+        let item = NSPasteboardItem()
+        guard item.setString(html, forType: .html), item.setString(tabSeparated, forType: .string) else { return false }
+        pasteboard.clearContents()
+        return pasteboard.writeObjects([item])
+    }
 }
