@@ -747,3 +747,47 @@ func issue871Fix3CommittingTheStoredAddressAfterARefusalSaysNothing() async thro
     #expect(await f.table.stored.deepSeekAddress == TableRecognitionEndpoint.deepSeekBaseURL)
     #expect(await f.secrets.items.count == 1)
 }
+
+/// Fix 4: hosted CI runs in English and `issue218EveryButtonTitleFitsActualControlInBothLanguages` cut off
+/// 还没有密钥？ — the label was as wide as "No key yet?". Every label of the group must hold the text of either language
+/// in the frame it has, whichever language the window shows (the Issue218 rule, scoped to this group), and the hint
+/// and its link stay on one line, apart.
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["en", "zh-Hans"])
+func issue871Fix4EveryLabelHoldsEitherLanguage(_ locale: String) async throws {
+    let en = try captureCatalog("en"), zh = try captureCatalog("zh-Hans")
+    func translations(_ shown: String) -> [String] {
+        guard let key = en[shown] != nil ? shown : en.first(where: { $0.value == shown || zh[$0.key] == shown })?.key
+        else { return [shown] }
+        return [en[key] ?? key, zh[key] ?? key]
+    }
+    for saved in [false, true] {
+        let f = try fixture871App(locale)
+        defer { f.panel.window.close() }
+        try await waitUntil { try !f.text("settings.capture.table-host").isEmpty }
+        if saved { try await f.saveKey("sk-live-00003f9a") }
+        func walk(_ view: NSView) {
+            if let field = view as? NSTextField, !field.isEditable, !field.stringValue.isEmpty {
+                for value in translations(field.stringValue) {
+                    let size = (value as NSString).boundingRect(
+                        with: NSSize(width: field.bounds.width, height: .greatestFiniteMagnitude),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading],
+                        attributes: [.font: field.font ?? NSFont.systemFont(ofSize: 13)]).size
+                    #expect(size.height <= field.bounds.height + 1,
+                            "\(locale) saved=\(saved): \(field.accessibilityIdentifier()) cuts off \(value)")
+                }
+            }
+            view.subviews.forEach(walk)
+        }
+        walk(try f.view("settings.capture.table"))
+        let hint = try f.view("settings.capture.table-key-hint"), help = try f.view("settings.capture.table-key-help")
+        #expect(hint.frame.minY == help.frame.minY && hint.frame.maxX <= help.frame.minX,
+                "\(locale): the key hint \(hint.frame) and its link \(help.frame) share one line, apart")
+        // The English run passed locally while hosted CI cut 还没有密钥？ off: the hint holds the
+        // longer text with the field's 2 pt inset on each side to spare, not only the bare text.
+        let font = try f.view("settings.capture.table-key-hint", as: NSTextField.self).font!
+        for value in ["No key yet?", "还没有密钥？"] {
+            #expect((value as NSString).size(withAttributes: [.font: font]).width + 4 <= hint.frame.width + 0.5,
+                    "\(locale): the key hint \(hint.frame.width) is narrower than \(value) and its inset")
+        }
+    }
+}

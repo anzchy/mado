@@ -76,6 +76,17 @@ struct TableRecognitionSettingsEnvironment {
     static let costHint = "May use your service account's balance; check the service for charges."
     static let addressHint = "Changing the address removes the saved key; save it and agree again."
     static let addressNotChanged = "Could not remove the saved key. The address was not changed."
+    /// The fixed labels in both languages: each is laid out for the longer text, whichever language the window shows,
+    /// so neither is cut off (hosted CI runs in English and checks the Chinese text too).
+    static let bothLanguages: [String: String] = [
+        "No key yet?": "还没有密钥？",
+        "Saved to Keychain": "已保存到钥匙串",
+        hostHint: "只在你点「识别表格」后，图片才发送到这里。",
+        costHint: "可能使用服务账户的余额，费用请到该服务查看。",
+        addressHint: "换地址会移除已保存的密钥，需要重新保存并同意。",
+        "A custom service needs an address and a model.": "自定义服务必须填写地址和模型。",
+        "Test again after changing the model.": "改模型后请重新测试。",
+    ]
 
     /// The note beside Test (owner 2026-11-24), and without a key the reason Test is unavailable.
     static func testHint(localize: (String) -> String, hasKey: Bool) -> String {
@@ -275,7 +286,7 @@ struct TableRecognitionSettingsEnvironment {
         savedPill.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.14).cgColor
         savedPill.textColor = NSColor.systemGreen
         savedPill.setAccessibilityIdentifier("settings.capture.table-key-pill")
-        savedPill.frame.size = NSSize(width: savedPill.intrinsicContentSize.width.rounded(.up) + 14, height: 18)
+        savedPill.frame.size = NSSize(width: width(of: savedPill) + 14, height: 18)
         savedRow.addSubview(savedPill)
         replaceKey = button("Replace…", zh: "更换…", id: "settings.capture.table-replace", action: #selector(replace(_:)),
                             in: savedRow)
@@ -404,15 +415,30 @@ struct TableRecognitionSettingsEnvironment {
         }
     }
 
+    /// The text a label shows and, for a fixed label, the same label in the other language.
+    private func variants(_ shown: String) -> [String] {
+        for (english, chinese) in Self.bothLanguages where [english, chinese, localize(english)].contains(shown) {
+            return [shown, english, chinese]
+        }
+        return [shown]
+    }
+
+    /// The width of a label's text, or of the same label in the other language when that is wider.
     private func width(of field: NSTextField) -> CGFloat {
-        field.attributedStringValue.size().width.rounded(.up) + 4
+        let font = field.font ?? DesignMetrics.font("uiSmall")
+        let other = variants(field.stringValue).map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+        return max(field.attributedStringValue.size().width, other.max()!).rounded(.up) + 4
     }
 
     /// Places a hint in the value column, at most two lines; returns its bottom.
     private func place(_ hint: NSTextField, top: CGFloat) -> CGFloat {
-        let height = hint.stringValue.isEmpty ? 16
-            : min(32, hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: valueWidth,
-                                                            height: .greatestFiniteMagnitude)).height.rounded(.up))
+        // As tall as the text needs in either language (a fixed hint), at most two lines.
+        let measure = hint.cell!.copy() as! NSCell
+        let height = hint.stringValue.isEmpty ? 16 : min(32, variants(hint.stringValue).map { text in
+            measure.stringValue = text
+            return measure.cellSize(forBounds: NSRect(x: 0, y: 0, width: valueWidth,
+                                                      height: .greatestFiniteMagnitude)).height.rounded(.up)
+        }.max()!)
         hint.frame = NSRect(x: valueX, y: top, width: valueWidth, height: height)
         return top + height
     }
