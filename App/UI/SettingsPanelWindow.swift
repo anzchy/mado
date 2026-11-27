@@ -562,12 +562,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let table = TableRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
                                                   environment: tableRecognition, localize: captureLocalize,
                                                   openURL: openURL)
-        let growth = max(0, 770 + afterCaptureShift + ocr.frame.height + table.frame.height - form.frame.height)
+        let cloud = ocr.cloudGroup!
+        captureShortcutFields[.toggleBar]?.nextKeyView = ocr.cloudToggle
+        restore.nextKeyView = ocr.cloudToggle
+        let growth = max(0, 770 + afterCaptureShift + cloud.frame.height + ocr.frame.height + table.frame.height - form.frame.height)
         if growth > 0 {
             form.frame.size.height += growth
             for view in form.subviews { view.frame.origin.y += growth }
         }
-        ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - ocr.frame.height)
+        cloud.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - cloud.frame.height)
+        form.addSubview(cloud)
+        ocr.frame.origin = NSPoint(x: 26, y: cloud.frame.minY - ocr.frame.height)
         form.addSubview(ocr)
         cloudRecognitionGroup = ocr
         table.frame.origin = NSPoint(x: 26, y: ocr.frame.minY - table.frame.height)

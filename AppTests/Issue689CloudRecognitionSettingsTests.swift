@@ -103,10 +103,14 @@ func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async
     #expect(heading.stringValue == (locale == "zh-Hans" ? "云识别" : "Cloud Recognition"))
     let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
     let pill = try f.view("settings.capture.ocr-pill")
-    let hint = try f.view("settings.capture.ocr-hint")
+    let hint = try f.view("settings.capture.cloud-hint", as: NSTextField.self)
     let learn = try f.view("settings.capture.cloud-learn", as: NSButton.self)
     #expect(toggle.superview === cloud && pill.superview === cloud && hint.superview === cloud && learn.superview === cloud)
     #expect(learn.title == (locale == "zh-Hans" ? "了解更多 ↗" : "Learn More ↗"))
+    #expect(hint.stringValue == (locale == "zh-Hans" ? "只发送所选图片。" : "Only chosen images are sent."))
+    #expect(hint.maximumNumberOfLines == 1 && hint.frame.maxX + 8 <= learn.frame.minX + 0.5)
+    #expect(hint.attributedStringValue.size().width.rounded(.up) <= hint.frame.width)
+    #expect(abs(hint.frame.minY - learn.frame.minY) < 0.5)
     #expect(try f.view("settings.capture.ocr-service").superview === text)
     #expect(try f.view("settings.capture.ocr-api-key").superview === text)
     #expect(try f.view("settings.capture.table-service").superview === table)
@@ -117,6 +121,9 @@ func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async
     }
     let restore = try f.view("settings.capture.shortcut-restore")
     #expect(cloud.frame.maxY < restore.frame.minY)
+    #expect(restore.nextKeyView === toggle)
+    let service = try f.view("settings.capture.ocr-service")
+    #expect(toggle.nextKeyView === service)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
@@ -128,7 +135,7 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     try await waitUntil { try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden == false }
     #expect(toggle.state == .off)
     #expect(toggle.isEnabled)
-    #expect(toggle.accessibilityLabel() == (zh ? "允许云识别" : "Allow Cloud Recognition"))
+    #expect(toggle.accessibilityLabel() == (zh ? "允许云识别（识别文字、识别表格）" : "Allow Cloud Recognition (Recognise Text, Recognise Table)"))
     #expect(try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self).stringValue == toggle.accessibilityLabel())
     #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).stringValue == (zh ? "未填写访问密钥" : "No Access Key"))
     let hint = try f.view("settings.capture.ocr-hint", as: NSTextField.self)
