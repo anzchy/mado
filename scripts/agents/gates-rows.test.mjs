@@ -572,7 +572,7 @@ test('PR-body workflow isolates PR tests from the trusted body-gates runner', as
   assert.match(agentJob, /- name: Checkout PR head[\s\S]*?ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}[\s\S]*?path: pr-head/);
   assert.match(agentJob, /- name: Test agent tooling\n        working-directory: pr-head\n        run: node --test scripts\/agents\/\*\.test\.mjs/);
   assert.match(agentJob, /runs-on: ubuntu-latest/);
-  assert.match(agentJob, /timeout-minutes: 5/);
+  assert.match(agentJob, /timeout-minutes: 10/);
   const command = agentJob.match(/run: (node --test .+)/)?.[1];
   assert.ok(command, 'missing tooling test command');
   for (const suite of ['agents', 'perf', 'ledger', 'tdd']) {
