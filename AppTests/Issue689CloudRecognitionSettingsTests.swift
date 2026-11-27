@@ -89,6 +89,36 @@ private let zhHint = "云识别只会把你要识别的那张图片发送到你�
 private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async throws {
+    let f = try fixture(locale)
+    defer { f.panel.window.close() }
+    let cloud = try f.view("settings.capture.cloud")
+    let text = try f.view("settings.capture.ocr")
+    let table = try f.view("settings.capture.table")
+    let form = try #require(cloud.superview)
+    #expect(text.superview === form && table.superview === form)
+    #expect(abs(cloud.frame.minY - text.frame.maxY) < 0.5)
+    #expect(abs(text.frame.minY - table.frame.maxY) < 0.5)
+    let heading = try f.view("settings.capture.cloud-heading", as: NSTextField.self)
+    #expect(heading.stringValue == (locale == "zh-Hans" ? "云识别" : "Cloud Recognition"))
+    let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
+    let pill = try f.view("settings.capture.ocr-pill")
+    let hint = try f.view("settings.capture.ocr-hint")
+    let learn = try f.view("settings.capture.cloud-learn", as: NSButton.self)
+    #expect(toggle.superview === cloud && pill.superview === cloud && hint.superview === cloud && learn.superview === cloud)
+    #expect(learn.title == (locale == "zh-Hans" ? "了解更多 ↗" : "Learn More ↗"))
+    #expect(try f.view("settings.capture.ocr-service").superview === text)
+    #expect(try f.view("settings.capture.ocr-api-key").superview === text)
+    #expect(try f.view("settings.capture.table-service").superview === table)
+    #expect(toggle.state == .off && toggle.isEnabled)
+    for id in ["settings.capture.ocr-service", "settings.capture.ocr-api-key", "settings.capture.ocr-secret-key",
+               "settings.capture.ocr-save", "settings.capture.table-service"] {
+        #expect(try f.view(id, as: NSControl.self).isEnabled, "\(id) remains editable with cloud off")
+    }
+    #expect(cloud.frame.maxY < try f.view("settings.capture.shortcut-restore").frame.minY)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async throws {
     let f = try fixture(locale)
     defer { f.panel.window.close() }
