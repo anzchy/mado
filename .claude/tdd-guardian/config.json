@@ -395,6 +395,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 300000
+    },
+    {
+      "name": "site-content-node",
+      "description": "Help-site content check RED receipt for #887.",
+      "command": "node scripts/tdd/node-lane.mjs scripts/site/check.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
