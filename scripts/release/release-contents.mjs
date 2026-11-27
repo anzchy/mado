@@ -18,13 +18,21 @@ export const RELEASE_PREFIXES = ['App/CaptureHelper/', 'scripts/release/', 'scri
 // its sources.
 const RESOURCE_ROOTS = ['App/', 'Packages/MadoKit/Sources/'];
 
-/** True when the repository path can change the shipped app's contents or entitlements, or is not a clean path. */
+const lower = list => list.map(entry => entry.toLowerCase());
+const FILES_LOWER = lower(RELEASE_FILES), PREFIXES_LOWER = lower(RELEASE_PREFIXES), ROOTS_LOWER = lower(RESOURCE_ROOTS);
+
+/**
+ * True when the repository path can change the shipped app's contents or entitlements, or is not a clean path.
+ * Paths match in any case: the macOS runner's checkout is case-insensitive, so `app/Resources/x.json` lands in
+ * App/Resources/. Only an exact `.swift` suffix counts as source; any other case of it is treated as content.
+ */
 export function releaseContent(file) {
   if (typeof file !== 'string' || !file || file.startsWith('/') || file.includes('\\') ||
       file.split('/').some(part => part === '' || part === '.' || part === '..')) return true;
-  if (RELEASE_FILES.includes(file) || RELEASE_PREFIXES.some(prefix => file.startsWith(prefix))) return true;
-  if (file.endsWith('.entitlements')) return true;
-  return RESOURCE_ROOTS.some(root => file.startsWith(root)) && !file.endsWith('.swift');
+  const folded = file.toLowerCase();
+  if (FILES_LOWER.includes(folded) || PREFIXES_LOWER.some(prefix => folded.startsWith(prefix))) return true;
+  if (folded.endsWith('.entitlements')) return true;
+  return ROOTS_LOWER.some(root => folded.startsWith(root)) && !file.endsWith('.swift');
 }
 
 /**
