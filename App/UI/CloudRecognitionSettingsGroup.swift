@@ -83,6 +83,7 @@ struct CloudRecognitionSettingsEnvironment {
     private let openURL: (URL) -> Void
     private let cloudSwitch = NSSwitch()
     var cloudToggle: NSSwitch { cloudSwitch }
+    private var serviceControl: NSPopUpButton!
     private(set) var cloudGroup: CloudRecognitionHeaderGroup!
     private let pill: NSTextField
     private let apiKey = NSTextField()
@@ -117,6 +118,8 @@ struct CloudRecognitionSettingsEnvironment {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override var isFlipped: Bool { true }
+
+    func connectCloudSwitchToService() { cloudSwitch.nextKeyView = serviceControl }
 
     private static func text(_ value: String, muted: Bool = false) -> NSTextField {
         let field = NSTextField(wrappingLabelWithString: value)
@@ -226,7 +229,8 @@ struct CloudRecognitionSettingsEnvironment {
         service.setAccessibilityLabel(localize("Recognition Service"))
         service.setAccessibilityIdentifier("settings.capture.ocr-service")
         addSubview(service)
-        cloudSwitch.nextKeyView = service
+        serviceControl = service
+        connectCloudSwitchToService()
         // #832 (grilling 20261122 decision 7): which Baidu product the application needs, static plain text.
         let product = Self.text(localize(Self.productHint), muted: true)
         product.setAccessibilityIdentifier("settings.capture.ocr-product-hint")

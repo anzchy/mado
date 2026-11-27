@@ -35,6 +35,12 @@ private actor OffBar: CaptureBarPreferencePort {
     func capturePermissionState() -> CapturePermissionState? { .granted }
 }
 
+private actor OnBar: CaptureBarPreferencePort {
+    func isCaptureBarEnabled() -> Bool { true }
+    func setCaptureBarEnabled(_ enabled: Bool) {}
+    func capturePermissionState() -> CapturePermissionState? { .granted }
+}
+
 @MainActor private final class ConsentRecorder {
     var alerts: [NSAlert] = []
     var answers: [@MainActor (Bool) -> Void] = []
@@ -63,7 +69,7 @@ private actor OffBar: CaptureBarPreferencePort {
     }
 }
 
-@MainActor private func fixture(_ locale: String? = nil) throws -> Fixture {
+@MainActor private func fixture(_ locale: String? = nil, captureBarOn: Bool = false) throws -> Fixture {
     let catalog = try locale.map(captureCatalog) ?? [:]
     let localize: (String) -> String = { catalog[$0] ?? $0 }
     let secrets = Secrets()
@@ -71,11 +77,13 @@ private actor OffBar: CaptureBarPreferencePort {
     let consent = ConsentRecorder()
     let model = CloudRecognitionSettingsModel(preferences: preferences, keys: BaiduCloudCredentialStore(secrets: secrets))
     let display = InMemoryDisplayPreferencesStore()
+    let bar: any CaptureBarPreferencePort
+    if captureBarOn { bar = OnBar() } else { bar = OffBar() }
     let panel = SettingsPanelWindow(
         cache: ThumbnailDiskCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
         appearanceAdapter: WindowAppearanceAdapter(preferencesStore: display), preferencesStore: display,
         defaults: UserDefaults(suiteName: "issue689-\(UUID().uuidString)")!,
-        capturePreferences: OffBar(), captureLocalize: localize,
+        capturePreferences: bar, captureLocalize: localize,
         cloudRecognition: CloudRecognitionSettingsEnvironment(model: model, presentConsent: { _, alert, answer in
             consent.alerts.append(alert)
             consent.answers.append(answer)
@@ -83,6 +91,30 @@ private actor OffBar: CaptureBarPreferencePort {
         openURL: { consent.opened.append($0) })
     panel.select(.capture)
     return Fixture(panel: panel, secrets: secrets, preferences: preferences, consent: consent)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue886CloudTabLoopKeepsRestoreBeforeSwitch(_ locale: String) async throws {
+    let f = try fixture(locale, captureBarOn: true)
+    defer { f.panel.window.close() }
+    let shortcut = try f.view("settings.capture.shortcut-4", as: NSControl.self)
+    let restore = try f.view("settings.capture.shortcut-restore", as: NSButton.self)
+    let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
+    let service = try f.view("settings.capture.ocr-service", as: NSPopUpButton.self)
+    try await waitUntil { shortcut.isEnabled && restore.isEnabled }
+    let window = f.panel.window
+    window.recalculateKeyViewLoop()
+    f.panel.select(.capture)
+    #expect(shortcut.nextKeyView === restore)
+    #expect(restore.nextKeyView === toggle)
+    #expect(toggle.nextKeyView === service)
+    #expect(window.makeFirstResponder(shortcut))
+    window.selectNextKeyView(nil)
+    #expect(window.firstResponder === restore)
+    window.selectNextKeyView(nil)
+    #expect(window.firstResponder === toggle)
+    window.selectNextKeyView(nil)
+    #expect(window.firstResponder === service)
 }
 
 private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且「云识别」开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
