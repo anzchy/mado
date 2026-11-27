@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkSite } from './check.mjs';
@@ -144,4 +144,23 @@ test('rejects non-page, non-asset files from the published directory', async () 
   await fixture({ 'index.html': '<h1>Help</h1>', 'README.md': '# Maintainer notes' }, async dir => {
     assert.match((await checkSite(dir)).join('\n'), /README\.md/);
   });
+});
+
+test('published site contains only checked pages and assets', async () => {
+  assert.deepEqual(await checkSite(), []);
+});
+
+test('DeepSeek help routes troubleshooting through the table group Advanced control', async () => {
+  const page = await readFile(new URL('../../site/deepseek-key.html', import.meta.url), 'utf8');
+  assert.match(page, /设置 › 截图 › 表格识别/);
+  assert.match(page, /「高级」[^<]*「地址」/);
+  assert.match(page, /「高级」[^<]*「模型」/);
+  assert.doesNotMatch(page, /设置 › 高级/);
+});
+
+test('help-site CI job has read-only contents and does not persist checkout credentials', async () => {
+  const workflow = await readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const job = workflow.split('  site-content:\n')[1]?.split('\n  # The package suite')[0] ?? '';
+  assert.match(job, /permissions:\s*\n\s*contents: read/);
+  assert.match(job, /persist-credentials: false/);
 });
