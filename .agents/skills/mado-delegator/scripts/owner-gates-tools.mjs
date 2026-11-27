@@ -125,6 +125,10 @@ export const NODE_LANE = Object.freeze({
     'scripts/perf/*.test.mjs', 'scripts/hooks/*.test.mjs', 'scripts/device/tests/*.test.cjs', 'scripts/agents/*.test.mjs',
     'scripts/tdd/*.test.mjs', '.agents/skills/mado-delegator/scripts/*.test.mjs', '.agents/skills/mado-verify/tests/*.test.mjs'],
 });
+// #916 WI-4 (item 6, #909): the Swift-source scans an implementer run keeps when it skips the node lane on a product-only
+// diff (owner-gates.sh --role implementer). Both are light node-lane files that read the tracked Swift sources: the #358
+// for … where ban and the code-identity scan. The delegator's full node lane runs them too.
+export const SOURCE_SCANS = Object.freeze(['scripts/ci/for-where-ban.test.mjs', 'scripts/name-checks/module-name.test.mjs']);
 export const NODE_LANE_EXCEPTIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'node-lane-exceptions.json');
 
 // Text match, no YAML parser. Each step's `run:` value is read whole (plain, quoted, `|` literal, `>` folded), shell `\`
@@ -360,6 +364,11 @@ async function main() {
     if (!files.length) throw new Error('node lane matched no test files');
     console.log(`excepted=${excepted.length} (${excepted.join(', ') || 'none'})`);
     for (const file of files) console.log(file);
+  } else if (cmd === 'source-scans') {
+    const [wt] = args;
+    const missing = SOURCE_SCANS.filter(file => !fs.existsSync(path.join(wt, file)));
+    if (missing.length) { for (const file of missing) console.error(`missing source scan: ${file}`); process.exitCode = 2; return; }
+    for (const file of SOURCE_SCANS) console.log(file);
   } else if (cmd === 'load-preflight') {
     let verdict;
     try { verdict = loadVerdict(readFacts(), loadThresholds()); }
@@ -376,6 +385,6 @@ async function main() {
     if (process.env.MADO_GATES_PREFLIGHT === 'off') console.log('preflight-guard=off');
     for (const note of verdict.notes) console.log(note);
     if (verdict.refuse && process.env.MADO_GATES_PREFLIGHT !== 'off') { console.log(`refuse: ${verdict.refuse}`); process.exitCode = 2; }
-  } else { console.error('usage: owner-gates-tools.mjs select|fact|rerun-plan|preflight|node-suites|load-preflight'); process.exitCode = 2; }
+  } else { console.error('usage: owner-gates-tools.mjs select|fact|rerun-plan|preflight|node-suites|source-scans|load-preflight'); process.exitCode = 2; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

@@ -416,3 +416,22 @@ test('892 fix1 review an empty diff puts every node failure in the diff', () => 
   assert.equal(failingTestInDiff({file: 'scripts/tdd/b.test.mjs', name: 'b'}, []), true);
   assert.equal(rerunPlan(failingBlock([['scripts/tdd/b.test.mjs', 'b']]), [], '/wt').reason, 'in-diff=yes');
 });
+
+// #916 WI-4: the Swift-source scans an implementer run keeps when it skips the node lane. Each is a real node-lane file
+// (so the delegator's run covers it too), not excepted, and the CLI lists them in order or fails on a missing one.
+import * as gateTools from './owner-gates-tools.mjs';
+test('916 WI-4 SOURCE_SCANS are node-lane files that scan the Swift sources, and the CLI fails closed on a missing one', () => {
+  assert.deepEqual(gateTools.SOURCE_SCANS, ['scripts/ci/for-where-ban.test.mjs', 'scripts/name-checks/module-name.test.mjs']);
+  const {files} = nodeLaneFiles(repo, null, readExceptions(NODE_LANE_EXCEPTIONS));
+  for (const file of gateTools.SOURCE_SCANS) assert.ok(files.includes(file), `${file} runs in the delegator's node lane`);
+  const tool = new URL('./owner-gates-tools.mjs', import.meta.url).pathname;
+  const ok = spawnSync(process.execPath, [tool, 'source-scans', repo], {encoding: 'utf8'});
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.deepEqual(ok.stdout.trim().split('\n'), gateTools.SOURCE_SCANS);
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'source-scans-'));
+  try {
+    const missing = spawnSync(process.execPath, [tool, 'source-scans', empty], {encoding: 'utf8'});
+    assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /missing source scan: scripts\/ci\/for-where-ban\.test\.mjs/);
+  } finally { fs.rmSync(empty, {recursive: true, force: true}); }
+});

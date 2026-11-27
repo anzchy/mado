@@ -15,7 +15,8 @@
 # OWNER_GATES_MAX_LOAD, OWNER_GATES_MIN_MEM_FREE, OWNER_GATES_MAX_PRESSURE tune them. MADO_GATES_PREFLIGHT=off
 # records a bypass while still printing facts and competitors. A threshold refusal exits 2 with no evidence.
 # #892: `--role implementer` (an argument before <worktree>) runs the node lane only when the diff touches scripts/,
-# .agents/, .github/ or .claude/; the default role, delegator, always runs it. #892 fix1: the environment never picks the
+# .agents/, .github/ or .claude/; the default role, delegator, always runs it. #916: a skipping implementer run still runs the
+# Swift-source scans (source-scans=<exit> files=…). #892 fix1: the environment never picks the
 # role; an OWNER_GATES_ROLE left in a shell is ignored with a warning, so the delegator's run cannot inherit a skip.
 # A node failure outside the diff gets one serial rerun of only the failed files under the
 # heavy lock; both attempts go to the summary, and the run stays exit 1 whatever the rerun says.
@@ -183,6 +184,16 @@ if [[ $role == implementer ]] && (( ! node_selected )); then
   # node tests also read product files (docs/agents/*.md, AppTests/, Packages/, project.yml and more; static scan in
   # #892 fix1), so a product-only diff can still change a node result. The delegator's run always runs node and is binding.
   echo "node=skipped (implementer run; diff touches no scripts/, .agents/, .github/ or .claude/ path; the delegator's owner-gates run and GitHub CI cover node)" >> "$s" || summary_error
+  # #916 WI-4 (item 6, #909): the Swift-source scans (owner-gates-tools.mjs SOURCE_SCANS: the #358 for … where ban, the
+  # code-identity scan) still run, so a banned pattern fails the implementer's gate, not only the delegator's node lane.
+  # They are light (about 2 s together), so they run outside the heavy lock. A missing scan file fails closed (70).
+  if scan_list=$(node "$here/owner-gates-tools.mjs" source-scans "$wt" 2> "$o/$p-source-scans.log"); then
+    scan_files=("${(@f)scan_list}")
+    node --test --test-concurrency=1 --test-reporter=spec "${scan_files[@]}" > "$o/$p-source-scans.log" 2>&1
+    lane_result source-scans $? "files=${(j:,:)scan_files}"
+  else
+    lane_result source-scans 70 "files=unavailable"
+  fi
 elif node_list=$(node "$here/owner-gates-tools.mjs" node-suites "$wt" 2> "$o/$p-node.log"); then
   node_suites=("${(@f)node_list}")
   echo "node-${node_suites[1]}" >> "$s" || summary_error
