@@ -72,12 +72,28 @@ enum TableImageFormat {
               let height = properties[kCGImagePropertyPixelHeight] as? Int, width > 0, height > 0 else { return nil }
         return (width, height)
     }
+
+    /// No orientation tag, or the tag says the pixels are stored upright.
+    static func isUpright(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let orientation = properties[kCGImagePropertyOrientation] as? Int else { return true }
+        return orientation == 1
+    }
 }
 
-/// Stub (#874 fix1 WI-5): nothing goes as it is yet.
+/// What Recognise Table sends from the opened file (#874 fix1 WI-5): the file's own bytes when the service takes
+/// them as they are, otherwise a PNG of the pixels. Uses the service limits in `TableRecognitionGuards`.
 public enum TableRecognitionSource {
-    public static let maximumOriginalBytes = 0
-    public static func sendsAsIs(_ data: Data) -> Bool { false }
+    /// The largest file whose base64 fits the service's cap: 32 MiB of base64 is 25,165,824 bytes.
+    public static let maximumOriginalBytes = TableRecognitionGuards.maxEncodedImageBytes / 4 * 3
+
+    /// A format the service accepts, within its size and side limits, and upright (no EXIF rotation the service
+    /// might not apply).
+    public static func sendsAsIs(_ data: Data) -> Bool {
+        guard case .success = TableRecognitionGuards.image(data) else { return false }
+        return TableImageFormat.isUpright(data)
+    }
 }
 
 /// The checks before anything is sent (#869 AC-2). Each returns the reason a request must not go out.
