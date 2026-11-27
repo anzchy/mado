@@ -72,8 +72,16 @@ import MadoMacUI
 
     override func cancelOperation(_ sender: Any?) { closeButton.performClick(sender) }
 
+    /// Every way the panel closes (Close, Esc, the title-bar button, ⌘W) runs `onClose` once (#874 fix1 WI-3).
+    override func close() {
+        let handler = onClose
+        onClose = {}
+        super.close()
+        handler()
+    }
+
     @objc private func copyTable(_ sender: Any?) { onCopy() }
-    @objc private func closePanel(_ sender: Any?) { onClose() }
+    @objc private func closePanel(_ sender: Any?) { close() }
 
     // MARK: - Layout (state 41 `.panel`)
 
