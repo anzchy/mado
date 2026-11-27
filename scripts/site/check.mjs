@@ -85,12 +85,16 @@ function scanText(label, source, errors) {
   }
 }
 
+function scanDraftBanner(label, source, errors) {
+  if (/(?:^|[\s。！？.!])(?:草稿|draft)\s*[:：]/i.test(source)) errors.push(`${label}: draft banner`);
+}
+
 function inside(site, target) {
   const rel = relative(site, target);
   return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-async function localReferenceError(site, page, value, kind) {
+async function localReferenceError(site, page, value, kind, tag, attributes) {
   if (/^(?:https?:|mailto:|tel:|data:|#)/i.test(value)) return null;
   let decoded;
   try { decoded = decodeURIComponent(value.split(/[?#]/, 1)[0]); }
@@ -107,7 +111,13 @@ async function localReferenceError(site, page, value, kind) {
   catch { return `unresolved internal ${kind}: ${value}`; }
   if (!inside(site, actual)) return `${kind} escapes site: ${value}`;
   if (!(await stat(actual)).isFile()) return `${kind} is not a file: ${value}`;
-  if (kind === 'href' && extname(actual).toLowerCase() !== '.html') return `link is not a page: ${value}`;
+  if (kind === 'href' && extname(actual).toLowerCase() !== '.html') {
+    const extension = extname(actual).toLowerCase();
+    const rel = new Set((attributes.get('rel') ?? '').toLowerCase().split(/\s+/));
+    const stylesheet = tag === 'link' && rel.has('stylesheet') && extension === '.css';
+    const icon = tag === 'link' && rel.has('icon') && new Set(['.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']).has(extension);
+    if (!stylesheet && !icon) return `link is not a page: ${value}`;
+  }
   return null;
 }
 
@@ -129,23 +139,31 @@ export async function checkSite(siteDir = defaultSite) {
     const label = relative(site, page);
     const text = visibleText(html);
     scanText(label, text, errors);
-    if (/<h[1-6]\b[^>]*>\s*(?:草稿|draft)\s*<\/h[1-6]>/i.test(html) || /(?:^|[。！？.!]\s*)(?:草稿|draft)\s*[:：]/i.test(text))
+    if (/<h[1-6]\b[^>]*>\s*(?:草稿|draft)\s*<\/h[1-6]>/i.test(html))
       errors.push(`${label}: draft banner`);
-    for (const comment of html.matchAll(/<!--([^]*?)-->/g)) scanText(`${label}: HTML comment`, decodeEntities(comment[1]), errors);
+    scanDraftBanner(label, text, errors);
+    for (const comment of html.matchAll(/<!--([^]*?)-->/g)) {
+      const source = decodeEntities(comment[1]);
+      scanText(`${label}: HTML comment`, source, errors);
+      scanDraftBanner(`${label}: HTML comment`, source, errors);
+    }
     for (const block of html.matchAll(/<(style|script)\b[^>]*>([^]*?)<\/\1\s*>/gi))
       scanText(`${label}: ${block[1].toLowerCase()}`, decodeEntities(block[2]), errors);
     if (label === 'screen-recording.html' &&
         (!text.includes('录屏与系统录音') || !text.includes('Screen & System Audio Recording') || !text.includes('「Mado」一行')))
       errors.push(`${label}: name Screen & System Audio Recording and the Mado row to enable`);
-    for (const { attributes } of startTags(html)) {
+    for (const { tag, attributes } of startTags(html)) {
       if (attributes.get('class')?.split(/\s+/).some(value => /^(?:proto|draft)$/i.test(value))) errors.push(`${label}: proto or draft banner class`);
       for (const name of ['content', 'alt', 'title', 'aria-label']) {
-        if (attributes.has(name)) scanText(`${label}: ${name}`, attributes.get(name), errors);
+        if (attributes.has(name)) {
+          scanText(`${label}: ${name}`, attributes.get(name), errors);
+          scanDraftBanner(`${label}: ${name}`, attributes.get(name), errors);
+        }
       }
       for (const kind of ['href', 'src']) {
         if (!attributes.has(kind)) continue;
         const value = attributes.get(kind);
-        const error = await localReferenceError(site, page, value, kind);
+        const error = await localReferenceError(site, page, value, kind, tag, attributes);
         if (error) errors.push(`${label}: ${error}`);
       }
     }
