@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Privacy wording now describes Cloud Recognition for text and tables as uploads to the service the user configures, with consent for each service host. The About panel, Settings, README and release-notes template no longer present Baidu as the only service.
+
 ## v0.0.2 (2026-11-24)
 
 Capture, annotate and recognise text. Mado now covers the path from taking a screenshot to marking it up and copying its text. All of these are `Partial` in the [feature ledger](docs/feature-ledger.md): they work and have a real-device record, with limits stated there.

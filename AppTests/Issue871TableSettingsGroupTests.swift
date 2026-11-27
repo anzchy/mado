@@ -145,7 +145,7 @@ private actor OffBar871: CaptureBarPreferencePort {
     return Fixture871App(panel: panel, secrets: secrets, table: table, transport: transport, dialogs: dialogs)
 }
 
-private let zhTestNote = "发送内置示例，不发送你的图片；可能收费。"
+private let zhTestNote = "发送内置示例，不发送你的图片；服务可能收费。"
 
 @MainActor @Test(.timeLimit(.minutes(3)))
 func issue871WI5GroupFollowsTextRecognitionWithoutASwitch() async throws {
@@ -186,7 +186,7 @@ func issue871WI5DefaultCaseMatchesState35(_ locale: String) async throws {
     #expect(test.title == (zh ? "测试" : "Test") && !test.isEnabled)
     #expect(try f.text("settings.capture.table-test-hint")
             == (zh ? zhTestNote + "填写并保存密钥后可测试。"
-                   : "Sends a built-in sample, not your images; may be charged. Save a key to test."))
+                   : "Sends a built-in sample, not your images; the service may charge. Save a key to test."))
     #expect(try f.text("settings.capture.table-test-status").isEmpty)
     #expect(try f.text("settings.capture.table-advanced-title") == (zh ? "高级" : "Advanced"))
     #expect(try !f.shown("settings.capture.table-address") && !f.shown("settings.capture.table-model"))
