@@ -33,17 +33,16 @@ public struct TableRecognitionService: Sendable {
         self.report = report
     }
 
-    /// Stub (#874 fix1 WI-2): `willSend` is not called yet.
-    public func recognise(_ image: Data, willSend: @Sendable () async -> Void) async -> TableRecognitionResult {
-        await recognise(image)
-    }
+    public func recognise(_ image: Data) async -> TableRecognitionResult { await recognise(image, willSend: {}) }
 
-    public func recognise(_ image: Data) async -> TableRecognitionResult {
+    /// As `recognise(_:)`; `willSend` runs once every check has passed and the request is built, just before the
+    /// transport is called (#874 fix1 WI-2). A run refused or cancelled before that never runs it.
+    public func recognise(_ image: Data, willSend: @Sendable () async -> Void) async -> TableRecognitionResult {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
         case .ready(let request, let destination):
-            let sent = await send(request, to: destination)
+            let sent = await send(request, to: destination, willSend: willSend)
             if case .cancelled = sent.result { return .cancelled }
             report(TableRecognitionDiagnostic.make(response: sent.response,
                                                    durationMilliseconds: sent.durationMilliseconds,
@@ -61,8 +60,10 @@ public struct TableRecognitionService: Sendable {
         let durationMilliseconds: Int
     }
 
-    private func send(_ request: URLRequest, to destination: HTTPDestination) async -> Sent {
+    private func send(_ request: URLRequest, to destination: HTTPDestination,
+                      willSend: @Sendable () async -> Void) async -> Sent {
         if Task.isCancelled { return Sent(result: .cancelled, response: nil, durationMilliseconds: 0) }
+        await willSend()
         let start = ContinuousClock.now
         let result: TableRecognitionResult
         let response: HTTPResponse?
@@ -119,7 +120,7 @@ public struct TableRecognitionService: Sendable {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
         case .ready(let request, let destination):
-            let sent = await send(request, to: destination)
+            let sent = await send(request, to: destination, willSend: {})
             let answer: TableRecognitionTestResult
             switch sent.result {
             case .table(let rows): answer = TableRecognitionSample.matches(rows) ? .passed : .failed(.other)

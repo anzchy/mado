@@ -21,7 +21,7 @@ public struct RecognisedTableResult: Equatable, Sendable {
 }
 
 /// Where one Recognise Table run is (spec #866 testing decisions: setup needed, consent needed, working, result,
-/// failure, cancelled). Only `working` has sent, or may be sending, anything.
+/// failure, cancelled). Only `working` has sent, or may be sending, anything; `preparing` has sent nothing.
 public enum RecogniseTableState: Equatable, Sendable {
     case idle
     /// No usable address or no access key: nothing was sent (state 41 `setup`, #877 draws the dialog).
@@ -30,9 +30,11 @@ public enum RecogniseTableState: Equatable, Sendable {
     case cloudOff
     /// Waiting for the answer to the consent dialog that names `host` (state 41 `consent`).
     case consent(host: String)
-    /// Stub (#874 fix1 WI-2): not reached yet.
+    /// The run is reading the image and checking again before it sends to `host`: nothing has been sent yet. The
+    /// working sheet shows without its "was sent" line; Cancel stops it (#874 fix1 WI-2).
     case preparing(host: String)
-    /// The image is with `host`; Cancel stops it (state 41 `working`).
+    /// The service is calling the transport for `host`: from here the image is with it; Cancel stops it (state 41
+    /// `working`).
     case working(host: String)
     case result(RecognisedTableResult)
     /// Refused before sending (format, size, settings changed meanwhile); #876 draws these.
@@ -78,11 +80,11 @@ public enum RecogniseTableState: Equatable, Sendable {
         self.onChange = onChange
     }
 
-    /// Consent or working: a new run cannot start.
+    /// Consent, preparing or working: a new run cannot start.
     public var isBusy: Bool {
         if checking { return true }
         switch state {
-        case .consent, .working: return true
+        case .consent, .preparing, .working: return true
         default: return false
         }
     }
@@ -133,7 +135,7 @@ public enum RecogniseTableState: Equatable, Sendable {
         guard granted else { state = .idle; return nil }
         let thisRun = run
         let serviceName = pendingService
-        state = .working(host: host)
+        state = .preparing(host: host)
         return Task { [weak self] in
             guard let self else { return }
             await recordConsent(host)
@@ -142,17 +144,18 @@ public enum RecogniseTableState: Equatable, Sendable {
         }
     }
 
-    /// One request, never retried. The service checks the switch, consent and key again before it sends.
+    /// One request, never retried. The service checks the switch, consent and key again before it sends, and says
+    /// when it calls the transport; only then is the run `working`.
     private func send(_ image: @escaping @Sendable () async throws -> Data, host: String, serviceName: String,
                       run thisRun: UUID) async {
-        state = .working(host: host)
+        state = .preparing(host: host)
         let service = self.service
         let request = Task { () -> TableRecognitionResult in
             let data: Data
             do { data = try await image() } catch {
                 return Task.isCancelled || error is CancellationError ? .cancelled : .notSent(.unsupportedImage)
             }
-            return await service.recognise(data)
+            return await service.recognise(data) { [weak self] in await self?.markSent(thisRun, host: host) }
         }
         self.request = request
         let result = await request.value
@@ -169,12 +172,18 @@ public enum RecogniseTableState: Equatable, Sendable {
         }
     }
 
-    /// Cancel in the working sheet: the request is cancelled where it is (the transport call included) and its
-    /// answer, whatever it is, is ignored. At the consent dialog it is the same as declining.
+    /// The service is calling the transport for this run.
+    private func markSent(_ thisRun: UUID, host: String) {
+        guard thisRun == run else { return }
+        state = .working(host: host)
+    }
+
+    /// Cancel in the working sheet: the request is cancelled where it is (the image read, the checks or the
+    /// transport call) and its answer, whatever it is, is ignored. At the consent dialog it is the same as declining.
     public func cancel() {
         switch state {
         case .consent: answerConsent(false)
-        case .working:
+        case .preparing, .working:
             run = UUID()
             request?.cancel()
             request = nil

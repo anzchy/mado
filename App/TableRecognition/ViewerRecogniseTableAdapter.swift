@@ -97,12 +97,12 @@ import MadoInfrastructure
     private func render() {
         guard let flow else { return }
         let window = controller?.window
-        if case .working = flow.state {} else if let alert = workingAlert {
+        if !Self.showsWorkingSheet(flow.state), let alert = workingAlert {
             workingAlert = nil
             dismissWorking(window, alert)
         }
         switch flow.state {
-        case .idle, .cancelled, .preparing:
+        case .idle, .cancelled:
             break
         case .consent(let host):
             guard !askingConsent else { return }
@@ -112,14 +112,19 @@ import MadoInfrastructure
                 self.askingConsent = false
                 if let task = flow.answerConsent(granted) { self.runTask = task }
             }
-        case .working(let host):
-            guard workingAlert == nil else { return }
-            let alert = Self.workingAlert(host: host)
-            workingAlert = alert
-            presentWorking(window, alert) { [weak self, weak flow] in
-                guard let self, let flow, self.flow === flow else { return }
-                flow.cancel()
+        case .preparing, .working:
+            // One sheet for the whole run. It says the image was sent only once the service calls the transport
+            // (#874 fix1 WI-2); until then it shows the title, the bar and Cancel.
+            let alert: NSAlert
+            if let workingAlert { alert = workingAlert } else {
+                alert = Self.workingAlert()
+                workingAlert = alert
+                presentWorking(window, alert) { [weak self, weak flow] in
+                    guard let self, let flow, self.flow === flow else { return }
+                    flow.cancel()
+                }
             }
+            if case .working(let host) = flow.state { Self.sentLine(of: alert)?.stringValue = Self.sentText(host: host) }
         case .result(let result):
             showPanel(result)
         case .setupNeeded, .cloudOff, .notSent, .failed:
@@ -179,12 +184,36 @@ import MadoInfrastructure
         return alert
     }
 
-    /// State 41 `working`: the host the image went to, an indeterminate bar, and Cancel.
-    static func workingAlert(host: String) -> NSAlert {
+    static func showsWorkingSheet(_ state: RecogniseTableState) -> Bool {
+        switch state {
+        case .preparing, .working: true
+        default: false
+        }
+    }
+
+    static let sentLineIdentifier = NSUserInterfaceItemIdentifier("table.working.sent")
+
+    /// State 41 `working`'s sentence, shown only once the request is with the service.
+    static func sentText(host: String) -> String {
+        String(format: String(localized: "The image was sent to %@. This usually takes a few seconds to over ten seconds."), host)
+    }
+
+    /// The working sheet's "was sent" line: empty until the service calls the transport.
+    static func sentLine(of alert: NSAlert) -> NSTextField? {
+        alert.accessoryView?.subviews.first { $0.identifier == sentLineIdentifier } as? NSTextField
+    }
+
+    /// State 41 `working`: the title, the line that names the host once the image was sent (empty before), an
+    /// indeterminate bar, and Cancel. The line has its room from the start, so the sheet does not change size.
+    static func workingAlert() -> NSAlert {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = String(localized: "Recognising table…")
-        alert.informativeText = String(format: String(localized: "The image was sent to %@. This usually takes a few seconds to over ten seconds."), host)
+        alert.informativeText = ""
+        let sent = NSTextField(wrappingLabelWithString: "")
+        sent.identifier = sentLineIdentifier
+        sent.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        sent.frame = NSRect(x: 0, y: 48, width: 260, height: 42)
         let progress = NSProgressIndicator(frame: NSRect(x: 0, y: 30, width: 260, height: 12))
         progress.style = .bar
         progress.isIndeterminate = true
@@ -193,16 +222,14 @@ import MadoInfrastructure
         fine.font = NSFont.systemFont(ofSize: 11)
         fine.textColor = .secondaryLabelColor
         fine.frame = NSRect(x: 0, y: 0, width: 260, height: 26)
-        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 46))
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 90))
+        accessory.addSubview(sent)
         accessory.addSubview(progress)
         accessory.addSubview(fine)
         alert.accessoryView = accessory
         alert.addButton(withTitle: String(localized: "Cancel"))
         return alert
     }
-
-    /// Stub (#874 fix1 WI-2): the working sheet has no sent line yet.
-    static func sentLine(of alert: NSAlert) -> NSTextField? { nil }
 
     /// Interim plain notices until #877 (setup, off) and #876 (failures) draw their own: each says what was not
     /// sent or not copied, and nothing more.
