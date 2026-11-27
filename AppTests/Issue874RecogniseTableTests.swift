@@ -280,7 +280,8 @@ func issue874CancelInTheWorkingSheetStopsTheRequestWithoutRetryOrClipboardChange
     try await rig.waitUntil("the request is with the service") { await transport.waiting }
     let working = try #require(rig.workingAlerts.first)
     #expect(working.messageText == String(localized: "Recognising table…"))
-    #expect(working.informativeText.contains("api.deepseek.com"))
+    // #874 fix1 WI-2: the "was sent" line is the sheet's own label, filled in once the request is with the service.
+    #expect(ViewerRecogniseTableAdapter.sentLine(of: working)?.stringValue.contains("api.deepseek.com") == true)
     #expect(working.buttons.map(\.title) == [String(localized: "Cancel")])
     let cancel = try #require(rig.cancelWorking)
     cancel()

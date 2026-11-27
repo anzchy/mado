@@ -104,6 +104,7 @@ func issue874FlowAsksConsentNamingTheRealHostBeforeSending(record: String) async
 func issue874FlowDecliningConsentSendsAndRecordsNothing() async {
     let rig = Rig874(options: .options869(consentHost: nil))
     await rig.flow.start(image: image874).value
+    #expect(rig.flow.state == .consent(host: "api.deepseek.com"))
     await rig.flow.answerConsent(false)?.value
     #expect(rig.flow.state == .idle)
     #expect(!rig.flow.isBusy)
@@ -181,6 +182,7 @@ func issue874FlowCancelStopsTheRequestNeverRetriesAndLeavesTheClipboard() async 
 func issue874FlowCancelAtConsentSendsNothing() async {
     let rig = Rig874(options: .options869(consentHost: nil))
     await rig.flow.start(image: image874).value
+    #expect(rig.flow.state == .consent(host: "api.deepseek.com"))
     rig.flow.cancel()
     #expect(rig.flow.state == .idle)
     #expect(await rig.transport.callCount == 0)
