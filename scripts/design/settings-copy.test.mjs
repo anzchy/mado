@@ -16,7 +16,8 @@ test('issue 882 uses one British Recognise Text key and consistent Cloud Recogni
     const chinese = entry.localizations?.['zh-Hans']?.stringUnit?.value ?? '';
     assert.doesNotMatch(chinese, /云端识别|云端服务/, key);
   }
-  assert.equal(catalog.strings['Allow Cloud Recognition'].localizations['zh-Hans'].stringUnit.value, '允许云识别');
+  assert.equal(catalog.strings['Allow Cloud Recognition (Recognise Text, Recognise Table)'].localizations['zh-Hans'].stringUnit.value,
+    '允许云识别（识别文字、识别表格）');
 });
 
 test('issue 882 state page has current app and display copy', () => {

@@ -122,7 +122,7 @@ private let enHint = "Cloud Recognition sends only the image you ask to recognis
 private let zhCloudGroupHint = "只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。"
 private let enCloudGroupHint = "Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."
 
-@MainActor @Test(arguments: ["zh-Hans", "en"])
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue886CloudCatalogHasNoOrphanAllowKey(_ locale: String) throws {
     let catalog = try captureCatalog(locale)
     #expect(catalog["Allow Cloud Recognition"] == nil)
