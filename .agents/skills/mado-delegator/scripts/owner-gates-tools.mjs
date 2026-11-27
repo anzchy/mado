@@ -121,6 +121,7 @@ export function inspectLock(lock) {
 // i760-fix1: pr-body.yml runs scripts/agents and scripts/tdd on every PR, so the lane runs them for every selection too.
 export const NODE_LANE = Object.freeze({
   always: ['scripts/ci/*.test.mjs', 'scripts/ledger/*.test.mjs', 'scripts/name-checks/*.test.mjs', 'scripts/release/*.test.mjs',
+    'scripts/site/*.test.mjs',
     'scripts/perf/*.test.mjs', 'scripts/hooks/*.test.mjs', 'scripts/device/tests/*.test.cjs', 'scripts/agents/*.test.mjs',
     'scripts/tdd/*.test.mjs', '.agents/skills/mado-delegator/scripts/*.test.mjs', '.agents/skills/mado-verify/tests/*.test.mjs'],
 });
