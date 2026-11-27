@@ -109,13 +109,33 @@ function runMain(event, payload, fetchImpl) {
 test('main writes native=false only for a complete docs-only list, native=true otherwise', async () => {
   const ok = async () => ({ ok: true, text: async () => JSON.stringify([entry('docs/a.md')]) });
   const skip = await runMain('pull_request', { pull_request: { number: 3, changed_files: 1 } }, ok);
-  assert.equal(skip.output, 'native=false\n');
+  assert.match(skip.output, /^native=false$/m);
   assert.match(skip.lines[0], /^native-inputs: native=false /);
-  assert.equal((await runMain('push', undefined, ok)).output, 'native=true\n');
-  assert.equal((await runMain('workflow_dispatch', undefined, ok)).output, 'native=true\n');
-  assert.equal((await runMain('pull_request', { pull_request: { number: 3, changed_files: 2 } }, ok)).output, 'native=true\n');
-  assert.equal((await runMain('pull_request', '{broken', ok)).output, 'native=true\n');
-  assert.equal((await runMain('pull_request', undefined, ok)).output, 'native=true\n');
+  assert.match((await runMain('push', undefined, ok)).output, /^native=true$/m);
+  assert.match((await runMain('workflow_dispatch', undefined, ok)).output, /^native=true$/m);
+  assert.match((await runMain('pull_request', { pull_request: { number: 3, changed_files: 2 } }, ok)).output, /^native=true$/m);
+  assert.match((await runMain('pull_request', '{broken', ok)).output, /^native=true$/m);
+  assert.match((await runMain('pull_request', undefined, ok)).output, /^native=true$/m);
   const failing = async () => ({ ok: false, text: async () => '' });
-  assert.equal((await runMain('pull_request', { pull_request: { number: 3, changed_files: 1 } }, failing)).output, 'native=true\n');
+  assert.match((await runMain('pull_request', { pull_request: { number: 3, changed_files: 1 } }, failing)).output, /^native=true$/m);
+});
+
+test('#861: main also writes release_contents from the same file list, true on any doubt', async () => {
+  const list = (...files) => async () => ({ ok: true, text: async () => JSON.stringify(files.map(file => entry(file))) });
+  const payload = count => ({ pull_request: { number: 3, changed_files: count } });
+  const docs = await runMain('pull_request', payload(1), list('docs/a.md'));
+  assert.equal(docs.output, 'native=false\nrelease_contents=false\n');
+  assert.match(docs.lines[1], /^native-inputs: release_contents=false /);
+  assert.equal((await runMain('pull_request', payload(2), list('App/AppDelegate.swift', 'docs/a.md'))).output,
+    'native=true\nrelease_contents=false\n');
+  assert.equal((await runMain('pull_request', payload(1), list('App/Resources/Mado.entitlements'))).output,
+    'native=true\nrelease_contents=true\n');
+  assert.equal((await runMain('push', undefined, list('project.yml'))).output, 'native=true\nrelease_contents=false\n');
+  assert.equal((await runMain('pull_request', '{broken', list('docs/a.md'))).output, 'native=true\nrelease_contents=true\n');
+  const failing = async () => ({ ok: false, text: async () => '' });
+  assert.equal((await runMain('pull_request', payload(1), failing)).output, 'native=true\nrelease_contents=true\n');
+  let calls = 0;
+  const counting = async () => { calls++; return { ok: true, text: async () => JSON.stringify([entry('project.yml')]) }; };
+  await runMain('pull_request', payload(1), counting);
+  assert.equal(calls, 1, 'one file-list request serves both outputs');
 });
