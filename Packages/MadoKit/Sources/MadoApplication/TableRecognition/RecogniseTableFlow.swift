@@ -30,6 +30,8 @@ public enum RecogniseTableState: Equatable, Sendable {
     case cloudOff
     /// Waiting for the answer to the consent dialog that names `host` (state 41 `consent`).
     case consent(host: String)
+    /// Stub (#874 fix1 WI-2): not reached yet.
+    case preparing(host: String)
     /// The image is with `host`; Cancel stops it (state 41 `working`).
     case working(host: String)
     case result(RecognisedTableResult)

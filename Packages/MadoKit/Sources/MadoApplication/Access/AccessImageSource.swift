@@ -172,6 +172,8 @@ public actor AccessImageSource {
             formatIdentifier: image.formatIdentifier, revision: image.revision, itemID: image.itemID,
             accessPermit: permit)
     }
+    /// Stub (#874 fix1 WI-5): reads nothing yet.
+    public func originalData(maximumByteCount: Int) async throws -> (RenderKey?, Data)? { nil }
     public func close() async {
         closed = true
         await releaseIfClosed()

@@ -38,6 +38,11 @@ import MadoInfrastructure
         guard let window, alert.window.sheetParent === window else { return }
         window.endSheet(alert.window, returnCode: .abort)
     }
+    /// Stub (#874 fix1 WI-1): not called yet.
+    var dismissConsent: @MainActor (NSWindow?, NSAlert) -> Void = { window, alert in
+        guard let window, alert.window.sheetParent === window else { return }
+        window.endSheet(alert.window, returnCode: .abort)
+    }
     var presentNotice: @MainActor (NSWindow?, NSAlert) -> Void = { window, alert in
         guard let window else { alert.runModal(); return }
         alert.beginSheetModal(for: window)
@@ -97,7 +102,7 @@ import MadoInfrastructure
             dismissWorking(window, alert)
         }
         switch flow.state {
-        case .idle, .cancelled:
+        case .idle, .cancelled, .preparing:
             break
         case .consent(let host):
             guard !askingConsent else { return }
@@ -196,6 +201,9 @@ import MadoInfrastructure
         return alert
     }
 
+    /// Stub (#874 fix1 WI-2): the working sheet has no sent line yet.
+    static func sentLine(of alert: NSAlert) -> NSTextField? { nil }
+
     /// Interim plain notices until #877 (setup, off) and #876 (failures) draw their own: each says what was not
     /// sent or not copied, and nothing more.
     static func noticeAlert(for state: RecogniseTableState) -> NSAlert? {
@@ -217,7 +225,7 @@ import MadoInfrastructure
         case .failed:
             message = String(localized: "Couldn't recognise the table")
             detail = String(localized: "Nothing was copied. The original image and the clipboard are unchanged.")
-        case .idle, .consent, .working, .result, .cancelled:
+        case .idle, .consent, .preparing, .working, .result, .cancelled:
             return nil
         }
         let alert = NSAlert()

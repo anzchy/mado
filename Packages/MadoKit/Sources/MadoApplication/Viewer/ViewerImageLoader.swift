@@ -153,6 +153,8 @@ public struct PresentedImage: Sendable {
               decoded.1.itemID == key.itemID, decoded.1.revision == key.revision else { return nil }
         return decoded.1.image
     }
+    /// Stub (#874 fix1 WI-5): no original bytes yet.
+    public func recognitionOriginal(maximumByteCount: Int) async -> Data? { nil }
     private func retire() {
         loadTask?.cancel()
         releasePresentation()

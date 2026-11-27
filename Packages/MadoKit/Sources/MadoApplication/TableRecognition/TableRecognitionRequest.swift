@@ -74,6 +74,12 @@ enum TableImageFormat {
     }
 }
 
+/// Stub (#874 fix1 WI-5): nothing goes as it is yet.
+public enum TableRecognitionSource {
+    public static let maximumOriginalBytes = 0
+    public static func sendsAsIs(_ data: Data) -> Bool { false }
+}
+
 /// The checks before anything is sent (#869 AC-2). Each returns the reason a request must not go out.
 enum TableRecognitionGuards {
     /// DeepSeek's limit on one image: 32 MiB of base64 and 8192 px per side (plan, API facts read 2026-11-24).

@@ -33,6 +33,11 @@ public struct TableRecognitionService: Sendable {
         self.report = report
     }
 
+    /// Stub (#874 fix1 WI-2): `willSend` is not called yet.
+    public func recognise(_ image: Data, willSend: @Sendable () async -> Void) async -> TableRecognitionResult {
+        await recognise(image)
+    }
+
     public func recognise(_ image: Data) async -> TableRecognitionResult {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
