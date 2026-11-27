@@ -241,15 +241,17 @@ test('all discovery probes share the heavy lock and issue-specific integration s
   const manual887=['site-content-node'];
   // #912: the hosted pre-audit helper's receipts (light, manual).
   const manual912=['hosted-preaudit-node'];
+  // #916: the app-red build-step wrapper's receipts (light, manual).
+  const manual916=['app-red-setup-node'];
   // #358 (via #871): the for … where ban's RED receipts (light, manual).
   const manual358=['for-where-node'];
   // #861: PR-time Release build receipts (light, manual).
   const manual861=['release-contents-node','release-build-node','release-pr-job-node','native-inputs-standalone-node',
     'release-entitlements-node','release-recipe-node'];
-  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','release-package-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node','rebase-docs-py','reuse-check-node',...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901,...manual861,...manual887,...manual358,...manual912].includes(l.name));
+  const heavy=config.lanes.filter(l=>!['release-appcast-node','release-node','release-package-node','name-check-node','module-name-node','docs-node','ci-cache-node','ci-flaky-node','release-tag-ci-node','unit-watchdog-node','heavy-lock-node','trash-lane-node','rebase-docs-py','reuse-check-node',...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901,...manual861,...manual887,...manual358,...manual912,...manual916].includes(l.name));
   const probes=heavy.map(l=>l.probeCommand);
-  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', ...manual788, 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', ...manual758, 'heavy-lock-node', 'integration', ...manual759, 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-package-node', 'rebase-docs-py', 'reuse-check-node', 'release-tag-ci-node', ...manual734, 'swift-red', ...manual898, ...manual901, ...manual861, ...manual887, ...manual358,...manual912, 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
-  for(const name of [...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901,...manual861,...manual887,...manual358,...manual912]){
+  assert.deepEqual(config.lanes.map(l=>l.name).sort(), ['app-red', 'ci-642-hosted-build-node', 'ci-642-removal-node', ...manual788, 'ci-app-compare-node', 'ci-cache-node', 'ci-code-name-node', 'ci-crash-evidence-node', 'ci-flaky-node', 'ci-host-ownership-node', 'ci-host-owner-log-node', 'ci-host-register-node', 'ci-host-timeout-node', ...manual631, 'docs-node', ...manual758, 'heavy-lock-node', 'integration', ...manual759, 'module-name-node', 'name-check-node', 'release-appcast-node', 'release-node', 'release-package-node', 'rebase-docs-py', 'reuse-check-node', 'release-tag-ci-node', ...manual734, 'swift-red', ...manual898, ...manual901, ...manual861, ...manual887, ...manual358,...manual912,...manual916, 'trash-lane-node', 'unit', 'unit-watchdog-node'].sort());
+  for(const name of [...manualCI,...manual631,...manual758,...manual788,...manual759,...manual734,...manual898,...manual901,...manual861,...manual887,...manual358,...manual912,...manual916]){
     const lane=config.lanes.find(l=>l.name===name);
     assert.deepEqual(lane.gateOn,['manual']);
     assert.equal(lane.probeCommand,'node --version');

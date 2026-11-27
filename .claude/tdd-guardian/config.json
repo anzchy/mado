@@ -331,7 +331,7 @@
       "probeCommand": "node --version",
       "gateOn": ["manual"],
       "coverage": "none",
-      "timeoutMs": 300000
+      "timeoutMs": 900000
     },
     {
       "name": "ci-apt-retry-node",
@@ -474,6 +474,17 @@
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-delegator/scripts/hosted-preaudit.test.mjs",
       "probeCommand": "node --version",
       "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "app-red-setup-node",
+      "description": "#916 app-red build step inside the receipt command (lock wait outside the plugin's 300 s setup timeout).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/app-red-lane.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     }
