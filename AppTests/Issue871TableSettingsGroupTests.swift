@@ -779,15 +779,57 @@ func issue871Fix4EveryLabelHoldsEitherLanguage(_ locale: String) async throws {
             view.subviews.forEach(walk)
         }
         walk(try f.view("settings.capture.table"))
-        let hint = try f.view("settings.capture.table-key-hint"), help = try f.view("settings.capture.table-key-help")
-        #expect(hint.frame.minY == help.frame.minY && hint.frame.maxX <= help.frame.minX,
-                "\(locale): the key hint \(hint.frame) and its link \(help.frame) share one line, apart")
-        // The English run passed locally while hosted CI cut 还没有密钥？ off: the hint holds the
-        // longer text with the field's 2 pt inset on each side to spare, not only the bare text.
-        let font = try f.view("settings.capture.table-key-hint", as: NSTextField.self).font!
-        for value in ["No key yet?", "还没有密钥？"] {
-            #expect((value as NSString).size(withAttributes: [.font: font]).width + 4 <= hint.frame.width + 0.5,
-                    "\(locale): the key hint \(hint.frame.width) is narrower than \(value) and its inset")
+        // Fix 5: the key hint and its link share a line only when the shown text and the link fit there.
+        try expectHintAndLinkLine871(f, locale, hint: "settings.capture.table-key-hint",
+                                     link: "settings.capture.table-key-help")
+    }
+}
+
+/// A hint and its link (state 35): when the text shown plus its inset and the link fit in the value column, the link
+/// sits beside the hint's first line and the hint holds the shown text on that line; otherwise the link goes under it.
+@MainActor private func expectHintAndLinkLine871(_ f: Fixture871App, _ locale: String, hint hintID: String,
+                                                 link linkID: String) throws {
+    let hint = try f.view(hintID, as: NSTextField.self), link = try f.view(linkID)
+    let group = try f.view("settings.capture.table")
+    let valueWidth = group.bounds.width - hint.frame.minX
+    let shown = (hint.stringValue as NSString).size(withAttributes: [.font: hint.font!]).width.rounded(.up) + 4
+    if shown + 2 + link.frame.width <= valueWidth {
+        #expect(link.frame.minY == hint.frame.minY && hint.frame.maxX <= link.frame.minX,
+                "\(locale): \(hintID) \(hint.frame) and \(linkID) \(link.frame) share the hint's first line, apart")
+        #expect(shown <= hint.frame.width + 0.5, "\(locale): \(hintID) \(hint.frame.width) is narrower than its text")
+    } else {
+        #expect(link.frame.minY >= hint.frame.maxY && link.frame.minX == hint.frame.minX,
+                "\(locale): \(linkID) \(link.frame) goes under \(hintID) \(hint.frame)")
+    }
+}
+
+/// Fix 5: sizing a hint for the other language must not push its link off the line in the language shown (a
+/// Chinese window put Privacy ↗ and Learn More ↗ under their hints). Every hint keeps its link beside it when the
+/// shown text fits, in either language, with or without a saved key.
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["en", "zh-Hans"])
+func issue871Fix5HintLinksShareTheLineWhenTheShownTextFits(_ locale: String) async throws {
+    for saved in [false, true] {
+        let f = try fixture871App(locale)
+        defer { f.panel.window.close() }
+        try await waitUntil { try !f.text("settings.capture.table-host").isEmpty }
+        if saved { try await f.saveKey("sk-live-00003f9a") }
+        if !saved {
+            try expectHintAndLinkLine871(f, locale, hint: "settings.capture.table-key-hint",
+                                         link: "settings.capture.table-key-help")
+        }
+        try expectHintAndLinkLine871(f, locale, hint: "settings.capture.table-host-hint",
+                                     link: "settings.capture.table-privacy")
+        try expectHintAndLinkLine871(f, locale, hint: "settings.capture.table-cost",
+                                     link: "settings.capture.table-cost-link")
+    }
+    // A Chinese window has the room (state 35): both links sit on their hint's line there.
+    if locale == "zh-Hans" {
+        let f = try fixture871App(locale)
+        defer { f.panel.window.close() }
+        try await waitUntil { try !f.text("settings.capture.table-host").isEmpty }
+        for (hintID, linkID) in [("settings.capture.table-host-hint", "settings.capture.table-privacy"),
+                                 ("settings.capture.table-cost", "settings.capture.table-cost-link")] {
+            #expect(try f.view(linkID).frame.minY == f.view(hintID).frame.minY, "zh-Hans: \(linkID) beside \(hintID)")
         }
     }
 }

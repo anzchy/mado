@@ -430,27 +430,44 @@ struct TableRecognitionSettingsEnvironment {
         return max(field.attributedStringValue.size().width, other.max()!).rounded(.up) + 4
     }
 
+    /// How tall a hint must be at `width`: the text shown as its cell draws it, and a fixed hint's other language as
+    /// the Issue218 rule measures it (that text is never drawn in this window; it only has to fit the frame). At most
+    /// two lines of the hint's font, measured.
+    private func height(of hint: NSTextField, width: CGFloat) -> CGFloat {
+        let font = hint.font ?? DesignMetrics.font("uiSmall")
+        let measure = hint.cell!.copy() as! NSCell
+        func drawn(_ text: String, _ width: CGFloat) -> CGFloat {
+            measure.stringValue = text
+            return measure.cellSize(forBounds: NSRect(x: 0, y: 0, width: width,
+                                                      height: .greatestFiniteMagnitude)).height.rounded(.up)
+        }
+        let line = drawn("X", .greatestFiniteMagnitude)
+        let others = variants(hint.stringValue).dropFirst().map { text in
+            (text as NSString).boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
+                                            options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                            attributes: [.font: font]).height.rounded(.up)
+        }
+        return min(2 * line, ([drawn(hint.stringValue, width)] + others).max()!)
+    }
+
     /// Places a hint in the value column, at most two lines; returns its bottom.
     private func place(_ hint: NSTextField, top: CGFloat) -> CGFloat {
-        // As tall as the text needs in either language (a fixed hint), at most two lines.
-        let measure = hint.cell!.copy() as! NSCell
-        let height = hint.stringValue.isEmpty ? 16 : min(32, variants(hint.stringValue).map { text in
-            measure.stringValue = text
-            return measure.cellSize(forBounds: NSRect(x: 0, y: 0, width: valueWidth,
-                                                      height: .greatestFiniteMagnitude)).height.rounded(.up)
-        }.max()!)
+        let height = hint.stringValue.isEmpty ? 16 : height(of: hint, width: valueWidth)
         hint.frame = NSRect(x: valueX, y: top, width: valueWidth, height: height)
         return top + height
     }
 
-    /// A hint and its link: on one line when both fit (state 35), otherwise the link goes under the hint. Returns
-    /// the bottom.
+    /// A hint and its link: on one line when the text shown and the link fit (state 35), otherwise the link goes
+    /// under the hint. Returns the bottom. Inline, the hint is as wide as the text shown and as tall as either
+    /// language needs at that width, so the link stays beside its first line whichever language the window shows.
     private func hintLine(_ hint: NSTextField, link: NSButton, top: CGFloat) -> CGFloat {
-        let hintWidth = width(of: hint)
+        let font = hint.font ?? DesignMetrics.font("uiSmall")
+        let hintWidth = (hint.stringValue as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 4
         if hintWidth + 2 + link.frame.width <= valueWidth {
-            hint.frame = NSRect(x: valueX, y: top, width: hintWidth, height: 16)
+            let height = height(of: hint, width: hintWidth)
+            hint.frame = NSRect(x: valueX, y: top, width: hintWidth, height: height)
             link.frame.origin = NSPoint(x: valueX + hintWidth + 2, y: top)
-            return top + 16
+            return top + max(height, link.frame.height)
         }
         let bottom = place(hint, top: top)
         link.frame.origin = NSPoint(x: valueX, y: bottom)
