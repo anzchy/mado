@@ -67,6 +67,7 @@ jobs:
     outputs:
       native: ${{ steps.classify.outputs.native }}
       site: ${{ steps.site.outputs.site }}
+      release_contents: ${{ steps.classify.outputs.release_contents }}
     steps:
       # The classifier comes from the base commit, so a pull request cannot loosen the rule that judges it.
       - name: Checkout trusted base
@@ -87,8 +88,9 @@ jobs:
           if [ -f trusted/scripts/ci/native-inputs.mjs ]; then
             node trusted/scripts/ci/native-inputs.mjs
           else
-            echo 'native-inputs: base has no classifier; running native jobs'
+            echo 'native-inputs: base has no classifier; running native jobs and the Release build'
             echo 'native=true' >> "$GITHUB_OUTPUT"
+            echo 'release_contents=true' >> "$GITHUB_OUTPUT"
           fi
       - name: Classify help-site changes
         id: site
@@ -503,6 +505,44 @@ jobs:
         with:
           path: .build/dd-ci
           key: ${{ steps.dd-key.outputs.key }}
+
+  # PR-time Release build (#861). When a pull request changes what decides the shipped app's contents or entitlements
+  # (the filter in scripts/release/release-contents.mjs, applied by the trusted base classifier above), build Release
+  # with the release workflow's own script, ad-hoc signed, and run its entitlement, product-identity and package checks.
+  # No secrets and no signing identity; the build step prints what an ad-hoc build cannot check. Every other pull
+  # request, push and dispatch skips this job at the job level, so it reports as skipped (never pending) and costs no
+  # runner time. A base classifier without the release_contents output runs it.
+  release-build:
+    name: Release build (ad-hoc)
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.release_contents != 'false'
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The build number is the commit count, as on the tag path.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read the version and build
+        run: scripts/release/release-build.sh version
+      - name: Set up Xcode
+        uses: ./.github/actions/xcode-setup
+      - name: Download Sparkle tools
+        run: scripts/release/release-build.sh sparkle-tools
+      - name: Build Release (ad-hoc)
+        run: scripts/release/release-build.sh build ad-hoc
+      - name: Bundle Sparkle's licence
+        run: scripts/release/release-build.sh licence
+      - name: Check entitlements
+        run: scripts/release/release-build.sh check-entitlements
+      - name: Check product identity for release
+        run: scripts/release/release-build.sh check-identity
+      - name: Check package contents
+        run: scripts/release/release-build.sh check-package
 
   # The required check on main keeps its name. scripts/ci/walking-skeleton.mjs decides: the classifier and the ledger
   # check must have succeeded, and then every native job and App execution succeeded, or the trusted classifier
