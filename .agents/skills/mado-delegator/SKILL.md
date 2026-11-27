@@ -87,7 +87,15 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the
    implementer must turn into the first RED. Late assertions drove P3-01, P3-10 and #136 past the round cap. Read the code before
-   writing fences. Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
+   writing fences. **Split big UI tickets before dispatch** (#916): a UI ticket that touches a file over ~500 lines
+   or adds more than one panel/group becomes vertical slices, each with its own brief, worktree and audit. Why: #871
+   bundled Settings layout, Keychain adapter, Test button, two languages and a new group in one brief, and PR #909
+   needed six fix rounds. Every UI brief fills the template's **Layout invariants** block (both languages,
+   runtime-measured fit through `AppTests/LayoutFitSupport.swift`, no hand-picked widths). Why: several #909 rounds
+   fixed the same clipped or wrapped zh-Hans/English label one instance at a time. Every fix brief keeps the fix
+   template's **pattern sweep** line (grep the whole change for each finding's pattern, list the greps in the
+   handoff). Why: #909's fix-round briefs fixed one instance, not the pattern.
+   Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
    `SHARED` code file with an in-flight branch means sequence the two items, or base the new branch on the other one
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
    Before dispatch, `new-task-worktree.sh` runs (for a fix round, run it yourself) `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when the worktree is detached) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree` and the task identity in the worktree's `.build/mado-verify/task-identity.json`. Codex uses `$tdd-guardian-workflow`;
