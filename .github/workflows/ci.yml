@@ -66,6 +66,7 @@ jobs:
       pull-requests: read
     outputs:
       native: ${{ steps.classify.outputs.native }}
+      site: ${{ steps.site.outputs.site }}
     steps:
       # The classifier comes from the base commit, so a pull request cannot loosen the rule that judges it.
       - name: Checkout trusted base
@@ -89,6 +90,42 @@ jobs:
             echo 'native-inputs: base has no classifier; running native jobs'
             echo 'native=true' >> "$GITHUB_OUTPUT"
           fi
+      - name: Classify help-site changes
+        id: site
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          # A failed file listing runs the check (fail closed). The job itself skips on unrelated PRs.
+          if [ "$CHANGED_FILES" -ge 3000 ]; then
+            echo 'site=true' >> "$GITHUB_OUTPUT"
+          elif ! gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, .previous_filename | select(. != null)' > "$RUNNER_TEMP/site-files.txt"; then
+            echo 'site=true' >> "$GITHUB_OUTPUT"
+          elif grep -Eq '^(site/|scripts/site/|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/site-files.txt"; then
+            echo 'site=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'site=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  site-content:
+    name: Help-site content
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Test help-site checker
+        run: node --test scripts/site/check.test.mjs
+      - name: Check help-site content
+        run: node scripts/site/check.mjs
 
   # The package suite runs as two processes (#391): the non-UI targets, and MadoMacUITests one test at a time,
   # because its window tests saturate the runner's main actor when Swift Testing runs them in parallel. Each run is

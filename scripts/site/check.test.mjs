@@ -52,3 +52,15 @@ test('accepts user-facing copy and external links', async () => {
     assert.deepEqual(await checkSite(dir), []);
   });
 });
+
+test('rejects internal notes hidden in HTML comments', async () => {
+  await fixture({ 'index.html': '<!-- TODO: internal note #887 --><h1>Help</h1>' }, async dir => {
+    assert.match((await checkSite(dir)).join('\n'), /internal note in HTML comment/);
+  });
+});
+
+test('requires the Mado row and exact macOS permission name on the permission page', async () => {
+  await fixture({ 'screen-recording.html': '<h1>录屏</h1><p>Open Screen Recording.</p>' }, async dir => {
+    assert.match((await checkSite(dir)).join('\n'), /Mado row/);
+  });
+});
