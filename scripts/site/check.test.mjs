@@ -220,3 +220,10 @@ test('help-site CI job has read-only contents and does not persist checkout cred
   assert.match(job, /permissions:\s*\n\s*contents: read/);
   assert.match(job, /persist-credentials: false/);
 });
+
+test('privacy copy never names Baidu as the only Cloud Recognition exception', async () => {
+  for (const file of ['README.md', 'CHANGELOG.md', 'docs/release/notes-template.md', 'GLOSSARY.md']) {
+    const source = await readFile(new URL(`../../${file}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /(?:only exception|唯一例外)[^\n]{0,240}(?:Baidu|百度)|(?:Baidu keys|百度密钥)[^\n]{0,80}(?:to Baidu|发送给百度)/i, file);
+  }
+});
