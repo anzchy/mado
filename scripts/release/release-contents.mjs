@@ -4,12 +4,12 @@
 // same script the release workflow uses. scripts/ci/native-inputs.mjs applies this filter from the trusted base commit,
 // so a pull request cannot loosen the rule that judges it. Any doubt (a malformed path or file list) counts as release
 // content. Pushes and dispatches never run the PR-time build: the tag and rehearsal runs build signed instead.
-import { listChangedFiles } from '../ci/changed-files.mjs';
+import { listChangedFiles } from '../ci/native-inputs.mjs';
 
 // The project definition, the app's Info.plist, the package manifest and pins, and the workflows and the composite
 // action that set up and run the Release build.
 export const RELEASE_FILES = ['project.yml', 'Packages/MadoKit/Package.swift', 'Packages/MadoKit/Package.resolved',
-  '.github/workflows/ci.yml', '.github/workflows/release.yml', 'scripts/ci/native-inputs.mjs', 'scripts/ci/changed-files.mjs'];
+  '.github/workflows/ci.yml', '.github/workflows/release.yml', 'scripts/ci/native-inputs.mjs'];
 // The Capture helper target (all of it), the release build and check scripts with their layout fixtures, the
 // product-identity check, and the Xcode setup action.
 export const RELEASE_PREFIXES = ['App/CaptureHelper/', 'scripts/release/', 'scripts/name-checks/', '.github/actions/xcode-setup/'];

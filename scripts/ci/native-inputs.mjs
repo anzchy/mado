@@ -12,8 +12,6 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listChangedFiles, MAX_FILES, PER_PAGE } from './changed-files.mjs';
-import { classifyRelease } from '../release/release-contents.mjs';
 
 // Paths no native build or test reads (reviewed 2026-11-04, docs/audit/20261104-github-actions-audit.md §4 F6).
 // Keep this explicit: a root `*.md` glob would wrongly include THIRD_PARTY_NOTICES.md, which App tests read.
@@ -21,7 +19,46 @@ export const SKIP_PREFIXES = ['docs/', '.agents/', '.claude/', '.codex/', 'scrip
   'scripts/ledger/', '.github/ISSUE_TEMPLATE/'];
 export const SKIP_FILES = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'CHANGELOG.md', 'GLOSSARY.md',
   '.github/workflows/pr-body.yml', '.github/workflows/release.yml'];
-export { MAX_FILES, PER_PAGE };
+export const PER_PAGE = 100;
+export const MAX_FILES = 3000;
+// Other tools import this file on its own (owner-gates-tools.mjs imports skippable; owner-gates.test.mjs copies it
+// alone), so it has no static import of a repository module: the release-contents filter (#861) loads in main().
+const STATUSES = new Set(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']);
+
+/**
+ * Every path the list names (both ends of a rename or copy), or `{ error }` when the list cannot be trusted: a missing
+ * or capped count, a malformed page or entry, or a count that differs from the event's changed_files.
+ */
+export function listChangedFiles({ changedFiles, pages }) {
+  const fail = error => ({ error });
+  if (!Number.isInteger(changedFiles) || changedFiles <= 0) return fail('pull_request.changed_files missing or zero');
+  if (changedFiles >= MAX_FILES) return fail(`changed_files ${changedFiles} reaches the ${MAX_FILES}-file API cap`);
+  if (!Array.isArray(pages) || pages.length === 0) return fail('no file list');
+  const files = [];
+  let count = 0;
+  for (const [index, page] of pages.entries()) {
+    if (!Array.isArray(page)) return fail(`page ${index + 1} is not a list`);
+    if (page.length > PER_PAGE || (index < pages.length - 1 && page.length !== PER_PAGE)) {
+      return fail(`page ${index + 1} has ${page.length} entries`);
+    }
+    for (const entry of page) {
+      if (!entry || typeof entry !== 'object' || typeof entry.filename !== 'string' || !STATUSES.has(entry.status)) {
+        return fail('malformed file entry');
+      }
+      const paths = [entry.filename];
+      if (entry.status === 'renamed' || entry.status === 'copied') {
+        if (typeof entry.previous_filename !== 'string') return fail(`${entry.status} entry without previous_filename`);
+        paths.push(entry.previous_filename);
+      } else if (entry.previous_filename !== undefined) {
+        return fail('previous_filename on a non-rename entry');
+      }
+      count++;
+      files.push(...paths);
+    }
+  }
+  if (count !== changedFiles) return fail(`listed ${count} files, event says ${changedFiles}`);
+  return { files, count };
+}
 
 export function skippable(file) {
   if (typeof file !== 'string' || !file || file.startsWith('/') || file.includes('\\') ||
@@ -61,19 +98,24 @@ export async function fetchPages({ api, repo, number, token, fetchImpl = fetch }
 }
 
 export async function main(env = process.env, { fetchImpl = fetch, log = console.log } = {}) {
-  let result, release;
+  let result, release, classifyRelease;
+  try {
+    ({ classifyRelease } = await import('../release/release-contents.mjs'));
+  } catch (error) {
+    release = { release: true, reason: `release-contents filter unavailable: ${error.message}` };
+  }
   try {
     const event = env.GITHUB_EVENT_NAME;
     if (event !== 'pull_request') {
       result = classify({ event });
-      release = classifyRelease({ event });
+      release ??= classifyRelease({ event });
     } else {
       const payload = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'));
       const pr = payload.pull_request;
       const pages = await fetchPages({ api: env.GITHUB_API_URL || 'https://api.github.com', repo: env.GITHUB_REPOSITORY,
         number: pr?.number, token: env.GH_TOKEN, fetchImpl });
       result = pages ? classify({ event, changedFiles: pr?.changed_files, pages }) : { native: true, reason: 'file list request failed' };
-      release = pages ? classifyRelease({ event, changedFiles: pr?.changed_files, pages })
+      release ??= pages ? classifyRelease({ event, changedFiles: pr?.changed_files, pages })
         : { release: true, reason: 'file list request failed' };
     }
   } catch (error) {
