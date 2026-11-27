@@ -23,7 +23,7 @@ gh run view <run-id> --repo anzchy/mado --log
 
 Select **Release → Run workflow** on `main` in Actions if using the web UI. Enter the full commit SHA and its `MARKETING_VERSION`. The optional `notarize_app` input also submits and staples the app; the default stops after the signed entitlement, product identity and package checks. The selected commit may be on a scratch branch for a deliberate failing check. The workflow runs only in `anzchy/mado`, requires the SHA to be reachable from a branch of this repository, and deletes its temporary signing keychain even when a check fails. It does not create or move tags, draft releases, appcast branches or PRs. Confirm the rehearsal passes before pushing a release tag; a rehearsal does not replace the tag commit's green `main` CI requirement.
 
-The workflow definition comes from the dispatched `--ref` (use `main` above), while the selected commit supplies its own local composite actions, build phases and release-check scripts. Those run with the Developer ID identity unlocked. Review the exact selected commit before approving a secret-bearing rehearsal, especially a scratch branch; branch reachability prevents a fork-only SHA, but does not make branch code trusted. The shared job still has `contents: write` and `pull-requests: write` for the tag path; checkout does not persist those credentials for a rehearsal. Secrets are not protected by a GitHub environment approval gate. Run rehearsals sequentially: the shared concurrency group allows one running and one pending run, and a third dispatch can cancel the pending run.
+The workflow definition comes from the dispatched `--ref` (use `main` above), while the selected commit supplies its own local composite actions, build phases and release-check scripts. Those run with the Developer ID identity unlocked. A `commit_sha` from before #861, which predates `scripts/release/release-build.sh`, cannot be rehearsed with today's workflow: the input check stops with that message. Review the exact selected commit before approving a secret-bearing rehearsal, especially a scratch branch; branch reachability prevents a fork-only SHA, but does not make branch code trusted. The shared job still has `contents: write` and `pull-requests: write` for the tag path; checkout does not persist those credentials for a rehearsal. Secrets are not protected by a GitHub environment approval gate. Run rehearsals sequentially: the shared concurrency group allows one running and one pending run, and a third dispatch can cancel the pending run.
 
 ```sh
 git switch main && git pull
@@ -68,7 +68,7 @@ Other measures:
 2. Sparkle 2.10.0's `LICENSE` is copied to `Contents/Resources/ThirdPartyNotices/Sparkle-2.10.0-LICENSE.txt`. It comes from the release tools tarball pinned by SHA-256 and includes Sparkle's external licences.
 3. **Re-signing:** Sparkle's helpers are re-signed with Developer ID in the order Sparkle's sandboxing documentation gives: Installer.xpc, Downloader.xpc, Autoupdate, Updater.app, then the framework. The app is signed last, followed by `codesign --verify --deep --strict`.
 4. **Checks on the signed app, before anything is sent to Apple:**
-   - `node scripts/release/check-entitlements.mjs <app> --configuration release --expect-bundle-id io.github.anzchy.mado`: exactly ADR-015's five entitlements, including `io.github.anzchy.mado-spks` and `io.github.anzchy.mado-spki`, and the expected Mado bundle ID.
+   - `node scripts/release/check-entitlements.mjs <app> --configuration release --expect-bundle-id io.github.anzchy.mado`: exactly ADR-015's five entitlements, including `io.github.anzchy.mado-spks` and `io.github.anzchy.mado-spki`, and the expected Mado bundle ID. It also checks the embedded Capture helper (`Contents/Library/LoginItems/MadoCaptureHelper.app`, required in Release) against its exact set: sandbox, Downloads and user-selected read-write, app-scope bookmarks and the shared App Group (#861).
    - `node scripts/name-checks/built-product.mjs <app> --release`: Mado product identity and the exact configured Mado feed URL.
    - `node scripts/release/check-package.mjs <app> --require-sparkle-licence --expect-version … --expect-build …`. It fails on research, prototype or evidence files, credentials, private photos, scripts, documents or build paths. It also checks that the Sparkle Info.plist keys keep the second-launch question and send no system profile, that the version and build are right, and that the licence is present.
 5. **App notarisation:** the app is notarised (`notarytool submit --wait`, Apple ID with an app-specific password), stapled and validated.
@@ -96,26 +96,34 @@ CI's **Release build (ad-hoc)** job runs the same script on a pull request that 
 - the Capture helper target;
 - non-Swift files under `App/` or the package sources (XcodeGen and SwiftPM bundle them);
 - the package manifest and pins;
-- the release and name-check scripts;
+- the release and name-check scripts, and the classifier `scripts/ci/native-inputs.mjs`;
 - the Xcode setup action, or the CI or release workflow.
 
-The filter is [`scripts/release/release-contents.mjs`](../../scripts/release/release-contents.mjs). It is applied by the Native inputs classifier from the trusted base commit, so a pull request cannot loosen it.
+Paths match in any case, because the macOS checkout is case-insensitive. The filter is [`scripts/release/release-contents.mjs`](../../scripts/release/release-contents.mjs). It is applied by the Native inputs classifier from the trusted base commit, so a pull request cannot loosen it.
 
 The job builds Release ad-hoc signed (`CODE_SIGN_IDENTITY=-`), with no identity and no secrets, then runs the entitlement, product-identity and package checks. Its version is `MARKETING_VERSION` and its build number is the commit count, as on the tag path.
 
-An ad-hoc build cannot show Developer ID signatures and their `_CodeSignature` entries, Sparkle's re-signed helpers, secure timestamps, notarisation, stapling or Gatekeeper. The job prints that limit in its log and job summary; the signed rehearsal above covers those.
+An ad-hoc build cannot show Developer ID signatures and their `_CodeSignature` entries, Sparkle's re-signed helpers, secure timestamps, notarisation, stapling or Gatekeeper. The signed rehearsal above covers the signatures, the re-signed helpers and the timestamps; it covers notarisation and stapling only when `notarize_app` is set, and Gatekeeper (`spctl`) is checked only on the tag run. The job prints that limit in its log and job summary.
 
 Other pull requests, pushes and dispatches skip the job at the job level. A skipped job reports as skipped, not pending, so it never blocks a merge and costs no runner time.
 
-To run the same build and checks locally (on the shared Mac, run the `build ad-hoc` step under `scripts/heavy-lock.sh`):
+To run the same build and checks locally, from the worktree root in bash or zsh. The build runs under `scripts/heavy-lock.sh`, as on the shared Mac it must. Each step's values are read from `$GITHUB_ENV` as data, not run as shell code, so a path with spaces works. The block stops at the first failing step and exits non-zero:
 
 ```sh
-export RUNNER_TEMP=$PWD/.build/release-runner GITHUB_ENV=$PWD/.build/release-runner/env
-mkdir -p "$RUNNER_TEMP" && : > "$GITHUB_ENV"
-for step in version sparkle-tools "build ad-hoc" licence check-entitlements check-identity check-package; do
-  scripts/release/release-build.sh $step || break
-  set -a; . "$GITHUB_ENV"; set +a
-done
+(
+  set -eu
+  export RUNNER_TEMP="$PWD/.build/release-runner"
+  export GITHUB_ENV="$RUNNER_TEMP/env"
+  mkdir -p "$RUNNER_TEMP"
+  : > "$GITHUB_ENV"
+  load() { while IFS= read -r line; do export "${line%%=*}=${line#*=}"; done < "$GITHUB_ENV"; }
+  scripts/release/release-build.sh version; load
+  scripts/release/release-build.sh sparkle-tools; load
+  scripts/heavy-lock.sh scripts/release/release-build.sh build ad-hoc; load
+  for step in licence check-entitlements check-identity check-package; do
+    scripts/release/release-build.sh "$step"
+  done
+)
 ```
 
 ## What the owner does
