@@ -115,7 +115,8 @@ func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async
                "settings.capture.ocr-save", "settings.capture.table-service"] {
         #expect(try f.view(id, as: NSControl.self).isEnabled, "\(id) remains editable with cloud off")
     }
-    #expect(cloud.frame.maxY < try f.view("settings.capture.shortcut-restore").frame.minY)
+    let restore = try f.view("settings.capture.shortcut-restore")
+    #expect(cloud.frame.maxY < restore.frame.minY)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
