@@ -153,6 +153,9 @@ export async function checkSite(siteDir = defaultSite) {
         (!text.includes('录屏与系统录音') || !text.includes('Screen & System Audio Recording') || !text.includes('「Mado」一行')))
       errors.push(`${label}: name Screen & System Audio Recording and the Mado row to enable`);
     for (const { tag, attributes } of startTags(html)) {
+      if (tag === 'meta' && attributes.get('name')?.toLowerCase() === 'robots' &&
+          /(?:^|[\s,])noindex(?:$|[\s,])/i.test(attributes.get('content') ?? ''))
+        errors.push(`${label}: robots noindex`);
       if (attributes.get('class')?.split(/\s+/).some(value => /^(?:proto|draft)$/i.test(value))) errors.push(`${label}: proto or draft banner class`);
       for (const name of ['content', 'alt', 'title', 'aria-label']) {
         if (attributes.has(name)) {
