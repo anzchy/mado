@@ -118,6 +118,11 @@ export function checkEntitlements(entitlements, { bundleId, configuration, expec
   return problems;
 }
 
+/** The embedded Capture helper's entitlements against its decided set (#861 fix 1). Stub: not implemented yet. */
+export function checkHelperEntitlements(entitlements, { configuration } = {}) {
+  throw new Error("checkHelperEntitlements is not implemented");
+}
+
 function main(argv) {
   const app = argv[0];
   const flag = argv.indexOf("--configuration");
