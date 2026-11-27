@@ -38,7 +38,7 @@ import MadoInfrastructure
         guard let window, alert.window.sheetParent === window else { return }
         window.endSheet(alert.window, returnCode: .abort)
     }
-    /// Stub (#874 fix1 WI-1): not called yet.
+    /// Ends the consent sheet when the run it asks for is abandoned (the viewer moved to another image).
     var dismissConsent: @MainActor (NSWindow?, NSAlert) -> Void = { window, alert in
         guard let window, alert.window.sheetParent === window else { return }
         window.endSheet(alert.window, returnCode: .abort)
@@ -52,8 +52,11 @@ import MadoInfrastructure
     /// The task the run is on now (the checks, then the request after the consent answer); tests await it.
     private(set) var runTask: Task<Void, Never>?
     private var workingAlert: NSAlert?
-    private var askingConsent = false
+    private var consentSheet: NSAlert?
     private var sourceImage: CGImage?
+    /// The image the run started on (#874 fix1 WI-1): the loader generation and the shown item and revision.
+    private var runGeneration: UUID?
+    private var runKey: RenderKey?
     nonisolated(unsafe) private var closeObserver: (any NSObjectProtocol)?
 
     init(controller: CanvasWindowController) {
@@ -64,6 +67,7 @@ import MadoInfrastructure
                 MainActor.assumeIsolated { self?.windowClosed() }
             }
         }
+        observeImageGeneration()
     }
     deinit { if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) } }
 
@@ -80,6 +84,8 @@ import MadoInfrastructure
         let sourceSize = controller.canvas.backdropFrame.sourceSize
         let imageLoader = controller.session.imageLoader
         sourceImage = image
+        runGeneration = imageLoader.generation
+        runKey = imageLoader.presented?.key
         // The image as the file has it: the full-resolution pixels when the canvas shows a reduced preview.
         let source: @Sendable () async throws -> Data = {
             let reduced = image.width != Int(sourceSize.width) || image.height != Int(sourceSize.height)
@@ -89,6 +95,7 @@ import MadoInfrastructure
             return try await ViewerRecogniseTextAdapter.sourceData(image: full ?? image)
         }
         flow?.close()
+        consentSheet = nil
         let flow = makeFlow(NativeTablePasteboard(pasteboard)) { [weak self] in self?.render() }
         self.flow = flow
         runTask = flow.start(image: source)
@@ -101,15 +108,20 @@ import MadoInfrastructure
             workingAlert = nil
             dismissWorking(window, alert)
         }
+        if case .consent = flow.state {} else if let alert = consentSheet {
+            consentSheet = nil
+            dismissConsent(window, alert)
+        }
         switch flow.state {
         case .idle, .cancelled:
             break
         case .consent(let host):
-            guard !askingConsent else { return }
-            askingConsent = true
-            presentConsent(window, Self.consentAlert(host: host)) { [weak self, weak flow] granted in
+            guard consentSheet == nil else { return }
+            let alert = Self.consentAlert(host: host)
+            consentSheet = alert
+            presentConsent(window, alert) { [weak self, weak flow] granted in
                 guard let self, let flow, self.flow === flow else { return }
-                self.askingConsent = false
+                if self.consentSheet === alert { self.consentSheet = nil }
                 if let task = flow.answerConsent(granted) { self.runTask = task }
             }
         case .preparing, .working:
@@ -126,6 +138,8 @@ import MadoInfrastructure
             }
             if case .working(let host) = flow.state { Self.sentLine(of: alert)?.stringValue = Self.sentText(host: host) }
         case .result(let result):
+            // A result for an image the viewer has left is dropped, never shown or copied.
+            guard isCurrent else { flow.close(); return }
             showPanel(result)
         case .setupNeeded, .cloudOff, .notSent, .failed:
             if let alert = Self.noticeAlert(for: flow.state) { presentNotice(window, alert) }
@@ -152,6 +166,7 @@ import MadoInfrastructure
     private func closePanel(returnFocus: Bool) {
         guard let panel else { return }
         self.panel = nil
+        sourceImage = nil
         panel.onCopy = {}
         panel.onClose = {}
         panel.orderOut(nil)
@@ -166,8 +181,32 @@ import MadoInfrastructure
     private func windowClosed() {
         flow?.close()
         if let alert = workingAlert { workingAlert = nil; dismissWorking(controller?.window, alert) }
+        consentSheet = nil
         closePanel(returnFocus: false)
         flow = nil
+        sourceImage = nil
+    }
+
+    /// The viewer still shows the image the run started on.
+    private var isCurrent: Bool {
+        guard let loader = controller?.session.imageLoader, loader.generation == runGeneration else { return false }
+        let key = loader.presented?.key
+        return key?.itemID == runKey?.itemID && key?.revision == runKey?.revision
+    }
+
+    /// Moving to another image while a run waits for consent, prepares or sends ends that run: its sheets go and
+    /// its answer is dropped (#874 fix1 WI-1). A result already in the panel stays with its own image.
+    private func observeImageGeneration() {
+        guard let controller else { return }
+        withObservationTracking {
+            _ = controller.session.imageLoader.generation
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let flow = self.flow, flow.isBusy, !self.isCurrent { flow.close() }
+                self.observeImageGeneration()
+            }
+        }
     }
 
     // MARK: - Sheets (state 41 `consent`, `working`)
