@@ -26,7 +26,7 @@ committed tree (stubs in their own `Stub-For:` commit; the `tdd-separation=` lin
 and Implemented-by: <implementer>. Rerun mado-verify (Claude `/mado-verify`, Codex `.agents/skills/mado-verify/SKILL.md`)
 on the final fix head and post a new evidence comment. <For a hosted-only failure: the hosted run's `.build/layout-evidence/`
 record and the `layout-metrics-fingerprint:` line are in the brief; a fix for a hosted-only failure is not audit-ready
-until the delegator's `hosted-preaudit.mjs dispatch` on the fix head prints GREEN; a local pass is not its RED/GREEN.> Update the handoff with "Fix round <k>", the new comment URL
+until the delegator's `hosted-preaudit.mjs dispatch` on the fix head prints GREEN with `retried=no`; a local pass is not its RED/GREEN.> Update the handoff with "Fix round <k>", the new comment URL
 and the head SHA it covers. Do not push.
 ```
 

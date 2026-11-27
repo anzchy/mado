@@ -131,9 +131,12 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    waits, downloads `app-crash-evidence` and prints one `Hosted-Preaudit:` line (head, run, attempt, App job, run step,
    counts). Dispatch the audits only on `GREEN`. `RED` means no audit dispatch: the failure, with its
    `.build/layout-evidence/` records from the artifact, goes back to the implementer as fix-round input. `NOT COUNTED`
-   (cancelled, stale, rerun, skipped-native, build-only, filtered/repeated, counts missing) is no evidence: dispatch
-   again. A fix for a hosted-only failure is not audit-ready until a dispatch on the fix head is `GREEN`; a focused
-   `--filter … --repeat 2` run may diagnose it but never counts. Any head change invalidates the line. Put the line in
+   (cancelled, stale, rerun, skipped-native, build-only, filtered/repeated, counts missing, app-result.json missing or
+   from another run) is no evidence: dispatch again. A fix for a hosted-only failure is not audit-ready until a dispatch
+   on the fix head is `GREEN`; a GREEN with `retried=yes` (it passed only after the App lane's one automatic retry) is
+   not enough for a fix of a hosted-only failure: dispatch again until a `retried=no` GREEN. For any other App-facing
+   diff a `retried=yes` GREEN may start the audits; name the retry in the audit request. A focused `--filter` run
+   (`--filter … --repeat 2`) may diagnose it but never counts: it prints `NOT COUNTED (filtered run)` even when it passed. Any head change invalidates the line. Put the line in
    the audit request. It is diagnostic: PR merge evidence stays the regular PR CI (`gates-rows.mjs`, step 8).
    Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` through `start-fresh-codex.sh <pane> gpt-auditor --cwd <auditor-worktree> --screen-cwd <Codex-screen-worktree> --prompt '<audit request>'` when its screen is in a separate Codex worktree, and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { EXIT, appFacingPattern, dispatchAndEvaluate, evaluateRun, isAppFacing, main, parseCounts } from './hosted-preaudit.mjs';
+import { EXIT, appFacingPattern, dispatchAndEvaluate, evaluateFiles, evaluateRun, isAppFacing, main, parseCounts } from './hosted-preaudit.mjs';
 
 // #912: the delegator's hosted App run before audit. Exports are shaped like `gh run view --json …`.
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -26,7 +26,9 @@ const runOf = (overrides = {}, job = appJob('success', 'success')) => ({
 });
 const PASS_LOG = 'noise\nTests run: 772, Failures: 0, Errors: 0, Skipped: 0\nTests run: 779, Failures: 0, Errors: 0, Skipped: 1\n';
 const FAIL_LOG = 'Tests run: 779, Failures: 1, Errors: 0, Skipped: 0\n';
-const RESULT = { version: 1, complete: true, attempts: 1, status: 0 };
+// app-lane's structured result for run 42 attempt 1 (MADO_APP_RESULT_ID), a full-bundle formal run.
+const RESULT = { version: 1, runId: '42-1', complete: true, attempts: 1, status: 0, filter: null, retryEnabled: true,
+  defaultQuarantine: true };
 
 test('a completed dispatch with a passing App job and log counts is GREEN and records every field', () => {
   const judged = evaluateRun(runOf(), HEAD, { log: PASS_LOG, result: RESULT });
@@ -73,6 +75,62 @@ test('a pass without readable counts, or with counts or a result that contradict
   assert.match(evaluateRun(runOf(), HEAD, { log: PASS_LOG, result: { ...RESULT, attempts: 2 } }).line, / retried=yes /);
 });
 
+// #912 fix 1 (gpt F1, F2, opus M1): GREEN needs this run's own complete, unfiltered, formal result and a clean log.
+test('a successful filtered run is a valid run but NOT COUNTED (filtered run)', () => {
+  for (const judged of [evaluateRun(runOf(), HEAD, { log: PASS_LOG, result: { ...RESULT, filter: 'Issue218' } }),
+    evaluateRun(runOf(), HEAD, { log: PASS_LOG, result: RESULT, filter: 'Issue218' })]) {
+    assert.equal(judged.verdict, 'NOT COUNTED (filtered run)');
+    assert.equal(judged.exit, EXIT.notCounted);
+    assert.match(judged.line, / run-step=success counts=779\/0 /);
+  }
+  assert.equal(evaluateRun(runOf({}, appJob('failure', 'failure')), HEAD, { log: FAIL_LOG, filter: 'Issue218' }).verdict, 'RED',
+    'a failing filtered run is still fix input');
+});
+
+test('a pass without this run\'s complete, formal app-result.json does not count', () => {
+  const cases = [
+    [null, /^NOT COUNTED \(app-result\.json missing\)$/],
+    [{ ...RESULT, runId: '41-1' }, /^NOT COUNTED \(app-result\.json is from run 41-1, not 42-1\)$/],
+    [{ ...RESULT, runId: '' }, /^NOT COUNTED \(app-result\.json is from run unknown, not 42-1\)$/],
+    [{ ...RESULT, complete: false }, /^NOT COUNTED \(app-result\.json is not a complete pass\)$/],
+    [{ ...RESULT, status: 70 }, /^NOT COUNTED \(app-result\.json is not a complete pass\)$/],
+    [{ ...RESULT, version: 2 }, /^NOT COUNTED \(app-result\.json is not a complete pass\)$/],
+    [{ ...RESULT, attempts: 0 }, /^NOT COUNTED \(app-result\.json is not a complete pass\)$/],
+    [{ ...RESULT, retryEnabled: false }, /^NOT COUNTED \(app-result\.json is not a formal full-bundle result\)$/],
+    [{ ...RESULT, defaultQuarantine: false }, /^NOT COUNTED \(app-result\.json is not a formal full-bundle result\)$/],
+    [{ ...RESULT, filter: undefined }, /^NOT COUNTED \(app-result\.json is not a formal full-bundle result\)$/],
+    ['{"version":1', /^NOT COUNTED \(app-result\.json unreadable\)$/],
+    [[RESULT], /^NOT COUNTED \(app-result\.json unreadable\)$/],
+  ];
+  for (const [result, expected] of cases) {
+    const judged = evaluateRun(runOf(), HEAD, { log: PASS_LOG, result });
+    assert.match(judged.verdict, expected, JSON.stringify(result));
+    assert.equal(judged.exit, EXIT.notCounted);
+  }
+});
+
+test('evaluate reads a missing or corrupt result file as no evidence, and a present one from this run as GREEN', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-preaudit-files-'));
+  fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(runOf()));
+  fs.writeFileSync(path.join(dir, 'app-tests.log'), PASS_LOG);
+  fs.writeFileSync(path.join(dir, 'corrupt.json'), '{"version":1,');
+  fs.writeFileSync(path.join(dir, 'app-result.json'), JSON.stringify(RESULT));
+  const files = result => evaluateFiles({ run: path.join(dir, 'run.json'), head: HEAD, log: path.join(dir, 'app-tests.log'),
+    result: result && path.join(dir, result) }).verdict;
+  assert.equal(files('absent.json'), 'NOT COUNTED (app-result.json missing)');
+  assert.equal(files(undefined), 'NOT COUNTED (app-result.json missing)');
+  assert.equal(files('corrupt.json'), 'NOT COUNTED (app-result.json unreadable)');
+  assert.equal(files('app-result.json'), 'GREEN');
+});
+
+test('a log whose last Tests run line has Errors above zero does not count', () => {
+  const log = 'Tests run: 779, Failures: 0, Errors: 1, Skipped: 0\n';
+  assert.deepEqual(parseCounts(log), { run: 779, failed: 0, errors: 1, skipped: 0 });
+  const judged = evaluateRun(runOf(), HEAD, { log, result: RESULT });
+  assert.equal(judged.verdict, 'NOT COUNTED (log counts 779/0 errors 1 contradict a passing step)');
+  assert.equal(judged.exit, EXIT.notCounted);
+});
+
 test('head must be a full SHA; field values cannot inject separators into the line', () => {
   assert.throws(() => evaluateRun(runOf(), HEAD.slice(0, 7)), /full 40-hex/);
   const judged = evaluateRun(runOf({ url: 'https://x | y\nz' }), HEAD, { log: PASS_LOG });
@@ -80,7 +138,7 @@ test('head must be a full SHA; field values cannot inject separators into the li
 });
 
 test('parseCounts reads the last combined Tests run line', () => {
-  assert.deepEqual(parseCounts(PASS_LOG), { run: 779, failed: 0, skipped: 1 });
+  assert.deepEqual(parseCounts(PASS_LOG), { run: 779, failed: 0, errors: 0, skipped: 1 });
   assert.equal(parseCounts('no counts here'), null);
   assert.equal(parseCounts(null), null);
 });
@@ -153,6 +211,7 @@ test('dispatch runs ci.yml with app_tests=true on the ref, finds that head\'s ne
       fs.mkdirSync(dest, { recursive: true });
       fs.writeFileSync(path.join(dest, 'app-tests.log'), PASS_LOG);
       fs.writeFileSync(path.join(dest, 'app-result.json'), JSON.stringify(RESULT));
+      fs.writeFileSync(path.join(dest, 'app-result.json'), JSON.stringify({ ...RESULT, runId: '77-1' }));
     }
     return { status: 0, stdout: '' };
   };
@@ -193,6 +252,8 @@ test('SKILL, audit request and PR-body guide state the dispatch-before-audit rul
   const pr = guide.slice(guide.indexOf('### 5.8 PR and merge'));
   assert.match(pr, /Hosted-Preaudit:/);
   assert.match(pr, /diagnostic: it never becomes the `app-tests` Gates row/);
+  assert.match(step4, /`retried=yes`.*not enough.*hosted-only failure/is, 'a pass after the automatic retry does not clear a hosted-only fix');
+  assert.match(step4, /`--filter`.*NOT COUNTED \(filtered run\)/is);
   const fix = read('.agents/skills/mado-delegator/references/templates/confirm-and-fix-templates.md');
   assert.match(fix, /hosted-only failure/i);
 });

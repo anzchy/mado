@@ -15,7 +15,9 @@
 //     run-step=<c> counts=<run>/<fail>|unknown retried=<yes|no|unknown> url=<url>
 // and exits 0 for GREEN, 1 for RED, 3 for NOT COUNTED, 2 for a usage or input error.
 // A cancelled, stale, rerun (attempt > 1), still-running, skipped-native, build-only or filtered/repeated run is
-// NOT COUNTED. GREEN also needs the counts from the run's own App log: a pass whose counts cannot be read is not counted.
+// NOT COUNTED; a filtered run that passed prints `NOT COUNTED (filtered run)`. GREEN also needs this run's own
+// app-result.json (runId <run>-<attempt>, complete, status 0, filter null, default retry and quarantine) and the counts
+// from its own App log with zero failures and zero errors.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,21 +28,39 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const REPEAT_STEPS = ['Record repeat job start', 'Upload App repeat logs'];
 
-/** The last combined `Tests run:` line of an App lane log, or null. */
+/** The last combined `Tests run:` line of an App lane log, or null. GREEN needs `failed` and `errors` both zero. */
 export function parseCounts(log) {
   if (typeof log !== 'string') return null;
-  const all = [...log.replace(/\r/g, '').matchAll(/^Tests run: (\d+), Failures: (\d+), Errors: \d+, Skipped: (\d+)$/gm)];
+  const all = [...log.replace(/\r/g, '').matchAll(/^Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)$/gm)];
   const last = all.at(-1);
-  return last ? { run: Number(last[1]), failed: Number(last[2]), skipped: Number(last[3]) } : null;
+  return last ? { run: Number(last[1]), failed: Number(last[2]), errors: Number(last[3]), skipped: Number(last[4]) } : null;
+}
+
+/**
+ * Why `result` (app-result.json, parsed) is not this run's formal full-bundle pass, or null when it is. app-lane writes
+ * it with runId `<run id>-<attempt>` (ci.yml MADO_APP_RESULT_ID); the formal fields are the ones app-evidence.mjs uses.
+ */
+function resultProblem(result, runId) {
+  if (result === null || result === undefined) return 'app-result.json missing';
+  if (typeof result !== 'object' || Array.isArray(result)) return 'app-result.json unreadable';
+  if (typeof result.runId !== 'string' || result.runId !== runId)
+    return `app-result.json is from run ${clean(result.runId || 'unknown')}, not ${runId}`;
+  if (result.version !== 1 || result.complete !== true || result.status !== 0 || ![1, 2].includes(result.attempts))
+    return 'app-result.json is not a complete pass';
+  if (result.filter !== null && typeof result.filter === 'string' && result.filter.trim()) return 'filtered run';
+  if (result.filter !== null || result.retryEnabled !== true || result.defaultQuarantine !== true)
+    return 'app-result.json is not a formal full-bundle result';
+  return null;
 }
 
 const clean = value => String(value ?? 'unknown').replace(/[\s|]+/g, '_') || 'unknown';
 
 /**
  * Judge one `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt,databaseId` export for <head>.
- * `log` is the run's app-tests.log text (artifact app-crash-evidence), `result` its parsed app-result.json.
+ * `log` is the run's app-tests.log text (artifact app-crash-evidence), `result` its parsed app-result.json (null when
+ * missing, any non-object when unreadable), `filter` the app_filter the run was dispatched with ('' for none).
  */
-export function evaluateRun(run, head, { log = null, result = null } = {}) {
+export function evaluateRun(run, head, { log = null, result = null, filter = '' } = {}) {
   if (!FULL_SHA.test(String(head ?? ''))) throw new Error('--head must be a full 40-hex SHA');
   if (!run || typeof run !== 'object' || !Array.isArray(run.jobs)) throw new Error('run export needs jobs');
   const jobs = run.jobs.filter(job => job?.name === 'App tests');
@@ -49,7 +69,7 @@ export function evaluateRun(run, head, { log = null, result = null } = {}) {
   const step = steps.filter(s => s?.name === 'Run App tests');
   const runStep = step.length === 1 ? (step[0].status === 'completed' ? step[0].conclusion : step[0].status) : 'absent';
   const counts = parseCounts(log);
-  const retried = result && result.complete === true && [1, 2].includes(result.attempts)
+  const retried = result && typeof result === 'object' && result.complete === true && [1, 2].includes(result.attempts)
     ? (result.attempts === 2 ? 'yes' : 'no') : 'unknown';
   const fields = {
     head, run: clean(run.databaseId), attempt: clean(run.attempt), event: clean(run.event),
@@ -71,9 +91,14 @@ export function evaluateRun(run, head, { log = null, result = null } = {}) {
     if (runStep === 'skipped' || runStep === 'absent') return `NOT COUNTED (App tests not run: run-step=${clean(runStep)})`;
     if (runStep === 'failure' || job.conclusion === 'failure') return 'RED';
     if (runStep !== 'success' || job.conclusion !== 'success') return `NOT COUNTED (run-step=${clean(runStep)} app-job=${clean(job.conclusion)})`;
+    // A filtered dispatch is a valid diagnostic run, never full-bundle evidence. ci.yml hands app_filter to the lane only
+    // for repeat > 1, so the dispatch input is checked as well as the result's own `filter`.
+    if (String(filter ?? '').trim()) return 'NOT COUNTED (filtered run)';
     if (!counts) return 'NOT COUNTED (counts unavailable: app-tests.log missing from app-crash-evidence)';
-    if (counts.failed !== 0 || counts.run === 0) return `NOT COUNTED (log counts ${counts.run}/${counts.failed} contradict a passing step)`;
-    if (result && (result.complete !== true || result.status !== 0)) return 'NOT COUNTED (app-result.json is not a complete pass)';
+    if (counts.failed !== 0 || counts.errors !== 0 || counts.run === 0)
+      return `NOT COUNTED (log counts ${counts.run}/${counts.failed}${counts.errors ? ` errors ${counts.errors}` : ''} contradict a passing step)`;
+    const problem = resultProblem(result, `${clean(run.databaseId)}-${clean(run.attempt)}`);
+    if (problem) return `NOT COUNTED (${problem})`;
     return 'GREEN';
   })();
   const line = `Hosted-Preaudit: ${verdict} ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`;
@@ -137,15 +162,21 @@ export function dispatchAndEvaluate({ worktree, ref, head, filter = '', repeat =
   const download = gh(['run', 'download', String(id), '-n', 'app-crash-evidence', '-D', artifact]);
   if (download.status !== 0) log(`hosted-preaudit: app-crash-evidence not downloaded: ${(download.stderr || '').trim()}\n`);
   return evaluateFiles({ run: path.join(out, 'run.json'), head, log: path.join(artifact, 'app-tests.log'),
-    result: path.join(artifact, 'app-result.json') });
+    result: path.join(artifact, 'app-result.json'), filter });
 }
 
-function readOptional(file, parse = text => text) {
-  try { return parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+function readOptional(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch { return null; }
 }
-export function evaluateFiles({ run, head, log, result }) {
+/** A missing result file is null; an unparseable one stays its raw text, which evaluateRun reports as unreadable. */
+function parseResult(text) {
+  if (text === null) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+export function evaluateFiles({ run, head, log, result, filter = '' }) {
   const exported = JSON.parse(fs.readFileSync(run, 'utf8'));
-  return evaluateRun(exported, head, { log: log ? readOptional(log) : null, result: result ? readOptional(result, JSON.parse) : null });
+  return evaluateRun(exported, head, { log: log ? readOptional(log) : null,
+    result: result ? parseResult(readOptional(result)) : null, filter });
 }
 
 function parseArgs(argv, allowed) {
