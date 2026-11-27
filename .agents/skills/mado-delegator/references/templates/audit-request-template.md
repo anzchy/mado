@@ -10,6 +10,10 @@ table). Use the severity table, COVERAGE line and report shape exactly.
 
 Rules: ~/.mado/herdr/delegator/audit-brief.md (blind, read-only, no gh, scratch isolation).
 
+Hosted App before audit: `Hosted-Preaudit: GREEN head=<40-hex head> run=<id> attempt=1 event=workflow_dispatch app-job=success run-step=success counts=<run>/0 …`
+(SKILL step 4, `hosted-preaudit.mjs dispatch` on this head), or `n/a — not App-facing` (`hosted-preaudit.mjs app-facing`
+printed `app-facing=no`). The line is diagnostic and names the head it covers; it is not the PR's app-tests PASS.
+
 Inputs:
 - the brief: ~/.mado/herdr/<implementer>/<brief>.md; scope amendments: <files>;
 - the handoff, a claim to test: ~/.mado/herdr/<implementer>/<item>-handoff.md; evidence in <dir>;

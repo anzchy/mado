@@ -1,0 +1,286 @@
+#!/usr/bin/env node
+// #912 (owner 2026-11-27): hosted App evidence before audit. For an App-facing diff the delegator dispatches `ci.yml`
+// on the implementer's verified head and dispatches the audits only after this script says GREEN for that head.
+// The result is diagnostic: PR merge evidence stays the regular PR CI (gates-rows.mjs, which never accepts a dispatch).
+//
+//   hosted-preaudit.mjs app-facing --worktree <wt> --base <sha> --head <sha>
+//       prints `app-facing=yes|no` from owner-gates.sh's own `app_facing=` pattern (one source for both).
+//   hosted-preaudit.mjs dispatch --worktree <wt> --ref <branch> --head <sha> [--filter <re>] [--repeat <n>] [--out <dir>]
+//       refuses unless origin/<branch> is exactly <head>; lists the dispatch runs, runs `gh workflow run ci.yml`
+//       (app_tests=true), takes the one run that is new since that list, waits, exports run.json, downloads
+//       app-crash-evidence into <out>/run-<id>/, then evaluates as below. --filter makes it diagnostic (never GREEN).
+//   hosted-preaudit.mjs evaluate --run <run.json> --head <sha> [--log <app-tests.log>] [--result <app-result.json>]
+//
+// Every mode that judges a run prints exactly one line
+//   Hosted-Preaudit: <GREEN|RED|NOT COUNTED (<reason>)> head=<40> run=<id> attempt=<n> event=<e> app-job=<c>
+//     run-step=<c> counts=<run>/<fail>|unknown retried=<yes|no|unknown> url=<url>
+// and exits 0 for GREEN, 1 for RED, 3 for NOT COUNTED, 2 for a usage or input error. A dispatch that fails at run time
+// (gh failure, no run or two new runs, existing evidence directory) is a NOT COUNTED line with run=unknown or the id.
+// A cancelled, stale, rerun (attempt > 1), still-running, skipped-native, build-only or filtered/repeated run is
+// NOT COUNTED; a filtered run that passed prints `NOT COUNTED (filtered run)`. GREEN also needs this run's own
+// app-result.json (runId <run>-<attempt>, complete, status 0, filter null, default retry and quarantine) and the counts
+// from its own App log with zero failures and zero errors.
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const EXIT = Object.freeze({ green: 0, red: 1, usage: 2, notCounted: 3 });
+const here = path.dirname(fileURLToPath(import.meta.url));
+const FULL_SHA = /^[0-9a-f]{40}$/;
+const REPEAT_STEPS = ['Record repeat job start', 'Upload App repeat logs'];
+
+/** The last combined `Tests run:` line of an App lane log, or null. GREEN needs `failed` and `errors` both zero. */
+export function parseCounts(log) {
+  if (typeof log !== 'string') return null;
+  const all = [...log.replace(/\r/g, '').matchAll(/^Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)$/gm)];
+  const last = all.at(-1);
+  return last ? { run: Number(last[1]), failed: Number(last[2]), errors: Number(last[3]), skipped: Number(last[4]) } : null;
+}
+
+/**
+ * Why `result` (app-result.json, parsed) is not this run's formal full-bundle pass, or null when it is. app-lane writes
+ * it with runId `<run id>-<attempt>` (ci.yml MADO_APP_RESULT_ID); the formal fields are the ones app-evidence.mjs uses.
+ */
+function resultProblem(result, runId) {
+  if (result === null || result === undefined) return 'app-result.json missing';
+  if (typeof result !== 'object' || Array.isArray(result)) return 'app-result.json unreadable';
+  if (typeof result.runId !== 'string' || result.runId !== runId)
+    return `app-result.json is from run ${clean(result.runId || 'unknown')}, not ${runId}`;
+  if (result.version !== 1 || result.complete !== true || result.status !== 0 || ![1, 2].includes(result.attempts))
+    return 'app-result.json is not a complete pass';
+  if (result.filter !== null && typeof result.filter === 'string' && result.filter.trim()) return 'filtered run';
+  if (result.filter !== null || result.retryEnabled !== true || result.defaultQuarantine !== true)
+    return 'app-result.json is not a formal full-bundle result';
+  return null;
+}
+
+const clean = value => String(value ?? 'unknown').replace(/[\s|]+/g, '_') || 'unknown';
+
+/**
+ * Judge one `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt,databaseId` export for <head>.
+ * `log` is the run's app-tests.log text (artifact app-crash-evidence), `result` its parsed app-result.json (null when
+ * missing, any non-object when unreadable), `filter` the app_filter the run was dispatched with ('' for none).
+ */
+export function evaluateRun(run, head, { log = null, result = null, filter = '' } = {}) {
+  if (!FULL_SHA.test(String(head ?? ''))) throw new Error('--head must be a full 40-hex SHA');
+  if (!run || typeof run !== 'object' || !Array.isArray(run.jobs)) throw new Error('run export needs jobs');
+  const jobs = run.jobs.filter(job => job?.name === 'App tests');
+  const job = jobs.length === 1 ? jobs[0] : null;
+  const steps = Array.isArray(job?.steps) ? job.steps : [];
+  const step = steps.filter(s => s?.name === 'Run App tests');
+  const runStep = step.length === 1 ? (step[0].status === 'completed' ? step[0].conclusion : step[0].status) : 'absent';
+  const counts = parseCounts(log);
+  const retried = result && typeof result === 'object' && result.complete === true && [1, 2].includes(result.attempts)
+    ? (result.attempts === 2 ? 'yes' : 'no') : 'unknown';
+  const fields = {
+    head, run: clean(run.databaseId), attempt: clean(run.attempt), event: clean(run.event),
+    'app-job': job ? clean(job.status === 'completed' ? job.conclusion : job.status) : jobs.length ? 'ambiguous' : 'absent',
+    'run-step': clean(runStep), counts: counts ? `${counts.run}/${counts.failed}` : 'unknown', retried, url: clean(run.url),
+  };
+  const verdict = (() => {
+    if (String(run.headSha ?? '').toLowerCase() !== head.toLowerCase())
+      return `NOT COUNTED (stale: run head ${clean(run.headSha).slice(0, 12)})`;
+    if (!['workflow_dispatch', 'pull_request'].includes(run.event)) return `NOT COUNTED (event ${clean(run.event)})`;
+    if (run.attempt !== 1) return `NOT COUNTED (attempt ${clean(run.attempt)}: dispatch a fresh run)`;
+    if (run.status !== 'completed') return `NOT COUNTED (run ${clean(run.status)})`;
+    if (jobs.length !== 1) return `NOT COUNTED (App tests job ${jobs.length ? 'ambiguous' : 'absent'})`;
+    if (job.status !== 'completed') return `NOT COUNTED (App job ${clean(job.status)})`;
+    if (job.conclusion === 'cancelled' || run.conclusion === 'cancelled') return 'NOT COUNTED (cancelled)';
+    if (job.conclusion === 'skipped') return 'NOT COUNTED (App job skipped: no native input)';
+    if (steps.some(s => REPEAT_STEPS.includes(s?.name) && !(s.status === 'completed' && s.conclusion === 'skipped')))
+      return `NOT COUNTED (filtered or repeated dispatch, run-step=${clean(runStep)}: the full bundle is required)`;
+    if (runStep === 'skipped' || runStep === 'absent') return `NOT COUNTED (App tests not run: run-step=${clean(runStep)})`;
+    if (runStep === 'failure' || job.conclusion === 'failure') return 'RED';
+    if (runStep !== 'success' || job.conclusion !== 'success') return `NOT COUNTED (run-step=${clean(runStep)} app-job=${clean(job.conclusion)})`;
+    // A filtered dispatch is a valid diagnostic run, never full-bundle evidence. ci.yml hands app_filter to the lane only
+    // for repeat > 1, so the dispatch input is checked as well as the result's own `filter`.
+    if (String(filter ?? '').trim()) return 'NOT COUNTED (filtered run)';
+    if (!counts) return 'NOT COUNTED (counts unavailable: app-tests.log missing from app-crash-evidence)';
+    if (counts.failed !== 0 || counts.errors !== 0 || counts.run === 0)
+      return `NOT COUNTED (log counts ${counts.run}/${counts.failed}${counts.errors ? ` errors ${counts.errors}` : ''} contradict a passing step)`;
+    const problem = resultProblem(result, `${clean(run.databaseId)}-${clean(run.attempt)}`);
+    if (problem) return `NOT COUNTED (${problem})`;
+    return 'GREEN';
+  })();
+  const line = `Hosted-Preaudit: ${verdict} ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`;
+  const exit = verdict === 'GREEN' ? EXIT.green : verdict === 'RED' ? EXIT.red : EXIT.notCounted;
+  return { verdict, line, exit, fields };
+}
+
+/** owner-gates.sh's `app_facing='…'` pattern, so the dispatch rule and the local App lane select the same diffs. */
+export function appFacingPattern(script = fs.readFileSync(path.join(here, 'owner-gates.sh'), 'utf8')) {
+  const found = /^app_facing='([^']+)'$/m.exec(script);
+  if (!found) throw new Error('owner-gates.sh has no app_facing pattern');
+  return new RegExp(found[1]);
+}
+export const isAppFacing = (files, pattern = appFacingPattern()) => files.some(file => pattern.test(file));
+
+function git(worktree, args) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  const r = spawnSync('git', ['-C', worktree, ...args], { encoding: 'utf8', env });
+  if (r.status !== 0) throw new Error(`git ${args[0]} failed: ${(r.stderr || '').trim().split('\n')[0]}`);
+  return r.stdout;
+}
+
+const usageError = message => Object.assign(new Error(message), { usage: true });
+const reasonText = text => String(text ?? '').replace(/[\r\n|]+/g, ' ').trim().slice(0, 240) || 'unknown';
+const firstLine = text => String(text ?? '').trim().split('\n')[0];
+
+/** The judged line for a dispatch that produced no judgeable run (exit 3). */
+export function notCountedLine(reason, head, run = 'unknown') {
+  const verdict = `NOT COUNTED (${reasonText(reason)})`;
+  const fields = { head, run: clean(run), attempt: 'unknown', event: 'unknown', 'app-job': 'unknown', 'run-step': 'unknown',
+    counts: 'unknown', retried: 'unknown', url: 'unknown' };
+  const line = `Hosted-Preaudit: ${verdict} ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ')}`;
+  return { verdict, line, exit: EXIT.notCounted, fields };
+}
+
+/**
+ * Dispatch and wait. `gh` is injectable for tests: (args) => { status, stdout, stderr }.
+ * Returns { line, exit } like evaluateRun. Bad arguments throw a usage error; every runtime failure is a NOT COUNTED line.
+ *
+ * Run association (#912 fix 1): the workflow_dispatch runs for <ref> are listed before the dispatch; the judged run is
+ * the one run that was not listed then, has <head>, and was created between the dispatch and the find timeout. More than
+ * one such run, at selection or after the wait, is `ambiguous dispatch`. The artifact goes into `<out>/run-<id>/`, a
+ * directory created fresh for that run (an existing one is refused, never reused); `<out>/run.json` is the latest export.
+ */
+export function dispatchAndEvaluate({ worktree, ref, head, filter = '', repeat = 1, out,
+  gh = args => spawnSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }),
+  sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), now = () => Date.now(),
+  findTimeoutMs = 180_000, log = text => process.stderr.write(text) }) {
+  if (!FULL_SHA.test(String(head ?? ''))) throw usageError('--head must be a full 40-hex SHA');
+  if (!/^[A-Za-z0-9._/-]+$/.test(String(ref ?? '')) || ref.startsWith('-')) throw usageError('--ref must be a branch name');
+  if (!Number.isSafeInteger(repeat) || repeat < 1 || repeat > 50) throw usageError('--repeat must be 1–50');
+  if (!out) throw usageError('--out is required');
+  const fail = (reason, run) => {
+    log(`hosted-preaudit: ${reasonText(reason)}\n`);
+    return notCountedLine(reason, head, run);
+  };
+  let remote;
+  try { remote = git(worktree, ['ls-remote', 'origin', `refs/heads/${ref}`]).trim().split(/\s+/)[0] ?? ''; }
+  catch (error) { return fail(error.message); }
+  if (remote.toLowerCase() !== head.toLowerCase())
+    return fail(`origin/${ref} is ${remote || 'absent'}, not ${head}: push the verified head first (push-guard)`);
+  const list = () => {
+    const r = gh(['run', 'list', '--workflow', 'ci.yml', '--event', 'workflow_dispatch', '--branch', ref, '--limit', '50',
+      '--json', 'databaseId,headSha,createdAt']);
+    if (r.status !== 0) return { error: `gh run list failed: ${firstLine(r.stderr)}` };
+    try {
+      const runs = JSON.parse(r.stdout || '[]');
+      return Array.isArray(runs) ? { runs } : { error: 'gh run list output is not a list' };
+    } catch { return { error: 'gh run list output unreadable' }; }
+  };
+  const started = now();
+  const before = list();
+  if (before.error) return fail(before.error);
+  const known = new Set(before.runs.map(r => String(r?.databaseId)));
+  const dispatched = gh(['workflow', 'run', 'ci.yml', '--ref', ref, '-f', 'app_tests=true', '-f', `app_filter=${filter}`,
+    '-f', `app_repeat=${repeat}`]);
+  if (dispatched.status !== 0) return fail(`gh workflow run failed: ${firstLine(dispatched.stderr)}`);
+  const ours = runs => runs.filter(r => r && !known.has(String(r.databaseId)) &&
+    String(r.headSha).toLowerCase() === head.toLowerCase() &&
+    Date.parse(r.createdAt) >= started && Date.parse(r.createdAt) <= started + findTimeoutMs)
+    .map(r => String(r.databaseId)).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
+  const ambiguous = ids => `ambiguous dispatch: runs ${ids.join(', ')}`;
+  let found = [];
+  for (;;) {
+    const listed = list();
+    if (listed.error) log(`hosted-preaudit: ${listed.error}; retrying\n`);
+    else found = ours(listed.runs);
+    if (found.length) break;
+    if (now() - started > findTimeoutMs) return fail(`dispatched run did not appear within ${Math.round(findTimeoutMs / 1000)} s`);
+    sleep(5000);
+  }
+  if (found.length > 1) return fail(ambiguous(found));
+  const id = found[0];
+  if (!/^\d+$/.test(id)) return fail(`run id ${id} unreadable`);
+  log(`hosted-preaudit: run ${id} for ${head.slice(0, 12)}; waiting\n`);
+  gh(['run', 'watch', id, '--interval', '30']);
+  // A second dispatch can show up after ours was picked: check again once the run is done.
+  const after = list();
+  if (after.error) return fail(after.error, id);
+  const finalIds = ours(after.runs);
+  if (finalIds.length !== 1 || finalIds[0] !== id) return fail(ambiguous([...new Set([id, ...finalIds])].sort((a, b) => a - b)), id);
+  const view = gh(['run', 'view', id, '--json', 'headSha,url,status,conclusion,jobs,event,attempt,databaseId']);
+  if (view.status !== 0) return fail(`gh run view failed: ${firstLine(view.stderr)}`, id);
+  const runDir = path.join(out, `run-${id}`);
+  try {
+    fs.mkdirSync(out, { recursive: true });
+    fs.mkdirSync(runDir);
+  } catch (error) {
+    return fail(error.code === 'EEXIST' ? `evidence directory ${runDir} already exists` : `cannot create ${runDir}: ${error.code}`, id);
+  }
+  fs.writeFileSync(path.join(runDir, 'run.json'), view.stdout);
+  fs.writeFileSync(path.join(out, 'run.json'), view.stdout);
+  const artifact = path.join(runDir, 'app-crash-evidence');
+  const download = gh(['run', 'download', id, '-n', 'app-crash-evidence', '-D', artifact]);
+  if (download.status !== 0) log(`hosted-preaudit: app-crash-evidence not downloaded: ${firstLine(download.stderr)}\n`);
+  try {
+    return evaluateFiles({ run: path.join(runDir, 'run.json'), head, log: path.join(artifact, 'app-tests.log'),
+      result: path.join(artifact, 'app-result.json'), filter });
+  } catch (error) { return fail(`run export unreadable: ${error.message}`, id); }
+}
+
+function readOptional(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch { return null; }
+}
+/** A missing result file is null; an unparseable one stays its raw text, which evaluateRun reports as unreadable. */
+function parseResult(text) {
+  if (text === null) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+export function evaluateFiles({ run, head, log, result, filter = '' }) {
+  const exported = JSON.parse(fs.readFileSync(run, 'utf8'));
+  return evaluateRun(exported, head, { log: log ? readOptional(log) : null,
+    result: result ? parseResult(readOptional(result)) : null, filter });
+}
+
+function parseArgs(argv, allowed) {
+  const options = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const key = argv[i]?.replace(/^--/, '');
+    if (!argv[i]?.startsWith('--') || !allowed.includes(key) || argv[i + 1] === undefined || key in options)
+      throw Object.assign(new Error(`unexpected argument ${argv[i]}`), { usage: true });
+    options[key] = argv[i + 1];
+  }
+  return options;
+}
+const USAGE = 'usage: hosted-preaudit.mjs app-facing --worktree <wt> --base <sha> --head <sha>\n' +
+  '       hosted-preaudit.mjs dispatch --worktree <wt> --ref <branch> --head <sha> [--filter <re>] [--repeat <n>] [--out <dir>]\n' +
+  '       hosted-preaudit.mjs evaluate --run <run.json> --head <sha> [--log <app-tests.log>] [--result <app-result.json>]\n';
+
+export function main(argv = process.argv.slice(2), { stdout = t => process.stdout.write(t), stderr = t => process.stderr.write(t), gh } = {}) {
+  const [mode, ...rest] = argv;
+  try {
+    if (mode === 'app-facing') {
+      const o = parseArgs(rest, ['worktree', 'base', 'head']);
+      if (!o.worktree || !o.base || !o.head) throw Object.assign(new Error('missing argument'), { usage: true });
+      const files = git(o.worktree, ['diff', '--name-only', '-z', `${o.base}...${o.head}`]).split('\0').filter(Boolean);
+      stdout(`app-facing=${isAppFacing(files) ? 'yes' : 'no'}\n`);
+      return 0;
+    }
+    if (mode === 'evaluate') {
+      const o = parseArgs(rest, ['run', 'head', 'log', 'result']);
+      if (!o.run || !o.head) throw Object.assign(new Error('missing argument'), { usage: true });
+      const judged = evaluateFiles(o);
+      stdout(`${judged.line}\n`);
+      return judged.exit;
+    }
+    if (mode === 'dispatch') {
+      const o = parseArgs(rest, ['worktree', 'ref', 'head', 'filter', 'repeat', 'out']);
+      if (!o.worktree || !o.ref || !o.head) throw Object.assign(new Error('missing argument'), { usage: true });
+      const out = o.out ?? path.join(o.worktree, '.build/hosted-preaudit', o.head.slice(0, 12));
+      const judged = dispatchAndEvaluate({ worktree: o.worktree, ref: o.ref, head: o.head, filter: o.filter ?? '',
+        repeat: o.repeat === undefined ? 1 : Number(o.repeat), out, log: stderr, ...(gh ? { gh } : {}) });
+      stdout(`${judged.line}\n`);
+      return judged.exit;
+    }
+    throw Object.assign(new Error(`unknown mode ${mode ?? '(none)'}`), { usage: true });
+  } catch (error) {
+    stderr(`hosted-preaudit: ${error.message}\n${error.usage ? USAGE : ''}`);
+    return EXIT.usage;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main();

@@ -121,7 +121,25 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    for the handoff's final head and the brief's issue, and confirm the printed comment URL is the one in the handoff; the
    script does not fetch the comment, so open the comment by hand and check it names that head. A failure returns the item to
    the implementer. A `WARNING apptests NOT VERIFIED` line (Codex panes have no key window) means your own owner-gates
-   `apptests=` result below is the binding App test evidence. Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
+   `apptests=` result below is the binding App test evidence.
+   **Hosted App before audit** (#912, owner 2026-11-27: hosted run = `workflow_dispatch` of `ci.yml` on the verified
+   head, not a draft PR). PR #909 passed every local gate and both audits, then failed on the hosted runner only.
+   When `node $SK/scripts/hosted-preaudit.mjs app-facing --worktree <wt> --base <base> --head <sha>` prints
+   `app-facing=yes` (owner-gates' own pattern), push the verified head with push-guard (no PR) and run
+   `node $SK/scripts/hosted-preaudit.mjs dispatch --worktree <wt> --ref <branch> --head <sha>` in the background, beside
+   owner-gates: it refuses unless `origin/<branch>` is that head, dispatches `ci.yml` (`app_tests=true`, full bundle),
+   judges only the one run that is new since its pre-dispatch run list, waits, downloads `app-crash-evidence` into
+   `.build/hosted-preaudit/<head12>/run-<id>/` and prints one `Hosted-Preaudit:` line (head, run, attempt, App job, run
+   step, counts, retried). Dispatch the audits only on `GREEN`. `RED` means no audit dispatch: the failure, with its
+   `layout-evidence/` records from that artifact, goes back to the implementer as fix-round input. `NOT COUNTED`
+   (cancelled, stale, rerun, skipped-native, build-only, filtered/repeated, counts missing, app-result.json missing or
+   from another run, ambiguous dispatch, a gh failure; exit 3) is no evidence: dispatch again. A fix for a hosted-only failure is not audit-ready until a dispatch
+   on the fix head is `GREEN`; a GREEN with `retried=yes` (it passed only after the App lane's one automatic retry) is
+   not enough for a fix of a hosted-only failure: dispatch again until a `retried=no` GREEN. For any other App-facing
+   diff a `retried=yes` GREEN may start the audits; name the retry in the audit request. A focused `--filter` run
+   (`--filter … --repeat 2`) may diagnose it but never counts: it prints `NOT COUNTED (filtered run)` even when it passed. Any head change invalidates the line. Put the line in
+   the audit request. It is diagnostic: PR merge evidence stays the regular PR CI (`gates-rows.mjs`, step 8).
+   Every tier: `gpt-auditor` and `opus-auditor` blind and in parallel, neither sees the other's report. Reset
    `gpt-auditor` through `start-fresh-codex.sh <pane> gpt-auditor --cwd <auditor-worktree> --screen-cwd <Codex-screen-worktree> --prompt '<audit request>'` when its screen is in a separate Codex worktree, and `/clear` `opus-auditor` before every audit or confirm; neither runs Swift tests, so the delegator
    supplies and reruns owner gate evidence: `$SK/scripts/owner-gates.sh <worktree> <sha> <prefix>` in the background;
    `design:check` needs `npm ci --ignore-scripts` and Playwright Chromium in the gated worktree; without them it

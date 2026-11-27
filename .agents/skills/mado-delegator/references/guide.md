@@ -667,6 +667,8 @@ closes only after `.agents/skills/mado-delegator/scripts/main-ci-status.sh --two
 PR body sections:
 - **Summary**, what and why;
 - **Review**, both auditors' rounds plus a Still open list;
+  for an App-facing diff, also the `Hosted-Preaudit:` line each audited head had (SKILL step 4, #912). That line is
+  diagnostic: it never becomes the `app-tests` Gates row or its PASS, which come only from the PR's own CI run;
 - **Gates**, with numbers;
   source the local retained count from `apptests-retained`, and mark hosted CI as binding for `app-tests`.
   An opted-in hosted failure makes the local App row FAIL. The node-tooling Source names skipped

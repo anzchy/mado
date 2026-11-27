@@ -467,6 +467,15 @@
       "gateOn": ["manual"],
       "coverage": "none",
       "timeoutMs": 180000
+    },
+    {
+      "name": "hosted-preaudit-node",
+      "description": "#912 delegator hosted App pre-audit helper and its SKILL/template rule.",
+      "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-delegator/scripts/hosted-preaudit.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
     }
   ],
   "coverageThresholds": {
