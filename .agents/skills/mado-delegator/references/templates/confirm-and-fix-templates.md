@@ -24,7 +24,9 @@ F1 [High] <one-paragraph trace> Fix: <direction, not code>. Tests: <continuation
 Gates as before. RED receipts / pasted RED per behavioural fix (ids <item>-FIX<k>-WI-n), each recorded on a clean
 committed tree (stubs in their own `Stub-For:` commit; the `tdd-separation=` line in the handoff). Commit per fix with Refs #<n>
 and Implemented-by: <implementer>. Rerun mado-verify (Claude `/mado-verify`, Codex `.agents/skills/mado-verify/SKILL.md`)
-on the final fix head and post a new evidence comment. Update the handoff with "Fix round <k>", the new comment URL
+on the final fix head and post a new evidence comment. <For a hosted-only failure: the hosted run's `.build/layout-evidence/`
+record and the `layout-metrics-fingerprint:` line are in the brief; a fix for a hosted-only failure is not audit-ready
+until the delegator's `hosted-preaudit.mjs dispatch` on the fix head prints GREEN; a local pass is not its RED/GREEN.> Update the handoff with "Fix round <k>", the new comment URL
 and the head SHA it covers. Do not push.
 ```
 
