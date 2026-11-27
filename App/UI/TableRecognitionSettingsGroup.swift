@@ -417,10 +417,10 @@ struct TableRecognitionSettingsEnvironment {
 
     /// The text a label shows and, for a fixed label, the same label in the other language.
     private func variants(_ shown: String) -> [String] {
-        for (english, chinese) in Self.bothLanguages where [english, chinese, localize(english)].contains(shown) {
-            return [shown, english, chinese]
+        guard let pair = Self.bothLanguages.first(where: { [$0.key, $0.value, localize($0.key)].contains(shown) }) else {
+            return [shown]
         }
-        return [shown]
+        return [shown, pair.key, pair.value]
     }
 
     /// The width of a label's text, or of the same label in the other language when that is wider.
