@@ -86,12 +86,36 @@ Other measures:
    - A PR to `main` is opened with title `release(appcast): mado <version> (<build>) for <tag>`. The PR changes only `appcast-mado.xml`; Picsee’s frozen `appcast.xml` is untouched.
    - Before pushing the branch, `scripts/release/appcast-pr-body.mjs` writes the rollout warning, owner check-trigger instruction, Gates table, `Device-Smoke` and `Ledger-Gardener` metadata, then the unchanged PR-body lint validates the body against `origin/main`. A generation or validation failure stops before any push or PR call. Native/UI/ledger checks are marked inapplicable with reasons; `NOT RUN` reasons describe the state at body generation, without borrowing PASS results from the tag commit. `Ledger-Gardener: DAILY <base7>..<head7> (covered by the daily sweep)` uses the fetched `origin/main` and committed appcast HEAD; it follows the daily-sweep convention and does not claim that a sweep ran during release. Both creation and an already-open PR use that body file. A rerun refreshes the existing PR body through `gh pr edit --body-file`.
 
-To check a local build before tagging (unsigned, so skip the licence and entitlement checks):
+The build, the Sparkle tools download, the licence copy and the three checks are defined once, in [`scripts/release/release-build.sh`](../../scripts/release/release-build.sh) (#861). Each release step calls one subcommand of it.
+
+## Pull-request Release build
+
+CI's **Release build (ad-hoc)** job runs the same script on a pull request that changes what decides the shipped app's contents or entitlements:
+- the project definition;
+- any entitlement file;
+- the Capture helper target;
+- non-Swift files under `App/` or the package sources (XcodeGen and SwiftPM bundle them);
+- the package manifest and pins;
+- the release and name-check scripts;
+- the Xcode setup action, or the CI or release workflow.
+
+The filter is [`scripts/release/release-contents.mjs`](../../scripts/release/release-contents.mjs). It is applied by the Native inputs classifier from the trusted base commit, so a pull request cannot loosen it.
+
+The job builds Release ad-hoc signed (`CODE_SIGN_IDENTITY=-`), with no identity and no secrets, then runs the entitlement, product-identity and package checks. Its version is `MARKETING_VERSION` and its build number is the commit count, as on the tag path.
+
+An ad-hoc build cannot show Developer ID signatures and their `_CodeSignature` entries, Sparkle's re-signed helpers, secure timestamps, notarisation, stapling or Gatekeeper. The job prints that limit in its log and job summary; the signed rehearsal above covers those.
+
+Other pull requests, pushes and dispatches skip the job at the job level. A skipped job reports as skipped, not pending, so it never blocks a merge and costs no runner time.
+
+To run the same build and checks locally (on the shared Mac, run the `build ad-hoc` step under `scripts/heavy-lock.sh`):
 
 ```sh
-xcodebuild build -scheme Mado -configuration Release CODE_SIGNING_ALLOWED=NO \
-  DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES -derivedDataPath .build/dd-rel
-node scripts/release/check-package.mjs .build/dd-rel/Build/Products/Release/Mado.app
+export RUNNER_TEMP=$PWD/.build/release-runner GITHUB_ENV=$PWD/.build/release-runner/env
+mkdir -p "$RUNNER_TEMP" && : > "$GITHUB_ENV"
+for step in version sparkle-tools "build ad-hoc" licence check-entitlements check-identity check-package; do
+  scripts/release/release-build.sh $step || break
+  set -a; . "$GITHUB_ENV"; set +a
+done
 ```
 
 ## What the owner does
