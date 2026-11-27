@@ -115,7 +115,7 @@ export async function main(env = process.env, { fetchImpl = fetch, log = console
       const pages = await fetchPages({ api: env.GITHUB_API_URL || 'https://api.github.com', repo: env.GITHUB_REPOSITORY,
         number: pr?.number, token: env.GH_TOKEN, fetchImpl });
       result = pages ? classify({ event, changedFiles: pr?.changed_files, pages }) : { native: true, reason: 'file list request failed' };
-      release ??= pages ? classifyRelease({ event, changedFiles: pr?.changed_files, pages })
+      release ??= pages ? classifyRelease({ event, listed: listChangedFiles({ changedFiles: pr?.changed_files, pages }) })
         : { release: true, reason: 'file list request failed' };
     }
   } catch (error) {

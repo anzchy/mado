@@ -4,7 +4,8 @@
 // same script the release workflow uses. scripts/ci/native-inputs.mjs applies this filter from the trusted base commit,
 // so a pull request cannot loosen the rule that judges it. Any doubt (a malformed path or file list) counts as release
 // content. Pushes and dispatches never run the PR-time build: the tag and rehearsal runs build signed instead.
-import { listChangedFiles } from '../ci/native-inputs.mjs';
+// It imports nothing from the repository: native-inputs.mjs loads it from main() under a top-level await, so an import
+// back into native-inputs.mjs would be a cycle that never settles (the entry script exited 13 with no output).
 
 // The project definition, the app's Info.plist, the package manifest and pins, and the workflows and the composite
 // action that set up and run the Release build.
@@ -26,11 +27,13 @@ export function releaseContent(file) {
   return RESOURCE_ROOTS.some(root => file.startsWith(root)) && !file.endsWith('.swift');
 }
 
-/** Pure decision for one CI run; `pages` is the list of parsed pull-request file pages, in order. */
-export function classifyRelease({ event, changedFiles, pages } = {}) {
+/**
+ * Pure decision for one CI run. `listed` is native-inputs.mjs's listChangedFiles result for the pull request:
+ * `{ files, count }`, or `{ error }` when the file list cannot be trusted.
+ */
+export function classifyRelease({ event, listed } = {}) {
   if (event !== 'pull_request') return { release: false, reason: `event ${event}: the PR-time Release build runs on pull requests only` };
-  const listed = listChangedFiles({ changedFiles, pages });
-  if (listed.error) return { release: true, reason: listed.error };
+  if (!listed || listed.error || !Array.isArray(listed.files)) return { release: true, reason: listed?.error ?? 'no file list' };
   const hit = listed.files.find(releaseContent);
   if (hit !== undefined) return { release: true, reason: `release content changed: ${hit}` };
   return { release: false, reason: `no release-content input among ${listed.count} changed files` };
