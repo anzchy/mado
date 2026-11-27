@@ -19,7 +19,7 @@ BUNDLE_ID=io.github.anzchy.mado
 DERIVED_DATA=.build/dd-release
 
 # What an ad-hoc build cannot show; printed to the log and the job summary.
-AD_HOC_LIMIT="Ad-hoc signed Release build: no Developer ID identity and no secrets. Its entitlements, product identity and package layout are checked; not covered here: Developer ID signatures and their _CodeSignature entries, Sparkle's re-signed helpers, secure timestamps, notarisation, stapling and Gatekeeper. The signed release rehearsal (release.yml workflow_dispatch, #860) covers those."
+AD_HOC_LIMIT="Ad-hoc signed Release build: no Developer ID identity and no secrets. Its entitlements (the app's and the embedded Capture helper's), product identity and package layout are checked; not covered here: Developer ID signatures and their _CodeSignature entries, Sparkle's re-signed helpers and secure timestamps, which the signed release rehearsal (release.yml workflow_dispatch, #860) covers; notarisation and stapling, which the rehearsal covers only when notarize_app is set; and Gatekeeper, which is checked only on the tag run."
 
 export_value() {
   echo "$1=$2"
