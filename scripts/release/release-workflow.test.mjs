@@ -162,21 +162,18 @@ test("the tag must be on main and match the project's marketing version", () => 
   assert.match(step(/checkout/i).text, /fetch-depth: 0/);
 });
 
-test("the Release build signs with Developer ID, hardened runtime, no injected entitlements, stripped", () => {
-  const build = step(/build release/i).text;
-  for (const setting of ["-configuration Release", "CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO", "ENABLE_HARDENED_RUNTIME=YES",
-    "DEPLOYMENT_POSTPROCESSING=YES", "STRIP_INSTALLED_PRODUCT=YES", 'CURRENT_PROJECT_VERSION="$BUILD"',
-    'CODE_SIGN_IDENTITY="$IDENTITY"', 'DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"', "--timestamp"]) {
-    assert.ok(build.includes(setting), setting);
-  }
+test("the Release build signs with Developer ID through the shared build script (#861)", () => {
+  // The flags themselves (hardened runtime, no injected entitlements, stripped, keychain, timestamp) are pinned in
+  // scripts/release/release-build.test.mjs; CI's PR-time Release build runs the same script ad-hoc.
+  assert.match(step(/^Build Release$/).text, /^        run: scripts\/release\/release-build\.sh build developer-id$/m);
+  assert.doesNotMatch(workflow, /xcodebuild/, "the build command is defined once, in scripts/release/release-build.sh");
   assert.match(step(/certificate/i).text, /Developer ID Application/);
 });
 
-test("Sparkle's tools are the pinned 2.10.0 tarball, checked by SHA-256", () => {
-  const tools = step(/sparkle tools/i).text;
-  assert.match(tools, /releases\/download\/2\.10\.0\/Sparkle-2\.10\.0\.tar\.xz/);
-  assert.match(tools, /c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c/);
-  assert.match(tools, /shasum -a 256 --check/);
+test("Sparkle's tools and licence come from the shared build script (#861)", () => {
+  // The pinned 2.10.0 tarball and its SHA-256 check are pinned in scripts/release/release-build.test.mjs.
+  assert.match(step(/sparkle tools/i).text, /^        run: scripts\/release\/release-build\.sh sparkle-tools$/m);
+  assert.match(step(/^Bundle Sparkle's licence$/).text, /^        run: scripts\/release\/release-build\.sh licence$/m);
   assert.doesNotMatch(workflow, /latest/);
 });
 
@@ -199,16 +196,16 @@ test("entitlement and package checks run on the signed app before notarisation",
   const notarise = index(/notarise the app/i);
   assert.ok(index(/re-sign/i) < index(/entitlements/i) && index(/entitlements/i) < notarise);
   assert.ok(index(/re-sign/i) < index(/package contents/i) && index(/package contents/i) < notarise);
-  assert.match(step(/entitlements/i).text, /node scripts\/release\/check-entitlements\.mjs "\$APP" --configuration release --expect-bundle-id io\.github\.anzchy\.mado/);
-  assert.match(step(/package contents/i).text,
-    /node scripts\/release\/check-package\.mjs "\$APP" --require-sparkle-licence --expect-version "\$VERSION" --expect-build "\$BUILD"/);
+  // #861: the commands live in scripts/release/release-build.sh, shared with CI's PR-time Release build.
+  assert.match(step(/entitlements/i).text, /^        run: scripts\/release\/release-build\.sh check-entitlements$/m);
+  assert.match(step(/product identity/i).text, /^        run: scripts\/release\/release-build\.sh check-identity$/m);
+  assert.match(step(/package contents/i).text, /^        run: scripts\/release\/release-build\.sh check-package$/m);
 });
 
 test("the DMG holds the stapled app and an Applications link, and is signed", () => {
   assert.ok(index(/notarise the app/i) < index(/dmg/i));
   const dmg = step(/build and sign the dmg/i).text;
-  assert.match(step(/build release/i).text, /-scheme Mado/);
-  assert.match(step(/build release/i).text, /Release\/Mado\.app/);
+  assert.match(step(/build release/i).text, /release-build\.sh build developer-id/);
   assert.match(dmg, /DMG="\$PWD\/\.build\/release\/Mado-\$VERSION\.dmg"/);
   assert.match(dmg, /ditto "\$APP" "\$STAGE\/Mado\.app"/);
   assert.match(dmg, /-volname "Mado \$VERSION"/);
