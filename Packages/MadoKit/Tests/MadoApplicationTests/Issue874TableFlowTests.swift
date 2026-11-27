@@ -245,3 +245,39 @@ func issue874FlowStartWhileBusyIsIgnoredAndCloseEndsTheRun() async {
     #expect(rig.flow.state == .idle)
     #expect(await transport.callCount == 1)
 }
+
+// Coverage for paths already implemented in WI-1 (the gate's 100 % lines and functions): an image that cannot be
+// read is not sent, a read cancelled under the flow is a cancel, and the default diagnostic sink is usable.
+
+private struct Unreadable874: Error {}
+
+@MainActor @Test(.timeLimit(.minutes(2)))
+func issue874FlowImageThatCannotBeReadIsNotSent() async {
+    let rig = Rig874()
+    await rig.flow.start(image: { throw Unreadable874() }).value
+    #expect(rig.flow.state == .notSent(.unsupportedImage))
+    #expect(await rig.transport.callCount == 0)
+    #expect(rig.clipboard.writes.isEmpty)
+}
+
+@MainActor @Test(.timeLimit(.minutes(2)))
+func issue874FlowImageReadCancelledIsACancelThatSendsNothing() async {
+    let rig = Rig874()
+    await rig.flow.start(image: { throw CancellationError() }).value
+    #expect(rig.flow.state == .cancelled)
+    #expect(await rig.transport.callCount == 0)
+}
+
+@MainActor @Test(.timeLimit(.minutes(2)))
+func issue874FlowWithTheDefaultDiagnosticSinkStillRuns() async {
+    let settings = FakeTableSettings869(.default869)
+    let transport = RecordingTransport869()
+    let flow = RecogniseTableFlow(settings: settings, credentials: FakeTableKeys869(), transport: transport,
+                                  clipboard: Clipboard874(), recordConsent: { _ in })
+    await flow.start(image: image874).value
+    guard case .result(let result) = flow.state else {
+        Issue.record("expected a result, got \(flow.state)"); return
+    }
+    #expect(result.table.rowCount == 2)
+    #expect(await transport.callCount == 1)
+}
