@@ -87,6 +87,8 @@ private actor OffBar: CaptureBarPreferencePort {
 
 private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且这个开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
 private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+private let zhCloudGroupHint = "只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。"
+private let enCloudGroupHint = "Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async throws {
@@ -107,10 +109,14 @@ func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async
     let learn = try f.view("settings.capture.cloud-learn", as: NSButton.self)
     #expect(toggle.superview === cloud && pill.superview === cloud && hint.superview === cloud && learn.superview === cloud)
     #expect(learn.title == (locale == "zh-Hans" ? "了解更多 ↗" : "Learn More ↗"))
-    #expect(hint.stringValue == (locale == "zh-Hans" ? "只发送所选图片。" : "Only chosen images are sent."))
-    #expect(hint.maximumNumberOfLines == 1 && hint.frame.maxX + 8 <= learn.frame.minX + 0.5)
-    #expect(hint.attributedStringValue.size().width.rounded(.up) <= hint.frame.width)
+    #expect(hint.stringValue == (locale == "zh-Hans" ? zhCloudGroupHint : enCloudGroupHint))
+    #expect(hint.maximumNumberOfLines == 2)
+    #expect(hint.frame.maxX + 8 <= learn.frame.minX + 0.5)
     #expect(abs(hint.frame.minY - learn.frame.minY) < 0.5)
+    let oneLine = hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: 10_000, height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up)
+    #expect(hint.frame.height <= oneLine * 2 + 2, "hint must reserve at most two lines")
+    expectLayoutFits(layoutLabelMeasure(hint.stringValue, font: hint.font!, frame: hint.frame.size),
+                     view: hint, shown: hint.stringValue, locale: locale, test: "i886-fix1-cloud-hint")
     #expect(try f.view("settings.capture.ocr-service").superview === text)
     #expect(try f.view("settings.capture.ocr-api-key").superview === text)
     #expect(try f.view("settings.capture.table-service").superview === table)

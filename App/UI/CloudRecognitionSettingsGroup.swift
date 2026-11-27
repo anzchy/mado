@@ -190,21 +190,22 @@ struct CloudRecognitionSettingsEnvironment {
                             y: pillInline ? top + 3 : top + 42, width: pillWidth, height: 18)
         addSubview(pill)
         top = pillInline ? top + 30 : top + 66
-        let hint = Self.text(localize("Only chosen images are sent."), muted: true)
-        hint.maximumNumberOfLines = 1
+        let hint = Self.text(localize("Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."), muted: true)
+        hint.maximumNumberOfLines = 2
         hint.setAccessibilityIdentifier("settings.capture.cloud-hint")
         let learn = TermsLinkButton(title: localize("Learn More ↗"), open: { [weak self] in
             self?.openURL(URL(string: "https://anzchy.github.io/mado/cloud-recognition.html")!)
         })
         learn.setAccessibilityIdentifier("settings.capture.cloud-learn")
         let learnWidth = learn.intrinsicContentSize.width.rounded(.up)
-        let hintWidth = min(widest([hint.stringValue, "Only chosen images are sent.",
-                                    "只发送所选图片。"], font: hint.font), valueWidth - learnWidth - 8)
-        hint.frame = NSRect(x: valueX, y: top, width: hintWidth, height: 18)
+        let hintWidth = width - learnWidth - 8
+        let hintHeight = hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: hintWidth,
+                                                               height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up)
+        hint.frame = NSRect(x: 0, y: top, width: hintWidth, height: hintHeight)
         addSubview(hint)
         learn.frame = NSRect(x: hint.frame.maxX + 8, y: top, width: learnWidth, height: 18)
         addSubview(learn)
-        top += 30
+        top += max(hintHeight, 18) + 12
         cloudGroup = CloudRecognitionHeaderGroup(frame: NSRect(x: 0, y: 0, width: width, height: top))
         cloudGroup.setAccessibilityIdentifier("settings.capture.cloud")
         for view in subviews { cloudGroup.addSubview(view) }
