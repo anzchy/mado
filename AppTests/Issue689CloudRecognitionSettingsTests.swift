@@ -85,8 +85,8 @@ private actor OffBar: CaptureBarPreferencePort {
     return Fixture(panel: panel, secrets: secrets, preferences: preferences, consent: consent)
 }
 
-private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且这个开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
-private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且「云识别」开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
+private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and the Cloud Recognition switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
 private let zhCloudGroupHint = "只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。"
 private let enCloudGroupHint = "Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."
 
