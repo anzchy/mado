@@ -87,7 +87,15 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    [the C design parity contract](../../../docs/agents/ui-parity-contract.md) before dispatch, including the
    **design-derived assertion rows** (selector · property · media range · viewports, from the pinned CSS) that the
    implementer must turn into the first RED. Late assertions drove P3-01, P3-10 and #136 past the round cap. Read the code before
-   writing fences. Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
+   writing fences. **Split big UI tickets before dispatch** (#916): a UI ticket that touches a file over ~500 lines
+   or adds more than one panel/group becomes vertical slices, each with its own brief, worktree and audit. Why: #871
+   bundled Settings layout, Keychain adapter, Test button, two languages and a new group in one brief, and PR #909
+   needed six fix rounds. Every UI brief fills the template's **Layout invariants** block (both languages,
+   runtime-measured fit through `AppTests/LayoutFitSupport.swift`, no hand-picked widths). Why: several #909 rounds
+   fixed the same clipped or wrapped zh-Hans/English label one instance at a time. Every fix brief keeps the fix
+   template's **pattern sweep** line (grep the whole change for each finding's pattern, list the greps in the
+   handoff). Why: #909's fix-round briefs fixed one instance, not the pattern.
+   Before dispatch run `$SK/scripts/overlap-check.py claim -- <the brief's "You own" paths>`: a
    `SHARED` code file with an in-flight branch means sequence the two items, or base the new branch on the other one
    (only when that one is close to merge, or is groundwork for the new one); never two parallel branches on one core file.
    Before dispatch, `new-task-worktree.sh` runs (for a fix round, run it yourself) `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` (the task branch when the worktree is detached) to write dispatch-owned JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree` and the task identity in the worktree's `.build/mado-verify/task-identity.json`. Codex uses `$tdd-guardian-workflow`;
@@ -181,7 +189,12 @@ if needed."); keep each pane on one item at a time. Never touch mdpro or its tmu
    NEEDS-OWNER → one small `docs(ledger): garden <b>..<h>` PR (限制/在哪 only; acceptance changes only in a separate
    commit quoting the user); BLOCK → tell the user, open an issue. Record the swept head. Keep the weekly `full` run
    (`docs/agents/doc-gardening.md` §When it runs).
-8. **PR & merge** — Merge audited PRs oldest first. Rebase each once, immediately before its merge; do not rebase a PR while an older ready PR waits. Run one `rebase-verify` and one `evidence.mjs check` per merge. Body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. After any head change, keep measured PASS rows bound to their actual run head and put `CODE same <audited-sha>` in Source where `rebase-verify` permits carry-forward; never stamp an unrun head as PASS. Update `Checker-Change:` to the new head, run `node scripts/agents/local-pr-lint.mjs --body-file <file> --base origin/main --expect <HEAD-SHA>`, then `gh pr edit` with the updated body. Build Gates with
+8. **PR & merge** — Merge audited PRs oldest first, with one exception: **conflict-aware ordering** (#916). When two
+   ready PRs conflict or overlap (`overlap-check.py trial` shows `CODE` or `OVERLAP` between them), land the smaller one
+   first, then rebase the bigger one once. Why: PR #909 was rebased twice before it landed, and each rebase cost gates,
+   PR-lint `CODE same` rows and a `/mado-verify` re-record on the big branch. Post-rebase refresh stays manual (decision
+   in [guide §5.6](references/guide.md#56-rebase-onto-main), "Post-rebase refresh: not scripted").
+   Rebase each once, immediately before its merge; do not rebase a PR while an older ready PR waits. Run one `rebase-verify` and one `evidence.mjs check` per merge. Body: Summary, Review table + Still open, `## Gates`, `Ledger-Gardener:` line. After any head change, keep measured PASS rows bound to their actual run head and put `CODE same <audited-sha>` in Source where `rebase-verify` permits carry-forward; never stamp an unrun head as PASS. Update `Checker-Change:` to the new head, run `node scripts/agents/local-pr-lint.mjs --body-file <file> --base origin/main --expect <HEAD-SHA>`, then `gh pr edit` with the updated body. Build Gates with
    `gh run view <id> --json headSha,url,status,conclusion,jobs,event,attempt > run.json`, then
    `node scripts/agents/gates-rows.mjs <summary.txt> --ci run.json --head <sha>` for the owner-gates lanes (including `design-check`) and CI
    `app-tests`. On documentation-only diffs, `swift=skipped (no native inputs)` and `lcov=skipped (no native inputs)` become N/A rows with the reason in Source. Node agents and TDD suites skip only when every changed path is in the reviewed native-only set; the node-tooling Source names skipped suites. Local App evidence is `apptests-retained=<exit> <run>/<fail>`; `apptests-hosted=skipped` is expected unless `OWNER_GATES_HOSTED=1`. The `apptests=` compatibility line equals the retained result when hosted is skipped. Gates rows source a local App row from `apptests-retained`, label skipped hosted execution `hosted CI binding`, and report FAIL when an opted-in hosted lane fails. The PR's app-tests PASS comes from hosted CI, never a local retained PASS. App PASS requires supplied matching --head, exported event other than workflow_dispatch, exported attempt=1,

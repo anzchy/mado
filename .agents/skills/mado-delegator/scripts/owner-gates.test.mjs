@@ -23,6 +23,14 @@ function fixture(t, mode = 'pass', covered = 2, npmInstalled = true, options = {
   fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'name-checks-ci.test.mjs'), '');
   // #750: the lane also runs every scripts/ci test and the mado-verify tests, minus the reviewed exceptions.
   fs.writeFileSync(path.join(dir, 'scripts', 'ci', 'for-where-ban.test.mjs'), '');
+  // #916 WI-4: the implementer run's Swift-source scans (owner-gates-tools.mjs SOURCE_SCANS) must exist in the worktree.
+  fs.writeFileSync(path.join(dir, 'scripts', 'name-checks', 'module-name.test.mjs'), '');
+  if (options.realScans) {
+    // #916 WI-4: the real for … where ban (#358) over the fixture's own App/ tree, run by the real node.
+    for (const rel of ['scripts/ci/for-where-ban.mjs', 'scripts/ci/for-where-ban.test.mjs']) fs.copyFileSync(path.join(root, rel), path.join(dir, rel));
+    fs.mkdirSync(path.join(dir, 'Packages/MadoKit/Sources'), { recursive: true });
+    for (const [rel, body] of Object.entries(options.realScans)) { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); }
+  }
   fs.mkdirSync(path.join(dir, '.agents/skills/mado-verify/tests'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.agents/skills/mado-verify/tests/fixture.test.mjs'), '');
   const exceptions = path.join(root, '.agents/skills/mado-delegator/scripts/node-lane-exceptions.json');
@@ -47,6 +55,12 @@ else if(process.argv[2]==='scripts/tdd/unit-lane.mjs'){
  else import(path.resolve(process.argv[2])).then(m=>{process.exitCode=m.runUnit({timeoutSeconds:process.env.MODE==='hang'?2:30,captureSeconds:0.2,graceSeconds:0.1,verifyCoverage:false});});
 }
 else if(process.argv[2]==='scripts/ci/package-coverage-local.mjs'){require('fs').appendFileSync(process.env.EXPORT_MARKER,'evaluate\\n');console.log('Package: lines ${covered}/2; functions ${covered}/2; raw functions ${covered}/2; exceptions 0; eligible functions ${covered}/2');console.log('Coverage gate: ${covered === 2 ? 'PASS' : 'FAIL'}');process.exit(${covered === 2 ? 0 : 1});}
+else if(process.argv[2]==='--test'&&process.env.REAL_NODE_TEST==='1'){
+ // #916 WI-4: run the real test files (the fixture's copies), as the real node lane would.
+ const r=require('node:child_process').spawnSync(process.execPath,process.argv.slice(2),{stdio:'inherit'});
+ require('fs').appendFileSync(process.env.NODE_RECORDS,JSON.stringify({argv:process.argv.slice(2),real:true})+'\\n');
+ process.exit(r.status??70);
+}
 else if(process.argv[2]==='--test'){
  const fs=require('fs');fs.writeFileSync(process.env.NODE_MARKER,process.argv.slice(2).join('\\n'));
  const handoff=['MADO_HEAVY_LOCK_HELD','MADO_HEAVY_CONTROL_FD','MADO_HEAVY_FLOCK_EXPECTED','MDPRO_HEAVY_LOCK_HELD'];
@@ -102,7 +116,7 @@ source "$OWNER" \${=OWNER_ARGS} "$FIXTURE_DIR" fixture-sha run fixture-base
   // #891: start from fixtureEnv so the caller's heavy-lock handoff and timing overrides never reach the
   // fixture's own top-level lock, then apply this fixture's private values.
   const env = fixtureEnv({ PATH: `${bin}:${process.env.PATH}`, FIXTURE_BIN: bin, FIXTURE_DIR: dir, OWNER: path.join(dir, '.agents/skills/mado-delegator/scripts/owner-gates.sh'),
-    MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), NODE_RECORDS: path.join(dir, 'node-records'), MADO_GATES_OUT: out,
+    REAL_NODE_TEST: options.realScans ? '1' : '', MODE: mode, BUILD: build, DIFF_PATH: options.diff ?? 'Packages/MadoKit/Sources/MadoCore/Fake.swift', SELECT_OUTPUT:options.selectOutput ?? '', OWNER_GATES_HOSTED: options.hosted ? '1' : '0', XCODE_MARKER: path.join(dir, 'xcode-args'), XCODEGEN_MARKER: path.join(dir, 'xcodegen-args'), HOME: dir, EXPORT_MARKER: path.join(dir, 'exports'), NODE_MARKER: path.join(dir, 'node-args'), NODE_RECORDS: path.join(dir, 'node-records'), MADO_GATES_OUT: out,
     COMPETITOR_LOCK: path.join(dir, 'scripts/heavy-lock.sh'), COMPETITOR_SCRIPT: path.join(dir, 'competitor.test.mjs'), COMPETITOR_MARKER: path.join(dir, 'competitor-ran'),
     MADO_HEAVY_LOCK: path.join(dir, 'heavy.lock'), MADO_MDPRO_LOCK: path.join(dir, 'shared.lock'),
     OWNER_GATES_MAX_LOAD: '', OWNER_GATES_MIN_MEM_FREE: '', OWNER_GATES_MAX_PRESSURE: '', MADO_GATES_PREFLIGHT: '' });
@@ -390,8 +404,13 @@ test('892 WI-1 an implementer run skips the node lane on a product-only diff and
   assert.equal(f.result.status, 0, f.result.stderr + f.summary);
   assert.match(f.summary, /^role=implementer$/m);
   assert.match(f.summary, /^node=skipped \(implementer run; diff touches no scripts\/, \.agents\/, \.github\/ or \.claude\/ path; the delegator's owner-gates run and GitHub CI cover node\)$/m);
-  assert.equal(nodeRuns(f), 0, 'no node --test invocation');
-  for (const lane of ['swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests-retained', 'apptests', 'ledger', 'diffcheck', 'design'])
+  // #916 WI-4: the one node --test invocation left is the Swift-source scans, not the node lane.
+  const scans = fs.existsSync(f.nodeRecords) ? fs.readFileSync(f.nodeRecords, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+  assert.equal(scans.length, 1, 'one node --test invocation: the source scans');
+  const [scan, ...rest] = scans;
+  assert.deepEqual(rest, [], 'only the source-scan invocation');
+  assert.deepEqual(scan.argv.filter(a => !a.startsWith('--')), ['scripts/ci/for-where-ban.test.mjs', 'scripts/name-checks/module-name.test.mjs']);
+  for (const lane of ['swift', 'lcov', 'xcodegen', 'xcodebuild', 'apptests-retained', 'apptests', 'source-scans', 'ledger', 'diffcheck', 'design'])
     assert.match(f.summary, new RegExp(`^${lane}=0( |$)`, 'm'), lane);
   assert.match(f.summary, /^DONE$/m);
 });
@@ -615,4 +634,44 @@ test('898 WI-3 a tdd-separation lane exit 1 (mandatory refusal) fails the run; a
   const silent = fixture(t, 'pass', 2, true, {});
   assert.equal(silent.result.status, 0, silent.summary);
   assert.match(silent.summary, /^tdd-separation=error \(no result line; exit 0; see run-tdd-separation\.log\)$/m);
+});
+
+// #916 WI-4 (item 6, #909): an implementer run that skips the node lane on a product-only diff still runs the
+// Swift-source scans (the #358 for … where ban), so a banned loop fails the implementer's gate, not only the delegator's.
+const forWhere = 'for id in ids where id.isReady { use(id) }\n', guarded = 'for id in ids { guard id.isReady else { continue }; use(id) }\n';
+test('916 WI-4 a for-where loop in a product-only diff fails the implementer gate through the source scans', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/New.swift', args: ['--role', 'implementer'], realScans: {'App/New.swift': forWhere}});
+  assert.equal(f.result.status, 1, 'the gate fails: ' + f.result.stderr + f.summary);
+  assert.match(f.summary, /^node=skipped \(implementer run;/m);
+  assert.match(f.summary, /^source-scans=1 files=scripts\/ci\/for-where-ban\.test\.mjs,scripts\/name-checks\/module-name\.test\.mjs$/m);
+  const scanLog = path.join(f.out, 'run-source-scans.log');
+  assert.ok(fs.existsSync(scanLog), 'source-scan log written');
+  assert.match(fs.readFileSync(scanLog, 'utf8'), /issue #358: replace for … where with a leading guard: App\/New\.swift:1/);
+  assert.ok(f.summary.indexOf('\nsource-scans=') < f.summary.indexOf('\nDONE'), 'reported before DONE');
+  assert.match(f.summary, /^DONE$/m);
+});
+
+test('916 WI-4 the same diff without the banned loop passes the source scans; the delegator run has no separate scan lane', t => {
+  const clean = fixture(t, 'pass', 2, true, {diff: 'App/New.swift', args: ['--role', 'implementer'], realScans: {'App/New.swift': guarded}});
+  assert.equal(clean.result.status, 0, clean.result.stderr + clean.summary);
+  assert.match(clean.summary, /^source-scans=0 files=/m);
+  // The delegator's (and a tooling-diff implementer's) full node lane already contains the scans.
+  for (const [diff, args] of [['App/New.swift', []], ['scripts/ci/foo.mjs', ['--role', 'implementer']]]) {
+    const f = fixture(t, 'pass', 2, true, {diff, args});
+    assert.equal(f.result.status, 0, f.result.stderr + f.summary);
+    assert.match(f.summary, /^node=0$/m);
+    assert.doesNotMatch(f.summary, /^source-scans=/m, `${diff} ${args}`);
+  }
+});
+
+test('916 WI-4 a missing source-scan file fails closed instead of passing', t => {
+  const f = fixture(t, 'pass', 2, true, {diff: 'App/New.swift', args: ['--role', 'implementer'], realScans: {'App/New.swift': guarded}});
+  fs.rmSync(path.join(f.dir, 'scripts/name-checks/module-name.test.mjs'));
+  const again = spawnSync('/bin/zsh', [path.join(f.dir, 'invoke.zsh')], {env: f.env, cwd: f.dir, encoding: 'utf8', timeout: 90_000});
+  const summary = fs.existsSync(path.join(f.out, 'run-summary.txt')) ? fs.readFileSync(path.join(f.out, 'run-summary.txt'), 'utf8') : '';
+  assert.equal(again.status, 1, again.stderr + summary);
+  assert.match(summary, /^source-scans=70 /m);
+  const log = path.join(f.out, 'run-source-scans.log');
+  assert.ok(fs.existsSync(log), 'source-scan log written');
+  assert.match(fs.readFileSync(log, 'utf8'), /missing source scan: scripts\/name-checks\/module-name\.test\.mjs/);
 });

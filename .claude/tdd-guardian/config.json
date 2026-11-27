@@ -76,15 +76,14 @@
     },
     {
       "name": "app-red",
-      "description": "Combined retained MadoAppTests and hosted focus App tests; setup builds both bundles. Keep identical PICSEE_APP_FILTER for record/verify and NO_RETRY=1 for RED.",
-      "setupCommand": "scripts/heavy-lock.sh xcodebuild build-for-testing -scheme Mado -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath \"${PICSEE_APP_DERIVED_DATA_PATH:-.build/dd-ci}\"",
-      "command": "node scripts/tdd/app-lane.mjs",
+      "description": "Combined retained MadoAppTests and hosted focus App tests. #916: the command builds both bundles first (scripts/tdd/app-red-lane.mjs; no setupCommand, whose plugin timeout is a fixed 300 s that the heavy-lock queue used up); a failed build exits 70, never a RED. timeoutMs = 2400 s for the tests + heavy-lock's 1800 s default build wait. Keep identical MADO_APP_FILTER for record/verify and MADO_APP_LANE_NO_RETRY=1 for RED.",
+      "command": "node scripts/tdd/app-red-lane.mjs",
       "gateOn": [
         "manual"
       ],
       "coverage": "none",
       "probeCommand": "scripts/heavy-lock.sh xcodebuild -list -project Mado.xcodeproj",
-      "timeoutMs": 2400000
+      "timeoutMs": 4200000
     },
     {
       "name": "release-node",
@@ -331,7 +330,7 @@
       "probeCommand": "node --version",
       "gateOn": ["manual"],
       "coverage": "none",
-      "timeoutMs": 300000
+      "timeoutMs": 900000
     },
     {
       "name": "ci-apt-retry-node",
@@ -474,6 +473,17 @@
       "command": "node scripts/tdd/node-lane.mjs .agents/skills/mado-delegator/scripts/hosted-preaudit.test.mjs",
       "probeCommand": "node --version",
       "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
+      "name": "app-red-setup-node",
+      "description": "#916 app-red build step inside the receipt command (lock wait outside the plugin's 300 s setup timeout).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/tdd/app-red-lane.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": [
+        "manual"
+      ],
       "coverage": "none",
       "timeoutMs": 120000
     }

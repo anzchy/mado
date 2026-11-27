@@ -1344,9 +1344,11 @@ for (const [label, contents, diagnostic] of [
  assert.equal(record.runId,'current');assert.equal(record.status,70);assert.equal(record.attempts,0);
  assert.equal(record.complete,true);assert.deepEqual(record.groups,{});
 });
-test('configured App RED setup supplies both groups needed by the combined native command',()=>{
+test('configured App RED setup supplies both groups needed by the combined native command',async()=>{
  const config=JSON.parse(readFileSync(new URL('../../.claude/tdd-guardian/config.json',import.meta.url),'utf8'));
- const setup=config.lanes.find(lane=>lane.name==='app-red').setupCommand;
+ // #916: the build moved from the plugin setupCommand into scripts/tdd/app-red-lane.mjs (the lane command).
+ assert.equal(config.lanes.find(lane=>lane.name==='app-red').command,'node scripts/tdd/app-red-lane.mjs');
+ const setup=(await import('./app-red-lane.mjs')).buildArgs({}).join(' ');
  const only=[...setup.matchAll(/-only-testing:([^\s]+)/g)].map(match=>match[1]);
  const hasHosted=only.length===0||only.includes('MadoHostedFocusTests');
  const dir=mkdtempSync(path.join(tmpdir(),'i393-red-setup-'));temporaryDirectories.add(dir);

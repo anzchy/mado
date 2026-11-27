@@ -622,6 +622,22 @@ keep branches short, integrate often, and never let two branches own one core mo
 - **Rebased PR push:** direct `git push` is blocked. On your own unmerged PR branch, obtain the full current remote
   tip OID and run `python3 scripts/codex-rules/push-guard.py --expected-remote-oid <oid>`. The script uses an exact
   lease and refuses `main`. Ordinary topic pushes use the same script without a lease.
+- **Conflict-aware ordering (#916).** When two ready PRs conflict or overlap (`trial` shows `CODE` or `OVERLAP`
+  between them), land the smaller one first and rebase the bigger one once. A big branch rebased behind a stream of
+  small ones pays gates, PR-lint rows and evidence each time (PR #909: two rebases before it landed).
+- **Post-rebase refresh: not scripted (decision, #916 item 4, 2026-11-27).** The issue proposed scripting the
+  Gates-row and evidence refresh after a `CODE same` rebase. It stays a manual step, for these reasons:
+  1. The mechanical part already exists. `gates-rows.mjs <summary> --ci run.json --head <sha>` writes the rows from
+     the owner-gates summary and the new head's CI run. Neither exists until the rebased head is pushed and gated.
+  2. What remains is a judgement: which measured PASS rows stay bound to the audited head with `CODE same
+     <audited-sha>` in Source, and which must be rerun. A script that rewrites the Gates table from a
+     `rebase-verify` verdict is the "stamp an unrun head as PASS" failure that step 8 and the PR-body lint forbid,
+     moved into a tool that cannot see which head each run measured.
+  3. The evidence part needs no new record on `CODE same`. `rebase-verify.sh` covers the new head,
+     `evidence.mjs check --head <audited-sha>` prints `case=head-moved` for the audited record, and #772's
+     `reuse-check.mjs` already decides when local Swift/lcov results carry over. A `CODE differ` rebase needs a new
+     `/mado-verify` run by design.
+  Revisit if a PR still needs more than one rebase after the ordering rule. Count those in the delegator handoff log.
 
 ### 5.7 Doc gardener
 

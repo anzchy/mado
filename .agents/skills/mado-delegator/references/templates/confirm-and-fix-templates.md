@@ -21,6 +21,10 @@ F1 [High] <one-paragraph trace> Fix: <direction, not code>. Tests: <continuation
 ## Still open (do not fix)
 <list>
 
+Pattern sweep (#916): for each finding, before handoff grep the whole change (`git diff origin/main...HEAD`, every
+file the branch touches, both languages) for the same pattern, fix every instance, and list each grep command with its
+hit count and the instances fixed in the handoff. Why: PR #909's fix-round briefs fixed one instance, not the pattern.
+
 Gates as before. RED receipts / pasted RED per behavioural fix (ids <item>-FIX<k>-WI-n), each recorded on a clean
 committed tree (stubs in their own `Stub-For:` commit; the `tdd-separation=` line in the handoff). Commit per fix with Refs #<n>
 and Implemented-by: <implementer>. Rerun mado-verify (Claude `/mado-verify`, Codex `.agents/skills/mado-verify/SKILL.md`)

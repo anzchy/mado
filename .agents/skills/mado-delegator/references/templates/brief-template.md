@@ -4,6 +4,7 @@ You are **<implementer>**. New task, fresh session. Issue #<n>.
 Worktree: `~/Documents/mac-app/picsee-wt/<issue>-<slug>` (branch `<branch>`, created from origin/main ≥ <sha7> by the delegator; a fix round continues in this same worktree).
 One task, one worktree (#901, owner 2026-11-25): work, commit, run gates and mado-verify only in this task worktree. Never edit in your pane home (the fixed worktree named after your pane: identity and marker only) or in another task's worktree.
 Target marker: the delegator runs `.agents/skills/mado-delegator/scripts/new-task-worktree.sh <issue> <slug> …`, which calls `node .agents/skills/mado-verify/scripts/mark-target.mjs <pane-home> <briefed-worktree> <issue-number> <Report-Task> <absolute-handoff-path> [<task-branch>]` before dispatch (fix rounds call mark-target.mjs directly). This writes JSON `{worktree, branch, issue, task, handoff}` in the pane home's `.build/mado-verify/target-worktree` and the task identity in the worktree's `.build/mado-verify/task-identity.json`. The implementer checks it but does not rewrite it; the old one-line marker is invalid.
+Size check (delegator, before dispatch; #916): a UI ticket that touches a file over ~500 lines or adds more than one panel/group is split into vertical slices, one brief each; this brief is one slice: <slice and its siblings, or `no split needed: <reason>`>. Why: #871 bundled five concerns in one brief and PR #909 needed six fix rounds.
 Tier **<Low|Medium|High>** because <reason>. Under the 2026-10-25 override, every tier receives independent `opus-auditor` review.
 
 ## Read first
@@ -39,6 +40,14 @@ Each changed state gets one row per design rule it depends on. The delegator cop
 - Include content pressure: the longest English and Chinese label (#136 labels overflowed 48 pt), the scroll bar taking width (P3-01 lost a column), and the window widths where the column count changes.
 - No state is `AUTO-PASS` until all its rows are green. A row that can't be asserted gets `NOT VERIFIED` and a reason in the handoff, never a silent omission.
 - Auditors check each row against the pinned CSS; a missing row is at least Medium for a user-visible state.
+
+### Layout invariants (required for UI work; otherwise write `无 UI 变化`; #916)
+
+Why: several PR #909 rounds fixed the same clipped or wrapped label, zh-Hans vs English, one instance per round.
+- **Both languages.** Every changed label, button and field is built and asserted in English and zh-Hans (inject the localizer, as `AppTests/Issue218LayoutFixTests.swift` does; do not swap strings into a layout made for the other language).
+- **Runtime-measured fit.** Assert fit on the rendered control through `AppTests/LayoutFitSupport.swift` (`layoutButtonMeasure`/`layoutLabelMeasure` + `expectLayoutFits`, the reviewed `LayoutFit.margin`, #912), with the real system font. A failure writes `.build/layout-evidence/`.
+- **No hand-picked widths.** No width, inset or column constant chosen to fit today's strings; derive it from the measured content or the pinned design token. An exact fit with 1 pt slack is a failure.
+- List each changed group with its controls and the proving test: <group · controls · test>.
 
 ## Interaction & lifecycle (required for a new or changed mode, panel or async load; otherwise write `无交互/生命周期变化`)
 
