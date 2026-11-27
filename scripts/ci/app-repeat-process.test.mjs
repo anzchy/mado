@@ -204,6 +204,9 @@ test('owned host may exit shortly after its iteration leader without forced clea
     env:{...process.env,MADO_TEST_RUN_TOKEN:token,MADO_HOST_EXECUTABLE:realpathSync(process.execPath),MADO_HOST_OWNERSHIP_REQUIRED:'1'},
     logPath,deadline:Date.now()+4000,graceMs:80,drainMs:1000});
   await waitForFileText(logPath,'iteration leader exited; waiting for 1 live owned/group processes',pending);
+  // A busy runner can delay the test after the host is registered. Keep the
+  // real host alive past the original four-second deadline to expose that race.
+  await new Promise(resolve=>setTimeout(resolve,4200));
   writeFileSync(release,'go');
   const result=await pending;
   assert.equal(existsSync(marker),true,'the host must start before its leader exits');
