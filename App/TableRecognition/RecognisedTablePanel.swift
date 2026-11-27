@@ -12,7 +12,10 @@ import MadoMacUI
 @MainActor final class RecognisedTablePanel: NSPanel {
     /// State 41 draws the panel inset 70 × 100 in a 1280 × 800 page: 1080 × 660.
     static let defaultContentSize = NSSize(width: 1080, height: 660)
-    static let minimumContentSize = NSSize(width: 640, height: 400)
+    /// Wide enough for the footer in one line in English and Chinese with the copied label shown: 16 + the note
+    /// (English, the longer, about 470 pt) + 8 + 「Table copied」 + 8 + Copy Table + 8 + Close + 16 is about 750 pt
+    /// (#874 fix1 WI-4; the fit test measures it with a margin).
+    static let minimumContentSize = NSSize(width: 800, height: 400)
     /// `.panel .body { grid-template-columns: 230px 1fr }`.
     static let sourceColumnWidth: CGFloat = 230
 
@@ -30,6 +33,7 @@ import MadoMacUI
     var onCopy: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
     private let hintBand = NSView()
+    private var rules: [NSView] = []
     private var shownTable: RecognisedTable?
 
     init(result: RecognisedTableResult, sourceImage: CGImage?) {
@@ -86,10 +90,10 @@ import MadoMacUI
     // MARK: - Layout (state 41 `.panel`)
 
     private func build(sourceImage: CGImage?) {
-        let content = NSView()
+        let content = TablePanelContentView()
         contentView = content
         content.wantsLayer = true
-        content.layer?.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
+        content.applyColours = { [weak self] in self?.applyColours() }
 
         // header { padding: 12px 16px } · .st muted 12px
         label(statusLabel, color: DesignColor.textSecondary.nsColor)
@@ -97,13 +101,11 @@ import MadoMacUI
         let headerRule = rule()
         // .hint { padding: 7px 16px; background: accent-soft; color: accent-text; 12px }
         hintBand.wantsLayer = true
-        hintBand.layer?.backgroundColor = DesignColor.selectionFill.nsColor.cgColor
         label(hintLabel, color: DesignColor.selectionText.nsColor)
         hintLabel.stringValue = String(localized: "Check the text and the rows and columns.")
         hintBand.addSubview(hintLabel)
         // .src { width 230; padding 12; background surface; border-right subtle } · small 原图 muted
         sourceColumn.wantsLayer = true
-        sourceColumn.layer?.backgroundColor = DesignColor.sidebarBackground.nsColor.cgColor
         label(sourceCaption, color: DesignColor.textSecondary.nsColor)
         sourceCaption.stringValue = String(localized: "Original")
         sourceImageView.imageScaling = .scaleProportionallyUpOrDown
@@ -209,6 +211,19 @@ import MadoMacUI
         closeButton.nextKeyView = tableText
         tableText.nextKeyView = copyButton
         initialFirstResponder = copyButton
+        applyColours()
+    }
+
+    /// Layer colours resolved for the appearance the panel is shown in, again on every light/dark change while it is
+    /// open (#874 fix1 WI-4); the text fields' colours are dynamic and follow by themselves.
+    private func applyColours() {
+        guard let content = contentView else { return }
+        content.effectiveAppearance.performAsCurrentDrawingAppearance {
+            content.layer?.backgroundColor = DesignColor.popoverBackground.nsColor.cgColor
+            hintBand.layer?.backgroundColor = DesignColor.selectionFill.nsColor.cgColor
+            sourceColumn.layer?.backgroundColor = DesignColor.sidebarBackground.nsColor.cgColor
+            for rule in rules { rule.layer?.backgroundColor = DesignColor.dividerSubtle.nsColor.cgColor }
+        }
     }
 
     private func label(_ field: NSTextField, color: NSColor) {
@@ -230,7 +245,7 @@ import MadoMacUI
     private func rule() -> NSView {
         let view = NSView()
         view.wantsLayer = true
-        view.layer?.backgroundColor = DesignColor.dividerSubtle.nsColor.cgColor
+        rules.append(view)
         return view
     }
 
@@ -271,5 +286,17 @@ import MadoMacUI
             }
         }
         return output
+    }
+}
+
+/// The panel's content view: redraws the layer colours whenever its appearance changes.
+@MainActor private final class TablePanelContentView: NSView {
+    var applyColours: () -> Void = {}
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() { applyColours() }
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColours()
+        needsDisplay = true
     }
 }
