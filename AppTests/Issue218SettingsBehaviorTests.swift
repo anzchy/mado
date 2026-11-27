@@ -63,6 +63,59 @@ import MadoMacUI
     }
 }
 
+@MainActor @Test(.timeLimit(.minutes(3))) func issue882CapturePermissionNameAndNoteFitInBothLanguages() throws {
+    let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("App/Resources/Localizable.xcstrings")
+    let catalog = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL)) as? [String: Any])
+    let strings = try #require(catalog["strings"] as? [String: Any])
+    let permission = "Screen & System Audio Recording"
+    let note = "On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."
+    for language in ["en", "zh-Hans"] {
+        func localize(_ key: String) -> String {
+            guard let entry = strings[key] as? [String: Any],
+                  let translations = entry["localizations"] as? [String: Any],
+                  let translation = translations[language] as? [String: Any],
+                  let unit = translation["stringUnit"] as? [String: Any],
+                  let value = unit["value"] as? String else { return key }
+            return value
+        }
+        let panel = SettingsPanelWindow(cache: ThumbnailDiskCache(),
+            appearanceAdapter: WindowAppearanceAdapter(preferencesStore: InMemoryDisplayPreferencesStore()),
+            preferencesStore: InMemoryDisplayPreferencesStore(),
+            defaults: UserDefaults(suiteName: "issue882-permission-\(language)-\(UUID().uuidString)")!,
+            captureLocalize: localize)
+        defer { panel.window.close() }
+        panel.select(.capture)
+        let root = try #require(panel.window.contentView)
+        let scroll = try #require(settingsControl("settings.capture.scroll", in: root) as? NSScrollView)
+        let form = try #require(scroll.documentView)
+        let label = try #require(form.subviews.compactMap { $0 as? NSTextField }
+            .first { $0.stringValue == localize(permission) })
+        let hint = try #require(settingsControl("settings.capture.permission-note", in: root) as? NSTextField)
+        let nextHeading = try #require(settingsControl("settings.capture.heading-after", in: root))
+        #expect(hint.stringValue == localize(note))
+        if language == "en" {
+            let singleLineWidth = label.attributedStringValue.size().width
+            #expect(singleLineWidth + 4 <= label.frame.width,
+                    "Permission name needs room for the text field's horizontal drawing inset")
+            let lineHeight = NSLayoutManager().defaultLineHeight(for: try #require(hint.font))
+            #expect(lineHeight * 4 <= hint.frame.height,
+                    "The English note uses four lines in the native field")
+        }
+        for field in [label, hint] {
+            let textRect = try #require(field.cell).drawingRect(forBounds: field.bounds)
+            let needed = field.attributedStringValue.boundingRect(
+                with: NSSize(width: textRect.width, height: 1000),
+                options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+            #expect(needed <= textRect.height, "\(language) clipped: \(field.stringValue)")
+        }
+        #expect(hint.frame.minY > nextHeading.frame.maxY, "\(language) note overlaps After Capture")
+        #expect(label.frame.minY > hint.frame.maxY, "\(language) permission label overlaps note")
+        #expect(form.subviews.allSatisfy { $0.frame.minY >= 0 && $0.frame.maxY <= form.frame.height },
+                "\(language) capture content escapes the form")
+    }
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue218CommandCommaReusesSettingsWindow() throws {
     _ = NSApplication.shared
     let preferences = InMemoryDisplayPreferencesStore()
@@ -158,8 +211,8 @@ import MadoMacUI
     let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     let strings = try #require(root["strings"] as? [String: Any])
     let cases: [(String, CGFloat, CGFloat)] = [
-        ("Follows the system language (Chinese / English). Set a language for Mado in System Settings → General → Language & Region.", 390, 67),
-        ("Only thumbnails created by Mado are deleted. Your images are untouched. Confirm before clearing; thumbnails are rebuilt while browsing.", 390, 45),
+        ("Follows the system language (Chinese / English). Set a language for Mado in System Settings › General › Language & Region.", 390, 67),
+        ("Only thumbnails created by Mado are deleted. Your images are untouched; thumbnails are rebuilt while browsing.", 390, 45),
         ("Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License).", 440, 52)
     ]
     for (key, width, height) in cases {

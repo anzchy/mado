@@ -14,9 +14,9 @@ import MadoApplication
     let with = CaptureBarView(captureAction: {}, recognizeAction: {})
     let text = try button687("capture.text", in: with)
     #expect(text.isEnabled)
-    #expect(text.toolTip == String(localized: "Capture and Recognize Text"))
+    #expect(text.toolTip == String(localized: "Capture and Recognise Text"))
     with.setShortcuts(["capture.text": "⌃⇧4"])
-    #expect(text.toolTip == String(localized: "Capture and Recognize Text") + " ⌃⇧4")
+    #expect(text.toolTip == String(localized: "Capture and Recognise Text") + " ⌃⇧4")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func captureBarTextButtonRoutesOnlyToRecognize() throws {

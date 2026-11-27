@@ -387,9 +387,9 @@ private actor HelperSwitchPreferences: CaptureBarPreferencePort {
     private func report(_ error: Error) {
         switch error {
         case ScreenCaptureKitScreen.Failure.permissionNotAsked:
-            status?.stringValue = String(localized: "Allow Mado to record the screen in System Settings, then try Capture again.")
+            status?.stringValue = String(localized: "Allow Mado in System Settings › Privacy & Security › Screen & System Audio Recording, then try Capture again.")
         case ScreenCaptureKitScreen.Failure.permissionDenied:
-            status?.stringValue = String(localized: "Screen capture requires Screen Recording permission, which is currently denied. System Settings has been opened.")
+            status?.stringValue = String(localized: "Capture requires Screen & System Audio Recording, which is currently denied. System Settings has been opened.")
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
         case CaptureSessionError.busy:
             status?.stringValue = String(localized: "Capture in progress")

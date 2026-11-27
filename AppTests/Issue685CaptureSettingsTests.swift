@@ -282,7 +282,7 @@ private let ctrlOpt: NSEvent.ModifierFlags = [.control, .option]
     #expect(change.frame.minX >= path.frame.maxX)
     #expect(change.title == "Change…")
     #expect(change.isEnabled)
-    #expect(hint.stringValue == "File name mado-20261113153012.png; the second capture in the same second adds -2.")
+    #expect(hint.stringValue == "A file name looks like mado-20261113153012.png; another capture in the same second adds -2.")
     change.performClick(nil)
     #expect(fixture.signals.names == [CaptureBarIdentity.chooseFolderNotification])
     // A bookmark the helper could not open: captures go to ~/Downloads and the note names the folder.
@@ -321,7 +321,7 @@ private let ctrlOpt: NSEvent.ModifierFlags = [.control, .option]
     NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: fixture.panel.window)
     await eventually { approval.isHidden }
     #expect(approval.isHidden)
-    #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
+    #expect(hint.stringValue == "When on, the Capture Bar appears when you log in to your Mac.")
     toggle.performClick(nil)
     await eventually { await login.unregisters == 1 }
     #expect(await login.unregisters == 1)
@@ -416,7 +416,7 @@ private let ctrlOpt: NSEvent.ModifierFlags = [.control, .option]
     await eventually { retry.isHidden }
     #expect(retry.isHidden)
     #expect(toggle.state == .off)
-    #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
+    #expect(hint.stringValue == "When on, the Capture Bar appears when you log in to your Mac.")
     let key = "The login item could not be removed, so the capture helper may still start at login."
     #expect(try captureCatalog("zh-Hans")[key] == "未能移除登录项，登录时仍可能启动截图助手。")
     #expect(try captureCatalog("zh-Hans")["Retry"] == "重试")
@@ -485,7 +485,7 @@ private let ctrlOpt: NSEvent.ModifierFlags = [.control, .option]
     await eventually { await login.registers == 2 }
     await eventually { toggle.state == .on }
     #expect(toggle.state == .on && toggle.isEnabled)
-    #expect(hint.stringValue == "When off, the Capture Bar will not appear after restarting your Mac.")
+    #expect(hint.stringValue == "When on, the Capture Bar appears when you log in to your Mac.")
 }
 
 // Fix r2 F3 (device smoke685 step A): a field kept recording after the user clicked elsewhere or switched apps, so the
