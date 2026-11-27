@@ -45,6 +45,8 @@ private actor Keys874F: TableRecognitionCredentialStore {
 
 private actor Transport874F: HTTPTransport {
     private(set) var count = 0
+    /// Calls whose task was already cancelled when the reply came.
+    private(set) var cancelledReplies = 0
     private(set) var requests: [URLRequest] = []
     private var gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
@@ -62,6 +64,7 @@ private actor Transport874F: HTTPTransport {
         count += 1
         requests.append(request)
         if gated { await withCheckedContinuation { gate = $0 } }
+        if Task.isCancelled { cancelledReplies += 1 }
         try Task.checkCancellation()
         return reply
     }
@@ -481,6 +484,7 @@ func issue874Fix1ClosingTheViewerDuringTheRequestCancelsItAndOpensNothing() asyn
     await run?.value
     try await Task.sleep(for: .milliseconds(100))
     #expect(await transport.count == 1, "never retried")
+    #expect(await transport.cancelledReplies == 1, "closing the viewer cancelled the request at the transport")
     #expect(rig.adapter.flow == nil && rig.adapter.panel == nil)
     #expect(rig.notices.isEmpty)
     #expect(rig.board.string(forType: .string) == "before")
