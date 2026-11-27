@@ -107,12 +107,12 @@ private actor CaptureBarTestPreferences: CaptureBarPreferencePort {
     panel.select(.capture)
     let toggle = try #require(captureSettingsView("settings.capture.enabled", in: panel) as? NSSwitch)
     let status = try #require(captureSettingsView("settings.capture.permission-status", in: panel) as? NSTextField)
-    for _ in 0..<100 where toggle.state != .on { await Task.yield() }
+    try await waitUntil { toggle.state == .on && status.stringValue == "Granted" }
     #expect(toggle.state == .on)
     #expect(status.stringValue == "Granted")
     await preferences.setCaptureBarEnabled(false)
     panel.select(.capture)
-    for _ in 0..<100 where toggle.state != .off { await Task.yield() }
+    try await waitUntil { toggle.state == .off }
     #expect(toggle.state == .off)
 }
 

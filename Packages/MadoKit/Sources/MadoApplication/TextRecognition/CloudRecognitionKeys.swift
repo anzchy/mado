@@ -10,7 +10,11 @@ public protocol CloudSecretStorePort: Sendable {
     func removeSecret(service: String, account: String) async throws(CloudSecretStoreError)
 }
 
-public enum CloudKeyError: Error, Equatable, Sendable { case emptyKey, storeFailed }
+public enum CloudKeyError: Error, Equatable, Sendable {
+    case emptyKey, storeFailed
+    /// The table service's address is not usable yet, so there is no configuration to save a key for (#871).
+    case addressNeeded
+}
 
 /// The user's Baidu API Key and Secret Key, in the keychain only (ADR-0019, grilling 1.1). Keys never go to
 /// UserDefaults or logs; a pair is usable only when both halves are saved.

@@ -352,6 +352,15 @@
       "timeoutMs": 120000
     },
     {
+      "name": "for-where-node",
+      "description": "Manual Node receipts for the #358 ban on Swift for … where loops in App and package sources (scripts/ci/for-where-ban.test.mjs).",
+      "command": "node scripts/tdd/node-lane.mjs scripts/ci/for-where-ban.test.mjs",
+      "probeCommand": "node --version",
+      "gateOn": ["manual"],
+      "coverage": "none",
+      "timeoutMs": 120000
+    },
+    {
       "name": "rebase-docs-py",
       "description": "Manual Python receipts for #733: rebase-verify's CODE same / DOCS differ / CODE differ results, the states README row merger and rebase-ledger.sh calling it.",
       "command": "python3 .agents/skills/mado-delegator/scripts/test_rebase_docs.py",
