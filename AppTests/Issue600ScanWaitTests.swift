@@ -147,6 +147,7 @@ func issue600StalledDeadlineStillSeesTheSymlinkScanComplete() async throws {
     // The first look's pause is a 2.5 s process-wide stall; the gate opens only after it, so the scan cannot have
     // completed before the deadline passed. Later looks sleep 5 ms of real time.
     let steps = Steps600([.milliseconds(2_500)], realTime: true)
+    #expect(!steps.realTime, "the real scan's scheduling delay must not consume the synthetic active budget")
     var completeAtStall: Bool?
     steps.onStep = {
         completeAtStall = controller.session.folderScan?.sourceSnapshot?.isComplete == true
