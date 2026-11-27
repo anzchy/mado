@@ -141,7 +141,10 @@ func recordLayoutFailure(test: String, view: NSView, shown: String, locale: Stri
                             "appearance": window.effectiveAppearance.name.rawValue]
     }
     let file = directory.appendingPathComponent("\(base).json")
-    guard let data = try? JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted, .sortedKeys]),
+    // A NaN or infinite number makes JSONSerialization raise an Objective-C exception that `try?` cannot catch and that
+    // would end the test process, so an unencodable record is not written (the issue text still names the numbers).
+    guard JSONSerialization.isValidJSONObject(record),
+          let data = try? JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted, .sortedKeys]),
           (try? data.write(to: file)) != nil else { return nil }
     return file
 }

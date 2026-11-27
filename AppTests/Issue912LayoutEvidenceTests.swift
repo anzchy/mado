@@ -71,6 +71,19 @@ private func scratchDirectory() -> URL {
     #expect((record["image"] as? String)?.hasPrefix("capture unavailable: ") == true)
 }
 
+// #912 fix 1 (opus L1): geometry that is not a finite number must not crash the test process while writing evidence.
+@MainActor @Test(.timeLimit(.minutes(1))) func issue912NonFiniteGeometryIsNotWrittenAndDoesNotCrash() throws {
+    let field = NSTextField(labelWithString: "NaN")
+    field.frame = NSRect(x: 0, y: 0, width: 10, height: 10)
+    let directory = scratchDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let broken = LayoutMeasure(required: NSSize(width: CGFloat.nan, height: .infinity), available: NSSize(width: 10, height: 11))
+    #expect(recordLayoutFailure(test: "issue912 nan()", view: field, shown: "NaN", locale: "en", measure: broken,
+                                directory: directory) == nil)
+    let written = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    #expect(!written.contains { $0.hasSuffix(".json") }, "\(written)")
+}
+
 @MainActor @Test(.timeLimit(.minutes(1))) func issue912MetricsFingerprintIsOneLineWithMeasuredWidths() throws {
     let directory = scratchDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
