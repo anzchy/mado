@@ -105,6 +105,14 @@ func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async
     #expect(heading.stringValue == (locale == "zh-Hans" ? "云识别" : "Cloud Recognition"))
     let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
     let pill = try f.view("settings.capture.ocr-pill")
+    try await waitUntil { !pill.isHidden }
+    let caption = try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self)
+    if locale == "zh-Hans" {
+        #expect(abs(pill.frame.midY - toggle.frame.midY) < 4, "Chinese status stays on the switch row")
+        #expect(pill.frame.minX >= caption.frame.maxX + 4, "Chinese status follows the caption")
+    } else {
+        #expect(pill.frame.minY >= toggle.frame.maxY + 10, "English status follows the wrapped caption")
+    }
     let hint = try f.view("settings.capture.cloud-hint", as: NSTextField.self)
     let learn = try f.view("settings.capture.cloud-learn", as: NSButton.self)
     #expect(toggle.superview === cloud && pill.superview === cloud && hint.superview === cloud && learn.superview === cloud)

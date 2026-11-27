@@ -164,14 +164,12 @@ struct CloudRecognitionSettingsEnvironment {
         let caption = Self.text(switchTitle)
         caption.maximumNumberOfLines = 2
         caption.setAccessibilityIdentifier("settings.capture.ocr-cloud.title")
-        // Sized for the wider of both languages, so switching language never clips the caption or the pill.
+        // Size for the current language; the English caption wraps, while the shorter Chinese one leaves room for the pill.
         func widest(_ texts: [String], font: NSFont?) -> CGFloat {
             texts.map { ($0 as NSString).size(withAttributes: [.font: font ?? NSFont.systemFont(ofSize: 12)]).width }
                 .max()!.rounded(.up) + 4
         }
-        let captionWidth = min(widest([switchTitle, "Allow Cloud Recognition (Recognise Text, Recognise Table)",
-                                       "允许云识别（识别文字、识别表格）"],
-                                      font: caption.font), valueWidth - 40)
+        let captionWidth = min(widest([switchTitle], font: caption.font), valueWidth - 40)
         caption.frame = NSRect(x: valueX + 40, y: top + 4, width: captionWidth, height: 36)
         addSubview(caption)
         pill.stringValue = localize("No Access Key")
