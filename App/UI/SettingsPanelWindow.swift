@@ -1212,7 +1212,8 @@ private final class SettingsSidebarButton: NSButton {
         labelView.font = DesignMetrics.font("ui")
         labelView.stringValue = title
         labelView.lineBreakMode = .byTruncatingTail
-        labelView.frame = NSRect(x: 34, y: 5, width: bounds.width - 44, height: 20)
+        // NSTextField's glyph ink starts about 2 pt inside its frame; align visible ink 8 pt after the icon.
+        labelView.frame = NSRect(x: 32, y: 7, width: bounds.width - 42, height: 20)
         labelView.setAccessibilityIdentifier("settings.sidebar.label.\(section.rawValue)")
         labelView.setAccessibilityElement(false)
         addSubview(labelView)

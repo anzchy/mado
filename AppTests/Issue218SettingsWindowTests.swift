@@ -68,7 +68,7 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
         #expect(abs(icon.frame.minX - 10) < 0.5)
         #expect(abs(icon.frame.width - 16) < 0.5)
         #expect(abs(icon.frame.height - 16) < 0.5)
-        #expect(abs(text.frame.minX - icon.frame.maxX - 8) < 0.5)
+        #expect(abs(text.frame.minX - icon.frame.maxX - 6) < 0.5) // glyph ink begins ~2 pt inside the text field
         #expect(text.intrinsicContentSize.width <= text.frame.width - 4)
         #expect(row.bounds.contains(icon.frame) && row.bounds.contains(text.frame))
         if index > 0 {
@@ -86,7 +86,7 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
         for row in [selected, unselected] {
             let icon = try #require(row.subviews.compactMap { $0 as? NSImageView }.first)
             let title = try #require(row.subviews.compactMap { $0 as? NSTextField }.first)
-            #expect(abs(title.frame.minX - icon.frame.maxX - 8) < 0.5)
+            #expect(abs(title.frame.minX - icon.frame.maxX - 6) < 0.5)
             #expect(row.bounds.contains(icon.frame) && row.bounds.contains(title.frame))
         }
     }
@@ -163,4 +163,42 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
     #expect(abs(iconTop - 57) < 0.5)
     let captureFirst = try #require(settingsView("settings.capture.enabled.title", in: root))
     print("i863 pane capture first-label top=\(try top(captureFirst, in: .capture))")
+}
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue863Fix1SidebarDrawnTextGapAndCenter() throws {
+    let (panel, _, _) = settingsFixture()
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    for section in SettingsSection.allCases {
+        let row = try #require(settingsView("settings.section.\(section.rawValue)", in: root) as? NSButton)
+        let icon = try #require(settingsView("settings.sidebar.icon.\(section.rawValue)", in: root))
+        let title = try #require(settingsView("settings.sidebar.label.\(section.rawValue)", in: root) as? NSTextField)
+        if section == .general {
+            let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 240, pixelsHigh: 40,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+            let context = try #require(NSGraphicsContext(bitmapImageRep: bitmap))
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            NSColor.clear.setFill()
+            NSRect(x: 0, y: 0, width: 240, height: 40).fill(using: .copy)
+            NSAffineTransform(transform: AffineTransform(scale: 2)).concat()
+            title.cell?.drawInterior(withFrame: title.bounds, in: title)
+            context.flushGraphics()
+            NSGraphicsContext.restoreGraphicsState()
+            var minX = 240, minY = 40, maxY = -1
+            for y in 0..<40 { for x in 0..<240 {
+                if (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.05 {
+                    minX = min(minX, x); minY = min(minY, y); maxY = max(maxY, y)
+                }
+            } }
+            #expect(maxY >= minY)
+            let visibleGap = title.frame.minX + CGFloat(minX) / 2 - icon.frame.maxX
+            let verticalOffset = title.frame.minY + CGFloat(minY + maxY) / 4 - icon.frame.midY
+            print("i863 sidebar visibleGap=\(visibleGap) verticalOffset=\(verticalOffset)")
+            #expect(abs(visibleGap - 8) < 1)
+            #expect(abs(verticalOffset) < 1)
+        }
+        #expect(row.bounds.contains(title.frame))
+    }
 }
