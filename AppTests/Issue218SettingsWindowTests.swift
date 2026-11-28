@@ -162,7 +162,15 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
     print("i863 pane about icon top=\(iconTop) x=\(icon.frame.minX) size=\(icon.frame.size)")
     #expect(abs(iconTop - 57) < 0.5)
     let captureFirst = try #require(settingsView("settings.capture.enabled.title", in: root))
-    print("i863 pane capture first-label top=\(try top(captureFirst, in: .capture))")
+    let captureScroll = try #require(settingsView("settings.capture.scroll", in: root) as? NSScrollView)
+    let captureForm = try #require(captureScroll.documentView)
+    let capturePaneTop = try pane(.capture).bounds.maxY - captureScroll.frame.maxY
+    let captureHeading = try #require(settingsView("settings.capture.heading-bar", in: root))
+    let captureLabel = try #require(captureForm.subviews.compactMap { $0 as? NSTextField }.first {
+        $0.stringValue == String(localized: "Capture Bar") && $0.frame.minX == 26 && $0.frame.width < 528
+    })
+    func captureTop(_ view: NSView) -> CGFloat { capturePaneTop + captureForm.bounds.maxY - view.frame.maxY }
+    print("i863 pane capture heading top=\(captureTop(captureHeading)) first-label top=\(captureTop(captureLabel)) value top=\(captureTop(captureFirst)) label x=\(captureLabel.frame.minX) width=\(captureLabel.frame.width)")
 }
 
 @MainActor @Test(.timeLimit(.minutes(3))) func issue863Fix1SidebarDrawnTextGapAndCenter() throws {
