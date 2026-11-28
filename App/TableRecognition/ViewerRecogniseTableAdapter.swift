@@ -247,11 +247,20 @@ import MadoInfrastructure
 
     /// State 41 `working`'s sentence, shown only once the request is with the service.
     static func sentText(host: String) -> String {
-        String(format: String(localized: "The image was sent to %@. This usually takes a few seconds to over ten seconds."), host)
+        sentText(host: host, format: String(localized: "The image was sent to %@. This usually takes a few seconds to over ten seconds."))
     }
 
-    /// `sentText(host:)` with the sentence `format` of a given language.
-    static func sentText(host: String, format: String) -> String { String(format: format, host) }
+    /// `sentText(host:)` with the sentence `format` of a given language. A host longer than `sentHostLimit`
+    /// characters keeps its start and its end with "…" between them, so the sentence fits the line (#874 fix2 WI-5).
+    static func sentText(host: String, format: String) -> String { String(format: format, shownHost(host)) }
+
+    static let sentHostLimit = 40
+
+    static func shownHost(_ host: String) -> String {
+        guard host.count > sentHostLimit else { return host }
+        let head = (sentHostLimit - 1) / 2
+        return host.prefix(head) + "…" + host.suffix(sentHostLimit - 1 - head)
+    }
 
     /// The working sheet's "was sent" line: empty until the service calls the transport.
     static func sentLine(of alert: NSAlert) -> NSTextField? {
