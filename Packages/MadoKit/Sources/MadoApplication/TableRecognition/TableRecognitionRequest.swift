@@ -82,21 +82,27 @@ enum TableImageFormat {
     }
 }
 
-/// What Recognise Table sends from the opened file (#874 fix1 WI-5): the file's own bytes when the service takes
-/// them as they are, otherwise a PNG of the pixels. Uses the service limits in `TableRecognitionGuards`.
+/// What Recognise Table sends from the opened file (#874 fix1 WI-5, fix2 WI-3): the file's own encoded image without
+/// its metadata when the service takes it as it is, otherwise a PNG of the pixels. Uses the service limits in
+/// `TableRecognitionGuards`.
 public enum TableRecognitionSource {
     /// The largest file whose base64 fits the service's cap: 32 MiB of base64 is 25,165,824 bytes.
     public static let maximumOriginalBytes = TableRecognitionGuards.maxEncodedImageBytes / 4 * 3
 
-    /// A format the service accepts, within its size and side limits, and upright (no EXIF rotation the service
-    /// might not apply).
-    public static func sendsAsIs(_ data: Data) -> Bool {
-        guard case .success = TableRecognitionGuards.image(data) else { return false }
-        return TableImageFormat.isUpright(data)
+    /// The bytes to send for an opened file: a JPEG or PNG within the service's size and side limits and upright (no
+    /// EXIF rotation the service might not apply) goes as its own image data with everything else it carries removed
+    /// (`TableImageMetadata`; a file without metadata goes byte for byte). Nil sends the pixels-only PNG instead: GIF,
+    /// WebP, other formats, and a file the walk does not read to its end.
+    public static func payload(from data: Data) -> Data? {
+        guard case .success = TableRecognitionGuards.image(data), TableImageFormat.isUpright(data),
+              let stripped = TableImageMetadata.stripped(data),
+              let size = TableImageFormat.pixelSize(of: stripped), let original = TableImageFormat.pixelSize(of: data),
+              size == original else { return nil }
+        return stripped
     }
 
-    /// The bytes to send for an opened file, or nil to send the PNG of its pixels.
-    public static func payload(from data: Data) -> Data? { sendsAsIs(data) ? data : nil }
+    /// The file goes as its own image data (see `payload(from:)`), not as a PNG re-encode.
+    public static func sendsAsIs(_ data: Data) -> Bool { payload(from: data) != nil }
 }
 
 /// The checks before anything is sent (#869 AC-2). Each returns the reason a request must not go out.

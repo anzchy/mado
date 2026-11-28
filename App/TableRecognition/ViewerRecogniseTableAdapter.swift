@@ -86,13 +86,14 @@ import MadoInfrastructure
         sourceImage = image
         runGeneration = imageLoader.generation
         runKey = imageLoader.presented?.key
-        // The file's own bytes when the service takes them as they are (#874 fix1 WI-5); otherwise a PNG of the image
-        // as the file has it: the full-resolution pixels when the canvas shows a reduced preview.
+        // The file's own image data without its metadata when the service takes it as it is (#874 fix1 WI-5, fix2
+        // WI-3); otherwise a PNG of the image as the file has it: the full-resolution pixels when the canvas shows a
+        // reduced preview. Neither carries the file's EXIF, GPS, XMP or IPTC.
         let source: @Sendable () async throws -> Data = {
             if let original = await imageLoader.recognitionOriginal(
                     maximumByteCount: TableRecognitionSource.maximumOriginalBytes),
-               TableRecognitionSource.sendsAsIs(original) {
-                return original
+               let payload = TableRecognitionSource.payload(from: original) {
+                return payload
             }
             let reduced = image.width != Int(sourceSize.width) || image.height != Int(sourceSize.height)
             let full = reduced
