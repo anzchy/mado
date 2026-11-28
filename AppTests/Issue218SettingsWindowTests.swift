@@ -121,3 +121,46 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
     let row = try #require(settingsView("settings.section.general", in: root) as? NSButton)
     #expect(row.focusRingMaskBounds == row.bounds)
 }
+
+// Browser state 35 measured in Chromium at the fixed 760×520 window: pane h=482,
+// heading top=18, form first-row top=57, and grid row gap=14.
+@MainActor @Test(.timeLimit(.minutes(3))) func issue863Fix1SettingsPaneSpacingMatchesState35() throws {
+    let (panel, _, _) = settingsFixture()
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    func pane(_ section: SettingsSection) throws -> NSView {
+        try #require(settingsView("settings.pane.\(section.rawValue)", in: root))
+    }
+    func label(_ title: String, in section: SettingsSection) throws -> NSTextField {
+        try #require(try pane(section).subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue == title })
+    }
+    func top(_ view: NSView, in section: SettingsSection) throws -> CGFloat {
+        let container = try pane(section)
+        return container.bounds.maxY - view.convert(view.bounds, to: container).maxY
+    }
+    let rows: [(SettingsSection, String, CGFloat)] = [
+        (.general, String(localized: "Appearance"), 57),
+        (.general, String(localized: "Image Tools"), 99),
+        (.general, String(localized: "Language"), 172),
+        (.display, String(localized: "Thumbnail Size"), 57),
+        (.display, String(localized: "Show File Names"), 95),
+        (.display, String(localized: "Thumbnails"), 133),
+        (.cache, String(localized: "Thumbnail Cache"), 57),
+        (.update, String(localized: "Current Version"), 57),
+        (.update, String(localized: "Auto Check"), 95),
+    ]
+    for (section, title, expected) in rows {
+        let field = try label(title, in: section)
+        let measured = try top(field, in: section)
+        print("i863 pane \(section.rawValue) \(title) top=\(measured) x=\(field.frame.minX) width=\(field.frame.width)")
+        #expect(abs(measured - expected) < 0.5, "\(section.rawValue) \(title): \(measured) vs CSS \(expected)")
+        #expect(abs(field.frame.minX - 26) < 0.5 && abs(field.frame.width - 120) < 0.5)
+    }
+    let about = try pane(.about)
+    let icon = try #require(about.subviews.compactMap { $0 as? NSImageView }.first)
+    let iconTop = try top(icon, in: .about)
+    print("i863 pane about icon top=\(iconTop) x=\(icon.frame.minX) size=\(icon.frame.size)")
+    #expect(abs(iconTop - 57) < 0.5)
+    let captureFirst = try #require(settingsView("settings.capture.enabled.title", in: root))
+    print("i863 pane capture first-label top=\(try top(captureFirst, in: .capture))")
+}

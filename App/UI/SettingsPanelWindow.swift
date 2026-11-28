@@ -775,7 +775,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
     private func buildGeneral() {
         let pane = panes[.general]!
-        rowLabel(String(localized: "Appearance"), y: 397, in: pane)
+        rowLabel(String(localized: "Appearance"), y: 401, in: pane)
         let titles: [(DisplayAppearance, String)] = [
             (.system, String(localized: "Follow System")),
             (.light, String(localized: "Light")),
@@ -790,25 +790,25 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             button.font = DesignMetrics.font("uiSmall")
             button.setAccessibilityRole(.radioButton)
             let width = max(62, button.intrinsicContentSize.width + 14)
-            button.frame = NSRect(x: x, y: 397, width: width, height: 24)
+            button.frame = NSRect(x: x, y: 401, width: width, height: 24)
             button.setAccessibilityIdentifier("settings.appearance.\(item.0.rawValue)")
             pane.addSubview(button)
             appearanceButtons[item.0] = button
             x += width + 2
         }
-        rowLabel(String(localized: "Image Tools"), y: 350, in: pane)
+        rowLabel(String(localized: "Image Tools"), y: 359, in: pane)
         toolsButton = NSButton(checkboxWithTitle: String(localized: "Always Show Image Tools"),
                                target: self, action: #selector(changeTools(_:)))
         toolsButton.font = DesignMetrics.font("ui")
-        toolsButton.frame = NSRect(x: 162, y: 350, width: toolsButton.intrinsicContentSize.width, height: 24)
+        toolsButton.frame = NSRect(x: 162, y: 359, width: toolsButton.intrinsicContentSize.width, height: 24)
         toolsButton.setAccessibilityIdentifier("settings.always-show-tools")
         pane.addSubview(toolsButton)
         let hint = label(String(localized: "When off, image tools hide after inactivity. Move the pointer to the window edge or press Tab to show them again."), role: "uiSmall", muted: true)
-        hint.frame = NSRect(x: 162, y: 310, width: 390, height: 36)
+        hint.frame = NSRect(x: 162, y: 319, width: 390, height: 36)
         pane.addSubview(hint)
-        rowLabel(String(localized: "Language"), y: 275, in: pane)
+        rowLabel(String(localized: "Language"), y: 286, in: pane)
         let language = label(String(localized: "Follows the system language (Chinese / English). Set a language for Mado in System Settings › General › Language & Region."), role: "uiSmall", muted: true)
-        language.frame = NSRect(x: 162, y: 232, width: 390, height: 67)
+        language.frame = NSRect(x: 162, y: 243, width: 390, height: 67)
         language.setAccessibilityIdentifier("settings.language-note")
         pane.addSubview(language)
     }
@@ -833,7 +833,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     /// settings.html 显示 pane: the grid-display.html `.grid-tools-panel` preferences (one shared store, #114).
     private func buildDisplay() {
         let pane = panes[.display]!
-        rowLabel(String(localized: "Thumbnail Size"), y: 397, in: pane)
+        rowLabel(String(localized: "Thumbnail Size"), y: 401, in: pane)
         final class ThumbnailSizeSlider: NSSlider {
             override var acceptsFirstResponder: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
             override var canBecomeKeyView: Bool { acceptsFirstResponder }
@@ -858,17 +858,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             target: self, action: #selector(changeThumbnailSize(_:)))
         displaySize.numberOfTickMarks = 15
         displaySize.allowsTickMarkValuesOnly = true
-        displaySize.frame = NSRect(x: 162, y: 397, width: 220, height: 24)
+        displaySize.frame = NSRect(x: 162, y: 401, width: 220, height: 24)
         configure(displaySize, entry: .settingsDisplayThumbnailSize, id: "settings.display.size", title: String(localized: "Thumbnail Size"))
         pane.addSubview(displaySize)
-        rowLabel(String(localized: "Show File Names"), y: 352, in: pane)
+        rowLabel(String(localized: "Show File Names"), y: 363, in: pane)
         displayNames = NSButton(checkboxWithTitle: String(localized: "Show names below thumbnails"),
                                 target: self, action: #selector(changeFileNames(_:)))
         displayNames.font = DesignMetrics.font("ui")
-        displayNames.frame = NSRect(x: 162, y: 352, width: displayNames.intrinsicContentSize.width, height: 24)
+        displayNames.frame = NSRect(x: 162, y: 363, width: displayNames.intrinsicContentSize.width, height: 24)
         configure(displayNames, entry: .settingsDisplayFileNames, id: "settings.display.names", title: String(localized: "Show File Names"))
         pane.addSubview(displayNames)
-        rowLabel(String(localized: "Thumbnails"), y: 307, in: pane)
+        rowLabel(String(localized: "Thumbnails"), y: 325, in: pane)
         var fitX: CGFloat = 162
         // A toggle pair styled like the 通用 appearance buttons.
         for (index, item) in [(ThumbnailFit.fill, String(localized: "Fill and Crop")),
@@ -881,13 +881,13 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             button.font = DesignMetrics.font("uiSmall")
             button.setAccessibilityRole(.radioButton)
             let width = max(62, button.intrinsicContentSize.width + 14)
-            button.frame = NSRect(x: fitX, y: 307, width: width, height: 24)
+            button.frame = NSRect(x: fitX, y: 325, width: width, height: 24)
             pane.addSubview(button)
             fitButtons[item.0] = button
             fitX += width + 2
         }
         let note = label(String(localized: "These settings sync with Display in the Grid Bottom Bar; changes take effect immediately in either place."), role: "uiSmall", muted: true)
-        note.frame = NSRect(x: 162, y: 260, width: 390, height: 40)
+        note.frame = NSRect(x: 162, y: 267, width: 390, height: 40)
         pane.addSubview(note)
         // Keep the Display columns; the English title wraps within the shared label column.
         let opacityTitle = label(String(localized: "Tool Background Opacity"))
@@ -914,22 +914,22 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
     private func buildCache() {
         let pane = panes[.cache]!
-        rowLabel(String(localized: "Thumbnail Cache"), y: 397, in: pane)
+        rowLabel(String(localized: "Thumbnail Cache"), y: 401, in: pane)
         cacheSize = label(String(localized: "Unknown"), role: "uiSmall")
         cacheSize.font = DesignMetrics.font("uiSmall", monospaced: true)
-        cacheSize.frame = NSRect(x: 162, y: 397, width: 350, height: 24)
+        cacheSize.frame = NSRect(x: 162, y: 401, width: 350, height: 24)
         cacheSize.setAccessibilityIdentifier("settings.cache.size")
         pane.addSubview(cacheSize)
         cacheClear = NSButton(title: String(localized: "Clear Cache…"), target: self, action: #selector(requestClear(_:)))
         cacheClear.font = DesignMetrics.font("ui")
-        cacheClear.frame = NSRect(x: 162, y: 353, width: cacheClear.intrinsicContentSize.width, height: 26)
+        cacheClear.frame = NSRect(x: 162, y: 361, width: cacheClear.intrinsicContentSize.width, height: 26)
         cacheClear.setAccessibilityIdentifier("settings.cache.clear")
         pane.addSubview(cacheClear)
         let hint = label(String(localized: "Only thumbnails created by Mado are deleted. Your images are untouched; thumbnails are rebuilt while browsing."), role: "uiSmall", muted: true)
-        hint.frame = NSRect(x: 162, y: 302, width: 390, height: 45)
+        hint.frame = NSRect(x: 162, y: 310, width: 390, height: 45)
         pane.addSubview(hint)
         cacheDiagnostic = label("", role: "uiSmall", muted: true)
-        cacheDiagnostic.frame = NSRect(x: 162, y: 274, width: 390, height: 24)
+        cacheDiagnostic.frame = NSRect(x: 162, y: 282, width: 390, height: 24)
         cacheDiagnostic.setAccessibilityIdentifier("settings.cache.diagnostic")
         pane.addSubview(cacheDiagnostic)
     }
@@ -949,31 +949,31 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
     private func buildUpdates() {
         let pane = panes[.update]!
-        rowLabel(String(localized: "Current Version"), y: 397, in: pane)
+        rowLabel(String(localized: "Current Version"), y: 401, in: pane)
         updateVersion = label(Self.versionDescription, role: "uiSmall")
-        updateVersion.frame = NSRect(x: 162, y: 397, width: 350, height: 24)
+        updateVersion.frame = NSRect(x: 162, y: 401, width: 350, height: 24)
         updateVersion.setAccessibilityIdentifier("settings.update.version")
         pane.addSubview(updateVersion)
-        rowLabel(String(localized: "Auto Check"), y: 352, in: pane)
+        rowLabel(String(localized: "Auto Check"), y: 363, in: pane)
         updateAutomatic = NSButton(checkboxWithTitle: String(localized: "Check for updates automatically"),
                                    target: self, action: #selector(changeAutomaticUpdates(_:)))
         updateAutomatic.font = DesignMetrics.font("ui")
-        updateAutomatic.frame = NSRect(x: 162, y: 352, width: updateAutomatic.intrinsicContentSize.width, height: 24)
+        updateAutomatic.frame = NSRect(x: 162, y: 363, width: updateAutomatic.intrinsicContentSize.width, height: 24)
         configure(updateAutomatic, entry: .settingsUpdatesAutomaticCheck, id: "settings.update.automatic", title: updateAutomatic.title)
         pane.addSubview(updateAutomatic)
         let explanation = updates?.isAvailable == true
             ? String(localized: "Mado contacts GitHub only to check for updates and sends no system information.")
             : String(localized: "Updates are not available in this build.")
         let privacy = label(explanation, role: "uiSmall", muted: true)
-        privacy.frame = NSRect(x: 162, y: 310, width: 390, height: 36)
+        privacy.frame = NSRect(x: 162, y: 323, width: 390, height: 36)
         pane.addSubview(privacy)
         updateCheck = NSButton(title: String(localized: "Check Now"), target: self, action: #selector(checkForUpdates(_:)))
         updateCheck.font = DesignMetrics.font("ui")
-        updateCheck.frame = NSRect(x: 162, y: 275, width: updateCheck.intrinsicContentSize.width, height: 26)
+        updateCheck.frame = NSRect(x: 162, y: 283, width: updateCheck.intrinsicContentSize.width, height: 26)
         configure(updateCheck, entry: .settingsUpdatesCheckNow, id: "settings.update.now", title: updateCheck.title)
         pane.addSubview(updateCheck)
         updateLastChecked = label(String(localized: "Last checked: Unknown"), role: "uiSmall", muted: true)
-        updateLastChecked.frame = NSRect(x: 162, y: 247, width: 390, height: 24)
+        updateLastChecked.frame = NSRect(x: 162, y: 255, width: 390, height: 24)
         updateLastChecked.setAccessibilityIdentifier("settings.update.last-checked")
         pane.addSubview(updateLastChecked)
         if updates?.isAvailable != true {
@@ -1009,17 +1009,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
 
     private func buildAbout() {
         let pane = panes[.about]!
-        let icon = NSImageView(frame: NSRect(x: 26, y: 362, width: 64, height: 64))
+        let icon = NSImageView(frame: NSRect(x: 26, y: 361, width: 64, height: 64))
         icon.image = NSImage(named: NSImage.applicationIconName)
         pane.addSubview(icon)
         let name = label("Mado", role: "title", bold: true)
-        name.frame = NSRect(x: 108, y: 406, width: 380, height: 20)
+        name.frame = NSRect(x: 108, y: 405, width: 380, height: 20)
         pane.addSubview(name)
         let info = aboutInfoDictionary ?? Bundle.main.infoDictionary ?? [:]
         let description = Self.versionDescription(info: info, localized: aboutLocalizedString)
         let version = label(aboutLocalizedString("Version") + " " + description, role: "uiSmall", muted: true)
         version.textColor = DesignColor.textSecondary.nsColor
-        version.frame = NSRect(x: 108, y: 383, width: 390, height: 20)
+        version.frame = NSRect(x: 108, y: 382, width: 390, height: 20)
         pane.addSubview(version)
         let privacy = label(aboutLocalizedString("A macOS image viewer for files on your disk. Mado collects no data. Images stay on your Mac. The only exception is Cloud Recognition, which is off until you turn it on with your own service key and agree; it then sends only the image you ask to recognise (text or table) to the service you chose. The sandbox reads only folders you choose."), role: "uiSmall", muted: true)
         privacy.textColor = DesignColor.textSecondary.nsColor
@@ -1029,7 +1029,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let privacyHeight = max(54, privacy.cell!.cellSize(
             forBounds: NSRect(x: 0, y: 0, width: 446, height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up))
         let shift = privacyHeight - 54
-        privacy.frame = NSRect(x: 108, y: 319 - shift, width: 446, height: privacyHeight)
+        privacy.frame = NSRect(x: 108, y: 318 - shift, width: 446, height: privacyHeight)
         pane.addSubview(privacy)
         let links: [(title: String, entry: EntryPoint)] = [
             (aboutLocalizedString("Report a Problem…"), .reportIssue),
@@ -1047,14 +1047,14 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
                 .foregroundColor: DesignColor.selectionText.nsColor,
             ])
             let width = button.intrinsicContentSize.width
-            button.frame = NSRect(x: linkX, y: 283 - shift, width: width, height: 26)
+            button.frame = NSRect(x: linkX, y: 282 - shift, width: width, height: 26)
             configure(button, entry: link.entry, id: "settings.about.link.\(index)", title: link.title)
             pane.addSubview(button)
             linkX += width + 14
         }
         let licences = label(aboutLocalizedString("Mado is released under the MIT License.\nThird party: Sparkle (MIT) · Welcome sample images from Unsplash (Unsplash License)."), role: "uiSmall", muted: true)
         licences.textColor = DesignColor.textSecondary.nsColor
-        licences.frame = NSRect(x: 108, y: 219 - shift, width: 446, height: 52)
+        licences.frame = NSRect(x: 108, y: 218 - shift, width: 446, height: 52)
         pane.addSubview(licences)
     }
 
