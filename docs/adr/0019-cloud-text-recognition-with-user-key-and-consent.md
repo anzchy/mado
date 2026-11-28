@@ -41,3 +41,11 @@ The first provider calls Baidu's standard general-text endpoint (`general_basic`
 - The standard endpoint accepts images up to 8 MB encoded and 4096 px on the longest side (the accurate one: 10 MB, 8192 px). Mado shrinks a larger image before upload, as before, and uses On-device Recognition when it cannot fit.
 - Settings tells the user to enable 通用文字识别 for the application in the Baidu console.
 - Nothing else in this decision changes: key, consent, global switch, fallback and the rule that selecting text on an image never uploads.
+
+## Amendment 2026-11-28: the Baidu notes move to the help site (#870, spec #866)
+
+The Baidu account notes (real-name verification, mainland Chinese ID documents only, unconfirmed image retention and service outside mainland China) and the terms link move out of the Settings description. Settings keeps a one-line Keychain hint with a 「了解更多 ↗」 link to the help page. The privacy facts and the terms link stay visible at the point of decision, in the consent dialog shown before the first upload, and on the help page `baidu-key.html` (Chinese and English). The step to enable 「通用文字识别」 in the Baidu AI Cloud console now appears only on the help page, which replaces the Settings sentence of the 2026-11-22 amendment.
+
+Owner decision 2026-11-28: 「修订 ADR-0019，说明移到帮助站」, with this text confirmed as written.
+
+Consequence: a release must not ship before the help pages are live (#887/#888). The #889 link check, once built, gates release on it; until then the ledger limitation for EXT-04 and EXT-06 states that the check does not exist yet.
