@@ -46,6 +46,52 @@ import MadoMacUI
     #expect(abs((heading.font?.pointSize ?? 0) - 16) < 1)
 }
 
+// State 35: 10 pt inside each 164 pt row, 16 pt icon, 8 pt gap, 30 pt rows, 2 pt pitch.
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["en", "zh-Hans"])
+func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
+    let (panel, _, _) = settingsFixture()
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    let sidebar = try #require(settingsView("settings.sidebar", in: root))
+    let titles = locale == "zh-Hans" ? ["通用", "显示", "缓存", "截图", "更新", "关于"]
+                                     : ["General", "Display", "Cache", "Screenshots", "Updates", "About"]
+    for (index, section) in SettingsSection.allCases.enumerated() {
+        panel.select(section)
+        let row = try #require(settingsView("settings.section.\(section.rawValue)", in: root) as? NSButton)
+        let icon = try #require(settingsView("settings.sidebar.icon.\(section.rawValue)", in: root))
+        let text = try #require(settingsView("settings.sidebar.label.\(section.rawValue)", in: root) as? NSTextField)
+        text.stringValue = titles[index] // Frames are independent of language; check both real string widths.
+        row.layoutSubtreeIfNeeded()
+        #expect(row.state == .on)
+        #expect(abs(row.frame.minX - 8) < 0.5)
+        #expect(abs(row.frame.height - 30) < 0.5)
+        #expect(abs(icon.frame.minX - 10) < 0.5)
+        #expect(abs(icon.frame.width - 16) < 0.5)
+        #expect(abs(icon.frame.height - 16) < 0.5)
+        #expect(abs(text.frame.minX - icon.frame.maxX - 8) < 0.5)
+        #expect(text.intrinsicContentSize.width <= text.frame.width - 4)
+        #expect(row.bounds.contains(icon.frame) && row.bounds.contains(text.frame))
+        if index > 0 {
+            let previous = try #require(settingsView("settings.section.\(SettingsSection.allCases[index - 1].rawValue)", in: root))
+            #expect(abs(previous.frame.minY - row.frame.maxY - 2) < 0.5)
+        }
+        #expect(row.frame.minY >= sidebar.bounds.minY)
+    }
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        panel.window.appearance = NSAppearance(named: appearance)
+        panel.select(.general)
+        let selected = try #require(settingsView("settings.section.general", in: root) as? NSButton)
+        let unselected = try #require(settingsView("settings.section.display", in: root) as? NSButton)
+        #expect(selected.state == .on && unselected.state == .off)
+        for row in [selected, unselected] {
+            let icon = try #require(row.subviews.compactMap { $0 as? NSImageView }.first)
+            let title = try #require(row.subviews.compactMap { $0 as? NSTextField }.first)
+            #expect(abs(title.frame.minX - icon.frame.maxX - 8) < 0.5)
+            #expect(row.bounds.contains(icon.frame) && row.bounds.contains(title.frame))
+        }
+    }
+}
+
 @MainActor @Test(.timeLimit(.minutes(3))) func issue218SettingsSectionPersistsAcrossWindowInstances() {
     let (first, _, defaults) = settingsFixture()
     for section in SettingsSection.allCases {

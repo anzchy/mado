@@ -338,8 +338,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             button.alignment = .left
             button.font = DesignMetrics.font("ui")
             let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "camera.viewfinder", "arrow.triangle.2.circlepath", "info.circle"]
-            button.image = NSImage(systemSymbolName: symbols[index], accessibilityDescription: nil)
-            button.imagePosition = .imageLeading
+            button.configureIconAndLabel(symbol: symbols[index], title: section.title, section: section)
             button.setAccessibilityIdentifier("settings.section.\(section.rawValue)")
             sidebar.addSubview(button)
             sidebarButtons[section] = button
@@ -1190,6 +1189,43 @@ private final class SettingsPanelNativeWindow: NSWindow {
 }
 
 private final class SettingsSidebarButton: NSButton {
+    private let iconView = NSImageView()
+    private let labelView = NSTextField(labelWithString: "")
+
+    func configureIconAndLabel(symbol: String, title: String, section: SettingsSection) {
+        self.title = ""
+        image = nil
+        setAccessibilityLabel(title)
+        iconView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
+        iconView.imageScaling = .scaleProportionallyDown
+        iconView.frame = NSRect(x: 10, y: 7, width: 16, height: 16)
+        iconView.setAccessibilityIdentifier("settings.sidebar.icon.\(section.rawValue)")
+        iconView.setAccessibilityElement(false)
+        addSubview(iconView)
+        labelView.font = DesignMetrics.font("ui")
+        labelView.stringValue = title
+        labelView.lineBreakMode = .byTruncatingTail
+        labelView.frame = NSRect(x: 34, y: 5, width: bounds.width - 44, height: 20)
+        labelView.setAccessibilityIdentifier("settings.sidebar.label.\(section.rawValue)")
+        labelView.setAccessibilityElement(false)
+        addSubview(labelView)
+        updateColors()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(convert(point, from: superview)) ? self : nil
+    }
+
+    override var state: NSControl.StateValue {
+        didSet { updateColors() }
+    }
+
+    private func updateColors() {
+        labelView.textColor = state == .on ? DesignColor.selectionText.nsColor : .labelColor
+        iconView.contentTintColor = state == .on ? DesignColor.selectionText.nsColor : .secondaryLabelColor
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         if state == .on {
             DesignColor.selectionFill.nsColor.setFill()
@@ -1200,6 +1236,7 @@ private final class SettingsSidebarButton: NSButton {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        updateColors()
         needsDisplay = true
     }
 }
