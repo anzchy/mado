@@ -113,3 +113,11 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
     first.window.close()
     fallback.window.close()
 }
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue863Fix1SidebarFocusRingCoversTheWholeRow() throws {
+    let (panel, _, _) = settingsFixture()
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    let row = try #require(settingsView("settings.section.general", in: root) as? NSButton)
+    #expect(row.focusRingMaskBounds == row.bounds)
+}

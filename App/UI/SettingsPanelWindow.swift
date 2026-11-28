@@ -1192,6 +1192,12 @@ private final class SettingsSidebarButton: NSButton {
     private let iconView = NSImageView()
     private let labelView = NSTextField(labelWithString: "")
 
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+    }
+
     func configureIconAndLabel(symbol: String, title: String, section: SettingsSection) {
         self.title = ""
         image = nil
