@@ -4,7 +4,8 @@ import MadoApplication
 import MadoInfrastructure
 import MadoMacUI
 
-// #870 (EXT-06 T12, spec #866, state 35 settings.html as of PR #883): the 截图 page keeps one short hint per row.
+// #870 (EXT-06 T12, spec #866, state 35 settings.html as of PR #883): the 截图 page keeps one short hint per row;
+// the Capture Bar hint alone may take two lines (owner 2026-11-28 on #870: 「允许两行，修改验收」, as in #886).
 // The long Capture Bar, Screen Recording and 文字识别 (Baidu) text moves to the help site (site/), reached by a
 // 「了解更多 ↗」 link that hands the page to the default browser through the Settings URL-open seam. Measured at the
 // Settings pane's only size (580 pt, it does not resize) with the real fonts, in both languages and appearances.
@@ -98,7 +99,7 @@ private let keysHint = [
 private let learnMore = ["zh-Hans": "了解更多 ↗", "en": "Learn More ↗"]
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"], [false, true])
-func issue870CaptureBarHintIsShortWithScreenRecordingHelpLink(_ locale: String, dark: Bool) throws {
+func issue870CaptureBarHintIsAtMostTwoLinesWithScreenRecordingHelpLink(_ locale: String, dark: Bool) throws {
     let f = try Fixture870(locale, dark: dark)
     defer { f.panel.window.close() }
     let hint = try f.view("settings.capture.privacy-hint", as: NSTextField.self)
@@ -106,7 +107,8 @@ func issue870CaptureBarHintIsShortWithScreenRecordingHelpLink(_ locale: String, 
     #expect(hint.stringValue == barHint[locale])
     #expect(link.title == learnMore[locale])
     #expect(link.accessibilityRole() == .link)
-    // State 35's own sentence is wider than the value column (zh 409 pt in 384 pt), so it takes two lines; see handoff.
+    // Owner 2026-11-28: at most two lines, the link beside the first line, nothing clipped (state 35's zh sentence
+    // is 409 pt in a 384 pt column). Every other hint on the page stays one line.
     expectLinkBesideHint(hint, link, maxX: 554, maxLines: 2, locale: locale, test: "i870-bar-hint")
     // The 登录时启动 row below keeps its place: the hint does not run into it.
     let login = try f.view("settings.capture.login")
