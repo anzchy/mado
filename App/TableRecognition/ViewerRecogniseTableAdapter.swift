@@ -243,6 +243,9 @@ import MadoInfrastructure
         String(format: String(localized: "The image was sent to %@. This usually takes a few seconds to over ten seconds."), host)
     }
 
+    /// `sentText(host:)` with the sentence `format` of a given language.
+    static func sentText(host: String, format: String) -> String { String(format: format, host) }
+
     /// The working sheet's "was sent" line: empty until the service calls the transport.
     static func sentLine(of alert: NSAlert) -> NSTextField? {
         alert.accessoryView?.subviews.first { $0.identifier == sentLineIdentifier } as? NSTextField

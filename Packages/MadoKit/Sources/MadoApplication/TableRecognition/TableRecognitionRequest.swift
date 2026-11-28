@@ -94,6 +94,9 @@ public enum TableRecognitionSource {
         guard case .success = TableRecognitionGuards.image(data) else { return false }
         return TableImageFormat.isUpright(data)
     }
+
+    /// The bytes to send for an opened file, or nil to send the PNG of its pixels.
+    public static func payload(from data: Data) -> Data? { sendsAsIs(data) ? data : nil }
 }
 
 /// The checks before anything is sent (#869 AC-2). Each returns the reason a request must not go out.

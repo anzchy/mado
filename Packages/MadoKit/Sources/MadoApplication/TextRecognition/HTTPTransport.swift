@@ -26,4 +26,14 @@ public enum HTTPDestination: Sendable, Equatable {
 /// target. Each service classifies a returned 3xx as a failure. Cancelling the calling task cancels the request.
 public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse
+    /// As `send(_:to:)`; `onStart` runs once the transport has admitted the request and is about to start it.
+    func send(_ request: URLRequest, to destination: HTTPDestination,
+              onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse
+}
+
+public extension HTTPTransport {
+    func send(_ request: URLRequest, to destination: HTTPDestination,
+              onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
+        try await send(request, to: destination)
+    }
 }
