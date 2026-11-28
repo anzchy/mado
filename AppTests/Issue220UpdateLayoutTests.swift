@@ -15,15 +15,15 @@ import MadoMacUI
         try #require(pane.subviews.first { ($0 as? NSTextField)?.stringValue == text }, "missing \(text)").frame
     }
     func near(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 1 }
-    for (text, y) in [(String(localized: "Current Version"), 397.0), (String(localized: "Auto Check"), 352.0)] {
+    for (text, y) in [(String(localized: "Current Version"), 401.0), (String(localized: "Auto Check"), 363.0)] {
         let row = try labelFrame(text)
         #expect(near(row.minX, 26) && near(row.width, 120) && near(row.minY, y), "\(text) \(row)")
     }
     let hint = try labelFrame(String(localized: "Mado contacts GitHub only to check for updates and sends no system information."))
-    #expect(near(hint.minX, 162) && near(hint.minY, 310) && near(hint.width, 390), "hint \(hint)")
+    #expect(near(hint.minX, 162) && near(hint.minY, 323) && near(hint.width, 390), "hint \(hint)")
     let pinned: [(String, CGFloat)] = [
-        ("settings.update.version", 397), ("settings.update.automatic", 352),
-        ("settings.update.now", 275), ("settings.update.last-checked", 247),
+        ("settings.update.version", 401), ("settings.update.automatic", 363),
+        ("settings.update.now", 283), ("settings.update.last-checked", 255),
     ]
     for (id, y) in pinned {
         let rect = try frame(id)
