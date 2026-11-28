@@ -20,11 +20,12 @@ import MadoCore
 }
 
 /// Like the real transport: the start report, then (optionally) a hold inside it, the last cancellation check, the
-/// load report and the load. `loadReportLate` reports the load from a task that runs after the reply was returned.
+/// load report and the load. `loadReportLate` keeps the load report until the test fires it, after the reply.
 private actor LoadTransport874H: HTTPTransport {
     private let holdInStart: Bool
     private let loadReportLate: Bool
     private var gate: CheckedContinuation<Void, Never>?
+    private var pendingLoad: (@Sendable () -> Void)?
     private(set) var started = 0
     private(set) var events: [String] = []
     init(holdInStart: Bool = false, loadReportLate: Bool = false) {
@@ -33,6 +34,7 @@ private actor LoadTransport874H: HTTPTransport {
     var holding: Bool { gate != nil }
     func open() { gate?.resume(); gate = nil }
     func note(_ event: String) { events.append(event) }
+    func fireLoad() { pendingLoad?(); pendingLoad = nil }
 
     func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
         try await send(request, to: destination, onStart: {}, onLoad: {})
@@ -51,7 +53,7 @@ private actor LoadTransport874H: HTTPTransport {
         if holdInStart { await withCheckedContinuation { gate = $0 } }
         try Task.checkCancellation()
         if loadReportLate {
-            Task.detached { try? await Task.sleep(for: .milliseconds(100)); onLoad() }
+            pendingLoad = onLoad
         } else {
             onLoad()
         }
@@ -117,6 +119,7 @@ func issue874Fix3ALoadReportAfterTheReplyLeavesTheResult() async {
     let flow = flow874H(transport, log: log)
     await flow.start(image: { makePNG869(4, 3) }).value
     guard case .result = flow.state else { Issue.record("expected a result, got \(flow.state)"); return }
+    await transport.fireLoad()
     try? await Task.sleep(for: .milliseconds(300))
     guard case .result = flow.state else { Issue.record("the late load report replaced the result: \(flow.state)"); return }
     #expect(!log.everSaidSent, "the run went from preparing to its result")
