@@ -38,6 +38,12 @@ public struct TableRecognitionService: Sendable {
     /// As `recognise(_:)`; `willSend` runs once every check has passed and the request is built, from inside the
     /// transport once it admitted the request and just before it starts it (#874 fix1 WI-2, fix2 WI-1). A run refused
     /// or cancelled before that, here or at the transport's entry, never runs it.
+    /// Stub (#874 fix3): ignores `loading`.
+    public func recognise(_ image: Data, willSend: @escaping @Sendable () async -> Void,
+                          loading: @escaping @Sendable () -> Void) async -> TableRecognitionResult {
+        await recognise(image, willSend: willSend)
+    }
+
     public func recognise(_ image: Data,
                           willSend: @escaping @Sendable () async -> Void) async -> TableRecognitionResult {
         switch await prepare(image) {

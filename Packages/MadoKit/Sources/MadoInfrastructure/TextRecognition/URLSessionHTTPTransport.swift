@@ -42,6 +42,13 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         try await send(request, to: destination, onStart: {})
     }
 
+    /// Stub (#874 fix3): ignores `onLoad`.
+    public func send(_ request: URLRequest, to destination: HTTPDestination,
+                     onStart: @escaping @Sendable () async -> Void,
+                     onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: onStart)
+    }
+
     /// Reports the start (`onStart`) only after the destination check and the cancellation check, and checks for
     /// cancellation again before the load, so nothing is said to be sent that was refused or cancelled (#874 fix2).
     public func send(_ request: URLRequest, to destination: HTTPDestination,

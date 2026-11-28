@@ -32,6 +32,11 @@ public protocol HTTPTransport: Sendable {
     /// it true that the request went to the service.
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse
+    /// As `send(_:to:onStart:)`, and `onLoad` runs from inside the transport after its last cancellation check, as
+    /// it starts the load (#874 fix3 WI-1).
+    func send(_ request: URLRequest, to destination: HTTPDestination,
+              onStart: @escaping @Sendable () async -> Void,
+              onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse
 }
 
 public extension HTTPTransport {
@@ -43,5 +48,12 @@ public extension HTTPTransport {
         await onStart()
         try Task.checkCancellation()
         return try await send(request, to: destination)
+    }
+
+    /// Stub (#874 fix3): ignores `onLoad`.
+    func send(_ request: URLRequest, to destination: HTTPDestination,
+              onStart: @escaping @Sendable () async -> Void,
+              onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: onStart)
     }
 }
