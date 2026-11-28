@@ -328,18 +328,30 @@ func issue874PanelIsResizableAndKeepsTheState41LayoutAtAnySize() async throws {
     #expect(panel.styleMask.contains(.resizable) && panel.styleMask.contains(.titled))
     #expect(panel.contentMinSize == RecognisedTablePanel.minimumContentSize)
     #expect(panel.title == String(localized: "Recognise Table"))
+    // AppKit keeps a window inside its screen's visible frame, so a request taller than the
+    // display comes back shorter (hosted CI at 1024 × 768: 1080 × 660 became 1080 × 642). The
+    // expected size is the request as AppKit constrains it to the panel's screen, and the
+    // layout must hold at whatever size the panel actually takes. The last request is taller
+    // than any screen, so the constrained path runs on every machine, not only on CI.
+    let screen = try #require(panel.screen ?? NSScreen.main)
     let sizes = [RecognisedTablePanel.defaultContentSize, RecognisedTablePanel.minimumContentSize,
-                 NSSize(width: 1400, height: 900)]
+                 NSSize(width: 1400, height: 900), NSSize(width: 1000, height: screen.frame.height + 400)]
+    var taken: [NSSize] = []
     for size in sizes {
         panel.setContentSize(size)
         let content = try #require(panel.contentView)
         content.layoutSubtreeIfNeeded()
+        taken.append(content.bounds.size)
         // Alignment rects: a push button's frame includes its bezel shadow; layout places the alignment rect.
         func frame(_ view: NSView) -> NSRect {
             let superview = view.superview ?? content
             return superview.convert(view.alignmentRect(forFrame: view.frame), to: content)
         }
-        #expect(content.bounds.size == size)
+        let got = content.bounds.size
+        let asked = panel.frameRect(forContentRect: NSRect(origin: .zero, size: size))
+        let expected = panel.contentRect(forFrameRect: panel.constrainFrameRect(asked, to: screen)).size
+        #expect(got == expected, "asked \(size), screen \(screen.visibleFrame.size)")
+        #expect(got.width >= panel.contentMinSize.width && got.height >= panel.contentMinSize.height)
         // `.panel .body { grid-template-columns: 230px 1fr }`; the table takes the rest.
         #expect(abs(frame(panel.sourceColumn).width - RecognisedTablePanel.sourceColumnWidth) < 0.5)
         #expect(frame(panel.tableScroll).minX >= frame(panel.sourceColumn).maxX - 0.5)
@@ -357,6 +369,10 @@ func issue874PanelIsResizableAndKeepsTheState41LayoutAtAnySize() async throws {
         #expect(frame(panel.hintLabel).maxY <= frame(panel.statusLabel).minY + 0.5)
         #expect(frame(panel.tableScroll).maxY <= frame(panel.hintLabel).minY + 0.5)
     }
+    // Resizable in fact, not only in the style mask: the large request grows the panel past the
+    // minimum, and the too-tall one is kept on the screen.
+    #expect(taken[2].width > taken[1].width && taken[2].height >= taken[1].height)
+    #expect(taken[3].height < sizes[3].height && taken[3].height <= screen.visibleFrame.height)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)))
