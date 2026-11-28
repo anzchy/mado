@@ -188,7 +188,8 @@ func issue870RemovedDetailLivesOnTheLinkedHelpPages() throws {
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue870ConsentDialogStillCarriesTheBaiduDisclosure(_ locale: String) throws {
     let catalog = try captureCatalog(locale)
-    let alert = CloudRecognitionSettingsGroup.consentAlert(localize: { catalog[$0] ?? $0 }, openURL: { _ in })
+    var opened: [URL] = []
+    let alert = CloudRecognitionSettingsGroup.consentAlert(localize: { catalog[$0] ?? $0 }, openURL: { opened.append($0) })
     let text = alert.informativeText
     if locale == "zh-Hans" {
         for phrase in ["百度", "实名认证", "中国大陆证件", "保存图片的期限", "服务条款"] { #expect(text.contains(phrase), "\(phrase)") }
@@ -197,5 +198,11 @@ func issue870ConsentDialogStillCarriesTheBaiduDisclosure(_ locale: String) throw
             #expect(text.contains(phrase), "\(phrase)")
         }
     }
-    #expect(alert.accessoryView is NSButton)
+    // The terms link left Settings, so the dialog's link is the in-app route to the terms: activate it and check
+    // that it hands exactly the Baidu terms address to the injected opener.
+    let link = try #require(alert.accessoryView as? NSButton)
+    #expect(link.title == (locale == "zh-Hans" ? "百度服务条款" : "Baidu Terms of Service"))
+    #expect(opened.isEmpty)
+    link.sendAction(link.action, to: link.target)
+    #expect(opened == [URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!])
 }

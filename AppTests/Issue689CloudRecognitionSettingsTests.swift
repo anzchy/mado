@@ -308,8 +308,9 @@ func issue689SettingsKeychainFailureIsShown() async throws {
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)))
-func issue689SettingsTermsLinkOpensBaiduTerms() async throws {
-    // #870: Settings no longer shows the terms link (the help page and the consent dialog do); the address is unchanged.
+func issue689BaiduTermsAddressIsUnchanged() async throws {
+    // #870: Settings no longer shows the terms link (the help page and the consent dialog do; the dialog's link is
+    // clicked in issue689ConsentDialogNamesBaiduTheOneImageAndTheTerms and issue870ConsentDialog…). Address unchanged.
     #expect(CloudRecognitionSettingsGroup.termsURL.absoluteString == "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")
 }
 
@@ -390,11 +391,12 @@ func issue832SettingsNamesTheBaiduProductToEnable(_ locale: String, keyedAndOn: 
         try await waitUntil { try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden == false }
         #expect(toggle.state == .off)
     }
-    #expect(!group(f).subviews.contains { $0.accessibilityIdentifier() == "settings.capture.ocr-product-hint" })
+    let ocrGroup = try group(f)
+    #expect(!ocrGroup.subviews.contains { $0.accessibilityIdentifier() == "settings.capture.ocr-product-hint" })
     let page = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("site/baidu-key.html"), encoding: .utf8)
     #expect(page.contains(zhProduct))
-    #expect(try f.view("settings.capture.ocr-fallback-hint").frame.maxY <= group(f).frame.height)
+    #expect(try f.view("settings.capture.ocr-fallback-hint").frame.maxY <= ocrGroup.frame.height)
 }
 
-@MainActor private func group(_ f: Fixture) -> NSView { (try? f.view("settings.capture.ocr")) ?? NSView() }
+@MainActor private func group(_ f: Fixture) throws -> NSView { try f.view("settings.capture.ocr") }
