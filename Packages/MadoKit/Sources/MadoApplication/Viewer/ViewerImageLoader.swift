@@ -153,6 +153,17 @@ public struct PresentedImage: Sendable {
               decoded.1.itemID == key.itemID, decoded.1.revision == key.revision else { return nil }
         return decoded.1.image
     }
+    /// Recognise Table (#874 fix1 WI-5): the shown file's own bytes, read through an independent scoped source like
+    /// `recognitionImage`, when the file holds at most `maximumByteCount` bytes and is still the item and revision
+    /// shown; nil otherwise.
+    public func recognitionOriginal(maximumByteCount: Int) async -> Data? {
+        guard source != nil, let opener, let originalSource = try? await opener() else { return nil }
+        let original = try? await originalSource.originalData(maximumByteCount: maximumByteCount)
+        await originalSource.close()
+        guard case (let key?, let data)? = original, let shown = presented?.key,
+              key.itemID == shown.itemID, key.revision == shown.revision else { return nil }
+        return data
+    }
     private func retire() {
         loadTask?.cancel()
         releasePresentation()

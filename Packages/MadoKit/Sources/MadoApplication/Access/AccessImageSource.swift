@@ -65,12 +65,7 @@ public actor AccessImageSource {
             do {
                 try accessPermit?.check()
                 result = try await access.withLease(request) { lease in
-                    let file: URL
-                    switch request {
-                    case .fileGrant(let original): file = lease.resolvedFileURL ?? original
-                    case .root(_, let url): file = url
-                    }
-                    let root = lease.rootID.map { ItemIdentityRoot(id: $0, url: lease.url) }
+                    let (file, root) = Self.file(of: request, in: lease)
                     let prepared = try await prepare(pipeline, file, root)
                     let maximumPixelSize = prepared.maximumPixelSize
                     try Task.checkCancellation()
@@ -171,6 +166,32 @@ public actor AccessImageSource {
         return DecodedImage(image: image.image, sourcePixelSize: image.sourcePixelSize,
             formatIdentifier: image.formatIdentifier, revision: image.revision, itemID: image.itemID,
             accessPermit: permit)
+    }
+    /// The file a lease opens for `request`, and the Access Root its identity is relative to.
+    private static func file(of request: AccessRequest, in lease: AccessLease) -> (URL, ItemIdentityRoot?) {
+        let file: URL
+        switch request {
+        case .fileGrant(let original): file = lease.resolvedFileURL ?? original
+        case .root(_, let url): file = url
+        }
+        return (file, lease.rootID.map { ItemIdentityRoot(id: $0, url: lease.url) })
+    }
+
+    /// The file's bytes as stored, read under a lease of its own, with the render key the pipeline gives that file
+    /// now (so the caller can check it is still the one shown); nil when the file is larger than `maximumByteCount`,
+    /// which is then not read. Recognise Table sends an accepted file as it is (#874 fix1 WI-5).
+    public func originalData(maximumByteCount: Int) async throws -> (RenderKey?, Data)? {
+        guard !closed else { throw FileAccessError.startFailed }
+        try accessPermit?.check()
+        let pipeline = pipeline, request = request
+        return try await access.withLease(request) { lease in
+            let (file, root) = Self.file(of: request, in: lease)
+            let key = try await pipeline.request(for: file, maximumPixelSize: 1, identityRoot: root).renderKey
+            guard let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maximumByteCount else {
+                return nil
+            }
+            return (key, try Data(contentsOf: file, options: .mappedIfSafe))
+        }
     }
     public func close() async {
         closed = true

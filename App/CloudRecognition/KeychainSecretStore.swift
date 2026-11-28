@@ -91,6 +91,12 @@ enum CloudRecognitionAppServices {
     static let tablePreferences: any TableRecognitionPreferencePort =
         UserDefaultsTableRecognitionPreferences(defaults: .standard)
     static let tableKeys = TableRecognitionKeyStore(secrets: KeychainSecretStore())
+    /// #874: what View › 识别表格… reads before every request (the global switch, the endpoint, its host's consent)
+    /// and the real transport it sends with (#890: only the consented host, no redirects).
+    static var tableConfiguration: TableRecognitionConfiguration {
+        TableRecognitionConfiguration(cloud: preferences, preferences: tablePreferences)
+    }
+    static let tableTransport: any HTTPTransport = URLSessionHTTPTransport()
     static let tableSettingsModel = TableRecognitionSettingsModel(cloud: preferences, preferences: tablePreferences,
                                                                   keys: tableKeys, transport: URLSessionHTTPTransport())
 

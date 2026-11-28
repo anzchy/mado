@@ -3,8 +3,7 @@ import Testing
 
 /// AC-3: the three clipboard forms carry identical cell text for the same edited table. Each form is decoded
 /// back to cells (HTML by a test-only extraction, tab-separated text by an RFC 4180-style quoted-field reader,
-/// Markdown by `parseMarkdown`) and compared with the model. Tabs inside cells are left out on purpose: the
-/// tab-separated form turns them into one space.
+/// Markdown by `parseMarkdown`) and compared with the model. Tabs inside cells have their own test below.
 @Test func issue868AllThreeFormsDecodeBackToTheSameEditedCells() throws {
     let edited = [
         ["名称 Name", "说明", "Emoji"],
@@ -68,6 +67,23 @@ private func htmlCells(_ html: String) -> (rows: [[String]], headerTagged: [Bool
         })
     }
     return (rows, headerTagged)
+}
+
+/// #874 fix1 WI-6 (audit i874-r1 gpt M1): a tab inside a cell survives the tab-separated form. Its field is quoted
+/// (inner quotes doubled), so a spreadsheet's paste reads the same cells and columns back, tabs included.
+@Test func issue874Fix1TabsInsideCellsSurviveTheTabSeparatedForm() throws {
+    let edited = [
+        ["名称\tName", "\tleading", "trailing\t"],
+        ["a\tb\tc", "say \"hi\"\tthere", "\"\t\""],
+        ["\t", "", "line\nbreak\tand tab"],
+    ]
+    let table = RecognisedTable(rows: edited)
+    let payload = try TableClipboardPayload.build(from: table)
+    let cells = tabSeparatedCells(payload.tabSeparated)
+    #expect(cells == edited)
+    #expect(cells.allSatisfy { $0.count == 3 }, "no tab splits a column")
+    #expect(htmlCells(payload.html).rows == edited)
+    #expect(try RecognisedTable.parseMarkdown(payload.markdown) == table)
 }
 
 /// Test-only reader for what a spreadsheet does on paste, matching Python's `csv` reader with a tab delimiter

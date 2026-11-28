@@ -26,7 +26,7 @@ import Testing
     #expect(!payload.markdown.contains("Sensoror"))
 }
 
-@Test func issue868TSVQuotesQuoteLeadingAndLineBreakFieldsKeepsBackslashesAndTurnsTabsIntoSpaces() throws {
+@Test func issue868TSVQuotesQuoteLeadingLineBreakAndTabFieldsAndKeepsBackslashes() throws {
     let table = RecognisedTable(rows: [
         ["literal \\n", "pipe | and tab\there"],
         ["line1\r\nline2", "backslash \\ and <br>"],
@@ -37,11 +37,12 @@ import Testing
         ["\n", "a\r\nb"],
     ], firstRowIsHeader: false)
     let payload = try TableClipboardPayload.build(from: table)
-    // Spreadsheet paste: a field that starts with `"` or has an in-cell line break is quoted RFC 4180 style
+    // Spreadsheet paste: a field that starts with `"`, has an in-cell line break or a tab is quoted RFC 4180 style
     // (inner quotes doubled); every other field stays bare, since a `"` after the first character is literal.
-    // A backslash is never escaped, a tab inside a cell becomes one space, and CRLF becomes LF.
+    // A backslash is never escaped, a tab inside a cell is kept in its quoted field (#874 fix1 WI-6), and CRLF
+    // becomes LF.
     #expect(payload.tabSeparated == [
-        "literal \\n\tpipe | and tab here",
+        "literal \\n\t\"pipe | and tab\there\"",
         "\"line1\nline2\"\tbackslash \\ and <br>",
         "\"say \"\"hi\"\"\nbye\"\tC:\\Temp \"bare\"",
         "\"\"\"quoted\"\" & x\"\tsecond",

@@ -33,12 +33,25 @@ public struct TableRecognitionService: Sendable {
         self.report = report
     }
 
-    public func recognise(_ image: Data) async -> TableRecognitionResult {
+    public func recognise(_ image: Data) async -> TableRecognitionResult { await recognise(image, willSend: {}) }
+
+    /// As `recognise(_:)`; `willSend` runs once every check has passed and the request is built, from inside the
+    /// transport once it admitted the request and just before it starts it (#874 fix1 WI-2, fix2 WI-1). A run refused
+    /// or cancelled before that, here or at the transport's entry, never runs it.
+    public func recognise(_ image: Data,
+                          willSend: @escaping @Sendable () async -> Void) async -> TableRecognitionResult {
+        await recognise(image, willSend: willSend, loading: {})
+    }
+
+    /// As `recognise(_:willSend:)`; `loading` runs from inside the transport after its last cancellation check, as it
+    /// starts the load (#874 fix3 WI-1). A run cancelled while the transport reports the start never runs it.
+    public func recognise(_ image: Data, willSend: @escaping @Sendable () async -> Void,
+                          loading: @escaping @Sendable () -> Void) async -> TableRecognitionResult {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
         case .ready(let request, let destination):
-            let sent = await send(request, to: destination)
+            let sent = await send(request, to: destination, willSend: willSend, loading: loading)
             if case .cancelled = sent.result { return .cancelled }
             report(TableRecognitionDiagnostic.make(response: sent.response,
                                                    durationMilliseconds: sent.durationMilliseconds,
@@ -56,13 +69,15 @@ public struct TableRecognitionService: Sendable {
         let durationMilliseconds: Int
     }
 
-    private func send(_ request: URLRequest, to destination: HTTPDestination) async -> Sent {
+    private func send(_ request: URLRequest, to destination: HTTPDestination,
+                      willSend: @escaping @Sendable () async -> Void,
+                      loading: @escaping @Sendable () -> Void) async -> Sent {
         if Task.isCancelled { return Sent(result: .cancelled, response: nil, durationMilliseconds: 0) }
         let start = ContinuousClock.now
         let result: TableRecognitionResult
         let response: HTTPResponse?
         do {
-            let received = try await transport.send(request, to: destination)
+            let received = try await transport.send(request, to: destination, onStart: willSend, onLoad: loading)
             response = received
             result = TableRecognitionReply.classify(received)
         } catch {
@@ -114,7 +129,7 @@ public struct TableRecognitionService: Sendable {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
         case .ready(let request, let destination):
-            let sent = await send(request, to: destination)
+            let sent = await send(request, to: destination, willSend: {}, loading: {})
             let answer: TableRecognitionTestResult
             switch sent.result {
             case .table(let rows): answer = TableRecognitionSample.matches(rows) ? .passed : .failed(.other)

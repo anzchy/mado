@@ -212,6 +212,7 @@ final class CanvasWindowController: NSWindowController, NSWindowDelegate {
     /// Page 39's views while Annotate Mode is on (#690 WI-6).
     var annotateViews = AnnotateWindowViews()
     lazy var recogniseTextAdapter = ViewerRecogniseTextAdapter(controller: self)
+    lazy var recogniseTableAdapter = ViewerRecogniseTableAdapter(controller: self)
     lazy var selectTextAdapter = ViewerSelectTextAdapter(controller: self)
     /// #690 fix r1: flattening for ⌘S and ⌘C; tests replace it to prove it runs off the main actor.
     var annotateFlatten: @Sendable (CGImage, Int, [AnnotationMark], CGRect?) throws -> CGImage = AnnotationFlattener.flatten
