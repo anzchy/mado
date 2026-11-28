@@ -5,16 +5,17 @@ import MadoMacUI
 
 enum SettingsSection: String, CaseIterable {
     case general, display, cache, capture, update, about
-    var title: String {
+    var titleKey: String {
         switch self {
-        case .general: String(localized: "General")
-        case .display: String(localized: "Display")
-        case .cache: String(localized: "Cache")
-        case .capture: String(localized: "Screenshots")
-        case .update: String(localized: "Updates")
-        case .about: String(localized: "About")
+        case .general: "General"
+        case .display: "Display"
+        case .cache: "Cache"
+        case .capture: "Screenshots"
+        case .update: "Updates"
+        case .about: "About"
         }
     }
+    var title: String { String(localized: String.LocalizationValue(titleKey)) }
 }
 
 actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
@@ -263,7 +264,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
     func select(_ section: SettingsSection) {
         selectedSection = section
         defaults.set(section.rawValue, forKey: Self.sectionKey)
-        window.title = section.title
+        window.title = captureLocalize(section.titleKey)
         for (key, pane) in panes { pane.isHidden = key != section }
         for (key, button) in sidebarButtons {
             button.state = key == section ? .on : .off
@@ -330,15 +331,17 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         content.setAccessibilityIdentifier("settings.content")
         root.addSubview(content)
         for (index, section) in SettingsSection.allCases.enumerated() {
-            let button = SettingsSidebarButton(title: section.title, target: self, action: #selector(selectSidebar(_:)))
+            let sectionTitle = captureLocalize(section.titleKey)
+            let button = SettingsSidebarButton(title: sectionTitle, target: self, action: #selector(selectSidebar(_:)))
             button.frame = NSRect(x: 8, y: 442 - CGFloat(index * 32), width: 164, height: 30)
             button.tag = index
             button.isBordered = false
             button.setButtonType(.toggle)
+            button.setAccessibilityRole(.button)
             button.alignment = .left
             button.font = DesignMetrics.font("ui")
             let symbols = ["gearshape", "rectangle.3.group", "externaldrive", "camera.viewfinder", "arrow.triangle.2.circlepath", "info.circle"]
-            button.configureIconAndLabel(symbol: symbols[index], title: section.title, section: section)
+            button.configureIconAndLabel(symbol: symbols[index], title: sectionTitle, section: section)
             button.setAccessibilityIdentifier("settings.section.\(section.rawValue)")
             sidebar.addSubview(button)
             sidebarButtons[section] = button
@@ -346,7 +349,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             pane.setAccessibilityIdentifier("settings.pane.\(section.rawValue)")
             content.addSubview(pane)
             panes[section] = pane
-            let heading = label(section.title, role: "title", bold: true)
+            let heading = label(sectionTitle, role: "title", bold: true)
             heading.frame = NSRect(x: 26, y: 444, width: 528, height: 20)
             pane.addSubview(heading)
         }

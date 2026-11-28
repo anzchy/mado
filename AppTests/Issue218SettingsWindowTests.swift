@@ -202,3 +202,54 @@ func issue863SettingsSidebarMetricsInBothLanguages(_ locale: String) throws {
         #expect(row.bounds.contains(title.frame))
     }
 }
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["en", "zh-Hans"])
+func issue863Fix1SidebarUsesRealLocalizedTitlesAndSingleHitTarget(_ locale: String) throws {
+    let catalog = try captureCatalog(locale)
+    let preferences = InMemoryDisplayPreferencesStore()
+    let panel = SettingsPanelWindow(
+        cache: ThumbnailDiskCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+        appearanceAdapter: WindowAppearanceAdapter(preferencesStore: preferences), preferencesStore: preferences,
+        defaults: UserDefaults(suiteName: "i863-fix1-\(locale)-\(UUID().uuidString)")!,
+        captureLocalize: { catalog[$0] ?? $0 })
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    let keys: [SettingsSection: String] = [.general: "General", .display: "Display", .cache: "Cache",
+                                           .capture: "Screenshots", .update: "Updates", .about: "About"]
+    func sameColor(_ a: NSColor?, _ b: NSColor) -> Bool {
+        guard let a = a?.usingColorSpace(.sRGB), let b = b.usingColorSpace(.sRGB) else { return false }
+        return abs(a.redComponent - b.redComponent) < 0.01 &&
+               abs(a.greenComponent - b.greenComponent) < 0.01 &&
+               abs(a.blueComponent - b.blueComponent) < 0.01 &&
+               abs(a.alphaComponent - b.alphaComponent) < 0.01
+    }
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+        panel.window.appearance = NSAppearance(named: appearance)
+        for section in SettingsSection.allCases {
+            panel.select(section)
+            for candidate in SettingsSection.allCases {
+                let row = try #require(settingsView("settings.section.\(candidate.rawValue)", in: root) as? NSButton)
+                let icon = try #require(settingsView("settings.sidebar.icon.\(candidate.rawValue)", in: root) as? NSImageView)
+                let label = try #require(settingsView("settings.sidebar.label.\(candidate.rawValue)", in: root) as? NSTextField)
+                let key = try #require(keys[candidate])
+                let expected = try #require(catalog[key])
+                #expect(label.stringValue == expected)
+                #expect(label.intrinsicContentSize.width <= label.frame.width - 4)
+                #expect(abs(row.frame.width - 164) < 0.5)
+                #expect(abs(icon.frame.midY - 15) < 0.5 && abs(label.frame.midY - 17) < 0.5)
+                for child in [icon as NSView, label] {
+                    let point = row.convert(NSPoint(x: child.frame.midX, y: child.frame.midY), to: row.superview)
+                    #expect(row.hitTest(point) === row)
+                }
+                #expect(row.accessibilityRole() == .button)
+                #expect(row.accessibilityValue() as? String == (candidate == section ? "1" : "0"))
+                let textColor = candidate == section ? DesignColor.selectionText.nsColor : NSColor.labelColor
+                let iconColor = candidate == section ? DesignColor.selectionText.nsColor : NSColor.secondaryLabelColor
+                NSAppearance(named: appearance)!.performAsCurrentDrawingAppearance {
+                    #expect(sameColor(label.textColor, textColor))
+                    #expect(sameColor(icon.contentTintColor, iconColor))
+                }
+            }
+        }
+    }
+}
