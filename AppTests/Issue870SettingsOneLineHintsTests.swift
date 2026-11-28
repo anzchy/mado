@@ -178,6 +178,12 @@ func issue870RemovedDetailLivesOnTheLinkedHelpPages() throws {
                    "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d"] {
         #expect(baidu.contains(phrase), "baidu-key.html says \(phrase)")
     }
+    // English Settings links here too, so the page carries the same notes and steps in English (#870 fix1).
+    for phrase in ["lang=\"en\"", "real-name verification", "mainland Chinese ID documents",
+                   "How long Baidu keeps images", "General Text Recognition", "API Key", "Secret Key",
+                   "Save to Keychain", "macOS Keychain", "Baidu Terms of Service"] {
+        #expect(baidu.contains(phrase), "baidu-key.html says \(phrase) in English")
+    }
     let cloud = try page("cloud-recognition.html")
     for phrase in ["识别文字", "识别表格", "同意", "本机识别"] {
         #expect(cloud.contains(phrase), "cloud-recognition.html says \(phrase)")
