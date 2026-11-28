@@ -47,14 +47,19 @@ struct CloudRecognitionSettingsEnvironment {
     }
 }
 
-/// Settings › 截图 › 文字识别 (settings.html lines 174–176, ADR-0019). It stays editable with the Capture Bar off
-/// (owner 2026-11-13: 「文字识别不变灰」). The switch turns on only after both keys are saved and consent is given
-/// (settings.html line 23); the first turn-on shows the consent dialog; 移除密钥 deletes both keys and turns it off.
+/// A flipped sibling of the text-recognition group, containing only the global cloud controls.
+@MainActor final class CloudRecognitionHeaderGroup: NSView {
+    override var isFlipped: Bool { true }
+}
+
+/// Settings › 截图 › 云识别 and 文字识别 (state 35, ADR-0019). The sibling cloud group owns the global switch;
+/// the text group keeps its service, keys, disclosure and terms. Both remain editable with the Capture Bar off
+/// (owner 2026-11-13: 「文字识别不变灰」). Turning on requires keys and consent; removing keys turns it off.
 @MainActor final class CloudRecognitionSettingsGroup: NSView {
     /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
 
-    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and the Cloud Recognition switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
     static let productHint = "Enable “General Text Recognition” for your app in the Baidu AI Cloud console."
     static let fallbackHint = "Without an access key, offline, or when the quota is used up, Recognise Text falls back to on-device recognition and says so; Recognise Table needs Cloud Recognition."
 
@@ -77,6 +82,9 @@ struct CloudRecognitionSettingsEnvironment {
     private let localize: (String) -> String
     private let openURL: (URL) -> Void
     private let cloudSwitch = NSSwitch()
+    var cloudToggle: NSSwitch { cloudSwitch }
+    private var serviceControl: NSPopUpButton!
+    private(set) var cloudGroup: CloudRecognitionHeaderGroup!
     private let pill: NSTextField
     private let apiKey = NSTextField()
     private let secretKey = NSSecureTextField()
@@ -111,6 +119,8 @@ struct CloudRecognitionSettingsEnvironment {
 
     override var isFlipped: Bool { true }
 
+    func connectCloudSwitchToService() { cloudSwitch.nextKeyView = serviceControl }
+
     private static func text(_ value: String, muted: Bool = false) -> NSTextField {
         let field = NSTextField(wrappingLabelWithString: value)
         field.font = DesignMetrics.font("uiSmall")
@@ -124,9 +134,10 @@ struct CloudRecognitionSettingsEnvironment {
         let divider = NSBox(frame: NSRect(x: 0, y: 0, width: width, height: 1))
         divider.boxType = .separator
         addSubview(divider)
-        let title = Self.text(localize("Text Recognition"), muted: true)
+        let title = Self.text(localize("Cloud Recognition"), muted: true)
         title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         title.frame = NSRect(x: 0, y: 14, width: width, height: 20)
+        title.setAccessibilityIdentifier("settings.capture.cloud-heading")
         addSubview(title)
 
         func rowLabel(_ text: String, top: CGFloat) {
@@ -142,10 +153,10 @@ struct CloudRecognitionSettingsEnvironment {
             return top + height
         }
 
-        // 云识别: switch, its caption, the 未填写访问密钥 pill, the ADR-0019 disclosure and the terms link.
+        // 云识别: switch, caption, status pill, short hint and shared privacy link.
         var top: CGFloat = 46
-        rowLabel("Cloud Recognition", top: top)
-        let switchTitle = localize("Allow Cloud Recognition")
+        rowLabel("Allow", top: top)
+        let switchTitle = localize("Allow Cloud Recognition (Recognise Text, Recognise Table)")
         cloudSwitch.controlSize = .mini
         cloudSwitch.frame = NSRect(x: valueX, y: top + 3, width: 32, height: 18)
         cloudSwitch.target = self
@@ -154,16 +165,15 @@ struct CloudRecognitionSettingsEnvironment {
         cloudSwitch.setAccessibilityLabel(switchTitle)
         addSubview(cloudSwitch)
         let caption = Self.text(switchTitle)
-        caption.maximumNumberOfLines = 1
+        caption.maximumNumberOfLines = 2
         caption.setAccessibilityIdentifier("settings.capture.ocr-cloud.title")
-        // Sized for the wider of both languages, so switching language never clips the caption or the pill.
+        // Size for the current language; the English caption wraps, while the shorter Chinese one leaves room for the pill.
         func widest(_ texts: [String], font: NSFont?) -> CGFloat {
             texts.map { ($0 as NSString).size(withAttributes: [.font: font ?? NSFont.systemFont(ofSize: 12)]).width }
                 .max()!.rounded(.up) + 4
         }
-        let captionWidth = min(widest([switchTitle, "Allow Cloud Recognition", "允许云识别"],
-                                      font: caption.font), valueWidth - 40)
-        caption.frame = NSRect(x: valueX + 40, y: top + 4, width: captionWidth, height: 18)
+        let captionWidth = min(widest([switchTitle], font: caption.font), valueWidth - 40)
+        caption.frame = NSRect(x: valueX + 40, y: top + 4, width: captionWidth, height: 36)
         addSubview(caption)
         pill.stringValue = localize("No Access Key")
         pill.maximumNumberOfLines = 1
@@ -174,21 +184,42 @@ struct CloudRecognitionSettingsEnvironment {
         pill.layer?.backgroundColor = DesignColor.hoverBackground.nsColor.cgColor
         pill.setAccessibilityIdentifier("settings.capture.ocr-pill")
         let pillWidth = widest([pill.stringValue, "No Access Key", "未填写访问密钥"], font: pill.font) + 10
-        let pillInline = valueX + 40 + captionWidth + 8 + pillWidth <= width
+        let pillInline = valueX + 40 + captionWidth + 8 + pillWidth <= width &&
+            caption.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: captionWidth,
+                                                     height: .greatestFiniteMagnitude)).height <= 18
         pill.frame = NSRect(x: pillInline ? valueX + 40 + captionWidth + 8 : valueX + 40,
-                            y: pillInline ? top + 3 : top + 26, width: pillWidth, height: 18)
+                            y: pillInline ? top + 3 : top + 42, width: pillWidth, height: 18)
         addSubview(pill)
-        top = pillInline ? top + 30 : top + 50
-        let hint = Self.text(localize(Self.cloudHint), muted: true)
-        hint.setAccessibilityIdentifier("settings.capture.ocr-hint")
-        top = measured(hint, top: top) + 2
-        let terms = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { [weak self] in
-            self?.openURL(Self.termsURL)
+        top = pillInline ? top + 30 : top + 66
+        let hint = Self.text(localize("Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."), muted: true)
+        hint.maximumNumberOfLines = 2
+        hint.setAccessibilityIdentifier("settings.capture.cloud-hint")
+        let learn = TermsLinkButton(title: localize("Learn More ↗"), open: { [weak self] in
+            self?.openURL(TableRecognitionSettingsGroup.privacyURL)
         })
-        terms.setAccessibilityIdentifier("settings.capture.ocr-terms")
-        terms.frame = NSRect(x: valueX, y: top, width: terms.intrinsicContentSize.width.rounded(.up), height: 16)
-        addSubview(terms)
-        top += 30
+        learn.setAccessibilityIdentifier("settings.capture.cloud-learn")
+        let learnWidth = learn.intrinsicContentSize.width.rounded(.up)
+        let hintWidth = width - learnWidth - 8
+        let hintHeight = hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: hintWidth,
+                                                               height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up)
+        hint.frame = NSRect(x: 0, y: top, width: hintWidth, height: hintHeight)
+        addSubview(hint)
+        learn.frame = NSRect(x: hint.frame.maxX + 8, y: top, width: learnWidth, height: 18)
+        addSubview(learn)
+        top += max(hintHeight, 18) + 12
+        cloudGroup = CloudRecognitionHeaderGroup(frame: NSRect(x: 0, y: 0, width: width, height: top))
+        cloudGroup.setAccessibilityIdentifier("settings.capture.cloud")
+        for view in subviews { cloudGroup.addSubview(view) }
+
+        // Text Recognition is a separate first-level group. Its disclosure and Baidu terms remain with its service.
+        let textDivider = NSBox(frame: NSRect(x: 0, y: 0, width: width, height: 1))
+        textDivider.boxType = .separator
+        addSubview(textDivider)
+        let textTitle = Self.text(localize("Text Recognition"), muted: true)
+        textTitle.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        textTitle.frame = NSRect(x: 0, y: 14, width: width, height: 20)
+        addSubview(textTitle)
+        top = 46
 
         // 服务: one choice, 百度 OCR.
         rowLabel("Service", top: top)
@@ -198,10 +229,22 @@ struct CloudRecognitionSettingsEnvironment {
         service.setAccessibilityLabel(localize("Recognition Service"))
         service.setAccessibilityIdentifier("settings.capture.ocr-service")
         addSubview(service)
+        serviceControl = service
+        connectCloudSwitchToService()
         // #832 (grilling 20261122 decision 7): which Baidu product the application needs, static plain text.
         let product = Self.text(localize(Self.productHint), muted: true)
         product.setAccessibilityIdentifier("settings.capture.ocr-product-hint")
         top = measured(product, top: top + 30) + 14
+        let disclosure = Self.text(localize(Self.cloudHint), muted: true)
+        disclosure.setAccessibilityIdentifier("settings.capture.ocr-hint")
+        top = measured(disclosure, top: top) + 2
+        let terms = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { [weak self] in
+            self?.openURL(Self.termsURL)
+        })
+        terms.setAccessibilityIdentifier("settings.capture.ocr-terms")
+        terms.frame = NSRect(x: valueX, y: top, width: terms.intrinsicContentSize.width.rounded(.up), height: 16)
+        addSubview(terms)
+        top += 30
 
         // 密钥: two fields and 保存到钥匙串, or the masked keys and 移除密钥.
         rowLabel("Keys", top: top)

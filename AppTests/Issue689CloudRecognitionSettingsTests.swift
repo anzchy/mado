@@ -35,6 +35,12 @@ private actor OffBar: CaptureBarPreferencePort {
     func capturePermissionState() -> CapturePermissionState? { .granted }
 }
 
+private actor OnBar: CaptureBarPreferencePort {
+    func isCaptureBarEnabled() -> Bool { true }
+    func setCaptureBarEnabled(_ enabled: Bool) {}
+    func capturePermissionState() -> CapturePermissionState? { .granted }
+}
+
 @MainActor private final class ConsentRecorder {
     var alerts: [NSAlert] = []
     var answers: [@MainActor (Bool) -> Void] = []
@@ -63,7 +69,7 @@ private actor OffBar: CaptureBarPreferencePort {
     }
 }
 
-@MainActor private func fixture(_ locale: String? = nil) throws -> Fixture {
+@MainActor private func fixture(_ locale: String? = nil, captureBarOn: Bool = false) throws -> Fixture {
     let catalog = try locale.map(captureCatalog) ?? [:]
     let localize: (String) -> String = { catalog[$0] ?? $0 }
     let secrets = Secrets()
@@ -71,11 +77,13 @@ private actor OffBar: CaptureBarPreferencePort {
     let consent = ConsentRecorder()
     let model = CloudRecognitionSettingsModel(preferences: preferences, keys: BaiduCloudCredentialStore(secrets: secrets))
     let display = InMemoryDisplayPreferencesStore()
+    let bar: any CaptureBarPreferencePort
+    if captureBarOn { bar = OnBar() } else { bar = OffBar() }
     let panel = SettingsPanelWindow(
         cache: ThumbnailDiskCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
         appearanceAdapter: WindowAppearanceAdapter(preferencesStore: display), preferencesStore: display,
         defaults: UserDefaults(suiteName: "issue689-\(UUID().uuidString)")!,
-        capturePreferences: OffBar(), captureLocalize: localize,
+        capturePreferences: bar, captureLocalize: localize,
         cloudRecognition: CloudRecognitionSettingsEnvironment(model: model, presentConsent: { _, alert, answer in
             consent.alerts.append(alert)
             consent.answers.append(answer)
@@ -85,8 +93,84 @@ private actor OffBar: CaptureBarPreferencePort {
     return Fixture(panel: panel, secrets: secrets, preferences: preferences, consent: consent)
 }
 
-private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且这个开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
-private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and this switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue886CloudTabLoopKeepsRestoreBeforeSwitch(_ locale: String) async throws {
+    let f = try fixture(locale, captureBarOn: true)
+    defer { f.panel.window.close() }
+    let shortcut = try f.view("settings.capture.shortcut-4", as: NSControl.self)
+    let restore = try f.view("settings.capture.shortcut-restore", as: NSButton.self)
+    let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
+    let service = try f.view("settings.capture.ocr-service", as: NSPopUpButton.self)
+    try await waitUntil { shortcut.isEnabled && restore.isEnabled }
+    let window = f.panel.window
+    window.recalculateKeyViewLoop()
+    f.panel.select(.capture)
+    #expect(shortcut.nextKeyView === restore)
+    #expect(restore.nextKeyView === toggle)
+    #expect(toggle.nextKeyView === service)
+    // Physical Tab reachability depends on Full Keyboard Access and is verified on device.
+}
+
+private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且「云识别」开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
+private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and the Cloud Recognition switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
+private let zhCloudGroupHint = "只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。"
+private let enCloudGroupHint = "Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue886CloudCatalogHasNoOrphanAllowKey(_ locale: String) throws {
+    let catalog = try captureCatalog(locale)
+    #expect(catalog["Allow Cloud Recognition"] == nil)
+}
+
+@MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
+func issue886CloudIsFirstLevelBeforeEditableTextAndTable(_ locale: String) async throws {
+    let f = try fixture(locale)
+    defer { f.panel.window.close() }
+    let cloud = try f.view("settings.capture.cloud")
+    let text = try f.view("settings.capture.ocr")
+    let table = try f.view("settings.capture.table")
+    let form = try #require(cloud.superview)
+    #expect(text.superview === form && table.superview === form)
+    #expect(abs(cloud.frame.minY - text.frame.maxY) < 0.5)
+    #expect(abs(text.frame.minY - table.frame.maxY) < 0.5)
+    let heading = try f.view("settings.capture.cloud-heading", as: NSTextField.self)
+    #expect(heading.stringValue == (locale == "zh-Hans" ? "云识别" : "Cloud Recognition"))
+    let toggle = try f.view("settings.capture.ocr-cloud", as: NSSwitch.self)
+    let pill = try f.view("settings.capture.ocr-pill")
+    try await waitUntil { !pill.isHidden }
+    let caption = try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self)
+    if locale == "zh-Hans" {
+        #expect(abs(pill.frame.midY - toggle.frame.midY) < 4, "Chinese status stays on the switch row")
+        #expect(pill.frame.minX >= caption.frame.maxX + 4, "Chinese status follows the caption")
+    } else {
+        #expect(pill.frame.minY >= toggle.frame.maxY + 10, "English status follows the wrapped caption")
+    }
+    let hint = try f.view("settings.capture.cloud-hint", as: NSTextField.self)
+    let learn = try f.view("settings.capture.cloud-learn", as: NSButton.self)
+    #expect(toggle.superview === cloud && pill.superview === cloud && hint.superview === cloud && learn.superview === cloud)
+    #expect(learn.title == (locale == "zh-Hans" ? "了解更多 ↗" : "Learn More ↗"))
+    #expect(hint.stringValue == (locale == "zh-Hans" ? zhCloudGroupHint : enCloudGroupHint))
+    #expect(hint.maximumNumberOfLines == 2)
+    #expect(hint.frame.maxX + 8 <= learn.frame.minX + 0.5)
+    #expect(abs(hint.frame.minY - learn.frame.minY) < 0.5)
+    let oneLine = hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: 10_000, height: CGFloat.greatestFiniteMagnitude)).height.rounded(.up)
+    #expect(hint.frame.height <= oneLine * 2 + 2, "hint must reserve at most two lines")
+    expectLayoutFits(layoutLabelMeasure(hint.stringValue, font: hint.font!, frame: hint.frame.size),
+                     view: hint, shown: hint.stringValue, locale: locale, test: "i886-fix1-cloud-hint")
+    #expect(try f.view("settings.capture.ocr-service").superview === text)
+    #expect(try f.view("settings.capture.ocr-api-key").superview === text)
+    #expect(try f.view("settings.capture.table-service").superview === table)
+    #expect(toggle.state == .off && toggle.isEnabled)
+    for id in ["settings.capture.ocr-service", "settings.capture.ocr-api-key", "settings.capture.ocr-secret-key",
+               "settings.capture.ocr-save", "settings.capture.table-service"] {
+        #expect(try f.view(id, as: NSControl.self).isEnabled, "\(id) remains editable with cloud off")
+    }
+    let restore = try f.view("settings.capture.shortcut-restore")
+    #expect(cloud.frame.maxY < restore.frame.minY)
+    #expect(restore.nextKeyView === toggle)
+    let service = try f.view("settings.capture.ocr-service")
+    #expect(toggle.nextKeyView === service)
+}
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"])
 func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async throws {
@@ -97,7 +181,7 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     try await waitUntil { try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden == false }
     #expect(toggle.state == .off)
     #expect(toggle.isEnabled)
-    #expect(toggle.accessibilityLabel() == (zh ? "允许云识别" : "Allow Cloud Recognition"))
+    #expect(toggle.accessibilityLabel() == (zh ? "允许云识别（识别文字、识别表格）" : "Allow Cloud Recognition (Recognise Text, Recognise Table)"))
     #expect(try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self).stringValue == toggle.accessibilityLabel())
     #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).stringValue == (zh ? "未填写访问密钥" : "No Access Key"))
     let hint = try f.view("settings.capture.ocr-hint", as: NSTextField.self)

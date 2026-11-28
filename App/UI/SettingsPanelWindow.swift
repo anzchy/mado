@@ -231,6 +231,7 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
                                                 styleMask: [.titled, .closable, .miniaturizable],
                                                 backing: .buffered, defer: false)
         super.init()
+        window.autorecalculatesKeyViewLoop = true
         window.isReleasedWhenClosed = false
         window.center()
         buildViews()
@@ -278,9 +279,15 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         if section == .update { refreshUpdates() }
         if section == .capture {
             scrollCaptureToTop()
+            window.recalculateKeyViewLoop()
+            connectCaptureKeyViewLoop()
+            window.autorecalculatesKeyViewLoop = false
             refreshCapture()
             cloudRecognitionGroup?.refresh()
             tableRecognitionGroup?.refresh()
+        } else {
+            window.autorecalculatesKeyViewLoop = true
+            window.recalculateKeyViewLoop()
         }
     }
 
@@ -289,6 +296,13 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let top = max(0, document.frame.height - scroll.contentView.bounds.height)
         scroll.contentView.scroll(to: NSPoint(x: 0, y: top))
         scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    private func connectCaptureKeyViewLoop() {
+        guard let restore = captureRestore, let cloud = cloudRecognitionGroup else { return }
+        captureShortcutFields[.toggleBar]?.nextKeyView = restore
+        restore.nextKeyView = cloud.cloudToggle
+        cloud.connectCloudSwitchToService()
     }
 
     func preferencesDidChange(_ preferences: DisplayPreferences) {
@@ -562,12 +576,15 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         let table = TableRecognitionSettingsGroup(width: 528, labelWidth: labelWidth, valueX: valueX - 26,
                                                   environment: tableRecognition, localize: captureLocalize,
                                                   openURL: openURL)
-        let growth = max(0, 770 + afterCaptureShift + ocr.frame.height + table.frame.height - form.frame.height)
+        let cloud = ocr.cloudGroup!
+        let growth = max(0, 770 + afterCaptureShift + cloud.frame.height + ocr.frame.height + table.frame.height - form.frame.height)
         if growth > 0 {
             form.frame.size.height += growth
             for view in form.subviews { view.frame.origin.y += growth }
         }
-        ocr.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - ocr.frame.height)
+        cloud.frame.origin = NSPoint(x: 26, y: form.frame.height - 770 - afterCaptureShift - cloud.frame.height)
+        form.addSubview(cloud)
+        ocr.frame.origin = NSPoint(x: 26, y: cloud.frame.minY - ocr.frame.height)
         form.addSubview(ocr)
         cloudRecognitionGroup = ocr
         table.frame.origin = NSPoint(x: 26, y: ocr.frame.minY - table.frame.height)
