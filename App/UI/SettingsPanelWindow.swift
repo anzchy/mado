@@ -451,8 +451,18 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         form.addSubview(captureEnabled)
         let switchText = field(captureLocalize("Show Capture Bar"), top: 49, id: "settings.capture.enabled.title")
         switchText.frame.origin.x = valueX + 40
-        field(captureLocalize("When enabled, Mado starts a small capture helper. Allow Mado under Screen & System Audio Recording; turning the switch off stops the helper."),
-              top: 76, height: 46, id: "settings.capture.privacy-hint", muted: true)
+        // #870 (state 35): one short hint and 了解更多 beside its first line; the helper and permission detail is on
+        // the help page. The sentence is wider than the value column, so it wraps once (two lines at most).
+        let barLearn = TermsLinkButton(title: captureLocalize("Learn More ↗"), open: { [weak self] in
+            self?.openURL(Self.screenRecordingHelpURL)
+        })
+        barLearn.setAccessibilityIdentifier("settings.capture.bar-learn")
+        let barLearnWidth = barLearn.intrinsicContentSize.width.rounded(.up)
+        let barHint = field(captureLocalize("No Mado window needed; first allow Screen & System Audio Recording."),
+                            top: 76, height: 32, id: "settings.capture.privacy-hint", muted: true)
+        barHint.frame.size.width = 554 - valueX - barLearnWidth - 8
+        barLearn.frame = NSRect(x: barHint.frame.maxX + 8, y: barHint.frame.maxY - 18, width: barLearnWidth, height: 18)
+        form.addSubview(barLearn)
         field(captureLocalize("Start at Login"), top: 125, labelColumn: true)
         let loginTitle = captureLocalize("Start Capture Bar at Login")
         let login = outputSwitch(loginTitle, top: 125, id: "settings.capture.login", action: #selector(changeLogin(_:)))
@@ -486,8 +496,8 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         field(captureLocalize("Screen & System Audio Recording"), top: 220, labelColumn: true)
         capturePermissionStatus = field(captureLocalize("Unknown"), top: 220, id: "settings.capture.permission-status", muted: true)
         if #available(macOS 15, *) {
-            field(captureLocalize("On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."),
-                  top: 248, height: 64, id: "settings.capture.permission-note", muted: true)
+            field(captureLocalize("macOS 15 and later ask again at times; choose Allow."),
+                  top: 248, height: 18, id: "settings.capture.permission-note", muted: true)
         }
         heading(captureLocalize("After Capture"), top: 310, id: "settings.capture.heading-after", divider: true)
         field(captureLocalize("Capture Folder"), top: 345, id: "settings.capture.folder-label", labelColumn: true)
@@ -646,6 +656,10 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
             for detail in captureDetails { detail.alphaValue = enabled ? 1 : 0.45 }
         }
     }
+
+    /// Help page for the Capture Bar's helper and the Screen & System Audio Recording permission (site/, #870).
+    /// Opened in the default browser through `openURL`; Mado makes no request itself.
+    static let screenRecordingHelpURL = URL(string: "https://anzchy.github.io/mado/screen-recording.html")!
 
     private static let filenameHint = "A file name looks like mado-20261113153012.png; another capture in the same second adds -2."
 

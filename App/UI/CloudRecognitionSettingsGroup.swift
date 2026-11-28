@@ -53,14 +53,15 @@ struct CloudRecognitionSettingsEnvironment {
 }
 
 /// Settings › 截图 › 云识别 and 文字识别 (state 35, ADR-0019). The sibling cloud group owns the global switch;
-/// the text group keeps its service, keys, disclosure and terms. Both remain editable with the Capture Bar off
+/// the text group keeps its service, keys and a help link (#870). Both remain editable with the Capture Bar off
 /// (owner 2026-11-13: 「文字识别不变灰」). Turning on requires keys and consent; removing keys turns it off.
 @MainActor final class CloudRecognitionSettingsGroup: NSView {
     /// Baidu AI Open Platform Service Agreement (research 20261113-capture-ocr-tech.md D12).
     static let termsURL = URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!
 
-    static let cloudHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and the Cloud Recognition switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
-    static let productHint = "Enable “General Text Recognition” for your app in the Baidu AI Cloud console."
+    /// The help page with the Baidu account notes, the product to enable, the key steps and the terms (#870: these
+    /// left Settings for one short line, spec #866). Opened in the default browser; Mado makes no request itself.
+    static let keyHelpURL = URL(string: "https://anzchy.github.io/mado/baidu-key.html")!
     static let fallbackHint = "Without an access key, offline, or when the quota is used up, Recognise Text falls back to on-device recognition and says so; Recognise Table needs Cloud Recognition."
 
     /// No pinned design for the dialog itself: a standard informational NSAlert with the terms link as its
@@ -93,6 +94,7 @@ struct CloudRecognitionSettingsEnvironment {
     private var remove: NSButton!
     private let message: NSTextField
     private var keysHint: NSTextField!
+    private var keysLearn: NSButton!
     private var fallback: NSTextField!
     /// The 访问密钥 row's geometry, for `layoutKeyRows()`.
     private var keysRow = (top: CGFloat(0), valueX: CGFloat(0), valueWidth: CGFloat(0), width: CGFloat(0),
@@ -211,7 +213,7 @@ struct CloudRecognitionSettingsEnvironment {
         cloudGroup.setAccessibilityIdentifier("settings.capture.cloud")
         for view in subviews { cloudGroup.addSubview(view) }
 
-        // Text Recognition is a separate first-level group. Its disclosure and Baidu terms remain with its service.
+        // Text Recognition is a separate first-level group with its service, keys and help link.
         let textDivider = NSBox(frame: NSRect(x: 0, y: 0, width: width, height: 1))
         textDivider.boxType = .separator
         addSubview(textDivider)
@@ -231,20 +233,9 @@ struct CloudRecognitionSettingsEnvironment {
         addSubview(service)
         serviceControl = service
         connectCloudSwitchToService()
-        // #832 (grilling 20261122 decision 7): which Baidu product the application needs, static plain text.
-        let product = Self.text(localize(Self.productHint), muted: true)
-        product.setAccessibilityIdentifier("settings.capture.ocr-product-hint")
-        top = measured(product, top: top + 30) + 14
-        let disclosure = Self.text(localize(Self.cloudHint), muted: true)
-        disclosure.setAccessibilityIdentifier("settings.capture.ocr-hint")
-        top = measured(disclosure, top: top) + 2
-        let terms = TermsLinkButton(title: localize("Baidu Terms of Service"), open: { [weak self] in
-            self?.openURL(Self.termsURL)
-        })
-        terms.setAccessibilityIdentifier("settings.capture.ocr-terms")
-        terms.frame = NSRect(x: valueX, y: top, width: terms.intrinsicContentSize.width.rounded(.up), height: 16)
-        addSubview(terms)
-        top += 30
+        // #870 (state 35): the Baidu account notes, the product to enable (#832) and the terms live on the help page
+        // behind 了解更多 on the keys line; the consent dialog still carries the disclosure and the terms link.
+        top += 34
 
         // 密钥: two fields and 保存到钥匙串, or the masked keys and 移除密钥.
         rowLabel("Keys", top: top)
@@ -281,10 +272,18 @@ struct CloudRecognitionSettingsEnvironment {
         savedKeys.setAccessibilityIdentifier("settings.capture.ocr-saved-keys")
         addSubview(savedKeys)
         keysRow = (top, valueX, valueWidth, width, save.frame.maxY)
-        let keysHint = Self.text(localize("Keys are stored in the macOS Keychain."), muted: true)
+        let keysHint = Self.text(localize("Keys are kept in the macOS Keychain."), muted: true)
         keysHint.setAccessibilityIdentifier("settings.capture.ocr-keys-hint")
-        _ = measured(keysHint, top: 0)
+        let keysLink = TermsLinkButton(title: localize("Learn More ↗"), open: { [weak self] in
+            self?.openURL(Self.keyHelpURL)
+        })
+        keysLink.setAccessibilityIdentifier("settings.capture.ocr-learn")
+        let keysLinkWidth = keysLink.intrinsicContentSize.width.rounded(.up)
+        _ = measured(keysHint, top: 0, width: valueWidth - keysLinkWidth - 8)
+        keysLink.frame = NSRect(x: keysHint.frame.maxX + 8, y: 0, width: keysLinkWidth, height: 18)
+        addSubview(keysLink)
         self.keysHint = keysHint
+        keysLearn = keysLink
         message.textColor = DesignColor.errorText.nsColor
         message.maximumNumberOfLines = 2
         message.setAccessibilityIdentifier("settings.capture.ocr-message")
@@ -297,7 +296,7 @@ struct CloudRecognitionSettingsEnvironment {
         // The group keeps the height of its tallest arrangement (移除密钥 under the key line, a two-line message);
         // the rows themselves move up when those are not shown, so any spare room is below the last note.
         let tallestKeys = max(save.frame.maxY, top + 26 + remove.frame.height) + 6
-        frame.size.height = tallestKeys + keysHint.frame.height + 4 + 32 + 8 + fallback.frame.height + 16
+        frame.size.height = tallestKeys + max(keysHint.frame.height, 18) + 4 + 32 + 8 + fallback.frame.height + 16
         show(CloudRecognitionSettingsState(isOn: false, hasKeys: false, consent: .notAsked, maskedAPIKey: nil))
     }
 
@@ -320,7 +319,8 @@ struct CloudRecognitionSettingsEnvironment {
             }
         }
         keysHint.frame.origin.y = top
-        top = keysHint.frame.maxY + 4
+        keysLearn.frame.origin.y = top
+        top = max(keysHint.frame.maxY, keysLearn.frame.maxY) + 4
         message.isHidden = message.stringValue.isEmpty
         if !message.isHidden {
             let height = message.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: row.valueWidth,
@@ -418,8 +418,8 @@ struct CloudRecognitionSettingsEnvironment {
     }
 }
 
-/// A text link in the accent colour (settings.html `.link`).
-private final class TermsLinkButton: NSButton {
+/// A text link in the accent colour (settings.html `.link`); it hands its page to the caller's URL-open seam.
+final class TermsLinkButton: NSButton {
     private let open: () -> Void
 
     init(title: String, open: @escaping () -> Void) {
