@@ -57,12 +57,17 @@ actor Transport874F: HTTPTransport {
     private let refuseAtEntry: Bool
     private var entryGate: CheckedContinuation<Void, Never>?
     private(set) var entered = 0
+    /// #874 fix3: the transport can hold after it reported the start and before its last cancellation check, as if
+    /// the start report were still running, until the test opens it.
+    private let holdInStart: Bool
+    private var startGate: CheckedContinuation<Void, Never>?
     /// Set just before the transport reports the start, from outside the main actor.
     nonisolated let reportingStart = StartFlag874F()
-    init(gated: Bool = false, holdAtEntry: Bool = false, refuseAtEntry: Bool = false) {
+    init(gated: Bool = false, holdAtEntry: Bool = false, refuseAtEntry: Bool = false, holdInStart: Bool = false) {
         self.gated = gated
         self.holdAtEntry = holdAtEntry
         self.refuseAtEntry = refuseAtEntry
+        self.holdInStart = holdInStart
         let body = try! JSONSerialization.data(withJSONObject: ["choices": [[
             "index": 0, "message": ["role": "assistant", "content": "| A | B |\n|---|---|\n| 1 | 2 |"],
             "finish_reason": "stop"]]])
@@ -72,17 +77,27 @@ actor Transport874F: HTTPTransport {
     func open() { gated = false; gate?.resume(); gate = nil }
     var holdingAtEntry: Bool { entryGate != nil }
     func openEntry() { entryGate?.resume(); entryGate = nil }
+    var holdingInStart: Bool { startGate != nil }
+    func openStart() { startGate?.resume(); startGate = nil }
     func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
-        try await send(request, to: destination, onStart: {})
+        try await send(request, to: destination, onStart: {}, onLoad: {})
     }
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: onStart, onLoad: {})
+    }
+    /// Like the real transport (#874 fix3): entry check, start report, last cancellation check, load report, load.
+    func send(_ request: URLRequest, to destination: HTTPDestination, onStart: @escaping @Sendable () async -> Void,
+              onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
         entered += 1
         if holdAtEntry { await withCheckedContinuation { entryGate = $0 } }
         try Task.checkCancellation()
         if refuseAtEntry { throw URLSessionHTTPTransport.Refusal.notAllowedHost }
         reportingStart.set()
         await onStart()
+        if holdInStart { await withCheckedContinuation { startGate = $0 } }
+        try Task.checkCancellation()
+        onLoad()
         count += 1
         requests.append(request)
         if gated { await withCheckedContinuation { gate = $0 } }
