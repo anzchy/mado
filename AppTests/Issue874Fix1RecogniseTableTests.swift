@@ -12,12 +12,12 @@ import MadoMacUI
 // words fit at its minimum size in both languages and its colours follow a light/dark switch; WI-5 an accepted file
 // goes as its own bytes; WI-7 the viewer window closing during consent or the request.
 
-@MainActor private final class Motion874F: ReduceMotionSource {
+@MainActor final class Motion874F: ReduceMotionSource {
     var reduceMotion = false
     var onChange: (@MainActor () -> Void)?
 }
 
-private actor Settings874F: TableRecognitionSettings {
+actor Settings874F: TableRecognitionSettings {
     var current: TableRecognitionOptions
     init(_ options: TableRecognitionOptions) { current = options }
     func set(_ options: TableRecognitionOptions) { current = options }
@@ -25,7 +25,7 @@ private actor Settings874F: TableRecognitionSettings {
 }
 
 /// The key; from the second read on (the service's own check) it can be held until the test opens it, or be gone.
-private actor Keys874F: TableRecognitionCredentialStore {
+actor Keys874F: TableRecognitionCredentialStore {
     private var reads = 0
     private let holdSecondRead: Bool
     private let goneOnSecondRead: Bool
@@ -43,7 +43,7 @@ private actor Keys874F: TableRecognitionCredentialStore {
     }
 }
 
-private actor Transport874F: HTTPTransport {
+actor Transport874F: HTTPTransport {
     private(set) var count = 0
     /// Calls whose task was already cancelled when the reply came.
     private(set) var cancelledReplies = 0
@@ -51,8 +51,18 @@ private actor Transport874F: HTTPTransport {
     private var gated: Bool
     private var gate: CheckedContinuation<Void, Never>?
     private let reply: HTTPResponse
-    init(gated: Bool = false) {
+    /// #874 fix2: like the real transport, an entry that checks the request before it reports the start and sends.
+    /// The entry can hold until the test opens it, or refuse the request.
+    private let holdAtEntry: Bool
+    private let refuseAtEntry: Bool
+    private var entryGate: CheckedContinuation<Void, Never>?
+    private(set) var entered = 0
+    /// Set just before the transport reports the start, from outside the main actor.
+    nonisolated let reportingStart = StartFlag874F()
+    init(gated: Bool = false, holdAtEntry: Bool = false, refuseAtEntry: Bool = false) {
         self.gated = gated
+        self.holdAtEntry = holdAtEntry
+        self.refuseAtEntry = refuseAtEntry
         let body = try! JSONSerialization.data(withJSONObject: ["choices": [[
             "index": 0, "message": ["role": "assistant", "content": "| A | B |\n|---|---|\n| 1 | 2 |"],
             "finish_reason": "stop"]]])
@@ -60,7 +70,19 @@ private actor Transport874F: HTTPTransport {
     }
     var waiting: Bool { gate != nil }
     func open() { gated = false; gate?.resume(); gate = nil }
+    var holdingAtEntry: Bool { entryGate != nil }
+    func openEntry() { entryGate?.resume(); entryGate = nil }
     func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: {})
+    }
+    func send(_ request: URLRequest, to destination: HTTPDestination,
+              onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
+        entered += 1
+        if holdAtEntry { await withCheckedContinuation { entryGate = $0 } }
+        try Task.checkCancellation()
+        if refuseAtEntry { throw URLSessionHTTPTransport.Refusal.notAllowedHost }
+        reportingStart.set()
+        await onStart()
         count += 1
         requests.append(request)
         if gated { await withCheckedContinuation { gate = $0 } }
@@ -82,7 +104,14 @@ private actor Transport874F: HTTPTransport {
     }
 }
 
-private actor Leases874F: AccessLeasing {
+final class StartFlag874F: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func set() { lock.lock(); value = true; lock.unlock() }
+    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+actor Leases874F: AccessLeasing {
     func acquire(_ request: AccessRequest) -> AccessLease {
         switch request { case .fileGrant(let url), .root(_, let url): AccessLease(url: url, rootID: nil) }
     }
@@ -90,7 +119,7 @@ private actor Leases874F: AccessLeasing {
 }
 
 /// One item per file, so opening another file is another image.
-private actor Pipeline874F: ImagePipeline {
+actor Pipeline874F: ImagePipeline {
     let item = ItemID.ephemeral(UUID())
     let image: CGImage
     init(image: CGImage) { self.image = image }
@@ -104,7 +133,7 @@ private actor Pipeline874F: ImagePipeline {
     }
 }
 
-private func picture874F(_ width: Int = 6, _ height: Int = 4) throws -> CGImage {
+func picture874F(_ width: Int = 6, _ height: Int = 4) throws -> CGImage {
     let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
         bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
@@ -113,12 +142,12 @@ private func picture874F(_ width: Int = 6, _ height: Int = 4) throws -> CGImage 
     return try #require(context.makeImage())
 }
 
-private func options874F(consent: Bool) -> TableRecognitionOptions {
+func options874F(consent: Bool) -> TableRecognitionOptions {
     TableRecognitionOptions(cloudEnabled: true, endpoint: .deepSeek,
                             consent: consent ? TableRecognitionConsentRecord(host: "api.deepseek.com", granted: true) : nil)
 }
 
-@MainActor private final class Rig874F {
+@MainActor final class Rig874F {
     let controller: CanvasWindowController
     let window: NSWindow
     let board = NSPasteboard(name: .init("mado.issue874fix1.\(UUID().uuidString)"))
@@ -320,7 +349,7 @@ func issue874Fix1TheTitleBarCloseRunsTheSamePathAsCloseAndEsc() async throws {
 
 // MARK: - WI-4: fit at the minimum size in both languages; colours follow the appearance
 
-private func catalogue874F(_ key: String, _ language: String) throws -> String {
+func catalogue874F(_ key: String, _ language: String) throws -> String {
     guard language != "en" else { return key }
     let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("App/Resources/Localizable.xcstrings")
@@ -400,16 +429,30 @@ func issue874Fix1PanelColoursFollowALightDarkSwitchWhileOpen() async throws {
 
 // MARK: - WI-5: an accepted file goes as its own bytes; anything else as the PNG
 
-private func file874F(_ type: UTType, name: String) throws -> (URL, Data) {
+func file874F(_ type: UTType, name: String) throws -> (URL, Data) {
     let buffer = NSMutableData()
     let destination = try #require(CGImageDestinationCreateWithData(buffer, type.identifier as CFString, 1, nil))
     CGImageDestinationAddImage(destination, try picture874F(40, 30), nil)
     #expect(CGImageDestinationFinalize(destination))
+    // #874 fix2 WI-3: only a file without metadata goes byte for byte, so the JPEG loses the EXIF block ImageIO
+    // always writes.
+    let data = type == .jpeg ? withoutJPEGSegments874F(buffer as Data, marker: 0xE1) : buffer as Data
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent("mado-874f-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     let url = folder.appendingPathComponent(name)
-    try (buffer as Data).write(to: url)
-    return (url, buffer as Data)
+    try data.write(to: url)
+    return (url, data)
+}
+
+/// The JPEG with every `marker` segment before the first SOS removed.
+func withoutJPEGSegments874F(_ data: Data, marker: UInt8) -> Data {
+    var bytes = [UInt8](data)
+    var index = 2
+    while bytes[index + 1] != 0xDA {
+        let length = Int(bytes[index + 2]) << 8 | Int(bytes[index + 3])
+        if bytes[index + 1] == marker { bytes.removeSubrange(index ..< index + 2 + length) } else { index += 2 + length }
+    }
+    return Data(bytes)
 }
 
 @MainActor @Test(.timeLimit(.minutes(3)))
@@ -441,7 +484,7 @@ func issue874Fix1AnAcceptedFileGoesAsItsOwnBytesAndOtherFormatsAsPNG() async thr
     }
 }
 
-private enum TableImageSize874F {
+enum TableImageSize874F {
     static func of(_ data: Data) -> (Int, Int)? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

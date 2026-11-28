@@ -50,7 +50,8 @@ private func flatJPEG874(width: Int, height: Int, orientation: Int? = nil) throw
 
 @Test func issue874Fix1OnlyAcceptedUprightFilesWithinTheLimitsGoAsTheyAre() throws {
     #expect(TableRecognitionSource.sendsAsIs(makePNG869(4, 3)))
-    #expect(TableRecognitionSource.sendsAsIs(makeGIF869(4, 3)))
+    // #874 fix2 WI-3: a GIF is not stripped of its metadata, so it goes as the pixels-only PNG.
+    #expect(!TableRecognitionSource.sendsAsIs(makeGIF869(4, 3)))
     #expect(TableRecognitionSource.sendsAsIs(try flatJPEG874(width: 4, height: 3, orientation: 1)))
     // Rotated by its EXIF tag: the service may not apply it, so the upright PNG goes instead.
     #expect(!TableRecognitionSource.sendsAsIs(try flatJPEG874(width: 4, height: 3, orientation: 6)))
