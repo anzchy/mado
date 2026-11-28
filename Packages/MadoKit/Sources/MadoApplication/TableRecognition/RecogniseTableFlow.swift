@@ -33,8 +33,8 @@ public enum RecogniseTableState: Equatable, Sendable {
     /// The run is reading the image and checking again before it sends to `host`: nothing has been sent yet. The
     /// working sheet shows without its "was sent" line; Cancel stops it (#874 fix1 WI-2).
     case preparing(host: String)
-    /// The service is calling the transport for `host`: from here the image is with it; Cancel stops it (state 41
-    /// `working`).
+    /// The transport passed its last cancellation check and started the load for `host`: from here the image is with
+    /// it; Cancel stops it (state 41 `working`, #874 fix3).
     case working(host: String)
     case result(RecognisedTableResult)
     /// Refused before sending (format, size, settings changed meanwhile); #876 draws these.
@@ -155,7 +155,11 @@ public enum RecogniseTableState: Equatable, Sendable {
             do { data = try await image() } catch {
                 return Task.isCancelled || error is CancellationError ? .cancelled : .notSent(.unsupportedImage)
             }
-            return await service.recognise(data) { [weak self] in await self?.markSent(thisRun, host: host) }
+            // The sent line comes from the load report, which follows the transport's last cancellation check
+            // (#874 fix3 WI-1): a cancel while the transport reports the start leaves the run preparing.
+            return await service.recognise(data, willSend: {}, loading: { [weak self] in
+                Task { @MainActor [weak self] in self?.markSent(thisRun, host: host) }
+            })
         }
         self.request = request
         let result = await request.value
@@ -172,9 +176,10 @@ public enum RecogniseTableState: Equatable, Sendable {
         }
     }
 
-    /// The service is calling the transport for this run.
+    /// The transport is starting the load for this run. The report reaches here after the load started, so the
+    /// reply may already have been handled: only a run still preparing becomes `working`.
     private func markSent(_ thisRun: UUID, host: String) {
-        guard thisRun == run else { return }
+        guard thisRun == run, case .preparing = state else { return }
         state = .working(host: host)
     }
 

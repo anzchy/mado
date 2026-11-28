@@ -42,17 +42,17 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         try await send(request, to: destination, onStart: {})
     }
 
-    /// Stub (#874 fix3): ignores `onLoad`.
     public func send(_ request: URLRequest, to destination: HTTPDestination,
-                     onStart: @escaping @Sendable () async -> Void,
-                     onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
-        try await send(request, to: destination, onStart: onStart)
+                     onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: onStart, onLoad: {})
     }
 
     /// Reports the start (`onStart`) only after the destination check and the cancellation check, and checks for
-    /// cancellation again before the load, so nothing is said to be sent that was refused or cancelled (#874 fix2).
+    /// cancellation again before the load (#874 fix2). The load (`onLoad`) is reported only after that last check,
+    /// right before the load starts, so nothing is said to be sent that was refused or cancelled (#874 fix3).
     public func send(_ request: URLRequest, to destination: HTTPDestination,
-                     onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
+                     onStart: @escaping @Sendable () async -> Void,
+                     onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
         let parts = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
         switch destination {
         case .baiduOCR:
@@ -71,6 +71,7 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         outgoing.timeoutInterval = timeout
         outgoing.httpShouldHandleCookies = false
         outgoing.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        onLoad()
         let (body, response) = try await session.data(for: outgoing)
         // The delegate refused to follow, so a 3xx arrives here as the final answer and is returned as it is; each
         // service classifies it as a failure (the HTTPTransport contract).

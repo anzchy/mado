@@ -33,7 +33,9 @@ public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse
     /// As `send(_:to:onStart:)`, and `onLoad` runs from inside the transport after its last cancellation check, as
-    /// it starts the load (#874 fix3 WI-1).
+    /// it starts the load (#874 fix3 WI-1). It is synchronous, so nothing it causes can come before the load starts;
+    /// a call cancelled before or while it reports the start never runs it. Only from then may anything say the
+    /// request was sent.
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void,
               onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse
@@ -50,10 +52,14 @@ public extension HTTPTransport {
         return try await send(request, to: destination)
     }
 
-    /// Stub (#874 fix3): ignores `onLoad`.
+    /// For a transport that implements only `send(_:to:onStart:)`: `onLoad` runs when its start report returns and
+    /// the call is not cancelled. A transport that checks cancellation after the start implements this itself.
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void,
               onLoad: @escaping @Sendable () -> Void) async throws -> HTTPResponse {
-        try await send(request, to: destination, onStart: onStart)
+        try await send(request, to: destination, onStart: {
+            await onStart()
+            if !Task.isCancelled { onLoad() }
+        })
     }
 }
