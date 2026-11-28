@@ -69,7 +69,7 @@ import MadoMacUI
     let catalog = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL)) as? [String: Any])
     let strings = try #require(catalog["strings"] as? [String: Any])
     let permission = "Screen & System Audio Recording"
-    let note = "On macOS 15 and later, the system asks again from time to time whether Mado may record the screen. This is a system requirement; choose Allow to keep capturing."
+    let note = "macOS 15 and later ask again at times; choose Allow."
     for language in ["en", "zh-Hans"] {
         func localize(_ key: String) -> String {
             guard let entry = strings[key] as? [String: Any],
@@ -98,10 +98,12 @@ import MadoMacUI
             let singleLineWidth = label.attributedStringValue.size().width
             #expect(singleLineWidth + 4 <= label.frame.width,
                     "Permission name needs room for the text field's horizontal drawing inset")
-            let lineHeight = NSLayoutManager().defaultLineHeight(for: try #require(hint.font))
-            #expect(lineHeight * 4 <= hint.frame.height,
-                    "The English note uses four lines in the native field")
         }
+        // #870: state 35's note is one short line in both languages.
+        let lineHeight = NSLayoutManager().defaultLineHeight(for: try #require(hint.font))
+        let noteHeight = try #require(hint.cell).cellSize(forBounds: NSRect(x: 0, y: 0, width: hint.frame.width,
+                                                                            height: .greatestFiniteMagnitude)).height
+        #expect(noteHeight < lineHeight * 1.5, "\(language) note is one line")
         for field in [label, hint] {
             let textRect = try #require(field.cell).drawingRect(forBounds: field.bounds)
             let needed = field.attributedStringValue.boundingRect(

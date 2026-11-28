@@ -111,8 +111,6 @@ func issue886CloudTabLoopKeepsRestoreBeforeSwitch(_ locale: String) async throws
     // Physical Tab reachability depends on Full Keyboard Access and is verified on device.
 }
 
-private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且「云识别」开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
-private let enHint = "Cloud Recognition sends only the image you ask to recognise to the service you configured. It sends only when you click Recognise Text or Recognise Table, have agreed once for that service host, and the Cloud Recognition switch is on. Selecting text directly on an image always uses on-device recognition. Baidu text recognition requires a Baidu account with real-name verification; its documentation lists only mainland Chinese ID documents. How long Baidu keeps images and whether its service works outside mainland China are unconfirmed."
 private let zhCloudGroupHint = "只在你点「识别文字」或「识别表格」时，才把那张图片发送出去；在图片上选字只用本机。"
 private let enCloudGroupHint = "Only when you click Recognise Text or Recognise Table is that image sent; selecting text on an image uses only on-device recognition."
 
@@ -184,11 +182,8 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     #expect(toggle.accessibilityLabel() == (zh ? "允许云识别（识别文字、识别表格）" : "Allow Cloud Recognition (Recognise Text, Recognise Table)"))
     #expect(try f.view("settings.capture.ocr-cloud.title", as: NSTextField.self).stringValue == toggle.accessibilityLabel())
     #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).stringValue == (zh ? "未填写访问密钥" : "No Access Key"))
-    let hint = try f.view("settings.capture.ocr-hint", as: NSTextField.self)
-    #expect(hint.stringValue == (zh ? zhHint : enHint))
-    #expect(hint.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: hint.frame.width, height: .greatestFiniteMagnitude)).height
-            <= hint.frame.height + 0.5)
-    #expect(try f.view("settings.capture.ocr-terms", as: NSButton.self).title == (zh ? "百度服务条款" : "Baidu Terms of Service"))
+    // #870: the long disclosure and the terms link moved to the help page; the consent dialog keeps both.
+    #expect(try f.view("settings.capture.ocr-learn", as: NSButton.self).title == (zh ? "了解更多 ↗" : "Learn More ↗"))
     let service = try f.view("settings.capture.ocr-service", as: NSPopUpButton.self)
     #expect(service.itemTitles == [zh ? "百度 OCR" : "Baidu OCR"])
     let api = try f.view("settings.capture.ocr-api-key", as: NSTextField.self)
@@ -198,7 +193,7 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     #expect(api.isEditable && secret.isEditable && !api.isHidden && !secret.isHidden)
     #expect(try f.view("settings.capture.ocr-save", as: NSButton.self).title == (zh ? "保存到钥匙串" : "Save to Keychain"))
     #expect(try f.view("settings.capture.ocr-keys-hint", as: NSTextField.self).stringValue
-            == (zh ? "访问密钥保存在 macOS 钥匙串中。" : "Keys are stored in the macOS Keychain."))
+            == (zh ? "访问密钥保存在 macOS 钥匙串中。" : "Keys are kept in the macOS Keychain."))
     #expect(try f.view("settings.capture.ocr-fallback-hint", as: NSTextField.self).stringValue
             == (zh ? "没有访问密钥、离线或额度用完时，「识别文字」会改用本机识别并标明；「识别表格」只能用云识别。"
                    : "Without an access key, offline, or when the quota is used up, Recognise Text falls back to on-device recognition and says so; Recognise Table needs Cloud Recognition."))
@@ -208,7 +203,7 @@ func issue689SettingsCloudGroupMatchesDesignWithoutKeys(_ locale: String) async 
     let group = try f.view("settings.capture.ocr")
     #expect(!group.isHidden && group.alphaValue == 1)
     for id in ["settings.capture.ocr-cloud", "settings.capture.ocr-service", "settings.capture.ocr-api-key",
-               "settings.capture.ocr-secret-key", "settings.capture.ocr-save", "settings.capture.ocr-terms"] {
+               "settings.capture.ocr-secret-key", "settings.capture.ocr-save", "settings.capture.ocr-learn"] {
         #expect(try f.view(id, as: NSControl.self).isEnabled, "\(id)")
     }
     // Nothing in the group overlaps, and it all sits inside the scrolled form.
@@ -314,10 +309,7 @@ func issue689SettingsKeychainFailureIsShown() async throws {
 
 @MainActor @Test(.timeLimit(.minutes(3)))
 func issue689SettingsTermsLinkOpensBaiduTerms() async throws {
-    let f = try fixture("zh-Hans")
-    defer { f.panel.window.close() }
-    try f.click("settings.capture.ocr-terms")
-    #expect(f.consent.opened == [URL(string: "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")!])
+    // #870: Settings no longer shows the terms link (the help page and the consent dialog do); the address is unchanged.
     #expect(CloudRecognitionSettingsGroup.termsURL.absoluteString == "https://ai.baidu.com/ai-doc/REFERENCE/kk3dwjg7d")
 }
 
@@ -365,10 +357,10 @@ func issue689SettingsReadsSavedStateOnOpen() async throws {
     #expect(try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden)
 }
 
-// #832 EXT-04 (spec #830, grilling 20261122 decision 7): the group names the Baidu product to enable, one static
-// sentence in the UI language, shown whatever the switch and key state, as plain text (no link, no new control).
-private let zhProduct = "需在百度智能云控制台为你的应用开通「通用文字识别」。"
-private let enProduct = "Enable “General Text Recognition” for your app in the Baidu AI Cloud console."
+// #832 EXT-04 (spec #830, grilling 20261122 decision 7) named the Baidu product to enable in the group. #870 (state 35,
+// spec #866: how-to steps live on the help site) moves that sentence to baidu-key.html, opened by the group's
+// 「了解更多 ↗」; Settings no longer shows it in any switch or key state.
+private let zhProduct = "在百度智能云控制台为你的应用开通「通用文字识别」。"
 
 @MainActor @Test(.timeLimit(.minutes(3)), arguments: ["zh-Hans", "en"], [false, true])
 func issue832SettingsNamesTheBaiduProductToEnable(_ locale: String, keyedAndOn: Bool) async throws {
@@ -398,29 +390,11 @@ func issue832SettingsNamesTheBaiduProductToEnable(_ locale: String, keyedAndOn: 
         try await waitUntil { try f.view("settings.capture.ocr-pill", as: NSTextField.self).isHidden == false }
         #expect(toggle.state == .off)
     }
-    let sentence = try f.view("settings.capture.ocr-product-hint", as: NSTextField.self)
-    #expect(sentence.stringValue == (locale == "zh-Hans" ? zhProduct : enProduct))
-    #expect(!sentence.isHidden && sentence.alphaValue == 1)
-    // Plain, static text: not editable, not selectable, no link attribute, nothing to press or focus.
-    #expect(!sentence.isEditable && !sentence.isSelectable && !sentence.acceptsFirstResponder)
-    #expect(!sentence.attributedStringValue.string.contains("http"))
-    var linked = false
-    sentence.attributedStringValue.enumerateAttribute(.link, in: NSRange(location: 0, length: sentence.attributedStringValue.length)) { value, _, _ in
-        if value != nil { linked = true }
-    }
-    #expect(!linked)
-    // Whole, inside the group, under the 服务 row and above the 密钥 row, overlapping nothing.
-    #expect(sentence.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: sentence.frame.width, height: .greatestFiniteMagnitude)).height
-            <= sentence.frame.height + 0.5)
-    let group = try f.view("settings.capture.ocr")
-    #expect(sentence.superview === group)
-    #expect(sentence.frame.minX >= 0 && sentence.frame.maxX <= group.frame.width + 0.5)
-    let service = try f.view("settings.capture.ocr-service", as: NSPopUpButton.self)
-    // The 密钥 row starts at the API Key field's top in both states (the masked line sits on the same row).
-    let keysRowTop = try f.view("settings.capture.ocr-api-key").frame.minY
-    #expect(sentence.frame.minY >= service.frame.maxY && sentence.frame.maxY <= keysRowTop)
-    for other in group.subviews where other !== sentence && !other.isHidden && !(other is NSBox) {
-        #expect(!sentence.frame.intersects(other.frame), "overlaps \(other.accessibilityIdentifier())")
-    }
-    #expect(try f.view("settings.capture.ocr-fallback-hint").frame.maxY <= group.frame.height)
+    #expect(!group(f).subviews.contains { $0.accessibilityIdentifier() == "settings.capture.ocr-product-hint" })
+    let page = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("site/baidu-key.html"), encoding: .utf8)
+    #expect(page.contains(zhProduct))
+    #expect(try f.view("settings.capture.ocr-fallback-hint").frame.maxY <= group(f).frame.height)
 }
+
+@MainActor private func group(_ f: Fixture) -> NSView { (try? f.view("settings.capture.ocr")) ?? NSView() }
