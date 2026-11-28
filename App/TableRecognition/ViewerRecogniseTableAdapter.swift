@@ -109,6 +109,13 @@ import MadoInfrastructure
 
     private func render() {
         guard let flow else { return }
+        // Every change of a run checks at once that the viewer still shows the run's image (#874 fix2 WI-2): a
+        // change queued before a move to another image (the transport's start, the answer) ends the run instead of
+        // showing anything for it. The generation observer alone runs later, after such a change.
+        if flow.state != .idle, !isCurrent {
+            flow.close()
+            return
+        }
         let window = controller?.window
         if !Self.showsWorkingSheet(flow.state), let alert = workingAlert {
             workingAlert = nil
