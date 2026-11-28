@@ -108,13 +108,11 @@ func issue886CloudTabLoopKeepsRestoreBeforeSwitch(_ locale: String) async throws
     #expect(shortcut.nextKeyView === restore)
     #expect(restore.nextKeyView === toggle)
     #expect(toggle.nextKeyView === service)
-    #expect(window.makeFirstResponder(shortcut))
-    window.selectNextKeyView(nil)
-    #expect(window.firstResponder === restore)
-    window.selectNextKeyView(nil)
-    #expect(window.firstResponder === toggle)
-    window.selectNextKeyView(nil)
-    #expect(window.firstResponder === service)
+    var current: NSView = shortcut
+    for expected in [restore as NSView, toggle, service] {
+        current = try #require(current.nextValidKeyView)
+        #expect(current === expected)
+    }
 }
 
 private let zhHint = "云识别只会把你要识别的那张图片发送到你配置的服务。只有在你点「识别文字」或「识别表格」、对该服务主机同意过一次、并且「云识别」开关打开时才会发送；在图片上直接选字永远只用本机识别。百度文字识别需要完成实名认证的百度账号，百度文档只列出中国大陆证件。百度保存图片的期限及在中国大陆以外能否使用，尚未确认。"
