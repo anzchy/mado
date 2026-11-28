@@ -85,7 +85,7 @@ private actor BarOff870: CaptureBarPreferencePort {
 
 private let barHint = [
     "zh-Hans": "打开后，没有 Mado 窗口也能截图；第一次需要允许「录屏与系统录音」权限。",
-    "en": "Captures without a Mado window; first allow Screen & System Audio Recording."
+    "en": "No Mado window needed; first allow Screen & System Audio Recording."
 ]
 private let macOS15Hint = [
     "zh-Hans": "macOS 15 起，系统会不定期再问一次，选「允许」即可。",
