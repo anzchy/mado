@@ -111,8 +111,9 @@ import MadoInfrastructure
         guard let flow else { return }
         // Every change of a run checks at once that the viewer still shows the run's image (#874 fix2 WI-2): a
         // change queued before a move to another image (the transport's start, the answer) ends the run instead of
-        // showing anything for it. The generation observer alone runs later, after such a change.
-        if flow.state != .idle, !isCurrent {
+        // showing anything for it. The generation observer alone runs later, after such a change. A result already
+        // in its panel stays with its own image, and Copy Table keeps working there (WI-4).
+        if panel == nil, flow.state != .idle, !isCurrent {
             flow.close()
             return
         }
@@ -151,8 +152,7 @@ import MadoInfrastructure
             }
             if case .working(let host) = flow.state { Self.sentLine(of: alert)?.stringValue = Self.sentText(host: host) }
         case .result(let result):
-            // A result for an image the viewer has left is dropped, never shown or copied.
-            guard isCurrent else { flow.close(); return }
+            // A result for an image the viewer has left was dropped above; one already in its panel stays there.
             showPanel(result)
         case .setupNeeded, .cloudOff, .notSent, .failed:
             if let alert = Self.noticeAlert(for: flow.state) { presentNotice(window, alert) }
