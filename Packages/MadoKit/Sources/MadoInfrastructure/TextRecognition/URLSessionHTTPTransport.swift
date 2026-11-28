@@ -39,6 +39,13 @@ public final class URLSessionHTTPTransport: HTTPTransport {
     deinit { session.finishTasksAndInvalidate() }
 
     public func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse {
+        try await send(request, to: destination, onStart: {})
+    }
+
+    /// Reports the start (`onStart`) only after the destination check and the cancellation check, and checks for
+    /// cancellation again before the load, so nothing is said to be sent that was refused or cancelled (#874 fix2).
+    public func send(_ request: URLRequest, to destination: HTTPDestination,
+                     onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
         let parts = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
         switch destination {
         case .baiduOCR:
@@ -49,6 +56,9 @@ public final class URLSessionHTTPTransport: HTTPTransport {
         }
         // URLSession starts a load even for a task that is already cancelled (#890: 199 of 200 calls did); a
         // cancelled call sends nothing.
+        try Task.checkCancellation()
+        await onStart()
+        // A call cancelled while it reported the start sends nothing either.
         try Task.checkCancellation()
         var outgoing = request
         outgoing.timeoutInterval = timeout

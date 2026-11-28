@@ -35,9 +35,11 @@ public struct TableRecognitionService: Sendable {
 
     public func recognise(_ image: Data) async -> TableRecognitionResult { await recognise(image, willSend: {}) }
 
-    /// As `recognise(_:)`; `willSend` runs once every check has passed and the request is built, just before the
-    /// transport is called (#874 fix1 WI-2). A run refused or cancelled before that never runs it.
-    public func recognise(_ image: Data, willSend: @Sendable () async -> Void) async -> TableRecognitionResult {
+    /// As `recognise(_:)`; `willSend` runs once every check has passed and the request is built, from inside the
+    /// transport once it admitted the request and just before it starts it (#874 fix1 WI-2, fix2 WI-1). A run refused
+    /// or cancelled before that, here or at the transport's entry, never runs it.
+    public func recognise(_ image: Data,
+                          willSend: @escaping @Sendable () async -> Void) async -> TableRecognitionResult {
         switch await prepare(image) {
         case .notSent(let block): return .notSent(block)
         case .cancelled: return .cancelled
@@ -61,14 +63,13 @@ public struct TableRecognitionService: Sendable {
     }
 
     private func send(_ request: URLRequest, to destination: HTTPDestination,
-                      willSend: @Sendable () async -> Void) async -> Sent {
+                      willSend: @escaping @Sendable () async -> Void) async -> Sent {
         if Task.isCancelled { return Sent(result: .cancelled, response: nil, durationMilliseconds: 0) }
-        await willSend()
         let start = ContinuousClock.now
         let result: TableRecognitionResult
         let response: HTTPResponse?
         do {
-            let received = try await transport.send(request, to: destination)
+            let received = try await transport.send(request, to: destination, onStart: willSend)
             response = received
             result = TableRecognitionReply.classify(received)
         } catch {

@@ -26,14 +26,22 @@ public enum HTTPDestination: Sendable, Equatable {
 /// target. Each service classifies a returned 3xx as a failure. Cancelling the calling task cancels the request.
 public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest, to destination: HTTPDestination) async throws -> HTTPResponse
-    /// As `send(_:to:)`; `onStart` runs once the transport has admitted the request and is about to start it.
+    /// As `send(_:to:)`, and `onStart` runs from inside the transport once it has admitted the request (the
+    /// destination check) and found the call not cancelled, just before it starts the request (#874 fix2 WI-1). A
+    /// refused or cancelled call never runs it, and a call cancelled while it runs starts nothing. Only from then is
+    /// it true that the request went to the service.
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse
 }
 
 public extension HTTPTransport {
+    /// For a transport that refuses nothing before it starts a request (the test fakes): the cancellation checks
+    /// around `onStart`, then `send(_:to:)`. A transport that checks its requests implements this itself.
     func send(_ request: URLRequest, to destination: HTTPDestination,
               onStart: @escaping @Sendable () async -> Void) async throws -> HTTPResponse {
-        try await send(request, to: destination)
+        try Task.checkCancellation()
+        await onStart()
+        try Task.checkCancellation()
+        return try await send(request, to: destination)
     }
 }
