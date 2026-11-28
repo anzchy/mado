@@ -269,11 +269,6 @@ actor AppGroupCaptureBarPreferences: CaptureBarPreferencePort {
         for (key, button) in sidebarButtons {
             button.state = key == section ? .on : .off
             button.setAccessibilityValue(key == section ? "1" : "0")
-            button.attributedTitle = NSAttributedString(string: button.title, attributes: [
-                .font: DesignMetrics.font("ui"),
-                .foregroundColor: key == section ? DesignColor.selectionText.nsColor : DesignColor.textPrimary.nsColor
-            ])
-            button.contentTintColor = key == section ? DesignColor.selectionText.nsColor : DesignColor.textSecondary.nsColor
             button.needsDisplay = true
         }
         if section == .cache { refreshCache() }
@@ -1194,6 +1189,8 @@ private final class SettingsPanelNativeWindow: NSWindow {
 private final class SettingsSidebarButton: NSButton {
     private let iconView = NSImageView()
     private let labelView = NSTextField(labelWithString: "")
+
+    override func accessibilityTitle() -> String? { labelView.stringValue }
 
     override var focusRingMaskBounds: NSRect { bounds }
 

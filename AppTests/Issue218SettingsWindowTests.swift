@@ -253,3 +253,14 @@ func issue863Fix1SidebarUsesRealLocalizedTitlesAndSingleHitTarget(_ locale: Stri
         }
     }
 }
+
+@MainActor @Test(.timeLimit(.minutes(3))) func issue863Fix1SidebarKeepsAccessibilityTitle() throws {
+    let (panel, _, _) = settingsFixture()
+    defer { panel.window.close() }
+    let root = try #require(panel.window.contentView)
+    for section in SettingsSection.allCases {
+        let row = try #require(settingsView("settings.section.\(section.rawValue)", in: root) as? NSButton)
+        let label = try #require(settingsView("settings.sidebar.label.\(section.rawValue)", in: root) as? NSTextField)
+        #expect(row.accessibilityTitle() == label.stringValue)
+    }
+}
